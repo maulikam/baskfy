@@ -942,19 +942,19 @@ export const NOT_DECOMPOSABLE: readonly BlockedEffect[] = [
   {
     name: "Cash drag",
     reason:
-      "Every mark carries a cash balance, so what cash weighed is known. What it cost is not: `net_flow` records money entering and leaving the account, never money moving between cash and shares inside it, so the return the shares earned alone cannot be separated from the total.",
+      "How much cash you held is known. What holding it cost is not, because Baskfy records money arriving in and leaving the account but not money moving between cash and shares inside it.",
     unblockedBy: "Recording internal buys and sells as transfers on the NAV series.",
   },
   {
     name: "Fees, brokerage and taxes",
     reason:
-      "`packages/core` has a cost model, and it belongs to the weekly rebalancer's plan. Nothing charges a cost against a portfolio's own history, so a net-of-fees line would be a gross one wearing a different label.",
+      "No brokerage or tax is charged against a portfolio's own history, so a figure called net of fees would be the gross one under a different name.",
     unblockedBy: "Wiring the existing cost model through the portfolio rebalance path.",
   },
   {
     name: "Contribution by holding, at this level",
     reason:
-      "This screen fetches no holdings — the overview payload stops at the portfolio row. It is real one level down: each portfolio's own screen carries `todays_contribution` and `total_contribution` per holding.",
+      "This screen reads portfolios, not the holdings inside them. Open a portfolio and the same figure is there for each of its holdings.",
     unblockedBy: "Nothing. Open a portfolio; the figure is already there.",
   },
 ];
@@ -1030,11 +1030,23 @@ export interface AttributionInput {
   readonly period: PeriodInput | null;
 }
 
+/**
+ * Why the period band cannot split a window's profit between portfolios.
+ *
+ * FOR THE ENGINEER, so the sentence below does not have to carry it: this screen loads the
+ * consolidated series only. `GET /api/v1/portfolio/{id}/nav` serves one per portfolio over the
+ * same range, and the parent passes them as `seriesByPortfolio`; with that prop the band is exact.
+ * Without it the figure would have to be apportioned by weight, which assumes every portfolio
+ * returned the same thing — the one assumption that makes attribution meaningless.
+ *
+ * FOR THE READER: the sentence says what is missing and what would fix it, in their terms. It
+ * used to name the route, and a retail investor meeting an API path on a portfolio screen learns
+ * nothing except that the product is talking to itself.
+ */
 export const PERIOD_UNAVAILABLE =
-  "Splitting a window's profit between portfolios needs each portfolio's own value series, and " +
-  "this screen loads only the consolidated one. `GET /api/v1/portfolio/{id}/nav` serves it per " +
-  "portfolio over the same range; until the page fetches those, the figure would have to be " +
-  "apportioned by weight, which would assume every portfolio returned the same thing.";
+  "Splitting this window's profit between portfolios needs each portfolio's own value history, " +
+  "and this screen loads only the combined one. Apportioning it by size instead would assume " +
+  "every portfolio returned the same thing.";
 
 /**
  * A window's profit for one series: the change in value with every flow inside the window removed.

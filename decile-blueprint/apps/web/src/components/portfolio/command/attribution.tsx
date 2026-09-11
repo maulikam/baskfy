@@ -251,23 +251,42 @@ export function Attribution({ attribution }: { attribution: AttributionModel }) 
 
       {/* The six the brief names and Baskfy cannot compute. Named on the surface that would have
           shown them, each with what is missing and what would unblock it — never as a dash, and
-          never as a plausible figure. Baskfy places live orders. */}
-      <section
-        aria-label="What cannot be decomposed"
+          never as a plausible figure. Baskfy places live orders.
+
+          CLOSED BY DEFAULT, and that is a correction rather than a preference. Open, these six
+          entries are the tallest thing on the screen: a screenshot of an EMPTY account measured
+          4,661px on a phone, most of it this list explaining what an account with no holdings
+          cannot be broken down by. The brief asks to "avoid a very long page" and to "use tabs,
+          drawers, expandable rows and sticky controls to progressively reveal detail", and the
+          rule it collided with — never a bare dash, always the reason — is satisfied by the
+          reason being one click away and labelled, not by it being unavoidable. The summary line
+          carries the count, so nothing is hidden; it is folded. */}
+      <details
         data-testid="attribution-blocked"
-        className="rounded-xl border border-border bg-card"
+        className="group rounded-xl border border-border bg-card [&_summary::-webkit-details-marker]:hidden"
       >
-        <div className="border-b border-border px-4 py-2.5">
-          <h3 className="flex items-center gap-1.5 text-sm font-semibold">
-            <Lock aria-hidden="true" className="size-3.5 text-muted-foreground" />
-            What this cannot be broken down by, and why
-          </h3>
-          <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
-            Each of these is part of a normal attribution and none of them is shown as a dash or as
-            an estimate. What is missing is named, so the list is a backlog rather than an apology.
-          </p>
-        </div>
-        <ul className="divide-y divide-border/60">
+        <summary className="flex cursor-pointer list-none items-start gap-1.5 px-4 py-2.5">
+          <Lock aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold">
+              What this cannot be broken down by, and why
+              <span className="ml-1.5 font-normal text-muted-foreground">
+                ({attribution.blocked.length})
+              </span>
+            </span>
+            <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">
+              Sector, allocation and selection effects, cash drag, fees, and contribution per
+              holding. None is shown as a dash or as an estimate.
+            </span>
+          </span>
+          <span
+            aria-hidden="true"
+            className="mt-0.5 shrink-0 text-xs text-muted-foreground transition-transform duration-150 group-open:rotate-90"
+          >
+            ▸
+          </span>
+        </summary>
+        <ul className="divide-y divide-border/60 border-t border-border">
           {attribution.blocked.map((effect) => (
             <li key={effect.name} className="px-4 py-2.5">
               <p className="flex items-center gap-1.5 text-sm font-medium">
@@ -283,7 +302,7 @@ export function Attribution({ attribution }: { attribution: AttributionModel }) 
             </li>
           ))}
         </ul>
-      </section>
+      </details>
     </section>
   );
 }

@@ -59,7 +59,12 @@ const themes = {
 /** Every token that renders text, and the surfaces it is allowed to render on. */
 const TEXT_ON_SURFACE: ReadonlyArray<{ token: string; surfaces: readonly string[] }> = [
   { token: "--foreground", surfaces: ["--background", "--card"] },
-  { token: "--muted-foreground", surfaces: ["--background", "--card"] },
+  /* `--muted` was missing from this list until 11 Sep 2026, and that omission cost a real defect:
+     `--muted-foreground` at #6f6f6f cleared 4.5 on the canvas and on a panel and read **4.41 on
+     `--muted`** — the one surface it is named for. 540 assertions here were green while a pill in
+     the Command Center failed AA in a browser. A token that is illegible on its own surface is
+     the failure this file exists to prevent, so the surface it is named for is now asserted. */
+  { token: "--muted-foreground", surfaces: ["--background", "--card", "--muted"] },
   { token: "--card-foreground", surfaces: ["--card"] },
   { token: "--popover-foreground", surfaces: ["--popover"] },
   { token: "--accent", surfaces: ["--background", "--card", "--accent-muted"] },

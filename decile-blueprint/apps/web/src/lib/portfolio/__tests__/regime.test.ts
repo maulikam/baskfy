@@ -254,7 +254,11 @@ describe("the momentum sentinel", () => {
 
     expect(sentinel.veto.state).toBe("not-stated");
     expect(sentinel.veto.evidence).toEqual([]);
-    expect(sentinel.veto.summary).toMatch(/it does not read silence as a clear sentinel/);
+    /* Corrected 11 Sep 2026 with the copy it asserts: the reason a reader needs, not the column
+       that holds it. See `no-internals.test.tsx` for why — a screenshot found an internal host,
+       a route and three field names in front of a customer. */
+    expect(sentinel.veto.summary).toMatch(/never reads silence as an all-clear/);
+    expect(sentinel.veto.summary).not.toMatch(/reason_codes|\/api\/v\d/);
   });
 
   it("only the desk's positive sentence makes the sentinel read as clear", () => {
@@ -344,7 +348,11 @@ describe("whether the stance is current", () => {
     const state = regimeReading({ regime: null, today: "2026-09-07" });
 
     if (state.kind !== "unavailable") throw new Error("unreachable");
-    expect(state.notice.detail).toMatch(/no reason was given/);
+    /* Corrected 11 Sep 2026 with the copy it asserts: the reason a reader needs, not the column
+       that holds it. See `no-internals.test.tsx` for why — a screenshot found an internal host,
+       a route and three field names in front of a customer. */
+    expect(state.notice.detail).toMatch(/gave no reason/);
+    expect(state.notice.detail).not.toMatch(/\/api\/v\d|https?:\/\//);
   });
 });
 
@@ -383,7 +391,11 @@ describe("figures RegimeOut does not carry", () => {
     const r = ready({ tier: "R2", previous_tier: "R1" });
     const candidate = r.unavailable.find((u) => u.id === "candidate-tier");
 
-    expect(candidate?.reason).toMatch(/raw_candidate_tier/);
+    /* Corrected 11 Sep 2026 with the copy it asserts: the reason a reader needs, not the column
+       that holds it. See `no-internals.test.tsx` for why — a screenshot found an internal host,
+       a route and three field names in front of a customer. */
+    expect(candidate?.reason).toMatch(/before the one-rung-a-week limit is applied/);
+    expect(candidate?.reason).not.toMatch(/raw_candidate_tier|\/api\/v\d/);
     expect(JSON.stringify(r)).not.toMatch(/candidateTier/);
   });
 });

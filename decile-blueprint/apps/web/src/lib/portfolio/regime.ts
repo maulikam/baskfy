@@ -201,7 +201,7 @@ export const DECLARED_UNAVAILABLE: readonly DeclaredUnavailable[] = [
     id: "candidate-tier",
     name: "Candidate tier",
     reason:
-      "The tier this evaluation would have set before the one-rung-per-week re-risking limit is stored as regime_evaluations.raw_candidate_tier, together with transition_limited. GET /api/v1/desk/regime selects neither, so the panel cannot show where the classifier pointed as against where the policy landed.",
+      "The desk records the tier its reading pointed at before the one-rung-a-week limit is applied, but does not yet publish it. Until it does, this panel can show where the policy landed and not where the reading pointed.",
     unblockedBy: "Add raw_candidate_tier and transition_limited to RegimeOut.",
   },
   {
@@ -295,7 +295,7 @@ export interface SentinelReading {
 }
 
 const SENTINEL_SILENCE_NOTE =
-  "The evaluation records a sentinel sentence only when the sentinel changes something. GET /api/v1/desk/regime returns the desk's rendered sentences and not its reason_codes, so where nothing is stated the panel says nothing was stated — it does not read silence as a clear sentinel.";
+  "The desk notes the momentum sentinel only when it changes something, and publishes those notes as sentences rather than as a state. So where the desk says nothing, this panel says nothing was stated — it never reads silence as an all-clear.";
 
 function findingFor(
   id: SentinelFinding["id"],
@@ -678,8 +678,8 @@ export function regimeReading(input: RegimeInput): RegimePanelState {
         severity: "critical",
         headline: "The desk's market stance could not be read",
         detail: because
-          ? `GET /api/v1/desk/regime did not answer: ${because} No tier is shown, because the last one this screen saw would be a claim about a market it cannot currently see.`
-          : "GET /api/v1/desk/regime did not answer, and no reason was given. No tier is shown, because the last one this screen saw would be a claim about a market it cannot currently see.",
+          ? `${because} No tier is shown, because the last one this screen saw would be a claim about a market it cannot currently see.`
+          : "The desk did not answer, and gave no reason. No tier is shown, because the last one this screen saw would be a claim about a market it cannot currently see.",
         nextStep: "Open the desk's own stance page once the desk is reachable.",
       },
     };

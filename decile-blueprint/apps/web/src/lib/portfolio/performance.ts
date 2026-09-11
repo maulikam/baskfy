@@ -924,8 +924,8 @@ export const NOT_DECOMPOSABLE: readonly BlockedEffect[] = [
   {
     name: "Contribution by sector",
     reason:
-      "There is no sector on `instrument`. The grouping helper already says so to the user's face — it offers no sector basis because it has none.",
-    unblockedBy: "A sector and industry map on `instrument`, sourced and kept current.",
+      "Baskfy does not record which sector a company belongs to, so there is nothing to group these holdings by. The grouping helper says the same thing when it offers you no sector option.",
+    unblockedBy: "A sector and industry classification for every listed company, sourced and kept current.",
   },
   {
     name: "Allocation effect",
@@ -951,13 +951,22 @@ export const NOT_DECOMPOSABLE: readonly BlockedEffect[] = [
       "No brokerage or tax is charged against a portfolio's own history, so a figure called net of fees would be the gross one under a different name.",
     unblockedBy: "Wiring the existing cost model through the portfolio rebalance path.",
   },
-  {
-    name: "Contribution by holding, at this level",
-    reason:
-      "This screen reads portfolios, not the holdings inside them. Open a portfolio and the same figure is there for each of its holdings.",
-    unblockedBy: "Nothing. Open a portfolio; the figure is already there.",
-  },
 ];
+
+/**
+ * Contribution by holding is **not** in the list above, and was until 11 Sep 2026.
+ *
+ * It sat there with `unblockedBy: "Nothing. Open a portfolio; the figure is already there."` —
+ * which is the sentence that gives the game away. A list headed *"what this cannot be broken down
+ * by"* is a list of things that do not exist; this one exists, is computed, and is rendered one
+ * click away on every portfolio's own screen (`DetailHoldingOut.todays_contribution`). Filing an
+ * available figure under "Not available" teaches a reader to stop believing the other five, which
+ * ARE real blockers.
+ *
+ * So it is a destination, not a caveat.
+ */
+export const CONTRIBUTION_BY_HOLDING_IS_ELSEWHERE =
+  "Contribution by holding is measured per portfolio. Open one to see which of its holdings moved it.";
 
 export interface ContributionRow {
   readonly portfolioId: number;

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { CircleAlert, Info, Lock } from "lucide-react";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { CONTRIBUTION_BY_HOLDING_IS_ELSEWHERE } from "@/lib/portfolio/performance";
 import type {
   Attribution as AttributionModel,
   AttributionBand,
@@ -286,6 +287,13 @@ export function Attribution({ attribution }: { attribution: AttributionModel }) 
             ▸
           </span>
         </summary>
+        {/* The one figure that is NOT missing, given its own line above the list of ones that
+            are. It used to sit inside the list with "Needs: Nothing", which is a contradiction a
+            reader notices — and once they notice it, the five real blockers below read as excuses
+            too. A destination, not a caveat. */}
+        <p className="border-t border-border px-4 py-2.5 text-xs leading-relaxed text-muted-foreground">
+          {CONTRIBUTION_BY_HOLDING_IS_ELSEWHERE}
+        </p>
         <ul className="divide-y divide-border/60 border-t border-border">
           {attribution.blocked.map((effect) => (
             <li key={effect.name} className="px-4 py-2.5">

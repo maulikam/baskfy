@@ -732,10 +732,18 @@ describe("what cannot be decomposed", () => {
       "Security-selection effect",
       "Cash drag",
       "Fees, brokerage and taxes",
-      "holding",
     ]) {
       expect(names).toContain(expected);
     }
+
+    /* Contribution by holding is NOT here, and this assertion is the correction of one that
+       required it to be. It sat in this list carrying `unblockedBy: "Nothing. Open a portfolio;
+       the figure is already there."` — a contradiction in its own entry. A list headed "what this
+       cannot be broken down by" is a list of things that do not exist, and this one exists,
+       is computed, and renders one click away on every portfolio's screen. Filing an available
+       figure under "Not available" teaches a reader to stop believing the five that are real. */
+    expect(names).not.toContain("holding");
+    expect(NOT_DECOMPOSABLE).toHaveLength(5);
     for (const effect of NOT_DECOMPOSABLE) {
       expect(effect.reason.length).toBeGreaterThan(40);
       expect(effect.unblockedBy.length).toBeGreaterThan(10);

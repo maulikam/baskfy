@@ -1073,3 +1073,27 @@ the shared block, and desk plus swing-monitor via theirs — each defaulting to 
 `tools/deploy/verify-safety.sh` asserts it, alongside a check that no VBT auto-execute flag
 appears in the deployed config, with comment lines stripped first so the prose stating the
 prohibition does not trip the check that states it.
+
+### VB13.4 — The re-detect asks the pipeline which session it is, not the exchange calendar · ⚠ UNREVIEWED
+
+**Found by pressing the button on the box, 11 Sep 2026 at 14:14 IST.** It answered `DONE` in 18
+seconds with 0 signals and `skipped_reason: "2026-09-11 is not a session the bars know about"`.
+
+`latest_published_session` read `trading_day`, which calls Friday a trading day from the moment
+Friday begins. Friday's *bars* do not exist until the chain publishes that evening. So a
+re-detect pressed during the afternoon faithfully re-detected **today**, found nothing, and
+reported it — harmless, and useless, because the session worth re-detecting was the one before.
+
+It now reads the newest `pipeline_run` carrying a `data_version`, which is the product's own
+answer to "what is the latest session" — the same query behind the freshness pill and the swing
+book's health check. `docs/README`'s two clocks say it plainly: a daily bar is a closed day, and
+there is no "today" bar until today ends.
+
+A test pins the exact case: a published run for yesterday, an unpublished one for today, and the
+answer must be yesterday. It would have failed before this change — the fixture calendar made
+every weekday look available, which is why the unit tests passed and the box did not.
+
+**The general lesson, and it is VB10.1's again in a different costume:** a fixture that says yes
+to everything tests the caller. The exchange calendar in the seeded database has all 4,089
+weekdays in it, so nothing local could distinguish "a trading day" from "a day whose bars exist".
+The box could, on the first press.

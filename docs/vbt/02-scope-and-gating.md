@@ -75,16 +75,27 @@ bad week. Changing one is a code change with a `DECISIONS-VB.md` entry.
 ## §3 — The real-money gate
 
 `BASKFY_VBT_EXECUTION_ENABLED=true` may be set only when **all** of the following are true, each
-with its evidence in `VB-FINAL-REPORT.md`. This is the swing pack's original five-condition gate
-(`docs/swing/02` §3 as first written, before STANDING-ANSWERS A11 rewrote it for that sleeve);
-it is restated here in full because **this sleeve has rehearsed nothing**, and the argument that
-retired the paper period for the swing book — that its code work was complete and one real
-DRY_RUN morning bought the same rehearsal — has not been made for this one.
+with its evidence in `VB-FINAL-REPORT.md`.
 
-1. **Twenty `DRY_RUN` sessions.** Twenty trading sessions on which the nightly job ran, a plan
-   was built, and every line that would have been an order was confirmed and simulated end to
-   end through the gateway, journalling `simulated=true`. `vb_session` counts them and
-   `/vbt` shows the count; **20 is a gate here, not information.**
+> ### The paper gate was withdrawn on 11 Sep 2026, by Maulik
+>
+> Condition 1 was **twenty `DRY_RUN` sessions**, and it is struck. His words: *"i dont want to
+> have dry run at all go live"* (DECISIONS-VB **VB11.4**, `NEEDS-MAULIK.md` V4). The same call he
+> made for the swing book at STANDING-ANSWERS A11, made earlier here.
+>
+> `DRY_RUN_SESSIONS_REQUIRED` is now **0**. `vb_session` still counts the sessions and the pages
+> still show the count, because "this sleeve has rehearsed three sessions" is worth knowing after
+> it stops being a condition — it is information now, not a gate.
+>
+> **What this changes, stated once and not argued.** The sleeve's one genuinely new mechanism is a
+> limit that expires after three *sessions*, and a session count was the only thing that could
+> exercise it before real money. It will now first run a full three-session window with money in
+> it. That is a fact about the schedule, not an objection: the four remaining conditions below are
+> unchanged, and they are the ones that carry evidence.
+
+The conditions, as they now stand:
+
+1. ~~**Twenty `DRY_RUN` sessions.**~~ **Withdrawn 11 Sep 2026** — see the box above.
 2. **VB10 green.** With the flag false, a property test proves no VBT code path reaches
    `OrderGateway.place`; with `DRY_RUN=true` the full drill (`tools/vbt/drill.py`) produces a
    simulated fill and a simulated GTT for every confirmed line and **0 orders reach a broker**.
@@ -94,8 +105,11 @@ DRY_RUN morning bought the same rehearsal — has not been made for this one.
    STRATEGY §5's caveats verbatim and the drift flag of `06`'s VB9.
 4. **Maulik's written risk decision**, as an entry in `DECISIONS-VB.md`: the sleeve's capital,
    the slot count, whether the equal-weight sizing stands, and the stop percentage. Until he
-   writes it, `vb_config.sleeve_capital_inr` is **0** and nothing is planned (`QUESTIONS.md`
-   carries the standing defaults: ₹10 lakh, equal weight, 10 slots).
+   writes it, `vb_config.sleeve_capital_inr` is **0** and nothing is planned. **The capital is
+   answered — ₹25 lakh, equal weight, ten slots (11 Sep 2026, DECISIONS-VB VB11.1)** — but the
+   decision in prose that this condition asks for is not yet written, and the capital is the
+   number, not the decision. Note that ₹25 lakh makes the 1%-of-turnover cap bind for the first
+   time; no backtest in this repository was produced at that size.
 5. **Half risk for the first live sessions.** For the first `first_live_sessions` [5] LIVE
    sessions the plan is sized at `risk_multiplier_first_live` [0.5] × the slot size, applied at
    plan time so the line shown is the line sent (`04` §5.4). The countdown is the evening job's,

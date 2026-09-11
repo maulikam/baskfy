@@ -37,7 +37,7 @@
   <span>
     <b>DRY_RUN</b>=<code>{{ 'true' if v.desk_dry_run else 'false' }}</code> ·
     <b>BASKFY_VBT_EXECUTION_ENABLED</b>=<code>{{ 'true' if v.execution_enabled else 'false' }}</code> ·
-    <b>DRY_RUN sessions</b>: {{ v.dry_run_sessions }} of {{ v.dry_run_sessions_required }}
+    <b>DRY_RUN sessions</b>: {{ v.dry_run_sessions }}{% if v.dry_run_sessions_required %} of {{ v.dry_run_sessions_required }}{% else %} rehearsed (no paper gate){% endif %}
     {% if v.breadth %}
       · <b>gate</b>:
       <span class="pill {{ 'ok' if v.breadth.gate == 'OPEN' else 'warn' }}">{{ v.breadth.gate }}</span>

@@ -564,7 +564,9 @@ class TestTheConfigRoutes:
             response = await client.get(url("/vbt/config"), headers=bearer(public_id))
 
         body = response.json()
-        assert body["dry_run_sessions_required"] == 20
+        # 0 since 11 Sep 2026: Maulik withdrew the paper gate (DECISIONS-VB VB11.4). The
+        # counter still counts; it is no longer a condition.
+        assert body["dry_run_sessions_required"] == 0
         assert body["execution_enabled"] is False
         # Strings: the ceilings ride to the form as text so a Decimal ceiling of `15.0` and an
         # integer one render the same way and neither goes through a float on the way.

@@ -865,3 +865,84 @@ The import checks beside it are over the **syntax tree**, not the text, because 
 cross-reference each other in prose — `vbt/indicators.py` explains how its rolling windows differ
 from the swing book's, which is a comment worth encouraging. A cross-reference is not a
 dependency; an import is.
+
+---
+
+## VB11 — Maulik's answers (11 Sep 2026)
+
+### VB11.1 — The sleeve carries ₹25 lakh, and that makes the turnover cap live for the first time
+
+Q1 answered: **₹25 lakh, equal weight, ten slots.** Slots of ₹2.5 lakh against the study's
+₹1 lakh.
+
+**The consequence is not proportional, and it is worth stating.** `04` §5's cap of 1% of a name's
+20-day average turnover binds below a turnover of `slot ÷ 0.01`:
+
+| capital | slot | the turnover cap binds below | does it ever fire? |
+|---|---|---|---|
+| ₹10 lakh (the study) | ₹1,00,000 | ₹1.00 cr | **No.** Filter F already requires ₹2 cr, so the cap was unreachable |
+| ₹25 lakh (chosen) | ₹2,50,000 | ₹2.50 cr | **Yes**, on every admitted name between ₹2 cr and ₹2.5 cr |
+
+So at this size the sleeve begins refusing full slots on its thinnest admitted names — the band
+filter F lets through at exactly ₹2 cr up to ₹2.5 cr. That was designed in from day one
+(`SizingConfig.max_position_vs_turnover`, and DECISIONS-VB's note that it "binds nowhere at
+₹10 lakh and will at ₹1 crore"), and the plan names `SizeCap.TURNOVER` on any line it shortens,
+so it will be visible rather than silent. **But no backtest number in this repository was
+produced at ₹25 lakh** — the study, the goldens and VB9's three books all run the ₹10 lakh frame,
+where the cap never fires. The paper run is the first time this behaviour will be seen at all.
+
+**The seed stays at ₹0.** `seed_vbt_config` is unchanged: a sleeve with no money cannot trade by
+accident, and the capital is set deliberately, by hand, on a database that exists. Setting it:
+
+```
+PATCH /api/v1/vbt/config   {"sleeve_capital_inr": "2500000.00"}
+```
+
+Rejected: changing the seed default to ₹25 lakh (it would arm every fresh database, including a
+test one, with money); re-running the study at ₹25 lakh to make the numbers match the frame (a
+worthwhile measurement, but it changes what the published figures mean and belongs in its own
+decision, not folded into an answer about capital).
+
+### VB11.2 — The execution flag is not delegated, and that is now confirmed rather than assumed
+
+Q3 answered: **no.** No agent may set `BASKFY_VBT_EXECUTION_ENABLED`, under any circumstances,
+whatever the paper run shows. `docs/swing/02` §3.5's delegation names the swing flag and stops
+there.
+
+This changes no code — it is the state the run already ends in, and `test_vbt_safety.py` asserts
+the flag defaults false and that no auto-execute setting exists. What changes is its status in
+`NEEDS-MAULIK.md`: V3 was an open question and is now a standing instruction.
+
+### VB11.3 — The fill-rate line keeps offers as its denominator
+
+VB8.1 confirmed on review: the page compares this book against **83.8%**, the study's fills over
+the orders the engine actually offered a fill test — not 12.8%, its fills over every working
+order. The live book only ever writes a `vb_order` for a line the plan produced under the same
+caps, so offers is the denominator that compares like with like. No code changes; the reasoning
+is now reviewed rather than mine alone.
+
+### VB11.4 — The paper gate is withdrawn. Maulik's call, 11 Sep 2026
+
+Q4 answered: *"i dont want to have dry run at all go live"*. `02` §3's condition 1 — twenty
+`DRY_RUN` sessions — is struck, and `DRY_RUN_SESSIONS_REQUIRED` is 0.
+
+This is his to decide and it is the same call he made for the swing book (STANDING-ANSWERS A11),
+made earlier in this sleeve's life. `NEEDS-MAULIK.md` V4 always said one line from him shortens
+it; this is that line.
+
+**The counter survives the gate.** `vb_session.counted_for_dry_run_gate` still moves and the desk
+and web pages still show the count, rendered as "N rehearsed (no paper gate)" when the target is
+zero. A number that stops being a condition does not stop being worth reading, and the day
+somebody asks "had this ever run before we turned it on" the honest answer should be a number
+rather than a shrug.
+
+**The one consequence, recorded once.** The three-session expiry window is the sleeve's only
+mechanism with no analogue in the weekly book or the swing book, and a session count was the only
+thing that could exercise it before real money. It will now first complete a full window with
+money in it. Recorded as a fact, not as an objection — the four remaining conditions are
+unchanged and they are the ones carrying evidence.
+
+**What did *not* change, and could not.** An agent still never sets
+`BASKFY_VBT_EXECUTION_ENABLED` (VB11.2, answered by Maulik minutes before this one), never places
+an order and never confirms a line on his behalf. Withdrawing a *condition* on the flag is not
+the same act as flipping it, and this run has done only the first.

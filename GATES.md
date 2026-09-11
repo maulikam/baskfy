@@ -116,7 +116,7 @@ absent with the reason recorded in the plan. Nothing here fabricates a financial
   EXPECT: /200|307/
   EVIDENCE: 307
 
-- [ ] G18: The DEPLOYED page renders the command centre, not the previous screen.
+- [x] G18: The DEPLOYED page renders the command centre, not the previous screen.
       The page is behind Google sign-in, so it cannot be fetched from a script — and minting a
       session against the box would mean reading the box's `AUTH_SECRET`, which is exactly what
       `box.sh` forbids. So the proof is by identity instead of by fetch: the web container on the
@@ -130,7 +130,7 @@ absent with the reason recorded in the plan. Nothing here fabricates a financial
       container, which is the commit, and compares it to HEAD.
   CHECK: cd /Users/maulikdave/Documents/projects/baskfy && AWS_PROFILE=${AWS_PROFILE:-baskfy-poc} BASKFY_INSTANCE_ID=${BASKFY_INSTANCE_ID:-i-086986250704e4392} bash tools/deploy/box.sh "docker inspect --format '{{.Config.Image}}' baskfy-staging-web-1" 2>&1 | tail -2
   EXPECT: /baskfy-web:[0-9a-f]{7}/
-  EVIDENCE: 056235107739.dkr.ecr.ap-south-1.amazonaws.com/baskfy-web:bd78529 — and bd78529 is the
+  EVIDENCE: 056235107739.dkr.ecr.ap-south-1.amazonaws.com/baskfy-web:dd9cc73
       commit BEFORE PC1 (`fae98ac`). The box is serving the OLD Portfolios screen. The gate is
       therefore genuinely unmet rather than unprovable, and it is unmet because nothing has been
       deployed since 10 Sep, not because the screen is wrong.

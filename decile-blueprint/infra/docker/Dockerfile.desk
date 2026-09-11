@@ -108,21 +108,56 @@ PY
 fi
 exec "$@"
 EOF
-# The swing-monitor service's loop. Sleeps until 09:14 IST on a weekday, runs the monitor
-# (`app.swing_monitor` exits 0 at once while BASKFY_SWING_MONITOR_ENABLED is false — it never
-# builds the strategy), then sleeps until the next weekday. Flag off means it logs and idles.
+# The swing-monitor service's loop. Starts the monitor at 09:14 IST on a weekday — or AT ONCE if
+# the container comes up while a session is already running (`app.swing_monitor` exits 0 straight
+# away while BASKFY_SWING_MONITOR_ENABLED is false — it never builds the strategy), then sleeps
+# until the next weekday. Flag off means it logs and idles.
 RUN cat > /usr/local/bin/swing-monitor-loop <<'EOF'
 #!/venv/bin/python
-"""09:14 IST on weekdays: python -m app.swing_monitor. Flag off: log, idle, repeat."""
+"""09:14 IST on weekdays, or immediately mid-session: python -m app.swing_monitor."""
 import datetime as dt, os, subprocess, sys, time, zoneinfo
 
 IST = zoneinfo.ZoneInfo("Asia/Kolkata")
 AT = dt.time(9, 14)
 
+#: When the watch ends. Read from the config so this cannot drift from `evaluate_trigger`, with a
+#: literal fallback because a loop that cannot import must still start the monitor in the morning.
+try:
+    from baskfy_core.swing.config import DEFAULT_SWING_CONFIG
 
-def next_run(now: dt.datetime) -> dt.datetime:
+    CLOSE = dt.time(*DEFAULT_SWING_CONFIG.opening_range.monitor_close)
+except Exception:  # noqa: BLE001 - never let an import failure stop the schedule
+    CLOSE = dt.time(15, 30)
+
+
+def next_run(now: dt.datetime, *, enabled: bool = True) -> dt.datetime:
+    """The next moment to launch the monitor. **`now` itself, when a session is under way.**
+
+    THE BUG THIS FIXES (11 Sep 2026). This used to add a day the instant 09:14 had passed, which
+    was right while the watch ended at 10:45 and SW6 could say "stops at 10:45": a container
+    restarting at 13:00 had genuinely missed the whole thing. SW26 widened the window to 15:30 and
+    did not touch this function, so every restart after the open silently forfeited the REST OF
+    THE DAY — the monitor logged "next run Mon" and sat out an afternoon it was built to watch.
+
+    Caught on the box: a 13:09 restart on Friday 11 Sep printed
+    `swing-monitor: flag ON; next run Mon 2026-09-14 09:14 IST`.
+
+    Starting mid-session is safe, and SW26 has the tests for the part that could have been unsafe:
+    the opening range is an absolute clock, so an afternoon start rebuilds the 09:15 range from
+    Kite's minute candles rather than from the afternoon's own ticks, and a name whose range
+    cannot be rebuilt raises nothing at all. What a restart genuinely loses is the signals raised
+    before it — there is no replay — which is what `deploy-swing.sh`'s session guard is for.
+    """
     run = dt.datetime.combine(now.date(), AT, tzinfo=IST)
     if run <= now:
+        # Inside today's session on a trading weekday: join it now rather than waiting for the
+        # next open. `run_until_close` ends the watch at `monitor_close` either way.
+        #
+        # Only when the flag is ON. With it off, `app.swing_monitor` exits 0 immediately, so
+        # joining would re-log every 90 seconds for the rest of the afternoon to say nothing is
+        # happening. A disabled monitor waits for tomorrow, exactly as it always did.
+        if enabled and now.weekday() <= 4 and now.time() < CLOSE:
+            return now
         run += dt.timedelta(days=1)
     while run.weekday() > 4:
         run += dt.timedelta(days=1)
@@ -131,8 +166,8 @@ def next_run(now: dt.datetime) -> dt.datetime:
 
 while True:
     now = dt.datetime.now(IST)
-    run = next_run(now)
     flag = os.environ.get("BASKFY_SWING_MONITOR_ENABLED", "false").lower() == "true"
+    run = next_run(now, enabled=flag)
     print(f"swing-monitor: flag {'ON' if flag else 'off'}; next run {run:%a %Y-%m-%d %H:%M} IST",
           flush=True)
     time.sleep(max(1.0, (run - dt.datetime.now(IST)).total_seconds()))

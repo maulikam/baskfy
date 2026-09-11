@@ -106,11 +106,25 @@ The product serves **two different clocks** and they are both correct:
 | Surface | Clock | Why |
 |---|---|---|
 | Baskets, factors, market health, the screener, the freshness pill's `as_of` | The **last completed trading session** | A daily bar is a *closed* day. House rules 5 and 7: point-in-time, idempotent. There is no "today" bar until today ends |
-| Portfolio marks and holdings, the swing book's setups and triggers | **Live, from Kite quotes** | These are prices, not bars, and a quote is available whenever the market is |
+| The **swing book's** setups and triggers, on the desk | **Live, from Kite quotes** | These are prices, not bars, and a quote is available whenever the market is |
+| The **web app's** portfolio marks — net worth, today's P&L, every holding's value | The **last completed session's close** | Not by design. `services/api` has no quote path at all; `_Prices` in `portfolio_overview.py` reads the newest two closes out of `ohlcv_daily` |
 
-So on a weekday at 13:15 the pill correctly reads **yesterday**, while the portfolio and the
-swing book are showing this minute. That is not staleness; it is the only honest reading of a
-half-finished day. **Do not make the published series claim today while today is still running.**
+⚠️ **THE ROW ABOVE WAS WRONG UNTIL 11 Sep 2026, and it was wrong in the direction that matters.**
+It read *"Portfolio marks and holdings, the swing book's setups and triggers | Live, from Kite
+quotes"*, which is true of the swing book and has **never** been true of the web app. `get_ltp`
+and `get_quotes` appear only in `kite-momentum-rebalancer/app/` — the desk's monitor — and
+`git log -S "get_ltp" -- services/api` is empty: the API has never had one, not once, in any
+commit.
+
+The cost of the error was not theoretical. An agent read this table, told Maulik that his
+portfolio screen was showing live quotes, and he had to correct it. **A working agreement that
+misstates where a money figure comes from is worse than one that says nothing**, because it is
+believed. Fixed by splitting the row, and the correction stays here rather than being tidied away.
+
+So on a weekday at 13:15 the pill reads **yesterday** and so does the portfolio, for the same
+reason: both are built on closes. The swing book on the desk is the only surface showing this
+minute. **Do not make the published series claim today while today is still running** — and do
+not tell anyone the portfolio is live until somebody builds the path that makes it so.
 
 ### What was tried and reverted, so nobody tries it again
 

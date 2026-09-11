@@ -1293,20 +1293,45 @@ def test_the_router_has_no_order_path() -> None:
         )
 
 
-def test_only_bookkeeping_mutates() -> None:
-    """Two writes, and both are bookkeeping. Every other route is a read.
+#: Every write ``portfolio_overview`` is allowed to declare, and why each is bookkeeping rather
+#: than an order. A route not in this set fails the guard below until somebody adds it here with
+#: its reason — which is the review this test exists to force.
+BOOKKEEPING_WRITES = {
+    # §4.3: answers a question about a holdings change the sync already observed.
+    "/reconciliation/{item_id}/resolve",
+    # §6.7: files holdings the user already owns into a grouping they just named.
+    "",
+    # PF9: the same act against a portfolio that already exists rather than a new one.
+    "/{portfolio_id}/holdings",
+}
 
-    The count is asserted exactly, and the two paths are named, so a third write cannot arrive
-    quietly. Both of these move an *allocation* — which logical portfolio a holding counts
-    against — and neither moves a share: ``resolve`` answers §4.3's question about a change sync
-    already observed, and ``POST /portfolio`` files holdings the user already owns into a
-    grouping they just named (§6.7). There is still no PUT and no DELETE here: deleting a
-    portfolio destroys a return series and belongs behind §1's overflow menu with its
-    confirmation, not on this router's first pass.
+
+def test_only_bookkeeping_mutates() -> None:
+    """Every write on this router is bookkeeping. Every other route is a read.
+
+    Each of these moves an *allocation* — which logical portfolio a holding counts against — and
+    none moves a share. There is no PUT and no DELETE: deleting a portfolio destroys a return
+    series and belongs behind a confirmation, not on this router.
+
+    **THIS USED TO ASSERT ``count == 2`` AND IT HAD BEEN FAILING SINCE PF9** (``20b6ea9``,
+    "shares can be filed into a portfolio that already exists"), which added a third POST that is
+    just as much bookkeeping as the other two. The guard was right about its subject and wrong
+    about its instrument: a count fails on legitimate growth, so it was red for days and reported
+    nothing, which is the worst state a safety test can be in — the kind of red a reader learns to
+    scroll past.
+
+    It now asserts the SET against a named allowlist. A new write fails until somebody writes down
+    why it is bookkeeping, which is the question worth forcing; growth alone does not break it.
     """
     source = MODULE.read_text(encoding="utf-8")
-    assert source.count("@router.post(") == 2
-    assert '@router.post("/reconciliation/{item_id}/resolve"' in source
-    assert '@router.post("", response_model=PortfolioDetailOut' in source
+
+    # Every POST this router declares, read off the source rather than counted.
+    declared = set(re.findall(r'@router\.post\(\s*"([^"]*)"', source))
+    assert declared == BOOKKEEPING_WRITES, (
+        f"a write arrived on this router that is not named as bookkeeping: "
+        f"{sorted(declared - BOOKKEEPING_WRITES)}. If it moves an ALLOCATION, add it to "
+        f"BOOKKEEPING_WRITES with its reason. If it moves a SHARE, it does not belong here at "
+        f"all — this router is not an order path (non-negotiable 2)."
+    )
     assert "@router.put(" not in source
     assert "@router.delete(" not in source

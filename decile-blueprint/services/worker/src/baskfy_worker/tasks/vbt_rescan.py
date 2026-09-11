@@ -78,7 +78,7 @@ async def newest_run(session: AsyncSession, *, user_id: int) -> VbScanRun | None
 
 
 async def latest_published_session(session: AsyncSession, on_or_before: dt.date) -> dt.date | None:
-    """The trade date of the most recently **published** pipeline run, at or before ``on_or_before``.
+    """The trade date of the most recently **published** run, at or before ``on_or_before``.
 
     **The pipeline's date, not the exchange calendar's**, and the difference is the whole point of
     the button. `trading_day` says Friday is a trading day from the moment Friday begins; the

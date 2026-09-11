@@ -72,8 +72,19 @@ MIGRATION = "\n".join(MIGRATIONS.values())
 
 class TestEveryTableIsTenantKeyed:
     def test_there_are_vbt_tables_at_all(self) -> None:
-        """A guard on the guard: an empty list would make every test below vacuous."""
-        assert len(VBT_TABLES) == 12, VBT_TABLES
+        """A guard on the guard: an empty list would make every test below vacuous.
+
+        **It asserted ``== 12`` and has been failing since VB12** (``d9fe557``, "the desk gets a
+        Re-detect button"), which added ``vb_scan_run`` and made it thirteen. The failure was a
+        false one: the sleeve gained a table on purpose, and this guard exists to catch the list
+        going EMPTY — a parametrize over nothing reports as green, which is the vacuity it is
+        named for. Pinning the exact count turned every future table into a broken build, and it
+        blocked the "suite green" gate of every module written after it.
+
+        So it asserts what it means. The lower bound stays generous enough to catch an empty or
+        truncated list and does not have to be revised the next time the sleeve grows.
+        """
+        assert len(VBT_TABLES) >= 12, VBT_TABLES
 
     @pytest.mark.parametrize("table_name", VBT_TABLES)
     def test_table_has_a_non_null_user_id(self, table_name: str) -> None:

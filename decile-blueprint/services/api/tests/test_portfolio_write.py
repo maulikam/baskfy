@@ -40,6 +40,7 @@ have made every read assertion there depend on rows it does not care about.
 from __future__ import annotations
 
 import datetime as dt
+import re
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from decimal import Decimal
@@ -54,6 +55,7 @@ from pydantic import ValidationError
 from screener_helpers import requires_db
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from test_portfolio_overview import BOOKKEEPING_WRITES
 
 from baskfy_api.auth import Principal, PrincipalKind
 from baskfy_api.problems import Problem, ProblemType
@@ -760,12 +762,18 @@ def test_the_write_half_says_in_its_own_source_that_it_is_not_an_order_path() ->
     forbidden words over *rendered payloads* — which is the right place for them, since a phrase
     assembled at runtime never appears in the source and the source has to be able to name a
     forbidden word in order to forbid it. What this asserts is narrower and structural: the write
-    half carries the promise in writing, and there are exactly two writes.
+    half carries the promise **in writing**, and every write it declares is named as bookkeeping.
+
+    The count assertion that used to stand here failed from PF9 (``20b6ea9``) onward, for the same
+    reason and with the same consequence as its twin in ``test_portfolio_overview.py``: a third
+    bookkeeping route arrived legitimately and a red safety test stopped being read. The allowlist
+    is shared with that twin so the two cannot disagree about what this router may declare.
     """
     source = MODULE.read_text(encoding="utf-8")
 
     assert "**Not an order path.**" in source
-    assert source.count("@router.post(") == 2
+    declared = set(re.findall(r'@router\.post\(\s*"([^"]*)"', source))
+    assert declared == BOOKKEEPING_WRITES, sorted(declared ^ BOOKKEEPING_WRITES)
     assert "@router.put(" not in source
     assert "@router.delete(" not in source
 

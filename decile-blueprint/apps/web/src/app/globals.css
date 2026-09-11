@@ -70,7 +70,20 @@
   --popover: #ffffff;
   --popover-foreground: #0a0a0a;
   --muted: #f0f0f0;
-  --muted-foreground: #6f6f6f;
+  /* #6f6f6f until 11 Sep 2026, and it failed on the one surface it is named for.
+   *
+   * It clears AA on `--background` (4.80) and on `--card` (5.02), and reads **4.41 on `--muted`**
+   * — under the 4.5 threshold. `contrast.test.ts` did not catch it because it never asserted
+   * `--muted-foreground` against `--muted`: 540 token assertions were green while a real pairing
+   * in the product failed. Axe found it in a browser on the assembled Command Center, on the
+   * "Not available" pill in the attribution panel, which is exactly the class of thing a token
+   * table cannot see.
+   *
+   * #686868 clears all three with margin — background 5.33, card 5.57, muted 4.89 — and is a
+   * quarter-step darker, which is invisible beside the change it prevents. The missing pair is
+   * now asserted, so the next token that is illegible on its own surface fails arithmetically
+   * rather than waiting for somebody to open a browser. */
+  --muted-foreground: #686868;
   --border: #e8e8e8;
   --input: #d6d6d6;
   --ring: #0a0a0a;

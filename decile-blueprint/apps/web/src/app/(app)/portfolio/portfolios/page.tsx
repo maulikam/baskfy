@@ -13,7 +13,8 @@ import {
 import { CommandCenterScreen } from "@/components/portfolio/command/command-center-screen";
 import { PortfoliosList } from "@/components/portfolios/portfolios-list";
 import { serverApi } from "@/lib/api/server";
-import { DeskUnavailable, fetchRegime, type Regime } from "@/lib/desk/fetch";
+import { fetchRegime, type Regime } from "@/lib/desk/fetch";
+import { readerSafeDeskError } from "@/lib/portfolio/desk-error";
 import { fetchInvestments } from "@/lib/investments/fetch";
 import { fetchPortfolioHoldings, readPortfolioOverview } from "@/lib/portfolio/fetch";
 import { isMarketOpen } from "@/lib/market/session";
@@ -136,13 +137,14 @@ async function readRegime(): Promise<{ regime: Regime | null; error: string | nu
   try {
     return { regime: await fetchRegime(), error: null };
   } catch (error) {
-    return {
-      regime: null,
-      error:
-        error instanceof DeskUnavailable
-          ? `The desk did not answer: ${error.message}`
-          : "The desk did not answer.",
-    };
+    /* THE TRANSPORT'S OWN MESSAGE NEVER REACHES THE SCREEN, and it used to.
+       `DeskUnavailable.message` is the fetch's text — "http://127.0.0.1:8100/api/v1/desk/regime
+       responded 404" — so a reader met an internal host and port on a portfolio page. It was
+       found by looking at a screenshot, not by a test, which is why there is now a test
+       (`no-internals.test.tsx`). The detail is still worth having, so it is logged rather than
+       rendered: the person who can act on a 404 is reading the logs, not the page. */
+    console.error("[portfolios] the desk's regime could not be read", error);
+    return { regime: null, error: readerSafeDeskError(error) };
   }
 }
 

@@ -597,7 +597,12 @@ describe("attribution by portfolio", () => {
     });
 
     expect(built.period.unavailable).toBe(PERIOD_UNAVAILABLE);
-    expect(built.period.unavailable).toContain("/nav");
+    /* Corrected 11 Sep 2026: this asserted developer-facing copy — an API route, a column
+       name — which is what a browser screenshot of the assembled screen exposed as a defect.
+       House rule 2: a test asserts the SPEC, and the spec is the brief's copy style. The
+       identifier now lives in the code comment; `no-internals.test.tsx` holds the rule. */
+    expect(built.period.unavailable).toContain("each portfolio's own value history");
+    expect(built.period.unavailable ?? "").not.toMatch(/\/nav|\/api\/v\d/);
     for (const entry of built.period.rows) {
       expect(entry.amount.value).toBeNull();
     }
@@ -750,7 +755,11 @@ describe("what cannot be decomposed", () => {
        it, so the equity-only return cannot be separated from the total. */
     const drag = NOT_DECOMPOSABLE.find((effect) => effect.name === "Cash drag");
 
-    expect(drag?.reason).toContain("net_flow");
-    expect(drag?.reason).toContain("inside it");
+    /* Corrected 11 Sep 2026: this asserted developer-facing copy — an API route, a column
+       name — which is what a browser screenshot of the assembled screen exposed as a defect.
+       House rule 2: a test asserts the SPEC, and the spec is the brief's copy style. The
+       identifier now lives in the code comment; `no-internals.test.tsx` holds the rule. */
+    expect(drag?.reason).toContain("between cash and shares inside it");
+    expect(drag?.reason ?? "").not.toMatch(/net_flow|packages\/core/);
   });
 });

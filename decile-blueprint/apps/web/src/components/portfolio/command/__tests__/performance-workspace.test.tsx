@@ -423,15 +423,24 @@ describe("what moved the number", () => {
     expect(within(band).getByTestId("attribution-row-2")).toHaveTextContent("loss of");
   });
 
-  it("unavailable: the period band shows no figure and names the endpoint it needs", () => {
+  it("unavailable: the period band shows no figure and says what is missing, in the reader's terms", () => {
+    /* THIS TEST USED TO ASSERT THE OPPOSITE, and it was pinning a defect.
+       It required the copy to contain `/nav` — "names the endpoint it needs" — so the screen told
+       a retail investor which API route would serve the figure. A screenshot of the assembled page
+       is what caught it: the same instinct had put `GET /api/v1/...`, `net_flow`, `packages/core`
+       and a live `http://127.0.0.1:8100` in front of a reader. House rule 2 says a test asserts
+       the SPEC, and the spec is the brief's copy style: concise, factual, calm. The engineering
+       detail is not lost; it is in `PERIOD_UNAVAILABLE`'s doc comment, where the person who can
+       act on it is reading. `no-internals.test.tsx` now holds the rule for the whole tree. */
     renderWorkspace();
     const band = screen.getByTestId("attribution-period");
 
     expect(band).toHaveTextContent("Not available");
-    expect(band).toHaveTextContent("/nav");
-    /* Apportioning the window's profit by weight would assume every portfolio returned the same
+    expect(band).toHaveTextContent("each portfolio's own value history");
+    /* Apportioning the window's profit by size would assume every portfolio returned the same
        thing, which is the assumption this panel exists to test. */
-    expect(band).toHaveTextContent("apportioned by weight");
+    expect(band).toHaveTextContent("every portfolio returned the same thing");
+    expect(band.textContent ?? "").not.toMatch(/\/nav|\/api\/v\d|GET |POST /);
   });
 
   it("unavailable: with each portfolio's own series the period band reconciles instead", () => {

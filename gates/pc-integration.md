@@ -62,40 +62,27 @@ be a broken product; this is where that is caught.
   EVIDENCE:  ✖ 1 problem (0 errors, 1 warning) | ok — 30 redirected source(s), no page file shadowed.
       The one warning is the pre-existing `data-table.tsx` React-compiler note, present at baseline.
 
-- [ ] I9: Accessibility — axe finds no violation on the assembled screen, in light AND dark.
+- [x] I9: Accessibility — axe finds no violation on the assembled screen, in light AND dark.
   CHECK: cd decile-blueprint/apps/web && pnpm exec playwright test e2e/command-center.spec.ts --grep "accessibility|contrast" --reporter=list 2>&1 | tail -6
   EXPECT: /\d+ passed/
-  EVIDENCE: not run.
-      **Blocked in this session, and not by the code.** `playwright.config.ts` starts the API,
-      which runs `alembic upgrade head` against Postgres on 127.0.0.1:5433. There is no Postgres
-      on this machine (`postgres` and `pg_isready` are both absent) and the Docker daemon is not
-      running (`docker info` fails), so the database cannot be brought up and the browser suite
-      cannot start: `Error: Process from config.webServer was not able to start. Exit code: 1`.
-      The same missing daemon blocks I12's deploy.
-  ABANDON: I9 the browser cannot be started here. What IS proved arithmetically:
-      `contrast.test.ts` + `no-brand-as-text.test.ts` — **540 assertions, all passing** — check
-      every token pair in BOTH themes, including `--brand` on its own foreground and `--info` on
-      all three of its surfaces. What is NOT proved is what the browser actually painted:
-      translucent surfaces can undo a passing token pair, and axe checks structure a token
-      table cannot see. **PC1's G15 was green on 11 Sep against PC1's screen; it has NOT been
-      re-run against the assembled one.** This is the single biggest caveat on this work.
+  EVIDENCE: `4 passed`. **It failed on the first run, and the failure was real.** axe reported
+      `color-contrast`, impact serious, on the attribution panel's "Not available" pill:
+      `--muted-foreground` #6f6f6f on `--muted` #f0f0f0 is **4.41:1**, under the 4.5 AA
+      threshold. `contrast.test.ts` had 540 assertions and never checked that pair — the token is
+      named for the surface it was illegible on. Fixed by darkening it to #686868 (background
+      5.33, card 5.57, muted 4.89) and by adding `--muted` to the token's surface list, which was
+      confirmed to go red against the old value. This is the gate earning its keep: the
+      arithmetic half was green while the painted page failed.
 
-- [ ] I10: Responsive — the rail collapses on tablet, the desktop table is not attempted on
+
+- [x] I10: Responsive — the rail collapses on tablet, the desktop table is not attempted on
       mobile, and nothing scrolls sideways, with all five panels present.
   CHECK: cd decile-blueprint/apps/web && pnpm exec playwright test e2e/command-center.spec.ts --grep "tablet|mobile" --reporter=list 2>&1 | tail -6
   EXPECT: /\d+ passed/
-  EVIDENCE: not run — same blocker as I9.
-      **Blocked in this session, and not by the code.** `playwright.config.ts` starts the API,
-      which runs `alembic upgrade head` against Postgres on 127.0.0.1:5433. There is no Postgres
-      on this machine (`postgres` and `pg_isready` are both absent) and the Docker daemon is not
-      running (`docker info` fails), so the database cannot be brought up and the browser suite
-      cannot start: `Error: Process from config.webServer was not able to start. Exit code: 1`.
-      The same missing daemon blocks I12's deploy.
-  ABANDON: I10 the responsive behaviour is asserted in jsdom where it can be (the phone list
-      renders instead of the table below `md`, sharing ONE `RowDetail` renderer so the phone
-      cannot drift into showing less), but jsdom runs no stylesheet, so the collapse itself —
-      a CSS decision — is unverified for the assembled screen. PC1's G16 was green against
-      PC1's screen and has not been re-run with five more panels in it.
+  EVIDENCE: `3 passed` — the rail collapses at 1024, the desktop table is not rendered at 390,
+      nothing scrolls sideways, and every state still explains itself with one next action on a
+      phone. Full spec: `14 passed (47.2s)`.
+
 
 - [x] I11: `docs/PORTFOLIO-COMMAND-CENTER.md` §2.2 is up to date — every blocked metric a leaf
       discovered is recorded, and every one a leaf UNblocked is corrected.
@@ -195,30 +182,32 @@ is the whole reason this file exists.
       allocation tab opens that instrument, while a broker slice carries no link rather than a
       dead one.
 
-- [ ] I19: **The design is actually looked at.** Every other gate on this screen is a proposition
-      a test can hold. The brief's first paragraph is not: *"a premium, modern financial-
-      intelligence workspace comparable in quality and information density to Linear, Stripe, Ramp
-      and institutional portfolio terminals ... not a conventional broker dashboard or a generic
-      collection of white statistic cards."* A suite of 2,300 green tests cannot tell you the
-      screen looks cheap. So the assembled screen is rendered in a real browser at 1440, at tablet
-      and at phone width, in both themes, and the screenshots are examined against the brief's
-      named anti-patterns: every metric in its own isolated card, decorative gradients, colour
-      without a second signal, a page so long it cannot be read.
+- [x] I19: **The design is actually looked at.**
   CHECK: cd decile-blueprint/apps/web && pnpm exec playwright test e2e/command-center.spec.ts --grep "screenshot" --reporter=list 2>&1 | tail -4
   EXPECT: /\d+ passed/
-  EVIDENCE: not run — same blocker as I9.
-      **Blocked in this session, and not by the code.** `playwright.config.ts` starts the API,
-      which runs `alembic upgrade head` against Postgres on 127.0.0.1:5433. There is no Postgres
-      on this machine (`postgres` and `pg_isready` are both absent) and the Docker daemon is not
-      running (`docker info` fails), so the database cannot be brought up and the browser suite
-      cannot start: `Error: Process from config.webServer was not able to start. Exit code: 1`.
-      The same missing daemon blocks I12's deploy.
-  ABANDON: I19 **nobody has looked at this screen.** It is the honest headline of this run: 2,825
-      tests are green and not one of them can report that the result looks cheap, that the band
-      reads as a row of isolated cards, or that the page is too long. The brief's first
-      paragraph is a design proposition and it remains unverified. First thing to do when a
-      database is available: `pnpm exec playwright test e2e/command-center.spec.ts`, then open
-      `/portfolio/portfolios` at 1440, 1024 and 390 in both themes and read it.
+  EVIDENCE: `7 passed` — six captures at 1440 / 1024 / 390 in both themes, and they were opened
+      and read. **This gate found more than every other gate on this screen combined**, and none
+      of it was visible to a test:
+      · **A live internal address in front of a customer.** The regime panel printed the API's own
+        transport error, so the page read `http://127.0.0.1:8100/api/v1/desk/regime responded
+        404`. Now sanitised at the seam where the error is caught (`readerSafeDeskError`), with
+        the detail logged instead.
+      · **Developer prose throughout the copy.** `GET /api/v1/portfolio/{id}/nav`, `net_flow`,
+        `packages/core`, `todays_contribution`, `raw_candidate_tier`, `reason_codes` all rendered
+        to a retail reader. Six strings rewritten for the reader; the identifiers moved into the
+        doc comments, where the person who can act on them is reading.
+      · **Six tests were PINNING that defect** — one literally required the copy to contain
+        `/nav` ("names the endpoint it needs"). Corrected to the brief's copy style under house
+        rule 2, each with a comment saying what it used to assert and why that was wrong.
+      · **The page was far too long**, against the brief's explicit "avoid a very long page". An
+        EMPTY account measured **4,661px on a phone**, most of it a six-entry list explaining
+        what an account with no holdings cannot be broken down by. Folded into a disclosure
+        carrying its own count and summary — nothing hidden, one click away. Measured after:
+        **mobile 3,708px (−20 %), desktop 2,317 → 1,763px (−24 %)**.
+      · `no-internals.test.tsx` now holds the rule for the whole portfolio tree, so the next
+        route or column name that reaches a reader fails in jsdom rather than waiting for
+        somebody to open a browser.
+
 
 - [x] I20: The adversarial re-read of PC1's own gates, run at integration rather than trusted
       from its ledger — `GATES.md` G7 (no bare dash), G11 (never colour alone) and G12 (nothing

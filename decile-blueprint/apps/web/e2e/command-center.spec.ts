@@ -130,3 +130,32 @@ test("on mobile every state still explains itself with one next action", async (
   const bare = body.split("\n").filter((line) => line.trim() === "—" || line.trim() === "-");
   expect(bare, `bare dash lines: ${JSON.stringify(bare)}`).toEqual([]);
 });
+
+/* ------------------------------------------------------------------ *
+ * The gate that is not a proposition — `gates/pc-integration.md` I19
+ * ------------------------------------------------------------------ *
+ *
+ * Every other check on this screen is something a test can assert. The brief's first paragraph is
+ * not: *"a premium, modern financial-intelligence workspace comparable in quality and information
+ * density to Linear, Stripe, Ramp and institutional portfolio terminals ... not a conventional
+ * broker dashboard or a generic collection of white statistic cards."*
+ *
+ * A suite of 2,800 green tests cannot report that a screen looks cheap. This captures it at the
+ * three widths in both themes so a person — or a model with eyes — can look at the thing itself
+ * and check it against the brief's own named anti-patterns: every metric in its own isolated
+ * card, decorative gradients, colour without a second signal, a page too long to read.
+ */
+for (const theme of ["light", "dark"] as const) {
+  for (const [name, size] of Object.entries(VIEWPORTS)) {
+    test(`screenshot: the command centre at ${name} in ${theme}`, async ({ page }) => {
+      await page.setViewportSize(size);
+      await page.goto(PATH);
+      await setTheme(page, theme);
+      await expect(page.getByRole("heading", { name: "Portfolio Command Center" })).toBeVisible();
+      await page.screenshot({
+        path: `test-results/shots/command-center-${name}-${theme}.png`,
+        fullPage: true,
+      });
+    });
+  }
+}

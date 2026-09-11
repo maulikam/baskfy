@@ -175,8 +175,16 @@ export function NewPortfolioFlow({
   const [name, setName] = useState(seed?.name ?? "");
   const [benchmark, setBenchmark] = useState(benchmarks[0] ?? "");
   const [sourceId, setSourceId] = useState<string | null>(seed?.sourceId ?? null);
-  /** The existing portfolio being filed into, when `start` is EXISTING. */
-  const [targetId, setTargetId] = useState<number | null>(null);
+  /**
+   * The existing portfolio being filed into, when `start` is EXISTING.
+   *
+   * Pre-selected to the first target when the flow is OPENED on that path — the page's own
+   * "Add to a portfolio" button seeds `start: "EXISTING"`, and a radio list arriving with nothing
+   * chosen would leave Continue disabled for no reason a reader can see.
+   */
+  const [targetId, setTargetId] = useState<number | null>(
+    seed?.start === "EXISTING" ? (targets[0]?.portfolio_id ?? null) : null,
+  );
 
   /** EXISTING skips kind, name and benchmark — the portfolio already has all three. */
   const filingIntoExisting = start === "EXISTING";

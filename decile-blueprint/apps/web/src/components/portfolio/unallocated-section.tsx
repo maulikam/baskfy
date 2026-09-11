@@ -273,6 +273,21 @@ export function UnallocatedSection({
           <Button type="button" variant="outline" onClick={() => openFlow(null)}>
             + New portfolio
           </Button>
+          {/* ITS OWN BUTTON, not a branch inside "+ New portfolio" (11 Sep 2026).
+              PF9 put "add to a portfolio you already have" behind that button, which is where a
+              person looking to add to an EXISTING portfolio will never look — Maulik went looking
+              and reported not seeing it, and he was right to. The flow underneath is the same; it
+              just opens on the step that asks which portfolio.
+              Hidden when there is nothing to add to, so it is never a dead end. */}
+          {targets && targets.length > 0 ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => openFlow({ start: "EXISTING", step: "target" })}
+            >
+              Add to a portfolio
+            </Button>
+          ) : null}
         </div>
       )}
 

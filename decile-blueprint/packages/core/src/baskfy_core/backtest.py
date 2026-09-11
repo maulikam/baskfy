@@ -784,6 +784,10 @@ class BacktestData:
     #: The published ``pipeline_run.data_version`` behind the panel. Carried into the metrics hash
     #: so docs/10's determinism test ("same config + same `data_version`") means what it says.
     data_version: int | None = None
+    #: What the adjusted price panel above can and cannot support — see `AdjustmentCoverage`.
+    #: Assembled by the caller, like everything else here: `packages/core` touches nothing, so the
+    #: engine cannot look up how far back the corporate actions go.
+    adjustment_coverage: AdjustmentCoverage | None = None
 
     def symbol_for(self, instrument_id: int) -> str:
         return self.symbols.get(instrument_id, f"#{instrument_id}")
@@ -983,6 +987,67 @@ ProgressSink = Callable[[BacktestProgress], None]
 
 
 @dataclass(frozen=True, slots=True)
+class AdjustmentCoverage:
+    """What the adjusted price series a run read can and cannot support.
+
+    **The engine cannot discover this and the caller can** — the same division `blind_rebalances`
+    below is built on. `packages/core` touches nothing (law 1), so the two dates are handed in.
+
+    THE TWO FACTS A BACKTEST'S READER NEEDS, AND NEITHER WAS EVER STATED
+    -------------------------------------------------------------------
+    **1. How far back corporate actions go.** `ohlcv_daily.close` is adjusted only for the actions
+    on record, and `docs/DECISIONS.md` §21.8 measured the problem: NSE's endpoint serves a recent
+    window and ignores how far back it is asked, returning the same 19 records for a 2024 query as
+    for a 2026 one. Measured on the box on 11 Sep 2026: bars from 2017-01-02, corporate actions
+    from 2024-01-02 — **seven years of history with no coverage at all.** A twelve-month momentum
+    factor whose window spans an unapplied 1:2 split reads as a 50 % loss and ranks the name at the
+    bottom of a decile it belongs near the top of. That is not a rounding error on a momentum
+    screen; it is the screen selecting on price breaks instead of returns.
+
+    **2. The series is "as of today", not as of the simulated date.** It carries every action known
+    *now*, including ones whose ex-date falls after a date being reconstructed.
+    `reprocess_instrument` takes an `as_of` for exactly this, and the nightly deliberately passes
+    nothing because today's
+    screen should be served today's series — its docstring says so. §21.9 found the consequence in
+    a parity run (eight rows off by exactly a dividend) and **declined to settle** the larger
+    question of storing one adjusted series per as-of date. This does not settle it either. What it
+    stops is the silence: a run that cannot know its prices were adjusted after the fact should at
+    least say so.
+
+    Neither fact makes a run wrong. Both change what it means, and a confident CAGR printed with
+    neither stated is a number a reader will take for more than it is.
+    """
+
+    #: Earliest corporate action on record, or `None` when there are none at all.
+    actions_from: dt.date | None
+    #: Latest corporate action on record.
+    actions_to: dt.date | None
+    #: The stored series carries every action known at load time, not at each simulated date.
+    as_of_today: bool = True
+
+    def caveats(self, start: dt.date, end: dt.date) -> tuple[str, ...]:
+        """The sentences this run has to carry, for the window it actually covered."""
+        notes: list[str] = []
+        if self.actions_from is None:
+            notes.append(
+                "No corporate actions are on record, so this series is unadjusted throughout. "
+                "Any split or bonus in the window reads as a price move."
+            )
+        elif start < self.actions_from:
+            notes.append(
+                f"Corporate actions are on record only from {self.actions_from.isoformat()}, and "
+                f"this run starts {start.isoformat()}. Splits, bonuses and dividends before that "
+                f"date are not applied, so returns spanning one are wrong by its ratio."
+            )
+        if self.as_of_today:
+            notes.append(
+                "Prices are adjusted as of the day this ran, not as of each simulated day, so a "
+                "corporate action is reflected in bars that predate it."
+            )
+        return tuple(notes)
+
+
+@dataclass(frozen=True, slots=True)
 class BacktestResult:
     """Everything docs/10 §Outputs asks for, before anything decides where to store it."""
 
@@ -1006,6 +1071,10 @@ class BacktestResult:
     #: completely different things. The engine cannot tell them apart; it can count them, so the
     #: caller that does know can decide whether the run means anything.
     blind_rebalances: tuple[dt.date, ...] = ()
+    #: What the price series this run read can and cannot support. `None` only when a caller has
+    #: not been taught to supply it — which is itself worth seeing, so it is not defaulted to an
+    #: empty coverage that would read as "no caveats".
+    adjustment_coverage: AdjustmentCoverage | None = None
     #: Fill days where a decision was taken and **nothing at all** could be traded (M45).
     #:
     #: Distinct from `blind_rebalances`, which is about the *screen* returning nothing. Here the
@@ -1251,6 +1320,7 @@ def run_backtest(  # noqa: PLR0912, PLR0915 - the execution model is a sequence;
         unexecuted_fills=tuple(unexecuted),
         notes=tuple(dict.fromkeys(notes)),
         data_version=data.data_version,
+        adjustment_coverage=data.adjustment_coverage,
     )
 
 

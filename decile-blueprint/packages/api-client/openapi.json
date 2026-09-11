@@ -169,6 +169,25 @@
         "title": "ActivityOut",
         "type": "object"
       },
+      "AddHoldingsIn": {
+        "additionalProperties": false,
+        "description": "``POST /portfolio/{id}/holdings`` — file more shares into a portfolio that already exists.\n\nThe same holding entries `POST /portfolio` takes, and the same meaning: a quantity narrows the\nrequest, omitting it means \"everything available\".",
+        "properties": {
+          "holdings": {
+            "items": {
+              "$ref": "#/components/schemas/HoldingKeyIn"
+            },
+            "minItems": 1,
+            "title": "Holdings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "holdings"
+        ],
+        "title": "AddHoldingsIn",
+        "type": "object"
+      },
       "AdminActionListOut": {
         "additionalProperties": false,
         "properties": {
@@ -35046,6 +35065,140 @@
           }
         },
         "summary": "Portfolio Detail",
+        "tags": [
+          "portfolio"
+        ]
+      }
+    },
+    "/api/v1/portfolio/{portfolio_id}/holdings": {
+      "post": {
+        "description": "Add shares to a portfolio that already exists. **Not an order path.**\n\nMaulik, 11 Sep 2026: *\"the current system does not allow to add stock into existing portfolio,\nit only allows to create a new one\"*. He was right, and it made the product unusable after the\nfirst pass: everything he owned went into one group called \"Swing Manual\", and the only way to\nbuild a second was to free the shares by hand first — with no screen that could free them.\n\n**This route MOVES shares, and that is the difference between it and `POST /portfolio`.**\nCreating a group takes only what is unallocated, because a new portfolio has no claim on\nanything yet. Adding to an existing one is the operation a person reaches for when the shares\nare already somewhere and belong somewhere else, so the cap here is the **whole position**,\nnot the free remainder. `_apply_allocation` takes the free shares first and then the smallest\nother slice, so the fewest portfolios are disturbed and Unallocated drains before anything is\ntaken out of a group the user built.\n\nWhat it refuses is still arithmetic: more shares than exist. And it refuses a **broker pile**\nas the target — those rows are Unallocated by definition (0038), and \"add these shares to\nUnallocated\" is a *removal*, which is a different verb and deserves its own route rather than\nthis one quietly doing two things.\n\nA MONITORING view takes membership, not quantity (§4.1): a lens answers \"which names\", never\n\"how many\", so a quantity sent for one is accepted and ignored rather than refused — the body\nis shared with the create route and a client should not have to know which kind it is talking\nto before it can send a holding.",
+        "operationId": "addHoldings",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "portfolio_id",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Portfolio Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddHoldingsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/baskfy_api__routers__portfolio_overview__PortfolioDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Invalid screen definition"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Add Holdings",
         "tags": [
           "portfolio"
         ]

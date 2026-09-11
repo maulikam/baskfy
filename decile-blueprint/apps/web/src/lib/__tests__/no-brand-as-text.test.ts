@@ -38,8 +38,19 @@ function walk(path: string): string[] {
   return readdirSync(path).flatMap((entry) => walk(join(path, entry)));
 }
 
-/** `text-brand`, `text-brand/70`, `hover:text-brand` — the token set on type. */
-const BRAND_AS_TEXT = /\b(?:[a-z-]+:)*text-brand\b(?!-foreground)/;
+/**
+ * `text-brand`, `text-brand/70`, `hover:text-brand` — the raw brand value set on type.
+ *
+ * Two variants are exempt, and both are the rule working rather than exceptions to it:
+ *
+ * · `text-brand-foreground` is what sits ON the brand fill, not on the canvas.
+ * · `text-brand-strong` is the darkened orange the prose above already describes — "the same hue
+ *   darkened ... for anything that is text". PC1 (11 Sep 2026) made it a token of its own when
+ *   the brand accent returned to the interface: #9a3412 is **6.98:1** on the canvas and #fdba74
+ *   is **11.37:1** on the dark one, both comfortably past 4.5. `contrast.test.ts` asserts the
+ *   pairs; this file only ensures nobody reaches for the bright one instead.
+ */
+const BRAND_AS_TEXT = /\b(?:[a-z-]+:)*text-brand\b(?!-foreground|-strong)/;
 
 describe("the brand orange is never rendered as text", () => {
   const files = walk(SRC).filter((path) => !path.includes("__tests__"));
@@ -56,8 +67,8 @@ describe("the brand orange is never rendered as text", () => {
       .findIndex((line) => BRAND_AS_TEXT.test(line) && !line.trimStart().startsWith("*"));
     expect(
       offender,
-      `line ${offender + 1} sets type in --brand, which is 3.27:1 on the canvas and needs 4.5. ` +
-        "Use text-accent — the same hue, at 5.31:1.",
+      `line ${offender + 1} sets type in --brand, which fails the 4.5:1 floor for text. ` +
+        "Use text-brand-strong — the same hue, darkened, at 6.98:1 light and 11.37:1 dark.",
     ).toBe(-1);
   });
 });

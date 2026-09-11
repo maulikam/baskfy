@@ -2556,6 +2556,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/portfolio/{portfolio_id}/holdings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Holdings
+         * @description Add shares to a portfolio that already exists. **Not an order path.**
+         *
+         *     Maulik, 11 Sep 2026: *"the current system does not allow to add stock into existing portfolio,
+         *     it only allows to create a new one"*. He was right, and it made the product unusable after the
+         *     first pass: everything he owned went into one group called "Swing Manual", and the only way to
+         *     build a second was to free the shares by hand first — with no screen that could free them.
+         *
+         *     **This route MOVES shares, and that is the difference between it and `POST /portfolio`.**
+         *     Creating a group takes only what is unallocated, because a new portfolio has no claim on
+         *     anything yet. Adding to an existing one is the operation a person reaches for when the shares
+         *     are already somewhere and belong somewhere else, so the cap here is the **whole position**,
+         *     not the free remainder. `_apply_allocation` takes the free shares first and then the smallest
+         *     other slice, so the fewest portfolios are disturbed and Unallocated drains before anything is
+         *     taken out of a group the user built.
+         *
+         *     What it refuses is still arithmetic: more shares than exist. And it refuses a **broker pile**
+         *     as the target — those rows are Unallocated by definition (0038), and "add these shares to
+         *     Unallocated" is a *removal*, which is a different verb and deserves its own route rather than
+         *     this one quietly doing two things.
+         *
+         *     A MONITORING view takes membership, not quantity (§4.1): a lens answers "which names", never
+         *     "how many", so a quantity sent for one is accepted and ignored rather than refused — the body
+         *     is shared with the create route and a client should not have to know which kind it is talking
+         *     to before it can send a holding.
+         */
+        post: operations["addHoldings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/portfolio/{portfolio_id}/nav": {
         parameters: {
             query?: never;
@@ -3708,6 +3751,17 @@ export interface components {
              * @default 0
              */
             total: number;
+        };
+        /**
+         * AddHoldingsIn
+         * @description ``POST /portfolio/{id}/holdings`` — file more shares into a portfolio that already exists.
+         *
+         *     The same holding entries `POST /portfolio` takes, and the same meaning: a quantity narrows the
+         *     request, omitting it means "everything available".
+         */
+        AddHoldingsIn: {
+            /** Holdings */
+            holdings: components["schemas"]["HoldingKeyIn"][];
         };
         /** AdminActionListOut */
         AdminActionListOut: {
@@ -23674,6 +23728,113 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["baskfy_api__routers__portfolio_overview__PortfolioDetailOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    addHoldings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                portfolio_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddHoldingsIn"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

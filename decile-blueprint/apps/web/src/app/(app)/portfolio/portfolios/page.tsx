@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import type { SleeveListOut } from "@baskfy/api-client";
 
-import { AllocationAnalytics } from "@/components/portfolio/allocation-analytics";
+import { CommandCenterScreen } from "@/components/portfolio/command/command-center-screen";
 import { PortfoliosList } from "@/components/portfolios/portfolios-list";
 import { serverApi } from "@/lib/api/server";
 import { fetchInvestments } from "@/lib/investments/fetch";
@@ -63,19 +63,32 @@ export default async function PortfolioPortfoliosPage() {
   }));
 
   return (
-    <div className="space-y-6">
-      {/* Monitoring views are excluded: §4.1 says a lens enters no total, and every figure in the
-          band is a share of one. They keep their own row in the list below. */}
-      <AllocationAnalytics
-        rows={overview?.portfolios ?? []}
+    <div className="space-y-8">
+      {/* PC1 — the command centre replaces the repeating per-portfolio blocks this page used to
+          draw. `docs/PORTFOLIO-COMMAND-CENTER.md` carries the plan and, more usefully, the survey
+          of which metrics Baskfy can and cannot compute; nothing here invents one. */}
+      <CommandCenterScreen
+        overview={overview}
         unallocated={overview?.unallocated ?? null}
+        error={overview ? null : "The portfolio service did not answer."}
       />
-      <PortfoliosList
-        initial={list}
-        error={data ? null : (error ?? "unreachable")}
-        investments={bookInvestments}
-        initialSleeves={initialSleeves}
-      />
+
+      {/* The grouping forest, sub-portfolios and the basket book are a different job from the
+          analytical one above — kept, below, rather than folded in. PC6 moves configuration into
+          its own drawer. */}
+      <details className="rounded-xl border border-border bg-card">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
+          Grouping, sub-portfolios and baskets
+        </summary>
+        <div className="border-t border-border p-4">
+          <PortfoliosList
+            initial={list}
+            error={data ? null : (error ?? "unreachable")}
+            investments={bookInvestments}
+            initialSleeves={initialSleeves}
+          />
+        </div>
+      </details>
     </div>
   );
 }

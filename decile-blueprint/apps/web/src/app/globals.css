@@ -78,10 +78,39 @@
   --accent: #0a0a0a;
   --accent-foreground: #ffffff;
   --accent-muted: #f0f0f0;
-  --brand: #0a0a0a;
-  --brand-foreground: #ffffff;
 
-  /* --- Semantic meaning. Green up, red down; never the mark's orange. ------ */
+  /* --- The mark's orange, promoted to the interface (PC1, 11 Sep 2026) -----
+   *
+   * This used to read `--brand: #0a0a0a`, and the comment below used to end "never the mark's
+   * orange". Maulik asked for the reverse — "Basqfy orange as the primary brand accent",
+   * "'Review rebalance' primary orange action" — and it is his call to make.
+   *
+   * THE RULE THE OLD COMMENT PROTECTED SURVIVES, because the brief asks for it too: green and
+   * red mean gain, loss and severity, and orange never does. Orange means *this is Baskfy* and
+   * *this is the primary action*. Two different jobs; they never collide on one element.
+   *
+   * ON THE PAIRING. `--brand` is the artwork's own #fe7510 and its foreground is CHARCOAL, not
+   * white. White on this orange is 2.70:1 and fails AA outright; charcoal is **7.32:1**, which
+   * is AAA. The reflex to put white on a coloured button is what would have forced a muddy
+   * brown-orange here — the pairing was wrong, not the colour.
+   *
+   * `--brand-strong` is for orange TEXT on a light surface, where #fe7510 is 2.58:1 and unusable.
+   * It is 6.98:1. Never use `--brand` for text on `--background`.
+   */
+  --brand: #fe7510;
+  --brand-foreground: #0a0a0a;
+  --brand-strong: #9a3412;
+  --brand-muted: #fff3e9;
+  --brand-border: #fcd2ad;
+
+  /* --- Benchmark and informational. Sparingly, and never for P&L. ----------
+   * The brief allows blue or violet "sparingly for benchmarks and informational states", and a
+   * benchmark line genuinely needs to be neither brand nor gain/loss. 7.90:1 on card.
+   */
+  --info: #4338ca;
+  --info-muted: #eef0fd;
+
+  /* --- Semantic meaning. Green up, red down; never brand orange. ---------- */
   --positive: #1a7f37;
   --positive-muted: #ebf8f2;
   --negative: #a81f14;
@@ -173,8 +202,19 @@
   --accent: #f7f7f7;
   --accent-foreground: #0a0a0a;
   --accent-muted: #1f1f1f;
-  --brand: #f7f7f7;
+
+  /* The same orange carries into dark unchanged — 7.32:1 against charcoal either way — so the
+   * primary action is identical in both themes rather than becoming a second design. Only the
+   * TEXT variant moves: #9a3412 would vanish on near-black, so dark takes #fdba74 (11.37:1).
+   * That is precisely why `--brand-strong` is a token and not a hardcoded hex. */
+  --brand: #fe7510;
   --brand-foreground: #0a0a0a;
+  --brand-strong: #fdba74;
+  --brand-muted: #2a1708;
+  --brand-border: #5c3210;
+
+  --info: #a5b4fc;
+  --info-muted: #1c1f3a;
 
   --positive: #4ecb71;
   --positive-muted: #102a1a;
@@ -205,6 +245,11 @@
   --color-accent-muted: var(--accent-muted);
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
+  --color-brand-strong: var(--brand-strong);
+  --color-brand-muted: var(--brand-muted);
+  --color-brand-border: var(--brand-border);
+  --color-info: var(--info);
+  --color-info-muted: var(--info-muted);
   --color-positive: var(--positive);
   --color-positive-muted: var(--positive-muted);
   --color-negative: var(--negative);

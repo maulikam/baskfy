@@ -14,6 +14,12 @@ import { expect, type Page } from "@playwright/test";
 /** Seeded by `baskfy_api.seed e2e` — `E2E_EMAIL` / `E2E_PASSWORD` in `seed.py`. */
 export const E2E_EMAIL = "e2e@example.com";
 export const E2E_PASSWORD = "e2e-suite-password";
+/**
+ * `seed.E2E_PUBLIC_ID`, and the seed's comment says why it is fixed: *"A fixed public_id keeps the
+ * JWT's `sub` stable across runs."* It is what `auth.setup.ts` mints the session's `sub` from and
+ * what the API looks the account up by.
+ */
+export const E2E_PUBLIC_ID = "e2e000000001";
 
 /** Where a sign-in with no `?next=` lands (`src/app/actions/auth.ts`). */
 export const DEFAULT_DESTINATION = "/build";

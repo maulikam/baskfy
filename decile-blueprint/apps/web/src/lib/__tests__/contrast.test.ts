@@ -66,6 +66,12 @@ const TEXT_ON_SURFACE: ReadonlyArray<{ token: string; surfaces: readonly string[
   { token: "--positive", surfaces: ["--background", "--card", "--positive-muted"] },
   { token: "--negative", surfaces: ["--background", "--card", "--negative-muted"] },
   { token: "--warning", surfaces: ["--background", "--card", "--warning-muted"] },
+  /* PC1. `--info` is the brief's "blue or violet ... sparingly for benchmarks and informational
+     states". The Command Center renders it as an icon on `--info-muted` with `--foreground` text
+     beside it, so BOTH pairs are asserted — an informational panel whose own text fails is worse
+     than no panel, because it reads as decoration. */
+  { token: "--info", surfaces: ["--background", "--card", "--info-muted"] },
+  { token: "--foreground", surfaces: ["--info-muted"] },
 ];
 
 describe("the token palette", () => {

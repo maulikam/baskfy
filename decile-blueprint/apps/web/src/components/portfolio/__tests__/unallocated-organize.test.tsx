@@ -1,12 +1,14 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+import type { CreateOutcome } from "@/components/portfolio/new-portfolio-flow";
 import { UnallocatedSection } from "@/components/portfolio/unallocated-section";
 import type {
   AggregatedHolding,
   GroupingSuggestion,
   HoldingBrokerLine,
+  PortfolioDraft,
   Unallocated,
 } from "@/lib/portfolio/organize";
 
@@ -184,6 +186,67 @@ describe("adding to a portfolio that already exists is reachable from the page",
     await user.click(screen.getByRole("button", { name: "Add to a portfolio" }));
 
     expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
+  });
+});
+
+describe("the Add button actually does something", () => {
+  /* It did nothing at all for one deploy, and three separate faults each produced silence:
+     the server action refused every add for having no name (a portfolio that already exists has
+     one); the refusal then rendered only inside the review step, which this path never reaches;
+     and a SUCCESS left the flow open on the same selection. All three look identical from a
+     chair: you click, and nothing moves. */
+
+  async function openAddFlow() {
+    const user = userEvent.setup();
+    const onCreate =
+      vi.fn<(draft: PortfolioDraft) => Promise<CreateOutcome>>().mockResolvedValue({
+        ok: true,
+        portfolioId: 7,
+      });
+    renderSection({ targets: TARGETS, onCreate });
+    await user.click(screen.getByRole("button", { name: "Add to a portfolio" }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await user.click(screen.getByLabelText(/Add HDFC Bank at Zerodha/));
+    return { user, onCreate };
+  }
+
+  it("sends the draft when Add is clicked", async () => {
+    const { user, onCreate } = await openAddFlow();
+
+    await user.click(screen.getByRole("button", { name: /^Add to Swing$/ }));
+
+    expect(onCreate).toHaveBeenCalledTimes(1);
+    const draft = onCreate.mock.calls[0]?.[0];
+    expect(draft?.start).toBe("EXISTING");
+    expect(draft?.targetPortfolioId).toBe(7);
+    // The portfolio already has a name; the flow never asks for one on this path.
+    expect(draft?.name).toBe("");
+  });
+
+  it("closes the flow once the write succeeds", async () => {
+    const { user } = await openAddFlow();
+
+    await user.click(screen.getByRole("button", { name: /^Add to Swing$/ }));
+
+    await waitFor(() => expect(screen.queryByTestId("new-portfolio-flow")).toBeNull());
+  });
+
+  it("shows a refusal on the step the user is standing on", async () => {
+    const user = userEvent.setup();
+    const onCreate = vi
+      .fn<(draft: PortfolioDraft) => Promise<CreateOutcome>>()
+      .mockResolvedValue({ ok: false, reason: "You cannot file more shares than you own." });
+    renderSection({ targets: TARGETS, onCreate });
+    await user.click(screen.getByRole("button", { name: "Add to a portfolio" }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await user.click(screen.getByLabelText(/Add HDFC Bank at Zerodha/));
+
+    await user.click(screen.getByRole("button", { name: /^Add to Swing$/ }));
+
+    expect(await screen.findByTestId("flow-refusal")).toHaveTextContent(
+      "You cannot file more shares than you own.",
+    );
+    expect(screen.getByTestId("new-portfolio-flow")).toBeInTheDocument();
   });
 });
 

@@ -485,6 +485,19 @@ export function NewPortfolioFlow({
         </div>
       ) : null}
 
+      {/* A refusal is shown WHERE THE USER IS. It used to render only inside the review step, so
+          an add-to-existing refusal — which is confirmed from the holdings step — was set into
+          state and never drawn: the button looked broken rather than refused. */}
+      {refusal && step !== "review" ? (
+        <p
+          role="alert"
+          data-testid="flow-refusal"
+          className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-3 text-xs text-foreground"
+        >
+          {refusal}
+        </p>
+      ) : null}
+
       {/* -------------------------------------------------------------- foot */}
       {step === "start" ? null : (
         <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">

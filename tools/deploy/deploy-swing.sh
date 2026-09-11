@@ -25,6 +25,7 @@
 #   4. run --rm seed reference; seed swing --capital ₹25,00,000 --risk 0.5 (MD1/MD2, audited);
 #   5. up -d api worker ingest-worker beat desk swing-monitor web caddy (caddy recreated, since a
 #      bind-mounted Caddyfile is pinned by inode); prints `docker compose ps`.
+#      KEEP_MONITOR=1 leaves `swing-monitor` alone — see "sparing the monitor" below.
 # Flags: DRY_RUN=true and every BASKFY_SWING_* stay false — they are compose defaults, and this
 # script writes no override. Rollback: the three image lines back to the previous tag + `up -d`.
 # Override the sleeve with SWING_CAPITAL / SWING_RISK; the tag with TAG=<sha>.
@@ -39,6 +40,24 @@ TAG="${TAG:-$(cd "$ROOT" && git rev-parse --short HEAD)}"
 SWING_CAPITAL="${SWING_CAPITAL:-2500000}"
 SWING_RISK="${SWING_RISK:-0.5}"
 export AWS_PROFILE="$PROFILE"
+
+# ------------------------------------------------------------------------- sparing the monitor
+# KEEP_MONITOR=1 deploys everything EXCEPT `swing-monitor` (11 Sep 2026).
+#
+# The session guard below refuses a deploy during market hours because recreating the monitor
+# drops whatever it is holding. That is the right default and it is a blunt one: most deploys do
+# not touch swing code at all, and the monitor is the only service with in-session state worth
+# protecting.
+#
+# So there is a third option between "wait until 15:30" and "lose a trigger": ship everything
+# else now and leave the monitor on its old image until a natural restart. The monitor keeps
+# running, keeps its state, and picks up the new image whenever it is next restarted. Safe
+# whenever the deploy does not change swing code — and when it does, this flag is the wrong tool
+# and the guard's wait is the right one.
+RESTART_SERVICES="api worker ingest-worker beat desk swing-monitor web"
+if [ "${KEEP_MONITOR:-0}" = "1" ]; then
+  RESTART_SERVICES="api worker ingest-worker beat desk web"
+fi
 
 say() { printf '\n── %s\n' "$*"; }
 box() { bash "$HERE/box.sh" "$@"; }
@@ -121,6 +140,14 @@ REFUSING TO DEPLOY: it is $hhmm IST, inside the trading session (09:15-15:30, Mo
   Wait until after 15:30, or deploy at the weekend. Between 15:30 and 18:40 is the clear window
   on a weekday — after the close, before the nightly.
 
+  IF THIS DEPLOY DOES NOT CHANGE SWING CODE, there is a third way: ship everything else now and
+  leave the monitor on its old image until a natural restart.
+
+      KEEP_MONITOR=1 DEPLOY_DURING_SESSION=1 bash tools/deploy/deploy-swing.sh
+
+  If it DOES change swing code, that flag is the wrong tool — the monitor would keep running the
+  old one. Wait.
+
   If this is an emergency and losing a trigger is the lesser cost:
       DEPLOY_DURING_SESSION=1 bash tools/deploy/deploy-swing.sh
 MSG
@@ -192,7 +219,7 @@ box "$(step "$C run --rm seed" "seed reference" 12)" \
     "$(step "$C run --rm seed python -m baskfy_api.seed swing --capital $SWING_CAPITAL --risk $SWING_RISK" "seed swing" 4)"
 
 say "5. up"
-box "$(step "$C up -d api worker ingest-worker beat desk swing-monitor web" up 12)" \
+box "$(step "$C up -d $RESTART_SERVICES" up 12)" \
     "$(step "$C up -d --force-recreate caddy" "caddy recreate" 3)" \
     "sleep 20; $C ps"
 

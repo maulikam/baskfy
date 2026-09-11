@@ -6608,3 +6608,32 @@ eighteen mixed reads still took at least `17/3` s — so the headroom is real an
 `KiteLane`, `LayeredCallSpacer` and the `lane=` argument and every caller is back on the single
 ceiling clock. M85.1's trigger reverses on its own line — remove `SWING_SCAN_AFTER_LOGIN_TASK`
 from `_queue_post_login_refresh`.
+
+## PC1.1 — the browser suite mints its session instead of typing a password ⚠ UNREVIEWED
+
+**11 Sep 2026.** Context: `e2e/auth.setup.ts` drove the login form's Password tab. M46 (`eccef8d`,
+5 Sep) replaced registration, password, OTP and reset with Google sign-in, and did not update the
+setup. Every Playwright spec has failed at that click since, reported as *"N did not run"* rather
+than as failures — so nothing surfaced it. Confirmed pre-existing by running `e2e/nav.spec.ts`
+unchanged: identical failure.
+
+**Choice taken.** The setup mints the session Auth.js would have written: `mintAccessToken` (the
+app's own, so the bearer's claims cannot drift) inside an Auth.js JWT cookie sealed with the
+throwaway `AUTH_SECRET` that `playwright.config.ts` already hands both servers, for the fixed
+`seed.E2E_PUBLIC_ID`. It then loads a gated route and asserts it is not bounced to `/login`, so the
+forgery is proved against the real middleware rather than assumed.
+
+**Rejected.** (a) Driving Google's consent screen — a third party's page, real credentials, and
+automating somebody else's login. (b) A test-only Credentials provider in `src/lib/auth` — that
+adds a second way to be signed in to *production* code to serve a test, and non-negotiable #1's
+culture is that auth paths do not grow for convenience. (c) Leaving it and abandoning G15/G16 —
+the brief's accessibility requirement is one of its strongest, and a dead suite is worth more
+attention than one gate.
+
+**Not fixed here, and still broken:** `account.spec.ts` and `auth-gate.spec.ts` sign in with a
+password inside the test itself, which is what they are testing. M46 removed the thing they test.
+They need rewriting against Google or deleting, and that is a decision about coverage, not a
+mechanical repair.
+
+**To reverse:** restore the previous `auth.setup.ts` from `git show HEAD:...`; nothing else reads
+`E2E_PUBLIC_ID`.

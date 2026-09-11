@@ -1595,3 +1595,47 @@ bhavcopy does not exist before ~18:00, which is correct), `sw_setup_daily` alrea
 afternoon Maulik connects Zerodha: the callback should log two queued refreshes, a `sw_scan_run`
 row should appear with `source="broker-login"` and `provisional=true`, and the Setups page should
 carry today's date. Until that happens M85 is tested, not demonstrated.
+
+---
+
+## PC — the Portfolio Command Center (11 Sep 2026)
+
+Maulik's brief: *"Redesign Basqfy's Portfolios screen completely ... an intelligent portfolio
+operating system — not a broker holdings page and not a collection of generic cards."* Plan and
+the data survey: `docs/PORTFOLIO-COMMAND-CENTER.md`. Tokens and components:
+`docs/PORTFOLIO-DESIGN-SYSTEM.md`.
+
+**Six commits, 78 of 83 gates met, 0 pending, 5 abandoned with reasons.**
+
+| Leaf | Gates | What it is |
+|---|---|---|
+| PC1 `fae98ac` | 17/18 | Command header, health strip, executive band, comparison table, attention rail |
+| PC2 `2cdf51f` | 9/9 | Performance workspace and attribution |
+| PC3 `2f531bc` | 10/10 | Detail workspace, eight tabs |
+| PC4 `bf84c1c` | 9/9 | Rebalance preview drawer |
+| PC5 `15b3b00` | 8/8 | Momentum regime panel |
+| PC6 `f807d2d` | 9/9 | Management drawer |
+| PC-INT `ae3e2b8` | 16/20 | Assembly, plus six brief requirements no leaf claimed |
+
+Suite **155 files / 2,825 tests**, up from 135 / 2,303. `pnpm run lint` 0 errors.
+
+### The defect worth remembering
+
+Every rate the portfolio API sends is a stored **fraction**. PC1's metric band and comparison table
+appended a percent sign to it, so a real 1.99% day would have rendered as **0.0199%** and an 8.2%
+drawdown as **-0.082%**. Forty-five tests were green over it because the fixtures used values the
+server never sends — schema-exact, and not realistic. Found by PC2 and independently by PC3, fixed
+with the conversion moved into the pure layer.
+
+### LOUD ABOUT WHAT IS NOT DONE
+
+* **Nobody has looked at this screen.** `playwright.config.ts` needs Postgres on 5433; this machine
+  has no Postgres binary and no Docker daemon to start one, so axe in both themes, the responsive
+  collapse and the screenshots could not run (I9, I10, I19). 2,825 green tests cannot report that a
+  screen looks cheap, and the brief's first paragraph is a design proposition.
+* **The box is serving the pre-redesign screen.** `baskfy-staging-web-1` runs `baskfy-web:bd78529`,
+  the commit *before* PC1. No deploy is possible from here (no Docker) and a Phase-A deploy is
+  Maulik's call anyway — that box is the live auto-execute host. `NEEDS-MAULIK.md` §PC.
+* **Eleven metrics the brief asks for still have no source**, now listed with what each would take:
+  `docs/PORTFOLIO-COMMAND-CENTER.md` §7.4. Six regime figures are one route change away; an
+  objective has no column at all; there is no route that returns a holding to Unallocated.

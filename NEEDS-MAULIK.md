@@ -1699,3 +1699,44 @@ which does not exist on the box — the compose project names it `baskfy-staging
 probe had been failing on a missing object rather than on a stale deploy, and would have gone on
 reporting "unprovable" after a deploy fixed it. It now reads the running image tag and compares it
 to HEAD.
+
+## CA — the corporate-action fix is committed and the box is still fetching 20 rows a night (11 Sep 2026)
+
+**What is needed:** a deploy of the Python image to the Phase-A box, so the nightly picks up
+`a4d8871`.
+
+**Why it is yours:** the same two reasons as the PC entry above, plus one specific to timing. The
+box is the live auto-execute host, and a Python-image rollout restarts the API, the worker, Beat
+and the ingest worker together. This was found at 22:30 and fixed by 23:00; rolling a production
+image at midnight to beat a deadline that does not exist is exactly what
+`docs/runbooks/bad-data-published.md` refuses — *"you have until tomorrow evening, not until the
+market opens. Do not rush a fix that publishes something."*
+
+**What it blocks:** nothing tonight — 2026-09-11 was repaired by hand and published without it
+(see below). It blocks **tomorrow night onwards**: until the image carries `a4d8871`, the nightly
+goes on asking NSE for corporate actions with no date range and goes on storing the 20-row default
+page. NSE published 87 actions on 2026-09-11 alone. Every night this is not deployed is another
+night of actions silently not applied to `close`, which is the series every factor reads.
+
+**What was done meanwhile.** Only PGIL's `Bonus 1:1` was repaired, because it was the single action
+blocking publication and Kite corroborated it independently. It was fetched from NSE with an
+explicit window, read by the shipped `parse_corporate_action_purpose`, upserted, and the series
+rebuilt with `reprocess_instrument` — 640 bars, one action. Our adjusted closes now match Kite's
+bar for bar. The full evidence is `gates/ca-truncation.md` and `docs/DECISIONS.md` §21.11.
+
+**The other ~460 actions are deliberately NOT repaired**, and that is the second thing needing your
+call. Over 2026-08-01..2026-09-30 NSE holds 606 actions and we hold 146. Backfilling them applies
+hundreds of mostly-dividend adjustments across the whole history of hundreds of instruments, which
+is a large mutation that wants its own gate file, its own run, and daylight — not a midnight
+follow-on to an incident fix.
+
+**It also changes the 2011 backfill plan, in your favour.** `docs/DECISIONS.md` §21.8 concluded
+that NSE serves only a recent window and that a historical corporate-actions source was "the single
+highest-value missing input". That was the truncation talking. Asked with a range, NSE returns
+**1,808 actions for 2011** and 5,522 for 2011-2013, with no sign of a cap — so the deep backfill
+can carry real corporate actions instead of inheriting Kite's opaque adjustments. §21.8 is marked
+wrong and superseded.
+
+**The command, when you want it:** build and push the Python image, then recreate the four
+services. `tools/deploy/push-images.sh` and `tools/deploy/verify-worker-image.sh` are the existing
+path; the verify script is what proves the running tag matches HEAD.

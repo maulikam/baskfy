@@ -1589,6 +1589,19 @@ standing default in `docs/twt/QUESTIONS.md`, and every module that does not depe
 built anyway. **Three of them need your hands rather than your opinion**, and they are T1, T2 and
 T3 below.
 
+| | What is needed | What it blocks |
+|---|---|---|
+| **T1** | **The daily Kite login**, before 09:00 every live morning | Every order, every GTT, every ratchet. Nothing at all before one |
+| **T2** | **The execution flag**, by your hand only — `BASKFY_TWT_EXECUTION_ENABLED`, in two files on the box | Any real order. No agent ever touches it |
+| **T3** | **The sleeve's capital**, your keystroke — seeded at 0, standing default ₹25,00,000 | Every plan. A sleeve at ₹0 skips every signal `NO_SLEEVE_CAPITAL`, by design |
+| **T4** | Nothing from you — but **expect it**: the plant's missing instrument-days make the live scan look thinner than Chartink's | Nothing. It is not a bug and the page says so |
+
+**The first live morning is written down**: [`docs/twt/FIRST-LIVE-MORNING.md`](docs/twt/FIRST-LIVE-MORNING.md)
+(TW10) is the sequence you will actually follow, with the command for every step, what the plan
+must show before you confirm, what to do when a GTT is missing, and **how to stop the sleeve in one
+command**. It carries T1, T2 and T3 as steps 3.1, 3.4 and 3.5, and it marks every command that does
+not exist yet so nothing in it is a surprise at 09:15.
+
 ### T1 — The daily Kite login (blocks every live morning, nothing before one)
 
 Kite's access tokens die around **06:00 IST** every day, so the desk cannot place an order, arm a

@@ -37,11 +37,34 @@ const TIERS: Record<string, { label: string; meaning: string }> = {
   R4: { label: "Risk-off", meaning: "Out of the market, or heading there." },
 };
 
+/**
+ * The desk's own `NewBuyMode`, and it is `full | half | blocked`.
+ *
+ * **This map used to read `none` and the bug it caused was invisible for months.** The desk never
+ * writes `none`, so `BUYS["blocked"]` was `undefined` and the sentence explaining a blocked book
+ * simply never rendered — on exactly the stance a reader most needs explained. The headline above
+ * it survived only because "blocked" fell into a ternary's else branch and happened to print
+ * "None", so the page looked right while saying nothing. Found by PC5 while building the command
+ * centre's regime panel against the same payload (`docs/pc-findings/pc5.md` §3.4).
+ *
+ * `regime_view.NEW_BUY_LABEL` is the source of these three keys. If the desk gains a fourth, the
+ * unrecognised branch below prints it as written rather than mapping it to a guess.
+ */
 const BUYS: Record<string, string> = {
   full: "New positions open at full size.",
   half: "New positions open at half size.",
-  none: "No new positions are being opened.",
+  blocked: "No new positions are being opened.",
 };
+
+const BUY_HEADLINE: Record<string, string> = {
+  full: "Full size",
+  half: "Half size",
+  blocked: "Blocked",
+};
+
+/** Why there is no answer — never a bare dash, which says nothing about why. */
+const NO_NEW_BUY_POLICY =
+  "The desk did not record a new-buy policy on this evaluation.";
 
 export default async function RegimePage() {
   let data;
@@ -99,13 +122,21 @@ export default async function RegimePage() {
         <Stat label="Most it may hold" value={pct(data.target_equity_cap_pct)} hint="at this setting on the dial" />
         <Stat
           label="New buys allowed"
-          value={data.new_buys ? (data.new_buys === "full" ? "Full size" : data.new_buys === "half" ? "Half size" : "None") : "–"}
+          /* An unrecognised mode prints as the desk wrote it. Mapping it to "None" would turn a
+             value this page does not understand into a claim about the market. */
+          value={
+            data.new_buys ? (BUY_HEADLINE[data.new_buys] ?? data.new_buys) : "Not recorded"
+          }
+          {...(data.new_buys ? {} : { hint: NO_NEW_BUY_POLICY })}
         />
       </StatRow>
 
-      {data.new_buys && BUYS[data.new_buys] && (
-        <p className="text-sm text-muted-foreground">{BUYS[data.new_buys]}</p>
-      )}
+      <p className="text-sm text-muted-foreground" data-testid="new-buy-explanation">
+        {data.new_buys
+          ? (BUYS[data.new_buys] ??
+            `The desk recorded its new-buy policy as "${data.new_buys}", which this page does not have a sentence for.`)
+          : NO_NEW_BUY_POLICY}
+      </p>
 
       <section className="flex flex-col gap-2">
         <h2 className="text-base">Why it is set there</h2>

@@ -1,6 +1,17 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+/* The export writes a file. In jsdom `URL.createObjectURL` does not exist, so exercising the real
+   `downloadCsv` would assert nothing about the export and would fail for a reason unrelated to it.
+   Mocking the download captures what would have been WRITTEN, which is the part that can be
+   wrong — a file whose rows disagree with the screen is the defect worth catching. */
+const downloaded = vi.hoisted(() => ({ calls: [] as Array<[string, string]> }));
+vi.mock("@/lib/portfolios/export", () => ({
+  downloadCsv: (filename: string, text: string) => {
+    downloaded.calls.push([filename, text]);
+  },
+}));
 
 import { CommandCenterScreen } from "@/components/portfolio/command/command-center-screen";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -21,7 +32,16 @@ import type { Overview, PortfolioRow } from "@/lib/portfolio/overview";
  */
 
 /* Schema-exact, no `as`. `OverviewOut` is generated from the API's OpenAPI document, so an
-   assertion here would let the fixture describe a payload the server never sends. */
+   assertion here would let the fixture describe a payload the server never sends.
+
+   SCHEMA-EXACT IS NOT THE SAME AS REALISTIC, and the difference cost this suite a real defect.
+   Every rate below is a stored FRACTION, because that is what the server computes — `pct = money
+   / base`, quantized (`portfolio_overview.py`), so a 1.99% day is `"0.019900"` and an 18.7% TWR is
+   `"0.187000"`. These fixtures originally read `"1.99"` and `"18.7"`, which type-check perfectly
+   and are values the API never sends. The band rendered them verbatim with a `%` appended and 45
+   tests stayed green while a real payload would have shown **"0.0199%"** for a 1.99% day. House
+   rule 2, in its least obvious form: a fixture that lies about the payload turns every assertion
+   over it into an assertion about nothing. Found by PC2 against the same fields. */
 function row(id: number, name: string, value: string, over: Partial<PortfolioRow> = {}): PortfolioRow {
   return {
     portfolio_id: id,
@@ -44,7 +64,7 @@ function row(id: number, name: string, value: string, over: Partial<PortfolioRow
       label: "Since grouped",
       since: "2026-01-01",
       is_model: false,
-      value: "12.5",
+      value: "0.125000",
     },
     ...over,
   };
@@ -66,10 +86,10 @@ function overview(over: Partial<Overview> = {}): Overview {
       invested: "3100000.00",
       holdings_without_cost_basis: 0,
       pending_reconciliation: false,
-      todays_pnl: { amount: "72029.56", label: "today", pct: "1.99" },
+      todays_pnl: { amount: "72029.56", label: "today", pct: "0.019900" },
       total_pnl: { amount: "580509.37", label: "total" },
-      twr: { label: "TWR since created", since: "2026-01-01", value: "18.7" },
-      xirr: { label: "XIRR", since: "2026-01-01", value: "21.4" },
+      twr: { label: "TWR since created", since: "2026-01-01", value: "0.187000" },
+      xirr: { label: "XIRR", since: "2026-01-01", value: "0.214000" },
       secondary: {
         broker_count: 2,
         cash: "120000.00",
@@ -81,9 +101,27 @@ function overview(over: Partial<Overview> = {}): Overview {
     chart: {
       pending_reconciliation: false,
       range: "1Y",
-      total_return: { label: "Total return", since: "2026-01-01", value: "18.7" },
-      max_drawdown: { drawdown: "-8.2", peak_on: "2026-06-01", trough_on: "2026-07-10" },
-      drawdown: [{ drawdown: "-2.1", index: "97.9", peak: "3750000.00", on: "2026-09-10" }],
+      total_return: { label: "Total return", since: "2026-01-01", value: "0.187000" },
+      max_drawdown: { drawdown: "-0.082000", peak_on: "2026-06-01", trough_on: "2026-07-10" },
+      benchmark: {
+        name: "NIFTY 500",
+        portfolio: {
+          kind: "TWR_SINCE_CREATED",
+          is_model: false,
+          label: "Portfolio",
+          since: "2026-01-01",
+          value: "0.187000",
+        },
+        benchmark: {
+          kind: "TWR_SINCE_CREATED",
+          is_model: false,
+          label: "NIFTY 500",
+          since: "2026-01-01",
+          value: "0.121000",
+        },
+        difference: "0.066000",
+      },
+      drawdown: [{ drawdown: "-0.021000", index: "97.9", peak: "3750000.00", on: "2026-09-10" }],
     },
     prices_label: "Prices: close of 2026-09-10",
     prices_as_of: "2026-09-10",
@@ -207,6 +245,24 @@ describe("the executive snapshot", () => {
     renderScreen();
 
     expect(screen.getByTestId("metric-band")).toHaveTextContent("+1.99%");
+  });
+
+  it("snapshot: a stored FRACTION is rendered as a human percentage, everywhere it appears", () => {
+    /* The regression this exists to prevent, in all four places at once. The server sends
+       `0.019900` for a 1.99% day, `0.214000` for a 21.4% XIRR, `0.187000` for an 18.7% TWR and
+       `-0.082000` for an 8.2% fall. Rendering any of them verbatim with a `%` appended reads as a
+       number a hundred times too small, which on a drawdown is the difference between "you are
+       down 8%" and "you are down a tenth of a percent". Only the today's-move assertion above
+       caught the original defect; the other three sites were unguarded. */
+    renderScreen();
+    const band = screen.getByTestId("metric-band");
+
+    expect(band).toHaveTextContent("+21.40%");
+    expect(band).toHaveTextContent("+18.70%");
+    expect(band).toHaveTextContent("-8.20%");
+
+    // And the raw fraction never reaches the screen under a percent sign.
+    expect(band.textContent).not.toMatch(/0\.0199%|0\.214%|0\.187%|-0\.082%/);
   });
 
   it("colour: direction is a glyph as well as a hue, so it survives greyscale", () => {
@@ -385,6 +441,18 @@ describe("the comparison table", () => {
     const detail = screen.getByTestId("portfolio-card-detail-1");
     expect(detail).toHaveTextContent("Zerodha");
     expect(detail).toHaveTextContent("Measured from");
+  });
+
+  it("table: a portfolio's return is a percentage, not the fraction the server stores", () => {
+    /* The same defect as the metric band's, in the column a reader compares portfolios on.
+       `headline_return.value` is a fraction — `return-value.tsx` has always put it through
+       `formatRate` — and printing it verbatim turned a 12.5% return into "0.125%". Both the
+       desktop table and the phone list render it, so both are asserted. */
+    renderScreen({ portfolios: [row(1, "Swing Manual", "1200000")] });
+
+    const table = screen.getByTestId("comparison-table");
+    expect(table).toHaveTextContent("12.50%");
+    expect(table.textContent).not.toMatch(/0\.125%/);
   });
 
   it("colour: the portfolio identifier is a colour AND a letter", () => {
@@ -602,5 +670,346 @@ describe("what the screen must never do", () => {
 
     expect(text).not.toMatch(/place order|buy now|execute trade/i);
     expect(screen.getByTestId("review-rebalance")).toHaveTextContent("Review rebalance");
+  });
+});
+
+/* ------------------------------------------------------------------ the header controls
+ *
+ * `gates/pc-integration.md` I2, I13 and I14. PC1 deferred four of these because they scope a
+ * chart it did not draw; the fifth — the portfolio selector — was in the brief's header list and
+ * in no leaf's gates, which is how a requirement disappears quietly.
+ *
+ * The rule every one of them is held to: **a control either does something or says why it
+ * cannot.** Not one is drawn greyed-out and silent. */
+
+describe("the header controls", () => {
+  beforeEach(() => {
+    downloaded.calls.length = 0;
+  });
+
+  it("header control: base currency is stated as INR, with the reason there is no other", async () => {
+    const user = userEvent.setup();
+    renderScreen();
+
+    const chip = screen.getByTestId("base-currency");
+    expect(chip).toHaveTextContent("INR");
+
+    await user.hover(chip);
+    expect(await screen.findByText(/Indian equities only/)).toBeInTheDocument();
+  });
+
+  it("navigation: the portfolio selector lists all portfolios and each one by name", async () => {
+    const user = userEvent.setup();
+    renderScreen({
+      portfolios: [row(1, "Swing Manual", "1200000"), row(2, "Long-Term Wealth", "900000")],
+    });
+
+    await user.click(screen.getByTestId("portfolio-selector"));
+    const menu = await screen.findByRole("menu");
+
+    expect(within(menu).getByRole("menuitem", { name: /All portfolios/ })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: /Swing Manual/ })).toHaveAttribute(
+      "href",
+      "/portfolio/1",
+    );
+    expect(within(menu).getByRole("menuitem", { name: /Long-Term Wealth/ })).toHaveAttribute(
+      "href",
+      "/portfolio/2",
+    );
+  });
+
+  it("navigation: choosing a portfolio OPENS its workspace rather than filtering this screen", () => {
+    /* The distinction the brief draws twice. A filter would leave a person on the aggregate
+       screen wondering why the comparison now has one row; the workspace is a different set of
+       questions and has its own surface. Every item is a link, so nothing here is a filter. */
+    renderScreen({ portfolios: [row(1, "Swing Manual", "1200000")] });
+
+    expect(screen.getByTestId("portfolio-selector")).toBeInTheDocument();
+  });
+
+  it("state: with nothing filed, the selector says why rather than sitting disabled", async () => {
+    const user = userEvent.setup();
+    renderScreen({ portfolios: [] }, CLEAN);
+
+    const empty = screen.getByTestId("portfolio-selector-empty");
+    expect(empty).toHaveTextContent("No portfolios yet");
+
+    await user.hover(empty);
+    expect(await screen.findByText(/nothing to switch between/i)).toBeInTheDocument();
+  });
+
+  it("header control: the overflow menu carries export, settings and reconciliation", async () => {
+    const user = userEvent.setup();
+    renderScreen();
+
+    await user.click(screen.getByTestId("overflow-menu"));
+    const menu = await screen.findByRole("menu");
+
+    expect(within(menu).getByTestId("export-view")).toBeInTheDocument();
+    expect(within(menu).getByTestId("open-settings")).toBeInTheDocument();
+    expect(within(menu).getByTestId("open-reconcile")).toHaveAttribute("href", "/reconcile");
+  });
+
+  it("unavailable: the import Baskfy cannot do yet is NAMED with what it would give, not hidden", async () => {
+    const user = userEvent.setup();
+    renderScreen();
+
+    await user.click(screen.getByTestId("overflow-menu"));
+    const blocked = await screen.findByTestId("import-blocked");
+
+    expect(blocked).toHaveTextContent(/consolidated account statement/i);
+    expect(blocked).toHaveTextContent(/purchase prices and dates your broker does not send/i);
+  });
+
+  it("interaction: a shareable report is NAMED with why it cannot exist yet", async () => {
+    /* Every interaction the brief lists either works or says why it cannot. A link another person
+       can open needs sharing to exist in the account model — not a button. */
+    const user = userEvent.setup();
+    renderScreen();
+
+    await user.click(screen.getByTestId("overflow-menu"));
+    const blocked = await screen.findByTestId("share-blocked");
+
+    expect(blocked).toHaveTextContent(/Shareable read-only report/);
+    expect(blocked).toHaveTextContent(/needs sharing to exist in the account model/);
+  });
+
+  it("interaction: exporting the current view writes the rows that are on screen", async () => {
+    const user = userEvent.setup();
+    renderScreen({
+      portfolios: [row(1, "Swing Manual", "1200000"), row(2, "Long-Term Wealth", "900000")],
+    });
+
+    await user.click(screen.getByTestId("overflow-menu"));
+    await user.click(await screen.findByTestId("export-view"));
+
+    expect(downloaded.calls).toHaveLength(1);
+    const [filename, text] = downloaded.calls[0]!;
+    expect(filename).toBe("baskfy-capital-portfolios.csv");
+    expect(text).toMatch(/Swing Manual/);
+    expect(text).toMatch(/Long-Term Wealth/);
+  });
+
+  it("monitoring: the export follows the MODE, so views never leave as capital rows", async () => {
+    const user = userEvent.setup();
+    renderScreen({
+      portfolios: [row(1, "Swing Manual", "1200000")],
+      monitoring_views: [
+        row(9, "High Momentum", "400000", { kind: "MONITORING", counts_toward_total: false }),
+      ],
+    });
+
+    await user.click(screen.getByRole("tab", { name: /Monitoring views/ }));
+    await user.click(screen.getByTestId("overflow-menu"));
+    await user.click(await screen.findByTestId("export-view"));
+
+    const [filename, text] = downloaded.calls[0]!;
+    expect(filename).toBe("baskfy-monitoring-views.csv");
+    expect(text).toMatch(/High Momentum/);
+    expect(text).not.toMatch(/Swing Manual/);
+    expect(text).toMatch(/do not sum to net worth/);
+  });
+
+  it("state: with no rows the export names the reason instead of downloading an empty file", async () => {
+    const user = userEvent.setup();
+    renderScreen({ portfolios: [] }, CLEAN);
+
+    await user.click(screen.getByTestId("overflow-menu"));
+    const blocked = await screen.findByTestId("export-view-blocked");
+
+    expect(blocked).toHaveTextContent(/no rows to export/i);
+    expect(downloaded.calls).toHaveLength(0);
+  });
+});
+
+/* ------------------------------------------------------------------ the assembled screen
+ *
+ * `gates/pc-integration.md`. Five leaves each finished their own ledger; thirty-two green leaves
+ * can still be a broken product, and this is where that is caught. These assert the SEAMS —
+ * whether the panels are present, wired and consistent with each other — not the panels
+ * themselves, which each leaf's own suite already holds. */
+
+describe("the assembled command centre", () => {
+  it("mounted: the performance workspace is drawn, not linked to on another page", () => {
+    /* PC1 shipped a sentence here pointing at `/portfolio/overview`, which was the honest seam
+       while PC2 did not exist. It exists. */
+    renderScreen();
+
+    expect(screen.getByTestId("performance-workspace")).toBeInTheDocument();
+    expect(screen.queryByText(/the overview chart/)).not.toBeInTheDocument();
+  });
+
+  it("mounted: attribution says which portfolio moved the number", () => {
+    renderScreen({
+      portfolios: [row(1, "Swing Manual", "1200000"), row(2, "Long-Term Wealth", "900000")],
+    });
+
+    expect(screen.getByTestId("attribution")).toBeInTheDocument();
+  });
+
+  it("mounted: the regime panel is in the rail, above the alerts", () => {
+    renderScreen();
+    expect(screen.getByTestId("regime-panel")).toBeInTheDocument();
+  });
+
+  it("mounted: the regime panel shows NO tier when the desk did not answer", () => {
+    /* The one regime seam worth an integration test: a screen that quietly shows an old stance as
+       current is worse than one that shows none, and the wiring is what decides which happens. */
+    render(
+      <TooltipProvider>
+        <CommandCenterScreen
+          overview={overview()}
+          unallocated={pile("180509.37")}
+          regime={null}
+          regimeError="The desk did not answer."
+        />
+      </TooltipProvider>,
+    );
+
+    const panel = screen.getByTestId("regime-panel");
+    expect(panel.textContent).not.toMatch(/\bR[1-4]\b/);
+  });
+
+  it("mounted: the management drawer opens from the overflow menu", async () => {
+    const user = userEvent.setup();
+    renderScreen();
+
+    expect(screen.queryByTestId("manage-drawer")).not.toBeInTheDocument();
+    await user.click(screen.getByTestId("overflow-menu"));
+    await user.click(await screen.findByTestId("open-settings"));
+
+    expect(await screen.findByTestId("manage-drawer")).toBeInTheDocument();
+  });
+
+  it("header control: the benchmark is NAMED, and says where it is changed", async () => {
+    const user = userEvent.setup();
+    renderScreen();
+
+    const chip = screen.getByTestId("benchmark-statement");
+    expect(chip).toHaveTextContent("vs NIFTY 500");
+
+    await user.hover(chip);
+    expect(await screen.findByText(/chosen per portfolio, not per page/)).toBeInTheDocument();
+  });
+
+  it("header control: a series with no benchmark says so rather than naming one", () => {
+    renderScreen({
+      chart: {
+        pending_reconciliation: false,
+        range: "1Y",
+        total_return: { label: "Total return", since: "2026-01-01", value: "0.187000" },
+      },
+    });
+
+    expect(screen.getByTestId("benchmark-statement")).toHaveTextContent("No benchmark");
+  });
+
+  it("monitoring: with everything assembled, a view's value still reaches no capital total", async () => {
+    /* The regression four extra panels are most likely to introduce. */
+    const user = userEvent.setup();
+    renderScreen({
+      portfolios: [row(1, "Swing Manual", "1200000")],
+      monitoring_views: [
+        row(9, "High Momentum", "400000", { kind: "MONITORING", counts_toward_total: false }),
+      ],
+    });
+
+    await user.click(screen.getByRole("tab", { name: /Monitoring views/ }));
+
+    expect(screen.queryByTestId("metric-band")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("performance-workspace")).not.toBeInTheDocument();
+    expect(screen.getByTestId("views-notice")).toBeInTheDocument();
+  });
+});
+
+/* ------------------------------------------------------------------ the last two states
+ *
+ * `gates/pc-integration.md` I17. `GATES.md` G10 covers empty, no brokers, stale prices,
+ * reconciliation mismatch, missing cost basis, no history, the loading skeleton and an API error.
+ * The brief names two more, and neither had a gate. */
+
+describe("permission and session states", () => {
+  it("restricted: a refusal is a different sentence, and a different next step, from an outage", () => {
+    /* Offering "Try again" to somebody who has lost access is a loop they cannot get out of. */
+    render(
+      <TooltipProvider>
+        <CommandCenterScreen overview={null} unallocated={null} failure="restricted" />
+      </TooltipProvider>,
+    );
+
+    const explain = screen.getByTestId("command-center-explain");
+    expect(explain).toHaveTextContent(/do not have access/i);
+    expect(explain).toHaveTextContent(/ask the account owner/i);
+    expect(explain).not.toHaveTextContent(/Try again/);
+    expect(screen.getByRole("link", { name: /signed-in account/i })).toBeInTheDocument();
+  });
+
+  it("restricted: an outage still says try again, so the two are not collapsed", () => {
+    render(
+      <TooltipProvider>
+        <CommandCenterScreen
+          overview={null}
+          unallocated={null}
+          failure="unreachable"
+          error="The portfolio service did not answer."
+        />
+      </TooltipProvider>,
+    );
+
+    expect(screen.getByRole("link", { name: /Try again/ })).toBeInTheDocument();
+  });
+
+  it("market closed: says today's P&L is final rather than still moving", () => {
+    render(
+      <TooltipProvider>
+        <CommandCenterScreen
+          overview={overview()}
+          unallocated={pile("180509.37")}
+          marketOpen={false}
+        />
+      </TooltipProvider>,
+    );
+
+    expect(screen.getByTestId("market-session")).toHaveTextContent(/final for the session/);
+  });
+
+  it("market closed: an open market says the figures are still moving", () => {
+    render(
+      <TooltipProvider>
+        <CommandCenterScreen
+          overview={overview()}
+          unallocated={pile("180509.37")}
+          marketOpen
+        />
+      </TooltipProvider>,
+    );
+
+    expect(screen.getByTestId("market-session")).toHaveTextContent(/live and will keep moving/);
+  });
+
+  it("state: with no answer about the session, no session label is guessed", () => {
+    /* The component takes no clock. A label invented from the browser's zone would be wrong for
+       half the day, on a screen whose whole subject is which clock a figure is on. */
+    renderScreen();
+    expect(screen.queryByTestId("market-session")).not.toBeInTheDocument();
+  });
+});
+
+describe("drilling down", () => {
+  it("drill: a portfolio's name in the comparison opens its workspace", () => {
+    renderScreen({ portfolios: [row(1, "Swing Manual", "1200000")] });
+
+    const link = screen.getAllByRole("link", { name: /Swing Manual/ })[0];
+    expect(link).toHaveAttribute("href", "/portfolio/1");
+  });
+
+  it("drill: an attribution row leads to the portfolio it says moved the number", () => {
+    /* A row that names a cause and cannot be followed is a picture you cannot ask a question of. */
+    renderScreen({
+      portfolios: [row(1, "Swing Manual", "1200000"), row(2, "Long-Term Wealth", "900000")],
+    });
+
+    expect(screen.getByTestId("attribution-link-1")).toHaveAttribute("href", "/portfolio/1");
+    expect(screen.getByTestId("attribution-link-2")).toHaveAttribute("href", "/portfolio/2");
   });
 });

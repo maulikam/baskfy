@@ -4,6 +4,7 @@ import { CircleAlert, Info } from "lucide-react";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { ExecutiveSnapshot, Metric } from "@/lib/portfolio/command-center";
+import { formatNumber } from "@/lib/format";
 import { formatRupees } from "@/lib/portfolios/decimal";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +33,11 @@ const NOT_AVAILABLE_MARK = "Not available";
 
 /** Tabular numerals everywhere, so a column of figures aligns on its decimal point. */
 const FIGURE = "tabular-nums tracking-tight";
+
+/** A percentage that is ALREADY a percentage: signed, two decimals, no scaling. */
+function formatPercent(value: string | null): string {
+  return formatNumber(value, { decimals: 2, signed: true, suffix: "%" });
+}
 
 function toneOf(value: string | null): "up" | "down" | "flat" {
   if (value === null) return "flat";
@@ -110,11 +116,23 @@ export function MetricCell({
           )}
         >
           <DirectionMark tone={tone} />
-          {percent ? `${metric.value}%` : formatRupees(metric.value)}
+          {/* THIS CELL FORMATS; IT DOES NOT SCALE — and the difference is the whole bug.
+              `Metric.value` for a rate is a PERCENTAGE, converted once where the metric is built
+              (`asPercent` in `command-center.ts`, on scaled integers). The API stores fractions:
+              `pct = money / base`, so a 1.99% day arrives as `0.019900`. Whoever converts must be
+              the pure layer, because this cell is shared — PC1's band, PC2's chart read-out and
+              its headline strip all render through it, and PC2's figures come from `percentOf`
+              already in percent. A `× 100` here showed PC2's 10% as 1,000%.
+
+              The original defect was the other direction: this read `${metric.value}%` while the
+              band handed it the raw fraction, so the executive snapshot would have shown
+              "0.0199%" for a 1.99% day and "-0.082%" for an 8.2% fall. Forty-five tests were
+              green over it because the fixtures used "1.99" and "18.7" — values that type-check
+              and that the server never sends. House rule 2 in its least obvious form. */}
+          {percent ? formatPercent(metric.value) : formatRupees(metric.value)}
           {metric.pct ? (
             <span className="ml-1.5 text-sm font-medium opacity-80">
-              {Number(metric.pct) > 0 ? "+" : ""}
-              {metric.pct}%
+              {formatPercent(metric.pct)}
             </span>
           ) : null}
         </p>

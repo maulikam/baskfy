@@ -6,7 +6,8 @@ import { DriftRepair } from "@/components/investments/drift-repair";
 import { InvestmentActions } from "@/components/investments/investment-actions";
 import { ShowDetailsModal } from "@/components/investments/show-details-modal";
 import { SipForm } from "@/components/investments/sip-form";
-import { PortfolioDetailScreen } from "@/components/portfolio/detail-screen";
+import { RebalanceSlot } from "@/components/portfolio/detail/detail-slots";
+import { PortfolioDetailWorkspace } from "@/components/portfolio/detail/workspace";
 import { PageHeader } from "@/components/shell/page-header";
 import { SectionTabs } from "@/components/shell/section-tabs";
 import { EMPTY_CELL, formatNumber, formatPercent, formatTradeDate } from "@/lib/format";
@@ -82,11 +83,22 @@ export default async function PortfolioDetailPage({
   return (
     <div className="flex flex-col gap-6">
       <SectionTabs section="portfolio" />
-      <PortfolioDetailScreen
+      {/* PC3's eight tabs replace the single scrolling detail screen. The workspace renders its
+          own heading, source badge and hide-amounts toggle, so the page adds none of them.
+          `rebalanceSlot` is PC4's drawer, joined in `detail-slots` because §6.1 forbids either
+          leaf from importing the other. */}
+      <PortfolioDetailWorkspace
         detail={bundle.detail}
         nav={bundle.nav}
         activity={bundle.activity}
         failures={{ nav: bundle.failures.nav, activity: bundle.failures.activity }}
+        rebalanceSlot={
+          <RebalanceSlot
+            portfolioId={bundle.detail.summary.portfolio_id}
+            portfolioName={bundle.detail.summary.name}
+            detail={bundle.detail}
+          />
+        }
       >
         {investment ? <ManageSection detail={investment} /> : null}
         <p className="text-xs text-muted-foreground">
@@ -96,7 +108,7 @@ export default async function PortfolioDetailPage({
             Disclaimer
           </Link>
         </p>
-      </PortfolioDetailScreen>
+      </PortfolioDetailWorkspace>
     </div>
   );
 }

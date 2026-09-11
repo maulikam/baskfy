@@ -116,10 +116,30 @@ absent with the reason recorded in the plan. Nothing here fabricates a financial
   EXPECT: /200|307/
   EVIDENCE: 307
 
-- [ ] G18: The DEPLOYED page renders the command centre, not the previous screen. Manual: sign in
-      against the deployed API, fetch `/portfolio/portfolios` with that session, and grep the HTML
-      for the title only this build emits.
-  EVIDENCE: pending
+- [ ] G18: The DEPLOYED page renders the command centre, not the previous screen.
+      The page is behind Google sign-in, so it cannot be fetched from a script — and minting a
+      session against the box would mean reading the box's `AUTH_SECRET`, which is exactly what
+      `box.sh` forbids. So the proof is by identity instead of by fetch: the web container on the
+      box runs the image digest ECR holds for this commit's tag, and G3-G16 have already shown
+      that this commit renders the command centre. Same bytes, same screen.
+      **The check as written could never have passed, and that hid a second fault.** There is no
+      container called `baskfy-web` on the box; the compose project names it
+      `baskfy-staging-web-1`. `docker inspect` on a missing object exits non-zero, so the probe
+      returned "No such object" rather than a digest — a check that fails for a reason unrelated
+      to the thing it is testing is not a check. It now reads the image TAG off the running
+      container, which is the commit, and compares it to HEAD.
+  CHECK: cd /Users/maulikdave/Documents/projects/baskfy && AWS_PROFILE=${AWS_PROFILE:-baskfy-poc} BASKFY_INSTANCE_ID=${BASKFY_INSTANCE_ID:-i-086986250704e4392} bash tools/deploy/box.sh "docker inspect --format '{{.Config.Image}}' baskfy-staging-web-1" 2>&1 | tail -2
+  EXPECT: /baskfy-web:[0-9a-f]{7}/
+  EVIDENCE: 056235107739.dkr.ecr.ap-south-1.amazonaws.com/baskfy-web:bd78529 — and bd78529 is the
+      commit BEFORE PC1 (`fae98ac`). The box is serving the OLD Portfolios screen. The gate is
+      therefore genuinely unmet rather than unprovable, and it is unmet because nothing has been
+      deployed since 10 Sep, not because the screen is wrong.
+  ABANDON: G18 not deployable from this session — the Docker daemon is not running on this
+      machine (`docker info` fails), so the web image cannot be built or pushed to ECR, and a
+      deploy of the Phase-A box is Maulik's call in any case: that box is the live auto-execute
+      host. Recorded in `NEEDS-MAULIK.md`. Everything G18 would have proved about the CODE is
+      proved by G3–G16 against this working tree; what is unproved is only that the box has
+      caught up. `gates/pc-integration.md` I12 carries the same handover for PC2–PC6.
 
 <!--
 Rules:

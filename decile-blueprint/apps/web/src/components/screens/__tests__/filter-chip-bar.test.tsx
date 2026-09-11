@@ -7,6 +7,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEMO_FACTORS } from "@/app/(app)/kitchen-sink/fixtures";
 import { FactorList } from "@/components/data/factor-combobox";
+import { FilterChipBar } from "@/components/screens/filter-chip-bar";
+import { defaultDefinition } from "@/lib/screens/defaults";
 
 /**
  * The "Sorted by" chip, and the bug that made it unusable.
@@ -122,5 +124,92 @@ describe("the inline factor list is usable", () => {
     const list = container.querySelector("[cmdk-list]");
     expect(list?.className).toMatch(/max-h-/);
     expect(list?.className).toMatch(/overflow-y-auto/);
+  });
+});
+
+/**
+ * G3 of `gates/leaf-7.2.1-chip-labels.md`: "The chip's accessible name equals its visible label."
+ *
+ * §1.1 fixed what the universe chip *shows*. This is the other half, and it is the half that goes
+ * wrong silently: a chip can read `NIFTY Total Market` on screen while announcing something else
+ * entirely, and nothing about the page looks broken. The three ways that happens are all live
+ * possibilities in this file — an `aria-label` added "for clarity" that then drifts from the text
+ * beside it; a decorative chevron that loses its `aria-hidden` and appends its own name; and the
+ * loading state, where the label is derived from the slug and a mismatch would mean a screen
+ * reader hearing `nifty-total-market` while the screen says `NIFTY Total Market`.
+ *
+ * So each case below asserts the same identity twice over, from both directions: the button's
+ * `textContent` is the expected label, and a role query *for that exact name* finds the same node.
+ * `getByRole(..., { name })` runs the real accessible-name computation, so an `aria-label` would
+ * make the second assertion fail while the first still passed, and an un-hidden chevron would
+ * break the first. Asserting only one of them is how this gate would pass while being wrong.
+ *
+ * Both moments of the page's life are covered because they are produced by different code paths:
+ * `universeChipLabel` reads the slug before `/meta/universes` answers and the published name
+ * afterwards, and the whole point of §1.1 is that those two paths agree.
+ */
+describe("G3: the chip announces exactly what it shows", () => {
+  const UNIVERSES = [
+    { slug: "nifty-total-market", name: "NIFTY TOTAL MARKET" },
+    { slug: "nifty-500", name: "NIFTY 500" },
+  ];
+
+  function renderBar(overrides: {
+    // The definition's own index type, not `string`: `definition.index` is a slug union, and a
+    // widened `string` is the TS2322 that had `make lint` red across the whole repo.
+    index?: ReturnType<typeof defaultDefinition>["index"];
+    universes?: readonly { slug: string; name: string }[];
+  }) {
+    return render(
+      <FilterChipBar
+        definition={{ ...defaultDefinition(), index: overrides.index ?? "nifty-total-market" }}
+        patch={() => {}}
+        factors={DEMO_FACTORS}
+        universes={(overrides.universes ?? []) as never}
+        operands={[]}
+        tradingDays={[]}
+        dataStartDate={null}
+        latestDate={null}
+        onReset={() => {}}
+      />,
+    );
+  }
+
+  function assertNameMatchesLabel(expected: string) {
+    const chip = screen.getByTestId("chip-index");
+    // Visible: the chevron contributes nothing because it is aria-hidden and empty.
+    expect(chip.textContent?.trim()).toBe(expected);
+    // Accessible: the real name computation, not a reading of the same DOM property.
+    expect(screen.getByRole("button", { name: expected })).toBe(chip);
+  }
+
+  it("before /meta/universes answers, which is every first paint", () => {
+    renderBar({ universes: [] });
+    assertNameMatchesLabel("NIFTY Total Market");
+  });
+
+  it("after the published name lands", () => {
+    renderBar({ universes: UNIVERSES });
+    assertNameMatchesLabel("NIFTY Total Market");
+  });
+
+  it("for a name whose digits must not be re-cased", () => {
+    renderBar({ index: "nifty-500", universes: UNIVERSES });
+    assertNameMatchesLabel("NIFTY 500");
+  });
+
+  it("never announces the raw slug in either state", () => {
+    const { unmount } = renderBar({ universes: [] });
+    expect(screen.queryByRole("button", { name: /nifty-total-market/i })).toBeNull();
+    unmount();
+    renderBar({ universes: UNIVERSES });
+    expect(screen.queryByRole("button", { name: /nifty-total-market/i })).toBeNull();
+  });
+
+  it("adds no aria-label that could drift from the text", () => {
+    // The failure this catches is a later edit, not today's markup: an aria-label added to the
+    // chip would keep the page looking right and make the two names diverge on the next relabel.
+    renderBar({ universes: UNIVERSES });
+    expect(screen.getByTestId("chip-index").hasAttribute("aria-label")).toBe(false);
   });
 });

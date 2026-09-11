@@ -242,3 +242,89 @@ describe("compact card previews", () => {
     },
   );
 });
+
+/**
+ * G3 of `gates/leaf-7.3.1-default-view.md`: "Basket remains reachable in one tap, keeps its sizing
+ * controls and its 'Save as basket' action, and the toggle keeps `aria-pressed`."
+ *
+ * The cases above each cover a piece of this, and the pieces are the problem. T7-D8 moved what the
+ * page *opens* on; the risk it carries is that the view it moved away from quietly decays, because
+ * nothing lands there any more and nothing fails when part of it stops arriving. A basket view that
+ * still renders but has lost its save action is not a demotion, it is a removal, and it would not
+ * show up in a test that only asks whether the sizing form appeared.
+ *
+ * So this asserts the whole claim as one journey, from the default the flag now produces: start on
+ * the table, press Basket once, and find everything Tree 6 §5 put there. One tap means one — the
+ * count is asserted rather than described, because "one tap away" degrades to two the moment
+ * something is nested behind a disclosure, and a reader would still call that reachable.
+ *
+ * `aria-pressed` is in the same gate for a reason that is easy to lose: the toggle is two buttons,
+ * not a tab list, so the pressed state is the *only* thing telling a screen-reader user which of
+ * the two views they are looking at. Losing it leaves the page announcing two identical buttons.
+ */
+describe("G3: the basket stays one tap away, whole", () => {
+  it("is one tap from the default view, with its sizing controls and its save action", async () => {
+    vi.stubEnv(FLAG, undefined);
+    const user = userEvent.setup();
+    renderView();
+
+    // The premise: we start where T7-D8 put us, not on the basket already.
+    expect(screen.getByTestId("ranked-table")).toBeInTheDocument();
+    expect(pressed("basket")).toBe("false");
+
+    await user.click(screen.getByTestId("view-mode-basket"));
+
+    // Everything Tree 6 §5 put on this view, in one place.
+    expect(sizingForm()).toBeInTheDocument();
+    expect(screen.getByText("Number of stocks")).toBeInTheDocument();
+    expect(screen.getByText("How spread out?")).toBeInTheDocument();
+    expect(screen.getByRole("radiogroup", { name: "Holding profile" })).toBeInTheDocument();
+    expect(screen.getByTestId("save-basket")).toHaveTextContent("Save as basket");
+    expect(screen.getByRole("radiogroup", { name: "Cash allocation" })).toBeInTheDocument();
+  });
+
+  it("is exactly one tap, not one tap and a disclosure", async () => {
+    vi.stubEnv(FLAG, undefined);
+    const user = userEvent.setup();
+    renderView();
+
+    const basket = screen.getByTestId("view-mode-basket");
+    expect(basket).toBeVisible();
+    expect(basket).not.toBeDisabled();
+    // Nothing stands between the reader and the toggle: it is not inside a closed disclosure.
+    expect(basket.closest("[hidden]")).toBeNull();
+    expect(basket.closest("details:not([open])")).toBeNull();
+
+    await user.click(basket);
+    expect(sizingForm()).toBeInTheDocument();
+  });
+
+  it("keeps aria-pressed on both buttons, in both directions", async () => {
+    vi.stubEnv(FLAG, undefined);
+    const user = userEvent.setup();
+    renderView();
+
+    // Both carry the attribute at all times — a button that drops it when unpressed announces
+    // nothing about its state rather than announcing "not pressed".
+    expect(pressed("table")).toBe("true");
+    expect(pressed("basket")).toBe("false");
+
+    await user.click(screen.getByTestId("view-mode-basket"));
+    expect(pressed("basket")).toBe("true");
+    expect(pressed("table")).toBe("false");
+
+    await user.click(screen.getByTestId("view-mode-table"));
+    expect(pressed("table")).toBe("true");
+    expect(pressed("basket")).toBe("false");
+  });
+
+  it("survives the flag being set to basket: the same view, still whole", () => {
+    // The reversal must not be a different basket view from the one a tap reaches.
+    vi.stubEnv(FLAG, "basket");
+    renderView();
+
+    expect(pressed("basket")).toBe("true");
+    expect(screen.getByTestId("save-basket")).toHaveTextContent("Save as basket");
+    expect(screen.getByRole("radiogroup", { name: "Holding profile" })).toBeInTheDocument();
+  });
+});

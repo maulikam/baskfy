@@ -1097,3 +1097,23 @@ every weekday look available, which is why the unit tests passed and the box did
 to everything tests the caller. The exchange calendar in the seeded database has all 4,089
 weekdays in it, so nothing local could distinguish "a trading day" from "a day whose bars exist".
 The box could, on the first press.
+
+### VB13.5 — A session the bars do not reach leaves no breadth row · ⚠ UNREVIEWED
+
+VB13.4's bug left a row behind before it was fixed: `vb_breadth_daily` for **11 Sep 2026**,
+`measured_count 0`, `above_count 0`, `gate SHUT` — for a session that had not closed.
+
+`run_detect_vbt` wrote a breadth row for two different situations under one branch: a **thin**
+session, and a date the bars simply do not cover. The first is right and `03` §3 documents it —
+the session happened, it was thin, and the record that the sleeve did not trade it is worth
+keeping. The second is a false record: it states a breadth reading for a day with no bars, in the
+table the evening job reads as its calendar.
+
+The two are now separate branches and the second writes nothing. The nightly chain could never
+reach it — it only ever runs the published date — but `make vbt DATE=<anything>` can, and now
+does the harmless thing.
+
+The phantom row was deleted from the box. It would have healed itself tonight anyway (detection
+is idempotent per `(user_id, date)`, so the 21:10 run would have overwritten it with the real
+11 Sep reading), which is exactly why it is worth pinning with a test rather than trusting to
+the schedule.

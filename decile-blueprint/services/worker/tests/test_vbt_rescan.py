@@ -25,8 +25,10 @@ import sqlalchemy as sa
 from helpers import requires_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from baskfy_core.models import AppUser, PipelineRun, VbConfig, VbScanRun
+from baskfy_core.models import AppUser, PipelineRun, VbBreadthDaily, VbConfig, VbScanRun
+from baskfy_worker.steps import StepOutcome, StepStatus
 from baskfy_worker.tasks import vbt_rescan as R
+from baskfy_worker.tasks.vbt import run_detect_vbt
 from baskfy_worker.tasks.vbt_rescan import (
     claim_run,
     latest_published_session,
@@ -257,3 +259,28 @@ class TestItCannotOrder:
         code = re.sub(r'("""|\'\'\')(?:.|\n)*?\1', " ", source)
         for forbidden in ("VbPlan", "VbOrder", "VbPosition", "VbFill"):
             assert forbidden not in code, f"vbt_rescan constructs {forbidden}"
+
+
+class TestADateTheBarsDoNotReach:
+    """VB13.5 — found on the box: a session with no bars must leave **no** breadth row.
+
+    `03` §3 has `vb_breadth_daily` record what the sleeve saw on a session. A row reading "0 of 0
+    names above their average, gate SHUT" for a day that has not closed is a false record, and the
+    evening job reads that table as its calendar. A genuinely *thin* session is different — it
+    happened, it was thin, and the record that the sleeve did not trade it is worth keeping.
+    """
+
+    async def test_it_writes_no_breadth_row_for_a_session_the_bars_do_not_reach(
+        self, session: AsyncSession
+    ) -> None:
+        user_id = await _user(session)
+        outcome = StepOutcome()
+
+        signals = await run_detect_vbt(session, outcome, dt.date(2026, 12, 25), user_id=user_id)
+
+        assert signals == 0
+        assert outcome.status is StepStatus.SKIPPED
+        rows = (
+            await session.execute(sa.select(sa.func.count()).select_from(VbBreadthDaily))
+        ).scalar_one()
+        assert rows == 0, "a session the bars do not reach left a breadth row behind"

@@ -991,54 +991,86 @@ class AdjustmentCoverage:
     """What the adjusted price series a run read can and cannot support.
 
     **The engine cannot discover this and the caller can** — the same division `blind_rebalances`
-    below is built on. `packages/core` touches nothing (law 1), so the two dates are handed in.
+    below is built on. `packages/core` touches nothing (law 1), so the facts are handed in.
 
-    THE TWO FACTS A BACKTEST'S READER NEEDS, AND NEITHER WAS EVER STATED
-    -------------------------------------------------------------------
-    **1. How far back corporate actions go.** `ohlcv_daily.close` is adjusted only for the actions
-    on record, and `docs/DECISIONS.md` §21.8 measured the problem: NSE's endpoint serves a recent
-    window and ignores how far back it is asked, returning the same 19 records for a 2024 query as
-    for a 2026 one. Measured on the box on 11 Sep 2026: bars from 2017-01-02, corporate actions
-    from 2024-01-02 — **seven years of history with no coverage at all.** A twelve-month momentum
-    factor whose window spans an unapplied 1:2 split reads as a 50 % loss and ranks the name at the
-    bottom of a decile it belongs near the top of. That is not a rounding error on a momentum
-    screen; it is the screen selecting on price breaks instead of returns.
+    THIS CLASS SHIPPED WRONG ONCE, AND THE CORRECTION IS THE USEFUL PART
+    --------------------------------------------------------------------
+    Its first version assumed one adjusted series whose quality was bounded by how far back
+    `corporate_action` went. Measured on the box, `ohlcv_daily` is **two spliced segments**:
 
-    **2. The series is "as of today", not as of the simulated date.** It carries every action known
-    *now*, including ones whose ex-date falls after a date being reconstructed.
-    `reprocess_instrument` takes an `as_of` for exactly this, and the nightly deliberately passes
-    nothing because today's
-    screen should be served today's series — its docstring says so. §21.9 found the consequence in
-    a parity run (eight rows off by exactly a dividend) and **declined to settle** the larger
-    question of storing one adjusted series per as-of date. This does not settle it either. What it
-    stops is the silence: a run that cannot know its prices were adjusted after the fact should at
-    least say so.
+        source='kite'  2,412,061 rows  2017-01-02 → 2026-09-10
+        source='nse'   1,341,173 rows  2024-01-01 → 2026-09-11
 
-    Neither fact makes a run wrong. Both change what it means, and a confident CAGR printed with
-    neither stated is a number a reader will take for more than it is.
+    Kite returns **adjusted** OHLC (M24, measured against the claim in docs/02 that it does not),
+    so the deep segment is adjusted **at source**, carries `adj_factor = 1`, and is deliberately
+    skipped by `reprocess_instrument`. Our `corporate_action` table is irrelevant to it. The first
+    version of this class would therefore have printed "corporate actions are on record only from
+    2024-01-02, and this run starts 2017-01-02, so splits before that are not applied" on every
+    deep run — and every word after the comma was false.
+
+    WHAT IS ACTUALLY WORTH SAYING
+    -----------------------------
+    **The splice, which is real and systematic.** Our segment is *price-return* adjusted — splits
+    and bonuses applied, dividends not, the convention M27 measured off the reference corpus.
+    Kite's is adjusted for splits, bonuses **and dividends**. `deep_backfill` multiplies the Kite
+    segment onto our level at the first shared date, so the join is continuous — but inside the
+    deep segment the *shape* is still total-return. A return computed wholly before the splice
+    carries the dividend adjustment; one computed after does not; one spanning it mixes them. On
+    NSE that is roughly 1.2 % a year, compounding, and on a momentum ranking it is a systematic
+    tilt rather than noise. `DECISIONS-MERGE.md` M29 carries the reasoning.
+
+    **Missing corporate actions, but only where they are actually load-bearing** — the segment we
+    adjust ourselves. If that segment begins after the earliest action on record, nothing is
+    missing, whatever the deep segment's start date is.
     """
 
     #: Earliest corporate action on record, or `None` when there are none at all.
     actions_from: dt.date | None
     #: Latest corporate action on record.
     actions_to: dt.date | None
+    #: First date of the segment WE adjust (`source='nse'`). Bars before it are adjusted at source
+    #: and do not depend on `corporate_action` at all. `None` when there is no such segment.
+    self_adjusted_from: dt.date | None = None
+    #: The date the two conventions meet. `None` when the panel is a single segment.
+    splice_on: dt.date | None = None
     #: The stored series carries every action known at load time, not at each simulated date.
     as_of_today: bool = True
 
     def caveats(self, start: dt.date, end: dt.date) -> tuple[str, ...]:
         """The sentences this run has to carry, for the window it actually covered."""
         notes: list[str] = []
-        if self.actions_from is None:
+
+        # Only the self-adjusted segment depends on our table. A run that never reaches it, or one
+        # whose segment starts after the first action, has nothing missing.
+        exposed_from = max(start, self.self_adjusted_from) if self.self_adjusted_from else start
+        exposed = self.self_adjusted_from is None or self.self_adjusted_from <= end
+        if exposed:
+            if self.actions_from is None:
+                notes.append(
+                    "No corporate actions are on record, so the prices adjusted here are "
+                    "unadjusted in fact. Any split or bonus reads as a price move."
+                )
+            elif exposed_from < self.actions_from:
+                # The WIDTH is the whole point. This boundary is one day wide on the deployed box
+                # (segment from 2024-01-01, first action 2024-01-02) and a caveat that shouted at
+                # that would be ignored by the time it mattered. Seven years reads differently
+                # from one day, so the sentence says which it is and the reader judges.
+                days = (self.actions_from - exposed_from).days
+                notes.append(
+                    f"Corporate actions are on record only from {self.actions_from.isoformat()}, "
+                    f"and prices adjusted here begin {exposed_from.isoformat()} — a gap of "
+                    f"{days} day{'' if days == 1 else 's'}. Splits and bonuses inside it are not "
+                    f"applied."
+                )
+
+        if self.splice_on is not None and start < self.splice_on:
             notes.append(
-                "No corporate actions are on record, so this series is unadjusted throughout. "
-                "Any split or bonus in the window reads as a price move."
+                f"Prices before {self.splice_on.isoformat()} come from a different source and are "
+                f"adjusted for dividends as well as splits, while prices after it are not. "
+                f"Returns measured before that date are higher than the later convention would "
+                f"give, by roughly the dividend yield."
             )
-        elif start < self.actions_from:
-            notes.append(
-                f"Corporate actions are on record only from {self.actions_from.isoformat()}, and "
-                f"this run starts {start.isoformat()}. Splits, bonuses and dividends before that "
-                f"date are not applied, so returns spanning one are wrong by its ratio."
-            )
+
         if self.as_of_today:
             notes.append(
                 "Prices are adjusted as of the day this ran, not as of each simulated day, so a "

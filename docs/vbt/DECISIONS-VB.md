@@ -1017,3 +1017,59 @@ docstring stripped. A third POST would still have to justify itself.
 This is the case the charter's precedence order describes — a criterion's literal wording
 (`== 1`) is the lowest thing in force, and scoping it to its Goal is the right move rather than
 weakening it. Recorded here because "I changed a safety test" should never be invisible.
+
+---
+
+## VB13 — the deploy, and three things it found (11 Sep 2026)
+
+### VB13.1 — A deploy now refuses during the trading session, not only during the nightly · ⚠ UNREVIEWED
+
+`deploy-swing.sh` has refused to run between 18:40 and 21:15 since M84, because a deploy killed
+the nightly chain twice. It now also refuses between **09:15 and 15:30** on a weekday.
+
+**Found by trying to deploy.** Asked to deploy on Friday 11 Sep at 13:46 IST, the check of the
+box's flags came back `BASKFY_SWING_EXECUTION_ENABLED=true`, `BASKFY_SWING_AUTO_EXECUTE=true`,
+`swing-monitor Up 41 minutes`. Step 5 of the deploy runs `up -d … swing-monitor`, and since SW26
+(5 Sep 2026) that monitor confirms its own triggers through the whole session. Deploying would
+have recreated a live, auto-executing trading process mid-session to ship a re-detect button.
+
+The gap was harmless when the nightly guard was written and stopped being harmless on 5 Sep, when
+auto-execute widened from the opening ninety minutes to the whole session. Nobody had deployed
+during a session since.
+
+Time only, no network call: a guard that has to reach AWS to decide is a guard that fails open
+when the network is slow. `DEPLOY_DURING_SESSION=1` overrides it, matching the nightly guard's
+own escape hatch. Rejected: checking the box's flags inside the guard (accurate, and fails open);
+refusing all day (the 15:30-18:40 window is the right time to deploy and should stay easy).
+
+### VB13.2 — Images are built from a clean worktree, so the tag describes the contents · ⚠ UNREVIEWED
+
+`push-images.sh` took its tag from `git rev-parse HEAD` and its build context from the **working
+tree**. Those are not the same thing, and on 11 Sep they were not: the tree carried a concurrent
+session's regenerated `openapi.json` and `schema.ts` that were in no commit at all. The image
+would have been tagged `d9fe557` and contained something else.
+
+It now exports HEAD to a temporary `git worktree` and builds from that, so the tag is the
+contents by construction. It prints a note when the tree is dirty, and `BUILD_FROM_WORKTREE=0`
+restores the old behaviour for someone deliberately testing an uncommitted change.
+
+The swing deploy notes already recorded building "from a clean worktree" as the practice
+(`docs/swing/STATUS.md`, deploy #3). It was a habit, not a mechanism; it is a mechanism now.
+
+### VB13.3 — The sleeve's flags are named in compose, not only in the env file · ⚠ UNREVIEWED
+
+`compose.prod.yml` named **no** `BASKFY_VBT_*` variable, so the sleeve ran on its code defaults
+on the box. Those defaults are the safe ones — execution false, nightly true — which is why
+nothing was wrong and why nobody would have noticed.
+
+It matters because of the trap the file's own desk block names: *"a variable this file does not
+name never reaches the container at all — setting it in `.env.staging.compose` alone would look
+like going unattended and do nothing."* Until today, writing `BASKFY_VBT_EXECUTION_ENABLED=true`
+into the box's env file would have looked like arming the sleeve and changed nothing. That is the
+less dangerous direction of the same bug, and it is still a lie about what the box is doing.
+
+Both flags are now named on every service that reads them — api, worker, beat, migrate, seed via
+the shared block, and desk plus swing-monitor via theirs — each defaulting to the safe value.
+`tools/deploy/verify-safety.sh` asserts it, alongside a check that no VBT auto-execute flag
+appears in the deployed config, with comment lines stripped first so the prose stating the
+prohibition does not trip the check that states it.

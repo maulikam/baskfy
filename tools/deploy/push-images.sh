@@ -10,11 +10,47 @@
 # verification image would deploy a site whose browser-side calls all fail.
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-BLUE="$ROOT/decile-blueprint"
+SOURCE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 REGION="${AWS_REGION:-ap-south-1}"
 HOSTNAME_PUBLIC="${BASKFY_PUBLIC_HOST:-staging.baskfy.com}"
-TAG="$(cd "$ROOT" && git rev-parse --short HEAD)"
+TAG="$(cd "$SOURCE_ROOT" && git rev-parse --short HEAD)"
+
+# ------------------------------------------------------------------- build from a CLEAN worktree
+# WHY THE IMAGE IS NOT BUILT FROM THE FILES IN FRONT OF YOU (11 Sep 2026)
+#
+# `TAG` comes from HEAD but `docker build` takes its context from the working tree, so an image
+# tagged `abc1234` could contain anything — a half-finished edit, another agent's uncommitted
+# regenerated client, a debug print. The tag then names a commit whose contents are not what is
+# running, and every later question ("what is on the box?") has no answer.
+#
+# It nearly shipped that way on 11 Sep 2026: the tree carried a concurrent session's regenerated
+# `openapi.json` and `schema.ts` that were in no commit at all.
+#
+# So: export HEAD to a temporary worktree and build from that. `git worktree add --detach` is
+# cheap, and the checkout is by definition exactly the tag. `BUILD_FROM_WORKTREE=0` falls back to
+# the old behaviour for someone deliberately testing an uncommitted change.
+CLEAN_WORKTREE=""
+cleanup_worktree() {
+  [ -n "$CLEAN_WORKTREE" ] || return 0
+  git -C "$SOURCE_ROOT" worktree remove --force "$CLEAN_WORKTREE" >/dev/null 2>&1 || true
+}
+trap cleanup_worktree EXIT
+
+if [ "${BUILD_FROM_WORKTREE:-1}" = "1" ]; then
+  DIRTY="$(cd "$SOURCE_ROOT" && git status --porcelain | grep -v '^??' || true)"
+  [ -z "$DIRTY" ] || {
+    printf '   note: the working tree has uncommitted changes; building from HEAD (%s) anyway.\n' "$TAG"
+    printf '         they will NOT be in the image. BUILD_FROM_WORKTREE=0 to include them.\n'
+  }
+  CLEAN_WORKTREE="$(mktemp -d)/baskfy-$TAG"
+  git -C "$SOURCE_ROOT" worktree add --detach --quiet "$CLEAN_WORKTREE" HEAD
+  ROOT="$CLEAN_WORKTREE"
+  echo "── building from a clean worktree of $TAG at $ROOT"
+else
+  ROOT="$SOURCE_ROOT"
+  echo "!! BUILD_FROM_WORKTREE=0 — building from the working tree; $TAG will not describe the image"
+fi
+BLUE="$ROOT/decile-blueprint"
 ACCOUNT="$(aws sts get-caller-identity --query Account --output text)"
 REG="${ACCOUNT}.dkr.ecr.${REGION}.amazonaws.com"
 

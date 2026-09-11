@@ -1558,7 +1558,22 @@ It reads bars and writes one row. It places nothing, and it cannot: the module n
 If it takes more than half an hour, say so and the loader gets a chunked read; if it takes two
 minutes, DECISIONS-VB **VB9.4** gets its number and the open item closes.
 
-### V5 — Deploys (unchanged from every other run)
+### V5 — Deploys — ⏳ ready, waiting on a window and two answers (11 Sep 2026)
+
+**The tooling is fixed and the box was inspected.** What is known:
+
+* the box runs `fe723d4` and its database is at `0039`; **all twelve `vb_` tables are already
+  there**, carried by the portfolio session's deploy today. The destructive migration
+  (`0039`, which deletes 120 duplicate instrument rows) has already run — not by this run;
+* HEAD is two commits ahead of the box and both are VBT's. The deploy applies **`0040` only**,
+  one additive `CREATE TABLE vb_scan_run`, with a downgrade;
+* a deploy now refuses during the trading session as well as the nightly window (VB13.1), builds
+  images from a clean worktree (VB13.2), and names the sleeve's flags in compose (VB13.3);
+* `tools/deploy/verify-safety.sh` passes, including the new VBT rails.
+
+**The windows.** After 15:30 IST and before 18:40 on a weekday, or any time at the weekend.
+
+### V5a — Deploys (unchanged from every other run)
 
 `aws sso login --profile baskfy-poc` and the deploy commands. **This run deploys nothing**; the
 box does not know this sleeve exists. When it is time, the sleeve needs `0036` applied, the two

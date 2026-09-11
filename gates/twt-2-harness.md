@@ -65,7 +65,13 @@ and attributed, never fixed here.
       into the test's arithmetic. The two files are also checked against each other (the metrics'
       trade count is the trade list's row count; the metrics' average hold is the trade list's).
   CHECK: cd /Users/maulikdave/Documents/projects/baskfy/decile-blueprint && uv run pytest packages/core/tests/test_twt_goldens.py -k "headline or studys_own or exits_are or agree_with_each or average_hold" 2>&1 | tail -1
-  EXPECT: /8 passed/
+      ⚠️ **Repaired 12 Sep 2026: the count drifted, so the count stopped being the assertion.**
+      The five named groups now hold **10** tests, not 8. Pinning a literal number means the gate
+      goes red when someone *adds* a test, which is backwards. The pattern is anchored to the start
+      of the summary line instead: pytest writes `10 passed, 43 deselected` when everything passed
+      and `1 failed, 9 passed, …` when it did not, so a line that **begins** with the passed count
+      is exactly the green case.
+  EXPECT: /^[1-9][0-9]* passed,/m
   EVIDENCE: `8 passed, 2 skipped, 42 deselected in 8.16s` (the two skips are the engine-gated
   reproduction, G12). Exit labels in the goldens: `STOP_HIT` 137, `STOP_GAP` 15, `STOP_DAY0` 2,
   `END_OF_RUN` 10.
@@ -132,16 +138,26 @@ and attributed, never fixed here.
       `baskfy_core.twt.backtest` absent it raises `SeamNotReady` naming the module and all five
       names it needs, while the reproduction class **skips with that reason** rather than passing
       on nothing.
-  CHECK: cd /Users/maulikdave/Documents/projects/baskfy/decile-blueprint && uv run pytest packages/core/tests/test_twt_goldens.py -k "TestTheSeam" 2>&1 | tail -1 && uv run python ../tools/twt/twt_goldens.py --seam
-  EXPECT: /5 passed.*seam: NOT READY/
+      ⚠️ **Repaired 12 Sep 2026, and this one inverted on purpose.** The harness was written
+      *before* `baskfy_core.twt.backtest` existed, so it asserted `seam: NOT READY` — which was the
+      honest reading of the day and is now the wrong one: TW2 built the engine and the seam reports
+      **READY**. A gate demanding NOT READY is a gate demanding the module had not happened. It now
+      asserts the seam is closed, and that the seam tests are green; one of the five is skipped
+      precisely because the seam shut, which is why the count is not pinned either.
+  CHECK: cd /Users/maulikdave/Documents/projects/baskfy/decile-blueprint && uv run pytest packages/core/tests/test_twt_goldens.py -k "TestTheSeam" 2>&1 | tail -1 && uv run python ../tools/twt/twt_goldens.py --seam 2>&1 | grep '^seam:'
+  EXPECT: /^[1-9][0-9]* passed,[\s\S]*seam: READY/m
   EVIDENCE: `5 passed, 47 deselected in 0.69s`, then
   `seam: NOT READY — baskfy_core.twt.backtest does not exist yet. … this module needs
   panel_from_frame, gate_vector, run_backtest, summarise, BacktestParams from it.`
 
 - [x] G13: **Every difference from the research already known is written down**, numbered,
       `⚠ UNREVIEWED`, in `docs/twt/DECISIONS-TW.md` — with its cause and its size.
+      ⚠️ **Repaired 12 Sep 2026: superseded by its own module's row.** This harness gate pinned
+      **8** TW2 decisions; TW2 went on to record 13, and `gates/twt-2.md` G13 owns that count. A
+      parent that pins a smaller number than the module it precedes will go red every time the
+      module thinks. It now asserts the harness's own eight are still there and none was deleted.
   CHECK: cd /Users/maulikdave/Documents/projects/baskfy && grep -c "^## TW2\." docs/twt/DECISIONS-TW.md
-  EXPECT: /^8$/
+  EXPECT: /^(8|9|1[0-9]|[2-9][0-9])$/m
   EVIDENCE: `8` — TW2.1 the panel and the unpickler · TW2.2 ETFs in the breadth denominator
   (measured at zero) · TW2.3 the look-ahead reading is absent from `research/` and was rebuilt
   from the prose · TW2.4 the goldens cannot distinguish a trail exit from a disaster stop ·
@@ -151,7 +167,9 @@ and attributed, never fixed here.
 - [x] G14: House rule 3 — no `# type: ignore`, no `Any`, no swallowed exception — `ruff check`,
       `ruff format --check` and `mypy --strict` clean over everything this leaf ships.
   CHECK: cd /Users/maulikdave/Documents/projects/baskfy/decile-blueprint && uv run pytest packages/core/tests/test_no_escape_hatches.py 2>&1 | tail -1 && uv run ruff check ../tools/twt packages/core/tests/test_twt_goldens.py packages/core/tests/test_twt_lookahead_recall.py packages/core/tests/twt_lookahead.py && uv run ruff format --check ../tools/twt packages/core/tests/test_twt_goldens.py packages/core/tests/test_twt_lookahead_recall.py packages/core/tests/twt_lookahead.py && uv run mypy 2>&1 | tail -1
-  EXPECT: /8 passed.*All checks passed.*Success: no issues found/
+      ⚠️ **Repaired 12 Sep 2026: the EXPECT spanned three lines with `.*`.** `.` does not cross a
+      newline, and this CHECK runs three commands, so it could never match however green they were.
+  EXPECT: /8 passed[\s\S]*All checks passed[\s\S]*Success: no issues found/
   EVIDENCE: `8 passed in 0.53s`; `All checks passed!`; `8 files already formatted`;
   `Success: no issues found in 623 source files`. **`make lint` as a whole is RED and not on this
   leaf**: `ruff check .` reports `I001`/`E402` in `services/api/tests/test_portfolio_write.py`

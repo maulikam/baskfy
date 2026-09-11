@@ -1711,6 +1711,269 @@ process that places orders, for a message.
 
 ---
 
+## TW10.1 — A parent gate re-runs its child's checks, and the tool for that lives in this repo · ⚠ UNREVIEWED
+
+**Context.** `gates/twt-root.md` R6, R7, R9 and R10 each ran the unlazy checker against a module's
+gate file with `EXPECT: /0 unchecked/`. The checker never prints that string — it prints
+`ALL MET (11 met)` or `UNMET: 3` — so none of the four could have passed. Underneath the wrong
+string sat a wrong question: the checker only re-runs gates it already believes unmet, so against a
+finished file it executes nothing and reports that the **file** is complete. That is a fact about
+the ledger, not about the module still being green, and a parent row exists to establish the
+second.
+
+**Taken.** `tools/gates/rerun.py` re-executes every `CHECK:` in a named gate file and verifies each
+against its own `EXPECT:`, printing one summary line (`gates/twt-6.md: 11/11 checks re-run,
+0 failed`) that a parent's EXPECT matches. The four rows call it. It duplicates the checker's
+parsing and its EXPECT semantics deliberately — including the `i` and `m` regex flags, because
+`gate-check.mjs` compiles the same literal with `new RegExp(body, flags)` and the two must not
+disagree about whether a gate passed.
+
+**It also sidesteps a bug in the checker**, which is in the skill and not in this repo:
+`args.filter((a, i) => !a.startsWith("--") && i !== tIdx + 1)` with no `--timeout` present has
+`tIdx === -1`, so the predicate drops index 0 — the only argument there is. A lone file argument
+falls back to every `gates/*.md` in the tree, and since `gates/twt-root.md` invokes the checker, it
+recurses without bound — five nested levels within two minutes, on 12 Sep 2026, before it was
+killed. `--status <file>` and `--timeout N <file>` both dodge it. **Reported rather than patched:** editing a globally installed skill from inside a repo
+run is a change nobody reviewing this commit would see.
+
+**Rejected.** Keeping `gate-check.mjs` and correcting only the EXPECT string. It would have made
+the rows *pass* without making them *check*: four green rows asserting that four files look
+finished, which is the decoration this run has spent two commits removing.
+
+**Reversal.** Delete `tools/gates/rerun.py` and put the checker invocation back, with
+`--timeout N` before the file so the argv bug does not bite. The rows' Goal is unchanged either
+way; only the strength of the evidence moves.
+
+---
+
+## TW10.2 — A gate cannot be its own evidence, so the exclusion is printed rather than hidden · ⚠ UNREVIEWED
+
+**Context.** `gates/twt-10.md` G8 asserts that every gate file in this run is fully checked with
+evidence. Its own `EVIDENCE:` line reads `pending` until it passes, so when it scanned the
+directory it counted itself and failed — for a reason with nothing to do with what it tests. G8 had
+already been repaired once for a neighbouring fault (its CHECK line contained the literal string it
+grepped for); this is the same shape one layer down.
+
+**Taken.** `tools/gates/ledger.py` reports which gate files are incomplete and takes
+`--exclude FILE:GATE_ID`. The exclusion is **printed in the summary line** —
+`14 files scanned, 142 gates, 0 incomplete (excluded as self-referential: gates/twt-10.md G8)` — so
+a reader sees exactly what is not being asserted. It also reads an **indented** `ABANDON:` line,
+which is how this repo writes them (`gates/twt-0.md` line 79) and which `gate-check.mjs`, anchoring
+at column 0, does not see; a scoped gate reads there as merely unchecked.
+
+**Rejected.** Two alternatives. Subtracting one from the file's own pending count — arithmetic that
+is right today and silently wrong the moment a second gate pends. And moving G8 into a file of its
+own — which makes the self-reference invisible rather than absent, since the new file is still one
+of the ones being scanned.
+
+**Reversal.** Drop the `--exclude` argument and accept that G8 is asserted by the run's report
+rather than by a gate. Nothing else depends on the tool.
+
+---
+
+## TW10.3 — The sleeve has no funding surface, and TW10 does not build one · ⚠ UNREVIEWED
+
+**Context.** Re-reading `FIRST-LIVE-MORNING.md` command by command — because `02` §3 makes the
+runbook a *condition* and a condition is not green because its gate file is — turned up that
+**`tw_config.sleeve_capital_inr` cannot be set by anything**. `PATCH /api/v1/twt/config` has no
+router (`twt_settings.py` exports `read_config`, `apply_patch` and `record_system_change` and
+mounts none of them), there is no `me/twt` page, and `seed twt` takes no `--capital` flag although
+`seed swing` has taken one since SW13. NEEDS-MAULIK T3 calls the capital "your keystroke" and there
+is nowhere to type it.
+
+Nothing here is *new* — §2.2's three commands have carried `[NOT YET REAL — TW3/TW8]` since TW10a
+wrote them. What was absent is the addition: three individually honest markers, and no line
+anywhere saying that together they mean the sleeve cannot be funded.
+
+**Taken.** Record it in three places (`NEEDS-MAULIK.md` T3, `TW-FINAL-REPORT.md` *Not done*, and
+this entry) with the two ways to close it, and **build neither**.
+
+**Why not build it.** The smaller option — `set_twt_sleeve` beside `set_swing_sleeve` plus a
+`--capital` flag — is maybe forty lines and audits correctly, and the temptation to add it while
+the file is open is the whole reason to write this down instead. Three reasons not to. This run's
+brief is that it **never funds the sleeve**, and shipping the funding mechanism as an unasked
+addendum to the safety module is the kind of scope creep that arrives inside a commit nobody
+expected it in. The root `CLAUDE.md` names `tw_config.sleeve_capital_inr` as a thing an agent
+never sets, and building its only setter at the end of an unrelated module reads against the grain
+of that even where it does not break it. And **TW3/TW8 own this surface** by the runbook's own
+markers; a third place to set the capital, built by a fourth module, is how a sleeve ends up with
+two answers to what its capital is.
+
+**Rejected.** Building the CLI flag quietly. Also rejected: leaving it in the runbook's markers
+only, which is the state that let three honest tags add up to an unnoticed blocker.
+
+**Reversal.** Not needed — nothing was built. Closing it is a later module's `set_twt_sleeve`, or
+the TW3/TW8 route the runbook already assumes.
+
+---
+
+## TW11.1 — The funding surface TW10.3 declined, built once Maulik had seen the choice · ⚠ UNREVIEWED
+
+**Context.** TW10.3 found that `NEEDS-MAULIK.md` T3 called the sleeve's capital "your keystroke"
+while there was nowhere to type it, and deliberately did not build the surface: *"building the
+funding surface at the end of an unrelated module — without you having seen the choice — is exactly
+the kind of scope the autonomy charter says to hand back instead."* That was the right call and it
+named its own reversal: *"Closing it is a later module's `set_twt_sleeve`."*
+
+**What changed is the one thing TW10.3 was waiting on.** On 12 Sep 2026, under `/unlazy` on
+`REMAINING.md` §2, Maulik was shown the choice and asked for it. So this is TW10.3's reversal
+taken, not a decision re-opened.
+
+**Decision.** `set_twt_sleeve` in `seed.py`, beside `set_swing_sleeve` and in its shape, plus
+`--capital` widened from `swing` to `swing|twt`. It writes through `twt_settings.apply_patch` — the
+same function the settings form would use — so the engine's bounds are checked first, the server
+ceilings second, and every field that moves leaves a `tw_config_audit` row with an author. The
+value is quantised to the column's 2 dp before the patch is compared, or `2500000` against a stored
+`2500000.00` would audit a change on every deploy (house rules 7 and 8).
+
+**`--risk` was NOT widened.** `tw_config` has no risk-per-trade column: this book sizes by slot
+(`max_position_pct`), not by stop distance. A flag accepted and then ignored is the failure
+`TwtConfigPatch`'s `extra="forbid"` exists to prevent, so the parser refuses it and says so.
+
+**The ₹0 is untouched and is now asserted twice.** Creation still writes an explicit `Decimal("0")`
+and only an explicit `--capital` moves it; `TestTheZeroSurvives` reads the seeder's own source and
+fails if anyone ever wires the funding call into the `twt` branch unconditionally. No capital was
+set by this work. `gates/twt-root.md` R11 still reads `flag_true=0 live_orders=0 capital_seed=1`.
+
+**Rejected.** The `PATCH /api/v1/twt/config` route and the `me/twt` page. They are the TW3/TW8
+shape the runbook assumes and they remain unbuilt: T3 asks for a keystroke on a box at 09:05, and
+the CLI is the surface that exists there. The route is worth building and is not blocking.
+Also rejected: the raw `UPDATE` on `tw_config`, which works today and is the worse option for the
+one reason that matters — no author, no trail.
+
+**Reversal.** Delete `set_twt_sleeve`, narrow the two `parser.error` branches back to `swing`, and
+drop `services/api/tests/test_seed_twt_sleeve.py`. Nothing else reads it. A capital already written
+through it stays written, with its audit row, which is the point.
+
+---
+
+## TW11.2 — The sleeve's clock gains the evening and the morning, and must never gain the sweep · ⚠ UNREVIEWED
+
+**Context.** `baskfy.twt.evening` and `baskfy.twt.morning` were registered tasks with no Beat entry
+from TW6 to 12 Sep 2026, while `twt-detect` had had one at 21:00 since TW4 and VBT-1 had both.
+`docs/twt/FIRST-LIVE-MORNING.md` tells a person to open the desk and read a plan that nothing was
+building; `make twt-plan` was the only thing that made one.
+
+**And `REMAINING.md` §2 was wrong about it in a way worth recording**, because it is the same fault
+this pack has now logged thirty-odd times. It said *"Nothing schedules the evening, the morning or
+the sweep. **No Beat entry, no TWT entry in the desk's clock.**"* The first sentence was true. The
+second was not: `twt-detect` has been in `BEAT_SCHEDULE` since TW4, with a comment explaining its
+time. A summary that rounds "two of the three are missing" up to "there is nothing here" is how a
+gap gets fixed twice or not at all.
+
+**Decision.** `twt-evening` at 21:20 and `twt-morning` at 09:05, both Mon–Fri, both on the compute
+queue. 21:20 rather than the VBT pair's 21:15 for two reasons and both are ordering: the plan is
+built from the session's signals and the session's gate, so an evening before `twt-detect` at 21:00
+would plan against yesterday's tape; and the detector densifies 260 sessions over the whole cash
+universe, so it should not share the compute queue with `vbt-evening`. 09:05 is after `vbt-morning`
+at 09:00, after the login window, and before the 09:15 open — a plan confirmed at 09:20 must not be
+one built last night, because the desk expires plans in thirty minutes.
+
+**This is safe only because of what those two jobs are.** `tasks/twt_evening.py`, first line of its
+docstring: *"Nothing here places an order. Every line is `PROPOSED`; a person confirms it on the
+desk."* Scheduling a planner is not auto-execution; scheduling anything that reaches
+`OrderGateway` would be.
+
+**Refused, and this is the load-bearing half of the entry: the 15:15 sweep is not scheduled.** The
+sweep re-arms GTT stops, so it is order flow, and a Beat entry for it would be the desk placing
+orders on a timer. The root `CLAUDE.md`'s first non-negotiable allows exactly one named
+auto-execute exception, it is the *swing* sleeve's, it is flagged, and it is Maulik's — *"An agent
+may not widen this exception, add a second one, or default the flag to true."* The sweep stays
+`POST /twt/sweep` and `tools/twt/sweep.py`, which is what the runbook §9 already tells a person to
+run. `test_the_sweep_is_not_on_a_timer` makes that a check rather than a comment, asserted twice:
+no TWT entry may be named for a sweep, and none may point at a task whose name contains one.
+
+**Reversal.** Delete the two entries and `services/worker/tests/test_twt_beat.py`. The tasks remain
+registered and `make twt-plan` remains what it was, so nothing else changes.
+
+---
+
+## TW11.3 — Eleven root rows, nine broken checks, and two real gaps · ⚠ UNREVIEWED
+
+**Context.** `gates/twt-root.md`'s preamble diagnosed a real bug — `EXPECT: /0 unchecked/` against
+a checker that prints `ALL MET` or `UNMET: n` — repaired four rows, and left **seven more instances
+of the identical bug** in the same file, all marked green. R0–R5 and R8. Re-running them was the
+only way to find that out.
+
+**What re-running the whole ledger turned up.** **Nineteen** failing checks underneath the eleven
+rows — five in twt-0, two in twt-1, five in twt-2, four in its harness, one each in twt-3, twt-4 and
+twt-8. Eighteen needed the check itself repaired and each carries a dated note on its own gate
+rather than here; the nineteenth, twt-8 G9, needed nothing repaired but the repository's lint. The
+classes:
+
+| Class | Where |
+|---|---|
+| EXPECT spanning two or three lines with `.*`, which does not cross a newline | twt-2 G15, twt-2-harness G12, G14 |
+| Anchored EXPECT with no `m` flag, so `$` cannot match | twt-0 G0.8, G0.9, twt-2 G13 |
+| Multi-line `python -c` in a CHECK, which `sh -c` receives as one line and rejects | twt-2 G6 |
+| A grep window that drifted as its command's output grew | twt-1 G12, twt-3 G10, twt-2 G5 |
+| A filter that had not kept up with the module | twt-1 G9, twt-2 G3 (the study's Sharpe read as money), twt-4 G2 (a signal-delete guard globbed onto TW6's plan delete) |
+| A point-in-time assertion that correctly inverted | twt-2-harness G12 (`seam: NOT READY` — TW2 closed the seam), twt-0 G0.4 (migration 0041 was free; TW3 took it) |
+
+**Two were not check bugs at all, and they are the reason this was worth doing.**
+
+1. **`06`'s TW6a had no `**Goal:**` line** — twelve module headings, twelve ACs, eleven goals. `06`'s
+   own convention is that every module carries both. Written.
+2. **`make lint` was red across the whole repository**, on one TypeScript error and one ESLint error
+   in the UI tree's uncommitted test files. Three TWT gates depend on that command and had been
+   recorded green before the breakage landed. Fixed type-only; `REMAINING.md` §4 records it under
+   the tree that owns those files, and says that tree may overrule it.
+
+**Decision.** Repair every check to test the thing it names, re-run all eleven rows through
+`tools/gates/rerun.py`, and write the reason into the gate beside each repair rather than into this
+file. A repair with no reason beside it is indistinguishable next month from someone loosening a
+gate to make a module pass.
+
+**Rejected.** Marking the seven rows unmet and handing them back — the checks were wrong, not the
+modules, and every module proved green once its checks could run. Also rejected: leaving the two
+real gaps for their own sessions. A missing Goal is one sentence, and a red repo-wide lint gate
+makes every future gate meaningless.
+
+**Reversal.** `git diff` on the gate files. Every repair is one CHECK or EXPECT line with a dated
+note above it; nothing about any module's code changed to make a gate pass.
+
+---
+
+## TW11.4 — A gate that emptied the developer's database, and had since TW3 · ⚠ UNREVIEWED
+
+**Context.** `gates/twt-3.md` G2 proved migration `0041_twt` round-trips by running
+`make migrate && make downgrade && make migrate`. No `BASKFY_DATABASE_URL` is set in that CHECK, and
+the default in `services/api/src/baskfy_api/settings.py:34` is `localhost:5433/baskfy` — the
+developer's own database, the one `DESK_DATABASE_URL` and `SCREENER_DATABASE_URL` also name. The
+Makefile's `downgrade` target is `alembic downgrade **base**`, not `-1`.
+
+**So the gate dropped every table in that database and recreated it empty, every time it ran** —
+including on 11 Sep when TW3 first recorded it green, and again on 12 Sep when the ledger was
+re-run. The `tw_config` row the database was holding (₹25,00,000, `updated_by = test`, no audit row)
+went with it. The database was close to an empty schema by size beforehand and the plant's bars live
+in other databases, so the loss is probably that one row — **but the contents were not recorded
+first, so that is an estimate and is written here as one.**
+
+**The EXPECT was weak in the same direction.** `/Running upgrade|Target database is not up to
+date|head/` matches a single successful `alembic upgrade`. A run in which the downgrade half never
+executed would have passed — and the downgrade is the only thing the gate exists to test.
+
+**Decision.** Round-trip a throwaway. `DROP DATABASE IF EXISTS baskfy_migrate_check; CREATE
+DATABASE …`, point `BASKFY_DATABASE_URL` at it for the duration, and assert the **end state** —
+`version=0041_twt tw_tables=13` — rather than a word in a log. This is the pattern `gates/twt-10.md`
+G6's drill already used for the same reason; G2 simply never adopted it.
+
+**Rejected.** Setting `BASKFY_DATABASE_URL` to `baskfy_test` instead: that is where the suites live,
+so a gate that downgrades it to base mid-run breaks every concurrently running test — a smaller
+version of the same fault. Also rejected: leaving the gate and documenting the hazard. A destructive
+command in a file whose entire purpose is to be re-run is not a documentation problem.
+
+**The general lesson, and it is bigger than this gate.** A ledger is re-run by definition. Any CHECK
+that writes must write somewhere disposable, and any CHECK that takes a database URL from a default
+is pointing at whatever the person's environment says — which on a deploy box is not a test
+database. **This is the only destructive CHECK found in the TWT pack**; `docker exec … DROP DATABASE
+baskfy_drill` in twt-10 G6 and the new `baskfy_migrate_check` both name a scratch database
+explicitly, which is the rule the rest of the pack already followed.
+
+**Reversal.** `git diff gates/twt-3.md`. Reverting restores a gate that empties your database.
+
+---
+
 ## The pack's own standing position on two things it was not asked
 
 **There is no paper phase and this file does not re-open it.** Maulik decided it on 11 Sep 2026,

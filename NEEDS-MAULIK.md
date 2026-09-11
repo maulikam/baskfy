@@ -1645,6 +1645,58 @@ nothing. At ₹25 lakh over ten slots a line is ₹2.5 lakh and that cap binds u
 research's ₹2 crore (DECISIONS-TW **TW0.3**). The floor is the pack's answer to the size change; it
 is not a measurement at the new size.
 
+#### ✅ There is a surface now. Built 12 Sep 2026 (TW11), after you asked for it.
+
+**This entry said "your keystroke" and, four lines later, that there was nowhere to type it.** That
+was true from the end of TW10 until you were shown the choice under `/unlazy` and asked for the
+surface to be built. One command now does it:
+
+```
+cd decile-blueprint && uv run python -m baskfy_api.seed twt --capital 2500000
+```
+
+It goes through the same `apply_patch` the settings form would: the engine's bounds first, the
+server ceilings second, then one `tw_config_audit` row recording the old value, the new value and
+an author. Running it twice with the same number writes nothing the second time. **It sets no
+capital of its own** — without `--capital` a seed still writes ₹0, and a test reads the seeder's
+source to make sure nobody ever wires the funding call in unconditionally.
+
+| Surface | State |
+|---|---|
+| `python -m baskfy_api.seed twt --capital …` | ✅ **built (TW11).** Mirrors `seed swing --capital` (SW13) and audits the same way. `services/api/tests/test_seed_twt_sleeve.py` |
+| `PATCH /api/v1/twt/config` — what `FIRST-LIVE-MORNING.md` §2.2 tells you to curl | **still does not exist.** `baskfy_api/twt_settings.py` has `read_config`, `apply_patch` and `record_system_change`, and **no `APIRouter`**; nothing mounts it. Not blocking — the CLI is the surface that exists where you actually type at 09:05 |
+| The settings form at `$WEB/me/twt` | **still does not exist.** There is no `me/twt` route in the web app |
+
+The runbook was **not wrong** about any of this — §2.2's three commands are tagged
+`[NOT YET REAL — TW3/TW8]` and always were. What was missing is that nothing collected those tags
+into "and therefore the sleeve cannot be funded".
+
+**The raw `UPDATE` on `tw_config` is no longer the only thing that works, and should not be used.**
+It bypasses `record_system_change`, so `tw_config_audit` gets no row and the change has no author
+and no trail. On a sleeve whose whole design is that a person decided each number, that matters.
+
+**So T3 is now genuinely one keystroke, and it is still yours.** No agent has run the command and
+none will; `docs/twt/DECISIONS-TW.md` TW11.1 records what was built and how to reverse it.
+
+#### ⚠️ And one thing to check on the box before you type anything
+
+**A capital with no audit row behind it was written around the audited path.** The local
+development database was carrying exactly that until 12 Sep 2026 — `sleeve_capital_inr =
+2500000.00`, `updated_by = test`, written 11 Sep 15:05 UTC, with `tw_config_audit` **empty**.
+
+That row no longer exists, and the reason is worth your eye more than the row was: re-running the
+TWT ledger **emptied the whole local dev database**. `gates/twt-3.md` G2 ran
+`make migrate && make downgrade && make migrate`, `make downgrade` is `alembic downgrade base`, and
+`BASKFY_DATABASE_URL` defaults to `localhost:5433/baskfy`. The gate is repaired — it round-trips a
+throwaway database now — but **it had been like that since TW3**, so any earlier ledger run did the
+same thing. `REMAINING.md` §2 carries the full account.
+
+**Nothing here can see the box**, so this is a question rather than a finding about it. Before
+step 3.5, run the read-back in `docs/twt/FIRST-LIVE-MORNING.md` §3.5 — it now asks for the audit
+row as well as the number, precisely so "funded" and "funded with a trail" cannot be confused. If
+the box shows a capital with no matching `tw_config_audit` row, somebody wrote it around the path
+and it should be re-written through `seed twt --capital`, not left.
+
 ### T4 — The plant's missing instrument-days, which will make the live scan look thin
 
 Not yours to fix and not this run's either — it is the data plant's — but it is yours to **expect**,

@@ -33,8 +33,16 @@ and it records two attempts to move that boundary that had to be reverted.
 
 - [x] G2: **Upsert, never delete-and-reinsert.** `tw_order.signal_date` is a composite FK into
       `tw_signal_daily`, so a delete is refused once an order references the row (TW3's finding).
-  CHECK: cd decile-blueprint && grep -rniE "delete\(|\.delete\b" services/worker/src/baskfy_worker/tasks/twt*.py | grep -viE "#|\"\"\"" | wc -l
-  EXPECT: /^\s*0\s*$/
+      ⚠️ **Repaired 12 Sep 2026: the glob outgrew the gate.** The row's subject is the composite
+      FK — `tw_order.signal_date` into `tw_signal_daily` — so what must never be deleted is a
+      **signal, state or breadth** row. The pattern globbed `twt*.py`, and TW6 later added
+      `twt_evening.py`, whose `store_plan` deletes the previous PROPOSED **plans** before writing
+      the rebuilt ones. That is TW6's intended behaviour on a different table with no such FK, and
+      it made a gate about signals go red. The check now names the tables it protects and pins the
+      one delete that does exist, so neither a new signal delete nor a second plan delete can slip
+      past it.
+  CHECK: cd /Users/maulikdave/Documents/projects/baskfy/decile-blueprint && printf 'signal_deletes=%s plan_deletes=%s\n' "$(grep -rniE 'delete\(' services/worker/src/baskfy_worker/tasks/twt*.py | grep -viE '#|\"\"\"' | grep -cE 'TwSignalDaily|TwStateDaily|TwBreadthDaily')" "$(grep -rniE 'delete\(' services/worker/src/baskfy_worker/tasks/twt*.py | grep -viE '#|\"\"\"' | grep -c 'TwPlan')"
+  EXPECT: /^signal_deletes=0 plan_deletes=1$/m
   EVIDENCE: `0`. Both writers go through `tasks/twt.py::_upsert`, which is
   `insert(...).on_conflict_do_update(index_elements=[user_id, date, instrument_id], set_=...)`;
   the breadth row is the same statement on `(user_id, date)`. The grep is the weaker half of the

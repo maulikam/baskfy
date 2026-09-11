@@ -43,6 +43,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.screener import current_data_version, execute_screen
 from baskfy_core.backtest import (
+    AdjustmentCoverage,
     BacktestConfig,
     BacktestData,
     BacktestDataError,
@@ -57,6 +58,7 @@ from baskfy_core.backtest import (
     shift_schedule,
 )
 from baskfy_core.models import (
+    CorporateAction,
     FactorDaily,
     IndexDef,
     IndexMemberDaily,
@@ -539,6 +541,7 @@ async def load_backtest_data(
         symbols=symbols,
         names=names,
         data_version=data_version,
+        adjustment_coverage=await _adjustment_coverage(session),
     )
     return LoadedBacktest(
         data=data,
@@ -586,3 +589,23 @@ async def execute_backtest(
 def notes_for(loaded: LoadedBacktest, result: BacktestResult) -> tuple[str, ...]:
     """Everything the assumptions panel should say that is specific to *this* run."""
     return tuple(dict.fromkeys((*loaded.notes, *result.notes)))
+
+
+async def _adjustment_coverage(session: AsyncSession) -> AdjustmentCoverage:
+    """How far back the corporate actions on record go — the caveat a run has to carry.
+
+    **Measured, not assumed.** `docs/DECISIONS.md` §21.8: NSE's endpoint serves a recent window and
+    ignores how far back it is asked, returning the same 19 records for a 2024 query as for a 2026
+    one. On the deployed box on 11 Sep 2026 the bars begin 2017-01-02 and the actions begin
+    2024-01-02, so seven years of history is unadjusted — and a momentum factor whose window spans
+    an unapplied split reads that split as a return.
+
+    The engine cannot look this up (law 1), so it is read here and handed in, the same way
+    `data_version` is.
+    """
+    row = (
+        await session.execute(
+            select(func.min(CorporateAction.ex_date), func.max(CorporateAction.ex_date))
+        )
+    ).one()
+    return AdjustmentCoverage(actions_from=row[0], actions_to=row[1])

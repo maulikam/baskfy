@@ -92,7 +92,11 @@ class DeepBackfill:
     written: int = 0
     skipped_no_overlap: int = 0
     skipped_no_deep_history: int = 0
+    #: Instruments refused because their bars fall in a COMPRESSED chunk. See `compressed_ranges`.
+    skipped_compressed: int = 0
     spliced: int = 0
+    #: The compressed chunk ranges that caused a refusal, so the operator knows what to decompress.
+    compressed_ranges: set[str] = field(default_factory=set)
     errors: list[str] = field(default_factory=list)
 
 
@@ -137,6 +141,59 @@ async def _existing(
     return series, (min(series) if series else None)
 
 
+async def compressed_ranges_covering(session: AsyncSession, days: Sequence[dt.date]) -> list[str]:
+    """The compressed chunk ranges that contain any of ``days``. Empty means it is safe to write.
+
+    **THIS IS THE GUARD THE INCIDENT OF 11 Sep 2026 BOUGHT.** `_write` already does the right
+    thing — `ON CONFLICT (instrument_id, date) DO NOTHING` — and on an uncompressed chunk that
+    makes the whole job idempotent, which is house rule 7.
+
+    It does not work on a compressed chunk. TimescaleDB serves the insert into the chunk's
+    uncompressed portion and **the conflict check never sees the compressed row**, so the row is
+    written a second time; a later recompression bakes the duplicate in, where no `ON CONFLICT`
+    can ever reach it. Three such rows — from an earlier run of this very module, at the seam
+    where its data met ours — crashed the nightly pipeline for 2026-09-11 with a Polars
+    `aggregation 'item' expected no or a single value, got 2 values`, and had to be removed by
+    dropping a chunk constraint, decompressing, deleting and recompressing.
+
+    A guard that is correct and inoperative is worse than no guard, because it is trusted. So this
+    module now asks the question `ON CONFLICT` cannot, and **refuses** rather than writing.
+    """
+    if not days:
+        return []
+    rows = (
+        await session.execute(
+            text(
+                "select distinct range_start::date::text || '..' || range_end::date::text "
+                "from timescaledb_information.chunks "
+                "where hypertable_name = 'ohlcv_daily' and is_compressed "
+                "and range_start::date <= :hi and range_end::date > :lo"
+            ),
+            {"lo": min(days), "hi": max(days)},
+        )
+    ).all()
+    return sorted(r[0] for r in rows)
+
+
+async def duplicate_pairs(session: AsyncSession) -> int:
+    """How many ``(instrument_id, date)`` pairs appear more than once. Must always be zero.
+
+    Checked after every write rather than trusted, because the failure this module can cause is
+    invisible until a Polars aggregation trips over it hours later, in a different process, on a
+    different day.
+    """
+    return int(
+        (
+            await session.execute(
+                text(
+                    "select count(*) from (select instrument_id, date from ohlcv_daily "
+                    "group by instrument_id, date having count(*) > 1) t"
+                )
+            )
+        ).scalar_one()
+    )
+
+
 async def _write(
     session: AsyncSession, instrument_id: int, bars: list[tuple[dt.date, dict[str, float]]]
 ) -> int:
@@ -175,7 +232,12 @@ async def _write(
     return written
 
 
-async def run(  # noqa: PLR0913 - one parameter per CLI flag, which is the module's contract
+async def run(  # noqa: PLR0912, PLR0913, PLR0915
+    # PLR0913: one parameter per CLI flag, which is the module's contract.
+    # PLR0912/PLR0915: this is a pipeline — fetch, drop placeholders, find the seam, refuse a
+    # compressed chunk, splice, write — and it reads as one because it IS one. The same
+    # suppression and the same reason sit on `baskfy_core.backtest.run_backtest`: splitting a
+    # sequence into helpers hides the order, and the order is the thing a reader needs.
     *,
     write: bool,
     start: dt.date = DEFAULT_START,
@@ -268,6 +330,16 @@ async def run(  # noqa: PLR0913 - one parameter per CLI flag, which is the modul
             )
             for day, row in sorted(deep.items())
         ]
+        # THE REFUSAL. Asked once per instrument, against the days actually about to be written.
+        # A compressed chunk cannot enforce the primary key, so writing into one is how this
+        # module planted the three duplicates that crashed the nightly on 11 Sep 2026.
+        async with session_scope(database_url) as session:
+            blocked = await compressed_ranges_covering(session, [day for day, _ in bars])
+        if blocked:
+            report.skipped_compressed += 1
+            report.compressed_ranges.update(blocked)
+            continue
+
         if not write:
             # A dry run that reports zero writable bars is not a preview of anything. Count what
             # the writing form would insert, and only skip the insert itself.
@@ -275,7 +347,28 @@ async def run(  # noqa: PLR0913 - one parameter per CLI flag, which is the modul
             continue
         async with session_scope(database_url) as session:
             report.written += await _write(session, instrument_id, bars)
+
+    if write:
+        await _record_duplicate_check(report, database_url)
     return report
+
+
+async def _record_duplicate_check(report: DeepBackfill, database_url: str | None) -> None:
+    """THE PROOF, not the promise.
+
+    House rule 7 says re-running a job produces identical rows. The failure this module can
+    actually cause is invisible for hours and surfaces in a different process on a different day —
+    a Polars aggregation tripping over a second row — so it is measured here rather than assumed.
+    A run that created one must say so in the one place somebody is still reading.
+    """
+    async with session_scope(database_url) as session:
+        duplicates = await duplicate_pairs(session)
+    if duplicates:
+        report.errors.append(
+            f"{duplicates} duplicate (instrument_id, date) pair(s) exist after this run. "
+            "The primary key did not stop them, which means a write reached a compressed "
+            "chunk. Do not run again until they are removed."
+        )
 
 
 def _render(report: DeepBackfill, *, write: bool) -> str:
@@ -288,7 +381,16 @@ def _render(report: DeepBackfill, *, write: bool) -> str:
         f"level-spliced at the seam   : {report.spliced}",
         f"skipped, nothing deeper     : {report.skipped_no_deep_history}",
         f"skipped, no shared date     : {report.skipped_no_overlap}",
+        f"REFUSED, compressed chunk   : {report.skipped_compressed}",
     ]
+    if report.compressed_ranges:
+        lines += [
+            "",
+            "  A compressed chunk cannot enforce the primary key, so writing into one creates",
+            "  duplicates that no ON CONFLICT can catch and no later delete can reach. Decompress",
+            "  these ranges, re-run, then recompress:",
+        ]
+        lines += [f"    {r}" for r in sorted(report.compressed_ranges)]
     if report.errors:
         lines += ["", f"errors ({len(report.errors)}):"]
         lines += [f"  {e}" for e in report.errors[:15]]

@@ -3,7 +3,7 @@
 The status page for the volume-breakout run. Updated at the end of every module, **loud about
 what is NOT done**. A fresh session resumes from the first module not marked ✅.
 
-**Run state: VB13 green — the deploy tooling is fixed and the box is inspected; the deploy itself waits on a window and two answers.** Started 10 Sep 2026 on branch
+**Run state: DEPLOYED — `bd78529` is live on the Phase A box, execution flag false, and the strategy has produced its first real signal.** Started 10 Sep 2026 on branch
 `developer`. The report will be `../../VB-FINAL-REPORT.md`; what needs Maulik's hands is
 `../../NEEDS-MAULIK.md` § VBT.
 
@@ -651,4 +651,59 @@ happened, by them. What is left is `0040`: one additive table, with a downgrade.
   detection should start on the first night.
 * `compute_vbt` has still never run against the real plant, so `NEEDS-MAULIK.md` V6's timing is
   still unmeasured — and the first deploy is when it stops being.
+
+---
+
+## Deployed — 11 Sep 2026, ~14:55 IST, tag `bd78529`
+
+**Deployed during the trading session, deliberately, with the live monitor spared.** Maulik asked
+for it "right now"; the risk was named to him first and he decided. `KEEP_MONITOR=1` shipped
+everything except `swing-monitor`, which stayed on `fe723d4` and **was never recreated across
+three deploys** — verified as `Up 2 hours` at the end.
+
+| | |
+|---|---|
+| Images | `baskfy-{web,py,desk}:bd78529`, built from a clean worktree (VB13.2) |
+| Migration | `0040_vbt_scan_run` applied; the box was already at `0039` with all twelve `vb_` tables |
+| Flags, read from inside the worker | `BASKFY_VBT_EXECUTION_ENABLED=false`, `BASKFY_VBT_NIGHTLY_ENABLED=true` |
+| Sleeve capital | **Rs 25,00,000**, written through the audited path — `vb_config_audit` records `0.00 -> 2500000.00`, `changed_by maulik:VB11.1` |
+| Beat | all eight `vbt-*` entries scheduled; `vbt-rescan-sweep` firing every minute, no errors |
+
+### The first real run of the strategy
+
+The re-detect button, pressed on the box, against the plant's own bars:
+
+```
+session 2026-09-10   18.8s   533,659 bars
+2,592 instruments -> 2,564 with a bar -> 1,768 with a 200-day average -> 907 above it
+gate OPEN (51.3%)  |  18 scan hits  |  1 signal
+```
+
+**JUNIPER** — close Rs 227.39, limit **Rs 227.35**, stop **Rs 200.05**, +6.55% on 3.92x volume,
+Rs 6.29 cr of 20-day turnover. Every number checks against `04`: the limit is the close floored
+to the Rs 0.05 tick, the stop is 12% below and floored again, the change is inside filter E's 15%
+and the turnover clears filter F's Rs 2 cr.
+
+### Two bugs the box found that no local test could
+
+* **VB13.4** — the re-detect asked the exchange calendar which session it was, so pressed at
+  14:14 it re-detected *today*, whose bars are not published until evening. It now asks the
+  pipeline. The seeded test calendar has all 4,089 weekdays in it, so nothing local could tell
+  "a trading day" from "a day whose bars exist".
+* **VB13.5** — that first press left a breadth row for 11 Sep saying "0 of 0 above the average,
+  gate SHUT" for a session that had not closed. A date the bars do not reach now writes nothing.
+  The row was deleted from the box.
+
+### What is NOT done, after the deploy
+
+* **No order has been placed and none can be**: the execution flag is false on the box and only
+  Maulik may set it (V3, answered).
+* `compute_vbt` joins the chain **tonight at 21:10** for the first time, and the evening plan at
+  21:15 will produce its first real `PLACE_LIMIT` lines against Rs 25 lakh. Nobody has seen that
+  happen.
+* A concurrent portfolio session was deploying at the same time and re-pinned the web image
+  mid-flight; it ended on `bd78529`.
+* The desk page has still never been opened in a browser.
+* `make vbt-backtest` against the plant is still unmeasured (V6). The 18.8s above is *detection*,
+  not the backtest.
 

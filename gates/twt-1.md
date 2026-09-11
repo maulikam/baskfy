@@ -24,7 +24,7 @@ shape, its purity test and its config discipline. Do NOT copy its rules.
       `test_twt_purity.py` asserts the module set is exactly the ten and that both imports exist.
 
 - [x] G2: **Law 1.** The package imports no database, no network, no disk and no clock.
-  CHECK: cd decile-blueprint && uv run pytest packages/core/tests/test_twt_purity.py -q 2>&1 | tail -3
+  CHECK: cd decile-blueprint && uv run pytest packages/core/tests/test_twt_purity.py 2>&1 | tail -3
   EXPECT: /passed/
   EVIDENCE: `uv run pytest packages/core/tests/test_twt_purity.py` -> **17 passed in 0.11s**. The scan
       also proves the look-ahead reading is unreachable (TW0.1, over the syntax tree so the prose
@@ -35,7 +35,7 @@ shape, its purity test and its config discipline. Do NOT copy its rules.
       event. **The year-boundary case is named in the AC because it is the one that silently
       sorts wrong:** ISO week 1 of the next year is AFTER week 52, and a `searchsorted` on
       `year × 100 + week` must not place it before.
-  CHECK: cd decile-blueprint && uv run pytest packages/core/tests/test_twt_signals.py -q 2>&1 | tail -3
+  CHECK: cd decile-blueprint && uv run pytest packages/core/tests/test_twt_signals.py 2>&1 | tail -3
   EXPECT: /passed/
   EVIDENCE: `uv run pytest packages/core/tests/test_twt_signals.py` -> **33 passed in 0.54s**.
       `TestTheYearBoundary`: the fixture ends 2024-12-31 — calendar year 2024, **ISO year 2025,
@@ -52,7 +52,7 @@ shape, its purity test and its config discipline. Do NOT copy its rules.
 
 - [x] G4: The exits are `04` §7 — the 20 % hard stop, the trailing stop off the highest high
       clamped to the exchange tick, the ratchet that never lowers a stop, and the fill-day rule.
-  CHECK: cd decile-blueprint && uv run pytest packages/core/tests/test_twt_exits.py -q 2>&1 | tail -3
+  CHECK: cd decile-blueprint && uv run pytest packages/core/tests/test_twt_exits.py 2>&1 | tail -3
   EXPECT: /passed/
   EVIDENCE: `uv run pytest packages/core/tests/test_twt_exits.py` -> **39 passed in 0.20s**. §7.1's 20 %
       stop floored to the tick (101.23 -> 80.95); §7.2's trail off `high_since` with both clamp
@@ -62,7 +62,7 @@ shape, its purity test and its config discipline. Do NOT copy its rules.
       and at the open.
 
 - [x] G5: Sizing applies every cap of `04` §6.2 **in order**, and §6.4's half size.
-  CHECK: cd decile-blueprint && uv run pytest packages/core/tests/test_twt_sizing.py -q 2>&1 | tail -3
+  CHECK: cd decile-blueprint && uv run pytest packages/core/tests/test_twt_sizing.py 2>&1 | tail -3
   EXPECT: /passed/
   EVIDENCE: `uv run pytest packages/core/tests/test_twt_sizing.py` -> **22 passed in 0.17s**.
       `caps_applied == (POSITION_PCT, TURNOVER, CASH)` asserts §6.2's order; §6.4's half size is
@@ -71,7 +71,7 @@ shape, its purity test and its config discipline. Do NOT copy its rules.
 
 - [x] G6: The breadth gate is **strict** (> 40 %, not ≥), and a zero denominator is SHUT rather
       than open — an empty universe must not read as a healthy market.
-  CHECK: cd decile-blueprint && uv run pytest packages/core/tests/test_twt_breadth.py -q 2>&1 | tail -3
+  CHECK: cd decile-blueprint && uv run pytest packages/core/tests/test_twt_breadth.py 2>&1 | tail -3
   EXPECT: /passed/
   EVIDENCE: `uv run pytest packages/core/tests/test_twt_breadth.py` -> **22 passed in 0.20s**.
       `gate_for(40.0000) is SHUT`, `gate_for(40.0001) is OPEN`, `gate_for(39.9999) is SHUT`;
@@ -81,7 +81,7 @@ shape, its purity test and its config discipline. Do NOT copy its rules.
 
 - [x] G7: **No threshold is a literal outside `config.py`.** This is the gate that keeps `04`
       the spec rather than a description of the code.
-  CHECK: cd decile-blueprint && uv run pytest packages/core/tests/test_twt_no_literals.py -q 2>&1 | tail -3
+  CHECK: cd decile-blueprint && uv run pytest packages/core/tests/test_twt_no_literals.py 2>&1 | tail -3
   EXPECT: /passed/
   EVIDENCE: `uv run pytest packages/core/tests/test_twt_no_literals.py` -> **13 passed in 0.19s**. AST
       scan: no numeric constant outside {0,1,2,100} in signals/breadth/sizing/exits/plan/sleeve;
@@ -91,7 +91,7 @@ shape, its purity test and its config discipline. Do NOT copy its rules.
 
 - [x] G8: Thin sessions (`04` §2.1) and the 10 % missing-bar tolerance (§2.2) are TESTS, not
       comments — `research/tight-close/STRATEGY.md` §1 is where they come from.
-  CHECK: cd decile-blueprint && uv run pytest packages/core/tests -q -k "twt and (thin or tolerance or calendar)" 2>&1 | tail -3
+  CHECK: cd decile-blueprint && uv run pytest packages/core/tests -k "twt and (thin or tolerance or calendar)" 2>&1 | tail -3
   EXPECT: /passed/
   EVIDENCE: `uv run pytest packages/core/tests -k "twt and (thin or tolerance or calendar)"` ->
       **73 passed, 2 skipped, 3945 deselected in 4.14s**. `test_twt_calendar.py` asserts a session
@@ -112,13 +112,13 @@ shape, its purity test and its config discipline. Do NOT copy its rules.
 
 - [x] G10: `test_no_escape_hatches.py` still green — no `# type: ignore`, no `Any`, no swallowed
       exception (house rule 3).
-  CHECK: cd decile-blueprint && uv run pytest packages/core/tests/test_no_escape_hatches.py -q 2>&1 | tail -3
+  CHECK: cd decile-blueprint && uv run pytest packages/core/tests/test_no_escape_hatches.py 2>&1 | tail -3
   EXPECT: /passed/
   EVIDENCE: `uv run pytest packages/core/tests/test_no_escape_hatches.py` -> **8 passed in 0.45s**.
       No `type: ignore`, no `Any`, no swallowed exception anywhere the scan reaches.
 
 - [x] G11: The whole core suite is green — TW1 broke nothing.
-  CHECK: cd decile-blueprint && uv run pytest packages/core/tests -q 2>&1 | tail -3
+  CHECK: cd decile-blueprint && uv run pytest packages/core/tests 2>&1 | tail -3
   EXPECT: /passed/
   EVIDENCE: `uv run pytest packages/core/tests` -> **4012 passed, 8 skipped in 445.43s**, exit 0.
       Baseline was green at 106 test files; TW1 adds twelve `test_twt_*.py` modules plus

@@ -37,7 +37,7 @@ the tests.
 - [x] G3: Every table, column, type and constraint of `03` exists as written — including
       `tw_position.stop_price` never falling, `tw_plan_skip.reason` in its enum, and
       `tw_order.side` in `{BUY, SELL}`.
-  CHECK: cd decile-blueprint && uv run pytest packages/core/tests/test_twt_schema.py -q 2>&1 | tail -3
+  CHECK: cd decile-blueprint && uv run pytest packages/core/tests/test_twt_schema.py 2>&1 | tail -3
   EXPECT: /passed/
   EVIDENCE: `123 passed in 2.44s` (`packages/core/tests/test_twt_schema.py`; the db half runs, it does not skip). Beyond the columns, the constraints are proved by *triggering* them: a stop below `initial_stop`, `close_reason='EMA_EXIT'`, a `next_trigger` with no `next_trigger_for`, `side='SHORT'`, an unknown `tw_plan_skip.reason`, an order for a signal nobody stored, a second order for the same signal, a thin session with an OPEN gate, a measured session with no percentage, and a plan that expired before it was built - each raises `IntegrityError` naming its own constraint. Deleting the `app_user` takes the whole sleeve with it, composite foreign key included.
 
@@ -54,7 +54,7 @@ the tests.
   20.00, 10 first-live entries.
 
 - [x] G5: The seed is **idempotent** (house rule 7) — running it twice changes no rows.
-  CHECK: cd decile-blueprint && uv run pytest packages/core/tests -q -k "twt and (seed or idempot)" 2>&1 | tail -3
+  CHECK: cd decile-blueprint && uv run pytest packages/core/tests -k "twt and (seed or idempot)" 2>&1 | tail -3
   EXPECT: /passed/
   EVIDENCE: `4 passed, 4014 deselected in 2.55s` (3 were TW3's when first run; the selection
   also catches a TW1 test that landed in the same tree). The idempotence test is not "the row still exists":
@@ -67,7 +67,7 @@ the tests.
       that is easy to get backwards — a `trail_pct` **below** `BASKFY_TWT_TRAIL_PCT_MIN` is
       refused too. Decision TW0.5: the measured cliff is in the tightening direction, so this one
       ceiling is a floor.
-  CHECK: cd decile-blueprint && uv run pytest packages/core/tests -q -k "twt and (ceiling or bound or refus)" 2>&1 | tail -3
+  CHECK: cd decile-blueprint && uv run pytest packages/core/tests -k "twt and (ceiling or bound or refus)" 2>&1 | tail -3
   EXPECT: /passed/
   EVIDENCE: `88 passed, 3930 deselected in 6.34s` (the count drifts upward as the TW1 sibling's
   tests land in the same tree; 53 of them are `test_twt_ceilings.py`). Above a ceiling: 422 `setting-above-ceiling`
@@ -93,7 +93,7 @@ the tests.
 
 - [x] G8: `test_schema_matches_docs.py` is extended to `03`, so the schema and the document
       cannot drift apart silently.
-  CHECK: cd decile-blueprint && uv run pytest packages/core/tests/test_schema_matches_docs.py -q 2>&1 | tail -3
+  CHECK: cd decile-blueprint && uv run pytest packages/core/tests/test_schema_matches_docs.py 2>&1 | tail -3
   EXPECT: /passed/
   EVIDENCE: `381 passed in 0.50s`. `DOCUMENTED_TABLES` gains the thirteen `tw_` tables with their
   primary keys (so `test_no_undocumented_tables` now covers them),
@@ -104,7 +104,7 @@ the tests.
   being loosened.
 
 - [x] G9: The whole core suite is green — TW3 broke nothing.
-  CHECK: cd decile-blueprint && uv run pytest packages/core/tests -q 2>&1 | tail -3
+  CHECK: cd decile-blueprint && uv run pytest packages/core/tests 2>&1 | tail -3
   EXPECT: /passed/
   EVIDENCE: `3929 passed, 4 skipped in 242.93s`. Baseline before TW3 was `3815 passed, 3 skipped`; the difference is TW3's 176 tests plus the TW1 sibling's, landing in the same tree.
 

@@ -23,27 +23,27 @@ touches **ten compressed chunks across 2,338 instruments**.
 
 - [ ] G2: A refusal is **visible in the report**, with the instrument count and the chunks
       involved. A skip nobody sees is the same as a silent corruption one release later.
-  CHECK: cd decile-blueprint && uv run pytest services/worker/tests -q -k "deep_backfill and (compressed or refus)" 2>&1 | tail -3
+  CHECK: cd decile-blueprint && uv run pytest services/worker/tests -k "deep_backfill and (compressed or refus)" 2>&1 | tail -3
   EXPECT: /passed/
   EVIDENCE: pending
 
 - [ ] G3: **The post-run assertion.** After any write, the tool checks for duplicate
       `(instrument_id, date)` pairs and fails loudly if it created any. House rule 7 says a job is
       idempotent; this proves it rather than trusting it.
-  CHECK: cd decile-blueprint && uv run pytest services/worker/tests -q -k "deep_backfill and duplicate" 2>&1 | tail -3
+  CHECK: cd decile-blueprint && uv run pytest services/worker/tests -k "deep_backfill and duplicate" 2>&1 | tail -3
   EXPECT: /passed/
   EVIDENCE: pending
 
 - [ ] G4: Re-running the tool over a range it has already written adds **nothing** — the
       idempotence the `ON CONFLICT` was always meant to give, now true on a compressed table too.
-  CHECK: cd decile-blueprint && uv run pytest services/worker/tests -q -k "deep_backfill and idempot" 2>&1 | tail -3
+  CHECK: cd decile-blueprint && uv run pytest services/worker/tests -k "deep_backfill and idempot" 2>&1 | tail -3
   EXPECT: /passed/
   EVIDENCE: pending
 
 - [ ] G5: The existing behaviour is unchanged where it was already right: zero-close placeholder
       bars still dropped, the splice factor still computed off the non-kite segment, dates at or
       after the first existing bar still not written.
-  CHECK: cd decile-blueprint && uv run pytest services/worker/tests/test_deep_backfill.py -q 2>&1 | tail -3
+  CHECK: cd decile-blueprint && uv run pytest services/worker/tests/test_deep_backfill.py 2>&1 | tail -3
   EXPECT: /passed/
   EVIDENCE: pending
 

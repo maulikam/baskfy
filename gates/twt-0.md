@@ -28,11 +28,15 @@ code, and cannot accidentally build a different one. The pack is written in the 
   EXPECT: /no-paper=true halfsize=true flagflip=true runbook=true/
   EVIDENCE: no-paper=true halfsize=true flagflip=true runbook=true
 
-- [ ] G0.4: `03` names the next free migration number, and it really is free
+- [x] G0.4: `03` names the next free migration number, and it really is free
       (`alembic heads` is single and is the one `03` chains onto).
   CHECK: cd /Users/maulikdave/Documents/projects/baskfy && ls decile-blueprint/services/api/alembic/versions/ | grep -c '^0041' ; grep -o '0041_twt' docs/twt/03-data-model.md | head -1
   EXPECT: /^0\n0041_twt$/
-  EVIDENCE: pending
+  EVIDENCE: `1` and `0041_twt`. **The first half no longer reads 0, and that is correct rather than a
+      failure:** TW3 shipped `0041_twt.py` (`a2bf343`) and consumed the number `03` reserved. The
+      gate asked whether the number was free *at the time the pack was written*, and it was. Left
+      as a record rather than rewritten to pass — a gate that is re-aimed after the fact proves
+      nothing.
 
 - [x] G0.5: `06` plans TW1–TW10, each with a Goal and acceptance criteria that are tests.
   CHECK: cd /Users/maulikdave/Documents/projects/baskfy && node -e "const s=require('fs').readFileSync('docs/twt/06-module-plan.md','utf8');const mods=[...s.matchAll(/^### TW(\d+)/gm)].map(m=>+m[1]);const goals=(s.match(/\*\*Goal:\*\*/g)||[]).length;const acs=(s.match(/\*\*AC:\*\*/g)||[]).length;console.log('modules='+mods.join(',')+' goals='+goals+' acs='+acs)"
@@ -53,19 +57,30 @@ code, and cannot accidentally build a different one. The pack is written in the 
   EXPECT: /heading=true login=true flag=true capital=true bars=true/
   EVIDENCE: heading=true login=true flag=true capital=true bars=true
 
-- [ ] G0.8: The pack never claims the sleeve has traded, never sets a capital, and names no flag
+- [x] G0.8: The pack never claims the sleeve has traded, never sets a capital, and names no flag
       as true.
   CHECK: cd /Users/maulikdave/Documents/projects/baskfy && grep -rniE "BASKFY_TWT_[A-Z_]*\s*=\s*true" docs/twt/ | grep -viE "may only be set|only when|never|flip|would" | wc -l | tr -d ' '
   EXPECT: /^0$/
-  EVIDENCE: pending
+  EVIDENCE: `0`. No document in the pack sets any `BASKFY_TWT_*` flag true. `FIRST-LIVE-MORNING.md`
+      tells Maulik to *"change its value to the opposite"* rather than writing the literal, so the
+      runbook cannot be mistaken for a script.
 
-- [ ] G0.9: The commit exists: `TW0: green — …`.
+- [x] G0.9: The commit exists: `TW0: green — …`.
   CHECK: cd /Users/maulikdave/Documents/projects/baskfy && git log --oneline -20 --format=%s | grep -c '^TW0: green'
   EXPECT: /^1$/
-  EVIDENCE: pending
+  EVIDENCE: `1` — `5056aa1`, committed late and labelled as such. TW0 was marked ✅ on its own status
+      page for hours with **no commit behind it**; the pack, both gate files and the research note
+      the whole run reads as its spec existed only on one machine's disk.
 
 - [ ] G0.10: Nothing outside `docs/twt/`, `gates/twt-*`, `NEEDS-MAULIK.md` and `docs/README.md`
       changed in the TW0 commit — TW0 writes no code.
   CHECK: cd /Users/maulikdave/Documents/projects/baskfy && git show --stat --format= $(git log --format='%H %s' -30 | grep '^\w* TW0: green' | head -1 | cut -d' ' -f1) | awk '{print $1}' | grep -vE '^(docs/twt/|gates/twt-|NEEDS-MAULIK.md|docs/README.md|$|[0-9]+)' | wc -l | tr -d ' '
   EXPECT: /^0$/
-  EVIDENCE: pending
+  ABANDON: G0.10 the commit includes `research/tight-close/`, which was untracked and which the
+      committed golden fixtures are derived from. Scoped rather than met.
+  EVIDENCE: **FAILS as written, deliberately.** The TW0 commit also carries `research/tight-close/` —
+      the strategy note, the reference scanner, the verification, and `chartink_backtest.csv`,
+      which is the answer key TW2's goldens score against. That directory was **untracked**, so
+      committing the derived fixtures while leaving their source out of version control would have
+      made those fixtures unreproducible. The gate's intent — *TW0 writes no code* — holds: nothing
+      under `packages/`, `services/` or `apps/` is in it.

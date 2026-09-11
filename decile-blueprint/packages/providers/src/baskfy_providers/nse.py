@@ -61,6 +61,20 @@ PROVIDER_NAME: Final = "nse"
 KIND_BHAVCOPY: Final = "bhavcopy"
 KIND_INDEX_SNAPSHOT: Final = "index-snapshot"
 KIND_CORPORATE_ACTIONS: Final = "corporate-actions"
+#: The windowed request is a *different question* from the un-ranged one, so it gets its own
+#: archive kind. `fetch_and_archive` never re-fetches a key that exists (docs/09, "Never re-fetch
+#: to re-parse"), so reusing the old kind would have kept re-parsing the truncated 20-row payloads
+#: already on disk and the fix would have been a no-op. The old files stay as the record of what
+#: the old code actually saw.
+KIND_CORPORATE_ACTIONS_WINDOWED: Final = "corporate-actions-windowed"
+
+#: Rows NSE returns when it ignores the window and serves its default first page.
+#:
+#: This exact number is the incident: twelve consecutive nightly payloads, every one of them 20
+#: rows, while NSE held 87 actions for 2026-09-11 alone. A count that lands on it again means the
+#: range was dropped, and an adjusted price series built on a default page is worse than a loud
+#: failure. See `gates/ca-truncation.md`.
+NSE_DEFAULT_PAGE_ROWS: Final = 20
 KIND_LISTINGS: Final = "listings"
 KIND_CONSTITUENTS: Final = "constituents"
 KIND_EQUITY_FUNDAMENTALS: Final = "equity-fundamentals"
@@ -298,15 +312,32 @@ class NSEProvider:
         return snapshots
 
     def corporate_actions(self, since: dt.date) -> list[CorporateAction]:
-        """Splits, bonuses, dividends and rights with an ex-date on or after ``since``."""
+        """Splits, bonuses, dividends and rights with an ex-date on or after ``since``.
+
+        **The window is not optional.** Asked without ``from_date``/``to_date``, NSE answers with
+        a default first page of 20 rows and no indication that it has done so; the nightly stored
+        those 20 as though they were the day's corporate actions, for every night the feed ran.
+        NSE published 87 actions for 2026-09-11 alone. `gates/ca-truncation.md` has the evidence.
+
+        The window runs forward from ``since`` rather than stopping at today, because NSE
+        announces an ex-date ahead of time and an action is worth *storing* before it is worth
+        *applying*. Nothing about that is a look-ahead: `apply_adjustments` bounds itself to
+        ``ex_date <= as_of`` (docs/DECISIONS.md §21.9), so a future-dated row sits inert in
+        `corporate_action` until its ex-date arrives. Deriving the far edge from ``since`` and not
+        from the clock also keeps the request a pure function of the archive key, so one archived
+        payload always answers exactly one question.
+        """
+        until = since + dt.timedelta(days=self._settings.nse_corporate_action_window_days)
         payload = self._archived(
-            KIND_CORPORATE_ACTIONS,
+            KIND_CORPORATE_ACTIONS_WINDOWED,
             since,
-            f"{self._settings.nse_base_url}/api/corporates-corporateActions?index=equities",
+            f"{self._settings.nse_base_url}/api/corporates-corporateActions?index=equities"
+            f"&from_date={_nse_day(since)}&to_date={_nse_day(until)}",
             extension="json",
             content_type="application/json",
         )
         frame = _read_json(payload, context="corporate actions")
+        self._refuse_default_page(frame.height, since, until)
         actions: list[CorporateAction] = []
         for row in frame.iter_rows(named=True):
             symbol = str(_first(row, ("symbol", "SYMBOL")) or "").strip()
@@ -595,6 +626,31 @@ class NSEProvider:
 
     # --- internals ------------------------------------------------------
 
+    def _refuse_default_page(self, rows: int, since: dt.date, until: dt.date) -> None:
+        """Refuse a payload shaped like NSE's default page rather than an answer to our window.
+
+        Defence in depth behind the window itself: the range is the fix, this is what makes a
+        silent regression of it impossible. Only a window long enough to make 20 rows absurd is
+        judged, so an honestly quiet week is never called truncated — over 120 days NSE returns
+        hundreds of rows, and the twelve archived payloads that exposed this were 20 every time.
+
+        Refusing is the cheap side of the trade. A false alarm costs one loud night that an
+        operator resolves by reading the archived file; accepting a default page costs an adjusted
+        price series that is quietly wrong for every instrument whose action fell outside it, and
+        a momentum factor computed on top of that.
+        """
+        if rows != NSE_DEFAULT_PAGE_ROWS:
+            return
+        if (until - since).days <= NSE_DEFAULT_PAGE_ROWS:
+            return
+        raise UnexpectedPayload(
+            f"corporate actions for {since.isoformat()}..{until.isoformat()} came back as exactly "
+            f"{NSE_DEFAULT_PAGE_ROWS} rows, which is the page NSE serves when it ignores the "
+            f"date range. Refusing to treat it as the window's full contents — see "
+            f"gates/ca-truncation.md.",
+            provider=PROVIDER_NAME,
+        )
+
     def _archived(
         self,
         kind: str,
@@ -756,6 +812,15 @@ def _require_column(frame: pl.DataFrame, candidates: tuple[str, ...], context: s
         f"got {frame.columns}",
         provider=PROVIDER_NAME,
     )
+
+
+def _nse_day(on: dt.date) -> str:
+    """``DD-MM-YYYY`` — the only date spelling ``corporates-corporateActions`` accepts.
+
+    Give it an ISO date and it does not complain; it silently ignores the range and serves the
+    default page, which is the failure this whole module comment exists about.
+    """
+    return on.strftime("%d-%m-%Y")
 
 
 def _first(row: Mapping[str, object], candidates: tuple[str, ...]) -> object:

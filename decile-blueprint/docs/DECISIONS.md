@@ -1776,6 +1776,15 @@ Two caveats on the residual, so nobody reads the 90-98% as "the rest is noise":
 
 ### 21.8 NSE serves only a recent corporate-actions window, so the deep series are unadjusted
 
+> **WRONG, and corrected on 11 Sep 2026 by §21.11.** The premise below — "the endpoint serves a
+> current window and ignores how far back the caller asks" — is a misreading of a truncated
+> response. The endpoint ignored the range because the code never sent one, and answered with its
+> default first page of 20 rows every time. Asked properly it returns **1,808 actions for 2011**
+> and 6,204 for 2024-2026. The conclusion drawn here, that "a historical corporate-actions source
+> is now the single highest-value missing input", is false: the source was NSE, the whole time,
+> behind two query parameters. Read §21.11 before acting on anything in this entry.
+
+
 `NSEProvider.corporate_actions(since)` returned **19 records for `since = 2024-01-01`** — the same
 19 it returns for `since = 2026-07-01`. The endpoint serves a current window and ignores how far
 back the caller asks. Only **4** of those have an ex-date on or before the 2026-08-18 as-of date.
@@ -1875,3 +1884,62 @@ of "one symbol under two series is a real state":
 **Reversal.** `downgrade()` restores the old key. The merged rows are **not** recreated and cannot
 be: nothing records which bar came from which row, and inventing a split would be worse than
 leaving them merged. A database rolled back will, in time, grow the same duplicates again.
+
+### 21.11 The corporate-action feed was truncated to 20 rows a night, and §21.8 misread it
+
+**Found 11 Sep 2026** by the data-quality gate, which refused to publish the session: *"1 of 4240
+instruments moved more than 50% with no corporate action or circuit to explain it."* The
+instrument was PGIL, 2378.40 -> 1187.70.
+
+The move was real. NSE's record for PGIL reads `11-Sep-2026 | Bonus 1:1`, and Kite corroborates it
+independently: asked for PGIL's last ten sessions after the ex-date, it returns 10 Sep close
+**1189.20** against our stored 2378.40 and volume **585,852** against our 292,926 — an exact
+halving of price and doubling of volume, which is what `bonus_factor(1, 1)` computes. The bar was
+right. We simply never received the action.
+
+**The cause.** `NSEProvider.corporate_actions` requested
+`/api/corporates-corporateActions?index=equities` **with no `from_date`/`to_date`**. NSE answers
+an un-ranged request with a default first page of 20 rows and says nothing about having done so.
+Every one of the twelve archived payloads on the box is exactly 20 rows. NSE published **87**
+actions for 2026-09-11 alone; the page did not even cover one day, and PGIL fell off it.
+
+**The scale.** Over 2026-08-01..2026-09-30 NSE holds **606** actions. `corporate_action` holds
+**146** — 76% missing. Of the 21 non-dividend actions in that window we hold 9, and 5 of those 9
+did not come from the feed at all: they carry `measured_factor` in `raw`, meaning
+`action_recovery` inferred them from the gap between Kite's adjusted series and the NSE print. The
+feed contributed four. The recovery module has been quietly carrying the feed for months, and it
+cannot help on an ex-date itself because it demands `FLANK_DAYS` of flat ratio on each side —
+which is exactly why PGIL reached the gate instead of being repaired before it.
+
+**Why this is a correctness bug and not a gap.** House rule 6 makes `close` the adjusted series and
+the factor engine reads it. An action we never store is never applied, so a missed bonus or split
+is a fabricated ±50% return feeding momentum. A missed dividend is a small error; there were
+hundreds of those too.
+
+**The fix** (`gates/ca-truncation.md`): the request names an explicit window, `from_date=since` to
+`since + nse_corporate_action_window_days` (default 120, a settings field, not a literal). The
+window runs *forward* because NSE announces an ex-date ahead of it and an action is worth storing
+before it is worth applying — no look-ahead follows, because `apply_adjustments` bounds itself to
+`ex_date <= as_of` per §21.9. Deriving the far edge from `since` rather than the clock keeps the
+request a pure function of the archive key, so one archived payload always answers one question.
+
+Two things make the fix hold. The payload is archived under a **new kind**,
+`corporate-actions-windowed`: `fetch_and_archive` never re-fetches an existing key (docs/09,
+"Never re-fetch to re-parse"), so reusing the old kind would have kept re-parsing the truncated
+files already on disk and the fix would have been a silent no-op. And a windowed request that
+comes back as exactly `NSE_DEFAULT_PAGE_ROWS` rows is **refused**, not parsed — over 120 days that
+count is NSE ignoring the range, and an adjusted price series built on a default page is worse
+than a loud night.
+
+**What this un-blocks.** §21.8 called a historical corporate-actions source "the single
+highest-value missing input" and bounded what the dataset could prove. It was never missing. NSE
+returns **1,808 actions for 2011**, 5,522 for 2011-2013, 6,204 for 2024-2026, with no sign of a cap
+— so the 2011 deep backfill can carry real corporate actions rather than inheriting Kite's opaque
+adjustments, and §21.7's residual has a new and much more likely explanation.
+
+**Not fixed by this entry, and deliberately so.** Only PGIL's action was repaired on the night, by
+hand, because it was the one blocking publication and Kite corroborated it. The other ~460 lost
+actions are a separate operation with its own gate: `docs/runbooks/bad-data-published.md` says a
+failed gate buys until tomorrow evening, and a 460-action mass re-adjustment at midnight is the
+rushed fix it warns against.
+

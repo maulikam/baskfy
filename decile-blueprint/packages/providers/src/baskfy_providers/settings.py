@@ -89,6 +89,18 @@ class ProviderSettings(BaseSettings):
     nse_request_timeout_seconds: float = Field(default=30.0, gt=0)
     #: NSE's public files are rate-sensitive (docs/09 §"NSE specifics").
     nse_rate_limit_per_second: float = Field(default=1.0, gt=0)
+    #: How far past ``since`` the corporate-action window reaches, in days.
+    #:
+    #: NSE answers ``corporates-corporateActions`` **without** a date range with a default first
+    #: page of 20 rows, and for eleven months nothing asked it for a range — so the nightly stored
+    #: 20 actions a night out of the 87 NSE published for 2026-09-11 alone. See
+    #: `gates/ca-truncation.md`. The window must therefore always be explicit.
+    #:
+    #: Forward-looking because NSE announces an ex-date days to weeks ahead, and an action is
+    #: worth storing before it is worth applying: `apply_adjustments` bounds itself to
+    #: ``ex_date <= as_of`` (docs/DECISIONS.md §21.9), so a future-dated row sits inert until its
+    #: ex-date arrives. In practice NSE publishes about a fortnight ahead, so this is generous.
+    nse_corporate_action_window_days: int = Field(default=120, gt=0)
 
     # --- Object storage (Cloudflare R2 / any S3-compatible) -------------
     s3_endpoint_url: str = ""

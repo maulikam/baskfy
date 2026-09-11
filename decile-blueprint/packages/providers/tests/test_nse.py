@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 import io
+import json
 import zipfile
 from collections.abc import Mapping
 from decimal import Decimal
@@ -19,6 +20,9 @@ from baskfy_providers.archive import LocalRawArchive, archive_key
 from baskfy_providers.errors import ProviderUnavailable, UnexpectedPayload, UpstreamUnavailable
 from baskfy_providers.nse import (
     KIND_BHAVCOPY,
+    KIND_CORPORATE_ACTIONS,
+    KIND_CORPORATE_ACTIONS_WINDOWED,
+    NSE_DEFAULT_PAGE_ROWS,
     NSEProvider,
     NSERuntime,
     parse_corporate_action_purpose,
@@ -561,3 +565,127 @@ def _quote_equity_json() -> bytes:
         b'{"info":{"symbol":"INFY"},"securityInfo":{"issuedSize":4148506959},'
         b'"priceInfo":{"lastPrice":1850.25,"pE":24.5,"pB":7.1},"metadata":{}}'
     )
+
+
+class TestCorporateActionWindow:
+    """The window on `corporates-corporateActions`, and the 20-row page that hid behind its absence.
+
+    Incident of 11 Sep 2026 (`gates/ca-truncation.md`). The endpoint was called with no
+    `from_date`/`to_date`, NSE answered with its default first page, and twelve consecutive
+    nightly payloads were 20 rows each while NSE held 87 actions for 2026-09-11 alone. PGIL's
+    `Bonus 1:1` fell outside the page, never reached `corporate_action`, was never adjusted for,
+    and surfaced as a fabricated -50.1% return that the data-quality gate refused to publish.
+
+    These assert the spec — a request that names its window, and a refusal to read a default page
+    as an answer — not the shape of today's code.
+    """
+
+    @staticmethod
+    def _rows(count: int, *, ex_date: str = "11-Sep-2026") -> bytes:
+        body = [
+            {"symbol": f"SYM{i}", "exDate": ex_date, "subject": "Dividend - Rs 1 Per Share"}
+            for i in range(count)
+        ]
+        return json.dumps(body).encode()
+
+    def test_the_request_names_a_date_window(
+        self, settings: ProviderSettings, archive: LocalRawArchive
+    ) -> None:
+        client = FakeHttpClient({"corporates-corporateActions": self._rows(3)})
+        build(settings, archive, client).corporate_actions(dt.date(2026, 9, 4))
+
+        asked = next(u for u in client.requests if "corporateActions" in u)
+        assert "from_date=04-09-2026" in asked
+        assert "to_date=" in asked
+
+    def test_the_far_edge_follows_the_window_setting(
+        self, settings: ProviderSettings, archive: LocalRawArchive
+    ) -> None:
+        settings = settings.model_copy(update={"nse_corporate_action_window_days": 30})
+        client = FakeHttpClient({"corporates-corporateActions": self._rows(3)})
+        build(settings, archive, client).corporate_actions(dt.date(2026, 9, 4))
+
+        asked = next(u for u in client.requests if "corporateActions" in u)
+        assert "to_date=04-10-2026" in asked
+
+    def test_the_window_reaches_past_today_to_catch_announced_ex_dates(
+        self, settings: ProviderSettings, archive: LocalRawArchive
+    ) -> None:
+        """NSE announces an ex-date ahead of it. Storing early is safe: `apply_adjustments`
+        bounds itself to ``ex_date <= as_of`` (docs/DECISIONS.md §21.9)."""
+        client = FakeHttpClient({"corporates-corporateActions": self._rows(3)})
+        build(settings, archive, client).corporate_actions(dt.date(2026, 9, 4))
+
+        asked = next(u for u in client.requests if "corporateActions" in u)
+        until = dt.datetime.strptime(asked.split("to_date=")[1][:10], "%d-%m-%Y").date()
+        assert until > dt.date(2026, 9, 4)
+
+    def test_a_default_page_is_refused_rather_than_parsed(
+        self, settings: ProviderSettings, archive: LocalRawArchive
+    ) -> None:
+        """Exactly 20 rows over a 120-day window is NSE ignoring the range, not a quiet quarter."""
+        client = FakeHttpClient({"corporates-corporateActions": self._rows(NSE_DEFAULT_PAGE_ROWS)})
+        with pytest.raises(UnexpectedPayload, match="ignores the date range"):
+            build(settings, archive, client).corporate_actions(dt.date(2026, 9, 4))
+
+    def test_a_short_window_is_allowed_to_return_the_page_size(
+        self, settings: ProviderSettings, archive: LocalRawArchive
+    ) -> None:
+        """A genuinely quiet few days may hold 20 actions. The refusal judges only windows long
+        enough that 20 is absurd, so it cannot cry wolf on an honest answer."""
+        settings = settings.model_copy(update={"nse_corporate_action_window_days": 5})
+        client = FakeHttpClient({"corporates-corporateActions": self._rows(NSE_DEFAULT_PAGE_ROWS)})
+        actions = build(settings, archive, client).corporate_actions(dt.date(2026, 9, 4))
+        assert len(actions) == NSE_DEFAULT_PAGE_ROWS
+
+    def test_one_row_fewer_than_a_page_is_not_refused(
+        self, settings: ProviderSettings, archive: LocalRawArchive
+    ) -> None:
+        client = FakeHttpClient(
+            {"corporates-corporateActions": self._rows(NSE_DEFAULT_PAGE_ROWS - 1)}
+        )
+        actions = build(settings, archive, client).corporate_actions(dt.date(2026, 9, 4))
+        assert len(actions) == NSE_DEFAULT_PAGE_ROWS - 1
+
+    def test_the_windowed_payload_is_archived_under_its_own_kind(
+        self, settings: ProviderSettings, archive: LocalRawArchive
+    ) -> None:
+        """`fetch_and_archive` never re-fetches an existing key, so a truncated payload already on
+        disk under the old kind must not be able to answer the new question."""
+        since = dt.date(2026, 9, 4)
+        archive.put(
+            archive_key(KIND_CORPORATE_ACTIONS, since, "json"),
+            self._rows(NSE_DEFAULT_PAGE_ROWS),
+            content_type="application/json",
+        )
+        client = FakeHttpClient({"corporates-corporateActions": self._rows(3)})
+
+        actions = build(settings, archive, client).corporate_actions(since)
+
+        assert len(actions) == 3, "the stale un-windowed payload was re-parsed"
+        assert archive.exists(archive_key(KIND_CORPORATE_ACTIONS_WINDOWED, since, "json"))
+
+    def test_pgil_the_action_that_was_missed_parses_and_survives_the_window(
+        self, settings: ProviderSettings, archive: LocalRawArchive
+    ) -> None:
+        """NSE's own row for PGIL, verbatim. Kite independently halved PGIL's history and doubled
+        its volume on this ex-date, which is what ``bonus_factor(1, 1)`` computes."""
+        body = json.dumps(
+            [
+                {
+                    "symbol": "PGIL",
+                    "exDate": "11-Sep-2026",
+                    "subject": "Bonus 1:1",
+                    "faceVal": "5",
+                }
+            ]
+        ).encode()
+        client = FakeHttpClient({"corporates-corporateActions": body})
+
+        actions = build(settings, archive, client).corporate_actions(dt.date(2026, 9, 4))
+
+        assert len(actions) == 1
+        assert actions[0].symbol == "PGIL"
+        assert actions[0].action_type == "bonus"
+        assert (actions[0].ratio_from, actions[0].ratio_to) == (Decimal(1), Decimal(1))
+        assert actions[0].ex_date == dt.date(2026, 9, 11)

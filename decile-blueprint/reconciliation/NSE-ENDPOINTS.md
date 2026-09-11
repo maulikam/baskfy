@@ -25,9 +25,16 @@ This is that confirmation, and it found one real defect.
 | `bhavcopy` | `{archive}/content/cm/BhavCopy_NSE_CM_0_0_0_{YYYYMMDD}_F_0000.csv.zip` | **200 — 3,649 rows** for 2026-08-21, 13 columns including `upper_circuit` |
 | `index_snapshots` | `{archive}/content/indices/ind_close_all_{DDMMYYYY}.csv` | **200 — 164 indices.** NIFTY 50 at 24252.0, PE 20.5, PB 2.94, div yield 1.16 |
 | `index_constituents` | `{archive}/content/indices/…` | **200 — see the table below** |
-| `corporate_actions` | `{base}/api/corporates-corporateActions?index=equities` | **200 — 20 actions** in the last 30 days, parsed to typed records |
+| `corporate_actions` | `{base}/api/corporates-corporateActions?index=equities&from_date=…&to_date=…` | **200 — every action in the window**, parsed to typed records. 248 rows for September 2026; 87 for 2026-09-11 alone |
 
 `{archive}` is `https://nsearchives.nseindia.com`, `{base}` is `https://www.nseindia.com`.
+
+> **Corrected 11 Sep 2026.** This row previously read *"200 — 20 actions in the last 30 days"*
+> and recorded the URL without a date range. Twenty was never the number of actions in thirty
+> days; it is the size of the default first page NSE serves when the range is missing, and the
+> reconciliation mistook the page for the answer. `gates/ca-truncation.md` has the evidence: twelve
+> consecutive nightly payloads of exactly 20 rows, against 87 actions NSE published for a single
+> day. The date range is now mandatory and a 20-row answer to a long window is refused.
 
 ## The defect: four constituent files are not named by the rule
 

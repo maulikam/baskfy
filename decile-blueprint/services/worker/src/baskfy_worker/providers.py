@@ -62,6 +62,10 @@ def build_pipeline_dependencies() -> PipelineDependencies:
         vbt_user_id=_sole_user_id(),
         vbt_nightly_enabled=get_worker_settings().vbt_nightly_enabled,
         vbt_execution_enabled=get_worker_settings().vbt_execution_enabled,
+        # TW4. The same tenant and the same rule: read once, here, never inside the step.
+        twt_user_id=_sole_user_id(),
+        twt_nightly_enabled=get_worker_settings().twt_nightly_enabled,
+        twt_execution_enabled=get_worker_settings().twt_execution_enabled,
     )
 
 

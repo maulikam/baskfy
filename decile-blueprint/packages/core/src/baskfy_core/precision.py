@@ -110,6 +110,34 @@ COLUMN_PRECISION: Final[dict[str, int]] = {
     "ret_20_pct": PERCENT_DP,
     "close_position": RSI_DP,
     "pct_above_dma": RSI_DP,
+    # --- TW4: `tw_state_daily`, `tw_signal_daily` and `tw_position` (docs/twt/03 §2, §3, §5) ---
+    #
+    # The same rule for the same reason, and on this sleeve it has teeth the others do not have:
+    # a TWT line is held for months, so the stop that is resting at the exchange was written from
+    # a number computed one specific evening. A trigger shown as 241.65 must not be sent as
+    # 241.6512, and `high_since` must not drift in the fourth place over six hundred sessions of
+    # maxima.
+    #
+    # `week_range_pct` and `month_low_ratio` keep **four** places because both are the exact
+    # quantities the rules compare against: `04` §3.1 line 3 tests the range against 3.01 and
+    # line 2 tests the ratio against 1.3, and `03` §2 stores them as numeric(10,4). Rounding a
+    # number to the precision of its own threshold is how a rule starts disagreeing with the row
+    # that recorded it -- the same argument `close_position` and `pct_above_dma` make above.
+    #
+    # The prices are 2 dp even where the column is PRICE_RAW (18,4), exactly as `close_raw` is:
+    # the exchange quotes cash equities in paise, and the extra two places are headroom for an
+    # adjusted series rather than precision anybody trades on.
+    "week_close_0": PRICE_DP,
+    "week_close_1": PRICE_DP,
+    "week_close_2": PRICE_DP,
+    "week_range_pct": RSI_DP,
+    "month_low_3": PRICE_DP,
+    "month_low_ratio": RSI_DP,
+    "sma_dma": PRICE_DP,
+    "entry_reference_close": PRICE_DP,
+    "stop_preview": PRICE_DP,
+    "high_since": PRICE_DP,
+    "next_trigger": PRICE_DP,
 }
 
 #: Columns stored as whole numbers: marketcap in ₹ crore, turnover and volumes in ₹.

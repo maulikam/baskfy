@@ -3,7 +3,7 @@ COMPOSE := docker compose -f infra/docker/compose.yml
 UV      := uv run
 
 .DEFAULT_GOAL := help
-.PHONY: help up down migrate downgrade seed test test-db e2e lint fmt typecheck schema openapi client doctor fixtures mailpit api web web-build worker beat flower pipeline backfill refdata explain bench loadtest plans bundle backup restore integrity drill metrics coverage reconcile mutants fundamentals refactors index-repair token-sync shadow backend-parity friday-drill cb-metrics swing vbt vbt-plan vbt-backtest
+.PHONY: help up down migrate downgrade seed test test-db e2e lint fmt typecheck schema openapi client doctor fixtures mailpit api web web-build worker beat flower pipeline backfill refdata explain bench loadtest plans bundle backup restore integrity drill metrics coverage reconcile mutants fundamentals refactors index-repair token-sync shadow backend-parity friday-drill cb-metrics swing vbt vbt-plan vbt-backtest twt twt-plan twt-backtest
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -167,6 +167,15 @@ vbt-plan:      ## Build the sleeve's plan for one date (places nothing): make vb
 
 vbt-backtest:  ## VB9: re-run the study over the plant's bars: make vbt-backtest [DATE=2026-09-09] [START=2017-10-16]
 	$(UV) python -m baskfy_worker.vbt_cli --backtest $(if $(DATE),--date $(DATE),) $(if $(START),--start $(START),)
+
+twt:           ## TW4: detect three-weeks-tight state and signals for one date: make twt DATE=2026-09-10 [SESSIONS=5] [FORCE=1]
+	$(UV) python -m baskfy_worker.twt_cli $(if $(DATE),--date $(DATE),) $(if $(SESSIONS),--sessions $(SESSIONS),) $(if $(FORCE),--force,)
+
+twt-backtest:  ## TW9: re-run the study over the plant's bars: make twt-backtest [START=2017-10-16] [DATE=2026-09-09] [SLEEVE=1000000] [JSON=out/twt.json]
+	$(UV) python ../tools/twt/backtest.py $(if $(START),--start $(START),) $(if $(DATE),--end $(DATE),) $(if $(SLEEVE),--sleeve $(SLEEVE),) $(if $(JSON),--json $(JSON),)
+
+twt-plan:      ## TW6: build the sleeve's plan for one session (places nothing): make twt-plan DATE=2026-09-10 [SOURCE=EVENING|MORNING]
+	$(UV) python -m baskfy_worker.twt_cli --plan $(or $(SOURCE),EVENING) $(if $(DATE),--date $(DATE),)
 
 swing-premarket: ## SW6's morning job: make swing-premarket DATE=2026-09-02 [STAGE=LEVELS|GAPS]
 	$(UV) python -m baskfy_worker.swing_cli $(if $(DATE),--date $(DATE),) --premarket $(or $(STAGE),GAPS)

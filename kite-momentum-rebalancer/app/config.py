@@ -197,6 +197,29 @@ VBT_STOP_BAND_MAX = float(os.getenv("BASKFY_VBT_STOP_BAND_MAX", "0.15"))
 # stop that rests at its own trigger can be walked through by a fast-falling book.
 VBT_GTT_LIMIT_FRACTION = float(os.getenv("BASKFY_VBT_GTT_LIMIT_FRACTION", "0.97"))
 
+# ---- The three-weeks-tight sleeve (docs/twt) ---------------------------------------------
+# The fourth sleeve. An end-of-day POSITION strategy: about eighteen entries a year, held a
+# hundred sessions on average, and its one new mechanism is the RATCHET — a 20% trailing stop
+# re-armed after every close on which the name made a new high since entry.
+#
+# BASKFY_TWT_EXECUTION_ENABLED is this sleeve's own DRY_RUN and is DELIBERATELY INDEPENDENT of
+# DRY_RUN itself, exactly as the swing and VBT flags above are: with it false, /twt/execute runs
+# the entire path — guards, risk, rate limits, journal — through the gateway's dry-run adapter
+# and records simulated=true whatever DRY_RUN says, so a rehearsal rehearses THIS code.
+# docs/twt/02 §3 lists what must be true before it flips, and NONE of it is an agent's: a green
+# tree, the written runbook, Maulik's own flag flip and half size for the first ten live entries.
+#
+# THERE IS NO BASKFY_TWT_AUTO_EXECUTE AND THERE WILL NOT BE ONE. Non-negotiable 1's named
+# exception is the swing sleeve's, by Maulik's own hand (DECISIONS-SW SW25); TW10 asserts that no
+# setting of that shape exists anywhere in the tree. A TWT order exists because a person pressed
+# Confirm on an unexpired plan — the ratchet included, which is the line that would most like to
+# be a job and is not.
+TWT_EXECUTION_ENABLED = os.getenv("BASKFY_TWT_EXECUTION_ENABLED", "false").lower() == "true"
+# The TWT stop band and the GTT cushion are NOT env knobs here: `04` §10.7 and §10.6 put both in
+# `baskfy_core.twt.config.ExitConfig` (0.5-30% and 0.97), and `app/twt_execute.py` reads them off
+# that config so the band the gateway is handed and the arithmetic that produced the trigger can
+# never be two different numbers. DECISIONS-TW TW6.5.
+
 # ---- The swing book's notifier (SW11, STANDING-ANSWERS A2) -------------------------------
 # One-way. A TRIGGERED signal for a daily-focus name is emailed with the whole line; nothing
 # that comes back — a reply, a tap — can reach an order. The desk does not import the data

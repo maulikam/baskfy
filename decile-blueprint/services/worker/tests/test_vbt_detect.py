@@ -49,7 +49,7 @@ from baskfy_core.seed_data import NSE_EXCHANGE_ID
 from baskfy_core.vbt.config import DEFAULT_VBT_CONFIG, Gate, SignalState
 from baskfy_worker.deps import PipelineDependencies
 from baskfy_worker.orchestrator import run_compute_vbt_step
-from baskfy_worker.steps import PipelineStep, StepOutcome, StepStatus
+from baskfy_worker.steps import POST_PUBLISH_STEPS, PipelineStep, StepOutcome, StepStatus
 from baskfy_worker.tasks import vbt as vbt_task
 from baskfy_worker.tasks.vbt import (
     LOOKBACK_SESSIONS,
@@ -588,7 +588,12 @@ class TestTheNeighboursAreUntouched:
     async def test_the_swing_step_still_precedes_this_one_in_the_chain(self) -> None:
         chain = list(PipelineStep)
         assert chain.index(PipelineStep.COMPUTE_SWING) < chain.index(PipelineStep.COMPUTE_VBT)
-        assert chain[-1] is PipelineStep.COMPUTE_VBT
+        # It was `chain[-1] is COMPUTE_VBT` until TW4 added `compute_twt` after it. The property
+        # this test is for was never the position — `steps.py` says so where `POST_PUBLISH_STEPS`
+        # is defined: "'last' stopped being the property the moment there were two of them". What
+        # must hold is that everything from here on is a step the run's success does not depend
+        # on, which is what the set membership below asserts and the index above cannot.
+        assert set(chain[chain.index(PipelineStep.COMPUTE_VBT) :]) <= POST_PUBLISH_STEPS
 
     async def test_the_detector_writes_no_swing_row(self, session: AsyncSession) -> None:
         """`02` Track C §5 — this sleeve never writes an `sw_` row."""

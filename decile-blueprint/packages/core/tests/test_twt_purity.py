@@ -29,16 +29,24 @@ FORBIDDEN = (
     re.compile(r"\bopen\(\s*['\"]"),
 )
 
-#: The ten modules ``docs/twt/06`` TW1 names.
+#: The ten modules ``docs/twt/06`` TW1 names, plus TW2's ``backtest.py`` — the sequencing of
+#: ``04`` §11, which ``06`` § TW2 ships and ``06`` § TW9 re-runs over the plant's bars — plus
+#: TW9's ``published.py`` and ``drift.py``: ``01`` §6's measurements as a record, and the
+#: comparison ``03`` §9 stores against them (DECISIONS-TW **TW9.1**; the same pair
+#: ``baskfy_core.vbt`` carries, for the same reason). The set is exact on purpose: a module that
+#: nobody decided on fails here.
 EXPECTED_MODULES = frozenset(
     {
         "__init__.py",
+        "backtest.py",
         "breadth.py",
         "calendar.py",
         "config.py",
+        "drift.py",
         "exits.py",
         "indicators.py",
         "plan.py",
+        "published.py",
         "signals.py",
         "sizing.py",
         "sleeve.py",

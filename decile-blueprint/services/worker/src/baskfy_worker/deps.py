@@ -56,3 +56,17 @@ class PipelineDependencies:
     #: know whether a confirm would be real: it is what decides the session's `mode`, whether
     #: `04` §5.4's first-live halving applies, and whether `02` §3.1's DRY_RUN counter moves.
     vbt_execution_enabled: bool = False
+
+    # --- TW4: the three-weeks-tight detection step ----------------------------
+    #
+    # Passed in for the same reason as the two pairs above, and `None` means the same thing: this
+    # deployment has no sole tenant, so the step skips itself and says so. The `tw_` schema is
+    # keyed by user and a nightly job may not invent one.
+    twt_user_id: int | None = None
+    #: `docs/twt/02` Track B. Detection moves no money, so it defaults on; false silences the
+    #: step (and the 21:00 retry) without removing either.
+    twt_nightly_enabled: bool = True
+    #: `docs/twt/02` Track B's real one, and **it is not read by the detector at all** — it is
+    #: here because TW5 and TW6 read it off the same bundle to decide a session's `mode` and
+    #: whether `04` §6.4's half size applies. Nothing in TW4 places or sizes anything.
+    twt_execution_enabled: bool = False

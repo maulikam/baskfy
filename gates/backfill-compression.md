@@ -15,17 +15,17 @@ Repaired by hand (drop chunk constraint → decompress → delete the three → 
 This file is about making the tool incapable of doing it again, because the run Maulik wants
 touches **ten compressed chunks across 2,338 instruments**.
 
-- [ ] G1: The tool refuses, by default, to write into a compressed chunk. Not a warning — a
+- [x] G1: The tool refuses, by default, to write into a compressed chunk. Not a warning — a
       refusal, counted and named in the report.
   CHECK: cd decile-blueprint && grep -cE "compressed" services/worker/src/baskfy_worker/deep_backfill.py
   EXPECT: /^[1-9]/
-  EVIDENCE: pending
+  EVIDENCE: 20
 
-- [ ] G2: A refusal is **visible in the report**, with the instrument count and the chunks
+- [x] G2: A refusal is **visible in the report**, with the instrument count and the chunks
       involved. A skip nobody sees is the same as a silent corruption one release later.
   CHECK: cd decile-blueprint && uv run pytest services/worker/tests -k "deep_backfill and (compressed or refus)" 2>&1 | tail -3
   EXPECT: /passed/
-  EVIDENCE: pending
+  EVIDENCE: .ss                                                                      [100%] | 1 passed, 2 skipped, 1087 deselected in 1.85s
 
 - [ ] G3: **The post-run assertion.** After any write, the tool checks for duplicate
       `(instrument_id, date)` pairs and fails loudly if it created any. House rule 7 says a job is
@@ -40,17 +40,17 @@ touches **ten compressed chunks across 2,338 instruments**.
   EXPECT: /passed/
   EVIDENCE: pending
 
-- [ ] G5: The existing behaviour is unchanged where it was already right: zero-close placeholder
+- [x] G5: The existing behaviour is unchanged where it was already right: zero-close placeholder
       bars still dropped, the splice factor still computed off the non-kite segment, dates at or
       after the first existing bar still not written.
   CHECK: cd decile-blueprint && uv run pytest services/worker/tests/test_deep_backfill.py 2>&1 | tail -3
   EXPECT: /passed/
-  EVIDENCE: pending
+  EVIDENCE: .........sss..ssss                                                       [100%] | 11 passed, 7 skipped in 0.21s
 
-- [ ] G6: `make lint` clean — ruff, ruff format, mypy --strict.
+- [x] G6: `make lint` clean — ruff, ruff format, mypy --strict.
   CHECK: cd decile-blueprint && uv run ruff check . 2>&1 | tail -2 && uv run mypy --strict 2>&1 | tail -2
   EXPECT: /Success|All checks passed/
-  EVIDENCE: pending
+  EVIDENCE: All checks passed! | Success: no issues found in 644 source files
 
 - [ ] G7: **The box has no duplicate pairs**, before the run and after it.
   CHECK: cd /Users/maulikdave/Documents/projects/baskfy && AWS_PROFILE=${AWS_PROFILE:-baskfy-poc} BASKFY_INSTANCE_ID=${BASKFY_INSTANCE_ID:-i-086986250704e4392} bash tools/deploy/box.sh "cd /opt/baskfy && docker compose -f compose.prod.yml --env-file .env.staging.compose exec -T postgres psql -U baskfy -d baskfy -t -A -c \"select count(*) from (select instrument_id,date from ohlcv_daily group by instrument_id,date having count(*)>1) t\"" 2>&1 | tail -1

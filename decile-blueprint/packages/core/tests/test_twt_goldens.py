@@ -83,12 +83,37 @@ HARNESS_MODULES: Final[tuple[str, ...]] = (
     "twt_scan.py",
 )
 
-#: Calls that put bytes on disk. The harness is read-only against ``research/``, and the only
-#: writer it has is the fixture builder.
+#: The sleeve's other operator tools, which live in the same directory because ``docs/twt/06``
+#: and ``docs/twt/FIRST-LIVE-MORNING.md`` put them there. They are **not** part of the goldens
+#: harness and neither reads ``research/``; they are named here so that an eighth, unexplained
+#: file in ``tools/twt`` still fails the assertion below. DECISIONS-TW **TW7.1**.
+OPERATOR_TOOLS: Final[tuple[str, ...]] = (
+    #: TW9's run of the sleeve's own engine over the plant's bars (``make twt-backtest``).
+    "backtest.py",
+    #: TW7's 15:15 chore: every open line has a resting GTT before 15:30.
+    "sweep.py",
+)
+
+#: Calls that put bytes on disk. Nothing in ``tools/twt`` may write to ``research/`` — it is the
+#: answer key — so every writer is named, one (file, function) pair at a time.
 _WRITE_CALLS: Final[frozenset[str]] = frozenset(
     {"write_text", "write_bytes", "mkdir", "unlink", "touch", "rename", "replace"}
 )
-#: The one function allowed to contain them, and the directory it writes to.
+#: The functions allowed to contain them, and where each one writes. Kept as an explicit
+#: allowlist rather than by narrowing the scan to the five harness modules: the property worth
+#: asserting is "no file in this directory writes anywhere nobody decided on", and that property
+#: is only as strong as the list of exceptions is short.
+_ALLOWED_WRITERS: Final[frozenset[tuple[str, str]]] = frozenset(
+    {
+        #: TW2's fixture builder -> ``packages/core/tests/fixtures/twt/``.
+        ("twt_scan.py", "write"),
+        #: TW9's ``--json`` -> wherever the operator asked, and nowhere by default.
+        ("backtest.py", "main"),
+        #: TW7's day-keyed alert journal -> ``data/twt/sweep/<date>.json`` (untracked).
+        ("sweep.py", "record_alerted"),
+    }
+)
+#: Kept for the gate's own wording; the goldens harness still has exactly one writer.
 _THE_ONE_WRITER: Final = ("twt_scan.py", "write")
 
 #: ``01`` §2's own counts over the research panel, and the shape of the panel itself.
@@ -176,12 +201,21 @@ class TestTheHarnessIsWhereItSaysItIs:
     """G1."""
 
     def test_the_five_modules_are_on_disk(self) -> None:
-        assert sorted(path.name for path in HARNESS.glob("*.py")) == list(HARNESS_MODULES)
+        """The harness's five, plus the sleeve's operator tools — and **nothing else**.
+
+        Still an exact set: a file in ``tools/twt`` that nobody decided on fails here. It is a
+        longer set than it was because ``docs/twt/06`` puts TW7's sweep and TW9's backtest runner
+        in this directory too, beside the tools they are siblings of.
+        """
+        assert sorted(path.name for path in HARNESS.glob("*.py")) == sorted(
+            HARNESS_MODULES + OPERATOR_TOOLS
+        )
+        assert set(HARNESS_MODULES).isdisjoint(OPERATOR_TOOLS)
 
     def test_the_harness_is_read_only_against_research(self) -> None:
-        """A source scan, not a promise: the only call in the harness that puts bytes on disk is
-        in ``twt_scan.write``, and it writes to the fixtures directory. ``research/`` is the
-        answer key and nothing here may touch it."""
+        """A source scan, not a promise: every call in this directory that puts bytes on disk is
+        in a named function writing to a named place. ``research/`` is the answer key and nothing
+        here may touch it."""
         offenders: list[str] = []
         for path in sorted(HARNESS.glob("*.py")):
             tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -192,9 +226,15 @@ class TestTheHarnessIsWhereItSaysItIs:
                     if not isinstance(inner, ast.Call) or not isinstance(inner.func, ast.Attribute):
                         continue
                     where = (path.name, node.name)
-                    if inner.func.attr in _WRITE_CALLS and where != _THE_ONE_WRITER:
+                    if inner.func.attr in _WRITE_CALLS and where not in _ALLOWED_WRITERS:
                         offenders.append(f"{path.name}:{node.name} calls {inner.func.attr}")
         assert offenders == []
+
+    def test_the_goldens_harness_itself_still_has_exactly_one_writer(self) -> None:
+        """The narrower claim TW2's gate was written about, kept as its own assertion so that
+        lengthening ``_ALLOWED_WRITERS`` for a sibling tool cannot quietly loosen it."""
+        harness_writers = {pair for pair in _ALLOWED_WRITERS if pair[0] in HARNESS_MODULES}
+        assert harness_writers == {_THE_ONE_WRITER}
 
     def test_nothing_in_the_harness_opens_a_file_for_writing(self) -> None:
         offenders: list[str] = []

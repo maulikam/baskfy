@@ -139,6 +139,13 @@ app.include_router(swing_desk.router)
 from . import vbt_desk                                               # noqa: E402
 app.include_router(vbt_desk.router)
 
+# TW6: the three-weeks-tight sleeve's operator page, its confirm route, and the five chores the
+# first-live-morning runbook needs — /twt/halt above all, which is the stop-the-sleeve command
+# and never removes a resting stop. Mounted here for the same reason as the two above: the desk
+# console is the only place a line of this sleeve becomes an order (docs/twt/02 Track C §3, §4).
+from . import twt_desk                                               # noqa: E402
+app.include_router(twt_desk.router)
+
 PLANS: dict[str, dict] = {}          # plan_id -> plan (in-memory, session-scoped)
 _kite: Kite | None = None
 _gateway: OrderGateway | None = None

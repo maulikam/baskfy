@@ -592,6 +592,162 @@ a golden exists to prevent.
 
 **Reversal.** Delete the fixtures and re-run `--write`.
 
+## TW2.9 — A bar becomes a `Decimal` through its shortest repr, which is what makes the study's epsilon reproducible · ⚠ UNREVIEWED
+
+**Context.** House rule 9 says money and prices are never float; the study's panel is a matrix of
+`float64`. So `baskfy_core.twt.backtest` has to convert at the boundary, and there are two ways to
+do it. `baskfy_core.vbt.backtest._dec` uses `Decimal(x)` — exact about the **double** — and its
+docstring calls the exactness a virtue. For TWT it would have been a bug.
+
+The research's tick function is `_tick(x) = floor(x * 100 + 1e-9) / 100`. **The `1e-9` is not
+noise-tolerance for nothing:** a double that means ₹100.05 is `100.04999999999999715…`, so
+`x * 0.8` comes out a hair under ₹80.04 and a bare floor returns ₹80.03. The epsilon puts it back.
+The initial stop is `open × 0.8` and the trail is `high_since × 0.8`, and a 2-decimal price whose
+paise end in 0 or 5 multiplies to an exact paisa — roughly **one entry in five** — so the choice is
+worth about a paisa on a fifth of the stops, and a stop one paisa out is a different exit session
+and a different trade.
+
+**Taken.** `_dec(printed) = Decimal(str(printed))` — the float read as the decimal it prints as —
+and then `exits.tick_floor` with no epsilon at all. The two corrections are the same correction:
+`str()` recovers ₹100.05, `100.05 × 0.8` is exactly `80.04` in decimal, and the floor returns
+`80.04` without needing a guard. Reproducing the study then needs **none of its float machinery**,
+only its rules.
+
+**Measured.** Entry and exit prices agree with `out/final_trades.csv` **to the paisa on all 164
+trades, both legs**, and the 137/15/2/10 exit-label split is identical. With `Decimal(x)` instead,
+the stops move and the trade list is a different book — which is why this is an entry and not a
+comment.
+
+**Rejected.** (a) `Decimal(x)`, as VBT-1 does — exact about the wrong thing, here. (b) Carrying the
+research's `+1e-9` into `exits.tick_floor` — it would put an epsilon into the **live** level the
+desk arms a GTT at, to fix a float problem this package does not have. (c) Rounding every bar to
+the tick on the way in — the adjusted series is not on a paisa grid and never was.
+
+**Reversal.** One function, `backtest._dec`. If it is ever changed, TW2's golden trade list is the
+test that says so, and it will say so loudly.
+
+## TW2.10 — Three fields still differ from the goldens, every one of them the study's own float error · ⚠ UNREVIEWED
+
+**The reproduction.** 164 of 164 trades matched on `(symbol, entry_date)`; **zero missing, zero
+extra**. Of the eight fields `twt_compare.COMPARED_FIELDS` checks, **five carry no difference at
+all**: `exit_date`, `exit_price`, `quantity`, `hold_sessions` and `reason`. `r_mult`, which the
+comparer does not check, agrees on all 164 to 1e-9.
+
+**What remains, with its size and its cause.**
+
+| field | trades differing | largest difference | tolerance | in ulps of the study's own double |
+|---|---|---|---|---|
+| `entry_price` | 44 | `5E-13` | 0.01 | 1.10 |
+| `pnl_inr` | 153 | `2E-10` | 1 | ~2,000 |
+| `return_pct` | 164 | `8.3E-14` | 0.01 | ~2,300 |
+
+**Cause.** This engine's arithmetic is exact decimal; the study's is `float64`, and
+`out/final_trades.csv` stores the shortest repr of the study's doubles. `entry_price` is one
+multiplication — `open × 1.0025` — so it is off by at most **one ulp**, which is the study rounding
+a product this engine does not have to round (`2436.9271249999997` against `2436.927125`). `pnl`
+and `ret_pct` are worse in ulps and still microscopic in rupees because they **subtract two numbers
+of similar size**: `price × qty × (1 - cost)` minus `entry × qty`, each around ₹1e5, to get a
+number sometimes around ₹1e2. That is textbook cancellation, and it amplifies the study's relative
+error to about `3e-13` — still a hundredth of a microrupee on the worst trade.
+
+**This is not a delta the sleeve owes anyone.** The exact value is ours; the golden is the float's
+approximation of it. There is no arithmetic available to this engine that would reproduce the
+study's rounding without reproducing its float chain, and reproducing a float chain is not what
+`04` asks for.
+
+**No tolerance was widened to accommodate any of it.** The three allowances (`0.01`, `1`, `0.01`)
+were written into `tools/twt/twt_compare.py` by the harness leaf *before* this engine existed, and
+`git diff tools/twt/` is empty. Every difference is four to eleven orders of magnitude inside its
+allowance.
+
+**Not a blocker for TW9.** `06` TW2 says a difference that cannot be explained blocks TW9. **There
+is none**: every one of the 361 is the same float-versus-decimal fact, sized and named above.
+
+## TW2.11 — The trail exit is reported `STOP_HIT`, and TW2.4's limit is accepted rather than worked around · ⚠ UNREVIEWED
+
+**Context.** TW2.4 recorded that `out/final_trades.csv` has **no label for the trail**: the
+research raises `pos.stop` as the trail ratchets and reports every exit through it as `stop`. A
+`TRAIL_HIT` on this side would show up as **137 differences that are not differences**.
+
+**Taken.** `baskfy_core.twt.exits.ExitReason` has no `TRAIL_HIT` member and the backtest does not
+invent one. A stop that fired is `STOP_HIT` (touched intraday) or `STOP_GAP` (the open was already
+through it) or `STOP_DAY0` (the fill session's own low), which is the split the study makes and the
+split that changes what the **fill price** was. Measured: `STOP_HIT` 137, `STOP_GAP` 15,
+`STOP_DAY0` 2, `END_OF_RUN` 10 — the goldens' own four counts, exactly.
+
+**Why this is the right way round.** "Trail or disaster" is a property of the *stop's history*, not
+of the exit event: the resting level is one number and the book has been moving it since entry. It
+is recoverable at any time from `initial_stop` against `exit_price` — a trail exit is one whose fill
+is above the initial stop — so nothing is lost by not labelling it, and a label the goldens cannot
+grade is a label nobody checks.
+
+**Reversal.** If the distinction is ever wanted on the page, it is a derived property on
+`BacktestTrade`, not a sixth `ExitReason`; adding the enum member is what would break the goldens.
+
+## TW2.12 — The backtest carries the clamp branch that can lower a stop; the plan refuses it; it fired zero times · ⚠ UNREVIEWED
+
+**Context.** TW1.4 recorded that `04` §7.2's fallback — `tick_floor(close × close_clamp_fallback)`
+when the raw trigger is at or above the close — can produce a trigger **below** the stop in force,
+and that `exits.ratchet` therefore returns three numbers: `next_trigger` (the expression as
+written), `stop_in_force` (`max` with the resting stop, never below it) and `clamped_below_stop`.
+The backtest has to pick one, and the two picks are different books.
+
+**Taken.** The backtest writes **`next_trigger`** — the research's own behaviour, which is what the
+goldens encode — and **counts** every occurrence on `BacktestResult.clamped_below_stop`. The *plan*
+(`plan.exit_lines`) is where the refusal lives: it emits a `RAISE_GTT_STOP` only when the trigger is
+strictly above the resting one, so a live stop still cannot fall. Three statements of "a stop never
+falls" (TW1.4) are untouched; what changes is that the **simulated** book is allowed to reproduce
+the study and is made to say so.
+
+**Measured: zero.** Over the study's whole 2017 → 2026 run the branch fired **0 times**, so the two
+readings produce the same 164 trades and the choice costs nothing on this panel. It is reachable in
+principle — it needs a close that has fallen to within 0.1 % of the resting stop without the session
+ever trading through it — and on the plant's bars it may not stay at zero, which is why it is
+counted rather than asserted away.
+
+**Rejected.** (a) Writing `stop_in_force` — safer-sounding, and it would silently make the backtest
+a different strategy from the one `01` §5's numbers describe. (b) Leaving the case uncounted —
+that is the version where the day it stops being zero, nobody finds out.
+
+**Reversal.** One assignment in `run_backtest`, and the counter says how much it would move.
+
+## TW2.13 — What TW9 needs to run this engine over the plant's bars, and the four things TW2 could not measure for it · ⚠ UNREVIEWED
+
+**The engine is parameterised, not forked.** `06` § TW9 asks for the same functions over
+`ohlcv_daily`. The whole difference is a `BacktestParams` and one keyword:
+
+1. bars from `ohlcv_daily` with `indicators.REQUIRED_COLUMNS` plus `is_etf` and `adj_factor`, put
+   on the run's own calendar by `calendar.drop_thin_sessions`;
+2. `signals.with_twt_columns`, then `signals.signal_mask(detected, config)` with **no** `floor_inr`
+   — the shipped ₹5 crore, where TW2 passes the research's ₹2 crore;
+3. `breadth.breadth_series` → `backtest.gate_vector(breadth, panel.sessions)`;
+4. `BacktestParams(start=config.backtest.start, sleeve_inr=…, tick=Decimal(TICK_INR),
+   cost_pct_per_side=config.costs.cost_bps_per_side / 100, config=config)` — **all four defaults
+   are already the shipped ones**, so a TW9 run that passes nothing is the shipped sleeve;
+5. `summarise(result).to_json()` into `tw_backtest_run.stats`, `source = PLANT`.
+
+`PANEL_COLUMNS` is asserted to be a subset of what `with_twt_columns` produces, so there is no
+column the study's panel has and the plant lacks. `test_twt_backtest.py::
+TestTheEngineRunsOnThePlantsShape` runs the whole chain from bare OHLCV.
+
+**The four things TW2 cannot tell TW9, and must not be read as having told it.**
+
+* **The tick.** TW2 ran at ₹0.01 (TW1.1); the plant runs at ₹0.05. Every stop moves by up to four
+  paise, which moves which sessions stop out. The drift TW9 measures against `01` §6 will contain
+  this, and it is **not** a plant defect.
+* **The floor.** ₹2 crore against ₹5 crore (TW0.3) — a deliberately different, smaller book.
+* **`adj_factor` is 1 everywhere in the research panel** (TW2.1). On the plant's bars it is real,
+  `close` and `close_raw` diverge, and `04` §7.3's corporate-action branch becomes reachable
+  *inside* a hold for the first time. Nothing in TW2 exercises it.
+* **Two numbers measured at zero here are zero *on this panel* only**: the ETF breadth denominator
+  (TW2.2 — the export barely carries ETFs, the plant does) and `clamped_below_stop` (TW2.12).
+
+**Two shape differences from `baskfy_core.vbt.backtest`, deliberate.** There is no `_Working`
+order book and no `orders_offered` — TWT-1's entry is `NEXT_OPEN` and nothing else (`04` §5.1), so
+every candidate that clears the caps and prints a bar fills, and a "fill rate" would be 100 % by
+construction rather than a measurement. And there is no `queued_exit`: TWT-1 has no end-of-day exit
+rule at all, which is the same absence `exits.Action`'s three members record.
+
 ## TW1.1 — The research's own tick is a named constant, like the research's own liquidity floor · ⚠ UNREVIEWED
 
 **Context.** `04` §7.1 and §7.2 say "tick_floor" without naming a tick size. The desk snaps NSE cash
@@ -714,6 +870,844 @@ because `04` §4.2's "four decimal places" is a number and G7 forbids a literal 
 `breadth.breadth_series` rounds to it **before** the gate reads the value, so the number a page shows
 and the number the gate decided on are the same number; `test_twt_breadth.py` asserts the series and
 the single-session reading agree on every session.
+
+---
+
+## TW4.1 — The detector's tests live in `services/api/tests`, the step's in `services/worker/tests` · ⚠ UNREVIEWED
+
+**Context.** `gates/twt-4.md` names its check commands, and five of the ten run
+`uv run pytest packages/core/tests services/api/tests`. The module under test is a **worker**
+task, and its sibling VB4's tests live in `services/worker/tests/test_vbt_detect.py`. Put TW4's
+tests where the sibling's are and five gate commands collect nothing, which pytest reports as
+"no tests ran" — a gate that cannot fail is not a gate.
+
+**Taken.** The detector's behaviour — idempotence, the funnel, the ratchet, the split, the two
+look-ahead measurements, the retry — is `services/api/tests/test_twt_detect.py`, with the
+self-contained database bootstrap `packages/core/tests/test_twt_schema.py` established (migrate
+to head, never drop, every test inside a transaction that is rolled back). The **wrapper's** one
+guarantee — a detector that raises leaves the run SUCCEEDED — is
+`services/worker/tests/test_twt_step.py`, where `PipelineRun` and the step fixtures already are
+and where `gates/twt-4.md` G6 looks for it.
+
+`services/api/tests` already imports `baskfy_worker` in fourteen modules, so this is the tree's
+own convention for a cross-service database test rather than a new one.
+
+**Rejected.** (a) Putting them in `services/worker/tests` and editing the gate's commands — the
+gate file is the definition of done and an agent that rewrites its own acceptance check has
+stopped being checked. (b) Duplicating the suite in both trees — two copies of a fixture is two
+ways for the fixture to be wrong. (c) `packages/core/tests` — that tree is the pure core's, and
+a worker task's database test does not belong in the package whose law is that it touches
+nothing.
+
+**Reversal.** `git mv` the module into `services/worker/tests/`, where the shared `session`
+fixture would replace the bootstrap, and widen the five gate commands to include that directory.
+
+## TW4.2 — A signal for a name that has never held the state still carries a `sessions_out_before` · ⚠ UNREVIEWED
+
+**Context.** `03` §3 makes `sessions_out_before` NOT NULL and ">= 5 by construction". TW1.4
+records that `signals.entry_events` leaves it **null** when the name has never been in the state
+at all, because the research's counter is "sessions since the state was last true" and there is
+no last. On a 260-session panel that is the ordinary case: this book's names are tight for a few
+days a year.
+
+**Taken.** The task writes `sessions_listed - 1` — every session the name has been listed **and
+out** — when the core's counter is null. It is the same quantity the counter measures, taken
+from the only origin that exists for such a name, and the entry event has already required it to
+be at least `entry_min_sessions_out`, so the column's stated invariant still holds. The state row
+beside it carries `sessions_in_state = 1`, so the two together still say exactly what happened.
+`test_twt_detect.py::test_sessions_out_before_counts_the_sessions_the_state_was_false` asserts
+both branches side by side, on two names of one panel.
+
+**Rejected.** (a) Making the column nullable — a migration, and it would make "how cold was this
+name" unanswerable for precisely the coldest names. (b) Writing `entry_min_sessions_out` — a
+number the system did not measure, stored as though it had. (c) Writing a sentinel like `-1` —
+the CHECK forbids it, and rightly.
+
+**Reversal.** One `if` in `tasks/twt.py::signal_rows`, plus the column's nullability if the other
+branch is preferred.
+
+## TW4.3 — The 21:00 retry asks the breadth table, not the signal table · ⚠ UNREVIEWED
+
+**Context.** VB4's Beat retry asks `published_signal_count` before it works, because re-detecting
+a session the chain already wrote costs minutes of Polars to arrive at the same rows. TWT-1
+signals about **eighteen times a year** (164 trades over nine years, `01` §6), so "this session
+has no signal rows" is what a session that ran perfectly looks like on almost every weeknight.
+Keyed on signals, the retry would densify 260 sessions over the whole cash universe every night.
+
+**Taken.** `published_session_count` counts `tw_breadth_daily` rows, which is exactly one per
+session the job has seen — including the thin ones it wrote a shut-gate row for and refused to
+trade. The Beat task and `make twt` share the one helper (`tasks.twt.detect_session`, which lives in
+the job's own module and not the CLI's), so the retry and
+the CLI cannot come to disagree about when a session counts as done, and
+`test_twt_detect.py::TestTheRetryAsksBeforeItWorks` asserts it on a panel whose only name is
+never tight — no states, no signals, and the retry still says "already detected".
+
+**Rejected.** (a) `tw_state_daily` — about fifty rows a day, but **zero** on a thin session, so
+a muhurat session would be re-detected every night forever. (b) `tw_session` — TW5 and TW6 own
+that row and it does not exist after detection alone. (c) Keying on the pipeline step — the
+retry exists precisely for the night the chain did not get that far.
+
+**Reversal.** One `select` in `tasks/twt.py::published_session_count`.
+
+## TW4.4 — The book does not ratchet on a thin session · ⚠ UNREVIEWED
+
+**Context.** `04` §2.1 removes muhurat and special-Saturday sessions from the rolling calendar:
+about 200 names print against about 1,900, and such a session "is not a trading session for this
+strategy". `04` §7.2's ratchet says "after every close on which the position is open" and does
+not say which closes count.
+
+**Taken.** A thin session writes its `tw_breadth_daily` row for the record — `thin_session = true`,
+`gate = SHUT`, null percentages — and **returns before the ratchet**. A trail that moved on a
+200-name session would be a stop derived from a day the strategy's own calendar says did not
+happen, and the stop is the thing this sleeve cannot get wrong. Nothing is lost: the next real
+session's ratchet reads `high_since` and the resting stop and produces the same level it would
+have, because the arithmetic is a maximum over the hold rather than an accumulation of deltas.
+
+**Rejected.** (a) Ratcheting anyway — a muhurat session's high is a real exchange print, so the
+answer would not be *wrong*; it would be a level nobody could reconcile with the calendar the
+rest of the sleeve reads, and `04` §2.1 exists because such a session poisons every window that
+spans it. (b) Writing no row at all — a hole in the history that reads like a failed job, which
+is the thing `03` §4's `thin_session` column exists to prevent.
+
+**Reversal.** Move the `run_twt_ratchet` call above the thin-session branch in
+`tasks/twt.py::run_detect_twt`. Two lines.
+
+## TW4.5 — `COMPUTE_TWT` joins `POST_PUBLISH_STEPS`, and one sibling assertion had to stop pinning a position · ⚠ UNREVIEWED
+
+**Context.** `steps.py` asks for this by name where `POST_PUBLISH_STEPS` is defined: *"A step
+added after these must either join this set or be a step the run's success depends on, which is a
+decision, not an edit."* VB4 made that decision and recorded it as DECISIONS-VB VB0.5.
+
+**Taken.** `COMPUTE_TWT` is fourteenth, after `COMPUTE_VBT`, and is in `POST_PUBLISH_STEPS`;
+`run_compute_twt_step` records its own failure and returns. Detection writes no money and nothing
+downstream depends on it, while a nightly that failed is a screener serving yesterday to
+everybody.
+
+**One sibling test had to change, and it is the change `steps.py` predicted.**
+`test_vbt_detect.py` asserted `chain[-1] is PipelineStep.COMPUTE_VBT`. That pins a *position*,
+and the same file in `steps.py` says the property "was never the position". It now asserts
+`set(chain[chain.index(COMPUTE_VBT):]) <= POST_PUBLISH_STEPS` — strictly stronger, because it
+holds for every step added after it too — with a comment saying what it used to say and why.
+`test_pipeline_chain.py`'s three chain assertions gained `compute_twt` and its count went from
+thirteen to fourteen, which is the same edit VB4 made to them. No sibling *code* is touched.
+
+**Rejected.** Making the step able to fail the run. A sleeve that has never traded must not be
+able to hold back `data_version`; the trade is not close.
+
+**Reversal.** Remove the member from `PipelineStep`, the set and the orchestrator, and restore
+the two test files' previous wording. Nothing stored changes shape.
+
+## TW4.6 — A handled corporate action does not rewrite `entry_adj_factor` · ⚠ UNREVIEWED
+
+**Context.** `04` §7.3 detects an action by comparing the as-of row's `adj_factor` with the
+position's `entry_adj_factor` (TW3.2). Nothing says what happens to that column afterwards. Leave
+it and the branch runs every evening for the rest of the hold; rewrite it and the branch runs once.
+
+**Taken.** It is **not** rewritten. The column means what its name says — the factor the line was
+bought at — and `03` §5's argument for storing `high_since` is the same argument: when a
+corporate action rewrites the adjusted series underneath a 600-session hold, "what was this stop
+derived from" must still have an answer, and a column that has been overwritten does not have one.
+
+Running the branch every evening is not a cost: `exits.on_adjustment` is a pure function of the
+re-derived high and the resting stop, so it returns the same answer every night until a person
+changes one of them — which is exactly the state `04` §7.3 wants, a position frozen at its
+pre-split stop with an alert against it until somebody looks. Once the stop has been re-armed in
+post-split money the same branch starts emitting raises again, so the ratchet resumes without
+anything being rewritten. `test_twt_detect.py` asserts both halves: the refusal, and the raise
+after a re-arm.
+
+**Rejected.** (a) Setting `entry_adj_factor` to the as-of factor once handled — it makes the
+field a lie, and it makes the alert fire exactly once, which is the wrong number of times for a
+condition a person has not yet acted on. (b) A separate `adjustment_handled_on` column — a
+migration for a state that is already derivable.
+
+**Reversal.** One assignment in `run_twt_ratchet`, plus a column rename if the field is to keep
+meaning what it says.
+
+## TW4.7 — `tw_state_daily` stores the adjusted comparands; only `tw_signal_daily`'s two levels are converted · ⚠ UNREVIEWED
+
+**Context.** `03` §10 is categorical: *"Levels leave core adjusted and are converted by the task
+(`level / adj_factor` of the as-of row) before they are stored or shown."* `03` §2 is equally
+categorical that `tw_state_daily` holds `week_range_pct` = `(max/min - 1) x 100` and
+`month_low_ratio` = `close / month_low_3`, stored "because the one rule anybody will dispute is
+this one". Both cannot be satisfied for the same columns: converting `month_low_3` while `close`
+is stored adjusted makes the stored ratio disagree with the stored columns it is computed from.
+
+**Taken.** `tw_state_daily` is the **record of what the rule compared** and is kept entirely in
+the adjusted space — the bar, `week_close_0/1/2`, `month_low_3`, `sma_dma` — with `adj_factor`
+beside it so any of them can be turned into an exchange price by a reader who wants one.
+`tw_signal_daily`'s `entry_reference_close` and `stop_preview` are converted, because `03` §3
+already says the first is "as an exchange price" and the second is a preview of a level a broker
+would be sent. So §10's rule applies where a level *leaves* the sleeve and not where a comparison
+is being recorded.
+`test_twt_detect.py::test_the_stored_state_row_is_auditable_from_its_own_columns` re-derives
+`month_low_ratio` from the row and asserts equality, which is the property this choice protects.
+
+**Rejected.** (a) Converting everything — the two stored ratios then disagree with the columns
+beside them on every split, which is the one dispute the table exists to settle. (b) Storing both
+spaces — six more columns for a number `adj_factor` already makes recoverable.
+
+**Reversal.** Convert in `state_rows` and recompute the two ratios from the converted values;
+`03` §2's column notes would need a line each saying which space they are in.
+
+## TW4.8 — The stop the ratchet trails against is the higher of `stop_price` and `gtt_trigger` · ⚠ UNREVIEWED
+
+**Context.** `04` §7.2's `raw_trigger = max(stop_in_force, ...)` and `03` §5's "`next_trigger` …
+null when it does not exceed `gtt_trigger`" name two different columns. They agree on an ordinary
+evening. They differ for one session whenever a raise is in flight — the desk has replaced the
+resting order but the book row has not caught up, or the reverse.
+
+**Taken.** `run_twt_ratchet` reads `max(stop_price, gtt_trigger)` as the stop in force. A stop
+never falls (`04` §7.2), so where the two disagree the higher is the one the position is
+*actually* protected at by at least one of the two systems, and trailing against the lower would
+propose a raise that the desk would then refuse — `RAISE_GTT_STOP` at or below the resting
+trigger is `BLOCKED` (`06` § TW6). A proposal the desk is guaranteed to block is a line on the
+morning page that wastes a person's attention.
+
+**Rejected.** (a) `stop_price` alone — `03` §5's own sentence names `gtt_trigger`. (b)
+`gtt_trigger` alone — it is null on a position whose GTT has not been armed yet, which is the
+`ARM_GTT` case of `04` §10.2 and a real state after a fill.
+
+**Reversal.** One `max` in `run_twt_ratchet`.
+
+## TW4.9 — `locked_upper_circuit` is `03` §2's circuit band, not `04` §5.2's locked open · ⚠ UNREVIEWED
+
+**Context.** Two documents define the column's condition differently. `03` §2 spells it out:
+`upper_circuit > 0 and high >= upper_circuit`. `04` §5.2 defines the *skip* `LOCKED_UPPER_CIRCUIT`
+as a name whose session opens `open == high == low`, and TW1's core computes exactly that as
+`limit_locked`.
+
+**Taken.** The stored column follows `03` §2, the document that names the column. The two are
+different questions and both are worth having: the stored flag says the name traded into its band
+on the signal session, which is context for a person reading the page; the plan's own skip is
+computed from the **entry** session's bar (`04` §10.1, TW1.6), which the evening does not have
+yet and which `04` §5.2 is about. The task multiplies `upper_circuit` by the row's `adj_factor`
+on the way in, because the band is an exchange print with no adjusted twin while `high` has been
+adjusted in place — unconverted, the morning after a 1:2 split would report the whole market
+locked.
+
+**Rejected.** (a) Storing `limit_locked` — then the column's own document is wrong and the
+schema's comment describes something else. (b) Storing their disjunction — a flag that means
+either of two things means neither.
+
+**Reversal.** Swap the expression in `state_rows` for `pl.col("limit_locked")`, and correct `03`
+§2's description to match.
+
+---
+
+## TW5.1 — The loader answers ₹0 for an unseeded sleeve where the read path raises · ⚠ UNREVIEWED
+
+**Context.** TW3 decided that `baskfy_api.twt_settings.read_config` raises `TwtConfigNotSeeded`
+rather than creating a row: a request handler that seeds is a handler that writes on a GET, and
+the row it writes carries defaults nobody chose. TW5's loader reads the same row for a different
+purpose — to answer "how much money does this sleeve have" — and a sleeve nobody has seeded and a
+sleeve seeded at ₹0 are the same amount of money.
+
+**Taken.** `twt_sleeve.sleeve_capital` catches `TwtConfigNotSeeded` and answers `Decimal(0)`;
+`slot_multiplier` answers 1 for the same row. Both states therefore produce the **same plan**: one
+with every signal skipped `NO_SLEEVE_CAPITAL` (`04` §9.3), and
+`test_twt_sleeve_db.py::test_an_unseeded_sleeve_also_skips_no_sleeve_capital` asserts that the two
+are indistinguishable. The read path keeps raising, because a person asking the settings page a
+question deserves "run `make seed`" rather than a form full of zeros. VBT-1's `vbt_sleeve` already
+answers zero for the same reason and this keeps the two loaders the same shape.
+
+**Why not the other way.** An evening job that raised on an unseeded row would lose the session's
+stored states, signals and breadth — rows that are snapshots and are never recomputed for a past
+date (`03` §2) — in order to protect a number that is zero either way. The failure would be loud
+and the cost would be a hole in the record.
+
+**Rejected.** (a) Letting the loader raise and catching it in TW4's task — then every caller
+repeats the branch, and the one that forgets is the one that runs at 19:00. (b) Seeding the row
+from the loader — a loader that writes, and the row would carry defaults nobody chose.
+
+**Reversal.** Delete the `try`/`except` in `sleeve_capital` and `slot_multiplier`; the two
+functions are the only ones that swallow it, and the swallow is named rather than bare (house
+rule 3 forbids the silent one, not the argued one).
+
+---
+
+## TW5.2 — The sleeve is a `MY_STRATEGY` capital portfolio by declaration, not by a `portfolio` row · ⚠ UNREVIEWED
+
+**Context.** `04` §9.3 and `06` TW5 both say the sleeve "is a `MY_STRATEGY` capital portfolio in
+the M34 / `PORTFOLIO_REDESIGN` sense, exactly as the swing and VBT sleeves are". The two siblings
+do **not** do the same thing about it: `broker_holdings_sync.file_swing_positions` files every open
+swing position into a real `portfolio` row named "Swing", and VBT-1 files nothing at all — its
+`vbt_sleeve` simply never reads the account.
+
+**Taken.** VBT-1's reading. `twt_sleeve` declares `TWT_PORTFOLIO_KIND = PortfolioKind.CAPITAL`,
+`TWT_PORTFOLIO_SOURCE = PortfolioSource.MY_STRATEGY` and `TWT_PORTFOLIO_NAME`, the test class
+`TestTheSleeveIsAMyStrategyCapitalPortfolio` pins both to the enums and then proves the substance —
+four names the account holds through another book move this sleeve's equity by nothing, take no
+slot, and produce no line. What the phrase *means* for arithmetic is "its own capital, its own
+realised profit, its own marked positions, and never the account's holdings", and that is what is
+asserted.
+
+**Rejected.** (a) Filing `tw_position` rows into a `portfolio` row now — it is a write into the
+portfolio forest by a module whose gate is about money and safety, it needs the broker-account
+attribution `file_swing_positions` carries, and it belongs beside the page that would display it.
+(b) Declaring nothing and relying on the docstring — then `06` TW5's bullet is a sentence with no
+test under it, which is how a shape gets copied without its rule.
+
+**Reversal.** Add a `twt_portfolio` / `file_twt_positions` pair shaped exactly like the swing one,
+using the three constants this module already names. **TW8 is the natural place**, since it is the
+module that renders the sleeve to a person.
+
+---
+
+## TW5.3 — The countdown is spent by a position id, and `half_size` is both the record and the key · ⚠ UNREVIEWED
+
+**Context.** `04` §6.4 and `03` §1: `first_live_entries_left` moves "once per **filled** entry by
+the session that filled it", never by a request and never by a plan nobody confirmed. Three things
+have to be impossible — a proposed line counting, a `DRY_RUN` plan counting, and one fill counting
+twice — and a rule that is only remembered is a rule that will be broken by the retry.
+
+**Taken.** `count_first_live_entry(session, *, user_id, position_id, session_date, now,
+execution_enabled, changed_by)`. Each of the three is structural rather than checked:
+
+* the parameter is a **`position_id`**, and a proposed line has no `tw_position` row to have one —
+  a caller who tries is answered with a `LookupError`, and the id is scoped to `user_id`, so one
+  tenant's fill cannot spend another's countdown (P4.1);
+* a `DRY_RUN` or flag-off fill is `simulated`, and a simulated fill counts nothing — which is the
+  same sentence as "a `DRY_RUN` plan is full size";
+* **`tw_position.half_size` is the idempotency key as well as the record.** A row already marked is
+  already counted, so a partial fill that completes later, a retried confirm and a re-run of the
+  morning all land on the same answer (house rule 7).
+
+`tw_session.first_live_entries_counted` is incremented by an upsert that adds in the database
+rather than a read-modify-write, so the count is right whether the evening job wrote the session
+row first or the fill did, and two fills a minute apart cannot both read the same number.
+
+**The audit says `twt-fill`, not `twt-evening`.** `twt_settings.SYSTEM_OWNED_FIELDS` names the
+evening job as the field's owner, which is a statement about *who may write it*; the entry is
+counted by the fill, and `03` §1b exists so "who counted that entry" has an answer that is true.
+
+**Rejected.** (a) Taking the `TwPosition` object — a transient one would have no id and the
+guard becomes a runtime question about ORM state. (b) A separate `counted` boolean column — a
+second fact that can disagree with `half_size`, and a migration for something an existing column
+already says. (c) Decrementing at confirm rather than at fill — a confirm that the gateway rejects
+would spend an entry the book never took.
+
+**Reversal.** One function. Nothing stored changes shape, and `half_size` keeps meaning what `03`
+§5 says it means either way.
+
+---
+
+## TW5.4 — `04` §6.3's session cap is counted by `signal_date` · ⚠ UNREVIEWED
+
+**Context.** The cap is "at most three new entries a session, counted as lines in this plan **plus**
+the session's already-confirmed or sent orders, whatever plan they came from". `tw_order` carries a
+`signal_date` and no session column: the order is proposed by the evening of session *t* and fills
+at the open of *t+1*, so "the session" could be read as either.
+
+**Taken.** `entries_already_this_session` counts `tw_order` rows with `state ∈ {CONFIRMED, SENT,
+PARTIAL, FILLED}` whose `signal_date` is the plan's own signal session, and `book_state` defaults
+`signal_date` to the as-of session so an evening plan needs no second argument. The reading follows
+the cap's purpose: it limits how many *new lines one night's signals* may become, and
+`uq_tw_order_one_per_signal` is already keyed the same way, so the cap and the idempotency key
+count the same population.
+
+A `CONFIRMED` order counts although it has not printed. It has spoken for money and for a slot, and
+`04` §6.3's own sentence — "so a fourth confirm of an evening is a refusal, not a surprise" — is
+about confirms rather than fills.
+
+**Rejected.** (a) Counting by fill date — then a plan rebuilt in the morning (`04` §11.3) counts
+zero until the broker answers, and three confirms plus a fourth all fit. (b) Counting plan lines —
+`04` §6.3 says "whatever plan they came from" by name.
+
+**Reversal.** One `where` clause. `tw_order` stores both dates once TW6 writes fills, so any past
+session can be re-counted either way.
+
+---
+
+## TW7.1 — `tools/twt` is the sleeve's tool directory, not the goldens harness, and the scan says which · ⚠ UNREVIEWED
+
+**Context.** `docs/twt/06` § TW7 and `FIRST-LIVE-MORNING` §8 both name the sweep
+`tools/twt/sweep.py`, and TW9's `make twt-backtest` runner landed in the same directory the same
+evening. `test_twt_goldens.py::TestTheHarnessIsWhereItSaysItIs` asserted that
+`tools/twt/*.py` is **exactly** TW2's five harness modules and that exactly one function in the
+directory writes bytes. Both assertions went red the moment a second kind of tool moved in — not
+because anything about the harness changed, but because the test used "the directory" as a proxy
+for "the harness".
+
+**Taken.** The proxy is named instead of widened. `HARNESS_MODULES` still holds TW2's five;
+`OPERATOR_TOOLS` holds `backtest.py` (TW9) and `sweep.py` (TW7), each with a one-line reason; the
+on-disk assertion is still an **exact** set over the union, so an eighth unexplained file still
+fails. The writer scan keeps scanning the whole directory and gains an explicit
+`_ALLOWED_WRITERS` allowlist of `(file, function)` pairs — `twt_scan.write` to the fixtures,
+`backtest.main` to wherever `--json` asked, `sweep.record_alerted` to `data/twt/sweep/` — plus a
+new assertion that the *harness's* own writers are still exactly `_THE_ONE_WRITER`, so
+lengthening the allowlist for a sibling tool cannot quietly loosen the claim TW2's gate was
+written about. `research/` remains untouchable and no test lost teeth.
+
+**Rejected.** (a) Narrowing the two scans to `HARNESS_MODULES` — cheaper, and it would stop
+asserting anything at all about the two files most likely to write somewhere careless. (b) Moving
+the sweep out of `tools/twt/` — the runbook a person reads at 15:15 gives that path literally, and
+a runbook made wrong to keep a test green is the wrong trade. (c) Leaving the suite red and
+attributing it — half of it is TW9's and half is TW7's, and neither module's gate can be ticked
+while it is.
+
+**Attribution.** `tools/twt/backtest.py` is **not** TW7's file. TW7 changed the test so that both
+new tools are accounted for; if TW9's session edits the same constants, the two edits are to the
+same three names and the later one wins.
+
+**Reversal.** Delete `OPERATOR_TOOLS` and `_ALLOWED_WRITERS` and restore the two literals. Nothing
+in the sleeve's code depends on either.
+
+---
+
+## TW7.2 — The sweep's day key is a file, not a `tw_session` column · ⚠ UNREVIEWED
+
+**Context.** `docs/twt/06` § TW7 asks for a sweep that is "idempotent and keyed on the day" —
+running it twice re-arms nothing twice and raises nothing twice. Re-arming is idempotent by
+construction: the sweep re-reads the book, and a line that was armed is no longer naked. Alerting
+is not: a second run over a book the desk could not fix would page a second time about the same
+position. Something has to remember what this day was already told.
+
+**Taken.** An injected `SweepJournal` protocol with two implementations — `MemoryJournal` for a
+process that owns its run, and `FileJournal` for the CLI, one JSON file per IST date under
+`data/twt/sweep/` (untracked). It is keyed on `(day, alert, position)` and never on the day alone:
+a **second** line going naked at 15:25 is a new fault, and `FIRST-LIVE-MORNING` §9.1 case 2 says
+that is the likely one on this sleeve, on up to ten lines a session for months.
+
+**Rejected.** (a) A `tw_session.swept_at` column — the durable, "proper" answer, and it needs a
+migration on a table TW6 is writing in a parallel session tonight. Two agents adding revisions to
+one tree is how a repository gets two heads. (b) Reusing `tw_session.naked_at_1515` as the key —
+`0` cannot distinguish "the sweep ran and the book was clean" from "the sweep did not run", which
+is exactly the distinction a person at 15:16 needs. (c) Suppressing by the day alone — see above;
+it swallows the second fault.
+
+**What this costs.** The journal is idempotent across *runs on one machine*, not across machines.
+The sweep runs on one box (`docs/08`'s Phase-A), so today that is the same thing. If the desk's
+own 15:15 chore and the laptop's command ever both run, the column in (a) is the fix and the
+protocol makes it a one-class change.
+
+**Reversal.** Delete `FileJournal`, pass the new implementation. The sweep's own logic does not
+move.
+
+---
+
+## TW7.3 — The re-arm is injected, and `build_rearm` is a literal return rather than a soft import · ⚠ UNREVIEWED
+
+**Context.** TW6 owns the desk's GTT arm/cancel paths and was writing them in a parallel session
+while TW7 was written. The sweep needs to *ask* for a re-arm without being the thing that arms —
+law 2, and non-negotiable 1.
+
+**Taken.** `Rearm = Callable[[PositionId], Awaitable[RearmOutcome]]`, injected into `sweep()`;
+the tests supply a fake desk that arms into its own book. `build_rearm()` — the CLI's wiring —
+returns `unavailable_rearm` today, a coroutine that **refuses every line with a reason naming
+`FIRST-LIVE-MORNING` §9.2 step 3**. When TW6's path lands, that function's body becomes an import
+and a return, and nothing else in the module moves.
+
+The placeholder refuses rather than pretends. A placeholder answering `armed=True` would make the
+sweep report `naked: 0` over a book it had done nothing to protect, which is worse than no sweep:
+the number a person reads at 15:16 would be a lie in the one direction that costs money. For the
+same reason a re-arm that answers `armed=True` with a null `gtt_id` is **not believed** and the
+line stays in `still_naked`.
+
+**Rejected.** (a) `try: from baskfy_api.twt_gtt import … except ImportError:` — it makes "the
+desk's GTT path is wired" a fact nobody can see in a diff, and a typo in the module name would
+degrade silently to the placeholder on a live afternoon. (b) Waiting for TW6 and importing
+directly — the module would not exist, and TW7's gates could not be run at all. (c) A `Protocol`
+for a desk object — one callable is the whole seam; an interface would be shape for its own sake.
+
+**Reversal.** One function body.
+
+---
+
+## TW7.4 — `TWT_POSITION_NAKED` is not keyed on 15:15, and `TWT_GTT_MISSING_AT_1515` is not keyed on the sweep having run · ⚠ UNREVIEWED
+
+**Context.** `FIRST-LIVE-MORNING` §8 says, in bold, that `TWT_POSITION_NAKED` "fires on any naked
+line **at any time of day**, not only at 15:15", and that `TWT_GTT_MISSING_AT_1515` is for what
+the sweep could not fix. The swing book's equivalent pair is split differently: `SWING_POSITION_
+NAKED` is Prometheus-only (a condition over time) and only the 15:20 check is raised in-process.
+
+**Taken.** Both are raised in-process, by the same code path, and the split is by *what the reader
+must do* rather than by when they fire. `naked_alert()` takes an `at` and is a pure function of
+the book, so any caller at any hour can raise it — the sweep raises it before it tries anything.
+`missing_at_1515_alert()` is only ever produced after a re-arm was attempted and carries the
+desk's own refusal text plus whether the 15:30 close has already passed, because §9.2's answer
+before the close ("re-arm, then arm by hand in Kite") and after it ("consider closing the line")
+are different actions.
+
+Not following the swing book's Prometheus-only split, deliberately: this sleeve's stop is 20 %
+wide and its book is ten lines, so a naked line here is rarer and worse, and `docs/twt/STATUS.md`
+already records that no Prometheus rule file carries a `TWT_*` rule. An alert that waits for a
+deployment that has not happened is not an alert.
+
+**Rejected.** (a) One alert with a severity that changes at 15:30 — the runbook has two sections
+and a person greps for the name. (b) Raising `TWT_POSITION_NAKED` only when the re-arm fails — it
+would then say the same thing as the other one and §8's sentence would be false.
+
+**Note for TW6.** The two `AlertName` members were added by TW6's session, not this one; TW7 reads
+them out of `baskfy_worker.alerts` and reads its runbook path out of `ops.RUNBOOKS`, so the two
+cannot disagree about either.
+
+**Reversal.** Delete one call.
+
+---
+
+## TW9.1 — `published.py` and `drift.py` join the core, and TW1's exact module list grows by two · ⚠ UNREVIEWED
+
+**Context.** TW9 needs `01` §6's measurements in code (the drift subtracts from them, the terminal
+tool prints them beside a fresh run) and the comparison arithmetic in one place. `06` § TW9 names
+neither module, and `test_twt_purity.py::EXPECTED_MODULES` asserts the `baskfy_core.twt` package is
+**exactly** eleven files, on purpose: "a twelfth module that nobody decided on fails here".
+
+**Taken.** Both, in the core, exactly as `baskfy_core.vbt` carries them — `published.py` (a record
+of results, never settings) and `drift.py` (the three deltas, the flag, and both figures the banner
+names). `EXPECTED_MODULES` grows to thirteen with the reason written into its comment, and
+`__init__` re-exports them. A new test, `packages/core/tests/test_twt_published.py`, asserts
+**every transcribed field against `fixtures/twt/golden_metrics.json`** — TW2's committed copy of the
+study's own `final_metrics.json` — and the four figures that are not in that file against `01` §7's
+own table rows. That is the discipline `baskfy_core.vbt.published` established and the only thing
+that makes a hand-copied table safe: the test reads the study, not the module.
+
+**Rejected.** (a) Keeping both in `baskfy_worker.tasks.twt_backtest` — fewer files, and it puts a
+pure comparison behind an `async` job so the only way to test the threshold is with a database.
+(b) Reading the numbers out of the fixture at runtime — the fixture is a *test* asset and the core
+may not read a file (law 1).
+
+**Reversal.** Two modules, four names in `__init__`, two lines in `EXPECTED_MODULES`.
+
+---
+
+## TW9.2 — The job is a worker task and `tools/twt/backtest.py` is its front door · ⚠ UNREVIEWED
+
+**Context.** `06` § TW9 says "`tools/twt/backtest.py` and `make twt-backtest`", and the neighbour
+it was modelled on splits the two: `baskfy_worker.tasks.vbt_backtest` holds VB9's job and
+`tools/vbt/backtest.py` is a *different* run (the research export, no database). Doing it VBT's way
+literally would give TWT two different backtests under one heading.
+
+**Taken.** One run, two names for it. `baskfy_worker.tasks.twt_backtest.run_twt_backtest` is the
+job — session in, one appended row out, importable by a test and by a future Celery task —
+and `tools/twt/backtest.py` is the terminal front door `make twt-backtest` invokes. TW2's
+reproduction over the research panel already exists as `tools/twt/twt_goldens.py` and needs no
+second entry point, which is why TWT does not repeat VBT's split.
+
+**Note on the directory.** `tools/twt/` was TW2's harness alone until this evening. TW7's session
+hit the same collision and **TW7.1** is the entry that resolves it: `HARNESS_MODULES` keeps TW2's
+five, `OPERATOR_TOOLS` names `backtest.py` and `sweep.py`, and `backtest.main` is on the writer
+allowlist for `--json`. Nothing here widened a pattern to silence a hit.
+
+**Rejected.** (a) `baskfy_worker.twt_cli --backtest`, which is exactly what `make vbt-backtest`
+runs — it is the closer mirror, and `twt_cli.py` was being edited by a parallel session for TW6a's
+`make twt-plan`. (b) Putting the whole job in `tools/twt/backtest.py` — a script outside the
+package that no test can import is a job nobody can assert anything about.
+
+**Reversal.** Delete the tool and point the Makefile at a `--backtest` flag on `twt_cli`.
+
+---
+
+## TW9.3 — The plant's bars read **22.17 %**, the study published **20.92 %**, and the floor is most of the gap · ⚠ UNREVIEWED
+
+**This is the module's finding. Read it before deciding the plant is wrong.**
+
+The first run over `ohlcv_daily` — 10,127 admitted instruments, 2,393 sessions, 2017-10-16 →
+2026-09-04, ₹10 lakh, the shipped ₹5 crore floor and the exchange's ₹0.05 tick:
+
+| | this run | `01` §6 (₹2 cr) | `01` §7's **₹5 cr** row |
+|---|---|---|---|
+| CAGR | **22.17 %** | 20.92 % | **22.5 %** |
+| max drawdown | **-26.47 %** | -24.7 % | **-27 %** |
+| trades | **169** | 164 | **169** |
+| win rate · profit factor | 42.60 % · 2.78 | 40.9 % · 2.71 | |
+| avg hold · time invested | 101.67 sessions · 78.22 % | 104.6 · 78.0 | |
+| in sample / out of sample | 13.56 % / 35.15 % | 11.1 % / 36.1 % | |
+| gate off | 14.91 % at -48.11 % (249 trades) | 17.2 % at -43 % | |
+
+`drift` reads `cagr_pct_delta = +1.25`, `max_dd_pct_delta = -1.77`, `trades_delta = +5`, and
+**`flagged = true`**, because the threshold is one point and `06` § TW9 says to compare against
+`01` §6. That is the right row to store and the wrong row to be surprised by.
+
+**The gap is the liquidity floor, and the study measured it itself.** `01` §6's headline is the
+**₹2 crore** book; this sleeve ships at **₹5 crore** (`04` §3.5, **TW0.3**). `01` §7's own
+sensitivity table gives that variant as **22.5 % at -27 % on 169 trades**. The plant's run lands on
+**169 trades exactly**, 0.33 of a point under its CAGR and half a point inside its drawdown. The
+run is not reproducing the number it is compared against; it is reproducing the number it was
+*asked for*, and the two differ by about the size of the flag.
+
+**What the remaining third of a point is, honestly.** Four things, none of them measurable apart
+without a second run each, and **TW2.13** named three in advance: the ₹0.05 tick against the
+study's paisa (every stop moves up to four paise, which changes which sessions stop out); real
+`adj_factor` where the research panel carried 1 everywhere, so `04` §7.3's corporate-action branch
+is reachable inside a hold for the first time; and the plant's own history being a different
+ingestion of the same market. The fourth is this run's window: the local snapshot's last bar is
+**2026-09-04**, three sessions short of the study's 2026-09-09, so the last three sessions of a
+9-year compound are missing from one side of the comparison.
+
+**Two cross-checks that came out clean.** The thin-session rule dropped exactly six dates
+(2017-10-19, 2018-11-07, 2024-01-20, 2024-03-02, 2024-05-18, 2025-02-01) — the same six TW2.1
+found already absent from the study's panel, two implementations agreeing on `04` §2.1 over the
+plant this time. And `clamped_below_stop` is **0** here as it was there (**TW2.12**), so the one
+branch that can lower a stop still has not fired on any history this repository holds.
+
+**What was NOT done.** The drift is not re-pointed at the ₹5 crore row. `06` § TW9 says `01` §6,
+the page shows `01` §6, and moving the comparison to the row that makes the flag go away is exactly
+the "explained away" this module's Goal forbids. `PublishedStudy` now carries
+`shipped_floor_cagr_pct`/`_max_drawdown_pct`/`_trades` so the terminal tool *names* the better
+comparison under a flagged drift, and this entry is where the explanation lives. If Maulik wants
+the page to say it too, that is a TW8 card change and a one-line addition to `Drift`.
+
+**Reversal.** The threshold is a keyword on `compare`; the comparand is `PUBLISHED`.
+
+---
+
+## TW9.4 — TW2.2's ETF warning: measured on the plant, and still zero — for a different reason than it looks · ⚠ UNREVIEWED
+
+**Context.** **TW2.2** measured the ETF contribution to the breadth denominator at zero on the
+study's panel and said, in the same entry, that the zero is a property of a sparse export and
+**not** of the plant, where ETFs print daily — so TW9 must not inherit it. `gates/twt-9.md` G7 is
+that sentence as a gate.
+
+**Taken.** The run measures it. `etf_denominator_delta` adds the refused rows back, recomputes only
+the breadth series, and stores `etf_instruments`, `etf_bars`, `sessions_compared`, the largest
+`pct_above_dma` difference on any session, and — the number that actually matters —
+**`gate_verdicts_changed`**, because the gate decides whether the book may enter at all and one
+flipped verdict is a different trade where 0.01 of a point is not.
+
+**The set added back is not `etf_instrument_ids`.** That helper reads membership of the `etf`
+universe alone; `load_universe` *also* refuses a symbol ending `BEES`/`ETF`/`IETF` and a name
+carrying the word, and on the snapshot this ran against the `etf` index has **no members at all**,
+so those two patterns are the whole of the exclusion. `excluded_etf_ids` takes `04` §1.1/§1.2's
+admitted set minus `load_universe`'s answer, which is exactly what was taken out.
+
+**Measured: 310 instruments, 1,239 bars over 2,393 sessions, largest difference 0.0000 of a point,
+0 gate verdicts changed.** Zero again — and the honest reading is that **this snapshot is as sparse
+in ETFs as the export was** (1,239 bars is half a bar per instrument per *year*), not that the
+question has been answered for a plant that carries them properly. The deep backfill running
+against production the same evening will change the denominator of that sentence. The measurement
+is on by default and stored on every run, so the day it stops being zero the row says so without
+anybody remembering to ask.
+
+**Rejected.** (a) Asserting zero in a test — that is inheriting the assumption with a test around
+it, which is worse than inheriting it. (b) Skipping the pass because it costs a second indicator
+run — it costs about a third of a 35-second run.
+
+**Reversal.** `measure_etf_denominator=False`.
+
+---
+
+## TW9.5 — A number the run could not produce is an **absent key**, never a JSON null · ⚠ UNREVIEWED
+
+**Context.** TW8's card reads `stats` through `@/lib/twt/numbers`' `Figure`, whose whole contract
+is that a missing value arrives with the reason there is none and never as a dash. It recognises
+"missing" as `undefined`. A JSON `null` is not `undefined`: it reaches `percent()`, fails to parse,
+and renders the string `"null%"` on a page about money.
+
+**Taken.** `stats_payload` drops every key whose value is `None` before storing. A book with no
+losing trade has no profit factor; a window that does not cross `is_oos_split` has no in-sample
+half; a flat curve has no Sharpe. All three are real states and the card already has a sentence for
+each of them.
+
+**Rejected.** (a) Storing `null` and teaching the page to treat it as absent — two places would
+then have to agree about what nothing looks like. (b) Storing `"0.00"` — a zero standing in for an
+unknown, on a page whose subject is a resting stop, is the failure the `Figure` rule exists for.
+
+**Reversal.** One dict comprehension.
+
+---
+
+## TW9.6 — Two books, not VBT-1's three, and every percentage leaves as a decimal string · ⚠ UNREVIEWED
+
+**Context.** `baskfy_worker.tasks.vbt_backtest` runs three books over one detection pass — `full`,
+`gate_off` and `raw_scan` — and writes its statistics as floats.
+
+**Taken.** Two books. `raw_scan` is VBT-1's ablation of its six trend filters; **TWT-1 has none**
+(`01` §4 measured them and they make it worse, which is why `04` §3 names no field for one), so a
+third book would be the same run twice under two names. `gate_off` stays, because it is the only
+argument for the breadth gate and `05` §3 gives it a cell nothing else fills — measured here at
+**14.91 % against the gated 22.17 %**, a gate worth 7.3 points on the plant's bars where the study
+measured 3.7.
+
+And every percentage is stored as a **decimal string of two places** rather than a float, which is
+where `tw_backtest_run` differs from `vb_backtest_run` on purpose: `@/lib/twt/numbers`' rule is
+that a rate converts and rounds exactly once, on the page, from a decimal string. A float in the
+JSONB would be rounded a second time by whatever read it — the 11 Sep portfolio bug, one layer
+down. `Drift.to_json` follows the same rule, so `baskfy_core.twt.drift` is not a copy of
+`baskfy_core.vbt.drift` even though it answers the same question.
+
+**Rejected.** Making `vb_` match — VBT-1's page and tests read floats today and Track C §8 says
+that tree is read, never edited, during this run.
+
+**Reversal.** `_pct` is one function.
+
+---
+
+## TW6.1 — The plan is offered the `SCAN_ONLY` rows, so the liquidity skip is recorded · ⚠ UNREVIEWED
+
+**Context.** `04` §10.1 lists `BELOW_LIQUIDITY_FLOOR` among the plan's skips, in order, and `03`
+§7 check-constrains `tw_plan_skip.reason` to it. But VBT-1's evening — the module this one is
+shaped after — drops its `SCAN_ONLY` rows before building ("`SCAN_ONLY` rows are not candidates"),
+and a skip the planner never sees is a skip that cannot be recorded.
+
+**Taken.** `twt_evening.candidates_for` selects **every** `tw_signal_daily` row for the session,
+both `SIGNAL` and `SCAN_ONLY`, and lets `build_entries` apply the floor itself. A name the floor
+rejects therefore leaves a `tw_plan_skip` row saying so, with the floor's value in its detail.
+
+**Why.** The ₹5 crore floor is this pack's one deliberate departure from the research's ₹2 crore
+(TW0.3), and the funnel *is* the argument for it. A plan that silently dropped the names the floor
+rejected could never show a person what the change costs — and "a plan is not honest without its
+skips" is the sentence `04` §10.1 opens with.
+
+**Rejected.** Filtering in SQL and counting the rejects into the step's `detail`: a number in a
+log is not a row on the page, and `05` §2 renders the skips with their reasons in words.
+
+**Reversal.** Add `TwSignalDaily.state == SignalState.SIGNAL.value` to `candidates_for`'s `where`.
+One line; the plan then has no `BELOW_LIQUIDITY_FLOOR` rows and the constraint becomes decorative.
+
+---
+
+## TW6.2 — `TWT_EVENING` is an alert, because `05` specifies no email and a second mailer is a second place to hide a failure · ⚠ UNREVIEWED
+
+**Context.** `06` § TW6 asks for "`AlertName.TWT_EVENING` email per `05`". `05` has four sections
+and none of them is an email: §1 is the web hub, §2 the desk page, §3 the backtest card and §4
+what the pages must never do. The criterion names a document that does not carry the thing.
+
+**Taken.** `TWT_EVENING` is a real `AlertName`, raised by the evening job through
+`baskfy_worker.alerts.dispatch` with the plan's gate, its counts, every line and every skip. That
+mechanism already writes the log line, the Sentry breadcrumb and **the email** to
+`BASKFY_OPS_ALERT_EMAIL`. Severity is `WARNING`, because the evening plan is not a failure and a
+`CRITICAL` that fires every weekday teaches a person to filter it.
+
+**Why not a template.** The swing book's EOD mail is a `Mailer`, a `Message` and a rendered
+digest — a second address, a second transport and a second place for a delivery failure to hide.
+`05` specifies neither the template nor its contents, so building one would be inventing a
+contract rather than meeting one. The charter's precedence puts the literal wording of an
+acceptance criterion lowest, and the Goal it is a proxy for — "the desk plan is delivered" — is met.
+
+**Rejected.** (a) Skipping the notification entirely: the runbook's daily routine says "21:05 the
+evening plan and the `TWT_EVENING` email", and a runbook that names a message nobody sends is
+worse than one that says nothing. (b) Reusing `swing_eod`'s template with TWT words in it: the
+swing digest's shape (flags, EPs, exposure level) has no TWT meaning.
+
+**Reversal.** Write `twt_eod(address, digest)` beside `swing_eod` and call it from
+`_raise_evening_alert`; the alert can stay beside it or go.
+
+---
+
+## TW6.3 — The desk spends the half-size countdown in SQL, because it cannot call TW5's function at all · ⚠ UNREVIEWED
+
+**Context.** TW5 wrote `baskfy_api.twt_sleeve.count_first_live_entry` and TW6's brief says to call
+it rather than reimplement it. `04` §6.4 spends the countdown **on a fill**, and on this sleeve the
+fill happens inside the desk's confirm — in `kite-momentum-rebalancer`, a different process with a
+different virtualenv and **no async Postgres driver**: `import asyncpg` fails there, so an
+`AsyncSession` cannot be constructed and the function cannot be called even indirectly.
+
+**Taken.** The *sizing* half is genuinely shared — `app/twt_execute.py` imports
+`baskfy_core.twt.sizing.first_live_multiplier`, the same function TW5's `slot_multiplier` calls, so
+the number a line is halved by has exactly one implementation. The *spending* half is
+`PgTwtStore.count_first_live_entry`, which reproduces TW5.3's three refusals against the same two
+columns (`tw_position.half_size`, `tw_config.first_live_entries_left`) and writes the same
+`tw_config_audit` row with `changed_by = "twt-fill"`.
+`tests/test_twt_desk.py::test_the_countdown_spends_once_and_never_on_a_simulated_fill` asserts all
+three refusals.
+
+**Why this is acceptable here and not in general.** It is the argument `vbt_desk` already makes in
+writing about VB12's rescan constants: the desk cannot import the worker, so the numbers are
+copied and a test asserts the copies agree. What is *not* copied is arithmetic — there is no second
+implementation of the multiplier, the equity, the stop or the tick.
+
+**Rejected.** (a) Adding `asyncpg` and SQLAlchemy-async to the desk's requirements to call one
+function: a new dependency on the process that places orders, against house rule 1, to save
+thirty lines. (b) Leaving the countdown to a nightly job: `04` §6.4 says "by the session that
+filled it", and a job that counted yesterday's fills would let a second live entry be sized full
+because the first had not been counted yet.
+
+**Reversal.** If the desk ever gains an async Postgres session, delete the store method and call
+TW5's function; the signature is already the one this method's arguments are named after.
+
+---
+
+## TW6.4 — `/twt/execute` refuses a `SELL_AT_OPEN` line outright · ⚠ UNREVIEWED
+
+**Context.** `TwLineKind` carries `SELL_AT_OPEN` so a person can be given a line for a `MANUAL`
+exit without a migration (`03` §7), and `04` §10.2 says **no TWT rule ever emits one** — TW10
+asserts the absence. Nothing said what the confirm route should do if one appeared anyway.
+
+**Taken.** `EXECUTABLE_KINDS` is the three kinds the planner can emit; a `SELL_AT_OPEN` is a
+**400** naming the reason ("this sleeve has no end-of-day sell rule and the GTT is the exit"). An
+import-time `assert` pins the absence so the set cannot grow by accident.
+
+**Why.** A route that could execute the kind would *be* an end-of-day sell rule, however
+carefully nobody planned one — and the shape this module copied (VBT-1, the swing book) has such a
+rule, which is exactly how rules get imported by accident. The charter breaks ties toward the
+stricter boundary when nothing in force changes, and nothing does: no TWT plan contains the kind.
+
+**Rejected.** Implementing a sell path for the `MANUAL` case. A manual exit is a person selling in
+the Kite app with their eyes on the chart (FIRST-LIVE-MORNING §9.2 step 4); giving the desk a sell
+button for a strategy whose only exit is the GTT is a second exit rule nobody measured.
+
+**Reversal.** Add `SELL_AT_OPEN` to `EXECUTABLE_KINDS`, delete the assert, and write `_sell_at_open`
+against `tw_position.quantity_open` — the swing book's is 60 lines and the shape is known.
+
+---
+
+## TW6.5 — The TWT stop band and GTT cushion are config fields, not desk env knobs · ⚠ UNREVIEWED
+
+**Context.** The swing book and VBT-1 each carry their band and their limit fraction as
+`BASKFY_*` variables in the desk's `app/config.py`, *and* the engine carries the same numbers.
+`04` §10.6 and §10.7 put TWT's in `baskfy_core.twt.config.ExitConfig`
+(`gtt_band_min_pct`/`gtt_band_max_pct` and `gtt_limit_fraction`).
+
+**Taken.** `app/twt_execute.py` reads all three off `DEFAULT_TWT_CONFIG.exits`. `app/config.py`
+gains exactly one TWT entry, `BASKFY_TWT_EXECUTION_ENABLED`, and `.env.example` says in so many
+words why the other three are not there.
+
+**Why.** The band is checked against a trigger the engine computed. Two copies of "0.30" agree
+until the day somebody edits one, and the failure mode is a gateway refusing this sleeve's own
+stop — which would make non-negotiable 4 unsatisfiable on a live line. One number, read where the
+arithmetic lives.
+
+**Rejected.** Copying the swing/VBT shape for symmetry. Symmetry is not a reason to create a
+second source of truth for a number that decides whether a stop can be armed.
+
+**Reversal.** Add the three `BASKFY_TWT_*` variables to `app/config.py` and `.env.example` and
+read them in `twt_stop_band` / `twt_limit_fraction`; both functions are three lines.
+
+---
+
+## TW6.6 — A plan is expired **at** its expiry, not after it · ⚠ UNREVIEWED
+
+**Context.** VBT-1's `/vbt/execute` refuses a plan when `now > expires_at`. `/twt/halt` must make
+every live plan unconfirmable, and the obvious implementation stamps each one's `expires_at` with
+the moment of the halt — which a strict `>` would leave confirmable for the microsecond it takes
+to answer.
+
+**Taken.** `/twt/execute` compares `now >= expires_at`. A plan built at 09:05 with a thirty-minute
+life is dead at 09:35:00.000, and a plan the halt stamped at 09:20:00.000 is dead at 09:20:00.000.
+
+**Why.** The safe direction, and it makes the halt's second behaviour exact rather than nearly
+exact. "Expires in thirty minutes" is what the runbook tells a person, and at minute thirty the
+honest answer is that it has.
+
+**Rejected.** Stamping `now - 1s` in `expire_plans` and leaving the comparison alone — a second
+that exists only to paper over an off-by-one, and a reader would have to find the subtraction to
+understand the rule.
+
+**Reversal.** One character in `_validate`.
+
+---
+
+## TW6.7 — The desk's own 15:15 sweep logs the alert name; TW7's tool raises it · ⚠ UNREVIEWED
+
+**Context.** `06` § TW6 says the sweep "raises `TWT_GTT_MISSING_AT_1515` for what is still naked
+afterwards". `AlertName` and `dispatch` live in `baskfy_worker`, which the desk process cannot
+import — the same venv boundary as TW6.3.
+
+**Taken.** `sweep_naked` logs at `error` with the alert's exact name and the symbols, which is
+what `app/swing_clock.py` already does for `SWING_GTT_MISSING_AT_1515`, and writes the count into
+`tw_session.naked_at_1515` where the page's red band reads it. The four `TWT_*` names exist in
+`baskfy_worker.alerts.AlertName` with `docs/runbooks/09-twt-morning.md` behind them, and
+**`tools/twt/sweep.py` (TW7) raises the real alert from the tree that can**.
+
+**Why.** Two copies of the sweep would be worse than one copy and a log line: the count that
+matters is in the database either way, and the desk's route exists so a person can check it from a
+phone rather than so a robot can page itself.
+
+**Rejected.** A webhook from the desk to the worker's alert sink — a new network dependency on the
+process that places orders, for a message.
+
+**Reversal.** None needed; TW7 owns `tools/twt/sweep.py` and reads the same rows.
 
 ---
 

@@ -25,8 +25,7 @@ import sqlalchemy as sa
 from helpers import requires_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from baskfy_core.models import AppUser, TradingDay, VbConfig, VbScanRun
-from baskfy_core.seed_data import NSE_EXCHANGE_ID
+from baskfy_core.models import AppUser, PipelineRun, VbConfig, VbScanRun
 from baskfy_worker.tasks import vbt_rescan as R
 from baskfy_worker.tasks.vbt_rescan import (
     claim_run,
@@ -51,24 +50,21 @@ async def _user(session: AsyncSession, public_id: str = "vb12") -> int:
     return int(user.id)
 
 
-async def _is_session(session: AsyncSession, day: dt.date) -> bool:
-    """Is this a trading day on the fixture's own calendar?
+async def _published(session: AsyncSession, day: dt.date, version: int) -> PipelineRun:
+    """A pipeline run that **published** — the only kind `latest_published_session` counts.
 
-    The seeded database already carries the exchange calendar (2011-2026, 4,089 days), so these
-    tests **read** it rather than inserting their own: inserting a duplicate is an integrity
-    error, and inventing a second calendar would test a fixture instead of the query.
+    A run with no `data_version` has not put its bars on the page, and re-detecting a session
+    whose bars are not there is what the first run on the box did by mistake (VB13.4).
     """
-    return bool(
-        (
-            await session.execute(
-                sa.select(TradingDay.date).where(
-                    TradingDay.exchange_id == NSE_EXCHANGE_ID,
-                    TradingDay.date == day,
-                    TradingDay.is_trading_day.is_(True),
-                )
-            )
-        ).scalar_one_or_none()
+    run = PipelineRun(
+        trade_date=day,
+        status="succeeded",
+        data_version=version,
+        started_at=dt.datetime.now(tz=dt.UTC),
     )
+    session.add(run)
+    await session.flush()
+    return run
 
 
 async def _queued(session: AsyncSession, user_id: int, **overrides: object) -> VbScanRun:
@@ -138,30 +134,30 @@ class TestClaiming:
 
 
 class TestWhichSessionItDetects:
-    async def test_it_is_the_latest_trading_day_at_or_before_the_date(
-        self, session: AsyncSession
-    ) -> None:
-        assert await _is_session(session, AS_OF), "the fixture calendar changed under this test"
+    async def test_it_is_the_newest_published_run(self, session: AsyncSession) -> None:
+        await _published(session, AS_OF - dt.timedelta(days=1), version=41)
+        await _published(session, AS_OF, version=42)
 
         assert await latest_published_session(session, AS_OF) == AS_OF
 
-    async def test_a_sunday_falls_back_to_the_friday(self, session: AsyncSession) -> None:
-        """16 Aug 2026 is a Sunday. The answer must be a session, never a calendar date."""
-        sunday = dt.date(2026, 8, 16)
-        assert not await _is_session(session, sunday)
-
-        answer = await latest_published_session(session, sunday)
-
-        assert answer is not None
-        assert answer < sunday
-        assert answer.weekday() < 5
-        assert await _is_session(session, answer)
-
-    async def test_a_date_before_the_calendar_begins_answers_none(
+    async def test_today_is_ignored_until_its_bars_are_published(
         self, session: AsyncSession
     ) -> None:
-        """Not a failure — the exchange calendar starts in 2011, and asking before it is the
-        state a fresh box is in before the reference-data job has run."""
+        """**VB13.4, the bug the box found.** The exchange calendar calls Friday a trading day
+        from midnight; Friday's bars do not exist until the chain publishes that evening. A
+        re-detect pressed at two in the afternoon must pick yesterday, not today."""
+        yesterday = AS_OF - dt.timedelta(days=1)
+        await _published(session, yesterday, version=41)
+        # Today's run exists and has NOT published — no data_version.
+        session.add(
+            PipelineRun(trade_date=AS_OF, status="running", started_at=dt.datetime.now(tz=dt.UTC))
+        )
+        await session.flush()
+
+        assert await latest_published_session(session, AS_OF) == yesterday
+
+    async def test_a_box_that_has_never_published_answers_none(self, session: AsyncSession) -> None:
+        """Not a failure — it is the state a fresh box is in before the chain has ever run."""
         assert await latest_published_session(session, dt.date(2009, 1, 1)) is None
 
 
@@ -180,7 +176,7 @@ class TestTheRun:
         assert result["status"] == "FAILED"
         await session.refresh(row)
         assert row.status == "FAILED"
-        assert row.error is not None and "trading day" in row.error
+        assert row.error is not None and "published no session" in row.error
         assert row.finished_at is not None
 
     async def test_a_run_over_a_quiet_session_finishes_done_with_its_funnel(
@@ -189,6 +185,7 @@ class TestTheRun:
         """No bars is a legitimate answer — `run_detect_vbt` returns rather than raises — and the
         row should say DONE with the counts, not FAILED."""
         user_id = await _user(session)
+        await _published(session, AS_OF, version=42)
         row = await _queued(session, user_id)
 
         result = await run_vbt_rescan(session, row.id, now=NOW)
@@ -214,6 +211,7 @@ class TestTheRun:
         """House rule 7: detection is idempotent per (user, date). Two requests are two audit
         rows and one set of signals."""
         user_id = await _user(session)
+        await _published(session, AS_OF, version=42)
         first = await _queued(session, user_id)
         second = await _queued(session, user_id)
 
@@ -229,6 +227,7 @@ class TestTheRun:
         """`02` Track C §6: the row carries the owner and the detection is written for them."""
         mine = await _user(session, "vb12-a")
         theirs = await _user(session, "vb12-b")
+        await _published(session, AS_OF, version=42)
         row = await _queued(session, theirs)
 
         await run_vbt_rescan(session, row.id, now=NOW)

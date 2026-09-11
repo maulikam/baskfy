@@ -29,9 +29,8 @@ from typing import Final
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from baskfy_core.models import TradingDay, VbScanRun
+from baskfy_core.models import PipelineRun, VbScanRun
 from baskfy_core.models.base import JsonObject
-from baskfy_core.seed_data import NSE_EXCHANGE_ID
 from baskfy_worker.steps import StepOutcome
 from baskfy_worker.tasks.vbt import run_detect_vbt
 
@@ -79,20 +78,30 @@ async def newest_run(session: AsyncSession, *, user_id: int) -> VbScanRun | None
 
 
 async def latest_published_session(session: AsyncSession, on_or_before: dt.date) -> dt.date | None:
-    """The most recent trading day at or before ``on_or_before``.
+    """The trade date of the most recently **published** pipeline run, at or before ``on_or_before``.
 
-    The exchange's calendar, not the sleeve's: the sleeve's calendar is built from bars it has
-    already detected, and the whole point of a re-detect is that those rows may be missing.
+    **The pipeline's date, not the exchange calendar's**, and the difference is the whole point of
+    the button. `trading_day` says Friday is a trading day from the moment Friday begins; the
+    bars for Friday do not exist until the chain publishes that evening. A re-detect that asked
+    the calendar would, pressed at two in the afternoon, faithfully re-detect *today* — find no
+    bars, and report "not a session the bars know about".
+
+    That is exactly what happened the first time this ran on the box (11 Sep 2026, 14:14 IST): it
+    answered `DONE` with `skipped_reason: "2026-09-11 is not a session the bars know about"` and
+    0 signals, when the session worth re-detecting was the one before it. Harmless, and useless.
+
+    `published_trade_date`'s query is the product's own answer to "what is the latest session",
+    the same one the freshness pill and the swing book's health check read — a run with a
+    `data_version` is a run whose bars are on the page (`docs/README`, the two clocks).
     """
     return (
         await session.execute(
-            select(TradingDay.date)
+            select(PipelineRun.trade_date)
             .where(
-                TradingDay.exchange_id == NSE_EXCHANGE_ID,
-                TradingDay.is_trading_day.is_(True),
-                TradingDay.date <= on_or_before,
+                PipelineRun.data_version.is_not(None),
+                PipelineRun.trade_date <= on_or_before,
             )
-            .order_by(TradingDay.date.desc())
+            .order_by(PipelineRun.data_version.desc())
             .limit(1)
         )
     ).scalar_one_or_none()
@@ -149,8 +158,8 @@ async def run_vbt_rescan(
         day = await latest_published_session(session, stamp.date())
         if day is None:
             raise ValueError(
-                "the exchange calendar has no trading day on or before "
-                f"{stamp.date().isoformat()}; run the reference-data job first"
+                "the pipeline has published no session on or before "
+                f"{stamp.date().isoformat()}; there is nothing to re-detect until the chain runs"
             )
         outcome = StepOutcome()
         signals = await run_detect_vbt(session, outcome, day, user_id=row.user_id)

@@ -592,20 +592,36 @@ def notes_for(loaded: LoadedBacktest, result: BacktestResult) -> tuple[str, ...]
 
 
 async def _adjustment_coverage(session: AsyncSession) -> AdjustmentCoverage:
-    """How far back the corporate actions on record go — the caveat a run has to carry.
+    """The two facts a run's caveats are built from, measured rather than assumed.
 
-    **Measured, not assumed.** `docs/DECISIONS.md` §21.8: NSE's endpoint serves a recent window and
-    ignores how far back it is asked, returning the same 19 records for a 2024 query as for a 2026
-    one. On the deployed box on 11 Sep 2026 the bars begin 2017-01-02 and the actions begin
-    2024-01-02, so seven years of history is unadjusted — and a momentum factor whose window spans
-    an unapplied split reads that split as a return.
+    `ohlcv_daily` is **two spliced segments** and the difference decides which caveats are true:
 
-    The engine cannot look this up (law 1), so it is read here and handed in, the same way
-    `data_version` is.
+    * ``source='kite'`` — adjusted **at source** (Kite returns adjusted OHLC, M24), ``adj_factor``
+      of 1, skipped by name in `reprocess_instrument`. Our `corporate_action` table is irrelevant
+      to these years.
+    * ``source='nse'`` — the bhavcopy segment, adjusted by us from that table.
+
+    So the "actions only go back to X" caveat applies **only** to the second, and the splice date
+    is where our price-return convention meets Kite's total-return one.
+
+    Read here and handed in, the way `data_version` is: `packages/core` touches nothing (law 1).
     """
-    row = (
+    actions = (
         await session.execute(
             select(func.min(CorporateAction.ex_date), func.max(CorporateAction.ex_date))
         )
     ).one()
-    return AdjustmentCoverage(actions_from=row[0], actions_to=row[1])
+    self_adjusted_from = (
+        await session.execute(select(func.min(OhlcvDaily.date)).where(OhlcvDaily.source != "kite"))
+    ).scalar_one_or_none()
+    deep_from = (
+        await session.execute(select(func.min(OhlcvDaily.date)).where(OhlcvDaily.source == "kite"))
+    ).scalar_one_or_none()
+    # A splice exists only when both segments do; a single-source panel has no join to warn about.
+    splice_on = self_adjusted_from if (deep_from and self_adjusted_from) else None
+    return AdjustmentCoverage(
+        actions_from=actions[0],
+        actions_to=actions[1],
+        self_adjusted_from=self_adjusted_from,
+        splice_on=splice_on,
+    )

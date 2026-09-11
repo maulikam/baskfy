@@ -495,8 +495,17 @@ describe("what the panel refuses to invent", () => {
     ]) {
       expect(blocked).toHaveTextContent(name);
     }
-    expect(blocked).toHaveTextContent("no sector on `instrument`");
+    /* The reason now says what a READER needs, not which table lacks a column. `instrument` is a
+       schema name and it reached the screen because the no-internals scan looks for snake_case,
+       paths and routes — a bare table name that is also an English word walked straight through
+       it. Found by Maulik reading the rendered panel. */
+    expect(blocked).toHaveTextContent("does not record which sector a company belongs to");
+    expect(blocked.textContent ?? "").not.toContain("`instrument`");
     expect(blocked).toHaveTextContent("Needs:");
+
+    /* And contribution by holding is a DESTINATION here, not a caveat: it exists, and saying
+       otherwise devalues the five above it. */
+    expect(blocked).toHaveTextContent("Open one to see which of its holdings moved it");
   });
 
   it("unavailable: none of the blocked effects is ever shown with a number", () => {

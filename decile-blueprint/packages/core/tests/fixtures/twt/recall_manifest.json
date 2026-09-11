@@ -1,0 +1,43 @@
+{
+ "what": "The stock-days the tight-close scan is true on, inside the window Chartink's own export covers, under each of the two weekly readings -- plus Chartink's own rows over the same window. TW2's recall measurement scores these against each other without needing the 1.7 GB panel or a running core.",
+ "source_panel": "research/volume-breakout/data/panel.pkl",
+ "source_chartink": "research/tight-close/chartink_backtest.csv",
+ "rebuild": "uv run python ../tools/twt/twt_scan.py --verify",
+ "window": {
+  "first": "2026-01-21",
+  "last": "2026-09-09"
+ },
+ "chartink_stock_days": 9254,
+ "reading_stock_days": {
+  "point_in_time": 9769,
+  "look_ahead": 7860
+ },
+ "miss_reasons": {
+  "point_in_time": {
+   "no_bar": 832,
+   "no_volume_average": 602,
+   "not_tight": 1741,
+   "not_above_month_low": 73,
+   "below_a_floor": 1
+  },
+  "look_ahead": {
+   "no_bar": 820,
+   "no_volume_average": 602,
+   "not_tight": 58,
+   "not_above_month_low": 86,
+   "below_a_floor": 1
+  }
+ },
+ "panel": {
+  "instruments": 4186,
+  "sessions": 2396,
+  "bars": 3578815,
+  "first_session": "2017-01-02",
+  "last_session": "2026-09-09"
+ },
+ "sha256": {
+  "recall_chartink.csv.gz": "7343f81e086b8aa9782ebb394e228b6d3255a454aa9c168f582f998813caf1f7",
+  "recall_look_ahead.csv.gz": "c55aa08182d539531c6bf25d8950e5292e4a3bad7f7f1303cb90c28f3cdf2817",
+  "recall_point_in_time.csv.gz": "6e01643780348e77ccd070ba0eefb0e3ff8e4d44b9419f23a0d4062296ad14a3"
+ }
+}

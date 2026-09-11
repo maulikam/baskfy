@@ -76,6 +76,10 @@ CREATE TABLE vb_fill (
   id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, position_id INTEGER, order_id INTEGER,
   side TEXT, quantity INTEGER, price NUMERIC, filled_at TEXT, journal_ref TEXT,
   simulated INTEGER);
+CREATE TABLE vb_scan_run (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, requested_at TEXT, started_at TEXT,
+  finished_at TEXT, session_date TEXT, status TEXT DEFAULT 'QUEUED', source TEXT DEFAULT 'desk',
+  detail TEXT, error TEXT, task_id TEXT);
 CREATE TABLE vb_session (
   user_id INTEGER, session_date TEXT, mode TEXT DEFAULT 'DRY_RUN', gate TEXT DEFAULT 'SHUT',
   signals INTEGER DEFAULT 0, confirms INTEGER DEFAULT 0, fills INTEGER DEFAULT 0,
@@ -343,13 +347,21 @@ class TestTheLaw:
             assert forbidden not in source, forbidden
 
     def test_there_is_exactly_one_execute_route_and_it_takes_one_line(self) -> None:
-        """`05` §3: "There is no 'confirm all'." A route that took a list would be one."""
+        """`05` §3: "There is no 'confirm all'." A route that took a list would be one.
+
+        Two POSTs since VB12, and the distinction is the point rather than the count:
+        `/vbt/execute` is the one doorway to the gateway, and `/vbt/rescan` writes a single
+        `vb_scan_run` row and hands off to a worker with no order path. The assertion below is
+        that **exactly one route can reach an order**, which is what Track C §3 is about; a third
+        POST would have to justify itself here.
+        """
         posts = [
             route
             for route in W.router.routes
             if "POST" in getattr(route, "methods", set())
         ]
-        assert [route.path for route in posts] == ["/vbt/execute"]
+        assert sorted(route.path for route in posts) == ["/vbt/execute", "/vbt/rescan"]
+        posts = [route for route in posts if route.path == "/vbt/execute"]
         # `from __future__ import annotations` in the module leaves these as strings, which is
         # what the assertion has to read — the point is the shape of the signature, not its
         # evaluation: one plan, one line, one confirm, and no list anywhere in it.
@@ -357,6 +369,24 @@ class TestTheLaw:
         assert set(parameters) >= {"plan_id", "line_id", "confirm"}
         assert parameters["line_id"] == "int"
         assert not any("list" in str(kind) for kind in parameters.values())
+
+    def test_the_rescan_route_cannot_reach_an_order(self) -> None:
+        """VB12: the second POST writes a row and names nothing that could place.
+
+        Asserted over the handler's own source, with its docstring stripped, because the
+        docstring explains at length what it is *not* allowed to do.
+        """
+        import inspect
+        import re
+
+        route = next(
+            r for r in W.router.routes if getattr(r, "path", "") == "/vbt/rescan"
+        )
+        source = inspect.getsource(route.endpoint)
+        code = re.sub(r'("""|\'\'\')(?:.|\n)*?\1', " ", source)
+        for forbidden in ("execute_line", "gateway", "place", "kc.", "gtt", "confirm"):
+            assert forbidden not in code.lower(), f"the rescan route names {forbidden}"
+        assert "request_scan" in code, "the rescan route does not write a scan row at all"
 
     def test_the_template_has_no_confirm_all_control(self) -> None:
         template = pathlib.Path(W.__file__).parent / "templates" / "vbt.html"

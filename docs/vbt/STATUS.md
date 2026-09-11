@@ -3,7 +3,7 @@
 The status page for the volume-breakout run. Updated at the end of every module, **loud about
 what is NOT done**. A fresh session resumes from the first module not marked ✅.
 
-**Run state: VB10 green — every claim of `02` is a test, and a whole DRY_RUN session runs end to end with 0 orders reaching a broker. The run is complete.** Started 10 Sep 2026 on branch
+**Run state: VB12 green — the run is complete, plus Maulik's four answers (VB11) and the desk's Re-detect button (VB12).** Started 10 Sep 2026 on branch
 `developer`. The report will be `../../VB-FINAL-REPORT.md`; what needs Maulik's hands is
 `../../NEEDS-MAULIK.md` § VBT.
 
@@ -582,4 +582,40 @@ in-memory store that accepts any key. DECISIONS-VB VB10.1.
   guess and it is recorded as one. It matters because this file is the run's central evidence:
   a golden that is not deterministic is not a golden. Worth pinning down before the flag is ever
   considered — run the module in a loop under load and capture the numbers.
+
+---
+
+## VB12 — The desk's Re-detect button ✅ (11 Sep 2026)
+
+Asked after the run closed: *"What about the scan now feature?"* The swing book has one and this
+sleeve had none. It now has a button, and it is a **different** control — DECISIONS-VB VB12.1 has
+the argument, and the short version is that VBT-1's signal is a closed-day fact, so there is
+nothing provisional to show.
+
+| | |
+|---|---|
+| What it does | Re-detects the latest **published** session. Writes `vb_signal_daily` and `vb_breadth_daily` and nothing else |
+| What it is for | The night `compute_vbt` was skipped because the quality gate refused the day, and the morning after a threshold changed |
+| How it travels | The desk has no Celery client, so the button writes a `QUEUED` `vb_scan_run` row and `baskfy.vbt.rescan_sweep` publishes it within a minute |
+| Refusals | One in flight (ten minutes), one a minute — both from the table, so they hold with no Redis |
+| Tests | `tests/test_vbt_rescan_desk.py` **20 passed**, `services/worker/tests/test_vbt_rescan.py` **19 passed** |
+| Migration | `0040_vbt_scan_run`, verified against the model by Alembic's own comparison — 0 differences |
+
+**A safety test changed, and that is worth naming.** Both trees asserted the desk had "exactly
+one POST route". It now has two. The assertion was a proxy for Track C §3, so it was rewritten to
+state the property directly — **exactly one route reaches `execute_line`** — and the new route is
+asserted, over its own source with the docstring stripped, to name no broker and no order verb
+(VB12.4).
+
+### What is NOT done at VB12
+
+* **The button has never been clicked in a browser.** The route, the store, the sweep and the
+  task are tested and the whole path was driven against a real Postgres by hand; the page itself
+  has still never been rendered anywhere.
+* Migration `0040` has not been applied to any box — like `0037` before it.
+* There is no web-app equivalent and there should not be one: the `/vbt` hub keeps its property
+  of having **no server actions at all** (VB8.4).
+* The sweep runs every minute, seven days a week. If that proves noisy on the box it should be
+  narrowed to evenings, but guessing the window before it has run once would be inventing a
+  number.
 

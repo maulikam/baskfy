@@ -169,6 +169,8 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     "vb_plan_skip": ("id",),
     "vb_session": ("user_id", "session_date"),
     "vb_backtest_run": ("id",),
+    # VB12 (docs/vbt/03 §13, migration 0040): one row per press of the desk's Re-detect button.
+    "vb_scan_run": ("id",),
 }
 
 #: docs/04 opening paragraph: "Money in numeric, never float."
@@ -306,6 +308,7 @@ def test_vbt_tables_are_recorded_in_docs() -> None:
         "vb_plan_skip",
         "vb_session",
         "vb_backtest_run",
+        "vb_scan_run",
     ):
         assert table in vbt_model, f"{table} is not described in docs/vbt/03"
 

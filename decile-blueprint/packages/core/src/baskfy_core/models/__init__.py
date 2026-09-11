@@ -173,6 +173,7 @@ from baskfy_core.models.vbt import (
     VbPlanLine,
     VbPlanSkip,
     VbPosition,
+    VbScanRun,
     VbSession,
     VbSignalDaily,
 )
@@ -330,6 +331,7 @@ __all__ = [
     "VbPlanLine",
     "VbPlanSkip",
     "VbPosition",
+    "VbScanRun",
     "VbSession",
     "VbSignalDaily",
     "WebhookDelivery",

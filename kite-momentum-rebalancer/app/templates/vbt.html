@@ -48,6 +48,28 @@
       This sleeve is end-of-day. The plan is built after the close and rebuilt before the open;
       nothing on this page fires inside a session, and there is no auto-execute flag for it.
     </span>
+
+    {# VB12: re-detect the latest published session. Writes signals and breadth; places nothing. #}
+    <span style="display:block;margin-top:8px">
+      <form method="post" action="/vbt/rescan" class="vb-rescan" style="display:inline">
+        <button type="submit" title="Detect the latest published session again. Reads bars, writes signals and breadth, places nothing.">Re-detect the last session</button>
+      </form>
+      {% if v.scan %}
+        <span class="muted" style="margin-left:8px">
+          last:
+          <span class="pill {{ 'ok' if v.scan.status == 'DONE' else ('bad' if v.scan.status == 'FAILED' else 'warn') }}">{{ v.scan.status }}</span>
+          {% if v.scan.session_date %}{{ v.scan.session_date }}{% endif %}
+          {% if v.scan.status == 'DONE' and v.scan.detail %}
+            · {{ v.scan.detail.signals }} signals
+            {% if v.scan.detail.scan_hits is defined %}of {{ v.scan.detail.scan_hits }} scan hits{% endif %}
+          {% endif %}
+          {% if v.scan.status == 'FAILED' and v.scan.error %}· {{ v.scan.error }}{% endif %}
+          {% if v.scan.status == 'QUEUED' %}· waiting for the worker's sweep (up to a minute){% endif %}
+        </span>
+      {% else %}
+        <span class="muted" style="margin-left:8px">never run on this desk</span>
+      {% endif %}
+    </span>
   </span>
 </div>
 
@@ -186,6 +208,32 @@ document.querySelectorAll('form.vb-confirm').forEach(function (form) {
       target.textContent = (body.status || response.status) + (body.reason ? ' — ' + body.reason : '');
     } catch (error) {
       target.textContent = 'the request failed: ' + error;
+      button.disabled = false;
+    }
+  });
+});
+
+// VB12: Re-detect. A row, not an order — the worker's sweep picks it up within a minute. The
+// button reports what the route answered and reloads once the request was accepted, so the
+// status line above shows the new row rather than the old one.
+document.querySelectorAll('form.vb-rescan').forEach(function (form) {
+  form.addEventListener('submit', async function (event) {
+    event.preventDefault();
+    var button = form.querySelector('button');
+    button.disabled = true;
+    var was = button.textContent;
+    try {
+      var response = await fetch('/vbt/rescan', { method: 'POST' });
+      var body = await response.json();
+      if (body.accepted) {
+        button.textContent = 'queued — the worker picks it up within a minute';
+        setTimeout(function () { window.location.reload(); }, 2000);
+      } else {
+        button.textContent = body.reason + (body.retry_after_seconds ? ' (' + body.retry_after_seconds + 's)' : '');
+        setTimeout(function () { button.textContent = was; button.disabled = false; }, 3000);
+      }
+    } catch (error) {
+      button.textContent = 'the request failed: ' + error;
       button.disabled = false;
     }
   });

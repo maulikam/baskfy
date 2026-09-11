@@ -946,3 +946,74 @@ unchanged and they are the ones carrying evidence.
 `BASKFY_VBT_EXECUTION_ENABLED` (VB11.2, answered by Maulik minutes before this one), never places
 an order and never confirms a line on his behalf. Withdrawing a *condition* on the flag is not
 the same act as flipping it, and this run has done only the first.
+
+---
+
+## VB12 — the desk's Re-detect button (11 Sep 2026)
+
+### VB12.1 — This sleeve gets a re-detect, not a "Scan now" · ⚠ UNREVIEWED
+
+Asked after the run: *"What about the scan now feature?"* The swing book has one (SW15) and this
+sleeve had none. It now has a button, and it is deliberately a **different** control.
+
+**The swing version scans today, from live quotes, and labels its rows provisional.** That works
+because a base and a pivot are readable from a partial bar. VBT-1's signal is not. Three of the
+five Chartink lines read the day's volume against its 50-day average, the close's position inside
+the day's range and the day's change; all three are meaningless before 15:30. And the entry limit
+**is** the signal bar's close, so an intraday hit would name a price that does not exist yet.
+That is not a provisional answer to the same question — it is a different question, with no
+action attached, for a strategy whose entry rule is "do not chase the open" (`04` §7.1).
+
+So the button asks for one thing: **re-detect the latest session that has already closed.** It is
+for the night the chain's `compute_vbt` step was skipped because the quality gate refused the day,
+and the morning after a threshold changed. `04` §10's clock is kept, not bent.
+
+Rejected: copying SW15 with a `provisional` flag (it would produce a number that looks like a
+signal and is not — the worst kind of feature on a page somebody acts from); leaving the CLI as
+the only way in (`make vbt DATE=…` works, but it is a shell on a box, and the moment it is needed
+is the moment a person is least likely to have one open).
+
+### VB12.2 — A row, not a request, because the desk has no Celery · ⚠ UNREVIEWED
+
+The desk's venv carries no Celery client and reaches Baskfy through Postgres alone. So the button
+writes one `QUEUED` `vb_scan_run` row and `baskfy.vbt.rescan_sweep` publishes it within a minute
+— exactly the path SW15 built for the swing desk's button, reused rather than reinvented.
+
+The cost is a minute of latency and a Beat entry that runs every minute, seven days a week
+(the night the chain failed is often a Friday whose fix happens on Saturday). The alternative —
+giving the desk a broker connection — would put a second thing in the desk that can reach the
+queue, for a button.
+
+**The task claims before it works.** A beat that overlaps a slow broker can publish the same row
+twice; `claim_run` moves `QUEUED` → `RUNNING` and answers `None` to the second copy, so the same
+session is never detected twice at once.
+
+### VB12.3 — Two refusals, answered from the table and not from a cache · ⚠ UNREVIEWED
+
+One in flight (ten minutes) and one a minute, both read from `vb_scan_run` rather than from Redis
+— the same call DECISIONS-SW SW15.1 made, for the same two reasons: the rule holds on a box with
+no cache configured, and it is testable against the database alone.
+
+Past ten minutes a `RUNNING` row is treated as a worker that died and a new request is allowed.
+A button wedged by one crash costs an afternoon, and the cost of a duplicate detection is that
+some rows are written twice with the same values (house rule 7: detection is idempotent per
+`(user_id, date)`).
+
+**The numbers exist twice** — in `baskfy_worker.tasks.vbt_rescan` and in `app/vbt_desk.py` —
+because the desk cannot import the worker. `tests/test_vbt_rescan_desk.py` reads the worker's
+source as text and asserts the two copies agree, which is the only check available across a venv
+boundary.
+
+### VB12.4 — The desk now has two POST routes, and the test says which one matters · ⚠ UNREVIEWED
+
+`test_vbt_desk.py` and `test_vbt_safety.py` both asserted "exactly one POST". That assertion was
+about Track C §3 — *no auto-execution, one line per click* — and a count was a proxy for it.
+
+The count is now two and the property is unchanged, so the assertions were rewritten to say the
+property directly: **exactly one route reaches `execute_line`**, which is the only doorway to the
+gateway, and the other writes one row and names no broker, asserted over its own source with the
+docstring stripped. A third POST would still have to justify itself.
+
+This is the case the charter's precedence order describes — a criterion's literal wording
+(`== 1`) is the lowest thing in force, and scoping it to its Goal is the right move rather than
+weakening it. Recorded here because "I changed a safety test" should never be invisible.

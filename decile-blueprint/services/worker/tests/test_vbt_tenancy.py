@@ -53,6 +53,7 @@ VB_TABLES = (
     "vb_plan_skip",
     "vb_session",
     "vb_backtest_run",
+    "vb_scan_run",
 )
 
 

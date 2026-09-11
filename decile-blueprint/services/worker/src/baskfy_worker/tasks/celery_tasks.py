@@ -106,6 +106,7 @@ from baskfy_worker.tasks.vbt_evening import (
     last_detected_session,
     run_vbt_evening,
 )
+from baskfy_worker.tasks.vbt_rescan import run_vbt_rescan, unpublished_runs
 from baskfy_worker.telemetry import provider_retry_hooks
 from baskfy_worker.window import DateWindow
 
@@ -1373,6 +1374,43 @@ def _vbt_check(
         return {"skipped": "no BASKFY_SOLE_USER_ID configured"}
     user_id = int(deps.vbt_user_id)
     return run_in_session(lambda session: check(session, user_id))
+
+
+@shared_task(name="baskfy.vbt.rescan", acks_late=True)
+def vbt_rescan_task(run_id: int) -> JsonObject:
+    """VB12: re-detect the latest published session for one `vb_scan_run` row.
+
+    Never raises: a failure is `FAILED` with its reason on the row, because the desk's button has
+    to be able to show what went wrong rather than leaving a request that simply stopped.
+    """
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        return await run_vbt_rescan(session, int(run_id))
+
+    return run_in_session(_run)
+
+
+@shared_task(name="baskfy.vbt.rescan_sweep")
+def vbt_rescan_sweep_task() -> JsonObject:
+    """VB12: publish every `QUEUED` `vb_scan_run` row nobody has published.
+
+    The desk writes those rows and has no Celery client, so without this the button would insert
+    a row that sat there. Beat, every minute; one indexed SELECT when idle.
+    """
+
+    def publish(run_id: int) -> str:
+        return str(vbt_rescan_task.apply_async(args=[run_id], queue=QUEUE_COMPUTE).id)
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        rows = await unpublished_runs(session)
+        published: list[int] = []
+        for row in rows:
+            row.task_id = publish(int(row.id))
+            published.append(int(row.id))
+        await session.flush()
+        return {"published": published}
+
+    return run_in_session(_run)
 
 
 @shared_task(name="baskfy.vbt.backtest", acks_late=True)

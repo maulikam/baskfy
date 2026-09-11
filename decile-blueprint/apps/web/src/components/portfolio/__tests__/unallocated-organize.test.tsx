@@ -149,6 +149,44 @@ function renderSection(overrides: Partial<React.ComponentProps<typeof Unallocate
   );
 }
 
+const TARGETS = [
+  { portfolio_id: 7, name: "Swing", kind: "CAPITAL" as const },
+  { portfolio_id: 8, name: "Long term", kind: "CAPITAL" as const },
+];
+
+/* --------------------------------------------------- adding to an existing portfolio */
+
+describe("adding to a portfolio that already exists is reachable from the page", () => {
+  /* It was not, for one deploy. PF9 built the flow and put it behind "+ New portfolio", which is
+     where nobody looking to add to an EXISTING portfolio will ever look — Maulik went looking and
+     did not find it. These pin the entrance, not just the machinery behind it. */
+
+  it("offers its own button when there is a portfolio to add to", async () => {
+    const user = userEvent.setup();
+    renderSection({ targets: TARGETS });
+
+    const button = screen.getByRole("button", { name: "Add to a portfolio" });
+    await user.click(button);
+
+    expect(screen.getByTestId("target-step")).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Swing/ })).toBeChecked();
+  });
+
+  it("hides the button when there is nothing to add to", () => {
+    renderSection({ targets: [] });
+
+    expect(screen.queryByRole("button", { name: "Add to a portfolio" })).toBeNull();
+  });
+
+  it("Continue is live immediately, because a portfolio is already chosen", async () => {
+    const user = userEvent.setup();
+    renderSection({ targets: TARGETS });
+    await user.click(screen.getByRole("button", { name: "Add to a portfolio" }));
+
+    expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
+  });
+});
+
 /* ------------------------------------------------------------------ §6.6 centrepiece */
 
 describe("§6.6 — the Unallocated section is a centrepiece", () => {

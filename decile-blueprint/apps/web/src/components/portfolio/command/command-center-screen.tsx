@@ -299,6 +299,10 @@ export function CommandCenterScreen({
                 todaysTotal={overview?.hero?.todays_pnl?.amount ?? null}
                 todaysUnavailable={overview?.hero?.todays_pnl?.unavailable_reason ?? null}
                 unallocatedValue={unallocated?.holdings_value ?? null}
+                /* `null` from the server means "nothing was traded, so there are no charges";
+                   `undefined` would mean this screen does not supply it. They render differently
+                   and neither renders ₹0. */
+                estimatedCosts={overview?.estimated_costs ?? null}
               />
             </div>
 

@@ -4481,6 +4481,96 @@
         "title": "EquityPointOut",
         "type": "object"
       },
+      "EstimatedCostsOut": {
+        "description": "What the recorded trades cost, at current statutory rates.\n\n**An estimate, and the panel says so.** `portfolio_nav_daily` is not net of these charges, so a\nreturn shown beside this figure is still gross. `baskfy_core.portfolio_costs` carries the full\nreasoning; the short version is that presenting this as a net-of-fees return would be the gross\nnumber under a different name, which is the complaint that made this figure worth building.\n\nAbsent — the whole object is ``None`` — when the portfolio has no recorded buys or sells.\nA portfolio whose holdings arrived by broker sync has no trade history until a statement is\nimported, and ₹0 would read as \"you were charged nothing\".",
+        "properties": {
+          "bps_of_turnover": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bps Of Turnover"
+          },
+          "brokerage": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Brokerage",
+            "type": "string"
+          },
+          "caveat": {
+            "title": "Caveat",
+            "type": "string"
+          },
+          "dp": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Dp",
+            "type": "string"
+          },
+          "exchange": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Exchange",
+            "type": "string"
+          },
+          "gst": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Gst",
+            "type": "string"
+          },
+          "sebi": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Sebi",
+            "type": "string"
+          },
+          "sell_scrip_days": {
+            "title": "Sell Scrip Days",
+            "type": "integer"
+          },
+          "stamp": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Stamp",
+            "type": "string"
+          },
+          "stt": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Stt",
+            "type": "string"
+          },
+          "total": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total",
+            "type": "string"
+          },
+          "trades": {
+            "title": "Trades",
+            "type": "integer"
+          },
+          "turnover": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Turnover",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stt",
+          "exchange",
+          "sebi",
+          "stamp",
+          "gst",
+          "dp",
+          "brokerage",
+          "total",
+          "turnover",
+          "trades",
+          "sell_scrip_days",
+          "caveat"
+        ],
+        "title": "EstimatedCostsOut",
+        "type": "object"
+      },
       "ExitBody": {
         "properties": {
           "holdings": {
@@ -8651,6 +8741,16 @@
           },
           "chart": {
             "$ref": "#/components/schemas/NavSeriesOut"
+          },
+          "estimated_costs": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EstimatedCostsOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "hero": {
             "$ref": "#/components/schemas/HeroOut"

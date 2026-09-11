@@ -945,12 +945,66 @@ export const NOT_DECOMPOSABLE: readonly BlockedEffect[] = [
       "How much cash you held is known. What holding it cost is not, because Baskfy records money arriving in and leaving the account but not money moving between cash and shares inside it.",
     unblockedBy: "Recording internal buys and sells as transfers on the NAV series.",
   },
-  {
-    name: "Fees, brokerage and taxes",
-    reason:
-      "No brokerage or tax is charged against a portfolio's own history, so a figure called net of fees would be the gross one under a different name.",
-    unblockedBy: "Wiring the existing cost model through the portfolio rebalance path.",
-  },
+];
+
+/**
+ * Fees left this list on 11 Sep 2026, because its own entry said it could.
+ *
+ * It read *"Needs: wiring the existing cost model through the portfolio rebalance path"* — which
+ * is not a missing-data problem, it is an unbuilt one, and the four entries that remain above are
+ * a different kind of thing entirely. Each of those needs something that exists nowhere: a sector
+ * map, benchmark constituents with weights, a per-holding return series, a record of money moving
+ * between cash and shares inside the account.
+ *
+ * The cost model was built and calibrated against 163 real fills and reproduces every component
+ * exactly. `portfolio_cash_flow` already carried the buys and sells. So the figure is now computed
+ * server-side and arrives on the payload.
+ *
+ * **What did NOT change is the honesty.** The value series is still not net of these charges, so
+ * the caveat travels with the number rather than being dropped once the number existed. That was
+ * the actual complaint in the old entry's wording, and shipping a figure without it would have
+ * been the regression the entry warned about.
+ */
+export interface EstimatedCosts {
+  readonly stt: string;
+  readonly exchange: string;
+  readonly sebi: string;
+  readonly stamp: string;
+  readonly gst: string;
+  /** Depository charge — flat, per scrip per selling day, not per order. */
+  readonly dp: string;
+  /** Genuinely zero: nothing is charged for delivery. A fact about the broker, not a gap. */
+  readonly brokerage: string;
+  readonly total: string;
+  readonly turnover: string;
+  readonly trades: number;
+  readonly sell_scrip_days: number;
+  readonly bps_of_turnover?: string | null;
+  /** Rendered verbatim beside the figure. The server owns this sentence. */
+  readonly caveat: string;
+}
+
+/** Why there is no figure, when the payload carries none. Never a ₹0, which claims too much. */
+export const NO_TRADES_COSTED =
+  "No buys or sells are recorded for these portfolios, so there are no charges to estimate. " +
+  "Holdings that arrived by broker sync carry no trade history until a statement is imported.";
+
+/** The six components in the order the panel lists them, largest first on a real session. */
+export const COST_COMPONENTS: ReadonlyArray<{
+  readonly key: keyof Pick<
+    EstimatedCosts,
+    "stt" | "stamp" | "exchange" | "dp" | "gst" | "sebi" | "brokerage"
+  >;
+  readonly label: string;
+  readonly note?: string;
+}> = [
+  { key: "stt", label: "Securities transaction tax" },
+  { key: "stamp", label: "Stamp duty", note: "Buy side only." },
+  { key: "exchange", label: "Exchange transaction charge" },
+  { key: "dp", label: "Depository charge", note: "Per holding per selling day, not per sale." },
+  { key: "gst", label: "GST" },
+  { key: "sebi", label: "SEBI turnover fee" },
+  { key: "brokerage", label: "Brokerage", note: "Nothing is charged for delivery." },
 ];
 
 /**

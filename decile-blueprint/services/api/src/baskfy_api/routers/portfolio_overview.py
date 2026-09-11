@@ -161,6 +161,11 @@ from baskfy_core.models.accounts import (
     PortfolioNavDaily,
     ReconciliationItem,
 )
+from baskfy_core.portfolio_costs import (
+    ESTIMATE_CAVEAT,
+    TradeFlow,
+    estimate_portfolio_costs,
+)
 from baskfy_core.portfolio_nav import (
     RETURN_PRECISION,
     DrawdownPoint,
@@ -632,6 +637,36 @@ class NavSeriesOut(BaseModel):
     pending_reconciliation: bool = False
 
 
+class EstimatedCostsOut(BaseModel):
+    """What the recorded trades cost, at current statutory rates.
+
+    **An estimate, and the panel says so.** `portfolio_nav_daily` is not net of these charges, so a
+    return shown beside this figure is still gross. `baskfy_core.portfolio_costs` carries the full
+    reasoning; the short version is that presenting this as a net-of-fees return would be the gross
+    number under a different name, which is the complaint that made this figure worth building.
+
+    Absent — the whole object is ``None`` — when the portfolio has no recorded buys or sells.
+    A portfolio whose holdings arrived by broker sync has no trade history until a statement is
+    imported, and ₹0 would read as "you were charged nothing".
+    """
+
+    stt: Decimal
+    exchange: Decimal
+    sebi: Decimal
+    stamp: Decimal
+    gst: Decimal
+    #: Depository charge. Flat, per scrip per day, sell side only — **not** per order.
+    dp: Decimal
+    #: Genuinely zero: Zerodha charges nothing for delivery. A fact about the broker, not a gap.
+    brokerage: Decimal
+    total: Decimal
+    turnover: Decimal
+    trades: int
+    sell_scrip_days: int
+    bps_of_turnover: Decimal | None = None
+    caveat: str
+
+
 class OverviewOut(BaseModel):
     """§6, in one response. The two timestamps §6.1 requires are separate fields, deliberately.
 
@@ -662,6 +697,8 @@ class OverviewOut(BaseModel):
     #: §6.5's muted tab, kept in a **separate list** so summing the table cannot include one.
     monitoring_views: list[PortfolioRowOut] = Field(default_factory=list)
     unallocated: UnallocatedOut
+    #: `None` when no buys or sells are recorded — see `EstimatedCostsOut`, and never a zeroed one.
+    estimated_costs: EstimatedCostsOut | None = None
     open_reconciliation_count: int = 0
     #: Stated on the wire so a client never has to know §4.1 to render the page correctly.
     monitoring_excluded_note: str = MONITORING_NOTE
@@ -2490,7 +2527,47 @@ async def portfolio_overview(
         portfolios=capital_rows,
         monitoring_views=monitoring_rows,
         unallocated=_unallocated_out(ledger, unallocated_cash, freeze),
+        estimated_costs=_estimated_costs_out(ledger),
         open_reconciliation_count=sum(1 for entry in ledger.entries if entry.freezes),
+    )
+
+
+def _estimated_costs_out(ledger: _Ledger) -> EstimatedCostsOut | None:
+    """The charges on every recorded trade in the book, from the desk's own cost model.
+
+    The attribution panel listed "Fees, brokerage and taxes" as unavailable, and its own entry said
+    the model existed and simply was not wired. It is wired here: `portfolio_cash_flow` already
+    carries the buys and sells with their value, their date and their instrument, and
+    `baskfy_core.portfolio_costs` turns those into the six statutory components — counting the flat
+    depository charge once per scrip per selling day rather than once per order.
+
+    `None` when nothing was traded, deliberately. See `EstimatedCostsOut`.
+    """
+    costs = estimate_portfolio_costs(
+        TradeFlow(
+            on=row.occurred_on,
+            kind=row.kind,
+            value=row.amount,
+            instrument_id=row.instrument_id,
+        )
+        for row in ledger.flow_rows
+    )
+    if costs is None:
+        return None
+    return EstimatedCostsOut(
+        stt=costs.stt,
+        exchange=costs.exchange,
+        sebi=costs.sebi,
+        stamp=costs.stamp,
+        gst=costs.gst,
+        dp=costs.dp,
+        brokerage=costs.brokerage,
+        total=costs.total,
+        turnover=costs.turnover,
+        trades=costs.trades,
+        sell_scrip_days=costs.sell_scrip_days,
+        bps_of_turnover=costs.bps_of_turnover,
+        caveat=ESTIMATE_CAVEAT,
     )
 
 

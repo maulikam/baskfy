@@ -726,15 +726,24 @@ describe("what cannot be decomposed", () => {
   it("unavailable: every effect the brief names carries a reason and what would unblock it", () => {
     const names = NOT_DECOMPOSABLE.map((effect) => effect.name).join(" | ");
 
+    /* Four, and each needs something that exists NOWHERE: a sector map, benchmark constituents
+       with weights, a per-holding return series, a record of money moving between cash and shares
+       inside the account. That shared property is what makes the list meaningful. */
     for (const expected of [
       "sector",
       "Allocation effect",
       "Security-selection effect",
       "Cash drag",
-      "Fees, brokerage and taxes",
     ]) {
       expect(names).toContain(expected);
     }
+
+    /* Fees is NOT here, and was until 11 Sep 2026. Its entry read "Needs: wiring the existing cost
+       model through the portfolio rebalance path" — an unbuilt thing, not a missing one, sitting
+       in a list of impossibilities. The model is wired; the figure is computed server-side from
+       `portfolio_cash_flow` and arrives on the payload. */
+    expect(names).not.toContain("Fees");
+    expect(names).not.toContain("brokerage");
 
     /* Contribution by holding is NOT here, and this assertion is the correction of one that
        required it to be. It sat in this list carrying `unblockedBy: "Nothing. Open a portfolio;
@@ -743,7 +752,7 @@ describe("what cannot be decomposed", () => {
        is computed, and renders one click away on every portfolio's screen. Filing an available
        figure under "Not available" teaches a reader to stop believing the five that are real. */
     expect(names).not.toContain("holding");
-    expect(NOT_DECOMPOSABLE).toHaveLength(5);
+    expect(NOT_DECOMPOSABLE).toHaveLength(4);
     for (const effect of NOT_DECOMPOSABLE) {
       expect(effect.reason.length).toBeGreaterThan(40);
       expect(effect.unblockedBy.length).toBeGreaterThan(10);

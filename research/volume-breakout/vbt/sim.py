@@ -27,7 +27,7 @@ from .scan import Indicators
 class Rules:
     name: str = "base"
     # entry
-    entry: Literal["next_open", "limit_close"] = "next_open"  # limit_close: bid the signal close for k sessions
+    entry: Literal["next_open", "limit_close", "stop_level"] = "next_open"  # limit_close: bid the signal close for k sessions; stop_level: buy-stop at entry_level[row, signal col]
     entry_valid: int = 3                    # sessions a limit order stays working
     fill_through_pct: float = 0.0           # require low <= limit*(1-x/100) before assuming a fill
     max_gap_pct: float | None = None        # skip if open_j > signal close * (1 + x/100)
@@ -41,7 +41,7 @@ class Rules:
     max_pct_of_turnover: float = 1.0        # position <= x% of 20-day avg turnover
     min_trade_inr: float = 10_000
     # stop
-    stop_mode: Literal["pct", "signal_low", "atr", "min_low_pct"] = "pct"
+    stop_mode: Literal["pct", "signal_low", "atr", "min_low_pct", "level"] = "pct"   # level: stop_level[row, signal col], floored at stop_pct
     stop_pct: float = 8.0
     atr_mult: float = 2.0
     max_stop_pct: float | None = None       # skip the trade if the initial stop is wider than this
@@ -61,6 +61,8 @@ class Rules:
     exit_close_below_sma: int | None = None # 20 or 50
     # regime
     gate: Literal["none", "idx_10_20", "idx_above_50", "idx_above_200"] = "none"
+    dd_lock_pct: float | None = None        # a fall of this much from the equity peak stops new entries ...
+    dd_cooldown: int = 20                   # ... for this many sessions; the peak then resets to current equity
     # costs
     cost_bps_side: float = 25.0             # STT/charges + slippage, each side
     initial_capital: float = 1_000_000.0
@@ -121,7 +123,11 @@ def index_gate(p: Panel, idx_dates: np.ndarray, idx_close: np.ndarray, mode: str
 
 
 def run(p: Panel, ind: Indicators, sig: np.ndarray, rules: Rules, gate_ok: np.ndarray | None = None,
-        start_col: int = 0) -> "Result":
+        start_col: int = 0, hold_state: np.ndarray | None = None, rank_key: np.ndarray | None = None,
+        entry_level: np.ndarray | None = None, stop_level: np.ndarray | None = None) -> "Result":
+    """`hold_state` (N, D) bool: when given, a position whose state is False at a close is sold at
+    the next open ("state" exit). `rank_key` (N, D): overrides Rules.rank for candidate ordering
+    (higher first)."""
     R = rules
     N, D = p.n, p.d
     if gate_ok is None:
@@ -135,7 +141,8 @@ def run(p: Panel, ind: Indicators, sig: np.ndarray, rules: Rules, gate_ok: np.nd
     trades: list[Trade] = []
     equity = np.full(D, np.nan)
     n_open = np.zeros(D, dtype=np.int16)
-    skipped = {"gap": 0, "slots": 0, "cash": 0, "liquidity": 0, "gate": 0, "stop_wide": 0, "no_bar": 0, "locked": 0}
+    skipped = {"gap": 0, "slots": 0, "cash": 0, "liquidity": 0, "gate": 0, "stop_wide": 0, "no_bar": 0, "locked": 0, "dd_lock": 0}
+    peak = R.initial_capital; dd_locked_until = -1
 
     def close_pos(pos: Position, col: int, price: float, qty: int, reason: str) -> None:
         nonlocal cash
@@ -180,23 +187,39 @@ def run(p: Panel, ind: Indicators, sig: np.ndarray, rules: Rules, gate_ok: np.nd
                 close_pos(pos, j, pos.stop, pos.qty, "stop"); continue
 
         # ---- 2. entries at the open (signals from j-1; or working limit orders)
-        if R.entry == "limit_close" and j >= 1:
+        if R.entry in ("limit_close", "stop_level") and j >= 1:
             # new working orders from j-1's signals; stale ones expire
             for r in np.nonzero(sig[:, j - 1])[0]:
                 if r not in positions and r not in working:
-                    working[r] = (j - 1, p.close[r, j - 1])
+                    lvl = p.close[r, j - 1] if R.entry == "limit_close" else entry_level[r, j - 1]
+                    if np.isfinite(lvl):
+                        working[r] = (j - 1, lvl)
             for r in [r for r, (c0, _) in working.items() if j - c0 > R.entry_valid]:
                 skipped["gap"] += 1; del working[r]
-        if j >= 1 and gate_ok[j - 1]:
-            if R.entry == "limit_close":
+        dd_locked = False
+        if R.dd_lock_pct is not None and j > start_col and np.isfinite(equity[j - 1]):
+            if j <= dd_locked_until:
+                dd_locked = True
+            else:
+                if dd_locked_until == j - 1:      # cooldown just ended: the peak restarts from here
+                    peak = equity[j - 1]
+                peak = max(peak, equity[j - 1])
+                if 1 - equity[j - 1] / peak >= R.dd_lock_pct / 100:
+                    dd_locked = True; dd_locked_until = j + R.dd_cooldown - 1
+        if j >= 1 and gate_ok[j - 1] and dd_locked:
+            skipped["dd_lock"] += int(sig[:, j - 1].sum())
+        if j >= 1 and gate_ok[j - 1] and not dd_locked:
+            if R.entry in ("limit_close", "stop_level"):
                 cand = [r for r in working if r not in positions]
             else:
                 cand = np.nonzero(sig[:, j - 1])[0]
                 cand = [r for r in cand if r not in positions]
             if cand:
                 key = {"rvol": ind.rvol, "change": ind.change_pct, "turnover": ind.turnover, "close_pos": ind.close_pos}
+                if rank_key is not None:
+                    key = {R.rank: rank_key}
                 if R.rank != "none":
-                    kc = [working[r][0] if R.entry == "limit_close" else j - 1 for r in cand]
+                    kc = [working[r][0] if R.entry in ("limit_close", "stop_level") else j - 1 for r in cand]
                     k = key[R.rank][cand, kc]
                     cand = [cand[i] for i in np.argsort(-np.nan_to_num(k, nan=-1e9))]
                 new = 0
@@ -211,12 +234,17 @@ def run(p: Panel, ind: Indicators, sig: np.ndarray, rules: Rules, gate_ok: np.nd
                         skipped["no_bar"] += 1; continue
                     if o == h == l:  # locked limit at the open, no fill possible
                         skipped["locked"] += 1; continue
-                    sig_col = working[row][0] if R.entry == "limit_close" else j - 1
+                    sig_col = working[row][0] if R.entry in ("limit_close", "stop_level") else j - 1
                     sc = p.close[row, sig_col]
                     if R.entry == "limit_close":
                         if l > working[row][1] * (1 - R.fill_through_pct / 100):
                             continue            # not touched today, order keeps working
                         o = min(o, working[row][1])  # fill at the limit (or better at the open)
+                        del working[row]
+                    elif R.entry == "stop_level":
+                        if h < working[row][1] * (1 + R.fill_through_pct / 100):
+                            continue            # level not reached today, order keeps working
+                        o = max(o, working[row][1])  # fill at the stop level, or at the open if it gapped above
                         del working[row]
                     gap = (o / sc - 1) * 100
                     if R.max_gap_pct is not None and gap > R.max_gap_pct:
@@ -230,6 +258,9 @@ def run(p: Panel, ind: Indicators, sig: np.ndarray, rules: Rules, gate_ok: np.nd
                         stop = p.low[row, sig_col]
                     elif R.stop_mode == "min_low_pct":
                         stop = max(p.low[row, sig_col], o * (1 - R.stop_pct / 100))
+                    elif R.stop_mode == "level":
+                        lv = stop_level[row, sig_col]
+                        stop = max(lv, o * (1 - R.stop_pct / 100)) if np.isfinite(lv) else o * (1 - R.stop_pct / 100)
                     elif R.stop_mode == "atr":
                         a = ind.atr14[row, sig_col]
                         stop = o - R.atr_mult * a if np.isfinite(a) else o * (1 - R.stop_pct / 100)
@@ -325,6 +356,8 @@ def run(p: Panel, ind: Indicators, sig: np.ndarray, rules: Rules, gate_ok: np.nd
                 e = sma_tr[R.exit_close_below_sma][row, j]
                 if np.isfinite(e) and c < e:
                     pos.pending_exit = "sma_close"
+            if hold_state is not None and not hold_state[row, j]:
+                pos.pending_exit = "state"
 
         equity[j] = cash + sum(pos.qty * (p.close[pos.row, j] if np.isfinite(p.close[pos.row, j]) else pos.entry) for pos in positions.values())
         n_open[j] = len(positions)

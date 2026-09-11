@@ -33,6 +33,7 @@ so every command below carries one of two tags:
 |---|---|
 | `[REAL]` | Exists today, on this tree or on the box. You can run it now. |
 | `[NOT YET REAL — TWn]` | Does not exist. Module `TWn` owns building it, **to this spelling**. Running it today gets you "No rule to make target" or a 404. |
+| `[BUILT — TWn, never run live]` | The command exists and is tested, and **it has never run against a broker**. Added 11 Sep 2026 when TW6 landed: a runbook that still said "not yet real" about a route that answers is the stale half of the same disagreement `/CLAUDE.md` warns about. |
 
 §11 is the full inventory of what is not real, so the later modules can be built to match.
 
@@ -133,7 +134,7 @@ sessions out** = the signals. Plus one `tw_breadth_daily` row.
 cd /Users/maulikdave/Documents/projects/baskfy/decile-blueprint && make twt-plan DATE=<the same session>
 ```
 
-`[NOT YET REAL — TW6]` It places nothing. Expect `entries=N exits=0 arms=0 ratchets=0 gate=OPEN|SHUT`
+`[BUILT — TW6, never run live]` It places nothing. Expect `entries=N exits=0 arms=0 ratchets=0 gate=OPEN|SHUT`
 and every line `PROPOSED`. The `TWT_EVENING` email carries the same thing.
 
 **On the very first morning there are no exit lines**, because the sleeve holds nothing. `ARM_GTT`
@@ -304,9 +305,9 @@ new size.
 cd /Users/maulikdave/Documents/projects/baskfy/decile-blueprint && make twt-plan DATE=<the signal session> SOURCE=MORNING
 ```
 
-`[NOT YET REAL — TW6]`
+`[BUILT — TW6, never run live]`
 
-Or open `$DESK/twt` in a browser, which builds and shows the same thing. `[NOT YET REAL — TW6/TW8]`
+Or open `$DESK/twt` in a browser, which builds and shows the same thing. `[BUILT — TW6, never run live]`
 
 **Three things about the clock, so you do not "fix" one of them:**
 
@@ -431,7 +432,7 @@ From the desk page, press Confirm on the row. From a terminal:
 curl -fsS -X POST $DESK/twt/execute -u desk:$DESK_PW -H "Origin: $DESK" -d confirm=true -d plan_id=<the plan id> -d line_id=<the line id>
 ```
 
-`[NOT YET REAL — TW6]`
+`[BUILT — TW6, never run live]`
 
 Three things are required and each is a refusal, not an error:
 
@@ -476,7 +477,8 @@ else set up first except §1's three variables.
 curl -fsS -X POST $DESK/twt/halt -u desk:$DESK_PW -H "Origin: $DESK" -d confirm=true
 ```
 
-`[NOT YET REAL — TW6 builds it, to this spelling]`
+`[BUILT — TW6, never run live]` Built to this spelling, and a test pins each of the four behaviours
+below — the third one twice, through the mounted route as well as directly.
 
 **What it must do, and this is the specification TW6 builds to:**
 
@@ -539,7 +541,7 @@ A live line with no stop is the one thing that can actually hurt this sleeve. Ch
 curl -fsS $DESK/twt/data -u desk:$DESK_PW | python3 -m json.tool
 ```
 
-`[NOT YET REAL — TW6]` Or just read the book panel on `$DESK/twt`.
+`[BUILT — TW6, never run live]` Or just read the book panel on `$DESK/twt`.
 
 **Every `OPEN` position with `quantity_open > 0` must have a non-null `gtt_id`.** Count them:
 positions in the book = GTT ids in the book. There is no acceptable difference.
@@ -563,7 +565,8 @@ and it stays until the sweep is clean.
 curl -fsS -X POST $DESK/twt/sweep -u desk:$DESK_PW -H "Origin: $DESK" -d confirm=true
 ```
 
-`[NOT YET REAL — TW6/TW7]` The desk's own clock runs the same chore at 15:15; this is how you run
+`[BUILT — TW6 route, TW7 tool; never run live]` **The desk's clock does not run it yet** — `app/swing_clock.py` has
+no TWT entry — so at 15:15 it runs because you ran it. This is how you run
 it by hand or confirm it ran. It is idempotent and keyed on the day, so running it twice is safe.
 
 Or from the laptop:
@@ -612,7 +615,7 @@ different things.
 curl -fsS -X POST $DESK/twt/rearm -u desk:$DESK_PW -H "Origin: $DESK" -d confirm=true -d position_id=<id>
 ```
 
-`[NOT YET REAL — TW6]` The swing book's `rearm_gtt` path, reused. Expect a new `gtt_id` and the
+`[BUILT — TW6, never run live]` The swing book's `rearm_gtt` path, reused. Expect a new `gtt_id` and the
 red band clearing. Re-run §8's check.
 
 **Step 2 — if the re-arm is refused, read the refusal.** It is almost always one of:
@@ -643,7 +646,10 @@ Kite → the holding → GTT → Single → SELL → CNC
 curl -fsS -X POST $DESK/twt/reconcile -u desk:$DESK_PW -H "Origin: $DESK" -d confirm=true
 ```
 
-`[NOT YET REAL — TW6]` It reads the broker's GTT list and attaches what it finds to the position.
+`[BUILT — TW6, never run live]` It reads the broker's GTT list and attaches what it finds to the
+position. **It has never met a real GTT list** — the field names are Kite's documented ones and no
+live response has been read; if one is spelled differently the reconcile attaches nothing and the
+page keeps calling a protected line naked, which is the right way round for that to fail.
 Until it runs, the page will keep calling a protected line naked — which is the right way round
 for a discrepancy to fail.
 
@@ -685,7 +691,7 @@ curl -fsS $DESK/status
 cd /Users/maulikdave/Documents/projects/baskfy/decile-blueprint && make twt-plan DATE=<the last completed session> SOURCE=MORNING
 ```
 
-`[NOT YET REAL — TW6]`
+`[BUILT — TW6, never run live]`
 
 **On a normal day this plan is nothing but ratchets.** The arithmetic was done last night: the
 nightly job raised each position's `high_since` with the session's high and computed
@@ -715,7 +721,7 @@ Exits first, entries after. One click per line. `confirm=true`, an unexpired `pl
 curl -fsS -X POST $DESK/twt/sweep -u desk:$DESK_PW -H "Origin: $DESK" -d confirm=true
 ```
 
-`[NOT YET REAL — TW6/TW7]` Expect `naked: 0`. The desk's clock does it at 15:15 anyway; this is
+`[BUILT — TW6 route, TW7 tool; never run live]` Expect `naked: 0`. **The desk's clock does not do it yet**; this is
 the check, and on a day you ratcheted ten lines it is the check that matters.
 
 ### The evening takes care of itself
@@ -743,20 +749,20 @@ these exact spellings.
 | Command / route | Owner | Note |
 |---|---|---|
 | `make twt DATE=…` | TW4 | Named in `06`. The nightly chain runs `COMPUTE_TWT` itself. |
-| `make twt-plan DATE=… [SOURCE=EVENING\|MORNING]` | **TW6** | **Not named in `06`** — requested here, mirroring `make vbt-plan`. |
+| `make twt-plan DATE=… [SOURCE=EVENING\|MORNING]` | **TW6** | **BUILT.** `baskfy_worker.twt_cli --plan`. Writes `tw_plan`; places nothing. |
 | `make twt-backtest` | TW9 | Named in `06`. |
-| `GET $DESK/twt`, `GET $DESK/twt/data` | TW6/TW8 | `05` §2. |
-| `POST $DESK/twt/execute` | TW6 | `04` §10.4. Needs `Origin`. |
-| `POST $DESK/twt/rearm` | **TW6** | Implied by `05` §2's per-line Re-arm button; the route name is requested here, mirroring `POST /swing/rearm`. |
-| `POST $DESK/twt/sweep` | **TW6/TW7** | The 15:15 chore as a route. `06` names the chore and `tools/twt/sweep.py`; the route name is requested here, mirroring `POST /swing/cutoff`. |
-| `POST $DESK/twt/reconcile` | **TW6** | Attach a hand-armed GTT to a position (§9.2 step 3). **Not in `06`** — requested here, mirroring `POST /swing/reconcile`. Without it a hand-armed line reads naked forever. |
-| **`POST $DESK/twt/halt`** | **TW6** | **The stop command (§7). Not in `06` — specified here and requested.** Its four required behaviours are in §7 and the third of them (protection is never removed) is the one a test must pin. |
+| `GET $DESK/twt`, `GET $DESK/twt/data` | TW6/TW8 | **BUILT** (TW6's shape; TW8's polish went to the web page). |
+| `POST $DESK/twt/execute` | TW6 | **BUILT.** `04` §10.4. Needs `Origin`. 400 / 404 / 410 / 409, and a `SELL_AT_OPEN` is a 400 (TW6.4). |
+| `POST $DESK/twt/rearm` | **TW6** | **BUILT**, and exported as the callable TW7's sweep injects (`twt_execute.rearm_callable`). |
+| `POST $DESK/twt/sweep` | **TW6/TW7** | **BUILT.** Idempotent, keyed on the day. **No clock runs it yet.** |
+| `POST $DESK/twt/reconcile` | **TW6** | **BUILT.** Never met a real GTT list — see §9.2 step 3. |
+| **`POST $DESK/twt/halt`** | **TW6** | **BUILT to §7's four behaviours.** The third — protection is never removed — is pinned twice: directly, and through the mounted route. |
 | `GET` / `PATCH $WEB/api/v1/twt/config` | TW3/TW8 | Mirrors `/api/v1/vbt/config`. `sleeve_capital_inr` travels as a string. |
 | `$WEB/me/twt` settings form | TW8 | The bounded settings of `02` only. |
 | `tools/twt/sweep.py` | TW7 | Named in `06`. |
 | `tools/twt/drill.py` | TW10 | Named in `06`. Must end `0 orders reached a broker.` |
 | `BASKFY_TWT_EXECUTION_ENABLED` | TW3 | Created **false**, in both env files on the box. |
-| `TWT_EVENING`, `TWT_POSITION_NAKED`, `TWT_GTT_MISSING_AT_1515`, `TWT_ADJUSTMENT_RESET` | TW4/TW6/TW7 | The four alerts this runbook tells you to react to. |
+| `TWT_EVENING`, `TWT_POSITION_NAKED`, `TWT_GTT_MISSING_AT_1515`, `TWT_ADJUSTMENT_RESET` | TW4/TW6/TW7 | **BUILT** in `baskfy_worker.alerts.AlertName`, one runbook behind all four: `decile-blueprint/docs/runbooks/09-twt-morning.md`. |
 
 **Real today:** `make test`, `make lint`, `make migrate`, `make token-sync`, the Kite login and its
 08:45 nudge, `tools/deploy/box.sh`, `curl $DESK/status`, the Kite app's GTT screen, and §7's

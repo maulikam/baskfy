@@ -98,6 +98,12 @@ from baskfy_worker.tasks.swing_scan_now import (
     sweep_queued,
 )
 from baskfy_worker.tasks.swing_timing_probe import DONE_MARKER, probe_once
+from baskfy_worker.tasks.twt import detect_session as twt_detect_session
+from baskfy_worker.tasks.twt_evening import SOURCE_MORNING as TWT_SOURCE_MORNING
+from baskfy_worker.tasks.twt_evening import (
+    last_detected_session as twt_last_detected_session,
+)
+from baskfy_worker.tasks.twt_evening import run_twt_evening
 from baskfy_worker.tasks.vbt import published_signal_count, run_detect_vbt
 from baskfy_worker.tasks.vbt_backtest import DEFAULT_START as VBT_BACKTEST_START
 from baskfy_worker.tasks.vbt_backtest import run_vbt_backtest
@@ -838,6 +844,111 @@ def vbt_detect_task(trade_date: str | None = None) -> JsonObject:
         outcome = StepOutcome()
         signals = await run_detect_vbt(session, outcome, day, user_id=user_id)
         return {"date": day.isoformat(), "signals": signals, "detail": outcome.detail}
+
+    return run_in_session(_run)
+
+
+@shared_task(name="baskfy.twt.detect", acks_late=True)
+def twt_detect_task(trade_date: str | None = None) -> JsonObject:
+    """TW4: detect the session's tight state and entry events, write its breadth row, ratchet.
+
+    Idempotent per ``(user_id, date)``: re-running a date upserts its own rows and moves no
+    counter (house rule 7). Defaults to today in IST when Beat fires without an argument.
+
+    **This is the 21:00 retry as well as the CLI's entry point.** The nightly chain already runs
+    the same detector as its fourteenth step, where it cannot fail the night; if the chain has
+    not published by the time Beat fires — a slow bhavcopy, a provider stall — this is what
+    writes the session anyway.
+
+    It asks first, and it asks the **breadth** table rather than the signal table: this strategy
+    signals about eighteen times a year, so "no signals" is the ordinary state of a session that
+    ran perfectly, and a retry keyed on it would densify 260 sessions over the whole cash
+    universe every single night to arrive at the same answer (DECISIONS-TW TW4.3).
+
+    Nothing here places, arms or cancels anything, whichever way ``BASKFY_TWT_EXECUTION_ENABLED``
+    is set: the ratchet it computes is a level stored for a plan a person confirms.
+    """
+    day = dt.date.fromisoformat(trade_date) if trade_date else dt.datetime.now(tz=IST).date()
+    deps = build_pipeline_dependencies()
+    if not deps.twt_nightly_enabled:
+        return {"date": day.isoformat(), "skipped": "BASKFY_TWT_NIGHTLY_ENABLED is false"}
+    if deps.twt_user_id is None:
+        return {"date": day.isoformat(), "skipped": "no BASKFY_SOLE_USER_ID configured"}
+
+    return run_in_session(
+        lambda session: twt_detect_session(
+            session, day, user_id=int(deps.twt_user_id or 0), force=False
+        )
+    )
+
+
+@shared_task(name="baskfy.twt.evening", acks_late=True)
+def twt_evening_task(trade_date: str | None = None) -> JsonObject:
+    """TW6: the exits, then the entries, then the session row — the plan for tomorrow morning.
+
+    Always **after** ``baskfy.twt.detect`` and never instead of it: the plan is built from the
+    session's signals, the session's gate and the ``next_trigger`` the detector computed, and an
+    evening that ran before the detector would plan against yesterday's tape.
+
+    Nothing here places an order. Every line it writes is ``PROPOSED`` until a person confirms it
+    on the desk (``docs/twt/02`` Track C §3), and there is no auto-execute flag for this sleeve.
+    """
+    day = dt.date.fromisoformat(trade_date) if trade_date else dt.datetime.now(tz=IST).date()
+    deps = build_pipeline_dependencies()
+    if deps.twt_user_id is None:
+        return {"date": day.isoformat(), "skipped": "no BASKFY_SOLE_USER_ID configured"}
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        outcome = StepOutcome()
+        report = await run_twt_evening(
+            session,
+            outcome,
+            day,
+            user_id=int(deps.twt_user_id or 0),
+            execution_enabled=deps.twt_execution_enabled,
+        )
+        if report is None:
+            return {"date": day.isoformat(), "skipped": outcome.detail}
+        return report.as_detail()
+
+    return run_in_session(_run)
+
+
+@shared_task(name="baskfy.twt.morning", acks_late=True)
+def twt_morning_task(trade_date: str | None = None) -> JsonObject:
+    """TW6: the same plan, rebuilt before the open — **re-sized, not re-detected** (``04`` §11.3).
+
+    Same session, same signals, same levels; the sizing moves because the sleeve's equity has
+    moved with its marks. ``trade_date`` is the **signal** session, which before the open is the
+    previous one, and a plan expires thirty minutes after it is built — which is why last
+    night's cannot be confirmed at 09:15 and this exists.
+    """
+    today = dt.datetime.now(tz=IST).date()
+    deps = build_pipeline_dependencies()
+    if deps.twt_user_id is None:
+        return {"date": today.isoformat(), "skipped": "no BASKFY_SOLE_USER_ID configured"}
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        user_id = int(deps.twt_user_id or 0)
+        day = (
+            dt.date.fromisoformat(trade_date)
+            if trade_date
+            else await twt_last_detected_session(session, user_id, today)
+        )
+        if day is None:
+            return {"date": today.isoformat(), "skipped": "no detected session to plan from"}
+        outcome = StepOutcome()
+        report = await run_twt_evening(
+            session,
+            outcome,
+            day,
+            user_id=user_id,
+            execution_enabled=deps.twt_execution_enabled,
+            source=TWT_SOURCE_MORNING,
+        )
+        if report is None:
+            return {"date": day.isoformat(), "skipped": outcome.detail}
+        return report.as_detail()
 
     return run_in_session(_run)
 

@@ -287,6 +287,24 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         "schedule": crontab(hour=21, minute=10, day_of_week="mon-fri"),
         "options": {"queue": QUEUE_COMPUTE},
     },
+    # --- TW4: the three-weeks-tight sleeve's nightly detection (docs/twt/06) ------
+    #
+    # The chain already runs `compute_twt` as its fourteenth step, after `publish`, after
+    # `compute_swing` and after `compute_vbt`. This entry is the belt to that brace, and it is
+    # the same argument the swing and VBT entries make: on a night the chain failed its quality
+    # gate the bars are still there, and a signal is worth having whether or not the screener had
+    # a bad night.
+    #
+    # 21:00, which is the time `docs/twt/06` § TW4 names. Like the VBT entry it asks before it
+    # works — a date that already has a `tw_breadth_daily` row is answered without re-detecting —
+    # because this detector densifies 260 sessions over the whole cash universe. It asks the
+    # *breadth* table and not the signal table, because this book signals about eighteen times a
+    # year and "no signals" is what a perfectly good session looks like (DECISIONS-TW TW4.3).
+    "twt-detect": {
+        "task": "baskfy.twt.detect",
+        "schedule": crontab(hour=21, minute=0, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_COMPUTE},
+    },
     # VB6: the plan, five minutes after the detector. The order matters and is the same argument
     # the swing pair makes at 21:00/21:05 — the plan is built from the session's signals and the
     # session's gate, so an evening that ran first would plan against yesterday's tape.

@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+{% block title %}Momentum Desk — Three weeks tight{% endblock %}
+
+{% block heading %}Three weeks tight{% endblock %}
+{% block heading_aside %}
+  <span class="pill {{ 'warn' if v.dry_run else 'bad' }}" id="twMode">
+    {{ 'SIMULATED' if v.dry_run else 'LIVE' }}</span>
+{% endblock %}
+
+{#- Money and prices. Decimal in, a string out; never a float on the way. -#}
+{% macro inr(x) -%}{% if x is none %}not available{% else %}₹{{ '{:,.2f}'.format(x) }}{% endif %}{%- endmacro %}
+{% macro pct(x) -%}{% if x is none %}not available{% else %}{{ '{:.2f}'.format(x) }}%{% endif %}{%- endmacro %}
+
+{#- ONE form per line. It carries exactly one line_id and posts exactly one line; there is no
+    control anywhere on this page that posts more than one, and there must never be one
+    (docs/twt/05 §2: "Confirm, per line"). An expired plan's buttons are GONE, not disabled —
+    a disabled button is a thing a person tries to press. -#}
+{% macro confirm_form(line) -%}
+  {% if line.confirmable %}
+  <form method="post" action="/twt/execute" class="tw-confirm" data-line-id="{{ line.id }}">
+    <input type="hidden" name="plan_id" value="{{ line.plan_id }}">
+    <input type="hidden" name="line_id" value="{{ line.id }}">
+    <input type="hidden" name="confirm" value="true">
+    <button type="submit" class="{{ 'btn-saffron' if v.dry_run else 'btn-danger' }}"
+            title="{{ line.label }}">Confirm</button>
+  </form>
+  {% else %}
+  <span class="muted">{{ 'plan expired' if line.expired else line.state | lower }}</span>
+  {% endif %}
+  <div class="tw-outcome muted" data-outcome-for="{{ line.id }}" aria-live="polite"></div>
+{%- endmacro %}
+
+{% block content %}
+
+{#- ============================== 1. the session strip ============================== -#}
+<div class="banner {{ 'warn' if v.dry_run else 'bad' }}" id="twStatus">
+  <span class="tag">status</span>
+  <span>
+    <b>DRY_RUN</b>=<code>{{ 'true' if v.desk_dry_run else 'false' }}</code> ·
+    <b>BASKFY_TWT_EXECUTION_ENABLED</b>=<code>{{ 'true' if v.execution_enabled else 'false' }}</code>
+    {% if v.plan %}· <b>session</b>: {{ v.plan.session_date }} ({{ v.plan.source }}){% endif %}
+    {% if v.breadth %}
+      · <b>gate</b>:
+      <span class="pill {{ 'ok' if v.breadth.gate == 'OPEN' else 'warn' }}">{{ v.breadth.gate }}</span>
+      {{ pct(v.breadth.pct_above_dma) }} of {{ v.breadth.measured_count }} names above their
+      200-day average
+    {% endif %}
+    {% if v.session %}
+      · <b>confirms</b> {{ v.session.confirms }} · <b>fills</b> {{ v.session.fills }} ·
+      <b>ratchets</b> {{ v.session.ratchets }}
+    {% endif %}
+    · <b>half size left</b>: {{ v.first_live_entries_left }} entries
+    <span class="muted" style="display:block;margin-top:5px">
+      This sleeve is end-of-day. The plan is built after the close and rebuilt before the open,
+      it reads the <b>last completed session</b>, and it expires {{ v.plan_ttl_minutes }} minutes
+      after it is built. Nothing here fires inside a session and there is no auto-execute flag
+      for this sleeve — an order exists because you pressed Confirm.
+    </span>
+    {% if v.countdown %}<span style="display:block;margin-top:5px"><b>{{ v.countdown }}</b></span>{% endif %}
+  </span>
+</div>
+
+{% if not v.available %}
+  <div class="banner bad"><span class="tag">unavailable</span>
+    <span>This desk cannot read the <code>tw_</code> tables: {{ v.reason }}</span></div>
+{% endif %}
+
+{#- ============================== the 15:15 strip ============================== -#}
+{% if v.naked %}
+<div class="banner bad" id="twNaked">
+  <span class="tag">naked</span>
+  <span>
+    <b>{{ v.naked | length }} open line(s) have no resting stop</b>: {{ v.naked | join(', ') }}.
+    A live line with no stop is the one thing that can actually hurt this sleeve. Re-arm it
+    below, or run the sweep.
+    <form method="post" action="/twt/sweep" class="tw-sweep" style="display:inline;margin-left:8px">
+      <input type="hidden" name="confirm" value="true">
+      <button type="submit" title="Re-arm everything naked. Places no buy, cancels nothing.">Run the 15:15 sweep</button>
+    </form>
+  </span>
+</div>
+{% endif %}
+
+{#- ============================== 2. exits first ============================== -#}
+<h2>Exits <span class="muted">— armed first, on purpose</span></h2>
+{% if v.exits %}
+<table class="grid">
+  <thead><tr>
+    <th>line</th><th>symbol</th><th>qty</th><th>old trigger</th><th>new trigger</th>
+    <th>high since</th><th>why</th><th></th>
+  </tr></thead>
+  <tbody>
+  {% for line in v.exits %}
+    <tr>
+      <td>{{ line.label }}</td>
+      <td><b>{{ line.symbol }}</b></td>
+      <td>{{ line.quantity }}</td>
+      <td>{{ inr(line.previous_trigger) }}</td>
+      <td><b>{{ inr(line.stop_price) }}</b></td>
+      <td>{{ inr(line.high_since) }}</td>
+      <td class="muted">{{ line.note or '' }}</td>
+      <td>{{ confirm_form(line) }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+  <p class="muted">No stop to arm and no stop to raise. On a book whose trail moves only on a new
+  high, that is the ordinary evening.</p>
+{% endif %}
+
+{#- ============================== 3. entries, then the skips ============================== -#}
+<h2>Entries</h2>
+{% if v.entries %}
+<table class="grid">
+  <thead><tr>
+    <th>line</th><th>symbol</th><th>qty</th><th>value</th><th>stop the fill gets</th>
+    <th>why</th><th></th>
+  </tr></thead>
+  <tbody>
+  {% for line in v.entries %}
+    <tr>
+      <td>{{ line.label }}</td>
+      <td><b>{{ line.symbol }}</b></td>
+      <td>{{ line.quantity }}</td>
+      <td>{{ inr(line.value_inr) }}</td>
+      <td>{{ inr(line.stop_price) }}</td>
+      <td class="muted">{{ line.note or '' }}</td>
+      <td>{{ confirm_form(line) }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p class="muted">At most {{ v.max_new_entries_per_session }} new entries in a session. A fourth
+confirm is <code>BLOCKED (SESSION_CAP)</code>, and that is correct behaviour.</p>
+{% else %}
+  <p class="muted">No entries. This book enters about eighteen times a year, so most mornings
+  look like this one.</p>
+{% endif %}
+
+{% if v.skips %}
+<h3>Passed over <span class="muted">— a plan is not honest without its skips</span></h3>
+<table class="grid">
+  <thead><tr><th>symbol</th><th>reason</th><th>detail</th></tr></thead>
+  <tbody>
+  {% for skip in v.skips %}
+    <tr><td>{{ skip.symbol }}</td><td><code>{{ skip.reason }}</code></td>
+        <td class="muted">{{ skip.detail or '' }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{#- ============================== 4. the book ============================== -#}
+<h2>The book <span class="muted">— only what this sleeve bought</span></h2>
+{% if v.book %}
+<table class="grid">
+  <thead><tr>
+    <th>symbol</th><th>entered</th><th>qty</th><th>entry</th><th>stop in force</th>
+    <th>GTT</th><th>high since</th><th>next trigger</th><th></th>
+  </tr></thead>
+  <tbody>
+  {% for pos in v.book %}
+    <tr class="{{ 'bad' if pos.gtt_id is none else '' }}">
+      <td><b>{{ pos.symbol }}</b>{% if pos.half_size %} <span class="pill">half size</span>{% endif %}</td>
+      <td>{{ pos.entry_date }}</td>
+      <td>{{ pos.quantity_open }}</td>
+      <td>{{ inr(pos.entry_avg) }}</td>
+      <td>{{ inr(pos.stop_price) }}</td>
+      <td>{% if pos.gtt_id %}{{ inr(pos.gtt_trigger) }}{% else %}<b>NAKED</b>{% endif %}</td>
+      <td>{{ inr(pos.high_since) }}</td>
+      <td>{% if pos.next_trigger %}{{ inr(pos.next_trigger) }}
+          <span class="muted">for {{ pos.next_trigger_for }}</span>{% else %}
+          <span class="muted">the trail did not beat the stop in force</span>{% endif %}</td>
+      <td>
+        {% if pos.gtt_id is none %}
+        <form method="post" action="/twt/rearm" class="tw-rearm">
+          <input type="hidden" name="position_id" value="{{ pos.id }}">
+          <input type="hidden" name="confirm" value="true">
+          <button type="submit" title="Arm a stop for this one position. Places no buy.">Re-arm</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+  <p class="muted">The sleeve holds nothing. A name in the account this sleeve never bought is
+  invisible here, deliberately — it belongs to the weekly book, the swing book, VBT-1 or you.</p>
+{% endif %}
+
+<p class="muted" style="margin-top:16px">
+  Sleeve capital {{ inr(v.config.sleeve_capital_inr) }} · equity {{ inr(v.money.equity_inr) }} ·
+  cash available {{ inr(v.money.cash_available_inr) }}. Sized against <b>this sleeve's own
+  money</b>, never the account's.
+</p>
+
+{% endblock %}

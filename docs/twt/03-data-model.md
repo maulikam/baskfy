@@ -151,6 +151,7 @@ not here.
 | `order_id` | FK to the `tw_order` that filled it |
 | `signal_date` | the session whose close produced the signal |
 | `entry_date`, `entry_avg` (PRICE_RAW), `quantity_entered` | from fills |
+| `entry_adj_factor` | ADJ_FACTOR, default 1 — **the `ohlcv_daily.adj_factor` the line was bought at.** `04` §7.3 names it by that name: the evening job detects a corporate action by comparing the as-of row's factor with this one. Added by TW3 although this table did not list it (DECISIONS-TW **TW3.2**), and written into the table here by TW4, the first module to read it. It is **never rewritten** once an action has been handled — the column means what its name says, and `high_since`'s own argument two paragraphs down is the same argument (DECISIONS-TW **TW4.6**) |
 | `initial_stop` | 20 % under the fill, what it was at entry, for R |
 | `stop_price` | the stop in force; **only ever rises** (asserted by a check constraint and by TW10) |
 | **`high_since`** | PRICE_RAW — **the highest high since entry, the exchange print**. The ratchet's only input besides `trail_pct`. Initialised to the fill price and raised after every close (`04` §7.2) |

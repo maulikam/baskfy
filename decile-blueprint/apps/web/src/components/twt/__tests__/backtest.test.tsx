@@ -93,6 +93,70 @@ describe("the twt backtest card never mixes two runs", () => {
     expect(screen.getAllByText("20.9%").length).toBeGreaterThan(0);
   });
 
+  /**
+   * TW9. A failure has a `finished_at` — that is `03` §9's whole point, so that "still running"
+   * and "died" are different states — which makes "the latest finished run" the wrong query on
+   * its own. It is the latest run that finished **and** produced statistics.
+   */
+  it("keeps the last finished run when a later re-run failed", () => {
+    render(
+      <BacktestCard
+        backtest={backtest([
+          backtestRun({ id: 1, finished_at: "2026-09-01T20:00:00+05:30" }),
+          backtestRun({
+            id: 2,
+            finished_at: "2026-09-12T20:41:00+05:30",
+            stats: null,
+            drift: null,
+            error: "RuntimeError: the plant fell over",
+          }),
+        ])}
+      />,
+    );
+
+    expect(screen.getAllByText("20.9%").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/the plant fell over/)).not.toBeInTheDocument();
+  });
+
+  /**
+   * TW9, `gates/twt-9.md` G5. `01` §6 published 20.92%; a run a point and a half away is past
+   * the threshold, and the page has to say so **naming both figures**. A banner that said only
+   * "this disagrees with the published result" would leave a reader unable to tell a rounding
+   * change from a broken gate.
+   */
+  it("flags a drift of 1.5 CAGR points and names both figures", () => {
+    render(
+      <BacktestCard
+        backtest={backtest([
+          backtestRun({
+            stats: { ...backtestRun().stats, cagr_pct: "22.42" },
+            drift: {
+              flagged: true,
+              cagr_pct_delta: "1.50",
+              max_dd_pct_delta: "-1.80",
+              trades_delta: 5,
+              published_cagr_pct: "20.92",
+              run_cagr_pct: "22.42",
+              threshold_cagr_points: "1.0",
+            },
+          }),
+        ])}
+      />,
+    );
+
+    const drift = screen.getByTestId("twt-drift");
+    expect(drift).toHaveTextContent("22.4%");
+    expect(drift).toHaveTextContent("20.9%");
+    expect(drift).toHaveTextContent(/treat neither as settled/i);
+  });
+
+  /** The other half of the same rule: a run inside the point says nothing at all. */
+  it("shows no drift banner when the run is inside the threshold", () => {
+    render(<BacktestCard backtest={backtest([backtestRun()])} />);
+
+    expect(screen.queryByTestId("twt-drift")).not.toBeInTheDocument();
+  });
+
   it("shows the gate comparison, which is the only argument for the gate", () => {
     render(<BacktestCard backtest={backtest()} />);
 

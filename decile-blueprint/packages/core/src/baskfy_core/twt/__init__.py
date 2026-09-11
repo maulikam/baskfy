@@ -27,10 +27,31 @@ Module map
 ``exits``       the 20 % stop, the ratcheting 20 % trail, the fill-day rule and the write-off
 ``sleeve``      the sleeve's own cash and equity — never the account's
 ``plan``        signals + book + gate -> a plan the desk can confirm line by line
+``backtest``    the sequencing of `04` §11: the sleeve's own functions, walked session by session
+                over a panel of bars — TW2's reproduction of the study and TW9's run over the
+                plant's, differing only in a ``BacktestParams``
+``published``   ``01`` §6's measurements as a record — results, never settings
+``drift``       a fresh run against those measurements, and the one CAGR point past which ``05``
+                §3 says so on the page
 """
 
 from __future__ import annotations
 
+from baskfy_core.twt.backtest import (
+    DEFAULT_BACKTEST_PARAMS,
+    PANEL_COLUMNS,
+    BacktestParams,
+    BacktestResult,
+    BacktestStats,
+    BacktestTrade,
+    Panel,
+    YearRow,
+    gate_vector,
+    panel_from_frame,
+    run_backtest,
+    summarise,
+    yearly,
+)
 from baskfy_core.twt.breadth import (
     BreadthReading,
     breadth_above_dma,
@@ -62,6 +83,11 @@ from baskfy_core.twt.config import (
     SignalState,
     SizingConfig,
     TwtConfig,
+)
+from baskfy_core.twt.drift import (
+    DRIFT_CAGR_POINTS,
+    Drift,
+    compare,
 )
 from baskfy_core.twt.exits import (
     Action,
@@ -112,6 +138,10 @@ from baskfy_core.twt.plan import (
     gtt_limit_price,
     stop_for,
 )
+from baskfy_core.twt.published import (
+    PUBLISHED,
+    PublishedStudy,
+)
 from baskfy_core.twt.signals import (
     SIGNAL_COLUMNS,
     WEEK_POSITION,
@@ -141,12 +171,16 @@ from baskfy_core.twt.sleeve import (
 )
 
 __all__ = [
+    "DEFAULT_BACKTEST_PARAMS",
     "DEFAULT_TWT_CONFIG",
+    "DRIFT_CAGR_POINTS",
     "DRY_RUN_SESSIONS_REQUIRED",
     "EXIT_LINE_KINDS",
     "INDICATOR_COLUMNS",
     "LINE_ORDER",
     "OPTIONAL_COLUMNS",
+    "PANEL_COLUMNS",
+    "PUBLISHED",
     "REQUIRED_COLUMNS",
     "RESEARCH_TICK_INR",
     "SIGNAL_COLUMNS",
@@ -156,6 +190,10 @@ __all__ = [
     "Action",
     "AdjustmentOutcome",
     "BacktestConfig",
+    "BacktestParams",
+    "BacktestResult",
+    "BacktestStats",
+    "BacktestTrade",
     "Bar",
     "BookState",
     "BreadthConfig",
@@ -163,6 +201,7 @@ __all__ = [
     "Candidate",
     "CostConfig",
     "DataConfig",
+    "Drift",
     "EntryBar",
     "EntryConfig",
     "EntryTiming",
@@ -175,7 +214,9 @@ __all__ = [
     "NakedPosition",
     "OpenPosition",
     "OpenPositionValue",
+    "Panel",
     "PlanLine",
+    "PublishedStudy",
     "RankKey",
     "Ratchet",
     "RatchetDue",
@@ -191,6 +232,7 @@ __all__ = [
     "SleeveValue",
     "TwtConfig",
     "TwtPlan",
+    "YearRow",
     "assemble",
     "breadth_above_dma",
     "breadth_series",
@@ -199,6 +241,7 @@ __all__ = [
     "build_entries",
     "clamp_under_close",
     "client_id_for",
+    "compare",
     "detect_signals",
     "drop_thin_sessions",
     "entry_events",
@@ -206,15 +249,18 @@ __all__ = [
     "fill_day_stop",
     "first_live_multiplier",
     "gate_for",
+    "gate_vector",
     "gtt_limit_price",
     "initial_stop",
     "liquidity_floor",
     "manage",
     "month_low_back",
     "on_adjustment",
+    "panel_from_frame",
     "r_multiple",
     "ratchet",
     "require_columns",
+    "run_backtest",
     "session_counts",
     "signal_mask",
     "size_entry",
@@ -222,6 +268,7 @@ __all__ = [
     "stop_fill",
     "stop_for",
     "stop_is_below_entry",
+    "summarise",
     "thin_sessions",
     "tick",
     "tick_floor",
@@ -231,4 +278,5 @@ __all__ = [
     "weekly_column",
     "with_twt_columns",
     "with_twt_indicators",
+    "yearly",
 ]

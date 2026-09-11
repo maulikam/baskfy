@@ -91,6 +91,20 @@ class AlertName(StrEnum):
     VBT_DETECT_STALE = "VBT_DETECT_STALE"
     VBT_ORDER_PAST_EXPIRY = "VBT_ORDER_PAST_EXPIRY"
     VBT_POSITION_NO_BAR = "VBT_POSITION_NO_BAR"
+    # TW6/TW7 (docs/twt/FIRST-LIVE-MORNING §11): the three-weeks-tight sleeve's four — the four
+    # names that runbook tells a person to react to, written down before the code that raises
+    # them. Same convention again: upper-case, verbatim, each raised in-process.
+    #
+    # TWT_EVENING is the odd one and it is deliberate. It is not a failure: it is the evening's
+    # plan, delivered by the one mechanism this repository already has for "tell Maulik
+    # something at 21:05" (`dispatch` writes the log line, the Sentry breadcrumb and the email).
+    # A second mailer for one sleeve's digest would be a second place for an address, a
+    # transport and a failure to hide; `docs/twt/05` specifies no email template, so this is the
+    # summary and the page is the list. DECISIONS-TW TW6.2.
+    TWT_EVENING = "TWT_EVENING"
+    TWT_POSITION_NAKED = "TWT_POSITION_NAKED"
+    TWT_GTT_MISSING_AT_1515 = "TWT_GTT_MISSING_AT_1515"
+    TWT_ADJUSTMENT_RESET = "TWT_ADJUSTMENT_RESET"
 
 
 #: How long the webhook is given before it is abandoned. An alert that blocks the reaper for

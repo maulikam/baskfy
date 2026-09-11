@@ -3,7 +3,7 @@
 The status page for the three-weeks-tight run. Updated at the end of every module, **loud about
 what is NOT done**. A fresh session resumes from the first module not marked ✅.
 
-**Run state: eight of eleven units green; TW5 green (the sleeve has its own money, its own book and its counter); TW4 green (the sleeve is wired); TW2 green (the engine exists and the study reproduces).** TW0 green; the pack is written. TW1 (the pure core) and
+**Run state: nine of eleven units green; TW6 green (the desk can plan, confirm, arm and ratchet — and can be stopped in one command that removes no stop); TW5 green (the sleeve has its own money, its own book and its counter); TW4 green (the sleeve is wired); TW2 green (the engine exists and the study reproduces).** TW0 green; the pack is written. TW1 (the pure core) and
 TW3 (the schema) run in parallel because they share no file — TW1 owns
 `packages/core/src/baskfy_core/twt/`, TW3 owns the migration and the models.
 
@@ -24,10 +24,10 @@ branch `developer`. The report will be `../../TW-FINAL-REPORT.md`; what needs Ma
 | TW3 — Schema and settings | ✅ | The thirteen `tw_` tables, `0041_twt` with a round-tripped downgrade, the seed at ₹0, the four bounds (one of them a floor). `gates/twt-3.md` 10/10 |
 | TW4 — The nightly job | ✅ | `baskfy.twt.detect` — the three tables, the funnel, the ratchet's arithmetic the night before, `COMPUTE_TWT` as the chain's fourteenth step (wrapped so it cannot raise), the 21:00 retry and `make twt`. `gates/twt-4.md` **10/10 with evidence**; nine decisions TW4.1–TW4.9 |
 | TW5 — The sleeve's cash and book | ✅ | `baskfy_api.twt_sleeve` — the sleeve's own equity and cash, its book as `BookState`, the person's settings reaching the arithmetic, and the half-size **counter** spent once per filled entry. `gates/twt-5.md` **8/8 with evidence**; four decisions TW5.1–TW5.4 |
-| TW6 — Desk plan, `/twt/execute`, the ratchet | ⬜ | |
-| TW7 — The fill-day rule and the naked-line assertion | ⬜ | |
+| TW6 — Desk plan, `/twt/execute`, the ratchet | ✅ | `gates/twt-6.md` **11/11 with evidence**. `baskfy.twt.evening` / `baskfy.twt.morning` + `make twt-plan`; the desk's `app/twt_desk.py` and `app/twt_execute.py` with **all six TW6a routes** — `/twt/execute`, `/twt/halt`, `/twt/rearm`, `/twt/sweep`, `/twt/reconcile`, `/twt` + `/twt/data`. The ratchet's two failure halves are each pinned: a failed cancel leaves the old stop resting and places nothing; a good cancel with a failed arm nulls `gtt_id`, records the raised stop as the intent and answers **BLOCKED … is NAKED**. `/twt/halt` zeroes the capital (audited), expires every live plan and **never touches protection** — asserted through the mounted route. 0 orders reached a broker: a spy on every gateway answer, a broker client that explodes, and a counting client that records **no call was made**. Seven decisions TW6.1–TW6.7 |
+| TW7 — The fill-day rule and the naked-line assertion | ✅ | `gates/twt-7.md` **6/6 with evidence**. `04` §7.4's three boundaries re-read at a **tick's** resolution against a fill whose stop is actually floored (the old negative case missed by a rupee); `tools/twt/sweep.py` — the 15:15 chore, idempotent and keyed on the day, re-arm injected as `Callable[[PositionId], Awaitable[RearmOutcome]]` so TW6's path is a one-line swap; a Hypothesis property over a generated book of fills, cancelled ratchets and exits. Four decisions TW7.1–TW7.4 |
 | TW8 — The pages | ✅ | All 9 gates green with evidence (`gates/twt-8.md`). Web `/twt` and `/twt/backtest`, read-only and asserted so; the desk page's shape as a component mounted on no web route (DECISIONS-TW TW8.1). Fixtures to `03`; the parent wires `/twt/today` and `/twt/backtest` when TW4 and TW5 land. Suite 165 files / 2,933 tests green, lint 0 errors |
-| TW9 — The backtest on the page | ⬜ | |
+| TW9 — The backtest on the page | ✅ | `gates/twt-9.md` **8/8 with evidence**. `tools/twt/backtest.py` + `make twt-backtest` + `baskfy_worker.tasks.twt_backtest`; one appended `tw_backtest_run` row, `source = PLANT`, sized against `params.sleeve_inr` and never `tw_config.sleeve_capital_inr` (asserted by an ORM spy). **First run over the plant's bars: 22.17 % CAGR at -26.47 % on 169 trades against `01` §6's 20.92 / -24.7 / 164 — drift +1.25 points, FLAGGED, and DECISIONS-TW TW9.3 names the ₹5 crore floor as most of it.** Six decisions TW9.1–TW9.6 |
 | TW10 — Safety and the runbook | 🟡 | **Runbook half GREEN** (`docs/twt/FIRST-LIVE-MORNING.md`, `gates/twt-10-runbook.md` 8/8). The safety-properties half needs the whole sleeve and comes last |
 
 States: ⬜ not started · 🔄 in progress · ✅ green · ⛔ blocked · 🟡 partial.
@@ -453,6 +453,228 @@ counts `tw_order` rows by `signal_date`, the same key `uq_tw_order_one_per_signa
   surface asks for it yet.
 * **`cash_available` has never met a working order**, because this sleeve has none (`03` §6). If
   TW6 ever introduces one, this loader is where the reservation would have to appear.
+
+---
+
+## TW9 — The backtest on the page ✅ (11 Sep 2026)
+
+`gates/twt-9.md` **8/8 with evidence**. A number from the plant's own bars, beside the study's,
+with the difference between them named.
+
+### What exists now that did not before
+
+* `baskfy_worker.tasks.twt_backtest` — the job. Universe → bars → thin sessions → `with_twt_columns`
+  → `signal_mask` with **no `floor_inr`** (the shipped ₹5 crore) → breadth → the gate vector → two
+  books over one detection pass → one appended `tw_backtest_run` row.
+* `tools/twt/backtest.py` and `make twt-backtest` — the same run from a terminal, with the drift
+  printed beside `01` §6 and `01` §7's ₹5 crore row.
+* `baskfy_core.twt.published` and `baskfy_core.twt.drift` — `01` §6's measurements as a record, and
+  the three deltas plus the flag. `test_twt_published.py` checks the transcription against TW2's
+  committed copy of the study's own `final_metrics.json`, so a digit that drifted there fails.
+* `services/worker/tests/test_twt_backtest_job.py` — 27 tests; **10 of them need no database at
+  all**, so every gate still has a voice when the shared test database is busy.
+* Two web tests on TW8's card: a later **failed** run does not displace the last good one, and a
+  1.5-point drift renders the warning naming both figures.
+
+### The first run over the plant's bars
+
+₹10 lakh, 2017-10-16 → **2026-09-04** (the snapshot's last published bar), 10,127 admitted
+instruments, 2,393 sessions, 35 seconds.
+
+| | this run | `01` §6 (₹2 cr) | `01` §7's **₹5 cr** row |
+|---|---|---|---|
+| CAGR | **22.17 %** | 20.92 % | **22.5 %** |
+| max drawdown | **-26.47 %** | -24.7 % | **-27 %** |
+| trades | **169** | 164 | **169** |
+| win rate · profit factor | 42.60 % · 2.78 | 40.9 % · 2.71 | |
+| avg hold · time invested | 101.67 · 78.22 % | 104.6 · 78.0 % | |
+| in sample / out of sample | 13.56 % / 35.15 % | 11.1 % / 36.1 % | |
+| gate off | 14.91 % at -48.11 %, 249 trades | 17.2 % at -43 % | |
+
+`drift` = `+1.25` CAGR points, `-1.77` drawdown points, `+5` trades, **flagged**. The trade count
+lands on `01` §7's ₹5 crore row **exactly**, and the CAGR a third of a point under it: the run is
+reproducing the book it was asked for, and `01` §6's headline is the ₹2 crore book it was not.
+**DECISIONS-TW TW9.3** is the full accounting, including the three sessions of window this snapshot
+is short and the three residual causes TW2.13 named in advance.
+
+The gate is worth **7.3 points** of CAGR and 21.6 points of drawdown here, against the 3.7 the
+study measured. `skipped` says why: 2,508 signals refused for a shut gate, 1,179 for full slots,
+10 for the session cap, and **none** for cash, turnover, a missing bar or a locked open.
+
+### The two numbers TW2 could only measure on its own panel
+
+* **`clamped_below_stop` = 0** on the plant as well (TW2.12). The one branch that can lower a stop
+  still has not fired on any history this repository holds.
+* **The ETF breadth denominator (TW2.2): measured, not inherited — and still zero.** 310 instruments
+  are refused as ETFs and they carry **1,239 bars in 2,393 sessions**; the largest reading
+  difference on any session is 0.0000 of a point and **0 gate verdicts** change. The honest reading
+  is that this snapshot is as sparse in ETFs as the research export was, *not* that the question is
+  settled for a plant that carries them properly. It is measured on every run, so the day it stops
+  being zero the row says so. **TW9.4.**
+
+### Two cross-checks that came out clean
+
+The thin-session rule dropped exactly six dates — 2017-10-19, 2018-11-07, 2024-01-20, 2024-03-02,
+2024-05-18, 2025-02-01 — the same six TW2.1 found already absent from the study's own panel. Two
+implementations of `04` §2.1, one answer, this time over the plant. And `PANEL_COLUMNS` needed no
+column the plant lacks, which is what TW2 built it to prove.
+
+### What is NOT done after TW9
+
+* **No API route serves the row.** `apps/web` still calls `/api/v1/twt/backtest` and there is no
+  `services/api/.../routers/twt.py` — TW8's page renders its empty state, correctly, and the card
+  will fill the moment the parent wires the read. TW9 built what the read needs: `latest_finished`
+  is the query, and `stats` carries every key the card reads.
+* **The run above was against a local snapshot, not production.** `baskfy_bt` ends 2026-09-04 and
+  the deep backfill to 2011 was still running against the production box. Re-run `make twt-backtest`
+  there and the window, the universe and the ETF measurement all change.
+* **Nothing appends a `RESEARCH_EXPORT` row yet.** TW2's reproduction prints and does not store, so
+  the card's second column is empty by construction until somebody wires `twt_goldens` to the table.
+* **No Celery task and no schedule.** The job is a function and a Makefile target; it is not on the
+  compute queue and nothing re-runs it nightly.
+* **The drift is measured against `01` §6 and stays there.** Re-pointing it at the ₹5 crore row
+  would make the flag disappear, which is the "explained away" the module's Goal forbids. The page
+  shows a flagged banner; TW9.3 is the explanation.
+
+---
+
+## TW7 — The fill-day rule and the naked-line assertion ✅ (11 Sep 2026)
+
+`gates/twt-7.md` is **6 of 6 with evidence**. The module is one claim: **the backtest's
+`STOP_DAY0` and the live book's same-session GTT are the same rule measured two ways**, and both
+halves are now asserted.
+
+| What | Where |
+|---|---|
+| The three boundaries, each with its own fixture | `packages/core/tests/test_twt_fill_day.py` (24 tests) |
+| The 15:15 sweep | `tools/twt/sweep.py` |
+| The sweep, the two alerts, the deadline, the TW6 seam | `services/worker/tests/test_twt_sweep.py` (34 tests) |
+| The generated safety property | `services/worker/tests/test_twt_safety_property.py` (9 tests) |
+
+### The boundary cases were *half* pinned, and the missing half was the expensive one
+
+`test_twt_exits.py::TestTheFillDayRule` already had a low through the stop, an open below it and a
+low exactly at it. What it did not have was the **tick**. Its negative case is a low of ₹81
+against a stop of ₹80 — a rupee out, which says nothing about a boundary five paisa wide — and
+every case used a round ₹100 fill whose 20 % stop needs no flooring, so what was being tested was
+the multiplication, not the level the exchange would hold. TW7 re-reads all three against a
+₹247.35 fill (stop ₹197.85, three paisa under `fill × 0.8`), adds the miss-by-one-tick case in
+both the pure rule and the engine, and adds the class that is the module's actual claim: over four
+fills, the price a `STOP_DAY0` fills at **is** `exits.initial_stop(fill)` — the trigger the desk
+arms.
+
+### What the sweep does, and what it deliberately does not
+
+It reads the book, pages `TWT_POSITION_NAKED` for anything naked (**at any hour** — §8 says so in
+bold), asks the injected re-arm to fix each one, and pages `TWT_GTT_MISSING_AT_1515` for what is
+left, saying which side of the 15:30 close it is on. It **writes no row and arms nothing**: law 2,
+and TW6 owns the desk's GTT paths.
+
+Idempotence has two halves and they hold for different reasons. Re-arming is idempotent *by
+construction* — the sweep re-reads the book, so an armed line is no longer naked; the test's fake
+desk arms into its own book precisely so that this is a fact about the algorithm rather than about
+a mock's call count. Alerting is idempotent by a journal keyed on **`(day, alert, position)`** —
+never on the day alone, because a second line going naked at 15:25 is a new fault and §9.1 case 2
+says that is the likely one here.
+
+### What is NOT done after TW7
+
+* **No re-arm exists.** `build_rearm()` returns `unavailable_rearm`, which refuses every line with
+  a reason naming `FIRST-LIVE-MORNING` §9.2 step 3. This is deliberate — a placeholder answering
+  `armed=True` would have the sweep report `naked: 0` over a book it had done nothing to protect —
+  but it means **today the sweep can find a naked line and cannot fix one**. The swap is the body
+  of one function; the exact shape the parent must wire is at the bottom of `gates/twt-7.md`.
+* **The sweep has never run against a database.** `_load_open_lines` reads `tw_position` and has
+  been exercised by nothing but `--help`; every assertion above is against in-memory books. There
+  has also never been a `tw_position` row anywhere, so there is nothing yet to read.
+* **The day key is a file, not a column.** `data/twt/sweep/<date>.json`, idempotent across runs on
+  one machine and not across machines. DECISIONS-TW **TW7.2** names the `tw_session` column to add
+  if that ever stops being the same thing, and says why a migration was not taken tonight (TW6 was
+  writing the same tree).
+* **No Beat entry, no desk route.** `FIRST-LIVE-MORNING` §8's `POST $DESK/twt/sweep` and the
+  desk's own 15:15 clock are TW6's; this module ships the chore and the command, not the schedule.
+* **No Prometheus rule.** Neither `TWT_*` name is in `infra/prometheus/alerts.yml`. Both are
+  raised in-process, which is why that is survivable — see DECISIONS-TW **TW7.4**.
+
+### One test in someone else's file had to be scoped, and it is named
+
+`test_twt_goldens.py::TestTheHarnessIsWhereItSaysItIs` asserted that `tools/twt/*.py` is
+**exactly** TW2's five harness modules, and that exactly one function in the directory writes
+bytes. Both went red the moment a second kind of tool moved in — TW7's `sweep.py` and, the same
+evening, TW9's `backtest.py`. The test used "the directory" as a proxy for "the harness". The
+proxy is now named rather than widened: the on-disk set is still **exact** over
+`HARNESS_MODULES + OPERATOR_TOOLS`, the writer scan still covers the whole directory and gained an
+explicit `(file, function)` allowlist, and a new assertion pins that the *harness's* own writers
+are still exactly one — so lengthening the allowlist for a sibling tool cannot loosen the claim
+TW2's gate was written about. DECISIONS-TW **TW7.1**.
+
+### Four failures in the full suite at the end of TW7, none of them TW7's
+
+`5773 passed, 1857 skipped, 4 failed`. All four are in files a sibling session created between
+22:11 and 22:16 while this module was being written:
+`services/worker/tests/test_twt_backtest_job.py` carries three `# type: ignore` comments and one
+`dict[str, Any]`, which `test_no_escape_hatches.py` correctly refuses (house rule 3), and
+`packages/core/tests/test_twt_published.py` fails two `01` §7 row assertions. `ruff check` and
+`mypy --strict` are both clean across 644 files, and every file TW7 wrote or touched is green.
+
+---
+
+## TW6 — The desk plan, `/twt/execute`, and the ratchet ✅ (11 Sep 2026)
+
+**The module that touches orders.** Eleven gates, all with evidence (`gates/twt-6.md`).
+
+### What now exists
+
+* **`baskfy_worker.tasks.twt_evening`** — `run_twt_evening`, and the two Celery tasks
+  `baskfy.twt.evening` and `baskfy.twt.morning`. Exits first (`ARM_GTT`, then the ratchet's
+  `RAISE_GTT_STOP`), then the entries, then every skip with its reason, then the `tw_session`
+  row. The morning rebuild reads the **same** session, re-sizes and re-detects nothing.
+* **`make twt-plan DATE=… [SOURCE=EVENING|MORNING]`** over `baskfy_worker.twt_cli --plan`.
+* **The desk** (`kite-momentum-rebalancer`): `app/twt_desk.py` (the `tw_` store, `05` §2's page,
+  the routes) and `app/twt_execute.py` (the confirm, the two GTT paths, the four chores). All six
+  of TW6a's routes exist to the runbook's exact spellings, and the page is mounted on `app.main`.
+* **Four alerts** — `TWT_EVENING`, `TWT_POSITION_NAKED`, `TWT_GTT_MISSING_AT_1515`,
+  `TWT_ADJUSTMENT_RESET` — with `docs/runbooks/09-twt-morning.md` behind all four.
+* **The seam TW7's sweep injects**: `twt_execute.rearm_callable(store, gateway, now=…,
+  price_for=…)` returns `Callable[[int], Awaitable[dict]]` whose dict is exactly
+  `RearmOutcome`'s fields, so `tools/twt/sweep.py` can stop using `unavailable_rearm`.
+
+### What is NOT done after TW6
+
+* **No order has ever been placed and no `tw_position` row has ever been created outside a
+  test.** `BASKFY_TWT_EXECUTION_ENABLED` is false in every environment, the sleeve's capital is
+  ₹0, and this run set neither. Every fill in every test is the gateway's dry-run branch.
+* **The live-order branch of `_buy_at_open` has never run.** With the flag false the confirm
+  always takes the dry-run path, which fills and arms in the same request; the real path answers
+  `SENT` and waits for `on_order_update`. That handler is written and unit-tested and **has never
+  seen a broker postback**.
+* **`/twt/reconcile` has never met a real GTT list.** `KiteGtts.list_gtts` maps
+  `kc.get_gtts()` into `{gtt_id, symbol, trigger, status}`; the shape is from Kite's documented
+  response and no live response has been read. If a field is named differently, the reconcile
+  attaches nothing and the page keeps calling a protected line naked — which is the right way
+  round for that discrepancy to fail, and is why it is listed here rather than trusted.
+* **The desk page is TW6's shape, not TW8's finish.** `05` §2's four panels, the 15:15 strip, one
+  Confirm per line and a Re-arm per naked line are all there and tested; the polish (the contrast
+  check, the DRY_RUN badge's styling, the freshness wording) is TW8's, and TW8 shipped the *web*
+  page rather than this one (DECISIONS-TW TW8.1).
+* **Nothing schedules the evening or the morning yet.** The two Celery tasks exist and are
+  registered; no Beat entry runs them, so today they are `make twt-plan` and a person.
+* **The half-size countdown has never counted anything**, for the same reason as after TW5: it
+  moves only on a live, non-simulated fill.
+* **The desk's 15:15 clock does not run the sweep.** `POST /twt/sweep` and
+  `tools/twt/sweep.py` both exist; `app/swing_clock.py` has no TWT entry, so at 15:15 the sweep
+  runs because a person ran it.
+
+### The one thing in this module that would cost money if it were wrong
+
+`RAISE_GTT_STOP` cancels a resting trigger and arms a new one, and it will do that on up to ten
+lines a session for months. **The cancel succeeding and the arm failing is the state that leaves a
+live line with no stop**, and it is the likely one on this sleeve. It is not swallowed: the intent
+(the raised stop) is written to `tw_position.stop_price`, `gtt_id` is nulled so the page, the
+sweep and `TWT_POSITION_NAKED` can all see it, and the route answers `BLOCKED` naming the position
+**NAKED**. The other half — a cancel that fails — places nothing at all, because two triggers sell
+the position twice when they fire. Both are driven through a gateway that fails on purpose,
+because a dry-run gateway always succeeds and neither state can otherwise be reached.
 
 ---
 

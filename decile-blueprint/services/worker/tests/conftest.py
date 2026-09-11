@@ -54,6 +54,13 @@ PIPELINE_TABLES = (
     "vb_signal_daily, vb_breadth_daily, vb_config_audit, vb_config, vb_fill, vb_order, "
     "vb_position, vb_plan_line, vb_plan_skip, vb_plan, vb_session, vb_backtest_run, "
     "vb_scan_run, "
+    # TW4's tables, by exactly the argument the two lines above make. `tw_config`,
+    # `tw_breadth_daily` and `tw_session` are keyed by user and do not cascade from `instrument`,
+    # so a breadth row written by one test is still there for the next and "this session has not
+    # been detected yet" would depend on execution order.
+    "tw_state_daily, tw_signal_daily, tw_breadth_daily, tw_config_audit, tw_config, "
+    "tw_fill, tw_order, tw_position, tw_plan_line, tw_plan_skip, tw_plan, tw_session, "
+    "tw_backtest_run, "
     # Prompt 12's account purge is a worker task too, and it writes `app_user` — which nothing
     # else here truncates, so without these a second test run finds the first one's accounts.
     "index_def"

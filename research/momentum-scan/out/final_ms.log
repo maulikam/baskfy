@@ -1,0 +1,109 @@
+entries 27053 MOM-1 signals 8915
+MOM-1                                  CAGR   14.6% (IS   11.9 / OOS   18.2)  DD  -46.3%  Sh  0.73  n   651  win 34.6%  PF 1.5 avgR 0.17 hold 30.7 exp 90.9%
+  stop_pct=10                          CAGR   15.6% (IS   13.4 / OOS   18.6)  DD  -42.4%  Sh  0.78  n   683  win 34.0%  PF 1.49 avgR 0.26 hold 28.9 exp 89.8%
+  stop_pct=12                          CAGR   13.4% (IS   11.6 / OOS   15.8)  DD  -43.3%  Sh  0.69  n   662  win 34.0%  PF 1.42 avgR 0.2 hold 30.1 exp 90.5%
+  stop_pct=20                          CAGR   16.1% (IS   13.4 / OOS   19.8)  DD  -45.6%  Sh  0.81  n   642  win 34.7%  PF 1.58 avgR 0.14 hold 31.2 exp 91.1%
+  max_positions=8                      CAGR   16.2% (IS   13.0 / OOS   20.5)  DD  -46.7%  Sh  0.75  n   536  win 34.7%  PF 1.56 avgR 0.19 hold 30.2 exp 92.1%
+  max_positions=15                     CAGR   10.9% (IS    9.5 / OOS   12.6)  DD  -43.5%  Sh  0.64  n   937  win 34.7%  PF 1.37 avgR 0.15 hold 31.0 exp 88.1%
+  max_new_per_day=5                    CAGR   13.2% (IS    9.4 / OOS   18.7)  DD  -48.4%  Sh  0.68  n   658  win 34.3%  PF 1.47 avgR 0.16 hold 30.4 exp 91.1%
+  cost_bps_side=40                     CAGR   12.3% (IS    9.5 / OOS   16.0)  DD  -49.2%  Sh  0.64  n   651  win 33.9%  PF 1.41 avgR 0.15 hold 30.7 exp 90.9%
+  cost_bps_side=60                     CAGR    9.4% (IS    6.7 / OOS   13.2)  DD  -52.6%  Sh  0.52  n   651  win 33.0%  PF 1.31 avgR 0.12 hold 30.7 exp 90.9%
+  rank=none                            CAGR   16.4% (IS   15.3 / OOS   17.8)  DD  -49.7%  Sh  0.79  n   656  win 35.2%  PF 1.53 avgR 0.19 hold 30.4 exp 90.6%
+  rank=rvol                            CAGR   16.0% (IS   13.9 / OOS   18.2)  DD  -54.1%  Sh  0.78  n   636  win 36.2%  PF 1.54 avgR 0.21 hold 31.6 exp 91.3%
+  exit_close_below_sma=20              CAGR   -2.0% (IS   -6.1 / OOS    3.6)  DD  -45.7%  Sh -0.02  n  1377  win 33.0%  PF 0.95 avgR -0.0 hold 13.3 exp 83.5%
+  breakeven_r=1.0                      CAGR   13.8% (IS   10.8 / OOS   17.8)  DD  -46.5%  Sh  0.70  n   662  win 32.6%  PF 1.47 avgR 0.16 hold 30.2 exp 90.8%
+  max_weight_pct=10                    CAGR   14.6% (IS   11.9 / OOS   18.2)  DD  -46.3%  Sh  0.73  n   651  win 34.6%  PF 1.5 avgR 0.17 hold 30.7 exp 90.9%
+  exit ema21 instead                   CAGR   -0.8% (IS   -7.4 / OOS    8.6)  DD  -45.1%  Sh  0.05  n  1256  win 32.0%  PF 0.98 avgR 0.0 hold 14.8 exp 84.5%
+  exit trail 20% instead               CAGR   16.7% (IS    9.9 / OOS   26.9)  DD  -32.2%  Sh  0.87  n   212  win 45.3%  PF 2.21 avgR 0.65 hold 99.0 exp 95.4%
+  gate breadth>35                      CAGR   13.9% (IS    9.5 / OOS   19.8)  DD  -31.4%  Sh  0.76  n   509  win 33.0%  PF 1.56 avgR 0.19 hold 30.6 exp 70.9%
+  gate breadth>40                      CAGR   11.4% (IS   10.9 / OOS   11.5)  DD  -31.8%  Sh  0.65  n   472  win 34.1%  PF 1.47 avgR 0.18 hold 31.4 exp 67.5%
+  gate breadth>45                      CAGR    5.8% (IS    6.9 / OOS    3.8)  DD  -31.3%  Sh  0.40  n   441  win 33.1%  PF 1.22 avgR 0.1 hold 31.0 exp 62.1%
+  MOM-1g: gate breadth>35 (the gated variant) CAGR   13.9% (IS    9.5 / OOS   19.8)  DD  -31.4%  Sh  0.76  n   509  win 33.0%  PF 1.56 avgR 0.19 hold 30.6 exp 70.9%
+      return_pct  trades  win_rate   avg_ret
+2017        11.2      13       7.7 -4.372104
+2018        -8.2      44      34.1  1.862395
+2019       -15.7      23       4.3 -7.229184
+2020        54.0      46      43.5  5.695260
+2021        38.7      71      43.7  8.769068
+2022       -12.6      81      28.4 -0.986961
+2023        40.7      58      34.5  3.758698
+2024        22.1      72      40.3  6.429894
+2025        12.6      56      26.8  0.092704
+2026         2.2      45      28.9  2.671227
+  entry=limit_close                    CAGR    8.1% (IS    3.9 / OOS   14.0)  DD  -41.6%  Sh  0.50  n   717  win 34.7%  PF 1.28 avgR 0.09 hold 28.2 exp 91.9%
+  entry lookback=3 (n=11216)           CAGR   10.9% (IS    2.9 / OOS   22.9)  DD  -48.5%  Sh  0.59  n   678  win 36.1%  PF 1.43 avgR 0.13 hold 29.9 exp 92.3%
+  entry lookback=10 (n=6342)           CAGR   17.5% (IS   10.0 / OOS   29.0)  DD  -39.0%  Sh  0.87  n   600  win 34.8%  PF 1.66 avgR 0.24 hold 32.5 exp 88.7%
+== ablation
+  drop None (n=8915)                   CAGR   14.6% (IS   11.9 / OOS   18.2)  DD  -46.3%  Sh  0.73  n   651  win 34.6%  PF 1.5 avgR 0.17 hold 30.7 exp 90.9%
+  drop A trig r30/r90 (n=9151)         CAGR   15.5% (IS   13.5 / OOS   18.1)  DD  -45.7%  Sh  0.77  n   653  win 35.4%  PF 1.5 avgR 0.18 hold 30.8 exp 91.3%
+  drop B above200 (n=10871)            CAGR   16.1% (IS   14.7 / OOS   17.8)  DD  -42.1%  Sh  0.78  n   659  win 34.6%  PF 1.49 avgR 0.18 hold 30.4 exp 91.0%
+  drop C tsma>=2cr (n=9944)            CAGR   13.0% (IS   10.3 / OOS   16.6)  DD  -49.8%  Sh  0.67  n   677  win 34.6%  PF 1.45 avgR 0.16 hold 29.7 exp 91.5%
+  drop D adr<=6 (n=9495)               CAGR    8.7% (IS    4.2 / OOS   15.2)  DD  -48.8%  Sh  0.47  n   696  win 32.9%  PF 1.28 avgR 0.1 hold 29.1 exp 92.1%
+  drop E ret5<15 (n=10053)             CAGR   15.9% (IS   14.1 / OOS   18.1)  DD  -37.5%  Sh  0.77  n   640  win 36.2%  PF 1.5 avgR 0.2 hold 31.5 exp 91.7%
+  drop F ret20<30 (n=9256)             CAGR   10.4% (IS    2.4 / OOS   22.4)  DD  -49.0%  Sh  0.57  n   657  win 34.4%  PF 1.4 avgR 0.13 hold 30.6 exp 91.3%
+  drop G above50 (n=9889)              CAGR   18.1% (IS   14.5 / OOS   23.0)  DD  -46.9%  Sh  0.88  n   698  win 38.4%  PF 1.66 avgR 0.2 hold 28.7 exp 90.9%
+  drop ALL (raw entries) (n=27053)     CAGR    1.6% (IS   -1.8 / OOS    6.2)  DD  -72.9%  Sh  0.19  n   869  win 33.8%  PF 1.04 avgR 0.07 hold 24.7 exp 97.4%
+      return_pct  trades  win_rate    avg_ret
+2017        11.2      13       7.7  -4.372104
+2018       -26.4      81      27.2  -1.686197
+2019       -14.6      78      26.9  -2.751146
+2020        77.3      58      39.7   1.067679
+2021        38.1      72      47.2  15.580018
+2022         5.1      84      32.1   0.350658
+2023        34.9      63      33.3   4.455684
+2024        20.9      73      39.7   6.051164
+2025        11.5      66      37.9  -0.347194
+2026         2.9      63      34.9   2.955164
+{
+ "start": "2017-10-16",
+ "end": "2026-09-09",
+ "years": 8.9,
+ "final_equity": 3359534,
+ "total_return_pct": 236.2,
+ "cagr_pct": 14.6,
+ "max_dd_pct": -46.3,
+ "calmar": 0.32,
+ "sharpe": 0.73,
+ "trades": 651,
+ "avg_open_positions": 9.09,
+ "exposure_pct": 90.9,
+ "win_rate_pct": 34.6,
+ "avg_win_pct": 20.65,
+ "avg_loss_pct": -6.94,
+ "avg_ret_pct": 2.6,
+ "median_ret_pct": -3.38,
+ "profit_factor": 1.5,
+ "avg_r": 0.17,
+ "avg_hold": 30.7,
+ "best_pct": 666.9,
+ "worst_pct": -24.9,
+ "is_cagr": 11.9,
+ "is_dd": -46.3,
+ "oos_cagr": 18.2,
+ "oos_dd": -18.0
+}
+{'sma_close': 596, 'stop': 36, 'end': 10, 'stop_day0': 5, 'stop_gap': 3, 'no_bar': 1}
+{'count': 651.0, 'mean': 2.6, 'std': 31.6, 'min': -24.9, '5%': -15.4, '25%': -7.3, '50%': -3.4, '75%': 4.2, '95%': 35.4, 'max': 666.9}
+top10 winners share of gross profit %: 30.9 | top1 %: 6.8
+    symbol entry_date  exit_date    ret_pct  hold
+     KITEX 2024-08-07 2024-12-11 192.130384    86
+     TANLA 2020-07-16 2021-01-29 666.913739   137
+   MAZDOCK 2023-05-17 2023-10-25 136.664124   110
+NATIONALUM 2025-09-04 2026-02-24  61.582408   118
+BECTORFOOD 2023-01-27 2023-09-18  98.579636   158
+benchmark NIFTY MIDCAP 150: CAGR 15.4%  maxDD -44.2%
+benchmark NIFTY 50: CAGR 10.1%  maxDD -38.4%
+benchmark NIFTY SMLCAP 250: CAGR 12.5%  maxDD -60.8%
+       1    2     3     4    5     6     7    8     9    10    11   12
+2017  NaN  NaN   NaN   NaN  NaN   NaN   NaN  NaN   NaN  NaN   3.0  5.7
+2018 -3.7 -2.4  -4.9   8.6 -6.2  -5.9   7.7  3.6 -14.6 -3.9  -4.5 -1.7
+2019 -3.5 -2.9   9.9  -0.2  2.9  -0.4  -8.1  0.5  -2.4 -4.4  -7.1  1.3
+2020  6.3 -0.1 -13.0   0.2 -1.2   6.3   9.4  8.1   9.8  2.4  30.1  5.4
+2021  0.6  7.5  -0.1  -1.2  4.4  12.1  10.6 -0.0  -0.5  1.2  -5.4  5.1
+2022  1.0 -9.5  11.2  -0.9 -9.8  -3.5  11.6  7.7  -3.8  3.3  -1.3  1.8
+2023 -2.9 -6.3  -3.7   5.4  6.8  10.7   7.5  4.4   0.1 -4.7   8.2  6.6
+2024  6.4  1.6  -6.7  10.1 -2.4   0.4   0.4  8.5   3.3 -0.2   4.3 -5.3
+2025 -9.1 -3.6   6.0  -2.1  7.1   3.4  -1.0 -3.4   0.7  5.9   1.6  6.8
+2026 -3.2 -4.3  -4.4  10.2  2.8   0.4   1.1  1.3  -0.4  NaN   NaN  NaN
+worst drawdown: -46.3 at 2020-05-18 ; peak 2018-01-12
+breadth by year: {2017: 0.2, 2018: 0.35, 2019: 0.26, 2020: 0.49, 2021: 0.86, 2022: 0.49, 2023: 0.66, 2024: 0.71, 2025: 0.35, 2026: 0.35}

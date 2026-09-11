@@ -83,6 +83,13 @@ RUNBOOKS: Final[dict[AlertName, str]] = {
     AlertName.VBT_DETECT_STALE: "docs/runbooks/08-vbt-evening.md",
     AlertName.VBT_ORDER_PAST_EXPIRY: "docs/runbooks/08-vbt-evening.md",
     AlertName.VBT_POSITION_NO_BAR: "docs/runbooks/08-vbt-evening.md",
+    # TW6/TW7: the three-weeks-tight sleeve's four, one runbook. The full first-morning
+    # sequence lives at the repository root in `docs/twt/FIRST-LIVE-MORNING.md`; this file is
+    # the part an alert needs at 21:05 or at 15:16.
+    AlertName.TWT_EVENING: "docs/runbooks/09-twt-morning.md",
+    AlertName.TWT_POSITION_NAKED: "docs/runbooks/09-twt-morning.md",
+    AlertName.TWT_GTT_MISSING_AT_1515: "docs/runbooks/09-twt-morning.md",
+    AlertName.TWT_ADJUSTMENT_RESET: "docs/runbooks/09-twt-morning.md",
 }
 
 

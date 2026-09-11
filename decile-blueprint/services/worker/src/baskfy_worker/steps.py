@@ -55,6 +55,13 @@ class PipelineStep(StrEnum):
     #: `data_version` that is otherwise good. `docs/vbt/06-module-plan.md` says so, and
     #: `docs/vbt/DECISIONS-VB.md` VB0.5 records the trade as a decision rather than an edit.
     COMPUTE_VBT = "compute_vbt"
+    #: TW4. Last, **after** `compute_vbt`, and for the same reason as the three above it: the
+    #: three-weeks-tight detector reads bars the chain has already published, and a detector bug
+    #: must not be able to hold back a `data_version` that is otherwise good.
+    #: `docs/twt/06-module-plan.md` § TW4 asks for the step to be wrapped so it cannot raise, and
+    #: `docs/twt/DECISIONS-TW.md` TW4.5 records joining `POST_PUBLISH_STEPS` as a decision rather
+    #: than an edit, which is what the note below asks of anything added here.
+    COMPUTE_TWT = "compute_twt"
 
 
 #: The chain, in the order docs/03 lists it. The orchestrator walks exactly this.
@@ -62,17 +69,24 @@ NIGHTLY_CHAIN: Final[tuple[PipelineStep, ...]] = tuple(PipelineStep)
 
 #: The steps that run **after** ``publish`` and may not fail the run.
 #:
-#: All three are caches in the sense that matters: they read what `publish` has already blessed,
+#: All four are caches in the sense that matters: they read what `publish` has already blessed,
 #: and nothing downstream depends on any of them having succeeded. `refresh_basket` (M30) records
-#: its own failure and returns; `compute_swing` (SW3) and `compute_vbt` (VB4) are each wrapped by
-#: an orchestrator step that cannot raise.
+#: its own failure and returns; `compute_swing` (SW3), `compute_vbt` (VB4) and `compute_twt` (TW4)
+#: are each wrapped by an orchestrator step that cannot raise.
 #:
 #: Named here rather than asserted as "is the last step", because "last" stopped being the
 #: property the moment there were two of them — and the property was never the position. A step
 #: added after these must either join this set or be a step the run's success depends on, which
-#: is a decision, not an edit. VB4 read that sentence and made the decision (DECISIONS-VB VB0.5).
+#: is a decision, not an edit. VB4 read that sentence and made the decision (DECISIONS-VB VB0.5);
+#: TW4 read it again and made the same one (DECISIONS-TW TW4.5), which is twice in two runs —
+#: so the sentence is working.
 POST_PUBLISH_STEPS: Final[frozenset[PipelineStep]] = frozenset(
-    {PipelineStep.REFRESH_BASKET, PipelineStep.COMPUTE_SWING, PipelineStep.COMPUTE_VBT}
+    {
+        PipelineStep.REFRESH_BASKET,
+        PipelineStep.COMPUTE_SWING,
+        PipelineStep.COMPUTE_VBT,
+        PipelineStep.COMPUTE_TWT,
+    }
 )
 
 

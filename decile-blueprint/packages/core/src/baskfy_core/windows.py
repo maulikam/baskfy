@@ -37,11 +37,10 @@ The consequence, quoted from docs/05:
 
 Counting convention
 -------------------
-A window of ``N`` trading days spans ``N`` bars, and yields ``N`` daily returns: the return on the
-first day of the window is measured against the last bar *before* it. That is what makes
-``pos_days_N`` a multiple of ``1/N`` — the property docs/13 §3 used to recover the lengths — and
-it is also what docs/05 §1 means by ``ret_N = P_t / P_{t-N} - 1``: ``P_{t-N}`` is the bar
-immediately preceding the window, so a return window needs ``N+1`` bars.
+A window of ``N`` trading days spans ``N`` bars. After M11 (``3ea9d02``), ``ret_N`` is
+``P_t / P_{t-(N-1)} - 1`` — the base is the window's **first bar**, so a return needs ``N``
+bars of history, not ``N+1``. ``bars_required`` returns ``N``. The pre-parity docstring that
+said ``N+1`` described the older ``shift(n)`` convention and was the stale half (AF 3.9).
 """
 
 from __future__ import annotations
@@ -206,7 +205,7 @@ def window_lengths(
 def bars_required(window: FactorWindow) -> int:
     """How many bars an instrument needs to have a value for this window.
 
-    ``N + 1``: ``N`` bars inside the window plus the one immediately before it, which supplies
-    ``P_{t-N}`` for the return and the first daily return for volatility and positive days.
+    ``N``: the window's length. Matches ``factors.py`` after M11 (``shift(n - 1)``) — the base
+    is the first bar inside the window, not the bar before it.
     """
-    return window.length + 1
+    return window.length

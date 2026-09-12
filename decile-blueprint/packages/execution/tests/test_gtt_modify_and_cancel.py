@@ -25,7 +25,6 @@ from baskfy_execution.gtt import (
     GTT_MODIFIED_STATUSES,
     GTT_MODIFY_ERROR,
 )
-from baskfy_execution.guards import UntouchableInstrumentError
 from baskfy_execution.risk import RiskConfig, RiskManager
 from baskfy_execution.tenancy import TenantIds
 from test_gtt_gateway import CALLER, SpyKC, events, journal, make_gateway
@@ -112,8 +111,9 @@ def test_dry_run_modify_touches_nothing_and_still_answers(tmp_path: Path) -> Non
 
 def test_an_untouchable_symbol_is_refused_a_modify_before_the_broker(tmp_path: Path) -> None:
     gw, kc = _gateway(tmp_path)
-    with pytest.raises(UntouchableInstrumentError):
-        modify(gw, symbol="SGBAUG28")
+    out = modify(gw, symbol="SGBAUG28")
+    assert out["status"] == "BLOCKED"
+    assert "protected instrument" in str(out["error"])
     assert kc.calls == []
 
 
@@ -200,8 +200,9 @@ def test_dry_run_cancel_touches_nothing_and_still_answers(tmp_path: Path) -> Non
 
 def test_an_untouchable_symbol_cannot_be_cancelled_around_the_guard(tmp_path: Path) -> None:
     gw, kc = _gateway(tmp_path)
-    with pytest.raises(UntouchableInstrumentError):
-        cancel(gw, symbol="SGBAUG28")
+    out = cancel(gw, symbol="SGBAUG28")
+    assert out["status"] == "BLOCKED"
+    assert "protected instrument" in str(out["error"])
     assert kc.calls == []
 
 

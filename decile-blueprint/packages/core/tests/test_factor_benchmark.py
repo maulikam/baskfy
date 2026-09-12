@@ -41,7 +41,7 @@ import pytest
 from benchmarks.budgets import record
 
 from baskfy_core.factors import compute_factors
-from baskfy_core.trading_calendar import load_seed_holidays
+from _law1_io import seed_holidays
 
 pytestmark = pytest.mark.benchmark
 
@@ -65,7 +65,7 @@ def _trading_days(count: int, end: dt.date) -> list[dt.date]:
     twelve-month window by counting backwards through it — a naive "every day" calendar would make
     the windows a third too long and the benchmark would measure a different computation.
     """
-    holidays = set(load_seed_holidays())
+    holidays = set(seed_holidays())
     days: list[dt.date] = []
     cursor = end
     while len(days) < count:

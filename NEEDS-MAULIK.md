@@ -24,6 +24,7 @@ blocker in the project.
 
 | | |
 |---|---|
+| **31** | ⚠ **`aws sso login --sso-session baskfy`** — the token has expired, so **nothing can reach the box**. Blocks every row below that mentions a deploy. |
 | **1** | Deploy the risk-ceiling lock — outside market hours. The only item needing your hands. |
 | **9** | Review the 46 irregular corporate actions (probable demergers). Nothing blocked. |
 | **11** | 231 instruments absent from Kite's master — a decision about whether it is worth filling them from the NSE archive. |
@@ -37,6 +38,46 @@ blocker in the project.
 | **19** | ⚠ **Four legal pages are live and show `[SUPPLIER LEGAL NAME]` to visitors.** Needs seven facts from you, then counsel. `docs/COUNSEL-BRIEF.md` is ready to forward. See §19. |
 | **18** | **The landing page's sample screen is 402-blocked** by the `custom_columns` entitlement, not by data. Unblocking it moves a paywall — your call (D7-adjacent). See §18. |
 | **16** | **Broker credentials for nine brokers** — Upstox, Angel One, Fyers, 5paisa, Dhan, ICICI, Kotak, HDFC (Groww has no public API). Only `BASKFY_KITE_*` exists today. Blocks consolidated holdings for every non-Zerodha account. See §16. |
+
+---
+
+## 31. The AWS SSO token has expired — nothing can deploy until you log in
+
+**Raised 12 Sep 2026**, when a deploy was asked for. · **Status:** open, blocking every deploy.
+
+`aws sts get-caller-identity --profile baskfy-poc` answers:
+
+> `Error when retrieving token from sso: Token has expired and refresh failed`
+
+Everything that reaches the box goes through it: `tools/deploy/box.sh` runs commands over **SSM**
+(docs/08 §3 — there is no SSH), and it resolves the instance id from Terraform output, which is
+also an authenticated call. `tools/deploy/push-images.sh` pushes to ECR the same way. So with an
+expired token there is no path to the box at all, and no agent can create one — the refresh is a
+browser login.
+
+**What is needed, and it is one command plus a browser:**
+
+```bash
+aws sso login --sso-session baskfy
+```
+
+Then the deploy is reachable again. The Docker daemon **is** running now, so the blocker
+`REMAINING.md` §3 named ("the Docker daemon has not been running on this machine") is cleared;
+this token is what replaced it.
+
+### Before you run it, one decision that is not mine
+
+The box serves `dd9cc73`. HEAD is `3ce77de` — **24 commits**, and they are not one tree's work:
+
+| | |
+|---|---|
+| Ready | The corporate-action fix (CA1), the fees cost model, the backfill guard, the Portfolio Command Center, the risk-ceiling lock, and TWT through TW11 |
+| ⚠ **Not ready** | **The UI polish tree.** `gates/node-7.1.md`, `node-7.2.md`, `node-7.3.md` and `leaf-7.5.1-verify.md` are **4 incomplete gate files** — `REMAINING.md` §4 says that tree still needs a dev server and Playwright in its own session. Commit `3ce77de` carries 175 lines of it because two lint errors inside those lines had `make lint` red repo-wide |
+| ⚠ New behaviour on a **live auto-execute host** | TW11 adds `twt-evening` 21:20 and `twt-morning` 09:05 to Beat. Both are plan-only (`tasks/twt_evening.py`: *"Nothing here places an order"*) and the flag is false, so nothing can trade — but they are two new jobs that will start firing on the box the moment it restarts |
+
+**So the question is whether to ship the UI tree half-finished**, not whether the rest is ready.
+Deploying only the API/worker images and holding `web` is possible — `push-images.sh` builds three
+(`web`, `python`, `desk`) and the web bundle is the one that carries the unfinished screens.
 
 ---
 

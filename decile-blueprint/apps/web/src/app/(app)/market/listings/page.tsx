@@ -11,9 +11,8 @@ import { fetchListings } from "@/lib/market/fetch";
 /**
  * `/listings` — Prompt 11 deliverable 4, docs/07's `GET /listings?from&to&series=&cursor=`.
  *
- * AFH 5.8: Previous is a URL back-stack (`prev` = the cursor that opened this page). Total count
- * needs the listings API — STATUS until then we show page size only plus "and more" when Next
- * exists.
+ * AFH 5.8: Previous is a URL back-stack (`prev` = the cursor that opened this page). The API's
+ * `total` is the filtered register size so the footer can say "N of M".
  */
 export const dynamic = "force-dynamic";
 
@@ -140,7 +139,7 @@ export default async function ListingsPage({
 
       <nav aria-label="Pagination" className="flex items-center justify-between gap-3">
         <p className="text-xs text-muted-foreground tnum" data-testid="listings-page-count">
-          {page.data.length} on this page
+          {page.data.length} on this page · {page.total ?? 0} matching
           {page.next_cursor ? " · more ahead" : " · end of register"}
         </p>
         <div className="flex items-center gap-2">

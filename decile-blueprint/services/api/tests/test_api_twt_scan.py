@@ -189,6 +189,7 @@ class TestScanNow:
             first = await client.post(url("/twt/scan"), headers=bearer(public_id))
             second = await client.post(url("/twt/scan"), headers=bearer(public_id))
 
+        drain_deferred_publishes(screener_session)
         assert first.status_code == 202
         assert second.status_code == 409
         body = second.json()

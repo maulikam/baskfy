@@ -72,6 +72,8 @@ export interface ExploreBasketCard {
 export interface ExploreList {
   items: ExploreBasketCard[];
   total: number;
+  /** Distinct categories across the filtered set (before limit/offset). AFH 5.8. */
+  categories?: string[];
 }
 
 /** Query params documented in `DOCUMENTED_LIST_PARAMS` / DECISIONS-SC SC2. */
@@ -86,6 +88,8 @@ export interface ExploreListParams {
   sort?: string;
   order?: string;
   q?: string;
+  limit?: string;
+  offset?: string;
 }
 
 /** Drop keys whose values are undefined — required under `exactOptionalPropertyTypes`. */

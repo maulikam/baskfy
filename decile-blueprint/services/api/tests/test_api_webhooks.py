@@ -8,6 +8,7 @@ receiver answers 500, or 401, or nothing at all.
 from __future__ import annotations
 
 import datetime as dt
+import ipaddress
 import json
 
 import api_helpers
@@ -30,6 +31,21 @@ pytestmark = [screener_helpers.requires_db, pytest.mark.db, pytest.mark.redis]
 
 ENDPOINTS = api_helpers.url("/webhook-endpoints")
 NOW = dt.datetime(2026, 8, 19, 15, 0, tzinfo=dt.UTC)
+
+
+@pytest.fixture(autouse=True)
+def _public_example_com(monkeypatch: pytest.MonkeyPatch) -> None:
+    """AUDIT 2.6 resolves DNS; the suite's network_guard forbids getaddrinfo. Patch the
+    resolver to a known public address for example.com so create/delivery tests stay offline.
+    """
+
+    def fake(host: str, port: int) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+        del port
+        if host.lower() == "example.com":
+            return [ipaddress.ip_address("93.184.216.34")]
+        raise webhooks.WebhookUrlNotPublic(f"webhook host {host!r} does not resolve")
+
+    monkeypatch.setattr(webhooks, "resolve_webhook_host", fake)
 
 
 def settings_for(url_: str = "postgresql+asyncpg://unused/unused") -> Settings:
@@ -417,7 +433,7 @@ class TestTheEndpointApi:
                 json={"screen_public_id": screen.public_id, "url": "file:///etc/passwd"},
                 headers=api_helpers.bearer(public_id),
             )
-            api_helpers.assert_problem(response, 400, "invalid-screen-definition")
+            api_helpers.assert_problem(response, 400, "bad-request")
 
     async def test_creation_returns_the_signing_secret_and_rotation_changes_it(
         self, seeded_url: str, screener_session: AsyncSession, clean_redis_namespaces: None

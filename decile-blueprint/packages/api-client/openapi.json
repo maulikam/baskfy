@@ -7533,6 +7533,12 @@
               }
             ],
             "title": "Next Cursor"
+          },
+          "total": {
+            "default": 0,
+            "description": "Filtered register size (no cursor). AFH 5.8 — page copy \"N of M\".",
+            "title": "Total",
+            "type": "integer"
           }
         },
         "required": [

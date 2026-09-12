@@ -81,6 +81,7 @@ from screener_helpers import AS_OF as PUBLISHED_SESSION
 from screener_helpers import requires_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from baskfy_api.deferred_publish import drain_deferred_publishes
 from baskfy_api.settings import Settings
 from baskfy_core.models import (
     AppUser,
@@ -194,6 +195,7 @@ async def _scan(settings: Settings, session: AsyncSession, public_id: str) -> dt
     queue = RecordingQueue()
     async with running_app(settings, session, task_queue=queue) as client:
         posted = await client.post(url("/twt/scan"), headers=bearer(public_id))
+    drain_deferred_publishes(session)
     assert posted.status_code == 202, posted.text
     run_id = int(posted.json()["run_id"])
     assert queue.sent == [("baskfy.twt.scan", [run_id])]

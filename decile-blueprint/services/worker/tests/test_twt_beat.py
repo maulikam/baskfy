@@ -66,7 +66,17 @@ def test_every_twt_beat_entry_names_a_task_the_worker_registers() -> None:
         for name, entry in BEAT_SCHEDULE.items()
         if str(entry["task"]).startswith("baskfy.twt.")
     }
-    assert scheduled == {"baskfy.twt.detect", "baskfy.twt.evening", "baskfy.twt.morning"}
+    # TW12 added the fourth: `baskfy.twt.scan_publish`, every minute, which publishes the
+    # `tw_scan_run` rows the desk's "Scan now" button writes (the desk has no Celery client). It
+    # is a `SELECT ... WHERE task_id IS NULL` and an `apply_async`; it confirms nothing, and
+    # `test_the_sweep_is_not_on_a_timer` below is what holds that line — it refused this entry
+    # under its first name, `twt-scan-sweep`, and the rename is DECISIONS-TW TW12.4.
+    assert scheduled == {
+        "baskfy.twt.detect",
+        "baskfy.twt.evening",
+        "baskfy.twt.morning",
+        "baskfy.twt.scan_publish",
+    }
     missing = scheduled - registered
     assert not missing, f"scheduled but not registered: {sorted(missing)}"
 
@@ -91,4 +101,15 @@ def test_the_sweep_is_not_on_a_timer() -> None:
     )
     assert not [t for t in twt_entries.values() if "sweep" in t], (
         "a TWT beat entry points at a sweep task"
+    )
+    # THIS TEST DID ITS JOB ON 12 SEP 2026 AND THE RECORD IS WORTH KEEPING.
+    #
+    # TW12's "Scan now" publisher was first written as `twt-scan-sweep` -> `baskfy.twt.scan_sweep`,
+    # copying the swing book's `swing-scan-sweep` and VBT-1's `vbt-rescan-sweep`. It publishes
+    # queued rows and could not reach a broker if it tried. This test failed it anyway, and was
+    # right to: a person scanning Beat for "twt sweep" must not find a hit, because the one they
+    # are looking for -- `sweep_naked`, at 15:15, through the gateway -- must never be there. The
+    # task was renamed to `scan_publish` rather than the assertion narrowed. DECISIONS-TW TW12.4.
+    assert "baskfy.twt.scan_publish" in twt_entries.values(), (
+        "the scan publisher is gone; if it was renamed back to a sweep, read TW12.4 first"
     )

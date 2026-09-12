@@ -598,8 +598,19 @@ nothing provisional to show.
 | What it is for | The night `compute_vbt` was skipped because the quality gate refused the day, and the morning after a threshold changed |
 | How it travels | The desk has no Celery client, so the button writes a `QUEUED` `vb_scan_run` row and `baskfy.vbt.rescan_sweep` publishes it within a minute |
 | Refusals | One in flight (ten minutes), one a minute — both from the table, so they hold with no Redis |
-| Tests | `tests/test_vbt_rescan_desk.py` **20 passed**, `services/worker/tests/test_vbt_rescan.py` **19 passed** |
+| Tests | `tests/test_vbt_rescan_desk.py` **34 passed** (20 at VB12), `services/worker/tests/test_vbt_rescan.py` **19 passed** |
 | Migration | `0040_vbt_scan_run`, verified against the model by Alembic's own comparison — 0 differences |
+
+**VB15 (12 Sep 2026) gave it the contract's shape and put it on the API.** `PLAN-SCAN-SYNC.md`
+fixed one "Scan now" shape across the three sleeves, so the desk gained `POST /vbt/scan` (**202**)
+and `GET /vbt/scan/{run_id}` beside the older `/vbt/rescan` — two names, one request, one store
+method (`PgVbtStore.request_scan`, which now raises `ScanRefused` and owns both refusals).
+`/vbt/rescan` answers exactly as it did, because the desk page's own form reads `body.accepted`.
+The API gained the same two routes over a new `baskfy_api.vbt_scan`, publishing the **existing**
+`baskfy.vbt.rescan` — no second detector, asserted literally. No migration: the table was already
+there. `tests/test_vbt_scan_safety.py` is the money-free property, run with `DRY_RUN=False` **and**
+`VBT_EXECUTION_ENABLED=True` against a gateway that raises on any attribute. DECISIONS-VB
+**VB15** has the reasoning, including **VB12.1** on the `source` column's CHECK constraint.
 
 **A safety test changed, and that is worth naming.** Both trees asserted the desk had "exactly
 one POST route". It now has two. The assertion was a proxy for Track C §3, so it was rewritten to

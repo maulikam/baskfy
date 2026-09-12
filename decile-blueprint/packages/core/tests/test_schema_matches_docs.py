@@ -171,8 +171,9 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     "vb_backtest_run": ("id",),
     # VB12 (docs/vbt/03 §13, migration 0040): one row per press of the desk's Re-detect button.
     "vb_scan_run": ("id",),
-    # The three-weeks-tight sleeve — docs/twt/03-data-model.md (TW3, migration 0041). Thirteen
-    # tables, every one keyed with `user_id` (docs/twt/02 Track C §6), the same shape the swing
+    # The three-weeks-tight sleeve — docs/twt/03-data-model.md (TW3, migration 0041, plus
+    # TW12's `tw_scan_run` from 0042). Fourteen tables, every one keyed with `user_id`
+    # (docs/twt/02 Track C §6), the same shape the swing
     # book and VBT-1 use above and for the same reason: a sleeve is one person's book. Three
     # carry the user in the primary key rather than beside it — `tw_state_daily`,
     # `tw_signal_daily` and `tw_breadth_daily` — because each is a snapshot of what one user's
@@ -192,6 +193,10 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     "tw_plan_skip": ("id",),
     "tw_session": ("user_id", "session_date"),
     "tw_backtest_run": ("id",),
+    # TW12: one press of "Scan now" (docs/twt/03 §11, migration 0042). Append-only like
+    # `tw_backtest_run`, and the only `tw_` table that records a *request* rather than a
+    # measurement. There is deliberately no `provisional` column — DECISIONS-TW TW12.2.
+    "tw_scan_run": ("id",),
 }
 
 #: docs/04 opening paragraph: "Money in numeric, never float."
@@ -355,6 +360,7 @@ def test_twt_tables_are_recorded_in_docs() -> None:
         "tw_plan_skip",
         "tw_session",
         "tw_backtest_run",
+        "tw_scan_run",
     ):
         assert table in twt_model, f"{table} is not described in docs/twt/03"
 

@@ -32,9 +32,18 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.broker_holdings import HoldingsResult
-from baskfy_api.portfolios import replace_holdings, resolve_symbols
-from baskfy_core.allocation_ledger import PortfolioKind, PortfolioSource
-from baskfy_core.models import Portfolio, PortfolioHolding
+from baskfy_api.portfolios import SymbolResolution, replace_holdings, resolve_symbols
+from baskfy_core.allocation_ledger import (
+    Allocation,
+    DetectedSell,
+    Holding,
+    HoldingKey,
+    PortfolioKind,
+    PortfolioSource,
+    attribute_sell,
+)
+from baskfy_core.models import Instrument, Portfolio, PortfolioHolding
+from baskfy_core.models.accounts import ReconciliationItem
 from baskfy_core.models.swing import SwPosition
 
 log = logging.getLogger(__name__)
@@ -55,6 +64,24 @@ class BrokerSyncResult:
     unresolved: tuple[str, ...]
     portfolio_id: int | None
     reason: str
+    #: Filed slices the broker no longer backs that had exactly one capital owner, so the sell
+    #: attributed itself and the row moved. See :func:`reconcile_missing_positions`.
+    reconciled: int = 0
+    #: Filed positions the broker no longer backs that are split across capital portfolios, so
+    #: nothing moved and the inbox was asked instead. Each is one OPEN ``reconciliation_item``.
+    questions: int = 0
+    #: Symbols whose filed rows could not be judged because the broker named the symbol but this
+    #: build could not resolve it. Named rather than silently treated as sold.
+    unjudged: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class DisappearanceReport:
+    """What one pass of :func:`reconcile_missing_positions` decided."""
+
+    reconciled: int
+    questions: int
+    unjudged: tuple[str, ...]
 
 
 def is_persistable(result: HoldingsResult) -> bool:
@@ -188,6 +215,23 @@ async def sync_holdings_into_portfolio(  # noqa: PLR0913
     except Exception:
         log.exception("could not file swing positions for broker account %s", broker_account_id)
 
+    # Before the pile is recomputed, and after the desk has filed its own: what the user filed
+    # that this live read no longer backs. Runs here rather than earlier so it sees the settled
+    # state — `file_swing_positions` has already released anything the strategy closed, and the
+    # sweep is not left asking a question about a row that is about to be rewritten anyway.
+    disappeared = await reconcile_missing_positions(
+        session,
+        result,
+        broker_quantities={
+            instrument_id: quantity for instrument_id, quantity, _ in wanted if quantity is not None
+        },
+        unjudgeable=_instruments_a_symbol_might_have_meant(resolutions),
+        user_id=user_id,
+        broker_account_id=broker_account_id,
+        pile_portfolio_id=int(portfolio.id),
+        as_of=as_of,
+    )
+
     wanted = await _minus_what_is_filed_elsewhere(
         session,
         wanted,
@@ -196,12 +240,317 @@ async def sync_holdings_into_portfolio(  # noqa: PLR0913
         pile_portfolio_id=int(portfolio.id),
     )
     written = await replace_holdings(session, portfolio, wanted, added_on=as_of)
+    reason = f"{written} holding(s) written to {portfolio.name} from a live read"
+    if disappeared.reconciled:
+        reason += f"; {disappeared.reconciled} filed holding(s) the broker no longer reports closed"
+    if disappeared.questions:
+        reason += f"; {disappeared.questions} left for the reconciliation inbox to answer"
+    if disappeared.unjudged:
+        reason += f"; not judged (unresolved symbol): {', '.join(disappeared.unjudged)}"
     return BrokerSyncResult(
         persisted=True,
         written=written,
         unresolved=tuple(unresolved),
         portfolio_id=portfolio.id,
-        reason=f"{written} holding(s) written to {portfolio.name} from a live read",
+        reason=reason,
+        reconciled=disappeared.reconciled,
+        questions=disappeared.questions,
+        unjudged=disappeared.unjudged,
+    )
+
+
+def _instruments_a_symbol_might_have_meant(
+    resolutions: Mapping[str, SymbolResolution],
+) -> dict[int, str]:
+    """``{instrument_id -> the symbol that may have meant it}`` for every symbol that did NOT
+    resolve to exactly one instrument.
+
+    The point is narrow and load-bearing. A symbol the broker reports and this build cannot pin
+    down is a symbol whose shares are somewhere in this table and we do not know where — so every
+    instrument it *could* have meant has to be exempt from "the broker no longer reports this".
+    Without it the sweep would read a resolution failure as a sale and delete a real position.
+
+    An ``AMBIGUOUS`` resolution carries its candidates, so the exemption is exact rather than a
+    blanket "judge nothing this pass". An ``UNMATCHED`` one carries none and needs none: it means
+    no instrument and no alias has that symbol, so it cannot be any row in the table.
+    """
+    return {
+        candidate.instrument_id: resolution.symbol
+        for resolution in resolutions.values()
+        if resolution.instrument_id is None
+        for candidate in resolution.candidates
+    }
+
+
+async def reconcile_missing_positions(  # noqa: PLR0913
+    session: AsyncSession,
+    result: HoldingsResult,
+    *,
+    broker_quantities: Mapping[int, Decimal],
+    unjudgeable: Mapping[int, str],
+    user_id: int,
+    broker_account_id: int,
+    pile_portfolio_id: int,
+    as_of: dt.date,
+) -> DisappearanceReport:
+    """Answer, for every filed holding, the question nothing in production was asking:
+    **the broker does not report this any more — what happened to it?**
+
+    THE BUG THIS EXISTS TO FIX, AND WHY IT OUTLIVED EVERYTHING ELSE
+    ---------------------------------------------------------------
+    On 12 Sep 2026 the box held 147 shares of PKTEA in a group the user made on 10 Sep. He does
+    not own them. Nothing had written a bad row: the row was true when it was written, the shares
+    left the account afterwards, and **no code path in production ever looked at it again**.
+    :func:`sync_holdings_into_portfolio` rewrites the broker's own pile and reads other
+    portfolios only to *subtract* from that pile — so a phantom slice does not even show up as an
+    imbalance; it quietly shrinks Unallocated by its own size and the arithmetic still adds up.
+    A filed row was, until this function, write-once.
+
+    The machinery to answer the question already existed twice over and neither copy ran:
+    ``baskfy_worker.tasks.holdings_sync.run_holdings_sync`` is 828 lines whose whole subject this
+    is, and it has no caller outside its own tests — ``reconciliation_item`` has 0 rows on a box
+    that has been live for eleven days. This is the smallest thing that makes the question get
+    asked on the path that actually runs.
+
+    WHY IT IS NOT A DELETE
+    ----------------------
+    §4.3: *"Unresolved reconciliation items freeze that holding's contribution to performance
+    rather than guessing. Never silently corrupt a portfolio's return series."* The decision is
+    therefore not taken here at all — it is
+    :func:`baskfy_core.allocation_ledger.attribute_sell`'s, unchanged and pure:
+
+    * **one capital owner** -> the sell attributes itself, the slice shrinks by the missing
+      quantity and a slice drained to zero is removed. Criterion 4's whole-holding case. PKTEA is
+      this case, and the row goes.
+    * **several capital owners** -> ``SPLIT_HOLDING``. One OPEN ``reconciliation_item``, and *not
+      one share moves*. The inbox, the attention ribbon and the command centre's
+      ``open_reconciliation_count`` already render it, which is why this leaf built no new screen.
+
+    THE THREE THINGS IT REFUSES TO JUDGE
+    ------------------------------------
+    1. **A read that is not live.** Unreachable here — the caller is past ``is_persistable`` — but
+       stated because it is the property that matters most: a fixture must never be able to
+       retire a real position.
+    2. **An empty read.** ``HoldingsResult.live([])`` returns ``source="empty"`` by construction,
+       so a broker that answers with nothing (an expired session, an upstream hiccup) never
+       reaches this function. The cost is real and is recorded rather than hidden: selling the
+       *entire* account is the one disappearance this does not reconcile. That needs the layer-1
+       ``broker_holding`` table ``holdings_sync``'s docstring already asks for; failing in the
+       direction of "we still think you own it" is the safe half.
+    3. **A position a symbol the broker named might have been.** Resolution fails by becoming
+       *ambiguous*: a rename leaves two ``symbol_alias`` rows pointing at different instruments,
+       or a second listing appears, and a symbol that resolved yesterday does not today. The
+       shares did not move; our ability to name them did. So every candidate of every unresolved
+       symbol is exempt (``unjudgeable``, from
+       :func:`_instruments_a_symbol_might_have_meant`), and the raw symbol is compared as well.
+       Those names come back in ``unjudged`` and are printed in the sync note, because a
+       judgement not taken has to be visible or it is indistinguishable from a clean bill.
+
+    The pile itself is out of scope: its rows are this sync's own output, recomputed from the
+    live read a few lines below, not an allocation anybody made.
+    """
+    if not result.is_live or not result.rows:
+        return DisappearanceReport(reconciled=0, questions=0, unjudged=())
+
+    reported_symbols = {row.symbol.strip().upper() for row in result.rows}
+
+    filed = (
+        await session.execute(
+            select(
+                PortfolioHolding.instrument_id,
+                PortfolioHolding.portfolio_id,
+                PortfolioHolding.quantity,
+                PortfolioHolding.avg_price,
+                Instrument.symbol,
+            )
+            .join(Portfolio, Portfolio.id == PortfolioHolding.portfolio_id)
+            .join(Instrument, Instrument.id == PortfolioHolding.instrument_id)
+            .where(
+                Portfolio.user_id == user_id,
+                PortfolioHolding.broker_account_id == broker_account_id,
+                PortfolioHolding.portfolio_kind == PortfolioKind.CAPITAL.value,
+                PortfolioHolding.portfolio_id != pile_portfolio_id,
+                #: "We do not know how many" is not "minus one" and it is not a sale either.
+                #: 0022 permits a NULL quantity; a NULL cannot be differenced, so it is left.
+                PortfolioHolding.quantity.is_not(None),
+                #: And a zero row is not a holding — `Allocation` refuses to represent one, so
+                #: a stale zero left by some earlier writer would raise here and take the whole
+                #: sync down rather than being the no-op it plainly is.
+                PortfolioHolding.quantity > 0,
+            )
+        )
+    ).all()
+    if not filed:
+        return DisappearanceReport(reconciled=0, questions=0, unjudged=())
+
+    slices: dict[int, dict[int, Decimal]] = {}
+    symbols: dict[int, str] = {}
+    avg_prices: dict[int, Decimal | None] = {}
+    for row in filed:
+        instrument_id = int(row.instrument_id)
+        symbols[instrument_id] = row.symbol
+        slices.setdefault(instrument_id, {})[int(row.portfolio_id)] = Decimal(row.quantity)
+        if avg_prices.get(instrument_id) is None:
+            avg_prices[instrument_id] = row.avg_price
+
+    reconciled = 0
+    questions = 0
+    unjudged: list[str] = []
+    for instrument_id in sorted(slices):
+        held_by = slices[instrument_id]
+        recorded = sum(held_by.values(), Decimal(0))
+        at_broker = broker_quantities.get(instrument_id)
+        if at_broker is None:
+            # Refusal 3, both halves: a symbol the broker named that could have meant this
+            # instrument, and the instrument's own symbol appearing in the raw read.
+            maybe_this = unjudgeable.get(instrument_id)
+            if maybe_this is not None:
+                unjudged.append(maybe_this)
+                continue
+            if symbols[instrument_id].strip().upper() in reported_symbols:
+                unjudged.append(symbols[instrument_id])
+                continue
+            at_broker = Decimal(0)
+        missing = recorded - at_broker
+        if missing <= 0:
+            continue
+
+        key = HoldingKey(instrument_id=instrument_id, broker_account_id=broker_account_id)
+        attribution = attribute_sell(
+            DetectedSell(key=key, quantity=missing),
+            [Holding(key=key, quantity=recorded, avg_price=avg_prices.get(instrument_id))],
+            [
+                Allocation(key=key, portfolio_id=portfolio_id, quantity=quantity)
+                for portfolio_id, quantity in sorted(held_by.items())
+            ],
+        )
+        owner = attribution.portfolio_id
+        if owner is not None:
+            await _close_slice(
+                session,
+                portfolio_id=owner,
+                instrument_id=instrument_id,
+                broker_account_id=broker_account_id,
+                remaining=held_by[owner] - missing,
+            )
+            reconciled += 1
+            continue
+
+        item = attribution.item
+        if item is None:
+            # Unreachable: `SellAttribution.__post_init__` refuses "neither". Raised rather than
+            # skipped, because a sell that produced no answer at all is a broken ledger and
+            # continuing past it would file the silence away as "nothing happened".
+            raise RuntimeError(
+                f"attribute_sell returned neither an attribution nor a question for "
+                f"instrument {instrument_id} at broker account {broker_account_id}"
+            )
+        await _ask_once(
+            session,
+            item_reason=str(item.reason),
+            quantity=item.quantity,
+            suggested_portfolio_id=item.suggested_portfolio_id,
+            user_id=user_id,
+            instrument_id=instrument_id,
+            broker_account_id=broker_account_id,
+            as_of=as_of,
+        )
+        questions += 1
+
+    await session.flush()
+    return DisappearanceReport(reconciled=reconciled, questions=questions, unjudged=tuple(unjudged))
+
+
+async def _close_slice(
+    session: AsyncSession,
+    *,
+    portfolio_id: int,
+    instrument_id: int,
+    broker_account_id: int,
+    remaining: Decimal,
+) -> None:
+    """Shrink one attributed slice, or remove it when nothing is left.
+
+    A zero row is not "holds none of it"; ``Allocation`` refuses to represent one and
+    :func:`_apply_allocation` deletes rather than zeroes for the same reason. A slice that goes
+    negative is impossible here — ``missing`` is bounded by ``recorded``, and ``recorded`` is this
+    slice's own quantity whenever it is the sole owner — but the clamp is written anyway, because
+    a negative quantity would breach ``portfolio_holding_quantity_not_negative`` at flush time and
+    take the whole sync down with it.
+    """
+    if remaining > 0:
+        await session.execute(
+            update(PortfolioHolding)
+            .where(
+                PortfolioHolding.portfolio_id == portfolio_id,
+                PortfolioHolding.instrument_id == instrument_id,
+                PortfolioHolding.broker_account_id == broker_account_id,
+            )
+            .values(quantity=remaining)
+        )
+        return
+    await session.execute(
+        delete(PortfolioHolding).where(
+            PortfolioHolding.portfolio_id == portfolio_id,
+            PortfolioHolding.instrument_id == instrument_id,
+            PortfolioHolding.broker_account_id == broker_account_id,
+        )
+    )
+
+
+async def _ask_once(  # noqa: PLR0913
+    session: AsyncSession,
+    *,
+    item_reason: str,
+    quantity: Decimal,
+    suggested_portfolio_id: int | None,
+    user_id: int,
+    instrument_id: int,
+    broker_account_id: int,
+    as_of: dt.date,
+) -> None:
+    """Write the question, or refresh the one already open. House rule 7 — idempotent.
+
+    A sync runs on every login and several times a day. Inserting a row each time would give a
+    user forty copies of one question by the end of a week, and an inbox that grows on its own is
+    an inbox nobody opens — which would defeat the freeze §4.3 is asking for. So the key is
+    ``(user, instrument, broker account, reason)`` among OPEN rows, and a repeat *updates* the
+    quantity rather than adding a sibling.
+
+    A RESOLVED or DISMISSED row is deliberately not matched. Those are a human's answer and
+    terminal; if the same condition is still true afterwards it is a new question, and silently
+    reopening somebody's decision would be the product overruling them.
+    """
+    existing = (
+        (
+            await session.execute(
+                select(ReconciliationItem).where(
+                    ReconciliationItem.user_id == user_id,
+                    ReconciliationItem.instrument_id == instrument_id,
+                    ReconciliationItem.broker_account_id == broker_account_id,
+                    ReconciliationItem.reason == item_reason,
+                    ReconciliationItem.state == "OPEN",
+                )
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if existing is not None:
+        existing.quantity = quantity
+        existing.suggested_portfolio_id = suggested_portfolio_id
+        return
+    session.add(
+        ReconciliationItem(
+            user_id=user_id,
+            instrument_id=instrument_id,
+            broker_account_id=broker_account_id,
+            quantity=quantity,
+            reason=item_reason,
+            state="OPEN",
+            suggested_portfolio_id=suggested_portfolio_id,
+            detected_on=as_of,
+        )
     )
 
 

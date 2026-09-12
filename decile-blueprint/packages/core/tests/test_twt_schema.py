@@ -139,15 +139,20 @@ BUSINESS_RULES: Final = (MONOREPO_ROOT / "docs" / "twt" / "04-business-rules.md"
     encoding="utf-8"
 )
 
-#: `docs/twt/03` §1: thirteen tables.
-EXPECTED_TABLE_COUNT: Final = 13
+#: `docs/twt/03`: thirteen tables from `0041_twt`, plus `tw_scan_run` from `0042_twt_scan_run`
+#: (TW12's "Scan now" button — `03` §11, DECISIONS-TW TW12.1). Fourteen.
+#:
+#: The count is asserted rather than inferred because every test below is parametrized over the
+#: list, and an empty or truncated list would make all of them vacuous. When it changes, it should
+#: change **here**, in one place, next to the reason.
+EXPECTED_TABLE_COUNT: Final = 14
 
 
 # --- the structural half -----------------------------------------------------
 
 
 class TestEveryTableIsTenantKeyed:
-    def test_there_are_thirteen_twt_tables(self) -> None:
+    def test_there_are_fourteen_twt_tables(self) -> None:
         """A guard on the guard: an empty list would make every test below vacuous."""
         assert len(TWT_TABLES) == EXPECTED_TABLE_COUNT, TWT_TABLES
 

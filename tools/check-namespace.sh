@@ -51,7 +51,16 @@ EXCLUDES=(
 #                        docs/06 defines it.
 #   decile_bucket        as screen_run_decile_bucket, a query-plan name; `decile` is the
 #                        statistic being bucketed.
-ALLOWED='^(decile_[1-6]|decile_bucket|DECILE_RANK_KEY)$'
+#   decile_decile        the Docker Compose volume `decile_decile-pgdata` -- project name plus
+#                        volume name, from the stack that existed before the rename. It appears
+#                        once, in REMAINING.md's record of what was deleted from Docker on
+#                        12 Sep 2026. It is the name of a thing that existed, not a namespace
+#                        this repo uses, and rewording it would make the record wrong about
+#                        which volume was removed. Same argument as the FINAL-REPORT.md
+#                        exclusion above, but scoped to the token rather than the file: if
+#                        REMAINING.md ever says `decile_core`, that is still a bug and still
+#                        fails. Added 12 Sep 2026; docs/DECISIONS-MERGE.md M2.1.
+ALLOWED='^(decile_[1-6]|decile_bucket|DECILE_RANK_KEY|decile_decile)$'
 
 violations=0
 while IFS= read -r line; do
@@ -95,7 +104,14 @@ fi
 #                                     in order to say its vocabulary is kept. Rewriting a
 #                                     decision record to satisfy a checker would be the checker
 #                                     editing history. Narrow on purpose: the exact phrase.
-BRAND_ALLOWED="(what-a-decile-actually-measures|WhatADecileMeasures|Decile's product vocabulary)"
+#   Decile bucketing                  the STATISTICAL OPERATION at the start of a sentence or a
+#                                     bullet, which is the only reason it is capitalised:
+#                                     "rank the universe by market cap, apply filters only
+#                                     within D1-D6". CLAUDE.md D1 keeps this vocabulary, and
+#                                     lower-cased `decile bucketing` has never been a hit. Two
+#                                     occurrences, NEEDS-MAULIK.md and PITCH-SOURCE.md. Added
+#                                     12 Sep 2026; docs/DECISIONS-MERGE.md M2.1.
+BRAND_ALLOWED="(what-a-decile-actually-measures|WhatADecileMeasures|Decile's product vocabulary|Decile bucketing)"
 
 brand_hits=0
 while IFS= read -r line; do

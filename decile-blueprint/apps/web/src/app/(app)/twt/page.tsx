@@ -9,9 +9,12 @@ import { OpenPositions } from "@/components/twt/open-positions";
 import { TightNames } from "@/components/twt/tight-names";
 import { formatTradeDate } from "@/lib/format";
 import { breadthLine, gateMeaning } from "@/lib/twt/copy";
-import { fetchToday } from "@/lib/twt/fetch";
+import { fetchLastScan, fetchToday } from "@/lib/twt/fetch";
 import { todayView } from "@/lib/twt/view";
 import { PAGES } from "@/lib/vocabulary";
+
+import { scanNow } from "./actions";
+import { ScanNow } from "./_components/scan-now";
 
 /**
  * `/twt` — the hub of `docs/twt/05` §1.
@@ -21,12 +24,13 @@ import { PAGES } from "@/lib/vocabulary";
  * The gate is first because a list of candidates under a shut gate is a list of trades not to
  * take, and a reader who meets the list first is a reader who has already started choosing.
  *
- * **Nothing on this page mutates anything.** There is no `actions.ts` under this tree and there
- * is not going to be one: `docs/twt/02` Track C §4 gives the web app no route under `/twt` that
- * can reach the gateway, and `05` §2 says a plan line becomes an order in the desk console, on a
- * click a person makes, and nowhere else. `__tests__/read-only.test.tsx` asserts that over the
- * whole tree — including that every method other than GET on this route is refused, which is what
- * a route with no handler and no action already is.
+ * **Nothing on this page can place an order.** There is exactly one server action under this
+ * tree — "Scan now", which queues the detector, moves no money, sets no sleeve capital and flips
+ * no execution switch. `docs/twt/02` Track C §4 still gives the web app no route under `/twt`
+ * that can reach the gateway, and `05` §2 still puts the click in the desk console — a plan line
+ * becomes an order there, and nowhere else. `__tests__/read-only.test.tsx` is the
+ * census that keeps the set at exactly one (DECISIONS-TW TW11, which supersedes TW8.7's "no
+ * action at all") and still asserts that no route handler exists under this tree.
  *
  * **Built ahead of its data (TW8).** TW4 and TW5 have not landed, so `fetchToday` answers `null`
  * and every section renders its empty state. That is deliberate: the empty state is the state
@@ -41,6 +45,7 @@ export const metadata: Metadata = {
 
 export default async function TwtPage() {
   const today = await fetchToday();
+  const lastScan = await fetchLastScan(today);
   const view = todayView(today);
   const gate = today?.gate ?? null;
 
@@ -50,9 +55,12 @@ export default async function TwtPage() {
         title={PAGES["/twt"].title}
         blurb={PAGES["/twt"].blurb}
         meta={
-          view.gate.session ? (
-            <span>As of {formatTradeDate(view.gate.session)}</span>
-          ) : null
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            {view.gate.session ? (
+              <span>As of {formatTradeDate(view.gate.session)}</span>
+            ) : null}
+            <ScanNow action={scanNow} lastScan={lastScan} />
+          </span>
         }
       />
       <SectionTabs section="twt" />

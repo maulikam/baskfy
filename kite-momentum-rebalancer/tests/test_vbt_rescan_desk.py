@@ -25,6 +25,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
 # The schema and the clock live beside this file; `tests/` is not a package, so the path is
 # explicit — the same insert `test_vbt_safety.py` makes.
@@ -207,3 +208,157 @@ class TestThePage:
         body = (DESK / "app" / "templates" / "vbt.html").read_text(encoding="utf-8")
         assert "Re-detect the last session" in body
         assert "Scan now" not in body
+
+
+class TestTheScanRoutesTheContractFixed:
+    """`PLAN-SCAN-SYNC.md`'s shape, over HTTP: **202** queued, **409** one in flight, **429** one
+    a minute, and `GET /vbt/scan/{run_id}` for the poll.
+
+    One shape across the sleeves, so a page written against the swing book's button works here
+    without learning a second vocabulary. `/vbt/rescan` is the older name the desk page's own
+    form posts and it is unchanged — the two go through the same `PgVbtStore.request_scan`, so
+    there is one rule rather than two copies of it.
+    """
+
+    @pytest.fixture
+    def store(self, tmp_path):  # noqa: ANN001, ANN201 - shadows the module's, for one reason
+        """The module's fixture, with ``check_same_thread=False``.
+
+        FastAPI runs a ``def`` endpoint in a worker thread, and sqlite refuses a connection used
+        from a thread other than the one that made it. Postgres, which is what the desk actually
+        runs on, has no such rule; this is a property of the test's twin, not of the code.
+        """
+        conn = sqlite3.connect(tmp_path / "vbt.db", isolation_level=None, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        conn.executescript(DDL)
+        return W.PgVbtStore(conn, user_id=1, schema="", broker_account_id=1)
+
+    @pytest.fixture
+    def client(self, store, monkeypatch):  # noqa: ANN001, ANN201 - the desk's fixture idiom
+        import contextlib
+
+        from app import main as M
+
+        monkeypatch.setattr(W, "open_store", lambda: contextlib.nullcontext(store))
+        monkeypatch.setattr(W, "_now", lambda: NOW)
+        return TestClient(M.app)
+
+    def test_a_press_is_a_202_with_the_run_to_poll(self, client, store) -> None:  # noqa: ANN001
+        response = client.post("/vbt/scan")
+        assert response.status_code == 202, response.text
+        rows = _rows(store)
+        assert len(rows) == 1
+        assert response.json() == {
+            "run_id": rows[0]["id"],
+            "status": "QUEUED",
+            "requested_at": NOW.isoformat(),
+        }
+        assert rows[0]["source"] == "desk"
+        assert rows[0]["task_id"] is None, "the sweep publishes it; the desk has no Celery"
+
+    def test_a_second_press_while_one_is_in_flight_is_a_409_naming_it(self, client, store) -> None:  # noqa: ANN001
+        first = client.post("/vbt/scan").json()["run_id"]
+        second = client.post("/vbt/scan")
+        assert second.status_code == 409
+        assert f"Scan {first} is queued" in second.json()["detail"]
+        assert len(_rows(store)) == 1, "the second press wrote nothing"
+
+    def test_a_press_inside_a_minute_of_a_finished_one_is_a_429_with_retry_after(
+        self, client, store
+    ) -> None:  # noqa: ANN001
+        store.request_scan(now=NOW - dt.timedelta(seconds=20))
+        store.conn.execute("UPDATE vb_scan_run SET status = 'DONE'")
+        response = client.post("/vbt/scan")
+        assert response.status_code == 429
+        assert response.headers["Retry-After"] == "40"
+        assert "one a minute is the limit" in response.json()["detail"]
+        assert len(_rows(store)) == 1
+
+    def test_a_dead_worker_does_not_wedge_the_button(self, client, store) -> None:  # noqa: ANN001
+        store.request_scan(now=NOW - dt.timedelta(seconds=W.RESCAN_STALE_AFTER_SECONDS + 1))
+        store.conn.execute("UPDATE vb_scan_run SET status = 'RUNNING'")
+        assert client.post("/vbt/scan").status_code == 202
+        assert len(_rows(store)) == 2
+
+    @pytest.mark.parametrize("status", ["QUEUED", "RUNNING", "DONE", "FAILED"])
+    def test_get_scan_reads_the_run_back_in_the_contract_s_vocabulary(
+        self, client, store, status: str
+    ) -> None:  # noqa: ANN001
+        run_id = store.request_scan(now=NOW)
+        store.conn.execute("UPDATE vb_scan_run SET status = ?", (status,))
+        body = client.get(f"/vbt/scan/{run_id}").json()
+        assert body["run_id"] == run_id
+        assert body["status"] == status
+        assert body["source"] == "desk"
+        assert body["session_date"] is None, "only the worker decides which session"
+        assert body["error"] is None
+
+    def test_get_scan_carries_the_funnel_and_the_reason_the_worker_wrote(
+        self, client, store
+    ) -> None:  # noqa: ANN001
+        run_id = store.request_scan(now=NOW)
+        store.conn.execute(
+            "UPDATE vb_scan_run SET status = 'DONE', session_date = ?, detail = ?",
+            ("2026-09-11", '{"signals": 19, "scan_hits": 41}'),
+        )
+        body = client.get(f"/vbt/scan/{run_id}").json()
+        assert body["session_date"] == "2026-09-11"
+        assert body["detail"] == {"signals": 19, "scan_hits": 41}
+
+    def test_an_unknown_run_is_a_404_rather_than_a_five_hundred(self, client) -> None:  # noqa: ANN001
+        assert client.get("/vbt/scan/999999").status_code == 404
+
+    def test_a_run_that_is_not_this_desk_s_user_is_a_404_rather_than_a_peek(
+        self, client, store
+    ) -> None:  # noqa: ANN001
+        store.conn.execute(
+            "INSERT INTO vb_scan_run (user_id, requested_at, status, source) "
+            "VALUES (2, ?, 'DONE', 'desk')",
+            (NOW.isoformat(),),
+        )
+        theirs = store.conn.execute(
+            "SELECT id FROM vb_scan_run WHERE user_id = 2"
+        ).fetchone()["id"]
+        assert client.get(f"/vbt/scan/{theirs}").status_code == 404
+
+    def test_the_older_rescan_name_still_answers_exactly_as_the_page_expects(
+        self, client, store
+    ) -> None:  # noqa: ANN001
+        """`app/templates/vbt.html` reads `body.accepted`, `body.reason` and
+        `body.retry_after_seconds`. A contract kept, not a route renamed under a live page."""
+        accepted = client.post("/vbt/rescan")
+        assert accepted.status_code == 200
+        assert accepted.json()["accepted"] is True
+        in_flight = client.post("/vbt/rescan").json()
+        assert in_flight == {
+            "accepted": False,
+            "reason": "a re-detect is already in flight",
+            "run_id": accepted.json()["run_id"],
+            "status": "QUEUED",
+        }
+        store.conn.execute("UPDATE vb_scan_run SET status = 'DONE'")
+        too_soon = client.post("/vbt/rescan").json()
+        assert too_soon["accepted"] is False
+        assert too_soon["reason"] == "too soon"
+        assert too_soon["retry_after_seconds"] == 60
+
+    def test_both_names_write_the_scan_row_and_nothing_else(self, client, store) -> None:  # noqa: ANN001
+        """The non-negotiable, behaviourally: a scan queues a detector and is money-free."""
+        assert client.post("/vbt/scan").status_code == 202
+        store.conn.execute("UPDATE vb_scan_run SET status = 'DONE'")
+        assert client.post("/vbt/rescan", json={}).json()["accepted"] is False
+        for table in ("vb_plan", "vb_plan_line", "vb_order", "vb_position", "vb_fill"):
+            count = store.conn.execute(f"SELECT COUNT(*) AS n FROM {table}").fetchone()["n"]
+            assert count == 0, f"a scan wrote to {table}"
+
+    def test_the_scan_route_is_covered_by_the_desk_s_origin_check(self, store, monkeypatch) -> None:  # noqa: ANN001, E501
+        """A POST a link preview or another origin can fire is a POST anybody can fire."""
+        import contextlib
+
+        from app import main as M
+
+        monkeypatch.setattr(W, "open_store", lambda: contextlib.nullcontext(store))
+        monkeypatch.setattr(W, "_now", lambda: NOW)
+        hostile = TestClient(M.app, headers={"Origin": "http://evil.example"})
+        assert hostile.post("/vbt/scan").status_code == 403
+        assert len(_rows(store)) == 0

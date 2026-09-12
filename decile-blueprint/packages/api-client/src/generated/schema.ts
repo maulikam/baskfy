@@ -3401,6 +3401,58 @@ export interface paths {
         patch: operations["patchWatch"];
         trace?: never;
     };
+    "/api/v1/twt/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Scan now: queue a detection run
+         * @description TW12. One row in ``tw_scan_run`` and one task name published; the worker does the rest.
+         *
+         *     The worker detects the **latest published session** — the pipeline's date, not the exchange
+         *     calendar's, so a press at two in the afternoon re-detects the session the bars actually know
+         *     about rather than a today whose bars do not exist yet. It calls the nightly's own detector
+         *     with ``force=True``, which is what makes the button useful: the nightly skips a session that
+         *     already has a breadth row, and that is exactly the session somebody presses this about.
+         *
+         *     A scan moves no money (`02` Track A, DECISIONS-TW TW12.3) and this route reaches no broker —
+         *     ``baskfy_api.twt_scan`` names none. At most one in flight per user (409) and one request a
+         *     minute (429, ``Retry-After``); both answered from the table rather than from a cache, so the
+         *     rule holds on a box with no Redis.
+         */
+        post: operations["postTwtScan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/twt/scan/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One scan's state
+         * @description That run, or a 404. A run this tenant did not request is a 404 rather than somebody
+         *     else's row — the same scoping the rest of the sleeve's surfaces use.
+         */
+        get: operations["getTwtScan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/vbt/backtest": {
         parameters: {
             query?: never;
@@ -3502,6 +3554,57 @@ export interface paths {
          *     second field changes neither.
          */
         patch: operations["patchVbtConfig"];
+        trace?: never;
+    };
+    "/api/v1/vbt/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Scan now: queue a re-detection of the last published session
+         * @description VB12, over the API. One row in ``vb_scan_run`` and one task name published.
+         *
+         *     **What it re-detects is a session that has already closed** — the latest one the pipeline has
+         *     published, which the worker resolves. It is deliberately not the swing book's "scan today
+         *     from live quotes": three of VBT-1's five lines read the day's volume against its 50-day
+         *     average, the close's position inside the day's range and the day's change, and the entry
+         *     limit *is* the signal bar's close, so an intraday answer would name a price that does not
+         *     exist yet.
+         *
+         *     A scan moves no money. This route reaches no broker and `baskfy_api.vbt_scan` names none. At
+         *     most one in flight per tenant (409) and one request a minute (429, ``Retry-After``); both are
+         *     answered from the table rather than a cache, so they hold on a box with no Redis.
+         */
+        post: operations["postVbtScan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vbt/scan/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One scan's state
+         * @description That run, if it is this tenant's. Somebody else's id is a 404, not a peek.
+         */
+        get: operations["getVbtScan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/vbt/today": {
@@ -10131,6 +10234,55 @@ export interface components {
             return_convention_note: string;
         };
         /**
+         * TwtScanQueuedOut
+         * @description What ``POST /twt/scan`` answers, with a 202: the run to poll.
+         */
+        TwtScanQueuedOut: {
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /** Run Id */
+            run_id: number;
+            /** Status */
+            status: string;
+        };
+        /**
+         * TwtScanRunOut
+         * @description One "Scan now" run (TW12). ``status`` walks QUEUED -> RUNNING -> DONE | FAILED.
+         *
+         *     ``session_date`` is null until the worker has decided which published session it is
+         *     detecting, because the caller asks for "the latest" and only the worker knows which that is.
+         *     ``detail`` carries the funnel on DONE; ``error`` the reason on FAILED.
+         *
+         *     **There is no ``provisional`` field**, and its absence is the design rather than an omission:
+         *     see the module docstring and DECISIONS-TW TW12.2.
+         */
+        TwtScanRunOut: {
+            /** Detail */
+            detail: {
+                [key: string]: unknown;
+            } | null;
+            /** Error */
+            error: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /** Run Id */
+            run_id: number;
+            /** Session Date */
+            session_date: string | null;
+            /** Started At */
+            started_at: string | null;
+            /** Status */
+            status: string;
+        };
+        /**
          * UnallocatedHoldingOut
          * @description A holding in no capital portfolio, aggregated across brokers for display (§6.7).
          */
@@ -10574,6 +10726,61 @@ export interface components {
             win_rate_pct: number;
             /** Years */
             years: number;
+        };
+        /**
+         * VbtScanQueuedOut
+         * @description What `POST /vbt/scan` answers, with a 202: the run to poll.
+         */
+        VbtScanQueuedOut: {
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /** Run Id */
+            run_id: number;
+            /** Status */
+            status: string;
+        };
+        /**
+         * VbtScanRunOut
+         * @description One "Scan now" run (VB12). ``status`` walks QUEUED -> RUNNING -> DONE | FAILED.
+         *
+         *     ``session_date`` is null until the worker has decided which published session it is
+         *     re-detecting — the caller asks for "the latest" and only the worker knows which that is.
+         *     ``funnel`` is the detector's own counts and is filled on DONE; ``error`` is the reason on
+         *     FAILED; ``detail`` carries the rest, in the shape the nightly step writes so the two read
+         *     the same. There is no ``provisional`` here and there is no column for one: this sleeve
+         *     re-detects a **closed** session, never a partial one.
+         */
+        VbtScanRunOut: {
+            /** Detail */
+            detail: {
+                [key: string]: unknown;
+            } | null;
+            /** Error */
+            error: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Funnel */
+            funnel: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /** Run Id */
+            run_id: number;
+            /** Session Date */
+            session_date: string | null;
+            /** Source */
+            source: string;
+            /** Started At */
+            started_at: string | null;
+            /** Status */
+            status: string;
         };
         /**
          * VbtTodayOut
@@ -28461,6 +28668,210 @@ export interface operations {
             };
         };
     };
+    postTwtScan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TwtScanQueuedOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getTwtScan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TwtScanRunOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     getVbtBacktest: {
         parameters: {
             query?: never;
@@ -28888,6 +29299,210 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VbtConfigView"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    postVbtScan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VbtScanQueuedOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getVbtScan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VbtScanRunOut"];
                 };
             };
             /** @description Invalid screen definition */

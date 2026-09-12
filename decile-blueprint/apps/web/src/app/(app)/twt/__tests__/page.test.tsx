@@ -1,5 +1,7 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+
+import type { TwtScanRun } from "@/lib/twt/fetch";
 
 import { backtest, emptyToday, gate, today } from "@/lib/twt/__tests__/fixtures";
 
@@ -21,14 +23,23 @@ import TwtPage from "../page";
 vi.mock("@/lib/twt/fetch", () => ({
   fetchToday: vi.fn(),
   fetchBacktest: vi.fn(),
+  fetchLastScan: vi.fn(),
 }));
+
+/* The action reaches `next-auth` through the write helper; the page only binds it to the form,
+   and "Scan now" has its own suite in `scan-now.test.tsx`. Same reason the swing page test mocks
+   its own `../actions`. */
+vi.mock("../actions", () => ({ scanNow: vi.fn() }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/twt",
   useRouter: () => ({ refresh: vi.fn() }),
 }));
 
-const { fetchToday, fetchBacktest } = await import("@/lib/twt/fetch");
+const { fetchToday, fetchBacktest, fetchLastScan } = await import("@/lib/twt/fetch");
+
+/* No scan has been run in any of these fixtures — the state the sleeve is genuinely in. */
+vi.mocked(fetchLastScan).mockResolvedValue(null);
 
 describe("the twt page answers the gate before it lists anything", () => {
   it("says new entries are allowed, and the card underneath agrees", async () => {
@@ -90,5 +101,65 @@ describe("the twt backtest page reads its conditions first", () => {
 
     expect(screen.getByTestId("twt-caveats")).toBeInTheDocument();
     expect(screen.getByTestId("twt-backtest-empty")).toBeInTheDocument();
+  });
+});
+
+/**
+ * "Scan now" is on the page — leaf 5 of `PLAN-SCAN-SYNC.md`.
+ *
+ * The control's own behaviour is `scan-now.test.tsx`; what this adds is the wiring, and the one
+ * claim the page must never stop making: the button is here, it is the only one, and nothing on
+ * this page can place an order — or set a capital, or flip a switch.
+ */
+describe("Scan now is on the hub, and it is the only control there", () => {
+  async function renderHub(lastScan: TwtScanRun | null = null) {
+    vi.mocked(fetchToday).mockResolvedValue(today());
+    vi.mocked(fetchLastScan).mockResolvedValue(lastScan);
+    render(await TwtPage());
+  }
+
+  it("offers the button in the header, enabled, with nothing said about a run yet", async () => {
+    await renderHub();
+
+    const control = screen.getByTestId("twt-scan-now");
+    expect(within(control).getByRole("button", { name: "Scan now" })).toBeEnabled();
+    expect(screen.getByTestId("twt-scan-status")).toHaveTextContent("");
+  });
+
+  it("shows the last run's state beside it when the payload names one", async () => {
+    await renderHub({
+      id: 4,
+      status: "RUNNING",
+      requested_at: "2026-09-12T08:10:00+00:00",
+      finished_at: null,
+      error: null,
+    });
+
+    expect(screen.getByTestId("twt-scan-status")).toHaveTextContent("Scanning now.");
+    expect(screen.getByRole("button", { name: "Scanning…" })).toBeDisabled();
+  });
+
+  /* The state this sleeve is genuinely in: every detection table at zero rows. The button has to
+     be pressable there above all, because that is the screen Maulik is looking at. */
+  it("offers the button on a hub with nothing computed at all", async () => {
+    vi.mocked(fetchToday).mockResolvedValue(emptyToday());
+    vi.mocked(fetchLastScan).mockResolvedValue(null);
+
+    render(await TwtPage());
+
+    expect(screen.getByRole("button", { name: "Scan now" })).toBeEnabled();
+  });
+
+  it("renders exactly one button on the whole page, and it is Scan now", async () => {
+    await renderHub();
+
+    const names = screen.getAllByRole("button").map((node) => node.textContent?.trim());
+    expect(names).toEqual(["Scan now"]);
+  });
+
+  it("still tells the reader, in the page's own words, that nothing here can place an order", async () => {
+    await renderHub();
+
+    expect(document.body.textContent).toContain("nothing on this page can place an order");
   });
 });

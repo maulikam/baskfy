@@ -349,18 +349,27 @@ class TestTheLaw:
     def test_there_is_exactly_one_execute_route_and_it_takes_one_line(self) -> None:
         """`05` §3: "There is no 'confirm all'." A route that took a list would be one.
 
-        Two POSTs since VB12, and the distinction is the point rather than the count:
-        `/vbt/execute` is the one doorway to the gateway, and `/vbt/rescan` writes a single
-        `vb_scan_run` row and hands off to a worker with no order path. The assertion below is
-        that **exactly one route can reach an order**, which is what Track C §3 is about; a third
-        POST would have to justify itself here.
+        Three POSTs since the scan contract, and the distinction is the point rather than the
+        count: `/vbt/execute` is the one doorway to the gateway, while `/vbt/rescan` and
+        `/vbt/scan` each write a single `vb_scan_run` row through the same store method and hand
+        off to a worker with no order path. (They are two names for one request: `/vbt/rescan`
+        is what the desk page's own form has always posted and answers
+        `{"accepted": …}`; `/vbt/scan` is the shape `PLAN-SCAN-SYNC.md` fixed across the sleeves
+        and answers 202/409/429. Both are covered by
+        `test_the_scan_routes_cannot_reach_an_order`.) The assertion below is that **exactly one
+        route can reach an order**, which is what Track C §3 is about; a fourth POST would have
+        to justify itself here.
         """
         posts = [
             route
             for route in W.router.routes
             if "POST" in getattr(route, "methods", set())
         ]
-        assert sorted(route.path for route in posts) == ["/vbt/execute", "/vbt/rescan"]
+        assert sorted(route.path for route in posts) == [
+            "/vbt/execute",
+            "/vbt/rescan",
+            "/vbt/scan",
+        ]
         posts = [route for route in posts if route.path == "/vbt/execute"]
         # `from __future__ import annotations` in the module leaves these as strings, which is
         # what the assertion has to read — the point is the shape of the signature, not its
@@ -370,23 +379,23 @@ class TestTheLaw:
         assert parameters["line_id"] == "int"
         assert not any("list" in str(kind) for kind in parameters.values())
 
-    def test_the_rescan_route_cannot_reach_an_order(self) -> None:
-        """VB12: the second POST writes a row and names nothing that could place.
+    @pytest.mark.parametrize("path", ["/vbt/rescan", "/vbt/scan"])
+    def test_the_scan_routes_cannot_reach_an_order(self, path: str) -> None:
+        """VB12 and the scan contract: the two non-execute POSTs write a row and name nothing
+        that could place.
 
-        Asserted over the handler's own source, with its docstring stripped, because the
-        docstring explains at length what it is *not* allowed to do.
+        Asserted over each handler's own source, with its docstring stripped, because the
+        docstrings explain at length what they are *not* allowed to do.
         """
         import inspect
         import re
 
-        route = next(
-            r for r in W.router.routes if getattr(r, "path", "") == "/vbt/rescan"
-        )
+        route = next(r for r in W.router.routes if getattr(r, "path", "") == path)
         source = inspect.getsource(route.endpoint)
         code = re.sub(r'("""|\'\'\')(?:.|\n)*?\1', " ", source)
         for forbidden in ("execute_line", "gateway", "place", "kc.", "gtt", "confirm"):
-            assert forbidden not in code.lower(), f"the rescan route names {forbidden}"
-        assert "request_scan" in code, "the rescan route does not write a scan row at all"
+            assert forbidden not in code.lower(), f"{path} names {forbidden}"
+        assert "request_scan" in code, f"{path} does not write a scan row at all"
 
     def test_the_template_has_no_confirm_all_control(self) -> None:
         template = pathlib.Path(W.__file__).parent / "templates" / "vbt.html"

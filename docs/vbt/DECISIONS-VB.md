@@ -1117,3 +1117,99 @@ The phantom row was deleted from the box. It would have healed itself tonight an
 is idempotent per `(user_id, date)`, so the 21:10 run would have overwritten it with the real
 11 Sep reading), which is exactly why it is worth pinning with a test rather than trusting to
 the schedule.
+
+### VB14 — `/vbt` gains one server action, "Scan now", and the read-only test becomes a census · ⚠ UNREVIEWED
+
+**Context.** `PLAN-SCAN-SYNC.md` leaf 5: Maulik asked for the swing hub's "Scan now" button on the
+volume-breakout and three-weeks-tight pages. Until 12 Sep 2026 this tree had **no server action at
+all**, and `__tests__/read-only.test.tsx` asserted exactly that — VB8.4 had declined `05` §2's
+per-row *Dismiss* note because `03` has no table to put one in, so "no action at all" was the
+strongest true claim available and the test made it.
+
+**Decision.** Build the button, and replace that assertion with the swing hub's **census** rather
+than deleting it. The file walk enumerates every export of every `use server` module under the
+tree and the set must be exactly `["scanNow"]`; it also pins the hub at one form and one submit
+button, requires the action to go through one write helper, and asserts that helper's path type is
+a **closed union of one literal** — `export type VbtWritePath = "/vbt/scan";` — with POST as its
+only method. A pattern that admitted `/vbt/scan` would admit the desk's confirm route too, which
+is precisely what `02` Track C §4 keeps out of this application.
+
+**Why a scan is allowed where an order is not.** A scan queues the detector: bars in, detection
+rows out. It can no more buy a share than the nightly job can. `02` Track C §4 is unchanged — the
+web app gets no route under `/vbt` that can reach the gateway, and a line becomes an order in the
+desk console, on a click Maulik makes, and nowhere else.
+
+**The status is mapped to a sentence, and the service's own `detail` is never rendered.** 202, 409
+and 429 become "Scan started…", "A scan is already running…", "A scan has just been run. The next
+one can start in about a minute." A refusal written for an operator names jobs, quote sources and
+tables, and 11 Sep 2026 established what that costs on a customer-facing page. The write helper
+therefore returns a status and not a string, so the page has nothing internal to leak.
+
+**Rejected.** (a) A link to a route — it would need a route handler under `/vbt`, which the 405
+assertion exists to prevent. (b) Passing the server's `detail` through as swing does: swing's hub
+is read by its operator, `/vbt` is read by the person whose money it is. (c) Polling
+`GET /vbt/scan/{run_id}` from the browser: that needs a bearer in the tab, and `router.refresh()`
+already re-renders the server component that owns the rows.
+
+**Reversal.** `git revert` the leaf-5 commit; the tree returns to having no action, and VB8.4's
+wording is true again unchanged.
+
+### VB15 — "Scan now" gets the contract's route shape, beside VB12's own name · ⚠ UNREVIEWED
+
+**Context.** `PLAN-SCAN-SYNC.md` leaf 3: the backend for the button leaf 5 is building. The
+contract fixes one shape across the three sleeves — `POST /vbt/scan` answering **202** queued,
+**409** one already in flight, **429** one a minute, `GET /vbt/scan/{run_id}` for the poll, and
+the status vocabulary `QUEUED | RUNNING | DONE | FAILED`. VBT already had the whole engine: the
+`vb_scan_run` table (`0040`), the `baskfy.vbt.rescan` task, the `vbt-rescan-sweep` beat entry, and
+the desk's `POST /vbt/rescan` with both refusals. What it did not have was the contract's shape, or
+any route at all on the API the web app talks to.
+
+**Decision.** Add the shape; reuse everything else.
+
+* **The desk** gains `POST /vbt/scan` (202) and `GET /vbt/scan/{run_id}`. The two refusals moved
+  out of the route body and into `PgVbtStore.request_scan`, which now raises `ScanRefused` — so
+  the new route and the old one answer from one rule rather than two copies of it.
+* **`POST /vbt/rescan` is kept, byte-for-byte in its answers.** `app/templates/vbt.html`'s button
+  reads `body.accepted`, `body.reason` and `body.retry_after_seconds`; renaming the route under a
+  live page would have broken it for nothing. Two names, one request, one store method.
+* **The API** gains `POST /vbt/scan` (202) and `GET /vbt/scan/{run_id}` on `routers/vbt.py`, over
+  a new `baskfy_api.vbt_scan` — the mirror of `baskfy_api.swing_scan`, which is the module
+  `test_swing_readonly.py` can make assertions about precisely because it does one thing.
+* **No second detector.** The published task name is `baskfy.vbt.rescan`, asserted literally in
+  `test_vbt_readonly.py`. A scan route that queued something new would be a second code path to
+  the same rows with none of VB12's tests behind it.
+* **No migration.** `vb_scan_run` already exists; `0042` belongs to leaf 4.
+
+**Where this differs from the swing sleeve, deliberately.** The swing desk's `/swing/scan` answers
+**200**; this one answers **202**, because the contract says 202 and a page that binds to one
+status code across three sleeves is the point of having a contract. And there is no `provisional`
+anywhere here: VB12 settled that this sleeve re-detects a **closed** session, and `vb_scan_run`
+has no column for a partial one.
+
+**VB12.1 — the `source` column, and the one honest compromise.** `vb_scan_run.source` has a CHECK
+constraint limiting it to `desk | cli` (`VB_SCAN_SOURCES`). A web press is a third surface, and
+widening the constraint is a migration this run does not hold a slot for. So the API writes the
+column as `desk` — a button press, as against a shell — and records the precise surface in
+`detail.source` as `{"source": "web"}`, which is exactly how `sw_scan_run` records it, that table
+having no column at all. `vbt_scan.source_of()` prefers the detail and falls back to the column,
+so the API's own answer is the true one. **Known limit:** the worker *replaces* `detail` with the
+funnel when the run finishes, so a `DONE` row falls back to `desk`. The provenance is there while
+the page is polling, which is when it is read. The clean fix is one line in `VB_SCAN_SOURCES` plus
+a CHECK-widening migration; it is worth doing the next time a VBT migration is written.
+
+**Money-free, and asserted rather than asserted-in-prose.** `tests/test_vbt_scan_safety.py` is the
+property, in the shape `test_twt_safety_properties.py` set: every scan route is discovered from
+the source with `ast`, exercised with `DRY_RUN=False` **and** `VBT_EXECUTION_ENABLED=True` against
+a gateway that raises on *any* attribute, and the plan / line / order / position / fill tables are
+counted afterwards. Both switches are set the dangerous way on purpose — the existing
+`test_vbt_safety.py` pins both the safe way, so its tests pass for two reasons and cannot tell you
+which one did the work.
+
+**Rejected.** (a) Renaming `/vbt/rescan` to `/vbt/scan` and updating the template: cleaner on
+paper, and it breaks the operator's page the moment the route lands ahead of the deploy. (b)
+Leaving the desk alone and building the API only: the contract names the desk route, and the desk
+is where an operator is when the chain has skipped a night. (c) A `provisional` flag copied from
+SW15: it would be a column with no meaning and an invitation to detect a partial bar.
+
+**Reversal.** Revert the leaf-3 commit. `/vbt/rescan`, the table, the task and the sweep are
+untouched by it, so the desk button keeps working with or without this change.

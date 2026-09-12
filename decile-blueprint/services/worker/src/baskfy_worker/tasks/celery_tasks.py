@@ -104,6 +104,8 @@ from baskfy_worker.tasks.twt_evening import (
     last_detected_session as twt_last_detected_session,
 )
 from baskfy_worker.tasks.twt_evening import run_twt_evening
+from baskfy_worker.tasks.twt_scan import run_twt_scan
+from baskfy_worker.tasks.twt_scan import unpublished_runs as twt_unpublished_scan_runs
 from baskfy_worker.tasks.vbt import published_signal_count, run_detect_vbt
 from baskfy_worker.tasks.vbt_backtest import DEFAULT_START as VBT_BACKTEST_START
 from baskfy_worker.tasks.vbt_backtest import run_vbt_backtest
@@ -949,6 +951,66 @@ def twt_morning_task(trade_date: str | None = None) -> JsonObject:
         if report is None:
             return {"date": day.isoformat(), "skipped": outcome.detail}
         return report.as_detail()
+
+    return run_in_session(_run)
+
+
+#: TW12's publisher task name. **Spelled as a literal in the decorator below as well**, not
+#: only here, and that is deliberate: ``packages/core/tests/test_twt_safety_properties.py``
+#: discovers this sleeve's task surface from source, and its discovery resolves a constant only
+#: because TW12 hardened it — before that it read string literals alone, and registering a TWT
+#: task through a constant would have added a scheduled path the safety property never looked at.
+#:
+#: **It is not called a sweep, and the swing book's and VBT-1's equivalents are.** On this sleeve
+#: "sweep" means ``sweep_naked`` — the 15:15 chore that re-arms GTT stops through the gateway —
+#: and ``services/worker/tests/test_twt_beat.py::test_the_sweep_is_not_on_a_timer`` refuses any
+#: Beat entry whose name or task contains the word, because a scheduled TWT sweep would be a
+#: second auto-execute exception. That test caught this task on 12 Sep 2026 and it was right to:
+#: a reader scanning Beat for "twt sweep" must not find a publisher. DECISIONS-TW **TW12.4**.
+TWT_SCAN_PUBLISH_TASK: Final = "baskfy.twt.scan_publish"
+
+
+@shared_task(name="baskfy.twt.scan", acks_late=True)
+def twt_scan_task(run_id: int) -> JsonObject:
+    """TW12: one press of **Scan now** — detect the latest published session for one
+    ``tw_scan_run`` row.
+
+    **It is the existing detector.** ``run_twt_scan`` calls ``twt.detect_session``, the same
+    function ``baskfy.twt.detect`` above calls, with ``force=True`` because a person asking for a
+    scan is asking for exactly the session the nightly's "already detected" rule skips. There is
+    no second detector and no provisional intraday path (DECISIONS-TW **TW12.2**).
+
+    Never raises: a failure is ``FAILED`` with its reason on the row, because the button has to be
+    able to show what went wrong rather than leaving a request that simply stopped.
+
+    It places, arms and cancels nothing, whichever way ``BASKFY_TWT_EXECUTION_ENABLED`` is set.
+    """
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        return await run_twt_scan(session, int(run_id))
+
+    return run_in_session(_run)
+
+
+@shared_task(name="baskfy.twt.scan_publish")
+def twt_scan_publish_task() -> JsonObject:
+    """TW12: publish every ``QUEUED`` ``tw_scan_run`` row nobody has published.
+
+    The desk writes those rows and has no Celery client, so without this the button would insert a
+    row that sat there. Beat, every minute; one indexed SELECT when idle.
+    """
+
+    def publish(run_id: int) -> str:
+        return str(twt_scan_task.apply_async(args=[run_id], queue=QUEUE_COMPUTE).id)
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        rows = await twt_unpublished_scan_runs(session)
+        published: list[int] = []
+        for row in rows:
+            row.task_id = publish(int(row.id))
+            published.append(int(row.id))
+        await session.flush()
+        return {"published": published}
 
     return run_in_session(_run)
 

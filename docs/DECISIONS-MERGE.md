@@ -6637,3 +6637,100 @@ mechanical repair.
 
 **To reverse:** restore the previous `auth.setup.ts` from `git show HEAD:...`; nothing else reads
 `E2E_PUBLIC_ID`.
+
+## T7-D8 — `/build/[id]` opens on the ranked table, behind `NEXT_PUBLIC_SCREEN_DEFAULT_VIEW` ⚠ UNREVIEWED
+
+**12 Sep 2026.** Recorded late: the code and its tests landed with the Tree 7 UI-polish leaves, and
+`gates/leaf-7.3.1-default-view.md` G5 asked for this entry and never got it. The gate was left
+honestly unchecked, which is the only reason the gap was still findable. The decision below is the
+one the code already implements; nothing is being changed here except the record.
+
+**Context.** Tree 6 §5 made the screen editor open on the **Basket** view — sizing controls, weight
+method, "Save as basket". The redesign brief's §3.1 argues the opposite for this one surface:
+`/build/[id]` is where a *ranked* artifact is constructed, so the ranked list is what the first
+paint owes the reader, and the basket is the thing you go to once you have decided the ranking is
+right. Landing on the basket asks the reader to accept a portfolio before they have seen the
+ordering it came from.
+
+**Choice taken.** `/build/[id]` defaults to **Table**. `screenDefaultView()` in
+`lib/screens/feature-flags.ts` reads `NEXT_PUBLIC_SCREEN_DEFAULT_VIEW`; `basket` restores Tree 6's
+behaviour exactly and anything else — including a typo — reads as `table`, because a misspelt
+environment variable must not silently decide what the page opens on.
+
+**Scope, and this is the part that matters.** Only the *editor's* default moves. `/discover`,
+`/basket/[slug]` and the build-list cards stay basket-first and none of them reads the flag;
+`gates/leaf-7.3.1-default-view.md` G4 is the assertion that keeps it that way. The Basket view
+stays one tap from the table, with its sizing controls and its "Save as basket" action intact — the
+change is which of the two is on top, not which of the two exists.
+
+**Rejected.** (a) Flipping the default everywhere, which would have reversed Tree 6 on surfaces
+whose whole argument is basket-first and where no brief asked for it. (b) Remembering the reader's
+last view in `localStorage` — a per-device default nobody chose, which makes "what does this page
+open on" unanswerable in a bug report, and which would have needed its own migration when the flag
+is eventually retired. (c) Shipping the flip unflagged, which would have made the reversal a code
+change rather than an environment variable.
+
+**To reverse:** set `NEXT_PUBLIC_SCREEN_DEFAULT_VIEW=basket`. No code change, no deploy of new
+source, and `src/components/screens/__tests__/default-view.test.tsx` proves the flag genuinely
+restores the Tree 6 rendering rather than merely being read.
+
+## SS-L1 — a filed holding the broker stopped reporting is reconciled, not kept and not deleted ⚠ UNREVIEWED
+
+**12 Sep 2026.** Maulik said he does not hold PKTEA; the box held 147 shares of it,
+`kind=CAPITAL`, `added=2026-09-10`, in a group he had made that evening (`Swing Manual`, id 6).
+Investigated as Leaf 1 of `PLAN-SCAN-SYNC.md`. Gates: `gates/pktea-phantom.md`, 14/14.
+
+**Context — and the row was never wrong.** PKTEA is in no seeder, no fixture and not in the
+regression corpus; the seeder does not reference `portfolio_holding` at all. The row was true on
+the day it was written, the shares left the demat afterwards, and **nothing in production ever
+read it again**. `baskfy_api.broker_holdings_sync.sync_holdings_into_portfolio` — the only
+broker-facing writer that runs — rewrites the broker's own pile and reads other portfolios only to
+*subtract* from that pile, so a phantom slice does not even present as an imbalance: it silently
+shrinks Unallocated by its own size and every total still adds up. `run_holdings_sync`, the
+828-line worker task built for exactly this question, has **no caller outside its own tests**;
+`reconciliation_item` had 0 rows on a box live for eleven days. The bug is the class, not the
+symbol: allocated rows were write-once.
+
+**Choice taken.** A disappearance sweep in the API's live sync path, which takes no decision of
+its own — it assembles the difference and hands it to `baskfy_core.allocation_ledger.attribute_sell`:
+
+* one capital owner → the sell attributes itself, the slice shrinks by the missing quantity and a
+  slice drained to zero is removed (criterion 4's whole-holding case; PKTEA is this);
+* several capital owners → one OPEN `reconciliation_item` and **not one share moves** (§4.3).
+
+No new screen: `GET /portfolio/reconciliation`, the attention ribbon and the command centre's
+`open_reconciliation_count` already render it — the surface existed and had nothing to show it.
+The item is idempotent on `(user, instrument, broker account, reason)` among OPEN rows, so a sync
+on every login refreshes one question instead of stacking forty.
+
+**A second, latent defect fell out of it.** `SPLIT_HOLDING` joined `ReconciliationReason` on
+10 Sep 2026 and 0022's CHECK was never widened, so the answer `attribute_sell` gives for *every*
+split sell could not be stored — the INSERT raised
+`ck_reconciliation_item_reconciliation_item_reason_known`. Unnoticed for two days because nothing
+writes reconciliation items in production. Migration **`0043_split_holding_reason`** widens it, and
+the test iterates the enum rather than a list so the next member is covered without editing it.
+Chained after leaf 4's `0042_twt_scan_run`; the box is at `0041_twt` and **this leaf did not
+deploy** (plan rules 1 and 4).
+
+**Rejected.** (a) *Deleting the phantom row* — §4.3 forbids silently altering a return series, and
+a delete would be right for PKTEA and wrong for every split position. (b) *Wiring
+`run_holdings_sync` into the route* — the honest fix eventually, but it is the worker's module
+(leaf 2's column), it carries its own model of a world without piles or slices, and it would have
+been a large change to the one path that touches real holdings. (c) *Judging disappearance on
+instrument id alone* — a symbol stops resolving when it becomes **ambiguous** (two renames
+claiming one old symbol), and reading that as a sale would delete a real position over a
+reference-data change; every candidate of every unresolved symbol is exempt and named in
+`unjudged` instead. (d) *Adding fields to `SyncHoldingsOut`* — would have forced a `make openapi`
+regeneration across leaves 3 and 4's in-flight routes for information the free-text `sync_note`
+already carries.
+
+**Known limit, deliberately left open.** A live read with **no rows** is `source="empty"` by
+construction and is refused, so *selling the entire account* is the one disappearance this does
+not reconcile. Failing towards "we still think you own it" is the safe half; closing it needs the
+layer-1 `broker_holding` table `holdings_sync.py`'s own docstring asks for, which is a schema
+decision and not this leaf's.
+
+**To reverse:** delete the `reconcile_missing_positions` call from
+`sync_holdings_into_portfolio` (the function and its tests can stay — they are then unreached), and
+`alembic downgrade 0042_twt_scan_run`. The downgrade is **not** a no-op: resolve or dismiss any
+`SPLIT_HOLDING` items first, because the narrowed constraint revalidates the table.

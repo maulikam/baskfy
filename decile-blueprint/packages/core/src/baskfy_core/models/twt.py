@@ -228,6 +228,18 @@ TW_SESSION_MODES: tuple[str, ...] = ("DRY_RUN", "LIVE")
 #: (``05`` §4 shows both).
 TW_BACKTEST_SOURCES: tuple[str, ...] = ("PLANT", "RESEARCH_EXPORT")
 
+#: ``tw_scan_run.status`` — the swing book's four words, in the swing book's order (TW12).
+#: Spelled the same across all three sleeves on purpose: a person reading "Scan now" on the swing
+#: page and on this one is reading the same state machine, and a page that has to learn a second
+#: vocabulary per sleeve is a page that will eventually render the wrong one.
+TW_SCAN_STATUSES: tuple[str, ...] = ("QUEUED", "RUNNING", "DONE", "FAILED")
+
+#: ``tw_scan_run.source`` — who pressed it. ``desk`` is the operator console, ``web`` the ``/twt``
+#: hub, ``cli`` a hand-run. ``vb_scan_run`` admits only ``desk`` and ``cli`` because VBT-1 has no
+#: web button; this sleeve is getting one, so ``web`` is named here rather than smuggled in as
+#: ``desk`` — a row that cannot say where a request came from is a row that cannot be audited.
+TW_SCAN_SOURCES: tuple[str, ...] = ("desk", "web", "cli")
+
 #: ``docs/twt/03`` §7 and ``04`` §10.4: the desk's own plan lifetime, restated for this surface.
 #: Named here because both the writer (the evening job) and the reader (``/twt/execute``) need
 #: it and neither may invent its own number. Prefixed, because the swing book exports its own
@@ -994,4 +1006,69 @@ class TwBacktestRun(Base):
     #: ``"{ExceptionType}: {message}"`` and the traceback; the exception is re-raised after it is
     #: recorded.
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[CreatedAt]
+
+
+class TwScanRun(Base):
+    """One press of **Scan now** on the three-weeks-tight page (TW12; ``docs/twt/03`` §13's shape).
+
+    The sleeve had no such table. The swing book has ``sw_scan_run`` (SW15) and VBT-1 has
+    ``vb_scan_run`` (VB12); this is the third of the same row, and it is deliberately the
+    **narrower** of the two shapes.
+
+    **There is no ``provisional`` column, and that is the design.** ``sw_scan_run`` carries one
+    because the swing book's setups can be read off a bar still being formed — a base and a pivot
+    are visible at 13:42. This strategy's signal is not: ``04`` §2 measures three *weekly* ranges
+    that have closed, against a monthly low, with a sessions-out count over closed sessions. A bar
+    built from a live quote would change the answer without making it truer, and the row would
+    then have to carry a warning about a number nobody should have computed. So this row asks for
+    one thing: **the latest published session, detected again.** (DECISIONS-TW **TW12.2**.)
+
+    **It runs the detector that already exists.** ``baskfy.twt.scan`` claims this row, calls
+    ``baskfy_worker.tasks.twt.detect_session`` — the same function ``baskfy.twt.detect`` calls,
+    with ``force=True`` because being asked for is the point — and writes ``DONE`` with the
+    funnel in ``detail``, or ``FAILED`` with the reason in ``error`` and nothing else written.
+    Detection is idempotent per ``(user_id, date)`` (house rule 7), so pressing the button twice
+    overwrites the same rows and moves no counter.
+
+    **It cannot place, size or cancel anything.** It writes ``tw_signal_daily``,
+    ``tw_state_daily`` and ``tw_breadth_daily`` and nothing else. The plan is still the evening
+    job's and the confirm is still a person's — ``02`` Track C §3 is untouched by this table, and
+    ``packages/core/tests/test_twt_safety_properties.py`` proves it over the routes that write it.
+
+    The desk inserts the row ``QUEUED`` and the worker's minute sweep publishes it, because the
+    desk has no Celery client (`app/twt_desk.py`); the API publishes directly and the sweep is its
+    fallback when no broker is configured. Same path, same reason, as both older sleeves.
+    """
+
+    __tablename__ = "tw_scan_run"
+    __table_args__ = (
+        _in_check("status_known", "status", TW_SCAN_STATUSES),
+        _in_check("source_known", "source", TW_SCAN_SOURCES),
+        CheckConstraint(
+            "finished_at IS NULL OR started_at IS NULL OR finished_at >= started_at",
+            name="finished_after_started",
+        ),
+        Index("ix_tw_scan_run_user_id_requested_at", "user_id", "requested_at"),
+    )
+
+    id: Mapped[BigIntPk]
+    user_id: Mapped[int] = _user_fk()
+    requested_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    started_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: Which published session was detected again. Null until the worker has decided, because the
+    #: caller asks for "the latest" and only the worker knows which that is.
+    session_date: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="QUEUED")
+    source: Mapped[str] = mapped_column(String(8), nullable=False, server_default="desk")
+    #: ``{"signals": n, "status": "...", ...the funnel}`` — the same shape the nightly step
+    #: writes, so the row a person reads after pressing the button reads like the night's own.
+    detail: Mapped[JsonObject | None] = mapped_column(JSONB, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: The broker's message id once published. A row without one has not been picked up yet, and
+    #: the sweep is what publishes it — which is how the desk's button works with no Celery.
+    task_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[CreatedAt]

@@ -366,6 +366,15 @@ class Settings(BaseSettings):
     #: ``vb_config.stop_pct`` may not exceed this. STRATEGY §4 measured 10% and 15% and found the
     #: stop to be insurance either way; wider than 15% is a different instrument.
     vbt_stop_pct_max: Decimal = Field(default=Decimal("15.0"), gt=0, le=50)
+    #: VB12 "Scan now": the least time between two requests from the one tenant, in seconds. The
+    #: same two numbers the swing book's scan carries and, deliberately, the same values the
+    #: worker's `baskfy_worker.tasks.vbt_rescan` and the desk's `app/vbt_desk.py` already hold —
+    #: a re-detect is a couple of minutes of Polars over the published universe, and a second
+    #: press inside a minute buys nothing the first will not deliver.
+    vbt_scan_min_interval_seconds: int = Field(default=60, ge=0)
+    #: A `QUEUED` / `RUNNING` re-detect older than this no longer counts as "in flight": a worker
+    #: that died mid-scan must not lock the button for an afternoon.
+    vbt_scan_stale_after_seconds: int = Field(default=600, gt=0)
 
     # --- The three-weeks-tight sleeve (docs/twt) -----------------------------
     #
@@ -405,6 +414,16 @@ class Settings(BaseSettings):
     #: Widening it is merely unprofitable; tightening it is the failure mode.
     #: DECISIONS-TW **TW0.5**.
     twt_trail_pct_min: Decimal = Field(default=Decimal("18.00"), gt=0, le=100)
+    #: TW12 "Scan now": the least time between two requests from the one tenant, in seconds. A
+    #: scan re-detects the whole cash universe — a couple of minutes of Polars over closed bars —
+    #: and a second press inside a minute buys nothing the first will not deliver. A threshold,
+    #: so a setting (STANDING-ANSWERS B13), never a literal in the route.
+    twt_scan_min_interval_seconds: int = Field(default=60, ge=0)
+    #: A ``QUEUED`` / ``RUNNING`` scan older than this no longer counts as "in flight": a worker
+    #: that died mid-scan must not lock the button forever. Ten minutes, the same window the
+    #: swing book and VBT-1 use, and the desk copies it (`app/twt_desk.py`) because it cannot
+    #: import the worker.
+    twt_scan_stale_after_seconds: int = Field(default=600, gt=0)
 
     # --- Rate limits (docs/07 §Conventions) ----------------------------------
     rate_limit_anonymous_per_minute: int = Field(default=10, gt=0)

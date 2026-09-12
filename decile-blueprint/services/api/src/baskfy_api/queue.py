@@ -84,6 +84,12 @@ PRODUCER_TASK_ROUTES: dict[str, dict[str, str]] = {
     # test's sake; the API publishes neither.
     "baskfy.vbt.rescan": {"queue": "compute"},
     "baskfy.vbt.rescan_sweep": {"queue": "default"},
+    # TW12: the three-weeks-tight sleeve's "Scan now". Unlike VB12's pair the API *does* publish
+    # the first of these — `POST /twt/scan` sends it directly when a broker is configured — so
+    # this line is load-bearing and not only anti-drift. The publisher beside it is Beat's, and it
+    # is not called a sweep for the reason DECISIONS-TW TW12.4 gives.
+    "baskfy.twt.scan": {"queue": "compute"},
+    "baskfy.twt.scan_publish": {"queue": "default"},
 }
 
 #: The queue an unrouted name lands on. Must match the worker's ``task_default_queue``, which is

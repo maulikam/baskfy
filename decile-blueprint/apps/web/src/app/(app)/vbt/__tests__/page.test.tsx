@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type {
@@ -6,6 +6,7 @@ import type {
   VbtBook,
   VbtBreadth,
   VbtCandidate,
+  VbtScanRun,
   VbtToday,
 } from "@/lib/vbt/fetch";
 
@@ -32,15 +33,24 @@ vi.mock("@/lib/vbt/fetch", () => ({
   fetchBook: vi.fn(),
   fetchBacktest: vi.fn(),
   fetchBars: vi.fn(),
+  fetchLastScan: vi.fn(),
 }));
+
+/* The action reaches `next-auth` through the write helper; the page only binds it to the form,
+   and "Scan now" has its own suite in `scan-now.test.tsx`. Same reason the swing page test mocks
+   its own `../actions`. */
+vi.mock("../actions", () => ({ scanNow: vi.fn() }));
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/vbt",
   useRouter: () => ({ refresh: vi.fn() }),
 }));
 
-const { fetchToday, fetchBreadth, fetchBook, fetchBacktest, fetchBars } =
+const { fetchToday, fetchBreadth, fetchBook, fetchBacktest, fetchBars, fetchLastScan } =
   await import("@/lib/vbt/fetch");
+
+/* No scan has been run in any of these fixtures — the state the sleeve is genuinely in. */
+vi.mocked(fetchLastScan).mockResolvedValue(null);
 
 function candidate(overrides: Partial<VbtCandidate> = {}): VbtCandidate {
   return {
@@ -438,5 +448,56 @@ describe("the Backtest page puts the caveats above the numbers", () => {
     expect(table).toHaveTextContent("31.4%");
     expect(table).toHaveTextContent("-8.1%");
     expect(screen.queryByTestId("drift-banner")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * "Scan now" is on the page — leaf 5 of `PLAN-SCAN-SYNC.md`.
+ *
+ * The control's own behaviour is `scan-now.test.tsx`; what this adds is the wiring, and the one
+ * claim the page must never stop making: the button is here, it is the only one, and nothing on
+ * this page can place an order.
+ */
+describe("Scan now is on the hub, and it is the only control there", () => {
+  async function renderToday(lastScan: VbtScanRun | null = null) {
+    vi.mocked(fetchToday).mockResolvedValue(today());
+    vi.mocked(fetchBreadth).mockResolvedValue(NO_BREADTH);
+    vi.mocked(fetchBars).mockResolvedValue(null);
+    vi.mocked(fetchLastScan).mockResolvedValue(lastScan);
+    render(await VbtTodayPage());
+  }
+
+  it("offers the button in the header, enabled, with nothing said about a run yet", async () => {
+    await renderToday();
+
+    const control = screen.getByTestId("vbt-scan-now");
+    expect(within(control).getByRole("button", { name: "Scan now" })).toBeEnabled();
+    expect(screen.getByTestId("vbt-scan-status")).toHaveTextContent("");
+  });
+
+  it("shows the last run's state beside it when the payload names one", async () => {
+    await renderToday({
+      id: 4,
+      status: "RUNNING",
+      requested_at: "2026-09-12T08:10:00+00:00",
+      finished_at: null,
+      error: null,
+    });
+
+    expect(screen.getByTestId("vbt-scan-status")).toHaveTextContent("Scanning now.");
+    expect(screen.getByRole("button", { name: "Scanning…" })).toBeDisabled();
+  });
+
+  it("renders exactly one button on the whole page, and it is Scan now", async () => {
+    await renderToday();
+
+    const names = screen.getAllByRole("button").map((node) => node.textContent?.trim());
+    expect(names).toEqual(["Scan now"]);
+  });
+
+  it("still tells the reader, in the page's own words, that nothing here can place an order", async () => {
+    await renderToday();
+
+    expect(document.body.textContent).toContain("nothing on this page can place an order");
   });
 });

@@ -44,6 +44,7 @@ import contextlib
 import dataclasses
 import datetime as dt
 import decimal
+import json
 import logging
 import uuid
 from collections.abc import Iterator
@@ -88,6 +89,32 @@ SWEEP_AT: Final = dt.time(15, 15)
 OPEN_STATE: Final = "OPEN"
 CLOSED_STATE: Final = "CLOSED"
 ENTERED_ORDER_STATES: Final[tuple[str, ...]] = ("CONFIRMED", "SENT", "PARTIAL", "FILLED")
+
+#: TW12's four states, and they are the swing book's and VBT-1's, in that order.
+SCAN_IN_FLIGHT: Final[tuple[str, ...]] = ("QUEUED", "RUNNING")
+#: TW12's two refusal windows, mirrored from ``baskfy_worker.tasks.twt_scan`` — the desk cannot
+#: import the worker (different venv, no Celery), so the numbers are copied and
+#: ``tests/test_twt_scan_desk.py`` asserts the two copies agree. VB12 made the same copy for the
+#: same reason; a third sleeve inventing its own numbers would be three answers to one question.
+SCAN_STALE_AFTER_SECONDS: Final = 600
+SCAN_MIN_INTERVAL_SECONDS: Final = 60
+
+
+class ScanRefused(Exception):
+    """:meth:`PgTwtStore.request_scan`'s two refusals, carrying the status the route answers with.
+
+    409 while one is in flight, 429 inside the minute — the contract's vocabulary, and the swing
+    desk's (`app/swing_desk.py`). VBT-1's ``/vbt/rescan`` answers 200 with ``accepted: false``
+    instead; that shape predates the contract and is not copied here, because a caller that has to
+    read the body to find out whether it was refused is a caller that will forget to.
+    """
+
+    def __init__(self, status: int, reason: str, *, run_id: int, retry_after: int | None = None):
+        super().__init__(reason)
+        self.status = status
+        self.reason = reason
+        self.run_id = run_id
+        self.retry_after = retry_after
 
 
 def _in_transaction(conn: Any) -> bool:  # noqa: ANN401 - a DB-API connection
@@ -747,6 +774,101 @@ class PgTwtStore:
             for row in rows
         ]
 
+    # -- TW12: the "Scan now" button's one table -------------------------------------------
+
+    def _scan_run_row(self, row: Any) -> dict:  # noqa: ANN401 - a driver row
+        detail = row["detail"]
+        return {
+            "id": int(row["id"]),
+            "requested_at": _stamp(row["requested_at"]),
+            "started_at": _stamp(row["started_at"]),
+            "finished_at": _stamp(row["finished_at"]),
+            "session_date": _date(row["session_date"]),
+            "status": str(row["status"]),
+            "source": str(row["source"]),
+            "detail": json.loads(detail) if isinstance(detail, str) else detail,
+            "error": row["error"],
+            "task_id": row["task_id"],
+        }
+
+    _SCAN_SELECT: Final = (
+        "SELECT id, requested_at, started_at, finished_at, session_date, status, source, "
+        "detail, error, task_id FROM "
+    )
+
+    def newest_scan(self) -> dict | None:
+        """This user's most recent **Scan now** request, whatever state it is in (TW12).
+
+        Both refusals are answered from this row rather than from a cache, so the rule holds on a
+        box with no Redis and is testable against the database alone — the argument SW15.1 made
+        for the swing book and VB12 repeated for VBT-1.
+        """
+        row = self.conn.execute(
+            f"{self._SCAN_SELECT}{self.t('tw_scan_run')} "
+            "WHERE user_id = ? ORDER BY requested_at DESC, id DESC LIMIT 1",
+            (self.user_id,),
+        ).fetchone()
+        return None if row is None else self._scan_run_row(row)
+
+    def scan_run(self, run_id: int) -> dict | None:
+        """One run by id, scoped to this user. ``None`` for somebody else's — the page must not
+        be able to poll a run it did not ask for, even on a desk with one tenant."""
+        row = self.conn.execute(
+            f"{self._SCAN_SELECT}{self.t('tw_scan_run')} WHERE user_id = ? AND id = ?",
+            (self.user_id, int(run_id)),
+        ).fetchone()
+        return None if row is None else self._scan_run_row(row)
+
+    def request_scan(
+        self,
+        *,
+        now: dt.datetime,
+        min_interval: dt.timedelta,
+        stale_after: dt.timedelta,
+        source: str = "desk",
+    ) -> int:
+        """Insert one ``QUEUED`` run for the worker's sweep to publish, or refuse.
+
+        **The desk has no Celery client**, so this is the whole of the button's write: a row.
+        Raises :class:`ScanRefused` with the contract's two statuses — 409 while a scan younger
+        than ``stale_after`` is ``QUEUED``/``RUNNING``, 429 when the newest request of any state
+        is inside ``min_interval``.
+
+        The order of the two checks matters and is the swing desk's: in-flight first, so a second
+        press two seconds after the first is told *what is happening* ("scan 4 is queued") rather
+        than *how long to wait*, which is the less useful of the two true answers.
+
+        It writes one row. It cannot size, place or cancel anything.
+        """
+        newest = self.newest_scan()
+        if newest is not None and newest["requested_at"] is not None:
+            requested_at = newest["requested_at"]
+            in_flight = newest["status"] in SCAN_IN_FLIGHT
+            if in_flight and requested_at > now - stale_after:
+                raise ScanRefused(
+                    409,
+                    f"Scan {newest['id']} is {str(newest['status']).lower()}; its result is on "
+                    f"its way.",
+                    run_id=newest["id"],
+                )
+            if requested_at > now - min_interval:
+                wait = min_interval - (now - requested_at)
+                seconds = max(1, int(wait.total_seconds() + 0.999))
+                ago = int((now - requested_at).total_seconds())
+                raise ScanRefused(
+                    429,
+                    f"A scan was requested {ago} s ago; one a minute is the limit. "
+                    f"Try again in {seconds} s.",
+                    run_id=newest["id"],
+                    retry_after=seconds,
+                )
+        row = self.conn.execute(
+            f"INSERT INTO {self.t('tw_scan_run')} (user_id, requested_at, status, source) "
+            "VALUES (?, ?, 'QUEUED', ?) RETURNING id",
+            (self.user_id, now, str(source)),
+        ).fetchone()
+        return int(row["id"])
+
     def breadth(self, on: dt.date) -> dict | None:
         row = self.conn.execute(
             f"SELECT date, measured_count, above_count, pct_above_dma, gate, thin_session "
@@ -1045,6 +1167,59 @@ def twt_page(request: Request) -> Any:  # noqa: ANN401 - a TemplateResponse
 @router.get("/twt/data")
 def twt_data() -> Any:  # noqa: ANN401 - a JSON-able dict
     return _jsonable(_view())
+
+
+@router.post("/twt/scan", status_code=202)
+def twt_scan_now() -> Any:  # noqa: ANN401 - a JSON-able dict
+    """TW12: ask for the latest **published** session to be detected again. Places nothing.
+
+    The night the chain's step was skipped because the quality gate refused the day, and the
+    morning after a threshold changed, this is the way to get the funnel recomputed without
+    waiting for 21:00 or reaching for a shell.
+
+    **It is not the swing book's "Scan now", although it is spelled like it.** That one scans
+    *today* from live quotes and labels its rows provisional. This one cannot and should not:
+    ``04`` §2 reads three *weekly* ranges that have closed, a monthly low, and a sessions-out
+    count over closed sessions. A bar built from a quote at 13:42 would change the answer without
+    making it truer. So there is no provisional path and no provisional column — the same
+    conclusion VB12 reached from different arithmetic (DECISIONS-TW **TW12.2**).
+
+    **202** with the run to poll; **409** while one is in flight, naming it; **429** inside the
+    minute, with ``Retry-After``. Both refusals are answered from ``tw_scan_run`` rather than from
+    a cache, so the rule holds on a box with no Redis and is testable against the database alone.
+
+    It writes one row, and the worker's sweep publishes it. Nothing on this path can size, place
+    or cancel anything: the task it queues calls the nightly's own detector and names no broker,
+    and ``packages/core/tests/test_twt_safety_properties.py`` asserts that over this route.
+    """
+    now = _now()
+    with open_store() as store:
+        try:
+            run_id = store.request_scan(
+                now=now,
+                min_interval=dt.timedelta(seconds=SCAN_MIN_INTERVAL_SECONDS),
+                stale_after=dt.timedelta(seconds=SCAN_STALE_AFTER_SECONDS),
+            )
+        except ScanRefused as exc:
+            headers = {"Retry-After": str(exc.retry_after)} if exc.retry_after else None
+            raise HTTPException(exc.status, exc.reason, headers=headers) from exc
+    return _jsonable({"run_id": run_id, "status": "QUEUED", "requested_at": now})
+
+
+@router.get("/twt/scan/{run_id}")
+def twt_scan_status(run_id: int) -> Any:  # noqa: ANN401 - a JSON-able dict
+    """One scan's state: ``QUEUED`` -> ``RUNNING`` -> ``DONE`` | ``FAILED``.
+
+    ``session_date`` is null until the worker has decided which session it is detecting, because
+    the caller asks for "the latest" and only the worker knows which that is. ``detail`` carries
+    the funnel on ``DONE`` and ``error`` the reason on ``FAILED``. A run id this user did not
+    request is a **404**, not somebody else's row.
+    """
+    with open_store() as store:
+        run = store.scan_run(run_id)
+    if run is None:
+        raise HTTPException(404, f"No scan {run_id}.")
+    return _jsonable(run)
 
 
 @router.post("/twt/execute")

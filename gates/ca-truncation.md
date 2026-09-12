@@ -107,7 +107,18 @@ request is a different file.
       deliberate backfill of the window. Neither is a deploy and neither happened here: this
       session was asked to verify the box, and writing 460 rows into the production
       `corporate_action` table is remediation, not verification.
-  EVIDENCE: pending — code deployed, data not re-fetched. 147/606 for the window, 22/87 for 11 Sep, PGIL bonus absent (12 Sep 2026).
+  EVIDENCE: pending — **the data half is now done and the adjustment half is deliberately not.**
+      `gates/ca-backfill.md` ran the window through the deployed feed on 12 Sep 2026: the box holds
+      **581** actions for 2026-08-01..09-30, up from 147, and PGIL's `bonus 2026-09-11 1:1` is
+      intact. The remaining gap to NSE's 606 is 25 and is accounted for — 14 REITs and InvITs that
+      have no row in `instrument`.
+      What this gate still asks for is *"the adjusted series is corrected, factors are recomputed on
+      the corrected series"*, and that was not done. **558 of the 581 are dividends**, and
+      `DECISIONS-MERGE.md` M27.1 measured the convention against the reference corpus at **price 42,
+      total 3**, finding that applying dividends "pushes them below even today's unadjusted
+      baseline". Rewriting 569 instruments' price history as a side effect of a capture run would
+      revert that measurement without taking it. The apply is a separate decision with its own
+      evidence and it is Maulik's.
 
 - [x] G9: The quality gate's threshold is **not** weakened anywhere in this repair. The gate was
       right; it is the only reason this was found.

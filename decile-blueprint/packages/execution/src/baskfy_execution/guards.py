@@ -29,6 +29,9 @@ UNTOUCHABLE_SERIES: frozenset[str] = frozenset({"GB", "GS"})
 # under a carry product, none can ever need closing under one.
 CARRY_PRODUCTS: frozenset[str] = frozenset({"NRML", "CNC"})
 DERIVATIVE_EXCHANGES: frozenset[str] = frozenset({"NFO", "BFO", "CDS", "BCD", "MCX"})
+#: Cash-equity venues. Anything else is either a derivative exchange (needs OPTIONS_ENABLED)
+#: or an unknown venue the gateway refuses rather than quietly sending.
+CASH_EXCHANGES: frozenset[str] = frozenset({"NSE", "BSE"})
 
 
 class UntouchableInstrumentError(RuntimeError):
@@ -68,6 +71,42 @@ def assert_tradeable(symbol: str, series: str | None = None) -> None:
        or (series or "").upper() in UNTOUCHABLE_SERIES:
         raise UntouchableInstrumentError(
             f"{symbol}: protected instrument (SGB/G-sec). This system will never trade it.")
+
+
+def product_exchange_refusal(
+    product: str,
+    exchange: str,
+    *,
+    intraday_enabled: bool,
+    options_enabled: bool,
+) -> str:
+    """Why this product/exchange pair is refused, or "" when the allow-list admits it.
+
+    Allow-list, not deny-list (AF 0.7): CNC on NSE/BSE is the only cash path; MIS needs
+    ``intraday_enabled``; any venue in ``DERIVATIVE_EXCHANGES`` needs ``options_enabled``.
+    A deny-list of NFO/BFO alone let MCX/NRML and CDS through every guard.
+    """
+    product_u = (product or "").upper().strip()
+    exchange_u = (exchange or "").upper().strip()
+    if exchange_u in DERIVATIVE_EXCHANGES:
+        if not options_enabled:
+            return "F&O/derivatives disabled (config.OPTIONS_ENABLED)"
+        return ""
+    if exchange_u not in CASH_EXCHANGES:
+        return (
+            f"{exchange_u or exchange!r}: exchange is neither cash equity (NSE/BSE) nor an "
+            f"enabled derivative venue"
+        )
+    if product_u == "MIS":
+        if not intraday_enabled:
+            return "MIS/intraday disabled (config.INTRADAY_ENABLED)"
+        return ""
+    if product_u != "CNC":
+        return (
+            f"{product_u or product!r}: only CNC is allowed on cash equity unless "
+            f"INTRADAY_ENABLED (MIS)"
+        )
+    return ""
 
 
 def filter_tradeable(symbols: list[str]) -> list[str]:

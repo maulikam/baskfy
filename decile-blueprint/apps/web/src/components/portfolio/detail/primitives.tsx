@@ -83,7 +83,7 @@ export function MetricValue({
   kind = "rupees",
   signed = false,
   compact = false,
-  short = "Not available",
+  short = "Needs more data",
   className,
 }: {
   metric: Metric;
@@ -106,16 +106,24 @@ export function MetricValue({
         </span>
       );
     }
+    /* AFH 5.2: one line + tooltip — no paragraph narrating absence under every tile. */
     return (
-      <span className={cn("block", className)}>
-        <span className="flex items-center gap-1 text-sm font-medium text-muted-foreground">
-          <CircleAlert aria-hidden="true" className="size-3.5 shrink-0 text-warning" />
-          Not available
-        </span>
-        <span className="mt-0.5 block max-w-[44ch] text-xs leading-snug text-muted-foreground">
-          {reason}
-        </span>
-      </span>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span
+            className={cn(
+              "inline-flex cursor-help items-center gap-1 text-sm font-medium text-muted-foreground",
+              className,
+            )}
+            title={reason}
+          >
+            <CircleAlert aria-hidden="true" className="size-3.5 shrink-0 text-warning" />
+            Needs more data
+            <span className="sr-only">{`${metric.label}: ${reason}`}</span>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-xs text-xs leading-relaxed">{reason}</TooltipContent>
+      </Tooltip>
     );
   }
 

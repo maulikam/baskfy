@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { DisclosureBlock } from "@/components/explore/disclosure-block";
 import { PageHeader } from "@/components/shell/page-header";
 import {
+  ExploreNotFound,
   ExploreUnavailable,
   fetchExploreBasket,
   fetchExploreConstituents,
@@ -51,7 +52,7 @@ export default async function BasketConstituentsPage({
   try {
     basket = await fetchExploreBasket(slug);
   } catch (error) {
-    if (error instanceof ExploreUnavailable) notFound();
+    if (error instanceof ExploreNotFound) notFound();
     throw error;
   }
 
@@ -61,6 +62,7 @@ export default async function BasketConstituentsPage({
   try {
     version = await fetchExploreConstituents(slug);
   } catch (error) {
+    if (error instanceof ExploreNotFound) throw error;
     if (!(error instanceof ExploreUnavailable)) throw error;
   }
   const rows = version?.constituents ?? [];

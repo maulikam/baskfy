@@ -1,7 +1,13 @@
 import "server-only";
 
+import { cache } from "react";
+
 import { serverApiOrigin } from "@/lib/api/config";
-import { ServerFetchTimeoutError, serverFetchJson } from "@/lib/api/server-fetch";
+import {
+  ServerFetchStatusError,
+  ServerFetchTimeoutError,
+  serverFetchJson,
+} from "@/lib/api/server-fetch";
 import { auth } from "@/lib/auth";
 
 /**
@@ -15,8 +21,12 @@ import { auth } from "@/lib/auth";
  * `no-store` rather than a revalidate window. A basket is a trading decision about today, and a
  * cached one is a decision about a day that has passed — the failure mode of showing a stale
  * basket is somebody acting on it.
+ *
+ * **404 vs unavailable (AUDIT 4.2).** A missing resource is `BasketNotFound`. A timeout or
+ * upstream blip is `BasketUnavailable` — never conflated into an empty-looking state.
  */
 
+export class BasketNotFound extends Error {}
 export class BasketUnavailable extends Error {}
 
 export interface BasketRow {
@@ -86,6 +96,9 @@ async function readJson(path: string): Promise<unknown> {
       timeoutMs: basketTimeoutMs,
     });
   } catch (error) {
+    if (error instanceof ServerFetchStatusError && error.status === 404) {
+      throw new BasketNotFound(`${path} not found`);
+    }
     if (error instanceof ServerFetchTimeoutError) {
       throw new BasketUnavailable(`${path} timed out after ${error.timeoutMs}ms`);
     }
@@ -113,10 +126,10 @@ async function readJson(path: string): Promise<unknown> {
  *
  * If the page tree is renamed again, these strings stay put.
  */
-export async function fetchBasket(): Promise<Basket> {
+export const fetchBasket = cache(async function fetchBasket(): Promise<Basket> {
   return (await readJson("/baskets")) as Basket;
-}
+});
 
-export async function fetchLatestPlan(): Promise<Plan> {
+export const fetchLatestPlan = cache(async function fetchLatestPlan(): Promise<Plan> {
   return (await readJson("/baskets/plan")) as Plan;
-}
+});

@@ -1,7 +1,13 @@
 import "server-only";
 
+import { cache } from "react";
+
 import { serverApiOrigin } from "@/lib/api/config";
-import { ServerFetchTimeoutError, serverFetchJson } from "@/lib/api/server-fetch";
+import {
+  ServerFetchStatusError,
+  ServerFetchTimeoutError,
+  serverFetchJson,
+} from "@/lib/api/server-fetch";
 import { auth } from "@/lib/auth";
 
 /**
@@ -9,8 +15,13 @@ import { auth } from "@/lib/auth";
  *
  * Catalog data comes from `GET /api/v1/explore` (SC2). There is no write helper here: Invest
  * CTAs hand off to `PlanHandoffPanel` or the desk console, never an order-placing endpoint.
+ *
+ * **404 vs unavailable (AUDIT 4.2).** A missing slug is `ExploreNotFound` and may become
+ * `notFound()`. A timeout, 5xx or network blip is `ExploreUnavailable` and must reach the
+ * error boundary — never a "this basket does not exist" page.
  */
 
+export class ExploreNotFound extends Error {}
 export class ExploreUnavailable extends Error {}
 
 export interface ExploreManagerBrief {
@@ -106,6 +117,9 @@ export async function readExploreJson(path: string): Promise<unknown> {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
   } catch (error) {
+    if (error instanceof ServerFetchStatusError && error.status === 404) {
+      throw new ExploreNotFound(`${path} not found`);
+    }
     if (error instanceof ServerFetchTimeoutError) {
       throw new ExploreUnavailable(`${path} timed out after ${error.timeoutMs}ms`);
     }
@@ -125,13 +139,17 @@ function toQuery(params: ExploreListParams): string {
   return encoded ? `?${encoded}` : "";
 }
 
-export async function fetchExploreList(params: ExploreListParams = {}): Promise<ExploreList> {
+export const fetchExploreList = cache(async function fetchExploreList(
+  params: ExploreListParams = {},
+): Promise<ExploreList> {
   return (await readExploreJson(`/explore${toQuery(params)}`)) as ExploreList;
-}
+});
 
-export async function fetchExploreBasket(slug: string): Promise<ExploreBasketCard> {
+export const fetchExploreBasket = cache(async function fetchExploreBasket(
+  slug: string,
+): Promise<ExploreBasketCard> {
   return (await readExploreJson(`/explore/${encodeURIComponent(slug)}`)) as ExploreBasketCard;
-}
+});
 
 export interface ExploreConstituent {
   symbol: string;
@@ -152,11 +170,13 @@ export interface ExploreConstituents {
   constituents: ExploreConstituent[];
 }
 
-export async function fetchExploreConstituents(slug: string): Promise<ExploreConstituents> {
+export const fetchExploreConstituents = cache(async function fetchExploreConstituents(
+  slug: string,
+): Promise<ExploreConstituents> {
   return (await readExploreJson(
     `/explore/${encodeURIComponent(slug)}/constituents`,
   )) as ExploreConstituents;
-}
+});
 
 export interface ExploreManager {
   slug: string;
@@ -168,6 +188,10 @@ export interface ExploreManager {
   disclosures_md: string | null;
 }
 
-export async function fetchExploreManager(slug: string): Promise<ExploreManager> {
-  return (await readExploreJson(`/explore/managers/${encodeURIComponent(slug)}`)) as ExploreManager;
-}
+export const fetchExploreManager = cache(async function fetchExploreManager(
+  slug: string,
+): Promise<ExploreManager> {
+  return (await readExploreJson(
+    `/explore/managers/${encodeURIComponent(slug)}`,
+  )) as ExploreManager;
+});

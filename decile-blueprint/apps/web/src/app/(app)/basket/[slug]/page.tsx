@@ -10,7 +10,7 @@ import { PerformanceChart } from "@/components/explore/performance-chart";
 import { ReturnStat } from "@/components/explore/return-stat";
 import { VolatilityChip } from "@/components/explore/volatility-chip";
 import { PageHeader } from "@/components/shell/page-header";
-import { ExploreUnavailable, fetchExploreBasket } from "@/lib/explore/fetch";
+import { ExploreNotFound, fetchExploreBasket } from "@/lib/explore/fetch";
 import { resolveBasketPerformanceSeries } from "@/lib/explore/performance";
 import { EMPTY_CELL, formatNumber, formatPercent, formatTradeDate } from "@/lib/format";
 
@@ -55,7 +55,7 @@ export default async function BasketDetailPage({
   try {
     basket = await fetchExploreBasket(slug);
   } catch (error) {
-    if (error instanceof ExploreUnavailable) notFound();
+    if (error instanceof ExploreNotFound) notFound();
     throw error;
   }
 

@@ -11,7 +11,8 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-const DATA_START = "2024-11-01";
+/** Fallback only when /meta/status is unreachable — never a second source of truth. */
+const FALLBACK_DATA_START = "2011-01-01";
 
 export default async function BuildBacktestsPage() {
   const api = await serverApi();
@@ -21,12 +22,15 @@ export default async function BuildBacktestsPage() {
     api.GET("/api/v1/meta/status"),
   ]);
 
+  const earliest = status.data?.data_start_date ?? FALLBACK_DATA_START;
+  const latest = status.data?.as_of ?? earliest;
+
   return (
     <BacktestsList
       initial={runs.data?.data ?? null}
       screens={screens.data?.data ?? []}
-      earliest={DATA_START}
-      latest={status.data?.as_of ?? DATA_START}
+      earliest={earliest}
+      latest={latest}
       error={runs.data ? null : (runs.error ?? "unreachable")}
     />
   );

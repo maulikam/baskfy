@@ -6917,3 +6917,14 @@ and `median < value`, an ordering that holds either way.
 **Needs Maulik**, or a session willing to settle it deliberately. Cheapest reversible option if
 someone wants movement now: make the card's value `close_raw`, keep the median adjusted, and say on
 the card which basis each is on — but that is a product-copy decision, not an engineering one.
+
+## AFG — published history start is `/meta/status.data_start_date` · ⚠ UNREVIEWED
+
+**Choice.** Every UI that names when history begins reads `data_start_date` from
+`GET /meta/status` (backtest date floors, About copy). No hard-coded `2024-11-01` / `2021-08-02`
+second source. Fallback `2011-01-01` only when the status call fails, matching D5's backfill floor.
+
+**Rejected.** Picking one of the marketing dates permanently — they disagreed because they
+described different seams (seed day vs mood series vs backfill target).
+
+**Reverse.** Restore the hard-coded floors and About sentence from the parent of this commit.

@@ -179,6 +179,8 @@ export const SECTION_TABS = {
     /* `docs/twt/05` §1: the fourth allocation, by the same argument as the third. Build is where
        the strategies live, and HOME1 fixes the primary chrome at five destinations. */
     { href: "/twt" as Route, label: "Three weeks tight" },
+    /* Names that land on more than one of the scans above — pair first, then with a screen. */
+    { href: "/build/overlap" as Route, label: "Overlap" },
   ],
   /*
     The swing hub (SW4, `docs/swing/05` §2): "Setups | Watchlist | Market | Positions | Journal".

@@ -57,7 +57,9 @@ describe("story strip helpers", () => {
 
     expect(stats.topPickSymbol).toBe("CUPID");
     expect(stats.topPickScore).toBe("2.5");
-    expect(stats.bestReturnText).toContain("120");
+    // Median of the top slice (80, 120) — not the outlier max (audit §1.9).
+    expect(stats.bestReturnText).toContain("100");
+    expect(stats.bestReturnText).not.toContain("120");
     expect(stats.medianVolText).not.toBeNull();
     expect(stats.asOfText).toContain("18 Aug");
   });

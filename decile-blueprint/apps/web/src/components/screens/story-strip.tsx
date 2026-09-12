@@ -89,7 +89,7 @@ export function StoryStrip({
                   : "—"
               }
             />
-            <Tile label="Best 1-yr return" value={stats.bestReturnText ?? "—"} />
+            <Tile label="Median 1-yr return (top 10)" value={stats.bestReturnText ?? "—"} />
             <Tile label="Median bumpiness" value={stats.medianVolText ?? "—"} />
             <Tile label="Results as of" value={stats.asOfText} />
           </>

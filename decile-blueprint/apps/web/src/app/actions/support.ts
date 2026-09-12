@@ -1,6 +1,7 @@
 "use server";
 
 import { serverApiOrigin } from "@/lib/api/config";
+import { SERVER_FETCH_TIMEOUT_MS } from "@/lib/api/server-fetch";
 import type { MutationResult } from "@/lib/auth/me";
 import { SUPPORT_TOPICS } from "@/lib/marketing/support-topics";
 
@@ -62,6 +63,7 @@ export async function sendSupportMessage(
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ name, email, topic, message }),
       cache: "no-store",
+      signal: AbortSignal.timeout(SERVER_FETCH_TIMEOUT_MS),
     });
   } catch {
     return { ok: false, message: UNREACHABLE };

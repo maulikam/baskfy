@@ -1,6 +1,7 @@
 import "server-only";
 
 import { serverApiOrigin } from "@/lib/api/config";
+import { SERVER_FETCH_TIMEOUT_MS } from "@/lib/api/server-fetch";
 import { auth } from "@/lib/auth";
 import { bodyForDraft, holdingsForDraft, type BenchmarkOption } from "@/lib/portfolio/draft-mapping";
 import type { PortfolioDraft } from "@/lib/portfolio/organize";
@@ -54,6 +55,7 @@ export async function fetchBenchmarkOptions(): Promise<readonly BenchmarkOption[
     const response = await fetch(`${serverApiOrigin()}/api/v1/meta/universes`, {
       headers: await authHeaders(),
       cache: "no-store",
+      signal: AbortSignal.timeout(SERVER_FETCH_TIMEOUT_MS),
     });
     if (!response.ok) return [];
     const rows: unknown = await response.json();
@@ -83,9 +85,14 @@ export async function createPortfolio(draft: PortfolioDraft): Promise<CreateResu
   try {
     const response = await fetch(`${serverApiOrigin()}/api/v1/portfolio`, {
       method: "POST",
-      headers: { ...(await authHeaders()), "content-type": "application/json" },
+      headers: {
+        ...(await authHeaders()),
+        "content-type": "application/json",
+        "Idempotency-Key": crypto.randomUUID(),
+      },
       body: JSON.stringify(body),
       cache: "no-store",
+      signal: AbortSignal.timeout(SERVER_FETCH_TIMEOUT_MS),
     });
     if (response.ok) {
       const created: unknown = await response.json();
@@ -151,6 +158,7 @@ async function addToPortfolio(draft: PortfolioDraft): Promise<CreateResult> {
         headers: { ...(await authHeaders()), "content-type": "application/json" },
         body: JSON.stringify(body),
         cache: "no-store",
+        signal: AbortSignal.timeout(SERVER_FETCH_TIMEOUT_MS),
       },
     );
     if (response.ok) return { ok: true, portfolioId };

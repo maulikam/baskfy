@@ -345,21 +345,21 @@ class NSEProvider:
             ex_date = _date(_first(row, ("exDate", "EX_DATE", "ex_date")))
             if not symbol or ex_date is None or ex_date < since:
                 continue
-            parsed = parse_corporate_action_purpose(purpose)
-            if parsed is None:
+            parsed_legs = parse_corporate_action_purposes(purpose)
+            if not parsed_legs:
                 continue
-            action_type, ratio_from, ratio_to, amount = parsed
-            actions.append(
-                CorporateAction(
-                    symbol=symbol,
-                    action_type=action_type,
-                    ex_date=ex_date,
-                    ratio_from=ratio_from,
-                    ratio_to=ratio_to,
-                    amount=amount,
-                    raw=dict(row),
+            for action_type, ratio_from, ratio_to, amount in parsed_legs:
+                actions.append(
+                    CorporateAction(
+                        symbol=symbol,
+                        action_type=action_type,
+                        ex_date=ex_date,
+                        ratio_from=ratio_from,
+                        ratio_to=ratio_to,
+                        amount=amount,
+                        raw=dict(row),
+                    )
                 )
-            )
         return actions
 
     def listings(self) -> list[ListingRecord]:
@@ -679,10 +679,7 @@ class NSEProvider:
         """Prime cookies, throttle, then fetch — under the retry policy."""
 
         def attempt() -> bytes:
-            client = self._require_client()
-            self._prime_cookies(client)
-            self._throttle()
-            return _body(_get(client, url), url)
+            return self._request(url)
 
         return call_with_retry(
             attempt, self._retry_policy, provider=self.name, hooks=self._retry_hooks
@@ -699,6 +696,8 @@ class NSEProvider:
         One visit to the site root before the first archive request; the client's cookie jar
         carries the result. Primed once per provider instance, not per request, because
         re-priming on every file is itself the kind of traffic pattern that gets throttled.
+        AF 3.11: a 401/403 clears the flag so the next call re-primes rather than looping on a
+        stale jar.
         """
         if self._cookies_primed:
             return
@@ -707,8 +706,30 @@ class NSEProvider:
         self._cookies_primed = True
 
     def _throttle(self) -> None:
-        if self._rate_limiter is not None:
-            self._rate_limiter.acquire()
+        """AF 3.11: a missing limiter is a hard refuse, not a silent no-op.
+
+        An unthrottled NSE client is how the §17 ~600-request stall happens. ``check()`` already
+        reports the gap; every live request must enforce it.
+        """
+        if self._rate_limiter is None:
+            raise ProviderUnavailable(
+                "NSE rate limiter is required; refusing an unthrottled request",
+                provider=self.name,
+            )
+        self._rate_limiter.acquire()
+
+    def _request(self, url: str) -> bytes:
+        """Throttled GET with a one-shot cookie re-prime on 401/403 (AF 3.11)."""
+        client = self._require_client()
+        self._prime_cookies(client)
+        self._throttle()
+        response = _get(client, url)
+        if response.status_code in (401, 403):
+            self._cookies_primed = False
+            self._prime_cookies(client)
+            self._throttle()
+            response = _get(client, url)
+        return _body(response, url)
 
 
 def build_http_client(settings: ProviderSettings) -> HttpClientLike:
@@ -987,12 +1008,26 @@ def _parse_demerger(text: str) -> ParsedAction:
 
 
 def _parse_dividend(text: str) -> ParsedAction:
-    amount = re.search(r"(?:RS\.?|RE\.?)\s*([\d.]+)", text)
-    return ("dividend", None, None, _to_decimal(amount.group(1)) if amount else None)
+    """Sum every ``RS x`` / ``RE x`` amount in the purpose (AF 3.3).
+
+    NSE writes combined cash legs as ``DIVIDEND - RS.2.50 + RS.1.00 PER SHARE``; keeping only
+    the first amount understated the cash adjustment.
+    """
+    amounts = [
+        value
+        for match in re.findall(r"(?:RS\.?|RE\.?)\s*([\d.]+)", text)
+        if (value := _to_decimal(match)) is not None
+    ]
+    if not amounts:
+        return ("dividend", None, None, None)
+    total = amounts[0]
+    for extra in amounts[1:]:
+        total += extra
+    return ("dividend", None, None, total)
 
 
-#: Keyword -> parser, checked in order. SPLIT precedes BONUS because NSE publishes combined
-#: "SPLIT AND BONUS" purposes, and the split leg is the one that changes the face value.
+#: Keyword -> parser. Order matters only for single-purpose strings; multi-leg purposes are
+#: split on AND before each segment is matched (AF 3.2).
 _PURPOSE_PARSERS: Final[tuple[tuple[str, Callable[[str], ParsedAction | None]], ...]] = (
     ("SPLIT", _parse_split),
     ("BONUS", _parse_bonus),
@@ -1151,22 +1186,37 @@ def parse_quote_equity(
 def parse_corporate_action_purpose(purpose: str) -> ParsedAction | None:
     """Read NSE's free-text "purpose" field into a typed action.
 
-    NSE does not publish a structured action type; it publishes strings like
-    ``"FACE VALUE SPLIT FROM RS.10/- TO RE.1/-"`` or ``"BONUS 4:1"``. The ratio convention that
-    comes out of here is docs/04's: split 10:1 -> ``from=10, to=1``; bonus 4:1 -> ``from=4, to=1``.
+    Prefer :func:`parse_corporate_action_purposes` when a row may carry multiple legs — this
+    helper returns the first leg only, for callers that still expect a single tuple.
+    """
+    legs = parse_corporate_action_purposes(purpose)
+    return legs[0] if legs else None
 
-    Returns ``None`` for purposes we do not model — AGMs, name changes, board meetings — which is
-    the overwhelming majority of rows in that file. Guessing at an unrecognised purpose would put
-    a wrong adjustment factor into every price before its ex-date, so an unreadable purpose is
-    dropped rather than approximated.
+
+def parse_corporate_action_purposes(purpose: str) -> list[ParsedAction]:
+    """Every modelled leg in an NSE purpose string (AF 3.2).
+
+    NSE publishes combined purposes such as ``FACE VALUE SPLIT … AND BONUS 1:1``. Matching the
+    first keyword alone dropped the bonus and understated the factor by 2×. Segments are split
+    on ``AND`` / ``&``; each segment contributes at most one action. Unmodelled text yields an
+    empty list rather than a guess.
     """
     text = purpose.upper().strip()
     if not text:
-        return None
-    for keyword, parse in _PURPOSE_PARSERS:
-        if keyword in text:
-            return parse(text)
-    return None
+        return []
+    segments = [part.strip() for part in re.split(r"\s+(?:AND|&)\s+", text) if part.strip()]
+    if len(segments) == 1:
+        segments = [text]
+    found: list[ParsedAction] = []
+    for segment in segments:
+        for keyword, parse in _PURPOSE_PARSERS:
+            if keyword not in segment:
+                continue
+            parsed = parse(segment)
+            if parsed is not None:
+                found.append(parsed)
+            break
+    return found
 
 
 def _to_decimal(text: str) -> Decimal | None:

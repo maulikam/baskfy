@@ -157,6 +157,9 @@ def _rows_for_day(
                 "lower_circuit": row["lower_circuit"],
                 "adj_factor": Decimal(1),
                 "source": BAR_SOURCE,
+                "open_raw": row["open"],
+                "high_raw": row["high"],
+                "low_raw": row["low"],
             }
         )
     return values, unmatched
@@ -168,20 +171,34 @@ async def upsert_day(session: AsyncSession, values: list[dict[str, object]]) -> 
     ``close``, ``volume`` and ``adj_factor`` are deliberately not overwritten on conflict, for the
     reason ``baskfy_worker.tasks.bars.upsert_bars`` gives: they are step 4's outputs, and
     re-ingesting a raw file must not silently un-adjust a series that has already been adjusted.
+
+    AF 0.6: same rule for OHL when ``adj_factor ≠ 1`` — refresh ``*_raw`` only.
     """
+    from sqlalchemy import case  # noqa: PLC0415 - mirror bars.upsert_bars
+
+    # Ensure raw OHL columns travel with every insert (older call sites may omit them).
+    for row in values:
+        row.setdefault("open_raw", row.get("open"))
+        row.setdefault("high_raw", row.get("high"))
+        row.setdefault("low_raw", row.get("low"))
+
     written = 0
     for offset in range(0, len(values), UPSERT_CHUNK):
         chunk = values[offset : offset + UPSERT_CHUNK]
         stmt = insert(OhlcvDaily).values(chunk)
+        keep_ohl = OhlcvDaily.adj_factor != 1
         await session.execute(
             stmt.on_conflict_do_update(
                 index_elements=[OhlcvDaily.instrument_id, OhlcvDaily.date],
                 set_={
-                    "open": stmt.excluded.open,
-                    "high": stmt.excluded.high,
-                    "low": stmt.excluded.low,
+                    "open": case((keep_ohl, OhlcvDaily.open), else_=stmt.excluded.open),
+                    "high": case((keep_ohl, OhlcvDaily.high), else_=stmt.excluded.high),
+                    "low": case((keep_ohl, OhlcvDaily.low), else_=stmt.excluded.low),
                     "close_raw": stmt.excluded.close_raw,
                     "volume_raw": stmt.excluded.volume_raw,
+                    "open_raw": stmt.excluded.open_raw,
+                    "high_raw": stmt.excluded.high_raw,
+                    "low_raw": stmt.excluded.low_raw,
                     "turnover": stmt.excluded.turnover,
                     "upper_circuit": stmt.excluded.upper_circuit,
                     "lower_circuit": stmt.excluded.lower_circuit,

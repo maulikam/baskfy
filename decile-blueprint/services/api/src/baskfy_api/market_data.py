@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Final
 
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, func, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_core.models import (
@@ -366,6 +366,12 @@ async def market_health_history(
 # ---------------------------------------------------------------------------
 
 
+#: Backfill seam for the listings register (AF 1.8). Instruments first seen on this calendar day
+#: were stamped ``listed_on`` by the reference ingest, not by an IPO — ~80 false "new listings"
+#: on staging. Hide them until a real IPO date is reconciled.
+LISTINGS_BACKFILL_SEAM: Final = dt.date(2026, 8, 17)
+
+
 def encode_cursor(listed_on: dt.date | None, symbol: str) -> str:
     """An opaque cursor naming the *last row of this page*, not an offset.
 
@@ -416,7 +422,12 @@ def listings_statement(query: ListingQuery) -> Select[tuple[Instrument]]:
     calls this.
     """
     sort_date = func.coalesce(Instrument.listed_on, NO_LISTING_DATE)
-    statement: Select[tuple[Instrument]] = select(Instrument).where(Instrument.is_active.is_(True))
+    statement: Select[tuple[Instrument]] = select(Instrument).where(
+        Instrument.is_active.is_(True),
+        # AF 1.8: hide the backfill seam day and rights-entitlement symbols (-RE*).
+        or_(Instrument.listed_on.is_(None), Instrument.listed_on != LISTINGS_BACKFILL_SEAM),
+        not_(Instrument.symbol.like("%-RE%")),
+    )
 
     if query.series:
         statement = statement.where(Instrument.series == query.series.upper())

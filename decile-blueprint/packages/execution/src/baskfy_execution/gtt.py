@@ -48,6 +48,7 @@ trigger it is asked to rest at is actually a stop.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final, Protocol
@@ -255,15 +256,17 @@ def refuse_stop(*, symbol: str, qty: int, trigger: float, last_price: float) -> 
       the one mistake here that loses money immediately rather than eventually. The desk's
       planner cannot produce one (`stop_from_vol` subtracts at least `STOP_MIN`), which is
       precisely why nothing downstream ever checked.
+    * NaN/Inf pass every ``<=`` / ``>=`` comparison as False, so an unchecked trigger used to
+      sail through; ``math.isfinite`` refuses them here (AF 3.6).
     """
     if qty <= 0:
         return f"{symbol}: GTT quantity must be positive, got {qty}"
-    if trigger <= 0:
-        return f"{symbol}: GTT trigger must be positive, got {trigger}"
-    if last_price <= 0:
+    if not math.isfinite(trigger) or trigger <= 0:
+        return f"{symbol}: GTT trigger must be a finite positive number, got {trigger!r}"
+    if not math.isfinite(last_price) or last_price <= 0:
         return (
-            f"{symbol}: no last price, so the trigger {trigger} cannot be checked against "
-            f"anything"
+            f"{symbol}: no finite last price, so the trigger {trigger} cannot be checked "
+            f"against anything"
         )
     if trigger >= last_price:
         return (
@@ -277,20 +280,26 @@ def band_finding(*, trigger: float, last_price: float, band: StopBand) -> str:
     """"too_far" / "too_close" / "" -- the desk's own two findings, same epsilon.
 
     `protection.py:114-127`. Reported, never refused: see `StopBand`.
+
+    ``too_close`` is journalled only against the weekly rebalancer's 8-12% band. Sleeve bands
+    (swing/VBT/TWT) start near 0.5%, so a legitimate vol-scaled stop would look "too_close"
+    against an 8% floor they do not use — noise in every journal (AF 3.9).
     """
-    if last_price <= 0:
+    if not math.isfinite(trigger) or not math.isfinite(last_price) or last_price <= 0:
         return ""
     drop = 1.0 - trigger / last_price
     if drop > band.max_pct + _BAND_EPSILON:
         return "too_far"
     if drop < band.min_pct - _BAND_EPSILON:
+        if band.min_pct + _BAND_EPSILON < DEFAULT_STOP_BAND.min_pct:
+            return ""
         return "too_close"
     return ""
 
 
 def drop_pct(*, trigger: float, last_price: float) -> float:
     """How far below the last price the trigger sits, in percent, rounded as the desk rounds."""
-    if last_price <= 0:
+    if not math.isfinite(trigger) or not math.isfinite(last_price) or last_price <= 0:
         return 0.0
     return round((1.0 - trigger / last_price) * 100.0, 2)
 

@@ -16,9 +16,14 @@ box() { bash "$ROOT/tools/deploy/box.sh" "$@" 2>/dev/null; }
 
 COMPOSE='docker compose -f compose.prod.yml --env-file .env.staging.compose'
 
-pins=$(box "cd /opt/baskfy && grep -cE '^BASKFY_(WEB|PY|DESK)_IMAGE=.*:${TAG}\$' .env.staging.compose" | tr -d '[:space:]')
-running=$(box "cd /opt/baskfy && $COMPOSE ps --format '{{.Service}}={{.State}}' | grep -c '=running'" | tr -d '[:space:]')
-cmd=$(box "cd /opt/baskfy && $COMPOSE exec -T web sh -lc 'grep -rl \"Portfolio Command Center\" /app | wc -l'" | tr -d '[:space:]')
+# `grep -c` exits 1 when it counts zero. Under `set -e` that killed this script outright, so it
+# could report success or NOTHING — never a failure, which is the one thing a verifier exists for.
+# Found 12 Sep 2026 when the tag argument was stale: pins was legitimately 0 and the script died
+# with no output, and the gate read as "the box is unreachable". Every count is now `|| true`'d and
+# defaulted, so a zero is reported as a zero.
+pins=$(box "cd /opt/baskfy && grep -cE '^BASKFY_(WEB|PY|DESK)_IMAGE=.*:${TAG}\$' .env.staging.compose || true" | tr -d '[:space:]')
+running=$(box "cd /opt/baskfy && $COMPOSE ps --format '{{.Service}}={{.State}}' | grep -c '=running' || true" | tr -d '[:space:]')
+cmd=$(box "cd /opt/baskfy && $COMPOSE exec -T web sh -lc 'grep -rl \"Portfolio Command Center\" /app | wc -l || true'" | tr -d '[:space:]')
 release=$(box "cd /opt/baskfy && $COMPOSE exec -T web sh -lc 'echo \$BASKFY_RELEASE'" | tr -d '[:space:]')
 twt=$(box "cd /opt/baskfy && grep -ciE '^BASKFY_TWT_EXECUTION_ENABLED=true' .env.staging.compose || true" | tr -d '[:space:]')
 

@@ -73,22 +73,35 @@ can be configured or funded at all.
 
 - [x] E6: **Nothing was funded and no flag moved.** Seeding creates a row at zero; it must not set
       a capital or enable execution.
-  CHECK: cd /Users/maulikdave/Documents/projects/baskfy && AWS_PROFILE=baskfy-poc bash tools/deploy/verify-pc-deploy.sh 8b074c7 2>&1 | tail -1
-  EXPECT: /running=10 .*twt_execution_true=0/
+      ⚠️ **This row hardcoded `8b074c7` and went silent the moment a second image shipped.** Worse,
+      it went silent rather than red: `verify-pc-deploy.sh` used `grep -c`, which exits 1 on zero
+      matches, and `set -e` killed the script — so it could report success or nothing, never a
+      failure, which is the one thing a verifier is for. The counts are `|| true`'d now (a wrong
+      tag reports `pins=0`, proved by running it with `deadbee`), and the tag comes from HEAD.
+  CHECK: cd /Users/maulikdave/Documents/projects/baskfy && AWS_PROFILE=baskfy-poc bash tools/deploy/verify-pc-deploy.sh $(git rev-parse --short HEAD) 2>&1 | tail -1
+  EXPECT: /^pins=3 running=10 .*twt_execution_true=0$/m
   EVIDENCE: pins=3 running=10 command_center=2 release=8b074c7 twt_execution_true=0 — ten services up, no TWT execution flag on the box, and the seeded capital is 0.00. Creating a row is not funding a sleeve.
 
-- [ ] E7: **The corrected copy is on the box.** E1 and E2 prove it in the repo; until a web image
+- [x] E7: **The corrected copy is on the box.** E1 and E2 prove it in the repo; until a web image
       carries it, the false sentence is still what Maulik reads. The deployed image must contain the
       unread-state testid and the new sentence.
-  CHECK: cd /Users/maulikdave/Documents/projects/baskfy && AWS_PROFILE=baskfy-poc bash tools/deploy/box.sh 'cd /opt/baskfy && docker compose -f compose.prod.yml --env-file .env.staging.compose exec -T web sh -lc "grep -rl \"No session has been read for this strategy yet\" /app | wc -l"' 2>&1 | tail -1
+      ⚠️ **The first CHECK grepped for the sentence and returned nothing, on an image that
+      contained it.** The phrase has spaces, so it needed a fourth level of quoting inside
+      `box.sh` → `docker compose exec` → `sh -lc` → `grep "..."`, and the innermost quotes
+      collapsed. Searching the testid instead — one token, no spaces — asks the same question and
+      cannot collapse — and then `tools/deploy/box-grep.sh` replaced even that, so the row asserts
+      the **actual sentence**, spaces included, rather than a testid standing in for it. The needle
+      travels as base64 and is read by `grep -F -f` from a file on the box, so no quote of the
+      caller's has to survive any layer. Third time this session a nested quote read as a broken box.
+  CHECK: cd /Users/maulikdave/Documents/projects/baskfy && AWS_PROFILE=baskfy-poc bash tools/deploy/box-grep.sh web /app "No session has been read for this strategy yet" 2>&1 | tail -1
   EXPECT: /^[1-9][0-9]*$/m
-  EVIDENCE: pending
+  EVIDENCE: 1 — the sentence "No session has been read for this strategy yet" is in the deployed image, and `twt-tight-empty` is also still there at 1, which is correct: the read-but-empty case still needs the original sentence. Both branches shipped, neither replaced the other.
 
-- [ ] E8: **The old sentence can no longer be reached with nothing read.** Both strings still exist
+- [x] E8: **The old sentence can no longer be reached with nothing read.** Both strings still exist
       in the bundle — that is correct, the read-but-empty case still needs the old one — so the
       assertion is that the unread branch exists beside it rather than that the old text is gone.
   CHECK: cd /Users/maulikdave/Documents/projects/baskfy && AWS_PROFILE=baskfy-poc bash tools/deploy/verify-pc-deploy.sh $(git rev-parse --short HEAD) 2>&1 | tail -1
   EXPECT: /pins=3 running=10 .*twt_execution_true=0/
-  EVIDENCE: pending
+  EVIDENCE: pins=3 running=10 command_center=2 release=c1ca302 twt_execution_true=0 — the box runs the new tag, ten services up, no execution flag moved. The deploy re-ran `seed twt`, which was a no-op against the row already there (ON CONFLICT DO NOTHING).
 
 <!-- A checked box whose EVIDENCE reads "pending" is UNMET. ABANDON: E<n> <reason> is the honest exit. -->

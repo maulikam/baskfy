@@ -112,3 +112,7 @@ Wave 2: H+I merged; D2 after ship / suites green.
 | D2 | orch | pending | box data job with backup id + alembic 0045 |
 | X.1 | X | merged | done — `83e40ef`: web lint 0 errors, 3268 tests green, openapi/client regenerated |
 | O.1 | orch | noted | database suites are serialized; a result taken during an overlap is void (AF O.1) |
+| V.1 | V | merged | done — `b02b2ff`/`8b1a132`: desk suite 2030 green; truncated web `docker build` and missing `REVALIDATE_SECRET` fixed |
+| T.1 | T | merged | done — `46a9156`: test-db 1848 passed; `make test` and `make lint` green |
+| I.7 | orch | merged | done — `77f765f`: version routes filtered on a visibility no row can hold (404 for every basket) |
+| SHIP | orch | in flight | `tools/deploy/ship.sh` from HEAD |

@@ -85,19 +85,19 @@ Wave 1: A–G merged into developer (`a4ee64f`).
 | 1.22 | G | merged | done |
 | 1.24 | G | merged | done |
 | 7 | G | merged | done |
-| 5.1 | H | merged | pending |
-| 5.2 | H | merged | pending |
-| 5.3 | H | merged | pending |
-| 5.4 | H | merged | pending |
-| 5.5 | H | merged | pending |
-| 5.6 | H | merged | pending |
-| 5.7 | H | merged | pending |
-| 5.8 | H | merged | pending |
-| 5.9 | H | merged | pending |
-| 5.10 | H | merged | pending |
-| 5.11 | H | merged | pending |
-| 5.12 | H | merged | pending |
-| 5.13 | H | merged | pending |
+| 5.1 | H | merged | done |
+| 5.2 | H | merged | done |
+| 5.3 | H | merged | done |
+| 5.4 | H | merged | done |
+| 5.5 | H | merged | done |
+| 5.6 | H | merged | done |
+| 5.7 | H | merged | done |
+| 5.8 | H | merged | done — needs explore router + lib/explore/fetch.ts: limit/offset; needs listings API: total |
+| 5.9 | H | merged | done — needed build/backtests + backtests-list/config-form |
+| 5.10 | H | merged | done |
+| 5.11 | H | merged | deferred — needs basket/[slug]: not owned by H (lane I versions tab) |
+| 5.12 | H | merged | done |
+| 5.13 | H | merged | done — needed backtests/metrics-table + explore/invest-cta overflow |
 | I.1 | I | merged | pending |
 | I.2 | I | merged | pending |
 | I.3 | I | merged | pending |

@@ -22,9 +22,11 @@ import type { Route } from "next";
 
 import { PAGES, type PagePath } from "@/lib/vocabulary";
 
-export type NavStatus = "ready" | "planned";
-
-interface NavItemBase {
+/**
+ * Every nav destination is ready. The `planned` status and `arrivesIn` machinery were deleted
+ * (AUDIT 4.10) — there were no planned items left, and the type only existed to keep dead UI.
+ */
+export interface NavItem {
   /** The plain-English name, from `lib/vocabulary` or a primary-nav override. */
   label: string;
   /** One sentence saying what the destination answers. */
@@ -33,20 +35,9 @@ interface NavItemBase {
   formerly?: string;
   /** lucide-react icon name, resolved in the shell so this module stays serialisable. */
   icon: NavIconName;
-}
-
-export interface ReadyNavItem extends NavItemBase {
   status: "ready";
   href: Route;
 }
-
-export interface PlannedNavItem extends NavItemBase {
-  status: "planned";
-  href: string;
-  arrivesIn: string;
-}
-
-export type NavItem = ReadyNavItem | PlannedNavItem;
 
 export interface NavGroup {
   label: string | null;
@@ -83,7 +74,7 @@ export type NavIconName =
   | "wrench"
   | "store";
 
-function page(href: PagePath & Route, icon: NavIconName): ReadyNavItem {
+function page(href: PagePath & Route, icon: NavIconName): NavItem {
   const entry = PAGES[href];
   return {
     href,
@@ -99,7 +90,7 @@ function page(href: PagePath & Route, icon: NavIconName): ReadyNavItem {
  * The five consumer destinations in the sticky header / mobile bottom bar.
  * Labels are fixed one-word IA tokens — not the section page titles (Today, Explore, …).
  */
-export const PRIMARY_NAV: readonly ReadyNavItem[] = [
+export const PRIMARY_NAV: readonly NavItem[] = [
   {
     href: "/home",
     label: "Home",

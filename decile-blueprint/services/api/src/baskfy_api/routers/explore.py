@@ -670,12 +670,16 @@ async def get_explore_performance(
         raise not_found("basket", slug)
 
     versions = (
-        await session.execute(
-            select(CbBasketVersion)
-            .where(CbBasketVersion.basket_id == basket.id)
-            .order_by(CbBasketVersion.version_no.asc())
+        (
+            await session.execute(
+                select(CbBasketVersion)
+                .where(CbBasketVersion.basket_id == basket.id)
+                .order_by(CbBasketVersion.version_no.asc())
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     if not versions:
         return PerformanceOut(slug=slug, points=[], coverage=Decimal("0.00"))
 
@@ -707,9 +711,7 @@ async def get_explore_performance(
         return PerformanceOut(slug=slug, points=[], coverage=Decimal("0.00"))
 
     start = history_versions[0].effective_date
-    as_of = (
-        await session.execute(select(func.max(OhlcvDaily.date)))
-    ).scalar_one_or_none()
+    as_of = (await session.execute(select(func.max(OhlcvDaily.date)))).scalar_one_or_none()
     if as_of is None or as_of < start:
         return PerformanceOut(slug=slug, points=[], coverage=Decimal("0.00"))
 

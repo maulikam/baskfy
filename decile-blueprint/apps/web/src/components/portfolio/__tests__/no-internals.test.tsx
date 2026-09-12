@@ -87,6 +87,8 @@ function emptyOverview(): Overview {
     sync_status: [],
     attention: [],
     unallocated: EMPTY_PILE,
+    live_overlay: false,
+    sync_summary: "No broker connected",
   };
 }
 

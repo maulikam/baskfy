@@ -72,7 +72,7 @@ describe("GET /logout", () => {
 
   it("does not clear the session itself — it posts a form so the mutation is POST", async () => {
     const { GET } = await import("../route");
-    const response = await GET(new NextRequest("https://staging.baskfy.com/logout"));
+    const response = GET(new NextRequest("https://staging.baskfy.com/logout"));
     expect(response.status).toBe(200);
     expect(response.headers.get("clear-site-data")).toBeNull();
     const body = await response.text();

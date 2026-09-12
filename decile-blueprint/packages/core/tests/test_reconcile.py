@@ -12,6 +12,7 @@ from decimal import Decimal
 
 import polars as pl
 import pytest
+from _law1_io import reference_export_path
 
 from baskfy_core.reconcile import (
     ALL_CHECKS,
@@ -31,7 +32,6 @@ from baskfy_core.reconcile import (
     skip_month_evidence,
     total_disagreements,
 )
-from _law1_io import reference_export_path
 from baskfy_core.reference_export import read_export
 
 

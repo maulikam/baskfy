@@ -58,7 +58,7 @@ export function BookBoxCard({ box }: { box: BookBox }) {
   return (
     <li>
       <Link
-        href={box.href as never}
+        href={box.href}
         data-testid="book-box"
         data-kind={box.kind}
         className="flex h-full flex-col gap-3 rounded-xl border border-border/70 bg-card p-4 transition-colors hover:border-foreground/40"

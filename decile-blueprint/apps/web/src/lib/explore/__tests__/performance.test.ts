@@ -36,14 +36,15 @@ describe("resolveBasketPerformanceSeries", () => {
       "fetch",
       vi.fn().mockResolvedValue({
         ok: true,
-        json: async () => ({
-          slug: "any-slug",
-          coverage: "0.9200",
-          points: [
-            { date: "2025-09-01", basket: "100.00" },
-            { date: "2026-09-01", basket: "148.00" },
-          ],
-        }),
+        json: () =>
+          Promise.resolve({
+            slug: "any-slug",
+            coverage: "0.9200",
+            points: [
+              { date: "2025-09-01", basket: "100.00" },
+              { date: "2026-09-01", basket: "148.00" },
+            ],
+          }),
       }),
     );
     const resolved = await resolveBasketPerformanceSeries("any-slug", METRICS);

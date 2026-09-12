@@ -1,5 +1,4 @@
 import Link from "next/link";
-import type { Route } from "next";
 
 import { StrategyMark } from "@/components/discover/strategy-mark";
 import { formatReturn, formatRupees } from "@/lib/discover/metrics";
@@ -49,7 +48,7 @@ export function BasketCard({
         "hover:border-muted-foreground/40 hover:bg-muted/30",
       )}
     >
-      <Link href={basket.href as Route} className="flex flex-col gap-3 focus:outline-none">
+      <Link href={basket.href} className="flex flex-col gap-3 focus:outline-none">
         <div className="flex items-start gap-3">
           <StrategyMark categories={basket.categories ?? []} />
           <div className="min-w-0 flex-1">

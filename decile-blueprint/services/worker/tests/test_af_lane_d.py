@@ -5,7 +5,9 @@ from __future__ import annotations
 import datetime as dt
 from decimal import Decimal
 
+import polars as pl
 import pytest
+from helpers import add_bar, make_instrument
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,9 +18,6 @@ from baskfy_providers.nse import (
 )
 from baskfy_worker.tasks.adjustments import reprocess_instrument
 from baskfy_worker.tasks.bars import upsert_bars
-import polars as pl
-
-from helpers import add_bar, make_instrument
 
 
 @pytest.mark.db
@@ -151,9 +150,7 @@ class TestOnConflictSkipsAdjustedOhl:
 class TestM29SeamRescale:
     """AF 3.1 — a later split must rescale ``kite_adjusted`` deep history."""
 
-    async def test_deep_segment_moves_with_the_seam_factor(
-        self, session: AsyncSession
-    ) -> None:
+    async def test_deep_segment_moves_with_the_seam_factor(self, session: AsyncSession) -> None:
         instrument = await make_instrument(session, "SEAMCO", token=91003)
         deep_day = dt.date(2017, 1, 2)
         seam = dt.date(2024, 1, 2)

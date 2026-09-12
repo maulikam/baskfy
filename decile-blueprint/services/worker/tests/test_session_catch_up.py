@@ -190,9 +190,7 @@ class TestItNeverProposesADayThatCannotHaveData:
             session, FRI, published=False
         )
         assert demoted is True
-        row = (
-            await session.execute(select(TradingDay).where(TradingDay.date == FRI))
-        ).scalar_one()
+        row = (await session.execute(select(TradingDay).where(TradingDay.date == FRI))).scalar_one()
         assert row.is_trading_day is False
         assert await catch_up.unlanded_sessions(session, through=FRI, lookback_days=0) == []
 

@@ -11,8 +11,8 @@ from __future__ import annotations
 from decimal import Decimal
 
 import pytest
-
 from _law1_io import reference_export_path
+
 from baskfy_core.reference_export import (
     EXPORT_COLUMNS,
     FACTOR_COLUMN_MAP,

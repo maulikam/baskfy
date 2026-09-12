@@ -26,6 +26,7 @@ from baskfy_providers.nse import (
     NSEProvider,
     NSERuntime,
     parse_corporate_action_purpose,
+    parse_corporate_action_purposes,
     parse_equity_quote,
 )
 from baskfy_providers.ports import REFERENCE_CAPABILITIES, Capability
@@ -107,8 +108,6 @@ class TestThrottleIsMandatory:
     """AF 3.11 — an unthrottled NSE client must refuse, not silently fire."""
 
     def test_throttle_raises_without_a_limiter(self, settings: ProviderSettings) -> None:
-        from baskfy_providers.errors import ProviderUnavailable
-
         provider = NSEProvider(settings)
         with pytest.raises(ProviderUnavailable, match="rate limiter"):
             provider._throttle()
@@ -391,8 +390,6 @@ class TestCorporateActionPurposes:
 
     def test_split_and_bonus_emit_both_legs(self) -> None:
         """AF 3.2 — a combined purpose must not drop the bonus leg."""
-        from baskfy_providers.nse import parse_corporate_action_purposes
-
         legs = parse_corporate_action_purposes(
             "FACE VALUE SPLIT FROM RS.10/- TO RE.1/- AND BONUS 1:1"
         )

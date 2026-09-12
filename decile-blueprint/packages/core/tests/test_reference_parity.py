@@ -67,11 +67,11 @@ from typing import Final
 
 import polars as pl
 import pytest
+from _law1_io import reference_export_path
 
 from baskfy_core.blends import BLEND_SHAPES
 from baskfy_core.factors import compute_factors
 from baskfy_core.precision import quantise
-from _law1_io import reference_export_path
 from baskfy_core.reference_export import (
     EXPORT_COLUMNS,
     FACTOR_COLUMN_MAP,

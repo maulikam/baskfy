@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from baskfy_api.problems import ProblemType, STATUS_FOR, bad_request
+from baskfy_api.problems import STATUS_FOR, ProblemType, bad_request
 
 
 def test_bad_request_is_a_400_distinct_from_invalid_screen() -> None:

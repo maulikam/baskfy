@@ -52,8 +52,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from baskfy_api.auth import Principal, PrincipalKind
 from baskfy_api.problems import Problem, ProblemType
 from baskfy_api.routers.portfolio_overview import (
+    BrokerRefOut,
     NavRange,
+    OverviewOut,
     ResolveBody,
+    SyncStatusOut,
+    _sync_summary,
     portfolio_activity,
     portfolio_detail,
     portfolio_holdings,
@@ -1294,39 +1298,26 @@ def test_the_router_has_no_order_path() -> None:
         )
 
 
-#: Every write ``portfolio_overview`` is allowed to declare, and why each is bookkeeping rather
-#: than an order. A route not in this set fails the guard below until somebody adds it here with
 # ---------------------------------------------------------------------------
 # Audit 0.4 / 0.9 — real valuations and live-overlay previous close
 # ---------------------------------------------------------------------------
 
 
-
 def test_overview_out_exposes_live_overlay() -> None:
     """Audit 4.1: OverviewOut tells the web whether Kite marks are on."""
-    from baskfy_api.routers.portfolio_overview import OverviewOut
-
     assert "live_overlay" in OverviewOut.model_fields
     assert OverviewOut.model_fields["live_overlay"].default is False
 
 
 def test_sync_summary_is_one_sentence_for_every_surface() -> None:
     """Audit 1.3: connected ≠ synced; Activity and the command centre must share one field."""
-    from baskfy_api.routers.portfolio_overview import (  # noqa: PLC0415
-        BrokerRefOut,
-        SyncStatusOut,
-        _sync_summary,
-    )
-
     none = _sync_summary([])
     assert none == "No broker connected"
 
     never = _sync_summary(
         [
             SyncStatusOut(
-                broker=BrokerRefOut(
-                    broker_account_id=1, broker_id="zerodha", label="primary"
-                ),
+                broker=BrokerRefOut(broker_account_id=1, broker_id="zerodha", label="primary"),
                 synced_on=None,
                 label="Holdings not synced yet",
             )
@@ -1337,9 +1328,7 @@ def test_sync_summary_is_one_sentence_for_every_surface() -> None:
     dated = _sync_summary(
         [
             SyncStatusOut(
-                broker=BrokerRefOut(
-                    broker_account_id=1, broker_id="zerodha", label="primary"
-                ),
+                broker=BrokerRefOut(broker_account_id=1, broker_id="zerodha", label="primary"),
                 synced_on=TODAY,
                 label=f"Holdings synced: {TODAY.isoformat()}",
             )
@@ -1349,16 +1338,16 @@ def test_sync_summary_is_one_sentence_for_every_surface() -> None:
 
 
 def test_twr_and_drawdown_are_none_until_two_real_valuations() -> None:
-    """Audit 0.4: a ₹1 seed mark must not produce −100 % TWR / drawdown / a ₹1 peak.
+    """Audit 0.4: a ₹1 seed mark must not produce -100 % TWR / drawdown / a ₹1 peak.
 
     The old code chain-linked every stored mark. A placeholder first row of ₹1 against a later
-    real mark made every derived return −100 % (or a peak of ₹1.00 on the wealth index). Refuse
+    real mark made every derived return -100 % (or a peak of ₹1.00 on the wealth index). Refuse
     until ≥2 marks strictly above ₹1 exist.
     """
     from baskfy_api.routers.portfolio_overview import (  # noqa: PLC0415 - local to this pin
-        _SeriesMeta,
         _consolidated_twr,
         _series_out,
+        _SeriesMeta,
     )
 
     seed = PortfolioNavDaily(
@@ -1418,7 +1407,7 @@ def test_twr_and_drawdown_are_none_until_two_real_valuations() -> None:
     assert ready.max_drawdown is not None
     assert _consolidated_twr([seed, alone, second]).value is not None
     # The seed mark remains on the chart; derived views start from the first real mark.
-    assert [point.value for point in ready.points][0] == Decimal("1.00")
+    assert next(point.value for point in ready.points) == Decimal("1.00")
     assert ready.total_return.since == YESTERDAY
 
 
@@ -1447,6 +1436,8 @@ async def test_live_overlay_sets_previous_to_the_stored_recency_one_close(
     )
 
 
+#: Every write ``portfolio_overview`` is allowed to declare, and why each is bookkeeping rather
+#: than an order. A route not in this set fails the guard below until somebody adds it here with
 #: its reason — which is the review this test exists to force.
 BOOKKEEPING_WRITES = {
     # §4.3: answers a question about a holdings change the sync already observed.

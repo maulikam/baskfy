@@ -7,11 +7,10 @@ from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
-import polars as pl
 import pytest
 
 from baskfy_core.basket import build_plan
-from baskfy_core.factors import _cutler_rsi, _with_rsi
+from baskfy_core.factors import _cutler_rsi
 from baskfy_core.score import apply_filters
 from baskfy_core.windows import FactorWindow, bars_required, subtract_months
 

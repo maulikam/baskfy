@@ -293,7 +293,7 @@ def _is_permanent(status: int) -> bool:
     return status not in RETRYABLE_CLIENT_STATUSES
 
 
-async def attempt_delivery(  # noqa: PLR0913 - the row, its endpoint, config, transport and clock
+async def attempt_delivery(  # noqa: PLR0913,PLR0915 - row/endpoint/config/transport/clock
     session: AsyncSession,
     delivery: WebhookDelivery,
     endpoint: WebhookEndpoint,

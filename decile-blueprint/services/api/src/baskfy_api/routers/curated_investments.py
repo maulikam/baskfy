@@ -641,11 +641,7 @@ async def list_investments(  # noqa: PLR0912 — list path gathers holdings/batc
         }
 
     instrument_ids = sorted(
-        {
-            int(h.instrument_id)
-            for holdings in holdings_by_inv.values()
-            for h in holdings
-        }
+        {int(h.instrument_id) for holdings in holdings_by_inv.values() for h in holdings}
     )
     live = await live_prices_by_instrument(session, instrument_ids) if instrument_ids else {}
 
@@ -795,9 +791,7 @@ async def get_investment(
         and a.payload.get("basket_id") == inv.basket_id
         for a in pending
     )
-    live = await live_prices_by_instrument(
-        session, [int(h.instrument_id) for h in holding_rows]
-    )
+    live = await live_prices_by_instrument(session, [int(h.instrument_id) for h in holding_rows])
     row = _row_out(
         inv,
         basket,

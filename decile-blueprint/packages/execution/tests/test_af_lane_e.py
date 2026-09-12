@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import math
 from pathlib import Path
 
-import pytest
 from baskfy_execution import OrderGateway, ProductGates, RiskConfig, RiskManager, TenantIds
 from baskfy_execution.gtt import DEFAULT_STOP_BAND, StopBand, band_finding, refuse_stop
 
@@ -104,7 +104,7 @@ def test_sent_is_replayed_from_the_journal_on_construction(tmp_path: Path) -> No
         + "\n",
         encoding="utf-8",
     )
-    gw, _ = _gw(tmp_path)
+    _, _ = _gw(tmp_path)
     # Reconstruct against the same journal so replay sees the prior dry_run.
     gw2 = OrderGateway(
         RecordingKC(),
@@ -235,10 +235,7 @@ def test_sleeve_band_does_not_journal_too_close() -> None:
 
 # --- 3.7 -------------------------------------------------------------------------------
 def test_gross_exposure_is_required_on_place() -> None:
-    params = OrderGateway.place.__annotations__
     # Keyword-only without a default: inspect via the signature default sentinel.
-    import inspect
-
     sig = inspect.signature(OrderGateway.place)
     assert sig.parameters["gross_exposure"].default is inspect.Parameter.empty
 

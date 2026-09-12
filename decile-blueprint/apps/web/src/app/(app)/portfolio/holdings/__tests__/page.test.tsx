@@ -8,56 +8,64 @@ import PortfolioHoldingsPage from "../page";
  * Allocated holdings must appear grouped by portfolio.
  */
 vi.mock("@/lib/brokers/fetch", () => ({
-  fetchBrokerCatalog: vi.fn(async () => ({ brokers: [{ id: "zerodha", connected: true }] })),
+  fetchBrokerCatalog: vi.fn(() =>
+    Promise.resolve({ brokers: [{ id: "zerodha", connected: true }] }),
+  ),
 }));
 
 vi.mock("@/lib/portfolio/fetch", () => ({
-  fetchPortfolioOverview: vi.fn(async () => ({
-    sync_summary: "Holdings synced: 2026-09-11",
-  live_overlay: false,
-    portfolios: [{ portfolio_id: 1, name: "Bonds", kind: "CAPITAL" }],
-    monitoring_views: [],
-    unallocated: {
-      cash: "0",
-      holdings_count: 0,
-      holdings_value: "0",
-      total_value: "0",
-      cta: "Organize",
-    },
-  })),
-  fetchPortfolioHoldings: vi.fn(async () => ({
-    prices_label: "Prices: close of 2026-09-11",
-    holdings_synced_label: "Holdings synced: 2026-09-11",
-    rows: [
-      {
-        instrument: { instrument_id: 1, symbol: "LOOSE", name: "Loose" },
-        quantity: "10",
-        value: "1000.00",
-        allocated: false,
-        split_across_portfolios: false,
-        allocation: null,
-        brokers: [],
-        monitoring_views: [],
-        pending_reconciliation: false,
+  fetchPortfolioOverview: vi.fn(() =>
+    Promise.resolve({
+      sync_summary: "Holdings synced: 2026-09-11",
+      live_overlay: false,
+      portfolios: [{ portfolio_id: 1, name: "Bonds", kind: "CAPITAL" }],
+      monitoring_views: [],
+      unallocated: {
+        cash: "0",
+        holdings_count: 0,
+        holdings_value: "0",
+        total_value: "0",
+        cta: "Organize",
       },
-      {
-        instrument: { instrument_id: 2, symbol: "BOND1", name: "Bond One" },
-        quantity: "5",
-        value: "5000.00",
-        allocated: true,
-        split_across_portfolios: false,
-        allocation: { portfolio_id: 1, name: "Bonds", kind: "CAPITAL" },
-        brokers: [],
-        monitoring_views: [],
-        pending_reconciliation: false,
-      },
-    ],
-  })),
-  fetchGroupingSuggestions: vi.fn(async () => ({
-    suggestions: [],
-    unavailableReason: null,
-    sectors: {},
-  })),
+    }),
+  ),
+  fetchPortfolioHoldings: vi.fn(() =>
+    Promise.resolve({
+      prices_label: "Prices: close of 2026-09-11",
+      holdings_synced_label: "Holdings synced: 2026-09-11",
+      rows: [
+        {
+          instrument: { instrument_id: 1, symbol: "LOOSE", name: "Loose" },
+          quantity: "10",
+          value: "1000.00",
+          allocated: false,
+          split_across_portfolios: false,
+          allocation: null,
+          brokers: [],
+          monitoring_views: [],
+          pending_reconciliation: false,
+        },
+        {
+          instrument: { instrument_id: 2, symbol: "BOND1", name: "Bond One" },
+          quantity: "5",
+          value: "5000.00",
+          allocated: true,
+          split_across_portfolios: false,
+          allocation: { portfolio_id: 1, name: "Bonds", kind: "CAPITAL" },
+          brokers: [],
+          monitoring_views: [],
+          pending_reconciliation: false,
+        },
+      ],
+    }),
+  ),
+  fetchGroupingSuggestions: vi.fn(() =>
+    Promise.resolve({
+      suggestions: [],
+      unavailableReason: null,
+      sectors: {},
+    }),
+  ),
 }));
 
 vi.mock("@/app/actions/portfolio", () => ({

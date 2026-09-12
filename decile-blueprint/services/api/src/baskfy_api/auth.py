@@ -175,7 +175,11 @@ async def current_principal(request: Request, session: SessionDep) -> Principal:
     if user.session_epoch > _token_epoch(claims):
         log.info(
             "token epoch stale",
-            extra={"subject": subject, "token_epoch": _token_epoch(claims), "user_epoch": user.session_epoch},
+            extra={
+                "subject": subject,
+                "token_epoch": _token_epoch(claims),
+                "user_epoch": user.session_epoch,
+            },
         )
         raise unauthenticated("The bearer token has been revoked.")
     return Principal(

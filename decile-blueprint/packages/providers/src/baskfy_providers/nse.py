@@ -1197,7 +1197,7 @@ def parse_corporate_action_purposes(purpose: str) -> list[ParsedAction]:
     """Every modelled leg in an NSE purpose string (AF 3.2).
 
     NSE publishes combined purposes such as ``FACE VALUE SPLIT … AND BONUS 1:1``. Matching the
-    first keyword alone dropped the bonus and understated the factor by 2×. Segments are split
+    first keyword alone dropped the bonus and understated the factor by 2x. Segments are split
     on ``AND`` / ``&``; each segment contributes at most one action. Unmodelled text yields an
     empty list rather than a guess.
     """

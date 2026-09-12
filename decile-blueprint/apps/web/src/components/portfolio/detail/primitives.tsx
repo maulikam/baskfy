@@ -1,6 +1,5 @@
 "use client";
 
-import type { Route } from "next";
 import Link from "next/link";
 import { CircleAlert, Clock, Info, Lock } from "lucide-react";
 import type { ReactNode } from "react";
@@ -305,7 +304,7 @@ export function StateCallout({ state }: { state: WorkspaceState }) {
         </p>
         <p className="mt-1 flex flex-wrap items-center gap-2 text-xs">
           <Link
-            href={state.action.href as Route}
+            href={state.action.href}
             className="font-medium text-brand-strong underline-offset-4 hover:underline"
           >
             {state.action.label}

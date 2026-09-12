@@ -38,10 +38,10 @@ from typing import Final
 import numpy as np
 import polars as pl
 import pytest
+from _law1_io import seed_holidays
 from benchmarks.budgets import record
 
 from baskfy_core.factors import compute_factors
-from _law1_io import seed_holidays
 
 pytestmark = pytest.mark.benchmark
 

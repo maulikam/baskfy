@@ -110,9 +110,7 @@ def apply_filters(u: pd.DataFrame, cfg: ScoringConfig) -> pd.DataFrame:
     # False, so without an explicit isna() a missing median_volume / MA / away_from_high
     # used to sail through (AF 3.8; non-negotiable 7 wants NULL = rejected).
     u.loc[
-        u.ma_50.isna()
-        | u.ma_200.isna()
-        | ((u.close < u.ma_50) & (u.close < u.ma_200)),
+        u.ma_50.isna() | u.ma_200.isna() | ((u.close < u.ma_50) & (u.close < u.ma_200)),
         "reject",
     ] += "below50&200DMA;"
     u.loc[(u.absolute_return_three_months < 0) & (u.absolute_return_six_months < 0), "reject"] += (

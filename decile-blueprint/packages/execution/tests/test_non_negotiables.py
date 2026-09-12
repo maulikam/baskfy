@@ -386,9 +386,7 @@ def test_non_negotiable_7b_an_untouchable_is_refused_a_gtt_in_both_directions(
     )
     assert out["status"] == "BLOCKED"
     assert "protected instrument" in str(out["error"])
-    out = asyncio.run(
-        gw.delete_gtt(gtt_id=1, symbol=symbol, tenant=TENANT, plan_tenant=TENANT)
-    )
+    out = asyncio.run(gw.delete_gtt(gtt_id=1, symbol=symbol, tenant=TENANT, plan_tenant=TENANT))
     assert out["status"] == "BLOCKED"
     assert "protected instrument" in str(out["error"])
 

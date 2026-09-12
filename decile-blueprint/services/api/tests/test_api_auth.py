@@ -596,6 +596,7 @@ class TestDpdp:
         assert restored.status_code == 200
         assert (await sign_in(api)).status_code == 200
 
+
 class TestSessionEpoch:
     """``app_user.session_epoch`` — the only thing that can end a *web* session.
 
@@ -644,7 +645,8 @@ class TestSessionEpoch:
         deleted = await api.request("DELETE", url("/me"), json={"email": EMAIL}, headers=headers)
         assert deleted.status_code == 200, deleted.text
 
-        # AUDIT 0.8 / 2.2: the pre-deletion bearer is dead — epoch + deleted_at, not only the layout.
+        # AUDIT 0.8 / 2.2: the pre-deletion bearer is dead — epoch + deleted_at,
+        # not only the layout.
         assert_problem(await api.get(url("/me"), headers=headers), 401, "unauthenticated")
 
         # Signing in again cancels the deletion (Prompt 12 §5) and reports the new generation.

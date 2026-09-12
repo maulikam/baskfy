@@ -75,7 +75,7 @@ export function BasketHealthPanel({
       {backtestHref ? (
         <p className="text-xs">
           <Link
-            href={backtestHref as never}
+            href={backtestHref}
             className="text-accent underline-offset-4 hover:underline"
           >
             See how this screen would have gone

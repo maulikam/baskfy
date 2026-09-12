@@ -401,9 +401,7 @@ async def _probe_and_demote_derived(session: AsyncSession, day: dt.date) -> bool
 
     probe = bhavcopy_publication_check(build_pipeline_dependencies().provider)
     published = bool(probe is not None and await probe(day))
-    return await catch_up.demote_derived_after_missing_bhavcopy(
-        session, day, published=published
-    )
+    return await catch_up.demote_derived_after_missing_bhavcopy(session, day, published=published)
 
 
 @shared_task(name="baskfy.pipeline.session_catch_up", acks_late=True)

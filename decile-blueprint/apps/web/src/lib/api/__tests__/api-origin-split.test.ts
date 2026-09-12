@@ -131,13 +131,13 @@ describe("apiOrigin is the single public resolver", () => {
     const previous = process.env[KEY];
     const previousNode = process.env.NODE_ENV;
     delete process.env[KEY];
-    process.env.NODE_ENV = "production";
+    Object.defineProperty(process.env, "NODE_ENV", { value: "production", writable: true });
     try {
       expect(() => apiOrigin()).toThrow(/NEXT_PUBLIC_API_URL must be set in production/);
     } finally {
       if (previous === undefined) delete process.env[KEY];
       else process.env[KEY] = previous;
-      process.env.NODE_ENV = previousNode;
+      Object.defineProperty(process.env, "NODE_ENV", { value: previousNode, writable: true });
     }
   });
 
@@ -145,13 +145,13 @@ describe("apiOrigin is the single public resolver", () => {
     const previous = process.env[KEY];
     const previousNode = process.env.NODE_ENV;
     delete process.env[KEY];
-    process.env.NODE_ENV = "development";
+    Object.defineProperty(process.env, "NODE_ENV", { value: "development", writable: true });
     try {
       expect(apiOrigin()).toBe("http://localhost:8000");
     } finally {
       if (previous === undefined) delete process.env[KEY];
       else process.env[KEY] = previous;
-      process.env.NODE_ENV = previousNode;
+      Object.defineProperty(process.env, "NODE_ENV", { value: previousNode, writable: true });
     }
   });
 

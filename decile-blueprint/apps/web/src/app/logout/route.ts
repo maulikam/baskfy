@@ -56,7 +56,7 @@ async function clearSession(): Promise<NextResponse> {
 }
 
 /** Auto-post form so a GET (layout redirect, menu link) still ends in a POST mutation. */
-export async function GET(_request: NextRequest): Promise<NextResponse> {
+export function GET(_request: NextRequest): NextResponse {
   const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>Signing out</title></head><body><form id="f" method="post" action="/logout"></form><script>document.getElementById("f").submit();</script></body></html>`;
   return new NextResponse(html, {
     status: 200,

@@ -16,7 +16,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from baskfy_core.reference_export import to_rows
+from baskfy_providers.reference_export_io import reference_rows
 from baskfy_providers.errors import ProviderUnavailable, UnexpectedPayload
 from baskfy_providers.fixture_builder import (
     FIXTURE_AS_OF,
@@ -116,14 +116,14 @@ class TestAnchoredToRealData:
     def test_the_final_close_matches_the_reference_export(
         self, fixture_provider: FixtureProvider
     ) -> None:
-        reference = {str(f["symbol"]): f["close"] for f in to_rows().factors}
+        reference = {str(f["symbol"]): f["close"] for f in reference_rows().factors}
         bars = fixture_provider.daily_bars_for_symbol("CUPID", FIXTURE_AS_OF, FIXTURE_AS_OF)
         assert bars["close"][0] == reference["CUPID"]
 
     def test_every_symbol_exists_in_the_reference_export(
         self, fixture_provider: FixtureProvider
     ) -> None:
-        real = {i.symbol for i in to_rows().instruments}
+        real = {i.symbol for i in reference_rows().instruments}
         assert {i.symbol for i in fixture_provider.list_instruments()} <= real
 
     def test_index_memberships_come_from_the_export(
@@ -131,7 +131,7 @@ class TestAnchoredToRealData:
     ) -> None:
         members = fixture_provider.index_constituents("nifty-total-market", FIXTURE_AS_OF)
         assert members
-        real = {m.symbol for m in to_rows().memberships if m.universe_slug == "nifty-total-market"}
+        real = {m.symbol for m in reference_rows().memberships if m.universe_slug == "nifty-total-market"}
         assert set(members) <= real
 
     def test_the_provenance_file_ships_with_the_fixtures(
@@ -211,7 +211,7 @@ class TestDeterminism:
         """A fixture that shifts between machines makes every downstream test unreproducible."""
         first = tmp_path / "a"
         second = tmp_path / "b"
-        rows = to_rows()
+        rows = reference_rows()
         build(first, rows)
         build(second, rows)
         for name in ("daily_bars.parquet", "corporate_actions.parquet", "instruments.parquet"):

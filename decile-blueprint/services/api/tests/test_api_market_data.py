@@ -28,7 +28,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_core.breadth import ATH_PROXIMITY_PCT
 from baskfy_core.models import Instrument
-from baskfy_core.reference_export import to_rows
+from baskfy_core.reference_export import read_export, to_rows
+from pathlib import Path
+
+_REFERENCE_EXPORT = (
+    Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "reference-screen-export-2026-08-18.csv"
+)
+
+
+def _reference_rows():
+    return to_rows(read_export(_REFERENCE_EXPORT))
 from baskfy_core.universes import (
     DASHBOARD_UNIVERSES,
     MARKET_HEALTH_SLUGS,
@@ -82,7 +91,7 @@ def hand_computed_breadth(slug: str) -> dict[str, Decimal | int | None]:
         Within 10% of ATH   abs(away_high_ath) <= 10
         1Y Return > 0%      ret_12m > 0
     """
-    data = to_rows()
+    data = _reference_rows()
     members = {m.symbol for m in data.memberships if m.universe_slug == slug}
     rows = [row for row in data.factors if str(row["symbol"]) in members]
 
@@ -458,7 +467,7 @@ class TestCursorStability:
         walked = await self._walk(api, limit=25)
         assert len(walked) == len(set(walked)), "a symbol appeared on two pages"
 
-        total = len({str(row["symbol"]) for row in to_rows().factors})
+        total = len({str(row["symbol"]) for row in _reference_rows().factors})
         assert len(walked) >= total, "the walk skipped rows the register contains"
 
     async def test_the_page_size_does_not_change_the_set_of_rows(

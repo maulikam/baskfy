@@ -39,7 +39,15 @@ from baskfy_core.models import (
     PipelineRun,
     PipelineRunStep,
 )
-from baskfy_core.reference_export import to_rows
+from baskfy_core.reference_export import read_export, to_rows
+
+_REFERENCE_EXPORT = (
+    Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "reference-screen-export-2026-08-18.csv"
+)
+
+
+def _reference_rows():
+    return to_rows(read_export(_REFERENCE_EXPORT))
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
 
 ENV_VAR: Final = "BASKFY_TEST_DATABASE_URL"
@@ -257,7 +265,7 @@ async def flush_screen_namespace(client: object) -> int:
 
 def export_symbols_in_file_order() -> Sequence[str]:
     """The 271 symbols in the order the reference export lists them (docs/13)."""
-    return [str(row["symbol"]) for row in to_rows().factors]
+    return [str(row["symbol"]) for row in _reference_rows().factors]
 
 
 def synthetic_universe_sql(index_id: int, instruments: int, days: int) -> tuple[str, str, str]:

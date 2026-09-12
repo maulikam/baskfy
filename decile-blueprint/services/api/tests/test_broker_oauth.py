@@ -42,6 +42,16 @@ from baskfy_core.broker_connections import BROKER_OAUTH_REVIEW
 #: guards against replaced a real session, so proving the *same* session survived is the test.
 REAL_DESK_SESSION = "desk-live-session-token-from-m58-bridge"
 
+#: The account every principal below speaks as, and the value `BASKFY_SOLE_USER_ID` carries.
+#:
+#: These tests call `oauth_callback` directly with an unbound ``AsyncSession()`` — the callback's
+#: subject is state validation and where a token is written, neither of which needs a row. Since
+#: `90cb1be` it opens with `scoped_sole_user_id`, which reads the sole tenant; with the variable
+#: set that resolves from the environment without a database
+#: (`curated_seed.resolve_sole_user_id`), so the guard runs against a real value and the session
+#: stays unbound. The refusal the guard exists for is asserted in the tenancy tests, not here.
+SOLE_USER_ID = 42
+
 
 @pytest.fixture(autouse=True)
 def _clean_oauth_state(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[None]:
@@ -52,6 +62,7 @@ def _clean_oauth_state(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Itera
     monkeypatch.setenv("BASKFY_KITE_TOKEN_ENCRYPTION_KEY", key)
     monkeypatch.setenv("BASKFY_BROKER_TOKEN_PATH", str(tmp_path / "broker-token.enc"))
     monkeypatch.setenv("BASKFY_KITE_API_KEY", "test-api-key")
+    monkeypatch.setenv("BASKFY_SOLE_USER_ID", str(SOLE_USER_ID))
     # Absent, not false: the spec is that a deployment which says nothing gets the refusal.
     monkeypatch.delenv("BASKFY_BROKER_OAUTH_ALLOW_SIMULATED", raising=False)
     yield
@@ -96,9 +107,11 @@ class TestOauthStateAndStub:
         simulated login writing over the shared blob. That was the defect, spelled as a test.
         """
         monkeypatch.setenv("BASKFY_BROKER_OAUTH_ALLOW_SIMULATED", "true")
-        register_oauth_state(state="good-state-token-abc12345", user_id=42, broker_id="zerodha")
+        register_oauth_state(
+            state="good-state-token-abc12345", user_id=SOLE_USER_ID, broker_id="zerodha"
+        )
         principal = MagicMock()
-        principal.require_user.return_value = 42
+        principal.require_user.return_value = SOLE_USER_ID
 
         result = await oauth_callback(
             principal,
@@ -129,7 +142,7 @@ class TestOauthStateAndStub:
 
     async def test_callback_rejects_bad_state(self) -> None:
         principal = MagicMock()
-        principal.require_user.return_value = 1
+        principal.require_user.return_value = SOLE_USER_ID
         with pytest.raises(Problem) as caught:
             await oauth_callback(
                 principal,
@@ -282,14 +295,16 @@ class TestDryRunCallbackCannotPoisonAStoredSession:
     """G2 — the exact live scenario, both ways round."""
 
     @staticmethod
-    def _principal(user_id: int = 42) -> MagicMock:
+    def _principal(user_id: int = SOLE_USER_ID) -> MagicMock:
         principal = MagicMock()
         principal.require_user.return_value = user_id
         return principal
 
     async def test_dry_run_callback_leaves_the_real_session_intact_and_refuses(self) -> None:
         token_store_for().save(REAL_DESK_SESSION)
-        register_oauth_state(state="live-state-token-000111", user_id=42, broker_id="zerodha")
+        register_oauth_state(
+            state="live-state-token-000111", user_id=SOLE_USER_ID, broker_id="zerodha"
+        )
 
         with pytest.raises(Problem) as caught:
             await oauth_callback(
@@ -315,7 +330,9 @@ class TestDryRunCallbackCannotPoisonAStoredSession:
     ) -> None:
         monkeypatch.setenv("BASKFY_BROKER_OAUTH_ALLOW_SIMULATED", "true")
         token_store_for().save(REAL_DESK_SESSION)
-        register_oauth_state(state="live-state-token-000222", user_id=42, broker_id="zerodha")
+        register_oauth_state(
+            state="live-state-token-000222", user_id=SOLE_USER_ID, broker_id="zerodha"
+        )
 
         result = await oauth_callback(
             self._principal(),
@@ -336,7 +353,9 @@ class TestDryRunCallbackCannotPoisonAStoredSession:
         monkeypatch.setenv("DRY_RUN", "false")
         monkeypatch.setenv("BASKFY_KITE_API_KEY", "")
         monkeypatch.delenv("BASKFY_KITE_API_SECRET", raising=False)
-        register_oauth_state(state="live-state-token-000333", user_id=42, broker_id="zerodha")
+        register_oauth_state(
+            state="live-state-token-000333", user_id=SOLE_USER_ID, broker_id="zerodha"
+        )
 
         with pytest.raises(Problem) as caught:
             await oauth_callback(
@@ -370,7 +389,9 @@ class TestDryRunCallbackCannotPoisonAStoredSession:
             "exchange_request_token",
             lambda **_: TokenExchange(access_token="real-kite-token", simulated=False, reasons=()),
         )
-        register_oauth_state(state="live-state-token-000555", user_id=42, broker_id="zerodha")
+        register_oauth_state(
+            state="live-state-token-000555", user_id=SOLE_USER_ID, broker_id="zerodha"
+        )
         queue = MagicMock()
 
         result = await oauth_callback(
@@ -394,7 +415,9 @@ class TestDryRunCallbackCannotPoisonAStoredSession:
     async def test_a_simulated_login_never_starts_it(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """No real session, nothing to fetch with: the sweep would only fail slower."""
         monkeypatch.setenv("BASKFY_BROKER_OAUTH_ALLOW_SIMULATED", "true")
-        register_oauth_state(state="live-state-token-000666", user_id=42, broker_id="zerodha")
+        register_oauth_state(
+            state="live-state-token-000666", user_id=SOLE_USER_ID, broker_id="zerodha"
+        )
         queue = MagicMock()
 
         result = await oauth_callback(
@@ -417,7 +440,9 @@ class TestDryRunCallbackCannotPoisonAStoredSession:
             "exchange_request_token",
             lambda **_: TokenExchange(access_token="real-kite-token", simulated=False, reasons=()),
         )
-        register_oauth_state(state="live-state-token-000777", user_id=42, broker_id="zerodha")
+        register_oauth_state(
+            state="live-state-token-000777", user_id=SOLE_USER_ID, broker_id="zerodha"
+        )
         queue = MagicMock()
         queue.send_task.side_effect = OSError("redis is not listening")
 
@@ -445,7 +470,9 @@ class TestDryRunCallbackCannotPoisonAStoredSession:
             "exchange_request_token",
             lambda **_: TokenExchange(access_token="real-kite-token", simulated=False, reasons=()),
         )
-        register_oauth_state(state="live-state-token-000444", user_id=42, broker_id="zerodha")
+        register_oauth_state(
+            state="live-state-token-000444", user_id=SOLE_USER_ID, broker_id="zerodha"
+        )
 
         result = await oauth_callback(
             self._principal(),

@@ -197,6 +197,12 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     # `tw_backtest_run`, and the only `tw_` table that records a *request* rather than a
     # measurement. There is deliberately no `provisional` column — DECISIONS-TW TW12.2.
     "tw_scan_run": ("id",),
+    # AF lane I (migration 0045): the Stocks watchlist and the goal composer's saved answers.
+    # Neither is a curated basket, so neither belongs with the `cb_` tables — a watched
+    # *instrument* is a bookmark on a symbol, and the preferences row is what `/discover`
+    # reads when there is no query string. docs/04e-stocks-watchlist-addendum.md.
+    "instrument_watch_item": ("id",),
+    "user_discover_preferences": ("user_id",),
 }
 
 #: docs/04 opening paragraph: "Money in numeric, never float."

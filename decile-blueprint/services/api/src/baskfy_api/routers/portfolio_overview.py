@@ -94,6 +94,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.auth import AuthenticatedDep, Principal
 from baskfy_api.db import SessionDep
+from baskfy_api.invoices import today_ist
 from baskfy_api.live_prices import live_prices_by_instrument
 from baskfy_api.problems import Problem, ProblemType, not_found
 from baskfy_core.allocation_ledger import (
@@ -2533,7 +2534,7 @@ async def portfolio_overview(
             # Today, not the price date. §6.4's stale-price row exists to say *how far behind*
             # the market data is, and a ribbon drawn as of the data's own newest day can never
             # notice that the data has stopped arriving — it would always be zero days behind.
-            as_of=dt.datetime.now(tz=dt.UTC).date(),
+            as_of=today_ist(),
             holdings=holdings,
             allocations=allocations,
             entries=ledger.entries,
@@ -3263,7 +3264,7 @@ async def resolve_reconciliation_item(
     await _owned_portfolio(session, body.portfolio_id, principal)
 
     entry = next(entry for entry in ledger.entries if entry.item_id == item_id)
-    today = dt.datetime.now(tz=dt.UTC).date()
+    today = today_ist()
     try:
         outcome = resolve(entry, body.portfolio_id, ledger.portfolios, today)
     except ValueError as exc:
@@ -3618,7 +3619,7 @@ async def portfolio_suggestions(
     """
     user_id = principal.require_user()
     ledger = await _load_ledger(session, user_id)
-    today = dt.datetime.now(tz=dt.UTC).date()
+    today = today_ist()
 
     unallocated = unallocated_holdings(ledger.holdings, ledger.allocations)
     unpriced = sorted(
@@ -3817,7 +3818,7 @@ async def new_portfolio(
     for overlapping would be refusing it for doing its job.
     """
     user_id = principal.require_user()
-    today = dt.datetime.now(tz=dt.UTC).date()
+    today = today_ist()
 
     if body.benchmark_index_id is not None:
         await _benchmark_index(session, body.benchmark_index_id)
@@ -4071,7 +4072,7 @@ async def add_holdings(
             "there is nothing to add to it. Remove them from the portfolio they are in instead.",
         )
     portfolio = ledger.portfolios[portfolio_id]
-    today = dt.datetime.now(tz=dt.UTC).date()
+    today = today_ist()
 
     by_key = {position.key: position for position in ledger.positions}
     chosen: list[tuple[_Position, Decimal]] = []

@@ -50,6 +50,7 @@ from baskfy_api import portfolios as service
 from baskfy_api.auth import AuthenticatedDep, Principal
 from baskfy_api.db import SessionDep
 from baskfy_api.entitlements import EntitlementsDep, Feature
+from baskfy_api.invoices import today_ist
 from baskfy_api.problems import Problem, ProblemType, not_found, stale_data_version
 from baskfy_api.schemas import (
     DEFAULT_PAGE_SIZE,
@@ -559,7 +560,7 @@ async def _apply(session: AsyncSession, portfolio: Portfolio, parsed: ParsedCsv)
         if instrument_id is not None:
             matched.append((instrument_id, row.quantity, row.avg_price))
 
-    imported = await service.replace_holdings(session, portfolio, matched, added_on=dt.date.today())
+    imported = await service.replace_holdings(session, portfolio, matched, added_on=today_ist())
     return ImportReportOut(
         total_lines=parsed.total_lines,
         matched=sum(1 for row in rows if row.status is MatchStatus.MATCHED),
@@ -686,7 +687,7 @@ async def create_portfolio(
         # §5.2 metric is measured from it.
         kind=PortfolioKind.CAPITAL.value,
         source=PortfolioSource.HOLDING_GROUP.value,
-        started_on=dt.date.today(),
+        started_on=today_ist(),
     )
     session.add(portfolio)
     await session.flush()
@@ -791,7 +792,7 @@ async def import_csv(  # noqa: PLR0913, PLR0917 - FastAPI injects one parameter 
             # user assembled, and it holds real money.
             kind=PortfolioKind.CAPITAL.value,
             source=PortfolioSource.HOLDING_GROUP.value,
-            started_on=dt.date.today(),
+            started_on=today_ist(),
         )
         session.add(portfolio)
         await session.flush()

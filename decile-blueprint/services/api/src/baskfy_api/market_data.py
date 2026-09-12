@@ -395,7 +395,7 @@ def decode_cursor(cursor: str) -> tuple[dt.date, str]:
 
 
 def _listings_filters(query: ListingQuery, *, with_cursor: bool) -> Select[tuple[Instrument]]:
-    """Active-register filters shared by the page read and the filtered ``total`` count (AFH 5.8)."""
+    """Active-register filters, shared by the page read and the filtered ``total`` (AFH 5.8)."""
     sort_date = func.coalesce(Instrument.listed_on, NO_LISTING_DATE)
     statement: Select[tuple[Instrument]] = select(Instrument).where(
         Instrument.is_active.is_(True),

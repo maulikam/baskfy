@@ -6,8 +6,9 @@ from decimal import Decimal
 
 import pytest
 
-from baskfy_api.routers.curated_versions import diff_weight_maps
+from baskfy_api.app import create_app
 from baskfy_api.routers import curated_versions, explore, watchlist
+from baskfy_api.routers.curated_versions import diff_weight_maps
 
 
 def test_diff_weight_maps_reports_added_removed_and_changed() -> None:
@@ -38,8 +39,6 @@ def test_diff_weight_maps_counts_unchanged() -> None:
 
 
 def test_explore_mounts_version_and_instrument_watch_routes() -> None:
-    from baskfy_api.app import create_app
-
     paths = set(create_app().openapi()["paths"])
     assert "/api/v1/explore/{slug}/versions" in paths
     assert "/api/v1/explore/{slug}/versions/diff" in paths

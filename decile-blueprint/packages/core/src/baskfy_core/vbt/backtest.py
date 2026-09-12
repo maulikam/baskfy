@@ -355,7 +355,8 @@ def run_backtest(  # noqa: PLR0912, PLR0915 - the sequencing is the module, and 
     slot_divisor = Decimal(sizing.max_slots)
     position_fraction = Decimal(str(sizing.max_position_pct)) / _HUNDRED
     turnover_fraction = Decimal(str(sizing.max_position_vs_turnover))
-    min_trade = Decimal(str(sizing.min_trade_value_inr))
+    # Already a `Decimal` since 12 Sep 2026 (house rule 9); no laundering needed.
+    min_trade = sizing.min_trade_value_inr
 
     total_sessions = panel.sessions_count
     first = 0 if params.start is None else panel.column_of(params.start)

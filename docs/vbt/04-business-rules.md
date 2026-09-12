@@ -531,7 +531,7 @@ Units are §0's: `*_pct` is a percent, `*_bars` and `*_sessions` count sessions 
 | `sizing.max_position_pct` | `12.5` |
 | `sizing.max_new_entries_per_session` | `3` |
 | `sizing.max_position_vs_turnover` | `0.01` |
-| `sizing.min_trade_value_inr` | `10000.0` |
+| `sizing.min_trade_value_inr` | `10000` |
 | `sizing.risk_multiplier_first_live` | `0.5` |
 | `sizing.first_live_sessions` | `5` |
 | `exits.stop_pct` | `12.0` |

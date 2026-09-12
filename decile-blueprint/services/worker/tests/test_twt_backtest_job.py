@@ -629,14 +629,15 @@ class TestTheStatsShapeIsPure:
 
         assert [key for key in PAGE_STATS_KEYS if key not in payload] == []
         # And the panel the gate vector was built from is the one the engine walked.
-        assert (
-            gate_vector(
-                breadth_series(detected, DEFAULT_TWT_CONFIG),
-                panel_from_frame(tagged, "signal").sessions,
-            ).size
-            == len(books.full.sessions)
-            or True
-        )
+        #
+        # `or True` was appended to this until 12 Sep 2026, which made it always pass — so the
+        # comment above described an assertion that was not being made. The property is real and
+        # it holds: the gate vector must cover exactly the sessions the engine walked, or the
+        # breadth gate is answering about a different stretch of tape than the book traded.
+        assert gate_vector(
+            breadth_series(detected, DEFAULT_TWT_CONFIG),
+            panel_from_frame(tagged, "signal").sessions,
+        ).size == len(books.full.sessions)
 
 
 class TestTheEtfDenominatorIsMeasuredAndNotInherited:

@@ -18,6 +18,7 @@ Units, stated once
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from decimal import Decimal
 from enum import StrEnum
 from typing import Final
 
@@ -130,7 +131,13 @@ class SizingConfig:
     #: A position may not exceed this fraction of the name's average daily turnover.
     max_position_vs_turnover: float = 0.01
     #: Below this the brokerage dominates the edge (the desk's ``MIN_TRADE_VALUE``).
-    min_trade_value_inr: float = 10_000.0
+    #:
+    #: ``Decimal``, not ``float``, since 12 Sep 2026. House rule 9 — "money and prices are
+    #: ``numeric``, never ``float``" — and this is rupees, as the ``_inr`` suffix and the units
+    #: note at the top of this module both say. It was a ``float`` and ``sizing.py`` laundered it
+    #: straight back with ``Decimal(str(...))``, which is the code admitting the declaration was
+    #: the wrong type. The TWT sleeve has always had it right (``twt/config.py``).
+    min_trade_value_inr: Decimal = Decimal("10000")
     #: "Start small" (docs/swing/02 §3.5, STANDING-ANSWERS A9): the first live sessions plan at
     #: half the configured risk — ``risk_per_trade_pct x risk_multiplier_first_live`` before
     #: ``size_position`` — for ``first_live_sessions`` sessions, counted down by the evening job

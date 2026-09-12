@@ -126,7 +126,7 @@ def size_entry(  # noqa: PLR0913 - one keyword per input the size depends on
     budget, cap = min(budgets, key=lambda pair: pair[0])
     quantity = _floor_div(budget, limit_price)
     value = limit_price * quantity
-    if value < Decimal(str(config.min_trade_value_inr)):
+    if value < config.min_trade_value_inr:
         # Which refusal depends on *what* made it too small: a turnover ceiling that cannot fund
         # ₹10,000 of the name is a liquidity verdict about the name, and the page should say so
         # rather than blaming the sleeve's cash.

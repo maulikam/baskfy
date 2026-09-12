@@ -6,8 +6,10 @@ import { useActionState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import type { TwtScanRun } from "@/lib/twt/fetch";
 import type { TwtScanResult } from "@/lib/twt/write";
+import { useTickingNow } from "@/lib/use-ticking-now";
 import { cn } from "@/lib/utils";
 
+import type { TwtScanFacts } from "../copy";
 import { scanButtonLabel, scanRunLine } from "../copy";
 
 /**
@@ -52,13 +54,21 @@ type ScanAction = (
 export function ScanNow({
   action,
   lastScan,
+  session = null,
   intervalMs = POLL_MS,
 }: {
   action: ScanAction;
-  lastScan: TwtScanRun | null;
+  lastScan: (TwtScanRun & TwtScanFacts) | null;
+  /**
+   * The latest session this strategy has published. It is what the line falls back to when no
+   * run exists — a page whose rows came from the nightly has been scanned, and saying nothing
+   * there was the gap of 12 Sep 2026.
+   */
+  session?: string | null;
   intervalMs?: number;
 }) {
   const router = useRouter();
+  const now = useTickingNow();
   const [result, formAction, pending] = useActionState(action, null);
   const inFlight = lastScan?.status === "QUEUED" || lastScan?.status === "RUNNING";
 
@@ -96,7 +106,11 @@ export function ScanNow({
             : "text-muted-foreground",
         )}
       >
-        {result === null ? scanRunLine(lastScan) : result.ok ? result.message : result.error}
+        {result === null
+          ? scanRunLine(lastScan, { now, session })
+          : result.ok
+            ? result.message
+            : result.error}
       </span>
     </form>
   );

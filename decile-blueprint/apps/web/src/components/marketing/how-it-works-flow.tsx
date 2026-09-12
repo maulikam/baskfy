@@ -367,11 +367,16 @@ function Chip({ children, className }: { children: React.ReactNode; className?: 
  * 2. **`transform` needs a box.** `flow-ack` lifts the label a pixel; a bare inline `<span>`
  *    ignores transforms entirely, so the acknowledgment would be an opacity flicker and the
  *    `translateY` would be dead code.
+ * 3. **The colour is `--foreground`, not `--muted-foreground`, and that is deliberate.** The mute
+ *    is `.flow-ack`'s rest opacity — one mechanism, not two. This read `text-muted-foreground`
+ *    until 12 Sep 2026, and muted-at-70%-opacity composited to 2.91:1 in light and 4.42:1 in
+ *    dark: seven of axe's twenty colour-contrast failures on the landing page. `globals.css`
+ *    carries the arithmetic. Do not put a muted token back here without removing the opacity.
  */
 function Eyebrow({ children, delay }: { children: React.ReactNode; delay: number }) {
   return (
     <span
-      className="flow-ack inline-block font-mono text-[12px] font-medium uppercase tracking-[var(--v-tracking-caps)] text-muted-foreground"
+      className="flow-ack inline-block font-mono text-[12px] font-medium uppercase tracking-[var(--v-tracking-caps)] text-foreground"
       style={{ animationDelay: `${delay}s` }}
     >
       {children}

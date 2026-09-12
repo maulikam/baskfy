@@ -1,4 +1,4 @@
-import type { Metadata, Route } from "next";
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { PageHeader } from "@/components/shell/page-header";
@@ -108,7 +108,7 @@ export default async function SwingSettingsPage() {
             place an order, raise the rung or turn execution on; the ceilings are server
             configuration and a value above one is refused with the ceiling named. The plan built
             tonight uses what is saved here. See the tape on the{" "}
-            <Link href={"/swing" as Route} className="underline underline-offset-2">
+            <Link href={"/swing"} className="underline underline-offset-2">
               swing hub
             </Link>
             .
@@ -118,7 +118,7 @@ export default async function SwingSettingsPage() {
         <p className="max-w-[70ch] text-sm text-muted-foreground" data-testid="not-seeded">
           The swing allocation is not set up on this deployment yet, or its settings could not be
           read just now — there is nothing to change until it is. The hub is at{" "}
-          <Link href={"/swing" as Route} className="underline underline-offset-2">
+          <Link href={"/swing"} className="underline underline-offset-2">
             /swing
           </Link>
           .

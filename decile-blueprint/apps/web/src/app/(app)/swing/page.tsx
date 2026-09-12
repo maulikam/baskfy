@@ -352,7 +352,7 @@ export default async function SwingSetupsPage(props: {
               <span className="text-sm text-muted-foreground">As of {formatTradeDate(asOf)}</span>
             ) : null}
             <ScanLabel provisional={provisional} scannedAt={scannedAt} />
-            <ScanNow action={scanNow} lastScan={lastScan} />
+            <ScanNow action={scanNow} lastScan={lastScan} session={asOf} />
           </span>
         }
       />

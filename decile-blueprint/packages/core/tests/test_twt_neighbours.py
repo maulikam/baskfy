@@ -41,7 +41,13 @@ UNIVERSE_FIELDS = (
 #: ``02`` Track C §8 names this file: *"``baskfy_core.vbt.config`` is read, never edited."*
 #: **Updating this constant is how a VBT change is declared.** If it moves without a VBT commit
 #: beside it, something in the TW tree reached into the wrong sleeve.
-VBT_CONFIG_SHA256 = "7c880c5b1d0daf88501e95d3ada8678cb5d58c1efbc8ea1c1c07c72307308b2a"
+#: **Moved 12 Sep 2026, deliberately, and declared here as this constant asks.**
+#: `vbt/config.py` changed `min_trade_value_inr` from `float` to `Decimal` under CLAUDE.md
+#: house rule 9 — the type this very sleeve has always used. The TW tree did not reach into
+#: VBT: the edit is a house-rule sweep across both neighbours, made in one commit, and it
+#: brings VBT into line with `twt/config.py` rather than the other way round. The value is
+#: unchanged. See `gates/pinned-wrong-behaviour.md` P3.
+VBT_CONFIG_SHA256 = "cd8c216d9d6f3d844643a67fa9fb075ba3b24ee47870bc8aa6d6c8ad0313d6e1"
 
 
 def _imports(path: Path) -> set[str]:

@@ -1,13 +1,14 @@
 "use client";
 
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   BumpinessDots,
   RankBadge,
   ReturnChip,
   ScoreBar,
+  scoreBarScale,
 } from "@/components/screens/cell-encodings";
 import type { ResultRow } from "@/components/screens/result-columns";
 import { formatNumber, formatPercent } from "@/lib/format";
@@ -164,6 +165,26 @@ export function ResultCards({ rows, onActivate, className }: ResultCardsProps) {
   const listRef = useRef<HTMLUListElement>(null);
   const { stride, gap, scrollMargin } = useListMetrics(listRef, rows.length);
 
+  /*
+   * The scale every bar in this feed is drawn against, derived once from the whole row set.
+   *
+   * This was missing, and the omission was invisible in a screenshot. `ScoreBar` with no `scale`
+   * falls back to `max(value, REFERENCE_SCORE_SCALE)`, which is right for the peek drawer — one
+   * score, no row set to compare it to — and wrong here for the same reason it would be wrong in
+   * the table: a value above the reference then becomes its own ceiling, so **every** score above
+   * 3.00 paints a full track. On the seeded universe the top names run to 5.13, and the strongest
+   * rows are exactly the ones a reader is comparing against each other, so the encoding lost its
+   * meaning at the top of the list and nowhere else.
+   *
+   * The table has always done this (`scaleForColumn` in `result-columns.tsx`). The card feed holds
+   * the same rows and owes the same answer: the same result must not encode differently because
+   * the viewport is 390px wide.
+   *
+   * Memoised on the rows, not on every render, because it is a full pass over the row set and this
+   * component re-renders on every scroll frame.
+   */
+  const scale = useMemo(() => scoreBarScale(rows.map((row) => row.sorting_factor)), [rows]);
+
   const virtualizer = useWindowVirtualizer({
     count: rows.length,
     estimateSize: () => stride,
@@ -238,7 +259,7 @@ export function ResultCards({ rows, onActivate, className }: ResultCardsProps) {
                     <div className="truncate text-xs text-muted-foreground">{name}</div>
                   ) : null}
                 </div>
-                {score !== null ? <ScoreBar value={score} /> : null}
+                {score !== null ? <ScoreBar value={score} scale={scale} /> : null}
                 <div className="flex min-w-0 items-center gap-2 overflow-hidden">
                   {ret !== null ? (
                     <span className="shrink-0">

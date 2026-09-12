@@ -129,7 +129,7 @@ def size_position(  # noqa: PLR0913 - one keyword per input the size depends on
 
     quantity, cap = min(caps, key=lambda pair: pair[0])
     value = entry * quantity
-    if quantity <= 0 or value < Decimal(str(config.min_trade_value_inr)):
+    if quantity <= 0 or value < config.min_trade_value_inr:
         return _refuse(entry, stop, SizeRefusal.BELOW_MIN_TRADE_VALUE)
     return SizedPosition(
         quantity=quantity,

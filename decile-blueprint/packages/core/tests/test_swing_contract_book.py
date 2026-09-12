@@ -176,7 +176,9 @@ class TestTheRefusalsAndTheirBoundaries:
         assert sized.refusal is None
 
     def test_a_trade_a_paisa_under_the_minimum_is_refused(self) -> None:
-        config = replace(SizingConfig(), min_trade_value_inr=10_000.01)
+        # `Decimal("10000.01")`, not the float literal: a paisa is exactly the magnitude a binary
+        # float cannot hold, which is why house rule 9 makes this field `numeric`.
+        config = replace(SizingConfig(), min_trade_value_inr=Decimal("10000.01"))
         sized = _size(
             equity="1000000",
             entry="100",
@@ -1328,7 +1330,7 @@ class TestTheRulesTheMutationRunFoundUnstated:
             entry=Decimal("500"),
             stop=Decimal("480"),
             avg_turnover_inr=None,
-            config=replace(SizingConfig(), min_trade_value_inr=0.0),
+            config=replace(SizingConfig(), min_trade_value_inr=Decimal("0")),
             max_stop_distance_pct=Decimal("10"),
         )
         assert sized.quantity == 0

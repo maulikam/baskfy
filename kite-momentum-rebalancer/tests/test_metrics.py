@@ -1,6 +1,8 @@
 """Coverage for the rest of the metrics engine: risk, trades, diagnostics, benchmarking."""
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -55,7 +57,9 @@ def test_monthly_return_matrix_shape():
     mat = M.monthly_return_matrix(s)
     assert list(mat.columns) == list(range(1, 13))
     assert set(mat.index) == {2026, 2027}
-    assert mat.loc[2027, 12] != mat.loc[2027, 12] or True   # trailing months may be NaN
+    # Was `assert mat.loc[2027, 12] != mat.loc[2027, 12] or True` until 12 Sep 2026: the `x != x`
+    # NaN idiom with `or True` appended, which made it always pass. The line below already says
+    # the same thing correctly, so the disabled one was removed rather than repaired.
     assert pd.isna(mat.loc[2027, 12])
 
 
@@ -143,7 +147,13 @@ def test_parametric_var_matches_the_formula():
 def test_alignment_handles_mismatched_dates():
     a = pd.Series([0.01, 0.02, 0.03], index=days(3))
     b = pd.Series([0.01, 0.02], index=days(2, "2026-01-02"))
-    assert M.beta(a, b) != 0 or True          # must not raise
+    # Was `assert M.beta(a, b) != 0 or True  # must not raise` until 12 Sep 2026 — always true, so
+    # it asserted neither "not zero" nor "did not raise". The real property is that alignment
+    # intersects the two indices and measures on the overlap: the shared dates are 2026-01-02 and
+    # 2026-01-03, where `a` moves 0.02 -> 0.03 against `b`'s 0.01 -> 0.02, so beta is exactly 1.
+    beta = M.beta(a, b)
+    assert math.isfinite(beta)
+    assert beta == pytest.approx(1.0)
     assert M.tracking_error(a, b) >= 0
 
 

@@ -128,6 +128,9 @@ class TestScanNow:
             )
 
         assert "provisional" not in read.json()
+        # An exact set, so a field added to this payload is reviewed rather than noticed. ``found``
+        # joined it on 12 Sep 2026: the page could say a run had finished but not what it found,
+        # and "DONE" is not a sentence anybody wants to read about their own money.
         assert set(read.json()) == {
             "run_id",
             "status",
@@ -137,7 +140,9 @@ class TestScanNow:
             "session_date",
             "detail",
             "error",
+            "found",
         }
+        assert read.json()["found"] is None, "a queued run has not looked at anything yet"
 
     async def test_the_status_vocabulary_is_the_contract_s_four(
         self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
@@ -365,3 +370,136 @@ class TestTheScanBelongsToOnePerson:
 
         assert posted.status_code == 401
         assert read.status_code == 401
+
+
+class TestThePageCanSayWhenItLastScanned:
+    """THE GAP OF 12 SEP 2026, on this sleeve.
+
+    "None of the scan shows when the last scan performed in any strategy." The hub has had a
+    control and a copy function for the last run since TW12, and both were being handed `None`.
+    The box's own ``tw_scan_run`` held two finished runs at the time — 16:45 and 16:59 IST on
+    12 Sep, about nineteen seconds each — and the page said nothing about either.
+
+    What a reader wants is three facts: **when it ran, whether it finished, and whether it found
+    anything.** The first two the row has always carried. The third is ``found``, lifted out of
+    the detail the worker wrote, where `0` is a real answer — this strategy signals about
+    eighteen times a year, so most sessions have none — and `None` is "the run did not say".
+    A page that could not tell those apart would read a quiet week as a broken job.
+    """
+
+    async def test_the_day_s_payload_names_the_newest_run(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _, public_id = await _sole_tenant(screener_session, monkeypatch)
+
+        async with running_app(settings, screener_session, task_queue=RecordingQueue()) as client:
+            before = await client.get(url("/twt/today"), headers=bearer(public_id))
+            posted = await client.post(url("/twt/scan"), headers=bearer(public_id))
+            after = await client.get(url("/twt/today"), headers=bearer(public_id))
+
+        assert before.status_code == 200
+        assert before.json()["last_scan"] is None, "no run, and the page says so in words"
+        run = after.json()["last_scan"]
+        assert run is not None, "the page cannot say when it last scanned"
+        assert run["id"] == posted.json()["run_id"]
+        assert run["status"] == "QUEUED"
+        assert run["found"] is None, "it has not looked at anything yet"
+        assert run["session_date"] is None, "only the worker decides which session"
+
+    async def test_a_finished_run_says_when_it_finished_and_what_it_found(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        now = dt.datetime.now(tz=dt.UTC)
+        screener_session.add(
+            TwScanRun(
+                user_id=user_id,
+                requested_at=now - dt.timedelta(minutes=13),
+                started_at=now - dt.timedelta(minutes=13),
+                finished_at=now - dt.timedelta(minutes=12),
+                status="DONE",
+                source="web",
+                session_date=dt.date(2026, 9, 11),
+                # What `twt.detect_session` returns and the task copies onto the row.
+                detail={"date": "2026-09-11", "signals": 3, "status": "OK", "detail": {}},
+            )
+        )
+        await screener_session.flush()
+
+        async with running_app(settings, screener_session, task_queue=RecordingQueue()) as client:
+            today = await client.get(url("/twt/today"), headers=bearer(public_id))
+
+        run = today.json()["last_scan"]
+        assert run["status"] == "DONE"
+        assert run["found"] == 3
+        assert run["session_date"] == "2026-09-11"
+        assert run["finished_at"] is not None, "the page has nothing to date the scan by"
+
+    async def test_found_none_and_did_not_say_are_different_answers(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Eighteen entries a year means most sessions signal nothing. That is the ordinary
+        result and must not be served as the same thing as a run that never reported."""
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        now = dt.datetime.now(tz=dt.UTC)
+        screener_session.add(
+            TwScanRun(
+                user_id=user_id,
+                requested_at=now - dt.timedelta(minutes=9),
+                finished_at=now - dt.timedelta(minutes=8),
+                status="DONE",
+                source="web",
+                detail=dict(DETAIL),
+            )
+        )
+        await screener_session.flush()
+
+        async with running_app(settings, screener_session, task_queue=RecordingQueue()) as client:
+            quiet = await client.get(url("/twt/today"), headers=bearer(public_id))
+
+        assert DETAIL["signals"] == 0, "the fixture is the quiet session"
+        assert quiet.json()["last_scan"]["found"] == 0
+
+        screener_session.add(
+            TwScanRun(
+                user_id=user_id,
+                requested_at=now - dt.timedelta(minutes=2),
+                finished_at=now - dt.timedelta(minutes=1),
+                status="FAILED",
+                source="web",
+                error="ScanNotRunnable: nothing published to detect",
+            )
+        )
+        await screener_session.flush()
+
+        async with running_app(settings, screener_session, task_queue=RecordingQueue()) as client:
+            failed = await client.get(url("/twt/today"), headers=bearer(public_id))
+
+        run = failed.json()["last_scan"]
+        assert run["status"] == "FAILED"
+        assert run["found"] is None, "a run that stopped before detecting has no count to give"
+
+    async def test_the_run_on_the_day_s_payload_is_this_user_s_own(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Somebody else's press must never date this reader's page."""
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        stranger, _ = await make_user(screener_session, "twt-scan-other@example.com")
+        now = dt.datetime.now(tz=dt.UTC)
+        screener_session.add(
+            TwScanRun(
+                user_id=stranger,
+                requested_at=now,
+                finished_at=now,
+                status="DONE",
+                source="web",
+                detail={"signals": 99},
+            )
+        )
+        await screener_session.flush()
+        assert stranger != user_id
+
+        async with running_app(settings, screener_session, task_queue=RecordingQueue()) as client:
+            today = await client.get(url("/twt/today"), headers=bearer(public_id))
+
+        assert today.json()["last_scan"] is None

@@ -310,3 +310,133 @@ class TestTheScanBelongsToOnePerson:
 
         assert posted.status_code == 401
         assert read.status_code == 401
+
+
+class TestThePageCanSayWhenItLastScanned:
+    """THE GAP OF 12 SEP 2026, on this sleeve.
+
+    "None of the scan shows when the last scan performed in any strategy." The plumbing was all
+    here — the page has had a copy function and a control for the last run since VB12 — and both
+    were being handed `None`, because **`GET /vbt/today` did not carry the run**. The contract
+    fixes the poll route rather than whether the day's payload inlines the run, and the page was
+    written to accept either; what that left in practice was a cold load with no run id to ask
+    about, so "when did this last scan?" had no answer at all until somebody pressed the button in
+    that same tab.
+
+    Two claims, and the second is the one that turns `DONE` into a sentence: the day's payload
+    names the newest run, and the run says **how many signals it produced** — where `0` is a real
+    answer (a thin tape) and `None` is "it did not say", and a page must be able to tell them
+    apart.
+    """
+
+    async def test_the_day_s_payload_names_the_newest_run(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _, public_id = await _sole_tenant(screener_session, monkeypatch)
+
+        async with running_app(settings, screener_session, task_queue=RecordingQueue()) as client:
+            before = await client.get(url("/vbt/today"), headers=bearer(public_id))
+            posted = await client.post(url("/vbt/scan"), headers=bearer(public_id))
+            after = await client.get(url("/vbt/today"), headers=bearer(public_id))
+
+        assert before.status_code == 200
+        assert before.json()["last_scan"] is None, "no run, and the page says so in words"
+        run = after.json()["last_scan"]
+        assert run is not None, "the page cannot say when it last scanned"
+        assert run["run_id"] == posted.json()["run_id"]
+        assert run["status"] == "QUEUED"
+        assert run["found"] is None, "it has not looked at anything yet"
+
+    async def test_a_finished_run_says_how_many_signals_it_found(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        now = dt.datetime.now(tz=dt.UTC)
+        # The shape `baskfy_worker.tasks.vbt_rescan` writes: the funnel's counts flattened onto
+        # the row, so the count is a top-level key and not one nested under `funnel`.
+        screener_session.add(
+            VbScanRun(
+                user_id=user_id,
+                requested_at=now - dt.timedelta(minutes=13),
+                started_at=now - dt.timedelta(minutes=13),
+                finished_at=now - dt.timedelta(minutes=12),
+                status="DONE",
+                source="desk",
+                session_date=dt.date(2026, 9, 11),
+                detail={"signals": 4, "status": "ok", **FUNNEL},
+            )
+        )
+        await screener_session.flush()
+
+        async with running_app(settings, screener_session, task_queue=RecordingQueue()) as client:
+            today = await client.get(url("/vbt/today"), headers=bearer(public_id))
+
+        run = today.json()["last_scan"]
+        assert run["status"] == "DONE"
+        assert run["found"] == 4
+        assert run["session_date"] == "2026-09-11"
+        assert run["finished_at"] is not None, "the page has nothing to date the scan by"
+
+    async def test_found_none_and_did_not_say_are_different_answers(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A quiet tape produces no signals and that is an ordinary day, not a fault — and not
+        the same thing as a run that never reported. `0` and `None` must survive the payload."""
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        now = dt.datetime.now(tz=dt.UTC)
+        quiet = VbScanRun(
+            user_id=user_id,
+            requested_at=now - dt.timedelta(minutes=9),
+            finished_at=now - dt.timedelta(minutes=8),
+            status="DONE",
+            source="desk",
+            detail={"signals": 0, "status": "ok", **FUNNEL},
+        )
+        screener_session.add(quiet)
+        await screener_session.flush()
+
+        async with running_app(settings, screener_session, task_queue=RecordingQueue()) as client:
+            quiet_body = await client.get(url("/vbt/today"), headers=bearer(public_id))
+
+        assert quiet_body.json()["last_scan"]["found"] == 0
+
+        silent = VbScanRun(
+            user_id=user_id,
+            requested_at=now - dt.timedelta(minutes=2),
+            finished_at=now - dt.timedelta(minutes=1),
+            status="DONE",
+            source="desk",
+            detail={"status": "ok"},
+        )
+        screener_session.add(silent)
+        await screener_session.flush()
+
+        async with running_app(settings, screener_session, task_queue=RecordingQueue()) as client:
+            silent_body = await client.get(url("/vbt/today"), headers=bearer(public_id))
+
+        assert silent_body.json()["last_scan"]["found"] is None
+
+    async def test_the_run_on_the_day_s_payload_is_this_user_s_own(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Somebody else's press must never date this reader's page."""
+        user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+        stranger, _ = await make_user(screener_session, "vbt-scan-other@example.com")
+        now = dt.datetime.now(tz=dt.UTC)
+        screener_session.add(
+            VbScanRun(
+                user_id=stranger,
+                requested_at=now,
+                finished_at=now,
+                status="DONE",
+                source="desk",
+                detail={"signals": 99},
+            )
+        )
+        await screener_session.flush()
+        assert stranger != user_id
+
+        async with running_app(settings, screener_session, task_queue=RecordingQueue()) as client:
+            today = await client.get(url("/vbt/today"), headers=bearer(public_id))
+
+        assert today.json()["last_scan"] is None

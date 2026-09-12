@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import datetime as dt
 import os
+import uuid
 
 import httpx
 import jwt
@@ -53,11 +54,41 @@ class TestProblemDocuments:
     async def test_every_problem_carries_the_instance_and_the_request_id(
         self, api: httpx.AsyncClient
     ) -> None:
+        """
+        THE REQUEST-ID HALF ASSERTED NOTHING UNTIL 12 Sep 2026. The line was
+
+            assert response.headers[REQUEST_ID_HEADER] == body.get("instance", "") or True
+
+        ``X or True`` is ``True`` for every ``X``, so the comparison was evaluated and thrown
+        away — and the comparison was nonsense anyway: ``instance`` is the request *path*
+        (RFC 9457) and the request id is a uuid4 hex. They were never meant to be equal, which is
+        presumably why ``or True`` was appended instead of the assertion being deleted or fixed.
+        What was left, ``REQUEST_ID_HEADER in response.headers``, checks the header exists and
+        nothing about whether it is usable.
+
+        The property that matters is **correlation**: a support conversation starts with "here is
+        the id from the error page", so the id must be a real value, and a client that supplies
+        its own must get that one back rather than a fresh one (``app.py``'s middleware:
+        ``request.headers.get(REQUEST_ID_HEADER) or new_request_id()``). Both halves below.
+        """
         response = await api.get(url("/screens/unknown-id"))
         body = problem(response)
         assert body["instance"] == url("/screens/unknown-id")
-        assert response.headers[REQUEST_ID_HEADER] == body.get("instance", "") or True
-        assert REQUEST_ID_HEADER in response.headers
+
+        # A request id is generated when the client sends none, and it is a real one.
+        generated = response.headers[REQUEST_ID_HEADER]
+        assert generated
+        assert generated.strip() == generated
+        uuid.UUID(hex=generated)
+
+        # Two requests do not share an id, or it correlates nothing.
+        other = await api.get(url("/screens/unknown-id"))
+        assert other.headers[REQUEST_ID_HEADER] != generated
+
+        # A client-supplied id is echoed back, which is what makes the id in a bug report usable.
+        supplied = uuid.uuid4().hex
+        echoed = await api.get(url("/screens/unknown-id"), headers={REQUEST_ID_HEADER: supplied})
+        assert echoed.headers[REQUEST_ID_HEADER] == supplied
 
     async def test_an_unhandled_exception_becomes_a_500_problem(
         self, seeded_url: str, screener_session: AsyncSession

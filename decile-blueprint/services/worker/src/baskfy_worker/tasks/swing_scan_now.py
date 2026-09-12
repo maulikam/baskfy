@@ -52,13 +52,16 @@ from decimal import Decimal
 from typing import Final
 
 import polars as pl
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_core.models import OhlcvDaily, SwScanRun, TradingDay
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
 from baskfy_providers.records import QuoteRecord
 from baskfy_worker.steps import StepOutcome
+from baskfy_worker.tasks.published_session import (
+    last_published_session as _last_published_session,
+)
 from baskfy_worker.tasks.swing import BAR_SCHEMA, load_swing_config, run_detect_swing
 from baskfy_worker.tasks.swing_premarket import LiquidName, QuoteSource, liquid_universe
 
@@ -138,9 +141,13 @@ def _live_index_level(source: object, slug: str) -> float | None:
     return None if level is None else float(level)
 
 
-async def last_published_session(session: AsyncSession) -> dt.date | None:
-    """The newest date with a published bar — "the last session" as the page means it."""
-    return (await session.execute(select(func.max(OhlcvDaily.date)))).scalar_one_or_none()
+#: "The last session the chain published" — the one rule, shared with `vbt_rescan` and
+#: `twt_scan` (`gates/sleeve-read-contract.md` C3). This module used to ask
+#: ``max(ohlcv_daily.date)`` instead, and that is the newest date with a *bar*, which is not the
+#: same day: on 2026-09-11 the box's run 48 fetched 4,358 rows and then failed the data quality
+#: gate, so for four hours this scan would have re-detected a session the gate had refused while
+#: the other two sleeves correctly answered 2026-09-10. A day the gate refused is not published.
+last_published_session = _last_published_session
 
 
 async def is_trading_day(session: AsyncSession, on: dt.date) -> bool:

@@ -1,4 +1,5 @@
-import { formatDateTimeIST } from "@/lib/format";
+import { formatTradeDate } from "@/lib/format";
+import { whenPhrase } from "@/lib/scan-age";
 import type { TwtScanRun } from "@/lib/twt/fetch";
 
 /**
@@ -59,23 +60,82 @@ export function scanButtonLabel(pending: boolean, inFlight: boolean): string {
 }
 
 /**
- * The last run, beside the button.
+ * The one fact the run row carries beyond its own columns, served inline by the API.
  *
- * A finished run gets its wall clock in IST rather than the reader's zone, for the reason
- * `formatDateTimeIST` gives: every schedule this strategy runs on is an IST wall-clock time tied
- * to the session, and a local rendering turns "is this fresh?" into arithmetic.
- *
- * A failed run gets no reason. `TwtScanRun.error` says things like which quote source was
- * missing; that is a sentence for the operator surfaces, and the reader needs only the two facts
- * that are theirs — nothing changed, and they can press it again.
+ * It is declared **here** rather than on `TwtScanRun` in `@/lib/twt/fetch` deliberately: this
+ * is copy's own view of a run, the fetch module is the transport's, and widening the transport
+ * type would make every consumer of it care about a field only this sentence reads. It is
+ * optional, so a run that predates it still type-checks and still renders.
  */
-export function scanRunLine(run: TwtScanRun | null | undefined): string {
-  if (!run) return "";
-  if (run.status === "QUEUED") return "Scan queued.";
-  if (run.status === "RUNNING") return "Scanning now.";
+export interface TwtScanFacts {
+  /**
+   * How many signals the run produced. `null` or absent is "the run did not say"; `0` is "it
+   * looked and found none", and the line renders the two differently on purpose.
+   */
+  found?: number | null;
+}
+
+/** What the page knows that the run row does not. */
+export interface ScanLineContext {
+  /**
+   * The browser's clock, once the control has mounted — `null` on the server's pass and on the
+   * hydrating one, where a reading of its own would be a text mismatch. See `@/lib/scan-age`.
+   */
+  now?: number | null;
+  /** The latest session this strategy has published, for the case where no run exists at all. */
+  session?: string | null;
+}
+
+/**
+ * What the last run is called in this sleeve's own words. TWT signals about eighteen times a
+ * year (`docs/twt/04`), so **zero is the ordinary answer** and the sentence must not read as a
+ * fault when it happens.
+ */
+function foundClause(found: number | null | undefined): string {
+  if (found === null || found === undefined) return "";
+  if (found === 0) return " — no signals, which is the ordinary result here.";
+  return found === 1 ? " — 1 signal." : ` — ${found.toLocaleString("en-IN")} signals.`;
+}
+
+/** What the line says when this user has never pressed the button. */
+export function neverScannedLine(session: string | null | undefined): string {
+  return session
+    ? `No scan has been started from here yet — what is shown is the nightly run's, for the ${formatTradeDate(session)} session.`
+    : "No scan has run yet.";
+}
+
+/**
+ * The last run, beside the button — **when it ran, whether it finished, and what it found.**
+ *
+ * Before 12 Sep 2026 this said nothing at all until a run existed, and said only "Last scan
+ * finished <stamp>" when one did. Both halves were wrong for the reader: a strategy whose data
+ * came from the nightly looked as though it had never been scanned, and a run that finished
+ * looked identical whether it had flagged fifty names or none. The four states a person can
+ * actually be in are the four below.
+ *
+ * A finished run's time is relative while it is recent ("12 minutes ago") and an IST wall clock
+ * once it is not — `@/lib/scan-age` carries the reasoning, including why `now` is passed in
+ * rather than read here.
+ *
+ * A failed run still gets **no reason**. `error` says things like which quote source was
+ * missing; that is a sentence for the operator surfaces, and the reader needs only the three
+ * facts that are theirs — when it stopped, that nothing changed, and that they can press again.
+ */
+export function scanRunLine(
+  run: (TwtScanRun & TwtScanFacts) | null | undefined,
+  context: ScanLineContext = {},
+): string {
+  const now = context.now ?? null;
+  if (!run) return neverScannedLine(context.session);
+  if (run.status === "QUEUED") return "Scan queued. This page updates when it finishes.";
+  if (run.status === "RUNNING") return "Scanning now. This page updates when it finishes.";
+
+  const when = whenPhrase(run.finished_at ?? run.requested_at, now);
   if (run.status === "FAILED") {
-    return "The last scan did not finish, so nothing changed. You can start another.";
+    const stopped = when ? ` It stopped ${when}.` : "";
+    return `The last scan did not finish, so nothing changed.${stopped} You can start another.`;
   }
-  const when = run.finished_at ?? run.requested_at;
-  return when ? `Last scan finished ${formatDateTimeIST(when)}.` : "The last scan finished.";
+  const lead = when ? `Last scanned ${when}` : "The last scan finished";
+  const found = foundClause(run.found);
+  return found ? `${lead}${found}` : `${lead}.`;
 }

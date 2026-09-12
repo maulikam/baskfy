@@ -321,6 +321,21 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     # truer (TW12.2). `test_twt_readonly.py` asserts this POST is the only non-GET under `/twt`.
     "/twt/scan": {"post"},
     "/twt/scan/{run_id}": {"get"},
+    # TW13: the read the `/twt` hub has asked for since TW8 — the gate's reading for the session,
+    # the names in the three-weeks-tight state with their entry events, the sleeve's own open book
+    # and the half-size countdown. It was absent for the whole of TW8-TW12, and `fetch.ts` turns a
+    # 404 into `null`, so the page reported "nothing has been read for this strategy yet" over a
+    # database that had just been written by "Scan now". A GET; it names no broker, and the
+    # session it serves is the latest the detector wrote rather than today.
+    "/twt/today": {"get"},
+    # TW14: the Backtest tab's read, the twin of `/twt/today` and absent for the same reason —
+    # `fetch.ts` has asked for it since TW8 and `readOrNull` turned its 404 into `null`. The
+    # quieter half of the same bug: `tw_backtest_run` holds 0 rows on the box, so the card's empty
+    # state was true by accident and would have gone on being rendered word for word the first
+    # evening TW9's job produced a settled result. A GET over one table; it serves the latest
+    # finished run per source with `docs/twt/01` §8's conditions attached, and an empty answer
+    # names which of the three absences it is instead of one sentence that is only sometimes true.
+    "/twt/backtest": {"get"},
     # VB15 (docs/vbt/DECISIONS-VB): the same button for the volume-breakout sleeve. Leaf 3 built
     # the routes and leaf 4 documented its own beside them, so these two were the last pair left
     # out of `EXPECTED_PATHS` and this set-equality stayed red until they landed — which is the

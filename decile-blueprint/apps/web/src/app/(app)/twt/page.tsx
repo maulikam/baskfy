@@ -32,9 +32,20 @@ import { ScanNow } from "./_components/scan-now";
  * census that keeps the set at exactly one (DECISIONS-TW TW11, which supersedes TW8.7's "no
  * action at all") and still asserts that no route handler exists under this tree.
  *
- * **Built ahead of its data (TW8).** TW4 and TW5 have not landed, so `fetchToday` answers `null`
- * and every section renders its empty state. That is deliberate: the empty state is the state
- * this page will actually be in for its first weeks, and it is the one most worth getting right.
+ * **It was built ahead of its data (TW8), and the data arrived before the reader did.** For the
+ * whole of TW8-TW12 `fetchToday` answered `null` because `GET /twt/today` did not exist, and
+ * every section rendered its empty state — correctly, while the detection tables were empty. On
+ * 12 Sep 2026 "Scan now" filled them and the page went on saying "Nothing has been read for this
+ * strategy yet", because a 404 and an empty database reach this component as the same `null`.
+ * TW13 served the route. The empty state is still the state this page will be in the first time
+ * anyone opens it, and it is still the one most worth getting right — but it is no longer the
+ * only state it can reach.
+ *
+ * **The marks are closes, not quotes.** `services/api` has no quote path (root `CLAUDE.md`,
+ * "Which date the product shows, and why it is not today"), so an open line is marked at the
+ * session's published close and the footnote below says so. The desk's monitor is the surface
+ * that sees this minute. A page that called a close "live" would be misstating a money figure,
+ * which that section of `CLAUDE.md` exists because of.
  */
 export const dynamic = "force-dynamic";
 
@@ -59,7 +70,7 @@ export default async function TwtPage() {
             {view.gate.session ? (
               <span>As of {formatTradeDate(view.gate.session)}</span>
             ) : null}
-            <ScanNow action={scanNow} lastScan={lastScan} />
+            <ScanNow action={scanNow} lastScan={lastScan} session={view.gate.session} />
           </span>
         }
       />
@@ -68,7 +79,8 @@ export default async function TwtPage() {
       <Answer
         footnote={
           "Read from published end-of-day prices — a daily price is a closed day, so this is the " +
-          "last completed session and not today. Open positions are marked at the live price. " +
+          "last completed session and not today. Open positions are marked at that session's " +
+          "close, not at a live price. " +
           "Nothing here is advice, and nothing on this page can place an order."
         }
       >

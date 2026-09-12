@@ -74,9 +74,29 @@ class ScanRunView:
     session_date: dt.date | None
     detail: dict[str, object] | None
     error: str | None
+    #: How many signals the run produced — the one number a page needs to say what it found
+    #: rather than ``DONE``. ``None`` means the run did not say; ``0`` means it looked and found
+    #: none, which for this sleeve is the **ordinary** answer (about eighteen entries a year,
+    #: ``docs/twt/04``) and must not render as a fault.
+    found: int | None = None
+
+
+def found_in(detail: dict[str, object] | None) -> int | None:
+    """How many signals the run produced, out of the detail the worker wrote.
+
+    ``baskfy_worker.tasks.twt_scan`` stores what ``detect_session`` returned, whose top level is
+    ``{"date": ..., "signals": n, "status": ..., "detail": {the funnel}}``. A run that failed
+    before detecting anything, or one written before the count existed, has no key and answers
+    ``None`` — so the page can say when it ran without claiming a number it does not have.
+    """
+    if detail is None:
+        return None
+    value = detail.get("signals")
+    return int(value) if isinstance(value, int) and not isinstance(value, bool) else None
 
 
 def scan_run_view(row: TwScanRun) -> ScanRunView:
+    detail = dict(row.detail) if isinstance(row.detail, dict) else None
     return ScanRunView(
         run_id=int(row.id),
         status=str(row.status),
@@ -84,8 +104,9 @@ def scan_run_view(row: TwScanRun) -> ScanRunView:
         started_at=row.started_at,
         finished_at=row.finished_at,
         session_date=row.session_date,
-        detail=dict(row.detail) if isinstance(row.detail, dict) else None,
+        detail=detail,
         error=row.error,
+        found=found_in(detail),
     )
 
 
@@ -185,6 +206,7 @@ __all__ = [
     "IN_FLIGHT",
     "SCAN_TASK_NAME",
     "ScanRunView",
+    "found_in",
     "in_flight",
     "newest_run",
     "request_scan",

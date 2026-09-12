@@ -30,6 +30,43 @@ export class ServerFetchTimeoutError extends Error {
   }
 }
 
+/**
+ * A non-OK response, with the status and the problem body kept rather than flattened into a
+ * message string.
+ *
+ * `gates/sleeve-read-contract.md` C7: the sleeves used to see `Error("… responded 404")` here
+ * and could only answer `null` to it, so a refusal, a degraded deployment and an empty database
+ * arrived at every page as the same value. Keeping the body is what lets
+ * `@/lib/api/sleeve-read` tell them apart. Still an `Error`, so every existing `catch` keeps
+ * behaving exactly as it did.
+ */
+export class ServerFetchStatusError extends Error {
+  readonly url: string;
+  readonly status: number;
+  /** The parsed problem+json body, or `null` when the response was not JSON. */
+  readonly problem: Record<string, unknown> | null;
+
+  constructor(url: string, status: number, problem: Record<string, unknown> | null) {
+    super(`${url} responded ${status}`);
+    this.name = "ServerFetchStatusError";
+    this.url = url;
+    this.status = status;
+    this.problem = problem;
+  }
+}
+
+async function readProblem(response: Response): Promise<Record<string, unknown> | null> {
+  try {
+    const body: unknown = await response.json();
+    return typeof body === "object" && body !== null
+      ? (body as Record<string, unknown>)
+      : null;
+  } catch {
+    /* A gateway's HTML error page, or an empty body. There is nothing to tell apart. */
+    return null;
+  }
+}
+
 export type ServerFetchJsonOptions = {
   /** Absolute or origin-relative URL. */
   url: string;
@@ -61,7 +98,11 @@ export async function serverFetchJson(options: ServerFetchJsonOptions): Promise<
     throw error;
   }
   if (!response.ok) {
-    throw new Error(`${options.url} responded ${response.status}`);
+    throw new ServerFetchStatusError(
+      options.url,
+      response.status,
+      await readProblem(response),
+    );
   }
   return response.json();
 }

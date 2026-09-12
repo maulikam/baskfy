@@ -95,10 +95,28 @@ async function readJson(path: string): Promise<unknown> {
   }
 }
 
+/**
+ * ⚠️ **These are API paths, not UI routes. They do not follow the page tree.**
+ *
+ * M48 (`6195b57`, 27 Aug 2026) renamed the page tree `app/(app)/baskets/` → `app/(app)/discover/`
+ * and the rename swept these two strings along with it — `/baskets` became `/discover` and
+ * `/baskets/plan` became `/discover/plan`. The commit's message describes four bug reports and
+ * three causes and mentions neither hunk, so it is collateral, not a decision (root `CLAUDE.md`,
+ * "When the code and a doc disagree": no commit gives a reason, so it is a bug).
+ *
+ * The API never moved. `services/api/.../routers/baskets.py` has served `GET /baskets` and
+ * `GET /baskets/plan` since M22 and still does; `/explore` is a different resource (the curated
+ * catalog), not this one. The 404s were invisible because `readJson` wraps any non-OK in
+ * `BasketUnavailable` and both pages render that as an honest-looking empty state — so
+ * `/discover/featured` and `/discover/plan` have claimed "nothing to show yet" for two weeks
+ * while the data was there the whole time.
+ *
+ * If the page tree is renamed again, these strings stay put.
+ */
 export async function fetchBasket(): Promise<Basket> {
-  return (await readJson("/discover")) as Basket;
+  return (await readJson("/baskets")) as Basket;
 }
 
 export async function fetchLatestPlan(): Promise<Plan> {
-  return (await readJson("/discover/plan")) as Plan;
+  return (await readJson("/baskets/plan")) as Plan;
 }

@@ -91,9 +91,27 @@ export async function settingsSave(
   const result = await swingWrite("PATCH", "/swing/config", body);
   if (!result.ok) {
     if (result.ceiling && result.field) {
+      /*
+       * The ceiling is the reader's; the name of the variable that sets it is not.
+       *
+       * Until 12 Sep 2026 this appended ` (BASKFY_SWING_RISK_PER_TRADE_PCT_MAX)` whenever the
+       * problem document carried `env_var`, and a test pinned that exact sentence. It is the
+       * defect of 11 Sep 2026 said again: `no-internals.test.tsx` bans "a setting or alert name,
+       * which is the same defect wearing capitals", and the hint rendered one component away
+       * (`_components/settings-form.tsx`, `max 1.0% — set by the server`) already got it right.
+       * A person who cannot edit the server's environment cannot act on its spelling; the person
+       * who can is reading this comment. `result.env_var` is still carried on the result for a
+       * caller that wants to log it — it is simply never concatenated into a sentence.
+       *
+       * The field name is the same rule: an unlabelled field is one this form does not own, and
+       * its stored spelling is snake_case. Say which limit was hit without naming the column.
+       */
+      const label = LABELS[result.field];
       return {
         ...result,
-        error: `${LABELS[result.field] ?? result.field}: max ${result.ceiling} — set by the server${result.env_var ? ` (${result.env_var})` : ""}. Nothing was saved.`,
+        error: label
+          ? `${label}: max ${result.ceiling} — set by the server. Nothing was saved.`
+          : `That is above the limit the server allows (${result.ceiling}). Nothing was saved.`,
       };
     }
     return result;

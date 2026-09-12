@@ -7,6 +7,54 @@ what is NOT done**. A fresh session resumes from the first module not marked ✅
 TW3 (the schema) run in parallel because they share no file — TW1 owns
 `packages/core/src/baskfy_core/twt/`, TW3 owns the migration and the models.
 
+**⚠️ 12 Sep 2026 — TW13: the hub had no reader, and eleven green modules could not have caught
+it.** Maulik pressed "Scan now". The scan ran and succeeded — three `tw_scan_run` rows, all
+`DONE`, ~19 s each — and the detector wrote, for user 1 and session **2026-09-11**, a breadth row
+(`OPEN`, 51.1588 %), **2** signals (IOLCP, OPTIEMUS) and **58** state rows. The page said
+*"Nothing has been read for this strategy yet."*
+
+It was neither a date mismatch nor a tenant mismatch, though both were plausible and both were
+measured first. **`GET /twt/today` had never been built.** `apps/web/src/lib/twt/fetch.ts` has
+asked for it since TW8; `readOrNull` turns a 404 into `null` by design so a page whose job has
+not run renders an empty state rather than a 500 — and `null` is also what an empty database
+produces, so the two are the same sentence at the component. TW8's own ledger line above still
+says "the parent wires `/twt/today` and `/twt/backtest` when TW4 and TW5 land". TW4 and TW5
+landed in TW4 and TW5. Nobody wired it, and no gate asked: every suite stopped at its own
+boundary — the scan test never reads a name back, the detector tests never ask how a page would
+get at them, the page tests render *given a payload* and never ask whether anything serves one.
+
+Fixed: `services/api/src/baskfy_api/twt.py` and one `@router.get("/today")`, resolving the
+session as **the latest `tw_breadth_daily` row the detector wrote** — the only resolution that
+cannot drift ahead of the writer. `gates/twt-read-blind.md` **16/16 re-run, 0 failed**;
+decisions TW13.1–TW13.4. **Not deployed** — the box still serves two `/twt` paths, and putting
+this on it is Maulik's decision. Nothing traded; the flag is false and the sleeve's capital is ₹0.
+
+**⚠️ 12 Sep 2026 — TW14: the same bug one room along, and the *true* empty state was the worse
+of the two.** The line above used to end "**Still NOT built: `GET /twt/backtest`**, which
+`fetch.ts` also asks for and which still answers `null` — honestly, for now, because that page's
+rows do not exist yet." The fact is still a fact: `tw_backtest_run` holds **0 rows on the box**,
+verified read-only. The conclusion was wrong.
+
+The hub's bug was loud — 58 names in the database against a page saying nothing had been read,
+and Maulik found it the same afternoon. The Backtest tab's was silent, because its empty state
+was *true*. "No completed run has been recorded yet" would have stayed on that screen word for
+word the first evening TW9's job wrote a settled result — a run measured at **22.17 % CAGR,
+-26.47 %, 169 trades**, in a table with nobody able to see it and no symptom to notice. A reader
+that does not exist and a writer that has not run are the same silence; only one of them is a
+bug, and the page cannot tell you which.
+
+Fixed: `baskfy_api.twt.backtest` and one `@router.get("/backtest")` — the latest **finished** run
+per source (finished *and* carrying stats, so a run in flight or a failed re-run never displaces
+the last good number), `docs/twt/01` §8's caveats verbatim in the payload, and TW9's drift flag
+with them. An empty answer now names **which** of the three absences it is — never asked for,
+still running, or finished without a result — so "the tab is still empty" stops being evidence of
+nothing. `gates/twt-backtest-route.md` **9/9 re-run, 0 failed**; decisions TW14.1–TW14.2.
+`services/api/tests/test_twt_backtest_to_page.py` is the seam test, in the shape TW13's
+`test_twt_scan_to_page.py` set. **Not deployed**, and the two new payload fields are **not yet
+rendered** — `lib/twt/fetch.ts` types only `runs`, so `reason` and `caveats` arrive and are
+ignored until whoever owns that module wires them. Nothing traded; the flag is false and the
+sleeve's capital is ₹0.
+
 **The local stack is up.** `make up` was run at the start of this session: Postgres is healthy on
 5433, so TW3's db-marked tests actually run rather than skipping. Before that the Docker daemon
 was not running at all, which is worth recording because it silently turns a db-marked suite into

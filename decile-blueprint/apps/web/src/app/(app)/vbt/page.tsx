@@ -188,7 +188,7 @@ export default async function VbtTodayPage() {
                 As of {formatTradeDate(asOf)}
               </span>
             ) : null}
-            <ScanNow action={scanNow} lastScan={lastScan} />
+            <ScanNow action={scanNow} lastScan={lastScan} session={asOf} />
           </span>
         }
       />

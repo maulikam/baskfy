@@ -12,8 +12,22 @@ import { cn } from "@/lib/utils";
  * "largest on screen" does not exist: the peek drawer and the mobile cards. 3.00 is chosen against
  * the seeded universe, where the 271 rows run -0.39 to 5.13 with a median of 0.55 and a 95th
  * percentile of 1.68 — a score of 3 is exceptional, so it makes a reference a lone bar can be read
- * against. It is a floor, never a clamp: a value above it scales against itself (see `ScoreBar`),
- * so two different scores can never paint the same width.
+ * against. It is a floor rather than a clamp: a value above it scales against itself (see
+ * `ScoreBar`), so a lone 5.13 fills its track instead of overflowing it.
+ *
+ * ⚠️ **That is all it does, and an earlier version of this comment claimed more.** It said "two
+ * different scores can never paint the same width", which is false on this path and was false when
+ * it was written: with no `scale`, 3.5 and 5.13 are each their own ceiling and both paint
+ * `scaleX(1)`. The sentence read as a guarantee, and `result-cards.tsx` was written against it —
+ * the mobile feed rendered `<ScoreBar value={score} />` with no scale, so every score above 3.00
+ * painted a full bar on a phone while the same rows encoded correctly in the table. Found 12 Sep
+ * 2026 by `result-cards.test.tsx`, which compared two adjacent cards' fills.
+ *
+ * **The rule, stated so it cannot be misread. Every surface that holds a row set passes
+ * `scale`.**
+ * The table derives it in `scaleForColumn`, the card feed in `ResultCards`. Only `peek-drawer.tsx`
+ * omits it, and only because one row in isolation has nothing to be scaled against — which is the
+ * case this constant exists for.
  */
 export const REFERENCE_SCORE_SCALE = 3;
 

@@ -14,6 +14,11 @@ Whole history, not the affected window: ``adj_factor[d]`` is the cumulative prod
 action after ``d``, so one new action changes the factor on every earlier bar. Recomputing from
 scratch each time is also what makes the task idempotent — there is no incremental state to get
 out of step with reality.
+
+AF 0.5: nightly ``source='kite'`` bars are adjustable; only ``kite_adjusted`` (M29 deep history)
+is excluded from ``adjust_bars``. AF 3.1: after adjusting the post-seam segment, rescale the
+``kite_adjusted`` segment by the seam bar's new ``adj_factor`` so a later split cannot reopen a
+``1/f`` step at 2024-01-01.
 """
 
 from __future__ import annotations
@@ -42,6 +47,9 @@ FACTOR_EXPONENT: Decimal = Decimal("0.0000000001")
 
 UPSERT_CHUNK: int = 2000
 
+#: Provenance that must not be fed to ``adjust_bars`` — vendor-adjusted, no exchange print.
+KITE_ADJUSTED_SOURCE: str = "kite_adjusted"
+
 
 @dataclass(frozen=True, slots=True)
 class InstrumentAdjustment:
@@ -51,6 +59,7 @@ class InstrumentAdjustment:
     bars_rewritten: int
     actions_applied: int
     unquantified: tuple[str, ...]
+    deep_rescaled: int = 0
 
 
 async def reprocess_instrument(
@@ -79,7 +88,8 @@ async def reprocess_instrument(
     actions = await _load_actions(session, instrument_id, as_of=as_of)
     bars = await _load_raw_bars(session, instrument_id)
     if bars.height == 0:
-        return InstrumentAdjustment(instrument_id, 0, 0, ())
+        deep_only = await _rescale_deep_segment(session, instrument_id, seam_factor=Decimal(1))
+        return InstrumentAdjustment(instrument_id, deep_only, 0, (), deep_only)
 
     result = adjust_bars(bars, actions)
     values = [
@@ -127,11 +137,61 @@ async def reprocess_instrument(
         )
         written += len(chunk)
 
+    # Earliest adjustable bar carries every subsequent action; that factor is what the deep
+    # segment must share so the M29 splice stays continuous after a later split.
+    earliest = min(values, key=lambda row: row["date"])
+    deep_rescaled = await _rescale_deep_segment(
+        session, instrument_id, seam_factor=earliest["adj_factor"]
+    )
+
     unquantified = tuple(
         f"{a.action.action_type}@{a.action.ex_date.isoformat()}: {a.detail}"
         for a in result.unquantified_actions
     )
-    return InstrumentAdjustment(instrument_id, written, len(result.effective_actions), unquantified)
+    return InstrumentAdjustment(
+        instrument_id,
+        written + deep_rescaled,
+        len(result.effective_actions),
+        unquantified,
+        deep_rescaled,
+    )
+
+
+async def _rescale_deep_segment(
+    session: AsyncSession, instrument_id: int, *, seam_factor: Decimal
+) -> int:
+    """Multiply ``kite_adjusted`` OHLC by ``seam_factor / row.adj_factor`` (AF 3.1).
+
+    Deep rows store the vendor-adjusted level with ``adj_factor`` recording how far the post-seam
+    series has moved since the splice. Recovering the splice baseline as ``price / adj_factor``
+    and writing ``baseline * seam_factor`` keeps the join continuous when a new split lands.
+    """
+    rows = (
+        await session.execute(
+            select(OhlcvDaily).where(
+                OhlcvDaily.instrument_id == instrument_id,
+                OhlcvDaily.source == KITE_ADJUSTED_SOURCE,
+            )
+        )
+    ).scalars().all()
+    if not rows:
+        return 0
+    target = _factor(seam_factor)
+    updated = 0
+    for row in rows:
+        was = row.adj_factor if row.adj_factor not in (None, Decimal(0)) else Decimal(1)
+        if was == target:
+            continue
+        scale = target / was
+        row.open = _price(row.open * scale) or row.open
+        row.high = _price(row.high * scale) or row.high
+        row.low = _price(row.low * scale) or row.low
+        row.close = _price(row.close * scale) or row.close
+        # close_raw on these rows carries the same adjusted value (no exchange print).
+        row.close_raw = _price(row.close_raw * scale) or row.close_raw
+        row.adj_factor = target
+        updated += 1
+    return updated
 
 
 async def run_apply_adjustments(
@@ -214,15 +274,10 @@ def _issue_price(raw: object) -> Decimal | None:
 async def _load_raw_bars(session: AsyncSession, instrument_id: int) -> pl.DataFrame:
     """Recover the unadjusted OHLCV for one instrument.
 
-    ``close_raw`` and ``volume_raw`` are stored directly (docs/04), but there is no
-    ``open_raw``/``high_raw``/``low_raw`` column — and ``open``/``high``/``low`` are *outputs* of
-    this very step. Reading them back as if they were raw would re-adjust an already-adjusted
-    series, compounding the factor on every run and breaking idempotency.
-
-    docs/09 anticipates exactly this: "Store `adj_factor` per row so any adjusted number can be
-    reverse-engineered." So the raw prints are recovered as ``open / adj_factor``. On a first run
-    ``adj_factor`` is 1 and this is the identity; on every later run it undoes precisely what the
-    previous run applied.
+    Prefer stored ``open_raw``/``high_raw``/``low_raw`` when present (AF 0.6). Otherwise recover
+    via ``price / adj_factor`` — identity when ``adj_factor`` is 1. ``kite_adjusted`` rows are
+    excluded: they have no exchange print and must not be double-counted (M29); AF 3.1 rescales
+    them separately across the seam.
     """
     rows = await session.execute(
         select(
@@ -233,18 +288,13 @@ async def _load_raw_bars(session: AsyncSession, instrument_id: int) -> pl.DataFr
             OhlcvDaily.close_raw,
             OhlcvDaily.volume_raw,
             OhlcvDaily.adj_factor,
+            OhlcvDaily.open_raw,
+            OhlcvDaily.high_raw,
+            OhlcvDaily.low_raw,
         )
         .where(
             OhlcvDaily.instrument_id == instrument_id,
-            # M29: deep-history bars come from Kite already adjusted, and there is no exchange
-            # print behind them to re-derive one from. Re-adjusting them would apply the stored
-            # corporate actions a SECOND time, on top of the vendor's own adjustment -- the exact
-            # double-count M28.2 found on CUPID, but silent and across nine years.
-            #
-            # They are excluded from the rebuild rather than deleted by it: `close_raw` carries
-            # the adjusted value for these rows (the column is NOT NULL), so a rebuild that read
-            # them would also overwrite the verified segment's neighbours with nonsense.
-            OhlcvDaily.source != "kite",
+            OhlcvDaily.source != KITE_ADJUSTED_SOURCE,
         )
         .order_by(OhlcvDaily.date)
     )
@@ -264,9 +314,9 @@ async def _load_raw_bars(session: AsyncSession, instrument_id: int) -> pl.DataFr
         [
             {
                 "date": r[0],
-                "open_raw": _unadjust(r[1], r[6]),
-                "high_raw": _unadjust(r[2], r[6]),
-                "low_raw": _unadjust(r[3], r[6]),
+                "open_raw": r[7] if r[7] is not None else _unadjust(r[1], r[6]),
+                "high_raw": r[8] if r[8] is not None else _unadjust(r[2], r[6]),
+                "low_raw": r[9] if r[9] is not None else _unadjust(r[3], r[6]),
                 "close_raw": r[4],
                 "volume_raw": r[5],
             }
@@ -308,6 +358,7 @@ def outcome_note_for(results: Sequence[InstrumentAdjustment]) -> dict[str, objec
 __all__ = [
     "AdjustmentOutcome",
     "InstrumentAdjustment",
+    "KITE_ADJUSTED_SOURCE",
     "instruments_with_actions",
     "outcome_note_for",
     "reprocess_instrument",

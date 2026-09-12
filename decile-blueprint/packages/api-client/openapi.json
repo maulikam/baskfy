@@ -3302,6 +3302,11 @@
             "title": "Collected",
             "type": "boolean"
           },
+          "marked_at_cost": {
+            "default": false,
+            "title": "Marked At Cost",
+            "type": "boolean"
+          },
           "returns_after_fees": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Returns After Fees",
@@ -3345,6 +3350,11 @@
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Dividends",
             "type": "string"
+          },
+          "marked_at_cost": {
+            "default": false,
+            "title": "Marked At Cost",
+            "type": "boolean"
           },
           "money_put_in": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
@@ -8771,6 +8781,11 @@
             ],
             "title": "Holdings Synced On"
           },
+          "live_overlay": {
+            "default": false,
+            "title": "Live Overlay",
+            "type": "boolean"
+          },
           "monitoring_excluded_note": {
             "default": "Monitoring view — overlaps with other portfolios, excluded from totals.",
             "title": "Monitoring Excluded Note",
@@ -8818,6 +8833,10 @@
             "title": "Sync Status",
             "type": "array"
           },
+          "sync_summary": {
+            "title": "Sync Summary",
+            "type": "string"
+          },
           "unallocated": {
             "$ref": "#/components/schemas/UnallocatedOut"
           }
@@ -8825,6 +8844,7 @@
         "required": [
           "prices_label",
           "holdings_synced_label",
+          "sync_summary",
           "hero",
           "chart",
           "unallocated"
@@ -13369,6 +13389,11 @@
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Dividends",
             "type": "string"
+          },
+          "marked_at_cost": {
+            "default": false,
+            "title": "Marked At Cost",
+            "type": "boolean"
           },
           "money_put_in": {
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",

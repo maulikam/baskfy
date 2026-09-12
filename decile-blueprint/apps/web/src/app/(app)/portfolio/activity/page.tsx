@@ -4,6 +4,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/shell/page-header";
 import { SectionTabs } from "@/components/shell/section-tabs";
 import { fetchBrokerCatalog } from "@/lib/brokers/fetch";
+import { fetchPortfolioOverview } from "@/lib/portfolio/fetch";
 import { PAGES } from "@/lib/vocabulary";
 
 /**
@@ -14,18 +15,9 @@ import { PAGES } from "@/lib/vocabulary";
  * All six are Phase 1 of §10 and none exists yet, so the page is honest about being empty rather
  * than inventing a feed. The route exists now so the §2 tab row is complete.
  *
- * **What it said to a connected account, and why that was wrong (M83).** The copy was static:
- * "Once a broker is connected…" above a "Connect a broker" link, shown to everyone. Maulik read it
- * with Zerodha already connected and 17 holdings synced, and reasonably asked why it wanted him to
- * connect again.
- *
- * Two separate untruths. It implied he was not connected when he was — the same defect the broker
- * panel had — and it implied that connecting is what would fill this page, when nothing would:
- * the feed does not exist. Prompting an action that cannot help is worse than an empty box,
- * because it sends someone to re-do work that was already done.
- *
- * So the page asks who is connected and says the true thing for each case. It still invents no
- * feed.
+ * **Sync copy (audit 1.3).** Connected ≠ synced. This page used to say "holdings are synced"
+ * whenever a broker OAuth token existed, while the command centre banner said the primary had
+ * never synced. Both surfaces now read `overview.sync_summary` — the one field.
  */
 export const metadata: Metadata = {
   title: PAGES["/portfolio/activity"].title,
@@ -45,6 +37,12 @@ export default async function PortfolioActivityPage() {
     connected = false;
   }
 
+  const overview = await fetchPortfolioOverview().catch(() => null);
+  const syncSummary =
+    overview?.sync_summary ??
+    overview?.holdings_synced_label ??
+    (connected ? "Holdings not synced yet" : "No broker connected");
+
   return (
     <div className="flex max-w-3xl flex-col gap-6">
       <SectionTabs section="portfolio" />
@@ -56,7 +54,7 @@ export default async function PortfolioActivityPage() {
       >
         {connected ? (
           <p className="max-w-[56ch] text-sm leading-relaxed text-muted-foreground">
-            Your broker is connected and your holdings are synced. Activity — buys, sells,
+            <span data-testid="sync-summary">{syncSummary}</span>. Activity — buys, sells,
             dividends and corporate actions — is not recorded yet, so there is nothing to list.
             Syncing again will not change that; this page fills in once the ledger behind it is
             built.
@@ -78,7 +76,7 @@ export default async function PortfolioActivityPage() {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        A record of what happened, not an instruction to do anything. Nothing here places an order.
+        Read-only. Nothing on this page places an order.
       </p>
     </div>
   );

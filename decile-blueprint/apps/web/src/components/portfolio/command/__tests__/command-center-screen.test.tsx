@@ -127,6 +127,8 @@ function overview(over: Partial<Overview> = {}): Overview {
     prices_as_of: "2026-09-10",
     holdings_synced_label: "Holdings reconciled today at 09:18",
     holdings_synced_on: "2026-09-11",
+    sync_summary: "Holdings synced: 2026-09-11",
+  live_overlay: false,
     monitoring_excluded_note:
       "Monitoring views may contain overlapping holdings and are excluded from total portfolio value.",
     open_reconciliation_count: 0,
@@ -970,7 +972,9 @@ describe("permission and session states", () => {
       </TooltipProvider>,
     );
 
-    expect(screen.getByTestId("market-session")).toHaveTextContent(/final for the session/);
+    expect(screen.getByTestId("market-session")).toHaveTextContent(
+      /session close \(plus any final quote overlay\)/,
+    );
   });
 
   it("market closed: an open market says the figures are still moving", () => {
@@ -984,7 +988,9 @@ describe("permission and session states", () => {
       </TooltipProvider>,
     );
 
-    expect(screen.getByTestId("market-session")).toHaveTextContent(/live and will keep moving/);
+    expect(screen.getByTestId("market-session")).toHaveTextContent(
+      /close, plus live overlay when a Kite session exists/,
+    );
   });
 
   it("state: with no answer about the session, no session label is guessed", () => {

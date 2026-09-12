@@ -107,7 +107,7 @@ The product serves **two different clocks** and they are both correct:
 |---|---|---|
 | Baskets, factors, market health, the screener, the freshness pill's `as_of` | The **last completed trading session** | A daily bar is a *closed* day. House rules 5 and 7: point-in-time, idempotent. There is no "today" bar until today ends |
 | The **swing book's** setups and triggers, on the desk | **Live, from Kite quotes** | These are prices, not bars, and a quote is available whenever the market is |
-| The **web app's** portfolio marks — net worth, today's P&L, every holding's value | The **last completed session's close** | Not by design. `services/api` has no quote path at all; `_Prices` in `portfolio_overview.py` reads the newest two closes out of `ohlcv_daily` |
+| The **web app's** portfolio marks — net worth, today's P&L, every holding's value | **Close, plus live overlay when a Kite session exists** | `ohlcv_daily` closes are the base; `live_prices.py` overlays Kite `last_price` when a live broker read is available (M82). Without a Kite session the page stays on the last close |
 
 ⚠️ **THE ROW ABOVE WAS WRONG UNTIL 11 Sep 2026, and it was wrong in the direction that matters.**
 It read *"Portfolio marks and holdings, the swing book's setups and triggers | Live, from Kite
@@ -121,10 +121,16 @@ portfolio screen was showing live quotes, and he had to correct it. **A working 
 misstates where a money figure comes from is worse than one that says nothing**, because it is
 believed. Fixed by splitting the row, and the correction stays here rather than being tidied away.
 
-So on a weekday at 13:15 the pill reads **yesterday** and so does the portfolio, for the same
-reason: both are built on closes. The swing book on the desk is the only surface showing this
-minute. **Do not make the published series claim today while today is still running** — and do
-not tell anyone the portfolio is live until somebody builds the path that makes it so.
+**Decision restated 12 Sep 2026 (audit 4.1):** after M82 the web portfolio *does* overlay live
+Kite marks when a session exists. The clock is therefore **"close, plus live overlay when a Kite
+session exists"** — not "always live" and not "close only". The freshness pill, live-refresh copy
+and this table must say exactly that. The 11 Sep correction above remains: do not claim live when
+there is no Kite path.
+
+So on a weekday at 13:15 the pill's published `as_of` still reads **yesterday** (last completed
+session). Portfolio marks may additionally show a live overlay when Kite is connected. Baskets,
+factors and market health stay end-of-day. **Do not make the published series claim today while
+today is still running.**
 
 ### What was tried and reverted, so nobody tries it again
 

@@ -12,6 +12,7 @@ from sqlalchemy import select
 from baskfy_api.auth import AuthenticatedDep
 from baskfy_api.curated_investments import load_investment_for_user, snapshot_dict
 from baskfy_api.db import SessionDep
+from baskfy_api.live_prices import live_prices_by_instrument
 from baskfy_core.curated_accounting import HoldingPosition
 from baskfy_core.gst import money
 from baskfy_core.models import CbFeeLedger, CbInvestmentHolding, CbOrderBatch
@@ -31,6 +32,7 @@ class CostsSnapshotOut(BaseModel):
     dividends: Decimal
     xirr: Decimal | None = None
     xirr_displayable: bool
+    marked_at_cost: bool = False
 
 
 class CostsOut(BaseModel):
@@ -38,6 +40,7 @@ class CostsOut(BaseModel):
     accrued_fees_total: Decimal
     returns_after_fees: Decimal
     collected: bool = False
+    marked_at_cost: bool = False
 
 
 @router.get("/cb/investments/{investment_id}/costs", response_model=CostsOut)
@@ -73,6 +76,16 @@ async def get_investment_costs(
         for h in holding_rows
     ]
     prices = {int(h.instrument_id): h.avg_price for h in holding_rows}
+    live = await live_prices_by_instrument(session, list(prices))
+    marked_at_cost = False
+    for instrument_id in list(prices):
+        quote = live.get(instrument_id)
+        if quote is not None and quote > 0:
+            prices[instrument_id] = quote
+        else:
+            marked_at_cost = True
+    if not prices:
+        marked_at_cost = False
     first = (inv.created_at or now).date()
     raw = snapshot_dict(
         buy_amounts=buy_amounts or [Decimal("0")],
@@ -93,9 +106,11 @@ async def get_investment_costs(
         )
     accrued = money(sum((row.total for row in fee_rows), Decimal("0")))
     returns = Decimal(str(raw["current_returns"]))
+    snapshot = CostsSnapshotOut.model_validate({**raw, "marked_at_cost": marked_at_cost})
     return CostsOut(
-        snapshot=CostsSnapshotOut.model_validate(raw),
+        snapshot=snapshot,
         accrued_fees_total=accrued,
         returns_after_fees=money(returns - accrued),
         collected=False,
+        marked_at_cost=marked_at_cost,
     )

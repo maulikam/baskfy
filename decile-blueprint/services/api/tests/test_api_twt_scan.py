@@ -35,6 +35,7 @@ from api_helpers import bearer, make_user, running_app, url
 from screener_helpers import requires_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from baskfy_api.deferred_publish import drain_deferred_publishes
 from baskfy_api.settings import Settings
 from baskfy_core.models import (
     TwConfig,
@@ -91,8 +92,11 @@ class TestScanNow:
             response = await client.post(url("/twt/scan"), headers=bearer(public_id))
             assert response.status_code == 202, response.text
             run_id = response.json()["run_id"]
+            assert queue.sent == [], "publish waits for commit (audit 4.13)"
             read = await client.get(url(f"/twt/scan/{run_id}"), headers=bearer(public_id))
 
+        drain_deferred_publishes(screener_session)
+        await screener_session.flush()
         assert response.json()["status"] == "QUEUED"
         assert queue.sent == [("baskfy.twt.scan", [run_id])], "a second detector was queued"
         row = (

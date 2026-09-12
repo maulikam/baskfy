@@ -94,6 +94,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.auth import AuthenticatedDep, Principal
 from baskfy_api.db import SessionDep
+from baskfy_api.invoices import today_ist
 from baskfy_api.live_prices import live_prices_by_instrument
 from baskfy_api.problems import Problem, ProblemType, not_found
 from baskfy_core.allocation_ledger import (
@@ -227,6 +228,11 @@ _STATUS_SYNCED: Final = "Synced"
 #: the same reason. Named because the number is a rule — ``portfolio_nav`` refuses to turn one
 #: valuation into a zero, and every place that decides whether to ask it should say why, not 2.
 _MIN_MARKS_FOR_A_RETURN: Final = 2
+
+#: A stored mark of one rupee or less is not a portfolio — it is a placeholder (audit 0.4) that
+#: turns TWR and drawdown into −100 % and the peak tile into ₹1.00. Derived returns use only
+#: marks strictly above this; the chart still shows every stored row.
+_MIN_REAL_VALUATION: Final = ONE
 
 #: The two closes §6.2's "vs previous close" needs, per instrument.
 _CLOSES_PER_INSTRUMENT: Final = 2
@@ -689,6 +695,11 @@ class OverviewOut(BaseModel):
     holdings_synced_on: dt.date | None = None
     holdings_synced_label: str
     sync_status: list[SyncStatusOut] = Field(default_factory=list)
+    #: Audit 1.3 — the one sentence Activity, the command centre and the holdings footer all
+    #: render. Built from ``sync_status`` so three surfaces cannot invent three answers.
+    sync_summary: str
+    #: Audit 4.1 — true when at least one holding is marked from a live Kite quote.
+    live_overlay: bool = False
     hero: HeroOut
     chart: NavSeriesOut
     attention: list[AttentionOut] = Field(default_factory=list)
@@ -1182,6 +1193,8 @@ class _Prices:
     ``unpriced`` names instruments with no close at all. They are excluded from valuation and
     reported, because :func:`~baskfy_core.allocation_ledger.holding_value` is right to refuse a
     missing price: valuing it at zero produces a total that is wrong and still adds up.
+
+    ``live_overlay`` is true when at least one Kite last_price replaced a close (audit 4.1).
     """
 
     as_of: dt.date | None
@@ -1189,6 +1202,7 @@ class _Prices:
     previous: Mapping[int, Decimal]
     dated: Mapping[int, dt.date]
     unpriced: tuple[int, ...]
+    live_overlay: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -1348,6 +1362,24 @@ def _label_for_sync(on: dt.date | None) -> str:
     if on is None:
         return "Holdings not synced yet"
     return f"Holdings synced: {on.isoformat()}"
+
+
+def _sync_summary(statuses: Sequence[SyncStatusOut]) -> str:
+    """One sentence every surface shares (audit 1.3).
+
+    Connected ≠ synced. A broker OAuth token with no holdings pull must not read as "synced" on
+    Activity while the command centre banner says the opposite.
+    """
+    if not statuses:
+        return "No broker connected"
+    never = [row for row in statuses if row.synced_on is None]
+    if len(never) == len(statuses):
+        return "Holdings not synced yet"
+    if never:
+        names = ", ".join(row.broker.label for row in never)
+        return f"{names} has never synced" if len(never) == 1 else f"Never synced: {names}"
+    latest = max(row.synced_on for row in statuses if row.synced_on is not None)
+    return _label_for_sync(latest)
 
 
 async def _load_ledger(session: AsyncSession, user_id: int) -> _Ledger:
@@ -1608,7 +1640,9 @@ async def _load_prices(session: AsyncSession, instrument_ids: Sequence[int]) -> 
     recent dates overall" would then compare a stock against a day it did not trade on.
     """
     if not instrument_ids:
-        return _Prices(as_of=None, latest={}, previous={}, dated={}, unpriced=())
+        return _Prices(
+            as_of=None, latest={}, previous={}, dated={}, unpriced=(), live_overlay=False
+        )
 
     ranked = (
         select(
@@ -1640,25 +1674,31 @@ async def _load_prices(session: AsyncSession, instrument_ids: Sequence[int]) -> 
             dated[instrument_id] = row.date
         else:
             previous[instrument_id] = row.close_raw
-    # LIVE MARKS OVER THE CLOSE, WHERE THE BROKER HAS ONE (M82).
+    # LIVE MARKS OVER THE CLOSE, WHERE THE BROKER HAS ONE (M82 / audit 0.9).
     #
-    # Everything above is `close_raw` — the previous session's print. Correct for a screener, wrong
-    # for the page that answers "what is my money worth": Maulik asked for the market, and on
-    # 2 Sep 2026 ATHERENERG was trading at 1692.50 while this showed the close.
+    # Everything above is `close_raw`. When a live quote overlays `latest`, `previous` must become
+    # the stored recency-1 close (what `latest` was a moment ago) — not recency-2. Leaving
+    # `previous` at recency-2 makes "Today's P&L" span two sessions (Monday LTP − Thursday close).
     #
-    # Only `latest` is overlaid. `previous` stays the prior close, which makes "Today" a live price
-    # against yesterday's close — the same arithmetic the broker's own app does. Overwriting
-    # `previous` too would silently zero the day's change.
-    #
-    # `dated` is left alone as well: it records which session the stored close came from, and a
-    # live mark has no session. Nothing that reads it starts meaning something else.
+    # `dated` is left alone: it records which session the stored close came from, and a live mark
+    # has no session.
     live = await live_prices_by_instrument(session, list(instrument_ids))
     for instrument_id, price in live.items():
+        stored_close = latest.get(instrument_id)
+        if stored_close is not None:
+            previous[instrument_id] = stored_close
         latest[instrument_id] = price
 
     unpriced = tuple(sorted(set(instrument_ids) - set(latest)))
     as_of = max(dated.values()) if dated else None
-    return _Prices(as_of=as_of, latest=latest, previous=previous, dated=dated, unpriced=unpriced)
+    return _Prices(
+        as_of=as_of,
+        latest=latest,
+        previous=previous,
+        dated=dated,
+        unpriced=unpriced,
+        live_overlay=bool(live),
+    )
 
 
 def _flow_from(row: PortfolioCashFlow) -> LedgerCashFlow:
@@ -1859,6 +1899,21 @@ def _nav_point(row: PortfolioNavDaily) -> NavPoint:
     return NavPoint(on=row.date, value=row.market_value + row.cash, net_flow=row.net_flow)
 
 
+def _is_real_valuation(row: PortfolioNavDaily) -> bool:
+    """True when the mark is a real portfolio, not a ₹1 placeholder (audit 0.4)."""
+    return row.market_value + row.cash > _MIN_REAL_VALUATION
+
+
+def _real_nav_points(rows: Sequence[PortfolioNavDaily]) -> list[NavPoint]:
+    """Marks that may feed TWR / drawdown — placeholders of ₹1 or less are dropped."""
+    return [_nav_point(row) for row in rows if _is_real_valuation(row)]
+
+
+def _real_points(points: Sequence[NavPoint]) -> list[NavPoint]:
+    """Same filter for callers that already hold :class:`NavPoint` values."""
+    return [point for point in points if point.value > _MIN_REAL_VALUATION]
+
+
 def _chain_linked(points: Sequence[NavPoint]) -> Decimal | None:
     """The time-weighted return over a series, using ``portfolio_nav``'s own public arithmetic.
 
@@ -1987,10 +2042,14 @@ def _headline_for(portfolio: LedgerPortfolio, points: Sequence[NavPoint]) -> Ret
     make different *claims*, and the routing is at the call site so the person reading this can
     see which claim was meant. Both refuse to invent a number from a series that is too short and
     return a labelled absence instead.
+
+    Placeholder marks of ₹1 or less are dropped first (audit 0.4): a return needs ≥2 real
+    valuations, and a seed mark must not turn the headline into −100 %.
     """
+    real = _real_points(points)
     if portfolio.source is PortfolioSource.HOLDING_GROUP:
-        return _figure_out(since_grouped_figure(portfolio, points))
-    return _figure_out(twr_figure(portfolio, points))
+        return _figure_out(since_grouped_figure(portfolio, real))
+    return _figure_out(twr_figure(portfolio, real))
 
 
 def _model_for(portfolio: LedgerPortfolio, value: Decimal | None) -> ReturnFigureOut | None:
@@ -2214,13 +2273,19 @@ class _SeriesMeta:
 
 
 def _series_out(rows: Sequence[PortfolioNavDaily], meta: _SeriesMeta) -> NavSeriesOut:
-    """Render one NAV series with everything §6.3 draws off it."""
+    """Render one NAV series with everything §6.3 draws off it.
+
+    Chart points keep every stored mark. TWR, daily moves and drawdown use only real valuations
+    (audit 0.4): a ₹1 seed mark must not produce −100 % returns or a peak of ₹1.00.
+    """
     portfolio_id = meta.portfolio_id
     window = meta.window
-    points = [_nav_point(row) for row in rows]
-    drawdown: list[DrawdownPoint] = drawdown_series(points) if points else []
-    worst = max_drawdown(points) if len(points) >= _MIN_MARKS_FOR_A_RETURN else None
-    total = _chain_linked(points)
+    real_points = _real_nav_points(rows)
+    drawdown: list[DrawdownPoint] = (
+        drawdown_series(real_points) if len(real_points) >= _MIN_MARKS_FOR_A_RETURN else []
+    )
+    worst = max_drawdown(real_points) if len(real_points) >= _MIN_MARKS_FOR_A_RETURN else None
+    total = _chain_linked(real_points)
     return NavSeriesOut(
         portfolio_id=portfolio_id,
         range=window,
@@ -2237,7 +2302,7 @@ def _series_out(rows: Sequence[PortfolioNavDaily], meta: _SeriesMeta) -> NavSeri
             for row in rows
         ],
         daily_pnl=[
-            DayPnlOut(on=move.on, amount=move.amount, pct=move.pct) for move in daily_pnl(points)
+            DayPnlOut(on=move.on, amount=move.amount, pct=move.pct) for move in daily_pnl(real_points)
         ],
         drawdown=[
             DrawdownPointOut(
@@ -2254,7 +2319,7 @@ def _series_out(rows: Sequence[PortfolioNavDaily], meta: _SeriesMeta) -> NavSeri
         ),
         total_return=LabelledRateOut(
             label=meta.label,
-            since=rows[0].date if rows else meta.since,
+            since=real_points[0].on if real_points else meta.since,
             value=total,
             unavailable_reason=(
                 None if total is not None else "Not enough end-of-day valuations yet"
@@ -2504,7 +2569,7 @@ async def portfolio_overview(
             # Today, not the price date. §6.4's stale-price row exists to say *how far behind*
             # the market data is, and a ribbon drawn as of the data's own newest day can never
             # notice that the data has stopped arriving — it would always be zero days behind.
-            as_of=dt.datetime.now(tz=dt.UTC).date(),
+            as_of=today_ist(),
             holdings=holdings,
             allocations=allocations,
             entries=ledger.entries,
@@ -2515,12 +2580,15 @@ async def portfolio_overview(
     )
 
     synced_on = max((row.as_of for row in ledger.broker_cash), default=None)
+    sync_status = _sync_status(ledger)
     return OverviewOut(
         prices_as_of=ledger.prices.as_of,
         prices_label=_label_for_prices(ledger.prices.as_of),
         holdings_synced_on=synced_on,
         holdings_synced_label=_label_for_sync(synced_on),
-        sync_status=_sync_status(ledger),
+        sync_status=sync_status,
+        sync_summary=_sync_summary(sync_status),
+        live_overlay=ledger.prices.live_overlay,
         hero=hero,
         chart=chart,
         attention=[_attention_out(item) for item in ribbon],
@@ -2704,12 +2772,16 @@ def _consolidated_xirr(ledger: _Ledger, closing_value: Decimal) -> LabelledRateO
 
 
 def _consolidated_twr(rows: Sequence[PortfolioNavDaily]) -> LabelledRateOut:
-    """§5.2's consolidated TWR — strategy quality, flow neutral, beside the XIRR, never merged."""
-    points = [_nav_point(row) for row in rows]
+    """§5.2's consolidated TWR — strategy quality, flow neutral, beside the XIRR, never merged.
+
+    Placeholder marks of ₹1 or less are excluded (audit 0.4); fewer than two real valuations
+    yields ``None`` rather than −100 %.
+    """
+    points = _real_nav_points(rows)
     value = _chain_linked(points)
     return LabelledRateOut(
         label="Time-weighted return since your first valuation",
-        since=rows[0].date if rows else None,
+        since=points[0].on if points else None,
         value=value,
         unavailable_reason=(None if value is not None else "Not enough end-of-day valuations yet"),
     )
@@ -3230,7 +3302,7 @@ async def resolve_reconciliation_item(
     await _owned_portfolio(session, body.portfolio_id, principal)
 
     entry = next(entry for entry in ledger.entries if entry.item_id == item_id)
-    today = dt.datetime.now(tz=dt.UTC).date()
+    today = today_ist()
     try:
         outcome = resolve(entry, body.portfolio_id, ledger.portfolios, today)
     except ValueError as exc:
@@ -3324,6 +3396,19 @@ async def _apply_allocation(
             f"cannot file {wanted} shares of {allocation.key}: only "
             f"{existing.holding.quantity} are held"
         )
+
+    # Lock every row that names this physical position before we move quantity (audit 4.14).
+    # Without FOR UPDATE two concurrent allocates can both read the same donor quantities and
+    # write slices that sum past held — 0035 removed the unique index that used to make that
+    # impossible to store.
+    await session.execute(
+        select(PortfolioHolding)
+        .where(
+            PortfolioHolding.instrument_id == allocation.key.instrument_id,
+            PortfolioHolding.broker_account_id == allocation.key.broker_account_id,
+        )
+        .with_for_update()
+    )
 
     # (1) the broker's pile — the unfiled shares, spoken for by nobody — then (2) other slices
     # smallest first. The target's own slice is never a source: taking from it to give to it
@@ -3585,7 +3670,7 @@ async def portfolio_suggestions(
     """
     user_id = principal.require_user()
     ledger = await _load_ledger(session, user_id)
-    today = dt.datetime.now(tz=dt.UTC).date()
+    today = today_ist()
 
     unallocated = unallocated_holdings(ledger.holdings, ledger.allocations)
     unpriced = sorted(
@@ -3784,7 +3869,7 @@ async def new_portfolio(
     for overlapping would be refusing it for doing its job.
     """
     user_id = principal.require_user()
-    today = dt.datetime.now(tz=dt.UTC).date()
+    today = today_ist()
 
     if body.benchmark_index_id is not None:
         await _benchmark_index(session, body.benchmark_index_id)
@@ -4038,7 +4123,7 @@ async def add_holdings(
             "there is nothing to add to it. Remove them from the portfolio they are in instead.",
         )
     portfolio = ledger.portfolios[portfolio_id]
-    today = dt.datetime.now(tz=dt.UTC).date()
+    today = today_ist()
 
     by_key = {position.key: position for position in ledger.positions}
     chosen: list[tuple[_Position, Decimal]] = []

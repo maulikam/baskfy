@@ -47,6 +47,7 @@ from sqlalchemy import ColumnElement, select
 
 from baskfy_api.auth import AuthenticatedDep, settings_for
 from baskfy_api.db import SessionDep
+from baskfy_api.invoices import today_ist
 from baskfy_api.kite_basket import build_basket
 from baskfy_api.problems import Problem, ProblemType, not_found
 from baskfy_api.routers.baskets import latest_plan
@@ -204,7 +205,7 @@ async def basket_as_kite_basket(
     weights = {str(symbol): Decimal(weight) for _, symbol, weight in rows}
     by_id = {int(iid): str(symbol) for iid, symbol, _ in rows}
 
-    today = dt.date.today()
+    today = today_ist()
     price_rows = (
         await session.execute(
             select(OhlcvDaily.instrument_id, OhlcvDaily.close_raw)

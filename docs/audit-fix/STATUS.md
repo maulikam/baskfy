@@ -2,6 +2,9 @@
 
 Rollback tag: **e795a71**.
 Wave 1: A–G merged into developer (`a4ee64f`).
+Post-merge: Law-1 callers (`12c1e1f`), house-rule Any + mypy (`1e1fe08`), `make lint` green (`9c24751`).
+Wave 2: H (`af/H` → `../baskfy-H`), I (`af/I` → `../baskfy-I`) running; D2 after ship.
+`make test-db` re-run in progress on developer.
 
 | item | lane | commit | state |
 |---|---|---|---|

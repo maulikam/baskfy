@@ -58,18 +58,26 @@ echo "── login to $REG"
 aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin "$REG"
 
 echo "── build web ($TAG) for https://${HOSTNAME_PUBLIC}"
+# NEXT_PUBLIC_DESK_URL was MISSING here until 12 Sep 2026, and the omission was silent in the
+# worst way. `Dockerfile.web` declares `ARG NEXT_PUBLIC_DESK_URL=` with an EMPTY default, and
+# `src/lib/site.ts` falls back to `https://desk.modelbasket.in` -- production. Its own comment
+# says why that matters: "Staging must set this or links silently go to production." The app now
+# refuses to build without it rather than shipping a staging page that links an operator at the
+# live desk, which is how this surfaced: the build failed with
+# `NEXT_PUBLIC_DESK_URL must be set in production`.
+#
+# THE COMMENT ABOVE USED TO SIT INSIDE THE `docker build` BELOW, AND THAT BROKE THE BUILD.
+# `\`-newline is spliced away before tokenizing, so an indented `#` line in the middle of a
+# continuation chain does not comment one argument out -- it ends the command at that point.
+# `docker build` therefore ran with no build context and no `NEXT_PUBLIC_DESK_URL`, exiting 1
+# under `set -e`, and the three lines after the comment block were parsed as commands of their
+# own (`--build-arg: command not found`). The fix for a note about an argument is to put it
+# above the command, never between its arguments.
 docker build --platform linux/arm64 -f "$BLUE/infra/docker/Dockerfile.web" \
   -t "$REG/baskfy-web:$TAG" -t "$REG/baskfy-web:latest" \
   --build-arg "NEXT_PUBLIC_SITE_URL=https://${HOSTNAME_PUBLIC}" \
   --build-arg "NEXT_PUBLIC_API_ORIGIN=https://${HOSTNAME_PUBLIC}" \
   --build-arg "NEXT_PUBLIC_API_URL=https://${HOSTNAME_PUBLIC}/api/v1" \
-  # NEXT_PUBLIC_DESK_URL was MISSING here until 12 Sep 2026, and the omission was silent in the
-  # worst way. `Dockerfile.web` declares `ARG NEXT_PUBLIC_DESK_URL=` with an EMPTY default, and
-  # `src/lib/site.ts` falls back to `https://desk.modelbasket.in` -- production. Its own comment
-  # says why that matters: "Staging must set this or links silently go to production." The app now
-  # refuses to build without it rather than shipping a staging page that links an operator at the
-  # live desk, which is how this surfaced: the build failed with
-  # `NEXT_PUBLIC_DESK_URL must be set in production`.
   --build-arg "NEXT_PUBLIC_DESK_URL=https://desk.${HOSTNAME_PUBLIC}" \
   --build-arg "BASKFY_RELEASE=$TAG" \
   "$BLUE"

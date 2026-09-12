@@ -187,6 +187,21 @@ services:
       NEXTAUTH_URL: ${BASKFY_PUBLIC_URL:?set BASKFY_PUBLIC_URL}
       AUTH_SECRET: ${BASKFY_JWT_SECRET}
       AUTH_TRUST_HOST: "true"
+      # On-demand revalidation secret. `:?` and not `:-`, for the same reason as
+      # `BASKFY_JWT_SECRET` and the opposite of the Google pair below: since `2e4437e` the web
+      # `middleware.ts` calls `assertRevalidateSecretConfigured()`, which throws in production when
+      # this is empty — and middleware runs on EVERY request, so the marketing pages and the legal
+      # documents 500 along with everything else. There is no degraded mode to preserve.
+      #
+      # It was missing from this block entirely, and the block's own note above is why that was
+      # invisible: the web service takes no `env_file:`, so a value present in `.env.staging`
+      # reaches the python services and never reaches Next. `.env.staging.example` already said
+      # "Runtime (web container): REVALIDATE_SECRET must be non-empty in production/staging" — the
+      # instruction was written and the wiring to honour it was not, so a box pulling an image
+      # built after 2e4437e would come up serving 500 on every page while `docker compose ps`
+      # reported the container healthy. Refusing to start, naming the variable, is the cheaper
+      # failure by a wide margin.
+      REVALIDATE_SECRET: ${REVALIDATE_SECRET:?set REVALIDATE_SECRET in .env.staging.compose (tools/deploy/deploy-swing.sh generates it on the box)}
       # Google sign-in (M46). Both values, because this container runs the OAuth code exchange.
       #
       # THEY HAVE TO BE LISTED HERE. This service is the one that does NOT take `env_file:

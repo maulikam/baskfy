@@ -4,14 +4,39 @@ source "$(dirname "${BASH_SOURCE[0]}")/_common.sh"
 
 docker image inspect "$WEB_IMAGE" >/dev/null 2>&1 || {
   echo "building $WEB_IMAGE …"
-  docker build --platform "$PLATFORM" -f "$BLUE/infra/docker/Dockerfile.web" -t "$WEB_IMAGE" "$BLUE" \
-    >/dev/null 2>&1 || fail "web image did not build"
+  # `NEXT_PUBLIC_DESK_URL` has to be passed even though this gate never clicks a desk link.
+  # `Dockerfile.web` builds with `NODE_ENV=production` and declares the arg with an EMPTY
+  # default; `src/lib/site.ts` throws `NEXT_PUBLIC_DESK_URL must be set in production` rather
+  # than falling back to the live desk, so `next build` failed here for every caller that did
+  # not pass it. The other three NEXT_PUBLIC_* values keep the Dockerfile's staging defaults --
+  # this gate asserts the image renders, not what it points at. The value below is deliberately
+  # an unroutable placeholder: an image built by a verification gate must not carry a URL that
+  # could send an operator anywhere real.
+  #
+  # The build log is kept and shown on failure. It was `>/dev/null 2>&1`, so the one line that
+  # named the missing variable was discarded and the gate said only "web image did not build".
+  LOG="$(mktemp)"
+  docker build --platform "$PLATFORM" -f "$BLUE/infra/docker/Dockerfile.web" -t "$WEB_IMAGE" \
+    --build-arg "NEXT_PUBLIC_DESK_URL=http://desk.invalid" \
+    "$BLUE" >"$LOG" 2>&1 || {
+      tail -25 "$LOG" | sed 's/^/    /' >&2
+      fail "web image did not build (full log: $LOG)"
+    }
+  rm -f "$LOG"
 }
 
 # Run it alone on a spare port. No API, no database: this gate is about the image, and the
 # marketing pages render without either.
 NAME="baskfy-verify-web-$$"
-docker run -d --name "$NAME" --platform "$PLATFORM" -p 39311:3000 "$WEB_IMAGE" >/dev/null \
+# `REVALIDATE_SECRET` is a RUNTIME variable, unlike the NEXT_PUBLIC_* set baked in above, and the
+# container is unusable without it: since `2e4437e` `middleware.ts` calls
+# `assertRevalidateSecretConfigured()`, which throws in production on an empty value, and
+# middleware runs on every request. The container started, logged `Ready in 408ms`, and answered
+# 500 to `/` — so this gate reported "landing page did not respond" for a fully working image.
+# The value is a throwaway: nothing here posts to `/api/revalidate`, it only has to be non-empty.
+docker run -d --name "$NAME" --platform "$PLATFORM" -p 39311:3000 \
+  -e REVALIDATE_SECRET="verify-web-image-throwaway" \
+  "$WEB_IMAGE" >/dev/null \
   || fail "container did not start"
 trap 'docker rm -f "$NAME" >/dev/null 2>&1' EXIT
 

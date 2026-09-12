@@ -20,7 +20,8 @@
 #   1. ships compose.prod.yml + Caddyfile to the box through the private archive bucket
 #      (the only file transport there is: no SSH, and SSM parameters land in CloudTrail);
 #   2. on the box: backs up the old copies, pins the three image tags to this commit in
-#      .env.staging.compose, generates BASKFY_DESK_PASSWORD there if absent (never sent), validates;
+#      .env.staging.compose, generates BASKFY_DESK_PASSWORD and REVALIDATE_SECRET there if absent
+#      (both generated on the box, never sent over the wire), validates;
 #   3. compose pull; run --rm migrate (waits, exit 0 or the deploy stops);
 #   4. run --rm seed reference; seed swing --capital ₹25,00,000 --risk 0.5 (MD1/MD2, audited);
 #   5. up -d api worker ingest-worker beat desk swing-monitor web caddy (caddy recreated, since a
@@ -182,6 +183,7 @@ box \
   "set -e; cd /opt/baskfy; for f in compose.prod.yml Caddyfile; do [ -f \$f ] && cp -p \$f \$f.bak-sw13-$STAMP; aws s3 cp --region $REGION --only-show-errors s3://$BUCKET/deploy/$TAG/\$f \$f; done; chown ec2-user:ec2-user compose.prod.yml Caddyfile; ls -l compose.prod.yml Caddyfile" \
   "set -e; cd /opt/baskfy; F=.env.staging.compose; for kv in BASKFY_WEB_IMAGE=$REG/baskfy-web:$TAG BASKFY_PY_IMAGE=$REG/baskfy-py:$TAG BASKFY_DESK_IMAGE=$REG/baskfy-desk:$TAG; do k=\${kv%%=*}; grep -q \"^\$k=\" \$F && sed -i \"s#^\$k=.*#\$kv#\" \$F || echo \"\$kv\" >> \$F; done; grep -E '^BASKFY_(WEB|PY|DESK)_IMAGE=' \$F" \
   "set -e; cd /opt/baskfy; F=.env.staging.compose; if ! grep -q '^BASKFY_DESK_PASSWORD=' \$F; then printf 'BASKFY_DESK_PASSWORD=%s\n' \"\$(python3 -c 'import secrets; print(secrets.token_hex(16))')\" >> \$F; echo 'BASKFY_DESK_PASSWORD generated on the box (hex, 32 chars; read it in an SSM shell, never through box.sh)'; else echo 'BASKFY_DESK_PASSWORD present'; fi; chmod 0600 \$F" \
+  "set -e; cd /opt/baskfy; F=.env.staging.compose; if ! grep -q '^REVALIDATE_SECRET=' \$F; then printf 'REVALIDATE_SECRET=%s\n' \"\$(python3 -c 'import secrets; print(secrets.token_hex(32))')\" >> \$F; echo 'REVALIDATE_SECRET generated on the box (never printed)'; else echo 'REVALIDATE_SECRET present'; fi; chmod 0600 \$F" \
   "$C config -q && echo 'compose config: ok'"
 
 # SSM runs the lines as one script WITHOUT set -e, so every step that must gate the next one
@@ -214,8 +216,6 @@ say "4. seed reference; seed swing (sleeve ₹$SWING_CAPITAL, risk $SWING_RISK %
 # same rows — and it is what makes a deploy to a FRESH box work without a separate ceremony.
 # The cost is minutes on a box that already has the data; the alternative is a first deploy that
 # silently comes up with an empty universe.
-BOX_TIMEOUT_SECONDS="${SEED_TIMEOUT_SECONDS:-1800}" \
-#
 # TW11 (12 Sep 2026): `seed twt` joined the list because the box had **no `tw_config` row at all**.
 # `sw_config=1`, `vb_config=1`, `tw_config=0` the first time anyone looked, and the reason is this
 # step: it seeds `reference` and `swing` and nothing else, so nothing in the deploy path had ever
@@ -226,6 +226,14 @@ BOX_TIMEOUT_SECONDS="${SEED_TIMEOUT_SECONDS:-1800}" \
 # Maulik decided those numbers; TWT's capital is `NEEDS-MAULIK.md` T3 and stays his keystroke. A
 # row at ₹0 plans nothing — every signal is skipped `NO_SLEEVE_CAPITAL` — so this creates the place
 # the number goes without putting a number in it.
+#
+# THE ENV PREFIX BELOW USED TO SIT ABOVE THE TW11 NOTE, WHICH SILENTLY DISARMED IT. A `\`-newline
+# is spliced away before tokenizing, so the comment block ended the statement: the prefix became a
+# plain unexported assignment, and `box` — which is `bash box.sh`, a subprocess — never saw it.
+# `SEED_TIMEOUT_SECONDS` was a dead knob, and the budget this whole note exists to state fell back
+# to box.sh's own default. Same class of bug as the one in push-images.sh; a note about an argument
+# goes above the command, never between its arguments.
+BOX_TIMEOUT_SECONDS="${SEED_TIMEOUT_SECONDS:-1800}" \
 box "$(step "$C run --rm seed" "seed reference" 12)" \
     "$(step "$C run --rm seed python -m baskfy_api.seed swing --capital $SWING_CAPITAL --risk $SWING_RISK" "seed swing" 4)" \
     "$(step "$C run --rm seed python -m baskfy_api.seed twt" "seed twt" 4)"

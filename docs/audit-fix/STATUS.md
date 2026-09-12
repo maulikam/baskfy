@@ -94,7 +94,7 @@ Wave 2: H+I merged; D2 after ship / suites green.
 | 5.5 | H | merged | done |
 | 5.6 | H | merged | done |
 | 5.7 | H | merged | done |
-| 5.8 | H | merged | done — explore limit/offset + categories; listings `total` |
+| 5.8 | H | merged | done — explore limit/offset + categories; listings `total` (AF 5.8b) |
 | 5.9 | H | merged | done |
 | 5.10 | H | merged | done |
 | 5.11 | H | merged | done — Versions tab via lane I |
@@ -107,3 +107,6 @@ Wave 2: H+I merged; D2 after ship / suites green.
 | I.5 | I | merged | done |
 | I.6 | I | merged | done |
 | I.BACKLOG | I | merged | done |
+| W.1 | W | in flight | real `next build` must compile under typedRoutes; lint alone missed it (AF W.1) |
+| V.1 | V | in flight | desk suite + image build-arg preflight |
+| D2 | orch | pending | box data job with backup id + alembic 0045 |

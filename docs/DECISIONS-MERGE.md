@@ -6989,3 +6989,38 @@ the `/build/overlap` vocabulary entry.
 **Rejected.** Waiting on explore/listings API pagination fields before any UI change.
 
 **Reverse.** Remove offset paging and listings Previous.
+
+## AF 5.8b — The API pages the catalogue and counts the register (supersedes AFH 5.8) · ⚠ UNREVIEWED
+
+**Choice.** `GET /explore` takes `limit`/`offset` and returns `categories` for the *filtered* set;
+the catalogue asks for one page and no longer slices a full list in the page. `GET /listings`
+returns `total` (the filtered register size, computed without the cursor), so the footer says
+"N on this page · M matching" instead of "more ahead".
+
+**Why the categories field.** The filter rail must offer every category in the filtered set, not
+just the ones that happen to appear on the visible page — paging in the page was the only reason
+the old code held the whole list.
+
+**Rejected.** Keeping the client-side slice (a 24-row page costing the whole catalogue on every
+request); a second `/explore/categories` endpoint (a second query for a value the list already
+knows).
+
+**Reverse.** Drop `limit`/`offset`/`categories` from `BasketListOut` and `total` from
+`ListingsPage`; restore the page-side slice.
+
+## AF W.1 — A green `make lint` is not a green build (typedRoutes) · ⚠ UNREVIEWED
+
+**What happened.** The web image failed to build while `make lint` (`tsc --noEmit` + eslint) was
+green, and it failed again after the nine-lane merge on the same error: `typedRoutes: true` makes
+`next build` generate route types that `tsc --noEmit` never loads, so a `<Link>` fed a `string`
+href type-checks in lint and fails in the build. A fix for the four affected files existed only
+in an uncommitted working tree during the merge and was flattened by it.
+
+**Choice.** The gate before any deploy is a real `next build`, not lint. Route helpers built from
+runtime ids return `Route` (the idiom already used by `lib/search/hrefs.ts` and
+`market/listings/page.tsx`), and the fix is committed rather than held.
+
+**Rejected.** Turning `typedRoutes` off, or `typescript.ignoreBuildErrors` — both delete the only
+check that catches a route typo before staging. `// @ts-expect-error` — house rule 3.
+
+**Reverse.** Revert the `Route` typings; nothing else depends on them.

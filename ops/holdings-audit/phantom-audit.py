@@ -54,13 +54,34 @@ async def main() -> None:
         print(f"VERDICT=inconclusive reason=broker_read_not_live({source})")
         return
 
+    # THE INSTRUMENT MASTER AND KITE SPELL G-SECS DIFFERENTLY, and comparing the raw strings
+    # reported the Sovereign Gold Bond as a phantom the moment it was correctly filed: the master
+    # holds `SGBDE31III-GB`, Kite's holdings endpoint drops the series suffix and says
+    # `SGBDE31III`. `baskfy_api.portfolios` tier 4 is the production bridge and
+    # `GSEC_SERIES_SUFFIXES` is its list; this audit uses the same list rather than a second one,
+    # because an audit that disagrees with the sync about what a holding IS will eventually
+    # recommend selling something real.
+    from baskfy_api.portfolios import GSEC_SERIES_SUFFIXES
+
+    def held_by_broker(symbol: str) -> bool:
+        if symbol in broker:
+            return True
+        return any(
+            symbol.endswith(suffix) and symbol[: -len(suffix)] in broker
+            for suffix in GSEC_SERIES_SUFFIXES
+        )
+
     matched, phantom = [], []
     for sym, qty, name, pile in sorted(filed):
-        (matched if sym in broker else phantom).append((sym, qty, name, pile))
+        (matched if held_by_broker(sym) else phantom).append((sym, qty, name, pile))
     print(f"matched={len(matched)} phantom={len(phantom)}")
     for sym, qty, name, _ in phantom:
         print(f"  PHANTOM {sym} qty={qty:g} in '{name}' — broker does not report it")
-    extra = sorted(set(broker) - {s for s, _, _, _ in filed})
+    filed_syms = {s for s, _, _, _ in filed}
+    filed_stripped = {
+        s[: -len(suf)] for s in filed_syms for suf in GSEC_SERIES_SUFFIXES if s.endswith(suf)
+    }
+    extra = sorted(set(broker) - filed_syms - filed_stripped)
     print(f"broker_has_unfiled={len(extra)}" + (f" {extra}" if extra else ""))
     # Print the broker's own list so a "phantom" cannot be a naming mismatch read as a sale.
     print("broker_reports=" + ",".join(sorted(broker)))

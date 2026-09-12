@@ -1,6 +1,7 @@
 import "server-only";
 
 import { serverApiOrigin } from "@/lib/api/config";
+import { SERVER_FETCH_TIMEOUT_MS } from "@/lib/api/server-fetch";
 import { auth } from "@/lib/auth";
 
 /**
@@ -8,6 +9,8 @@ import { auth } from "@/lib/auth";
  *
  * The catalog is always fetchable for a signed-in account. Live OAuth is not: the payload's
  * `gate.live_oauth_enabled` is the server's own answer to whether D3 has been signed off.
+ *
+ * Connect and sync-holdings carry an AbortSignal timeout (AUDIT 4.5).
  */
 
 export interface BrokerCapabilities {
@@ -68,6 +71,7 @@ export async function fetchBrokerCatalog(): Promise<BrokerCatalog> {
   const response = await fetch(`${serverApiOrigin()}/api/v1/brokers`, {
     headers: { Authorization: `Bearer ${session.accessToken}` },
     cache: "no-store",
+    signal: AbortSignal.timeout(SERVER_FETCH_TIMEOUT_MS),
   });
   if (!response.ok) throw new BrokersUnavailable(`brokers ${response.status}`);
   return (await response.json()) as BrokerCatalog;
@@ -92,6 +96,7 @@ export async function startBrokerConnect(brokerId: string): Promise<ConnectResul
       "Content-Type": "application/json",
     },
     cache: "no-store",
+    signal: AbortSignal.timeout(SERVER_FETCH_TIMEOUT_MS),
   });
   if (!response.ok) {
     return {
@@ -146,6 +151,7 @@ export async function syncBrokerHoldings(brokerId: string): Promise<SyncHoldings
         "Content-Type": "application/json",
       },
       cache: "no-store",
+      signal: AbortSignal.timeout(SERVER_FETCH_TIMEOUT_MS),
     },
   );
   if (!response.ok) return refused(`Could not sync holdings (${response.status}).`);

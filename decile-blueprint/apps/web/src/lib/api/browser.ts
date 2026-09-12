@@ -15,6 +15,9 @@ import { apiOrigin } from "@/lib/api/config";
  *
  * Read *per request* rather than captured once: a token that expires mid-session would otherwise
  * turn every subsequent query into a 401 until the page reloaded.
+ *
+ * Every request carries an AbortSignal timeout (AUDIT 4.5). The budget matches the RSC default
+ * unless `NEXT_PUBLIC_BASKFY_BROWSER_FETCH_TIMEOUT_MS` overrides it.
  */
 
 interface SessionPayload {
@@ -25,6 +28,13 @@ interface SessionPayload {
 /** Refresh this many milliseconds before the token actually expires, to cover clock skew. */
 const REFRESH_MARGIN_MS = 60_000;
 
+const BROWSER_FETCH_TIMEOUT_MS: number = (() => {
+  const raw = process.env.NEXT_PUBLIC_BASKFY_BROWSER_FETCH_TIMEOUT_MS?.trim();
+  if (!raw) return 2500;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 2500;
+})();
+
 let cached: { token: string; expiresAt: number } | null = null;
 let inFlight: Promise<string | undefined> | null = null;
 
@@ -34,7 +44,10 @@ export function resetTokenCache(): void {
 }
 
 async function fetchSessionToken(): Promise<string | undefined> {
-  const response = await fetch("/api/auth/session", { credentials: "same-origin" });
+  const response = await fetch("/api/auth/session", {
+    credentials: "same-origin",
+    signal: AbortSignal.timeout(BROWSER_FETCH_TIMEOUT_MS),
+  });
   if (!response.ok) return undefined;
   const payload = (await response.json()) as SessionPayload | null;
   if (!payload?.accessToken) return undefined;
@@ -80,10 +93,22 @@ async function onUnauthorized(): Promise<void> {
   }
 }
 
+function browserTimedFetch(request: Request): Promise<Response> {
+  const parent = request.signal;
+  const budget = AbortSignal.timeout(BROWSER_FETCH_TIMEOUT_MS);
+  const signals = AbortSignal as typeof AbortSignal & {
+    any?: (signals: AbortSignal[]) => AbortSignal;
+  };
+  const signal =
+    parent && typeof signals.any === "function" ? signals.any([parent, budget]) : budget;
+  return fetch(new Request(request, { signal }));
+}
+
 export function browserApi(): BaskfyClient {
   client ??= createBaskfyClient({
     baseUrl: apiOrigin(),
     getAccessToken: () => accessToken(),
+    fetch: browserTimedFetch,
     onUnauthorized: () => {
       void onUnauthorized();
     },

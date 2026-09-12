@@ -1,6 +1,8 @@
 # AF run status
 
 Rollback tag: **e795a71** (verify-pc-deploy.sh 12 Sep 2026).
+Wave 1: A–G running.
+
 Box: pins=3 running=10 release=e795a71 twt_execution_true=0.
 verify-stack.sh local: FAIL (local compose not up) — box verified via verify-pc-deploy.
 

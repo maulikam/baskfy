@@ -1,5 +1,6 @@
 "use client";
 
+import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
 
@@ -25,10 +26,10 @@ export function NewScreenRedirect() {
     started.current = true;
     void (async () => {
       const created = await create.mutateAsync({
-        name: "Untitled screen",
+        name: "New screen",
         definition: defaultDefinition(),
       });
-      router.replace(`/build/${created.public_id}` as never);
+      router.replace(`/build/${created.public_id}` as Route);
     })();
   }, [create, router]);
 

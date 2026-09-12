@@ -120,6 +120,18 @@ def _is_blocked_ip(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bo
     )
 
 
+def resolve_webhook_host(host: str, port: int) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    """DNS for :func:`assert_public_webhook_url`. Tests monkeypatch this — ``network_guard``
+    blocks ``socket.getaddrinfo`` (Prompt 2), and delivery must still exercise the public-IP
+    check without opening a socket.
+    """
+    try:
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except OSError as exc:
+        raise WebhookUrlNotPublic(f"webhook host {host!r} does not resolve") from exc
+    return [ipaddress.ip_address(info[4][0]) for info in infos]
+
+
 def assert_public_webhook_url(url: str) -> None:
     """Resolve the host and refuse RFC1918 / link-local / loopback (AUDIT 2.6).
 
@@ -140,13 +152,7 @@ def assert_public_webhook_url(url: str) -> None:
     if literal is not None and _is_blocked_ip(literal):
         raise WebhookUrlNotPublic(f"webhook URL targets a non-public address ({literal})")
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
-    try:
-        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
-    except OSError as exc:
-        raise WebhookUrlNotPublic(f"webhook host {host!r} does not resolve") from exc
-    for info in infos:
-        sockaddr = info[4]
-        ip = ipaddress.ip_address(sockaddr[0])
+    for ip in resolve_webhook_host(host, port):
         if _is_blocked_ip(ip):
             raise WebhookUrlNotPublic(f"webhook URL resolves to a non-public address ({ip})")
 

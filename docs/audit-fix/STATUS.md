@@ -94,7 +94,7 @@ Wave 2: H+I merged; D2 after ship / suites green.
 | 5.5 | H | merged | done |
 | 5.6 | H | merged | done |
 | 5.7 | H | merged | done |
-| 5.8 | H | merged | done — client page; API limit/offset + listings total still to wire |
+| 5.8 | H | merged | done — explore limit/offset + categories; listings `total` |
 | 5.9 | H | merged | done |
 | 5.10 | H | merged | done |
 | 5.11 | H | merged | done — Versions tab via lane I |

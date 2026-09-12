@@ -530,6 +530,8 @@ class ListingsPage(_Out):
 
     data: list[ListingOut]
     next_cursor: str | None = None
+    #: Filtered register size (no cursor). AFH 5.8 — page copy "N of M".
+    total: int = 0
 
 
 # ---------------------------------------------------------------------------

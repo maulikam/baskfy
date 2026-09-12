@@ -73,8 +73,7 @@ export default async function AllBasketsPage({
     view: viewParam,
   });
 
-  /* AFH 5.8: catalogue page uses limit/offset in the URL. The explore list API still returns the
-     full set (needs lib/explore/fetch.ts + explore router limit/offset); we page in the page. */
+  /* AFH 5.8: catalogue pages via explore `limit`/`offset`; categories come on the list response. */
   const offsetRaw = Number.parseInt(first(params.offset) ?? "0", 10);
   const offset = Number.isFinite(offsetRaw) && offsetRaw > 0 ? offsetRaw : 0;
 
@@ -83,7 +82,13 @@ export default async function AllBasketsPage({
     // `view` is a presentation choice, not a catalogue filter — it never reaches the API.
     const { view, ...query } = state;
     void view;
-    catalogue = await fetchExploreList(definedParams(query));
+    catalogue = await fetchExploreList(
+      definedParams({
+        ...query,
+        limit: String(PAGE_SIZE),
+        offset: String(offset),
+      }),
+    );
   } catch (error) {
     if (!(error instanceof ExploreUnavailable)) throw error;
     return (
@@ -108,14 +113,14 @@ export default async function AllBasketsPage({
       state.category ||
       state.rebalance_frequency,
   );
-  const categories = [
-    ...new Set(catalogue.items.flatMap((basket) => basket.categories)),
-  ].sort();
-  const pageItems = catalogue.items.slice(offset, offset + PAGE_SIZE);
+  const categories = catalogue.categories?.length
+    ? catalogue.categories
+    : [...new Set(catalogue.items.flatMap((basket) => basket.categories))].sort();
+  const pageItems = catalogue.items;
   const prevOffset = Math.max(0, offset - PAGE_SIZE);
   const nextOffset = offset + PAGE_SIZE;
   const hasPrev = offset > 0;
-  const hasNext = nextOffset < catalogue.items.length;
+  const hasNext = nextOffset < catalogue.total;
 
   return (
     <SelectionProvider>

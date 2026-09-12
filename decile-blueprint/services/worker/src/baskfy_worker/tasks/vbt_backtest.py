@@ -143,7 +143,12 @@ def _params_json(params: BacktestParams, start: dt.date, end: dt.date | None) ->
         sub = getattr(params.config, group.name)
         for spec in dataclasses.fields(sub):
             value = getattr(sub, spec.name)
-            config[f"{group.name}.{spec.name}"] = list(value) if isinstance(value, tuple) else value
+            if isinstance(value, tuple):
+                value = list(value)
+            elif isinstance(value, Decimal):
+                # House rule 9 — money stays exact through JSONB (asyncpg uses json.dumps).
+                value = str(value)
+            config[f"{group.name}.{spec.name}"] = value
     return {
         "start": start.isoformat(),
         "end": end.isoformat() if end else None,

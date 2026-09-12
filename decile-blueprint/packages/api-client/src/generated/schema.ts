@@ -6791,6 +6791,12 @@ export interface components {
             data: components["schemas"]["ListingOut"][];
             /** Next Cursor */
             next_cursor?: string | null;
+            /**
+             * Total
+             * @description Filtered register size (no cursor). AFH 5.8 — page copy "N of M".
+             * @default 0
+             */
+            total?: number;
         };
         /** ManagerApplyIn */
         ManagerApplyIn: {

@@ -74,6 +74,8 @@ DOCUMENTED_LIST_PARAMS: Final[tuple[str, ...]] = (
     "sort",
     "order",
     "q",
+    "limit",
+    "offset",
 )
 
 
@@ -124,6 +126,8 @@ class BasketCardOut(BaseModel):
 class BasketListOut(BaseModel):
     items: list[BasketCardOut]
     total: int
+    #: Distinct categories across the *filtered* set (before limit/offset), for the filter rail.
+    categories: list[str] = []
 
 
 class ManagerOut(BaseModel):
@@ -305,6 +309,8 @@ async def list_explore_baskets(  # noqa: PLR0913, PLR0917 - one query param per 
     sort: Annotated[SortField, Query()] = "name",
     order: Annotated[SortDir, Query()] = "asc",
     q: Annotated[str | None, Query(max_length=80)] = None,
+    limit: Annotated[int | None, Query(ge=1, le=200)] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> BasketListOut:
     """Catalog list - filters/sorts match docs/smallcase/05 (DECISIONS-SC SC2).
 
@@ -352,7 +358,13 @@ async def list_explore_baskets(  # noqa: PLR0913, PLR0917 - one query param per 
 
     rows = (await session.execute(stmt)).all()
     items = [_card(b, m, met) for b, m, met in rows]
-    return BasketListOut(items=items, total=len(items))
+    categories = sorted({category for card in items for category in card.categories})
+    total = len(items)
+    if offset:
+        items = items[offset:]
+    if limit is not None:
+        items = items[:limit]
+    return BasketListOut(items=items, total=total, categories=categories)
 
 
 @router.get("/explore/managers", response_model=ManagerListOut)

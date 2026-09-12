@@ -67,6 +67,8 @@ def test_documented_list_params_cover_ui_spec_facets() -> None:
         "sort",
         "order",
         "q",
+        "limit",
+        "offset",
     }
     assert set(DOCUMENTED_LIST_PARAMS) == expected
 
@@ -283,6 +285,8 @@ async def test_explore_filter_params_round_trip(engine: AsyncEngine, migrated: N
             "sort",
             "order",
             "q",
+            "limit",
+            "offset",
         }
 
         result = await list_explore_baskets(

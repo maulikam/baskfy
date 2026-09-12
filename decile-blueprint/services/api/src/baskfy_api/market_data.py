@@ -125,6 +125,7 @@ class HealthPoint:
 class ListingPage:
     rows: Sequence[Instrument]
     next_cursor: str | None = None
+    total: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -393,34 +394,8 @@ def decode_cursor(cursor: str) -> tuple[dt.date, str]:
         raise InvalidCursor(cursor) from exc
 
 
-async def listings(session: AsyncSession, query: ListingQuery) -> ListingPage:
-    """docs/07: `GET /listings?from&to&series=&cursor=` — "NSE listings, newest first".
-
-    Newest first means ``listed_on DESC``, and ties are broken by symbol so the order is total.
-    Without that tie-break the order between two instruments listed the same day is whatever the
-    planner chose last, and a cursor into the middle of a listing date would skip and repeat rows
-    — which is Prompt 11's third acceptance criterion, and not a theoretical concern: NSE lists
-    dozens of instruments on the same day.
-    """
-    statement = listings_statement(query)
-    rows = (await session.execute(statement)).scalars().all()
-    page = list(rows[: query.limit])
-    has_more = len(rows) > query.limit
-    return ListingPage(
-        rows=page,
-        next_cursor=(
-            encode_cursor(page[-1].listed_on, page[-1].symbol) if has_more and page else None
-        ),
-    )
-
-
-def listings_statement(query: ListingQuery) -> Select[tuple[Instrument]]:
-    """The register's statement, on its own so ``EXPLAIN`` can be run against the real thing.
-
-    Prompt 16 deliverable 2 asks for ``EXPLAIN ANALYZE`` on "every hot query"; a plan taken from a
-    hand-written approximation would tune a statement we do not issue. ``baskfy_api.query_plans``
-    calls this.
-    """
+def _listings_filters(query: ListingQuery, *, with_cursor: bool) -> Select[tuple[Instrument]]:
+    """Active-register filters shared by the page read and the filtered ``total`` count (AFH 5.8)."""
     sort_date = func.coalesce(Instrument.listed_on, NO_LISTING_DATE)
     statement: Select[tuple[Instrument]] = select(Instrument).where(
         Instrument.is_active.is_(True),
@@ -440,7 +415,7 @@ def listings_statement(query: ListingQuery) -> Select[tuple[Instrument]]:
         statement = statement.where(Instrument.listed_on >= query.start)
     if query.end is not None:
         statement = statement.where(Instrument.listed_on <= query.end)
-    if query.cursor is not None:
+    if with_cursor and query.cursor is not None:
         after_date, after_symbol = decode_cursor(query.cursor)
         # Row-value comparison against the *whole* sort key. Written the same way round as the
         # ORDER BY below so the two cannot drift apart.
@@ -450,9 +425,55 @@ def listings_statement(query: ListingQuery) -> Select[tuple[Instrument]]:
                 (sort_date == after_date) & (Instrument.symbol > after_symbol),
             )
         )
+    return statement
 
+
+async def listings(session: AsyncSession, query: ListingQuery) -> ListingPage:
+    """docs/07: `GET /listings?from&to&series=&cursor=` — "NSE listings, newest first".
+
+    Newest first means ``listed_on DESC``, and ties are broken by symbol so the order is total.
+    Without that tie-break the order between two instruments listed the same day is whatever the
+    planner chose last, and a cursor into the middle of a listing date would skip and repeat rows
+    — which is Prompt 11's third acceptance criterion, and not a theoretical concern: NSE lists
+    dozens of instruments on the same day.
+    """
+    # AFH 5.8: total is the filtered register size (no cursor), so the page can say "N of M".
+    total = int(
+        (
+            await session.execute(
+                select(func.count()).select_from(
+                    _listings_filters(query, with_cursor=False).subquery()
+                )
+            )
+        ).scalar_one()
+    )
+    statement = listings_statement(query)
+    rows = (await session.execute(statement)).scalars().all()
+    page = list(rows[: query.limit])
+    has_more = len(rows) > query.limit
+    return ListingPage(
+        rows=page,
+        next_cursor=(
+            encode_cursor(page[-1].listed_on, page[-1].symbol) if has_more and page else None
+        ),
+        total=total,
+    )
+
+
+def listings_statement(query: ListingQuery) -> Select[tuple[Instrument]]:
+    """The register's statement, on its own so ``EXPLAIN`` can be run against the real thing.
+
+    Prompt 16 deliverable 2 asks for ``EXPLAIN ANALYZE`` on "every hot query"; a plan taken from a
+    hand-written approximation would tune a statement we do not issue. ``baskfy_api.query_plans``
+    calls this.
+    """
+    sort_date = func.coalesce(Instrument.listed_on, NO_LISTING_DATE)
     # `+ 1` so the caller learns whether another page exists without a second COUNT.
-    return statement.order_by(sort_date.desc(), Instrument.symbol.asc()).limit(query.limit + 1)
+    return (
+        _listings_filters(query, with_cursor=True)
+        .order_by(sort_date.desc(), Instrument.symbol.asc())
+        .limit(query.limit + 1)
+    )
 
 
 async def listing_series(session: AsyncSession) -> list[str]:

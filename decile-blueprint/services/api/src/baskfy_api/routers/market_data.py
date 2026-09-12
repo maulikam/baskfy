@@ -261,6 +261,7 @@ async def get_listings(  # noqa: PLR0913, PLR0917 - FastAPI injects one paramete
                 for row in page.rows
             ],
             next_cursor=page.next_cursor,
+            total=page.total,
         ),
         data_version=await current_data_version(session),
     )

@@ -48,11 +48,21 @@ class OrderGateway(_CoreOrderGateway):
         The merged gateway requires ``user_id`` + ``broker_account_id`` (P4.3). This
         console still trades one account; a second tenant is a different caller, not
         a silent default onto the founder.
+
+        Core ``place`` requires ``gross_exposure`` (AF 3.7). Desk callers that only
+        pass price×qty get the same notional here so existing console call sites stay
+        valid without disarming the risk layer with a silent 0.0 default.
         """
         from baskfy_execution.tenancy import TenantIds
 
         sole = TenantIds(user_id=int(C.SOLE_USER_ID),
                          broker_account_id=int(C.SOLE_BROKER_ACCOUNT_ID))
+        if "gross_exposure" not in kwargs:
+            price = kwargs.get("price")
+            if price is None:
+                price = kwargs.get("reference_price")
+            qty = int(kwargs.get("qty") or 0)
+            kwargs["gross_exposure"] = abs(float(price or 0.0) * qty)
         return await super().place(
             tenant=tenant if tenant is not None else sole,
             plan_tenant=plan_tenant if plan_tenant is not None else sole,

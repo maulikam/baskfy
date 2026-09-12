@@ -27,6 +27,13 @@ export interface CollectionsGridProps {
 }
 
 export function CollectionsGrid({ collections, className }: CollectionsGridProps) {
+  // Audit §1.14: hide the module when every shelf names the same baskets — undifferentiated
+  // themes are noise, not discovery.
+  const signatures = collections.map((c) => [...c.basket_slugs].sort().join(","));
+  const differentiated =
+    signatures.length === 0 || new Set(signatures).size > 1 || collections.length === 1;
+  if (!differentiated) return null;
+
   return (
     <section
       aria-label="Collections"

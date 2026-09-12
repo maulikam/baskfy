@@ -43,6 +43,7 @@ from typing import Final
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from baskfy_api.deferred_publish import defer_task_publish
 from baskfy_api.problems import Problem, ProblemType
 from baskfy_api.queue import TaskQueue
 from baskfy_core.models import VbScanRun
@@ -222,9 +223,5 @@ async def request_scan(  # noqa: PLR0913 - one keyword per rule the request is c
     if queue is None:
         log.warning("vbt scan %s queued with no broker; the worker's sweep will publish it", row.id)
         return row
-    try:
-        row.task_id = str(queue.send_task(SCAN_TASK_NAME, [int(row.id)]))
-    except Exception as exc:  # a broker that is down is not the person's fault
-        log.warning("vbt scan %s could not be published (%s); the sweep will", row.id, exc)
-    await session.flush()
+    defer_task_publish(session, queue, SCAN_TASK_NAME, int(row.id), row=row)
     return row

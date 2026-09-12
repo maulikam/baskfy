@@ -7233,3 +7233,24 @@ checker editing history. Adding "Decile suite" to `BRAND_ALLOWED` — that list 
 `RUN-AND-TEST.md` and `NEEDS-MAULIK.md` stay in scope, unchanged.
 
 **Reverse.** Restore `default=None`'s bare pass-through and the exact-filename glob.
+
+## AF O.1 — Two Python suites cannot share one test database · ⚠ UNREVIEWED
+
+**What happened.** A `make test-db` run reported `62 failed, 1275 passed, 512 errors` where the
+previous run had reported `26 failed, 1822 passed`. Nearly every error was
+`asyncpg.exceptions.UndefinedTableError: relation "exchange" does not exist` — the schema had been
+dropped out from under a running test. Nothing had regressed: `tools/ci-local.sh` runs the Python
+suites too, and it was running at the same time against the same `baskfy_test` database. The
+migration fixtures legitimately `DROP SCHEMA public CASCADE` and re-migrate, so a second runner
+sees its own tables vanish mid-query.
+
+**Choice.** The database suites are serialized: one Python runner against `baskfy_test` at a time.
+An orchestrator that fans work out to parallel lanes must keep `make test-db`, `make test` and
+`tools/ci-local.sh` off each other, and a suite result taken during an overlap is void — re-run it
+before believing a single number in it.
+
+**Rejected.** Giving each runner its own database (`BASKFY_TEST_DATABASE_URL` would allow it) —
+worth doing, but it is a change to the test plumbing that should not be made while grading a merge;
+filed as a follow-up rather than done under time pressure.
+
+**Reverse.** Nothing to reverse; this is a rule about how the suites are run, not a code change.

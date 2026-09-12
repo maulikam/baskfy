@@ -7,6 +7,7 @@ routes** - Track C / PACK.2.
 
 from __future__ import annotations
 
+import bisect
 import datetime as dt
 from decimal import Decimal
 from typing import Annotated, Final, Literal
@@ -22,8 +23,11 @@ from baskfy_api.db import SessionDep
 from baskfy_api.problems import not_found
 from baskfy_api.schemas import _In
 from baskfy_core.curated_metrics import (
+    BasketVersion,
     headline_return,
+    nav_for_storage,
     return_convention_fields,
+    version_aware_nav,
     whole_months_between,
 )
 from baskfy_core.models import (
@@ -35,6 +39,7 @@ from baskfy_core.models import (
     CbMetrics,
     CbWatchlistItem,
     Instrument,
+    OhlcvDaily,
 )
 
 router = APIRouter(tags=["explore"])
@@ -202,10 +207,13 @@ def _metrics_out(row: CbMetrics | None, launched_at: dt.date | None) -> MetricsO
         since_inception_pct=row.since_inception_pct,
     )
     disclosure = return_convention_fields()
+    # Strip internal doc citations from user-facing copy (audit §1.13 / §7).
+    note = str(disclosure["return_convention_note"])
+    note = note.replace("(docs/DECISIONS-MERGE.md M39.3), ", "")
     return MetricsOut(
         return_convention=str(disclosure["return_convention"]),
         dividends_included=bool(disclosure["dividends_included"]),
-        return_convention_note=str(disclosure["return_convention_note"]),
+        return_convention_note=note,
         as_of_date=row.as_of_date,
         min_amount=row.min_amount,
         volatility_bucket=row.volatility_bucket,
@@ -496,13 +504,24 @@ async def get_explore_basket(
     return _card(basket, manager, metrics)
 
 
+#: Fraction → percent for display. Storage is a 4-dp share of 1.0; the page shows percent of 100.
+_FULL_PCT: Final = Decimal(100)
+_WEIGHT_PCT_Q: Final = Decimal("0.01")
+
+
+def _weight_pct(weight: Decimal) -> Decimal:
+    """House rule 8: round the *display* percent once, here, never in the browser."""
+    return (weight * _FULL_PCT).quantize(_WEIGHT_PCT_Q)
+
+
 class ConstituentOut(BaseModel):
     symbol: str
     name: str | None
     segment: str
-    #: Percent of the basket, as stored — `cb_constituent.weight` is a numeric, and house rule 8
-    #: rounds at write time, so the API hands over exactly what the table holds.
+    #: Fraction of the basket as stored (`0.0500` = 5%). Kept for callers that already read it.
     weight: Decimal
+    #: Percent of the basket for display (`5.00`). House rule 8: rounded once at write.
+    weight_pct: Decimal
 
 
 class ConstituentsOut(BaseModel):
@@ -522,6 +541,9 @@ class ConstituentsOut(BaseModel):
     label: str
     added_count: int
     removed_count: int
+    #: How many versions this basket has ever published. Used to label "monthly rebalance"
+    #: honestly when the cut job has not yet written a second version.
+    version_count: int
     constituents: list[ConstituentOut]
 
 
@@ -558,6 +580,16 @@ async def get_explore_constituents(
             .limit(1)
         )
     ).scalar_one_or_none()
+    version_count = int(
+        (
+            await session.execute(
+                select(func.count())
+                .select_from(CbBasketVersion)
+                .where(CbBasketVersion.basket_id == basket.id)
+            )
+        ).scalar_one()
+    )
+
     if version is None:
         return ConstituentsOut(
             slug=slug,
@@ -566,6 +598,7 @@ async def get_explore_constituents(
             label="GENESIS",
             added_count=0,
             removed_count=0,
+            version_count=0,
             constituents=[],
         )
 
@@ -584,16 +617,143 @@ async def get_explore_constituents(
         label=version.label,
         added_count=version.added_count,
         removed_count=version.removed_count,
+        version_count=version_count,
         constituents=[
             ConstituentOut(
                 symbol=instrument.symbol,
                 name=instrument.name,
                 segment=constituent.segment,
                 weight=constituent.weight,
+                weight_pct=_weight_pct(Decimal(constituent.weight)),
             )
             for constituent, instrument in rows
         ],
     )
+
+
+class PerformancePointOut(BaseModel):
+    date: dt.date
+    #: Rebased NAV, rounded once for storage/display (house rule 8).
+    basket: Decimal
+    benchmark: Decimal | None = None
+
+
+class PerformanceOut(BaseModel):
+    """NAV path for the chart — only days with full constituent price coverage.
+
+    ``coverage`` is covered trading days / calendar trading days in the series span (0–1).
+    A partial series that still plots every day is what made a +48% basket look like a
+    five-fold climb: two sparse points joined as if they were a continuous record.
+    """
+
+    slug: str
+    points: list[PerformancePointOut]
+    coverage: Decimal
+
+
+def _day_fully_covered(weights: dict[str, Decimal], prices: dict[str, Decimal]) -> bool:
+    return all(symbol in prices and prices[symbol] > 0 for symbol in weights)
+
+
+@router.get("/explore/{slug}/performance", response_model=PerformanceOut)
+async def get_explore_performance(
+    slug: SlugPath, session: SessionDep, principal: AuthenticatedDep
+) -> PerformanceOut:
+    """Version-aware NAV for the chart. Covered days only; ``coverage`` names the rest."""
+    principal.require_user()
+    basket = (
+        await session.execute(select(CbBasket).where(CbBasket.slug == slug, *_visible()))
+    ).scalar_one_or_none()
+    if basket is None:
+        raise not_found("basket", slug)
+
+    versions = (
+        await session.execute(
+            select(CbBasketVersion)
+            .where(CbBasketVersion.basket_id == basket.id)
+            .order_by(CbBasketVersion.version_no.asc())
+        )
+    ).scalars().all()
+    if not versions:
+        return PerformanceOut(slug=slug, points=[], coverage=Decimal("0.00"))
+
+    version_ids = [v.id for v in versions]
+    constituent_rows = (
+        await session.execute(
+            select(CbConstituent, Instrument)
+            .join(Instrument, Instrument.id == CbConstituent.instrument_id)
+            .where(CbConstituent.version_id.in_(version_ids))
+        )
+    ).all()
+    by_version: dict[int, dict[str, Decimal]] = {}
+    instrument_ids: set[int] = set()
+    for constituent, instrument in constituent_rows:
+        by_version.setdefault(constituent.version_id, {})[instrument.symbol] = Decimal(
+            constituent.weight
+        )
+        instrument_ids.add(int(constituent.instrument_id))
+
+    history_versions = [
+        BasketVersion(
+            effective_date=version.effective_date,
+            weights=by_version.get(version.id, {}),
+        )
+        for version in versions
+        if by_version.get(version.id)
+    ]
+    if not history_versions or not instrument_ids:
+        return PerformanceOut(slug=slug, points=[], coverage=Decimal("0.00"))
+
+    start = history_versions[0].effective_date
+    as_of = (
+        await session.execute(select(func.max(OhlcvDaily.date)))
+    ).scalar_one_or_none()
+    if as_of is None or as_of < start:
+        return PerformanceOut(slug=slug, points=[], coverage=Decimal("0.00"))
+
+    price_rows = (
+        await session.execute(
+            select(OhlcvDaily.date, Instrument.symbol, OhlcvDaily.close)
+            .join(Instrument, Instrument.id == OhlcvDaily.instrument_id)
+            .where(
+                OhlcvDaily.instrument_id.in_(list(instrument_ids)),
+                OhlcvDaily.date >= start,
+                OhlcvDaily.date <= as_of,
+            )
+            .order_by(OhlcvDaily.date)
+        )
+    ).all()
+    history: dict[dt.date, dict[str, Decimal]] = {}
+    for trade_date, symbol, close in price_rows:
+        history.setdefault(trade_date, {})[str(symbol)] = Decimal(close)
+
+    # Keep only days where every name in the then-current version has a print.
+    covered: dict[dt.date, dict[str, Decimal]] = {}
+    trading_days = 0
+    covered_days = 0
+    ordered_versions = sorted(history_versions, key=lambda v: v.effective_date)
+    effective_dates = [v.effective_date for v in ordered_versions]
+    for day in sorted(history):
+        if day < start:
+            continue
+        trading_days += 1
+        index = bisect.bisect_right(effective_dates, day) - 1
+        weights = ordered_versions[max(index, 0)].weights
+        if _day_fully_covered(weights, history[day]):
+            covered[day] = history[day]
+            covered_days += 1
+
+    nav = version_aware_nav(covered, history_versions)
+    coverage = (
+        (Decimal(covered_days) / Decimal(trading_days)).quantize(Decimal("0.0001"))
+        if trading_days > 0
+        else Decimal("0.00")
+    )
+    points = [
+        PerformancePointOut(date=day, basket=nav_for_storage(value), benchmark=None)
+        for day, value in nav.points
+    ]
+    return PerformanceOut(slug=slug, points=points, coverage=coverage)
 
 
 @router.get("/watchlist", response_model=WatchlistOut)

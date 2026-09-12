@@ -178,6 +178,8 @@ async def upsert_bars(session: AsyncSession, instrument_id: int, frame: pl.DataF
     """Upsert one instrument's bars. Raw in, raw out — no adjustment happens here."""
     if frame.height == 0:
         return 0
+    from sqlalchemy import case  # noqa: PLC0415 - keep the upsert import surface local
+
     values = [
         {
             "instrument_id": instrument_id,
@@ -190,6 +192,9 @@ async def upsert_bars(session: AsyncSession, instrument_id: int, frame: pl.DataF
             "volume": row["volume"],
             "close_raw": row["close"],
             "volume_raw": row["volume"],
+            "open_raw": row["open"],
+            "high_raw": row["high"],
+            "low_raw": row["low"],
             "adj_factor": Decimal(1),
             "source": row["source"],
         }
@@ -199,18 +204,22 @@ async def upsert_bars(session: AsyncSession, instrument_id: int, frame: pl.DataF
     for offset in range(0, len(values), UPSERT_CHUNK):
         chunk = values[offset : offset + UPSERT_CHUNK]
         stmt = insert(OhlcvDaily).values(chunk)
+        # AF 0.6: when adj_factor ≠ 1 the stored OHL is already adjusted — overwriting it with
+        # the raw refetch and then re-dividing in reprocess corrupts high/low for every scan.
+        # Always refresh *_raw; skip OHL overwrite on an adjusted row.
+        keep_ohl = OhlcvDaily.adj_factor != 1
         await session.execute(
             stmt.on_conflict_do_update(
                 index_elements=[OhlcvDaily.instrument_id, OhlcvDaily.date],
-                # `close`, `volume` and `adj_factor` are deliberately NOT overwritten here.
-                # They are outputs of step 4; refetching raw bars must not silently un-adjust a
-                # series that has already been adjusted.
                 set_={
-                    "open": stmt.excluded.open,
-                    "high": stmt.excluded.high,
-                    "low": stmt.excluded.low,
+                    "open": case((keep_ohl, OhlcvDaily.open), else_=stmt.excluded.open),
+                    "high": case((keep_ohl, OhlcvDaily.high), else_=stmt.excluded.high),
+                    "low": case((keep_ohl, OhlcvDaily.low), else_=stmt.excluded.low),
                     "close_raw": stmt.excluded.close_raw,
                     "volume_raw": stmt.excluded.volume_raw,
+                    "open_raw": stmt.excluded.open_raw,
+                    "high_raw": stmt.excluded.high_raw,
+                    "low_raw": stmt.excluded.low_raw,
                     "source": stmt.excluded.source,
                 },
             )

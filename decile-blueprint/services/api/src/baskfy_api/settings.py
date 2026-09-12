@@ -579,6 +579,14 @@ class Settings(BaseSettings):
             raise RuntimeError(
                 "BASKFY_GOOGLE_CLIENT_ID is empty in production; nobody could sign in"
             )
+        if not self.allowed_logins:
+            # Single-tenant / invite-only: an empty allowlist in production is "anyone who
+            # completes Google sign-in gets a session", which is the opposite of the design
+            # (AUDIT 2.5). Fail startup while that posture holds.
+            raise RuntimeError(
+                "BASKFY_LOGIN_ALLOWLIST is empty in production; nobody outside an explicit "
+                "list may hold a session on this deployment"
+            )
         # docs/11 §Security: "Razorpay webhooks: verify signature". An empty secret cannot verify
         # one, and a webhook handler that accepts anything is a way to grant yourself a plan.
         if not self.razorpay_webhook_secret:

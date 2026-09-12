@@ -140,9 +140,29 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       const expiresAt = claims.accessTokenExpiresAt ?? 0;
       if (expiresAt - REFRESH_MARGIN_MS > Date.now()) return token;
 
+      /* AUDIT 0.8 / 2.2: re-minting used to ignore session_epoch, so a revoked cookie kept
+         minting fresh 15-min bearers for thirty days. Ask /me with the about-to-expire token;
+         a newer epoch (or a 401 from deleted_at) kills the session instead of renewing it. */
+      const stamped = claims.sessionEpoch ?? 0;
+      const origin = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
+      if (origin && claims.accessToken) {
+        const meResponse = await fetch(`${origin}/api/v1/me`, {
+          headers: { Authorization: `Bearer ${claims.accessToken}` },
+          cache: "no-store",
+        });
+        if (!meResponse.ok) {
+          throw new Error("The accounts service refused this session.");
+        }
+        const me = (await meResponse.json()) as { session_epoch?: number };
+        if (typeof me.session_epoch === "number" && me.session_epoch > stamped) {
+          throw new Error("This session has been revoked.");
+        }
+      }
+
       const minted = await mintAccessToken(
         {
           subject: publicId,
+          epoch: stamped,
           issuer: process.env.BASKFY_JWT_ISSUER,
           audience: process.env.BASKFY_JWT_AUDIENCE,
         },

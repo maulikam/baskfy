@@ -101,10 +101,10 @@ Wave 2: H (`af/H` → `../baskfy-H`), I (`af/I` → `../baskfy-I`) running; D2 a
 | 5.11 | H | merged | pending |
 | 5.12 | H | merged | pending |
 | 5.13 | H | merged | pending |
-| I.1 | I | merged | pending |
-| I.2 | I | merged | pending |
-| I.3 | I | merged | pending |
-| I.4 | I | merged | pending |
-| I.5 | I | merged | pending |
-| I.6 | I | merged | pending |
-| I.BACKLOG | I | merged | pending |
+| I.1 | I | 08a98ae | done; needs basket overview+constituents nav: Versions tab link |
+| I.2 | I | 1ce6138 | done; needs screen results table: SaveInstrumentButton; migration 0045 |
+| I.3 | I | 6800b8f | done (/discover/search); needs discover hub link |
+| I.4 | I | 52879d6 | done; needs actions/auth.ts: first-login → /onboarding |
+| I.5 | I | 21d1949 | done |
+| I.6 | I | 1275e4e | done (honest copy locked; page already honest) |
+| I.BACKLOG | I | 429fcf5 | done |

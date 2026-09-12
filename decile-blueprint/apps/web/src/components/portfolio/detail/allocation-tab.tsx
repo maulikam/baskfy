@@ -6,7 +6,6 @@ import Link from "next/link";
 import {
   Figure,
   MetricValue,
-  NotYetMeasured,
   Panel,
   ShareBar,
 } from "@/components/portfolio/detail/primitives";
@@ -149,13 +148,6 @@ export function AllocationTab({ allocation }: AllocationTabProps) {
           </li>
         </ul>
       </Panel>
-
-      <NotYetMeasured
-        items={allocation.blocked}
-        heading="Cuts this tab cannot make yet"
-        intro="The brief asks for five more breakdowns. Four of them wait on one thing: nothing in Baskfy says what sector an instrument is in."
-        testId="allocation-blocked"
-      />
     </>
   );
 }

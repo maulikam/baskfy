@@ -107,7 +107,7 @@ describe("no blocked-figure explanation is written in the system's own vocabular
 describe("nothing internal reaches the portfolio detail reader", () => {
   it("copy: the Risk tab with a full history stays in a reader's words", () => {
     renderWorkspace(<RiskTab risk={riskView(richDetail(), richNav())} />);
-    expect(screen.getByTestId("risk-blocked")).toBeInTheDocument();
+    expect(screen.queryByTestId("risk-blocked")).not.toBeInTheDocument();
     scanPage("the Risk tab with a history");
   });
 
@@ -120,7 +120,7 @@ describe("nothing internal reaches the portfolio detail reader", () => {
 
   it("copy: the Allocation tab names no column and no instrument table", () => {
     renderWorkspace(<AllocationTab allocation={allocationView(richDetail())} />);
-    expect(screen.getByTestId("allocation-blocked")).toBeInTheDocument();
+    expect(screen.queryByTestId("allocation-blocked")).not.toBeInTheDocument();
     scanPage("the Allocation tab");
   });
 

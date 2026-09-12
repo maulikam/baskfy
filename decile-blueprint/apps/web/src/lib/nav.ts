@@ -163,7 +163,8 @@ export const SECTION_TABS = {
     { href: "/discover/search" as Route, label: "Search" },
     { href: "/discover/collections" as Route, label: "Collections" },
     { href: "/discover/compare" as Route, label: "Compare" },
-    { href: "/discover/saved" as Route, label: "Saved" },
+    /* AFH 5.7: Saved is Watchlist — keep the tab but point at the one list. */
+    { href: "/portfolio/watchlist" as Route, label: "Watchlist" },
   ],
   build: [
     { href: "/build" as Route, label: "Screens" },
@@ -171,16 +172,9 @@ export const SECTION_TABS = {
     /* Create left Discover; this is where it lives. Removing it from one hub without giving it
        a home in the other would have hidden a real surface behind a direct link. */
     { href: "/create" as Route, label: "Create" },
-    /* `docs/swing/05` §1: "The **Build** hub gains a section tab **Swing**". */
-    { href: "/swing" as Route, label: "Swing" },
-    /* `docs/vbt/05` §1, the same shape: the third allocation is a tab beside the second, not a
-       new hub. It is read-only here — a volume-breakout line becomes an order in the desk
-       console and nowhere else (`docs/vbt/02` Track C §4). */
-    { href: "/vbt" as Route, label: "Volume breakout" },
-    /* `docs/twt/05` §1: the fourth allocation, by the same argument as the third. Build is where
-       the strategies live, and HOME1 fixes the primary chrome at five destinations. */
-    { href: "/twt" as Route, label: "Three weeks tight" },
-    /* Names that land on more than one of the scans above — pair first, then with a screen. */
+    /* AFH 5.5: Swing / Volume breakout / Three weeks tight are operator sleeves — gated behind
+       is_staff in the user menu and direct URLs until SectionTabs can read is_staff
+       (needs shell/section-tabs.tsx). Overlap stays: it is a Build tool, not a sleeve. */
     { href: "/build/overlap" as Route, label: "Overlap" },
   ],
   /*
@@ -226,7 +220,8 @@ export const SECTION_TABS = {
   */
   portfolio: [
     { href: "/portfolio/overview" as Route, label: "Overview" },
-    { href: "/portfolio/portfolios" as Route, label: "Portfolios" },
+    /* AFH 5.1: command centre is the Details drill-down, not a second portfolio voice. */
+    { href: "/portfolio/portfolios" as Route, label: "Details" },
     { href: "/portfolio/holdings" as Route, label: "Holdings" },
     { href: "/portfolio/activity" as Route, label: "Activity" },
     { href: "/portfolio/watchlist" as Route, label: "Watchlist" },
@@ -375,6 +370,14 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       page("/tradebook", "arrow-left-right"),
       page("/regime", "gauge"),
       page("/reconcile", "check-check"),
+    ],
+  },
+  {
+    label: "Operator",
+    items: [
+      page("/swing", "activity"),
+      page("/vbt", "trending-up"),
+      page("/twt", "line-chart"),
     ],
   },
   {

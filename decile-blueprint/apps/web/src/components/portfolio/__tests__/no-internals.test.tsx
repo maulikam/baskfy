@@ -99,7 +99,7 @@ describe("nothing internal reaches the reader", () => {
         <CommandCenterScreen overview={emptyOverview()} unallocated={EMPTY_PILE} marketOpen={false} />
       </TooltipProvider>,
     );
-    expect(screen.getByRole("heading", { name: "Portfolio Command Center" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Details" })).toBeInTheDocument();
     scan("the empty command centre");
   });
 

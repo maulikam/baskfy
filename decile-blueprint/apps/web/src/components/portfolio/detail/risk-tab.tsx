@@ -2,7 +2,7 @@
 
 import { ShieldAlert } from "lucide-react";
 
-import { MetricValue, NotYetMeasured } from "@/components/portfolio/detail/primitives";
+import { MetricValue } from "@/components/portfolio/detail/primitives";
 import type { RiskView } from "@/lib/portfolio/detail-tabs";
 
 /**
@@ -82,13 +82,6 @@ export function RiskTab({ risk }: RiskTabProps) {
           a position.
         </p>
       </section>
-
-      <NotYetMeasured
-        items={risk.notMeasured}
-        heading="What this tab will show, and what each needs first"
-        intro="These are the rest of the brief's risk figures. None of them is estimated here. A risk number with an unstated model behind it is worse than an absent one, because somebody may size a position against it."
-        testId="risk-blocked"
-      />
     </>
   );
 }

@@ -286,8 +286,9 @@ describe("deleting a portfolio", () => {
       />,
     );
     const impact = screen.getByTestId("delete-impact");
-    expect(impact).toHaveTextContent("Not available");
-    expect(impact).toHaveTextContent("Nothing in this portfolio has been priced yet.");
+    expect(impact).toHaveTextContent("Needs more data");
+    expect(impact.textContent ?? "").not.toContain("Nothing in this portfolio has been priced yet.");
+    expect(impact.querySelector('[title="Nothing in this portfolio has been priced yet."]')).not.toBeNull();
     /* The rule is about a FIGURE that is a bare dash, not about punctuation: no element in the
        panel may be nothing but an em dash where a number was expected. */
     expect(within(impact).queryAllByText("—")).toHaveLength(0);

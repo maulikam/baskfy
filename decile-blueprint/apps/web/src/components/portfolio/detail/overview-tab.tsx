@@ -5,7 +5,6 @@ import { ArrowRight } from "lucide-react";
 import {
   Figure,
   MetricValue,
-  NotYetMeasured,
   Panel,
   ShareBar,
   StateCallout,
@@ -14,7 +13,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { formatTradeDate } from "@/lib/format";
 import {
-  BLOCKED_OVERVIEW,
   type AllocationView,
   type DetailSnapshot,
   type Movers,
@@ -26,10 +24,8 @@ import type { ActivityItem, PortfolioDetail } from "@/lib/portfolio/overview";
 /**
  * The Overview tab: what this portfolio is, what it is worth, and what needs a person.
  *
- * The brief's list for this tab is long, and roughly a quarter of it does not exist. Objective,
- * last rebalance, next review and a target exposure are all absent for reasons about the data
- * rather than about the design, and {@link BLOCKED_OVERVIEW} says so at the bottom of the tab
- * rather than four blank rows saying it by implication.
+ * AFH 5.2 deleted the "What an overview would also say…" spec-gap block. Absent facts stay
+ * absent rather than narrated as product.
  *
  * ## Order is the argument
  *
@@ -245,13 +241,6 @@ export function OverviewTab({
           </ul>
         )}
       </Panel>
-
-      <NotYetMeasured
-        items={BLOCKED_OVERVIEW}
-        heading="What an overview would also say, once the record carries it"
-        intro="The brief asks this tab for four facts that no field in Baskfy holds. They are named here rather than left as four blank rows."
-        testId="overview-blocked"
-      />
     </>
   );
 }

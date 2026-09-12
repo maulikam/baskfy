@@ -133,14 +133,10 @@ describe("the overview tab", () => {
     expect(screen.getByTestId("detail-panel-activity")).toBeInTheDocument();
   });
 
-  it("names the four overview facts Baskfy does not store, with what each would need", () => {
+  it("does not render the overview spec-gap block (AFH 5.2)", () => {
     workspace();
-    const blocked = screen.getByTestId("overview-blocked");
-    expect(blocked).toHaveTextContent("This portfolio's stated objective");
-    expect(blocked).toHaveTextContent("When it was last rebalanced");
-    expect(blocked).toHaveTextContent("When it is next due for review");
-    expect(blocked).toHaveTextContent("A target equity exposure for this portfolio");
-    expect(blocked).toHaveTextContent("a rebalance event written to the activity feed");
+    expect(screen.queryByTestId("overview-blocked")).not.toBeInTheDocument();
+    expect(screen.queryByText(/What an overview would also say/i)).not.toBeInTheDocument();
   });
 });
 

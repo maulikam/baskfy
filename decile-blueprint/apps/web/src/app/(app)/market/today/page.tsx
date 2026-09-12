@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { HeadlineStrip } from "@/components/market/headline-strip";
 import { IndexDashboard } from "@/components/market/index-dashboard";
 import { PageHeader } from "@/components/shell/page-header";
 import { SectionTabs } from "@/components/shell/section-tabs";
@@ -39,14 +40,15 @@ export default async function MarketTodayPage() {
   }
 
   return (
-    <>
+    <div className="flex flex-col gap-4">
       <SectionTabs section="market" />
-      <PageHeader
-        title={PAGES["/market/today"].title}
-        blurb={PAGES["/market/today"].blurb}
-        meta={`${board.data.length} indices, priced at the close on ${formatTradeDate(board.as_of)}. Sorted by today's move, biggest first — click any column heading to re-sort.`}
-      />
+      {/* AFH 5.6: tight header — title only; the strip carries the numbers people come for. */}
+      <PageHeader title={PAGES["/market/today"].title} />
+      <HeadlineStrip rows={board.data} />
+      <p className="text-xs text-muted-foreground">
+        {board.data.length} indices · close of {formatTradeDate(board.as_of)}
+      </p>
       <IndexDashboard rows={board.data} asOf={formatTradeDate(board.as_of)} />
-    </>
+    </div>
   );
 }

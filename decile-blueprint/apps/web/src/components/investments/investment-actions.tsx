@@ -2,13 +2,15 @@
 
 import { useState } from "react";
 
-import { MarketClosedModal } from "@/components/cb/market-closed-modal";
 import { PlanHandoffPanel } from "@/components/cb/plan-handoff-panel";
 import { Button } from "@/components/ui/button";
+import { isMarketOpen } from "@/lib/market/session";
 
 /**
  * Order-shaped CTAs on investor surfaces — Invest more / Exit / Rebalance.
- * Never posts an order; always opens PlanHandoffPanel or MarketClosedModal (05-ui-spec).
+ *
+ * AFH 5.3: secondary until `/cb/plans/*` is wired with a real `planId`. Never posts an order;
+ * opens PlanHandoffPanel (desk stub). Market-closed is an inline line, not a hollow modal CTA.
  */
 
 export type InvestmentActionKind = "invest_more" | "exit" | "rebalance";
@@ -29,32 +31,38 @@ export function InvestmentActions({
   actions = ["invest_more", "exit", "rebalance"],
 }: InvestmentActionsProps) {
   const [handoffKind, setHandoffKind] = useState<InvestmentActionKind | null>(null);
-  const [marketClosed, setMarketClosed] = useState(false);
+  const marketOpen = isMarketOpen();
 
   return (
     <div className="space-y-3">
+      {!marketOpen ? (
+        <p
+          role="status"
+          data-testid="market-closed-inline"
+          className="text-sm text-muted-foreground"
+        >
+          Market is closed. You can still review a plan; the desk will refuse execution until the
+          session is open.
+        </p>
+      ) : null}
       <div className="flex flex-wrap gap-2">
         {actions.map((kind) => (
           <Button
             key={kind}
             type="button"
-            variant={kind === "exit" ? "outline" : "primary"}
+            variant="outline"
             size="sm"
             onClick={() => setHandoffKind(kind)}
           >
             {LABELS[kind]}
           </Button>
         ))}
-        <Button type="button" variant="ghost" size="sm" onClick={() => setMarketClosed(true)}>
-          If market closed…
-        </Button>
       </div>
       {handoffKind ? (
         <PlanHandoffPanel
           basketName={`${basketName} · ${LABELS[handoffKind].toLowerCase()}`}
         />
       ) : null}
-      <MarketClosedModal open={marketClosed} onOpenChange={setMarketClosed} />
     </div>
   );
 }

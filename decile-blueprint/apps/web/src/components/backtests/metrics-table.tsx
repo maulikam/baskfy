@@ -33,7 +33,7 @@ export function MetricsTable({ backtest }: MetricsTableProps) {
       <h2 id="backtest-metrics" className="text-sm font-semibold">
         Metrics
       </h2>
-      <div className="overflow-hidden rounded-lg border border-border">
+      <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full text-sm">
           <caption className="sr-only">Performance metrics for this backtest</caption>
           <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">

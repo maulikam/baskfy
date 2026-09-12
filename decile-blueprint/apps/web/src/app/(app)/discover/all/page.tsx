@@ -31,6 +31,13 @@ import { PAGES } from "@/lib/vocabulary";
  */
 
 const BASE = "/discover/all";
+const PAGE_SIZE = 24;
+
+function catalogueHref(state: FilterState, pageOffset: number): string {
+  const base = buildHref(BASE, state);
+  if (pageOffset <= 0) return base;
+  return `${base}${base.includes("?") ? "&" : "?"}offset=${pageOffset}`;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +73,11 @@ export default async function AllBasketsPage({
     view: viewParam,
   });
 
+  /* AFH 5.8: catalogue page uses limit/offset in the URL. The explore list API still returns the
+     full set (needs lib/explore/fetch.ts + explore router limit/offset); we page in the page. */
+  const offsetRaw = Number.parseInt(first(params.offset) ?? "0", 10);
+  const offset = Number.isFinite(offsetRaw) && offsetRaw > 0 ? offsetRaw : 0;
+
   let catalogue;
   try {
     // `view` is a presentation choice, not a catalogue filter — it never reaches the API.
@@ -99,6 +111,11 @@ export default async function AllBasketsPage({
   const categories = [
     ...new Set(catalogue.items.flatMap((basket) => basket.categories)),
   ].sort();
+  const pageItems = catalogue.items.slice(offset, offset + PAGE_SIZE);
+  const prevOffset = Math.max(0, offset - PAGE_SIZE);
+  const nextOffset = offset + PAGE_SIZE;
+  const hasPrev = offset > 0;
+  const hasNext = nextOffset < catalogue.items.length;
 
   return (
     <SelectionProvider>
@@ -122,9 +139,10 @@ export default async function AllBasketsPage({
 
           <div className="min-w-0 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm text-muted-foreground">
-                {catalogue.items.length} shown
-                {catalogue.items.length !== catalogue.total ? ` of ${catalogue.total}` : ""}
+              <p className="text-sm text-muted-foreground" data-testid="catalogue-page-count">
+                {pageItems.length === 0
+                  ? `0 shown of ${catalogue.total}`
+                  : `${offset + 1}–${offset + pageItems.length} of ${catalogue.total}`}
               </p>
               <ResultsModeToggle
                 mode={mode}
@@ -132,7 +150,7 @@ export default async function AllBasketsPage({
               />
             </div>
 
-            {catalogue.items.length === 0 ? (
+            {pageItems.length === 0 ? (
               <div className="grid place-items-center rounded-xl border border-dashed border-border bg-card/50 px-6 py-16 text-center">
                 <p className="max-w-[52ch] text-sm leading-relaxed text-muted-foreground">
                   Nothing matches these filters. Clear them to see the full catalog, or check back
@@ -146,8 +164,39 @@ export default async function AllBasketsPage({
                 </Link>
               </div>
             ) : (
-              <ResultsView baskets={catalogue.items} mode={mode} />
+              <ResultsView baskets={pageItems} mode={mode} />
             )}
+
+            {catalogue.total > PAGE_SIZE ? (
+              <nav
+                aria-label="Catalogue pages"
+                className="flex items-center justify-between gap-3"
+                data-testid="catalogue-pagination"
+              >
+                {hasPrev ? (
+                  <Link
+                    href={catalogueHref(state, prevOffset)}
+                    rel="prev"
+                    className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
+                  >
+                    Previous
+                  </Link>
+                ) : (
+                  <span />
+                )}
+                {hasNext ? (
+                  <Link
+                    href={catalogueHref(state, nextOffset)}
+                    rel="next"
+                    className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
+                  >
+                    Next
+                  </Link>
+                ) : (
+                  <span />
+                )}
+              </nav>
+            ) : null}
           </div>
 
           <aside

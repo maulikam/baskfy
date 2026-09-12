@@ -55,18 +55,22 @@ describe("the investor surfaces place no orders", () => {
     }
   });
 
-  it("wires order-shaped CTAs through PlanHandoffPanel and MarketClosedModal", () => {
+  it("wires order-shaped CTAs through PlanHandoffPanel and an inline market-closed line", () => {
     const actions = readFileSync(join(INVEST_COMPONENTS, "investment-actions.tsx"), "utf8");
     expect(actions).toContain("PlanHandoffPanel");
-    expect(actions).toContain("MarketClosedModal");
+    expect(actions).toContain("market-closed-inline");
+    expect(actions).toContain('variant="outline"');
+    expect(actions).not.toContain("If market closed");
     expect(actions).not.toMatch(/<form[\s>]/);
     expect(actions).not.toContain('"use server"');
   });
 
-  it("keeps handoff stubs in components/cb", () => {
+  it("keeps handoff stubs in components/cb and drops Notify me", () => {
     const handoff = readFileSync(join(CB_COMPONENTS, "plan-handoff-panel.tsx"), "utf8");
     const closed = readFileSync(join(CB_COMPONENTS, "market-closed-modal.tsx"), "utf8");
     expect(handoff).toContain("PlanHandoffPanel");
     expect(closed).toContain("MarketClosedModal");
+    expect(closed).not.toMatch(/Notify me/);
+    expect(closed).not.toContain("disabled title=\"Arrives with notifications\"");
   });
 });

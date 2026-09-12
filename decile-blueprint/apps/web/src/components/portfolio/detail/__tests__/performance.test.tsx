@@ -205,11 +205,8 @@ describe("the performance tab", () => {
     );
   });
 
-  it("lists what the performance tab cannot show yet, with what each would take", () => {
+  it("does not narrate performance gaps as a product section (AFH 5.2)", () => {
     tab();
-    const blocked = screen.getByTestId("performance-blocked");
-    expect(blocked).toHaveTextContent("Today, and this week, as chart ranges");
-    expect(blocked).toHaveTextContent("an intraday valuation job");
-    expect(blocked).toHaveTextContent("Returns after brokerage and taxes");
+    expect(screen.queryByTestId("performance-blocked")).not.toBeInTheDocument();
   });
 });

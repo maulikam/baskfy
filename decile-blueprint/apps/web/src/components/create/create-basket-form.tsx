@@ -17,8 +17,7 @@ import {
 
 /**
  * SC8 create form — private basket, ≥2 instruments, equal/custom weights normalize to 1.0.
- * Saves via `POST /api/v1/cb/baskets` (leaf 3.4). Preview stubbed.
- * No order route — invest later via the SC3 plan path.
+ * Saves via `POST /api/v1/cb/baskets`. No order route — invest later via the broker hand-off.
  */
 
 const MIN_INSTRUMENTS = 2;
@@ -55,7 +54,7 @@ export function CreateBasketForm() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<SavedPrivateBasket | null>(null);
   const [previewNote] = useState(
-    "Backtest preview is stubbed for this leaf — point-in-time preview wires in with the screener path.",
+    "A live backtest preview for this basket is not available yet. Save the basket, then run a backtest from Build when you want a historical read.",
   );
 
   function updateRow(index: number, patch: Partial<Row>) {

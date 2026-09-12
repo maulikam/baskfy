@@ -74,12 +74,14 @@ export function BasketCard({
         ) : null}
 
         <div className="mt-auto flex flex-wrap items-end justify-between gap-3 border-t border-border/60 pt-3">
-          <div>
-            <div className="eyebrow">Min. amount</div>
-            <div className="mt-0.5 text-sm font-medium tabular-nums">
-              {formatRupees(basket.minAmount)}
+          {basket.minAmount !== null && basket.minAmount !== undefined && basket.minAmount !== "" ? (
+            <div>
+              <div className="eyebrow">Min. amount</div>
+              <div className="mt-0.5 text-sm font-medium tabular-nums">
+                {formatRupees(basket.minAmount)}
+              </div>
             </div>
-          </div>
+          ) : null}
           {basket.headlinePct !== null && basket.headlinePct !== undefined ? (
             <div>
               <div className="eyebrow">{basket.headlineLabel ?? "1Y"}</div>

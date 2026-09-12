@@ -10,15 +10,10 @@ import { fetchListings } from "@/lib/market/fetch";
 
 /**
  * `/listings` — Prompt 11 deliverable 4, docs/07's `GET /listings?from&to&series=&cursor=`.
- * docs/08 §Routes: "RSC + cursor pagination".
  *
- * Cursor, not page number, all the way to the URL. The register grows every night, so an offset
- * would quietly repeat and skip rows between one page and the next — and "page 7" is not a stable
- * thing to link to when the rows above it move. `?cursor=` is.
- *
- * The consequence is that there is no "previous" link and no page count: a keyset cursor points
- * forward only. Browser Back is the previous page, and it works exactly right because each page
- * is a distinct URL.
+ * AFH 5.8: Previous is a URL back-stack (`prev` = the cursor that opened this page). Total count
+ * needs the listings API — STATUS until then we show page size only plus "and more" when Next
+ * exists.
  */
 export const dynamic = "force-dynamic";
 
@@ -38,6 +33,21 @@ function first(value: string | string[] | undefined): string | undefined {
   return value;
 }
 
+function listingsHref(parts: {
+  cursor?: string | undefined;
+  prev?: string | undefined;
+  series: string;
+  search: string;
+}): Route {
+  const query = new URLSearchParams();
+  if (parts.series) query.set("series", parts.series);
+  if (parts.search) query.set("search", parts.search);
+  if (parts.cursor) query.set("cursor", parts.cursor);
+  if (parts.prev) query.set("prev", parts.prev);
+  const qs = query.toString();
+  return (qs ? `/market/listings?${qs}` : "/market/listings") as Route;
+}
+
 export default async function ListingsPage({
   searchParams,
 }: {
@@ -45,21 +55,30 @@ export default async function ListingsPage({
 }) {
   const params = await searchParams;
   const cursor = first(params.cursor);
+  const prev = first(params.prev);
   const series = first(params.series) ?? "";
   const search = first(params.search) ?? "";
 
   const page = await fetchListings({ cursor, series, search });
 
-  /* `typedRoutes` cannot check a route built from a runtime cursor, so the cast is at the one
-     place the string is assembled — from our own route and our own encoded cursor. */
-  const nextHref = ((): Route | null => {
-    if (!page.next_cursor) return null;
-    const query = new URLSearchParams();
-    if (series) query.set("series", series);
-    if (search) query.set("search", search);
-    query.set("cursor", page.next_cursor);
-    return `/market/listings?${query.toString()}` as Route;
-  })();
+  const nextHref = page.next_cursor
+    ? listingsHref({
+        cursor: page.next_cursor,
+        /* Remember how we got here so Previous can return to this page's cursor (or none). */
+        prev: cursor ?? "",
+        series,
+        search,
+      })
+    : null;
+
+  const prevHref =
+    prev !== undefined
+      ? listingsHref({
+          cursor: prev === "" ? undefined : prev,
+          series,
+          search,
+        })
+      : null;
 
   return (
     <>
@@ -67,16 +86,8 @@ export default async function ListingsPage({
       <PageHeader
         title={PAGES["/market/listings"].title}
         blurb={PAGES["/market/listings"].blurb}
-        meta={`Newest listings first. Listing dates may reflect when we first saw a name in the pipeline, not the exchange IPO date — treat clustered same-day rows with care. ${PAGE_SIZE} at a time.`}
+        meta={`Newest listings first. ${PAGE_SIZE} at a time.`}
       />
-
-      <p
-        role="status"
-        className="rounded-xl border border-border bg-muted/50 px-4 py-3 text-sm text-muted-foreground"
-      >
-        Data note: until the listings register is reconciled against exchange IPO dates, this table
-        can show many names sharing one backfill day. Prefer Market → Today for live index moves.
-      </p>
 
       <ListingsFilters series={series} search={search} options={SERIES_OPTIONS} />
 
@@ -128,20 +139,34 @@ export default async function ListingsPage({
       )}
 
       <nav aria-label="Pagination" className="flex items-center justify-between gap-3">
-        <p className="text-xs text-muted-foreground tnum">
-          {page.data.length} rows on this page
+        <p className="text-xs text-muted-foreground tnum" data-testid="listings-page-count">
+          {page.data.length} on this page
+          {page.next_cursor ? " · more ahead" : " · end of register"}
         </p>
-        {nextHref ? (
-          <Link
-            href={nextHref}
-            rel="next"
-            className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
-          >
-            Next page
-          </Link>
-        ) : (
-          <p className="text-xs text-muted-foreground">End of the register.</p>
-        )}
+        <div className="flex items-center gap-2">
+          {prevHref ? (
+            <Link
+              href={prevHref}
+              rel="prev"
+              data-testid="listings-prev"
+              className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
+            >
+              Previous
+            </Link>
+          ) : null}
+          {nextHref ? (
+            <Link
+              href={nextHref}
+              rel="next"
+              data-testid="listings-next"
+              className="rounded-md border border-border px-3 py-1.5 text-sm hover:bg-muted"
+            >
+              Next page
+            </Link>
+          ) : (
+            <p className="text-xs text-muted-foreground">End of the register.</p>
+          )}
+        </div>
       </nav>
     </>
   );

@@ -50,9 +50,9 @@ function price(value: number | null): string {
 
 /** The band's colour per gate — the `market/mood` conventions: green, amber, red, grey for unknown. */
 const BAND: Record<string, string> = {
-  GREEN: "bg-emerald-500",
-  AMBER: "bg-amber-400",
-  RED: "bg-red-500",
+  GREEN: "bg-positive",
+  AMBER: "bg-warning",
+  RED: "bg-negative",
 };
 
 /** `05` §2: "the gate as a colour band over time … with the lock-out shaded". */
@@ -69,7 +69,7 @@ function GateBand({ days }: { days: SwingMarketDay[] }) {
           title={`${formatTradeDate(day.date)}: ${day.gate} · rung ${day.exposure_level + 1} of 4${day.drawdown_locked ? " · locked out" : ""}`}
           data-gate={day.gate}
           data-locked={day.drawdown_locked ? "true" : undefined}
-          className={`flex-1 ${BAND[day.gate] ?? "bg-muted"} ${day.drawdown_locked ? "border-b-4 border-red-800 opacity-60" : ""}`}
+          className={`flex-1 ${BAND[day.gate] ?? "bg-muted"} ${day.drawdown_locked ? "border-b-4 border-negative opacity-60" : ""}`}
         />
       ))}
     </ol>
@@ -192,7 +192,7 @@ export default async function SwingMarketPage() {
                     key={day.date}
                     className={
                       day.drawdown_locked
-                        ? "border-b border-border/40 bg-red-500/10"
+                        ? "border-b border-border/40 bg-negative-muted"
                         : "border-b border-border/40"
                     }
                     data-locked={day.drawdown_locked ? "true" : undefined}
@@ -209,7 +209,7 @@ export default async function SwingMarketPage() {
                     <td className="py-2 pr-3 tabular-nums">
                       {percent(day.drawdown_pct)}
                       {day.drawdown_locked ? (
-                        <span className="ml-1.5 text-xs font-medium text-red-700">locked out</span>
+                        <span className="ml-1.5 text-xs font-medium text-negative">locked out</span>
                       ) : null}
                     </td>
                     <td className="py-2 pr-3 tabular-nums">{day.parabolic_count}</td>

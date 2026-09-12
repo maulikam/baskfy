@@ -138,7 +138,7 @@ function emptyReason(
 function StatusPill({ status }: { status: string }) {
   const tone =
     status === "TRIGGERED"
-      ? "border-emerald-600/50 text-emerald-700"
+      ? "border-positive/50 text-positive"
       : status === "FAILED" || status === "EXTENDED"
         ? "border-border text-muted-foreground"
         : "border-border text-foreground";
@@ -200,7 +200,7 @@ function SetupTable({
                 <td className="py-2 pr-3">
                   {watch?.focus ? (
                     <span
-                      className="mr-1.5 text-amber-600"
+                      className="mr-1.5 text-warning"
                       title="In today's focus — the top five flags by score and every episodic pivot. Pushed at the trigger and first on the desk page."
                       aria-label="focus"
                     >
@@ -211,7 +211,7 @@ function SetupTable({
                   <span className="ml-2 text-xs text-muted-foreground">{row.name}</span>
                   {row.locked_upper_circuit ? (
                     <span
-                      className="ml-2 text-xs text-amber-600"
+                      className="ml-2 text-xs text-warning"
                       title="Locked at its upper circuit — there was no seller, so a break here is not a fill."
                     >
                       locked
@@ -394,7 +394,7 @@ export default async function SwingSetupsPage(props: {
           {focusCount > 0 ? (
             <>
               {" "}
-              <span className="text-amber-600">★</span> marks the {focusCount} in today&rsquo;s
+              <span className="text-warning">★</span> marks the {focusCount} in today&rsquo;s
               focus — the top five flags by score and every episodic pivot.
             </>
           ) : null}

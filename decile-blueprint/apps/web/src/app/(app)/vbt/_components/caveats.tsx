@@ -13,11 +13,11 @@ export function BacktestCaveats() {
     <aside
       aria-labelledby="vbt-caveats-heading"
       data-testid="vbt-caveats"
-      className="rounded-lg border border-amber-600/40 bg-amber-50/50 p-4 dark:bg-amber-950/20"
+      className="rounded-lg border border-warning/40 bg-warning-muted p-4"
     >
       <h2
         id="vbt-caveats-heading"
-        className="text-sm font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300"
+        className="text-sm font-semibold uppercase tracking-wide text-warning dark:text-warning"
       >
         This is one history, and it is a favourable one
       </h2>

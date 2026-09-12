@@ -111,7 +111,7 @@ function CandidateTable({
                 {row.locked_upper_circuit ? (
                   <span
                     title="Locked at the upper circuit — no plan line is placed for it (04 §7.4)"
-                    className="ml-1.5 text-amber-600"
+                    className="ml-1.5 text-warning"
                     data-testid="locked-warning"
                   >
                     ⚠

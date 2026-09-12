@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import cast
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from baskfy_api import deferred_publish as mod
 from baskfy_api.deferred_publish import defer_task_publish, drain_deferred_publishes
+from baskfy_api.queue import TaskQueue
 
 
 class _RecordingQueue:
@@ -25,7 +25,7 @@ class _FakeAsyncSession:
     """Minimal stand-in: info dict only. No real after_commit hook needed for unit drain."""
 
     def __init__(self) -> None:
-        self.info: dict[str, Any] = {}
+        self.info: dict[str, object] = {}
         self.sync_session = SimpleNamespace()
 
 
@@ -44,11 +44,13 @@ def test_defer_does_not_publish_until_drain(monkeypatch: pytest.MonkeyPatch) -> 
 
         return decorator
 
-    monkeypatch.setattr(mod.event, "listens_for", _fake_listens_for)
+    monkeypatch.setattr(
+        "baskfy_api.deferred_publish.event.listens_for", _fake_listens_for
+    )
 
     defer_task_publish(
         cast(AsyncSession, session),
-        cast(mod.TaskQueue, queue),
+        cast(TaskQueue, queue),
         "baskfy.vbt.rescan",
         42,
         row=row,

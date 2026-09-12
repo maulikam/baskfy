@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 from importlib import resources
 from pathlib import Path
 
@@ -11,7 +12,7 @@ _REPO = Path(__file__).resolve().parents[3]  # decile-blueprint/
 REFERENCE_EXPORT = _REPO / "tests" / "fixtures" / "reference-screen-export-2026-08-18.csv"
 
 
-def seed_holidays() -> dict:
+def seed_holidays() -> dict[dt.date, str]:
     text = resources.files("baskfy_core.data").joinpath(HOLIDAY_FILE).read_text(encoding="utf-8")
     return parse_seed_holidays(text)
 

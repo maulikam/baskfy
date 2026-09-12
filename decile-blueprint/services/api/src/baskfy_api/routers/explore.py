@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import bisect
 import datetime as dt
+from collections.abc import Mapping
 from decimal import Decimal
 from typing import Annotated, Final, Literal
 
@@ -642,7 +643,7 @@ class PerformancePointOut(BaseModel):
 class PerformanceOut(BaseModel):
     """NAV path for the chart — only days with full constituent price coverage.
 
-    ``coverage`` is covered trading days / calendar trading days in the series span (0–1).
+    ``coverage`` is covered trading days / calendar trading days in the series span (0-1).
     A partial series that still plots every day is what made a +48% basket look like a
     five-fold climb: two sparse points joined as if they were a continuous record.
     """
@@ -652,7 +653,7 @@ class PerformanceOut(BaseModel):
     coverage: Decimal
 
 
-def _day_fully_covered(weights: dict[str, Decimal], prices: dict[str, Decimal]) -> bool:
+def _day_fully_covered(weights: Mapping[str, Decimal], prices: Mapping[str, Decimal]) -> bool:
     return all(symbol in prices and prices[symbol] > 0 for symbol in weights)
 
 

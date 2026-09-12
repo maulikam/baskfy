@@ -18,6 +18,7 @@ import logging
 import os
 from collections.abc import Awaitable, Callable, Sequence
 from decimal import Decimal
+from functools import partial
 from pathlib import Path
 from typing import Final
 
@@ -455,9 +456,7 @@ def session_catch_up(
         if not _published(chain):
             # AF 3.11: a derived calendar guess that yields no bhavcopy must not be re-proposed
             # every sweep. Probe once; demote on a clear "nothing published".
-            was_demoted = run_in_session(
-                lambda session, d=day: _probe_and_demote_derived(session, d)
-            )
+            was_demoted = run_in_session(partial(_probe_and_demote_derived, day=day))
             if was_demoted:
                 demoted.append(day.isoformat())
             planned.append({"date": day.isoformat(), "skipped": "the chain did not publish"})

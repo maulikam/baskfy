@@ -557,6 +557,7 @@ async def test_a_holding_filed_into_bonds_is_still_refused_by_the_gateway(
                 price=float(BOND_CLOSE),
                 tenant=TENANT,
                 plan_tenant=TENANT,
+                gross_exposure=0.0,
             )
 
 
@@ -598,6 +599,7 @@ def test_an_ordinary_share_is_not_caught_by_any_of_this() -> None:
             price=130.0,
             tenant=TENANT,
             plan_tenant=TENANT,
+            gross_exposure=0.0,
         )
     )
     assert result["status"] != "BLOCKED"

@@ -39,16 +39,19 @@ from baskfy_core.models import (
     PipelineRun,
     PipelineRunStep,
 )
-from baskfy_core.reference_export import read_export, to_rows
+from baskfy_core.reference_export import ReferenceRows, read_export, to_rows
+from baskfy_core.seed_data import NSE_EXCHANGE_ID
 
 _REFERENCE_EXPORT = (
-    Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "reference-screen-export-2026-08-18.csv"
+    Path(__file__).resolve().parents[3]
+    / "tests"
+    / "fixtures"
+    / "reference-screen-export-2026-08-18.csv"
 )
 
 
-def _reference_rows():
+def _reference_rows() -> ReferenceRows:
     return to_rows(read_export(_REFERENCE_EXPORT))
-from baskfy_core.seed_data import NSE_EXCHANGE_ID
 
 ENV_VAR: Final = "BASKFY_TEST_DATABASE_URL"
 API_DIR: Final = Path(__file__).resolve().parents[1]

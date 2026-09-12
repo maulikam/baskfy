@@ -117,7 +117,7 @@ async def test_live_prices_by_instrument_runs_kite_io_via_to_thread(
         ran.append(getattr(fn, "__name__", "fn"))
         return fn(*args, **kwargs)
 
-    monkeypatch.setattr(live_prices.anyio.to_thread, "run_sync", _capture)
+    monkeypatch.setattr("baskfy_api.live_prices.anyio.to_thread.run_sync", _capture)
     monkeypatch.setattr(
         live_prices,
         "holdings_for_broker",

@@ -356,6 +356,7 @@ class TestARePresentedPlanIsIdempotent:
                     client_id=stored.client_id_for(leg["symbol"]),
                     tenant=stored.tenant,
                     plan_tenant=stored.tenant,
+                    gross_exposure=0.0,
                 )
             )
             statuses.append(str(result["status"]))

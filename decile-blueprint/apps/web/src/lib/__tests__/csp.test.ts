@@ -51,7 +51,9 @@ describe("the Content-Security-Policy header", () => {
         expect(policy).toContain("default-src 'self'");
         expect(policy).toContain("object-src 'none'");
         expect(policy).toContain("base-uri 'self'");
-        expect(policy).toContain("form-action 'self'");
+        // Spec: Kite Publisher hand-off must be an allowed form target (AUDIT 0.2 / 2.3).
+        // The old pin of exactly `form-action 'self'` locked in the bug that blocked Invest.
+        expect(policy).toContain("form-action 'self' https://kite.zerodha.com");
         expect(policy).toContain("frame-ancestors 'none'");
       });
     }

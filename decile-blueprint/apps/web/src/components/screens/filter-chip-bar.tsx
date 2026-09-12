@@ -318,7 +318,9 @@ export function FilterChipBar({
             data-testid="chip-sort"
           >
             <span className="text-muted-foreground">Sorted by:</span>
-            <span className="max-w-[9rem] truncate">{sortLabel}</span>
+            <span className="max-w-[16rem] truncate sm:max-w-none sm:overflow-visible" title={sortLabel}>
+              {sortLabel}
+            </span>
             <ChevronDown aria-hidden="true" className="size-3.5 opacity-70" />
           </ChipButton>
         </PopoverTrigger>

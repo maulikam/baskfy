@@ -10,6 +10,8 @@
  * the labels leave the screen and the numbers stop meaning anything.
  */
 
+import type { Route } from "next";
+
 export const MAX_COMPARE = 3;
 
 /** Versioned, so a future shape change can be recognised rather than mis-parsed. */
@@ -94,12 +96,14 @@ export function writeSelection(
   }
 }
 
-/** `/discover/compare?b=one&b=two` — order preserved, so the table's columns match the picking. */
-export function compareHref(selection: readonly string[]): string {
+/** `/discover/compare?b=one&b=two` — order preserved, so the table's columns match the picking.
+ *  `Route` with one assertion: the path is a route this app owns, and `typedRoutes` cannot check
+ *  a query string built from slugs chosen in the browser. */
+export function compareHref(selection: readonly string[]): Route {
   const params = new URLSearchParams();
   for (const slug of normalise(selection)) params.append(COMPARE_PARAM, slug);
   const query = params.toString();
-  return query ? `/discover/compare?${query}` : "/discover/compare";
+  return query ? (`/discover/compare?${query}` as Route) : "/discover/compare";
 }
 
 /** Read a selection out of a URL's search params, applying the same cap and de-duplication. */

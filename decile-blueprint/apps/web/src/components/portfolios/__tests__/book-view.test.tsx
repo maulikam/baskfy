@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import type { Route } from "next";
 import { describe, expect, it } from "vitest";
 
 import { BookBoxCard } from "@/components/portfolios/book-box";
@@ -15,7 +16,9 @@ const managerBox: BookBox = {
   xirr: "11.2",
   holdingsCount: null,
   valueIsLiveMark: true,
-  href: "/portfolio/1",
+  /* The real thing is built from a portfolio id at runtime, which is why `BookBox.href` is a
+     `Route`; a fixture standing in for one makes the same assertion. */
+  href: "/portfolio/1" as Route,
 };
 
 const ruleBox: BookBox = {
@@ -28,7 +31,7 @@ const ruleBox: BookBox = {
   xirr: null,
   holdingsCount: null,
   valueIsLiveMark: false,
-  href: "/portfolios/9/sleeves",
+  href: "/portfolios/9/sleeves" as Route,
   portfolioId: 9,
 };
 

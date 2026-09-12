@@ -17,6 +17,7 @@
  */
 
 import type { PortfolioNodeOut, SleeveListOut, SleeveOut } from "@baskfy/api-client";
+import type { Route } from "next";
 
 import { addDecimalStrings, roundDecimalString } from "@/lib/portfolios/decimal";
 
@@ -62,7 +63,9 @@ export interface BookBox {
   xirr: string | null;
   holdingsCount: number | null;
   valueIsLiveMark: boolean;
-  href: string;
+  /** Where the box's card goes. A route built from a numeric id, so `typedRoutes` cannot check
+      it; each site below asserts it once. */
+  href: Route;
   portfolioId?: number;
 }
 
@@ -139,7 +142,7 @@ function investmentBox(row: BookInvestment): BookBox | null {
     xirr: snap?.xirr_displayable ? (snap.xirr ?? null) : null,
     holdingsCount: null,
     valueIsLiveMark: snap?.current_value != null && snap.current_value !== "",
-    href: `/portfolio/${row.id}`,
+    href: `/portfolio/${row.id}` as Route,
   };
 }
 
@@ -154,7 +157,7 @@ function sleeveBox(portfolio: PortfolioNodeOut, sleeve: SleeveOut): BookBox {
     xirr: null,
     holdingsCount: null,
     valueIsLiveMark: false,
-    href: `/portfolios/${portfolio.id}/sleeves`,
+    href: `/portfolios/${portfolio.id}/sleeves` as Route,
     portfolioId: portfolio.id,
   };
 }
@@ -170,7 +173,7 @@ function leftoverHoldingsBox(portfolio: PortfolioNodeOut): BookBox {
     xirr: null,
     holdingsCount: portfolio.holdings_count,
     valueIsLiveMark: false,
-    href: `/portfolios/${portfolio.id}/rebalance`,
+    href: `/portfolios/${portfolio.id}/rebalance` as Route,
     portfolioId: portfolio.id,
   };
 }

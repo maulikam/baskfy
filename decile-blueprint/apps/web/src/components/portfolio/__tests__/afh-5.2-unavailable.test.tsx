@@ -11,7 +11,10 @@ describe("AFH 5.2 unavailable tiles", () => {
   it("shows Needs more data without the reason paragraph in the tile body", () => {
     const reason = "Cost basis is missing for this holding.";
     renderWorkspace(
-      <MetricValue metric={metric("Cost", null, reason)} kind="rupees" />,
+      <MetricValue
+        metric={metric("Cost", "What was paid for this holding.", null, reason)}
+        kind="rupees"
+      />,
     );
     expect(screen.getByText("Needs more data")).toBeInTheDocument();
     expect(screen.queryByText(reason)).not.toBeInTheDocument();

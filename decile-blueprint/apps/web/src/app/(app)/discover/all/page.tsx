@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Route } from "next";
 import Link from "next/link";
 
 import { CompareBar } from "@/components/discover/compare-bar";
@@ -33,10 +33,13 @@ import { PAGES } from "@/lib/vocabulary";
 const BASE = "/discover/all";
 const PAGE_SIZE = 24;
 
-function catalogueHref(state: FilterState, pageOffset: number): string {
+/* A page of the catalogue is `/discover/all` plus the filters plus an offset. `typedRoutes` can
+   check the path and nothing after the `?`, so the assertion is made once here — the same way
+   `buildHref` makes it for the filter rail. */
+function catalogueHref(state: FilterState, pageOffset: number): Route {
   const base = buildHref(BASE, state);
   if (pageOffset <= 0) return base;
-  return `${base}${base.includes("?") ? "&" : "?"}offset=${pageOffset}`;
+  return `${base}${base.includes("?") ? "&" : "?"}offset=${pageOffset}` as Route;
 }
 
 export const dynamic = "force-dynamic";

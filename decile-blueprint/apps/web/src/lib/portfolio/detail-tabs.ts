@@ -1,3 +1,5 @@
+import type { Route } from "next";
+
 import { percentOf } from "@/lib/portfolio/analytics";
 import { metric, type Metric } from "@/lib/portfolio/command-center";
 import {
@@ -2101,8 +2103,9 @@ export type WorkspaceStateId =
 
 export interface WorkspaceAction {
   readonly label: string;
-  /** A route inside the app. Nothing here places an order. */
-  readonly href: string;
+  /** A route inside the app. Nothing here places an order. `Route`, because the callout renders
+      it with `next/link` and one of these states names the portfolio's own id. */
+  readonly href: Route;
 }
 
 export interface WorkspaceState {
@@ -2227,7 +2230,7 @@ export function workspaceStates(
       headline: "This portfolio has no valuation history yet",
       detail:
         "Performance, drawdown and the monthly grid all read from an end-of-day valuation series, and this one holds fewer than two days. They will fill in as the series is built.",
-      action: { label: "See what has happened here so far", href: `/portfolio/${id}` },
+      action: { label: "See what has happened here so far", href: `/portfolio/${id}` as Route },
       since: detected,
     });
   }

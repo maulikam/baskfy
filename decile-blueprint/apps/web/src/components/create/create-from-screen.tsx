@@ -1,6 +1,7 @@
 "use client";
 
 import type { ScreenOut, ScreenRunResponse } from "@baskfy/api-client";
+import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
@@ -352,7 +353,7 @@ function SizedPreview({
       {result ? (
         <BasketHealthPanel
           health={health}
-          backtestHref={`/build/backtests?screen=${screen.public_id}`}
+          backtestHref={`/build/backtests?screen=${screen.public_id}` as Route}
         />
       ) : null}
 

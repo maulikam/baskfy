@@ -4,7 +4,11 @@ import Link from "next/link";
 import { DiscoverSearchClient } from "@/app/(app)/discover/search/discover-search-client";
 import { PageHeader } from "@/components/shell/page-header";
 import { SectionTabs } from "@/components/shell/section-tabs";
-import { ExploreUnavailable, fetchExploreList } from "@/lib/explore/fetch";
+import {
+  ExploreUnavailable,
+  fetchExploreList,
+  type ExploreBasketCard,
+} from "@/lib/explore/fetch";
 
 /**
  * `/discover/search` — client-side basket search (AF I.3).
@@ -22,7 +26,7 @@ export const metadata: Metadata = {
 };
 
 export default async function DiscoverSearchPage() {
-  let items = [];
+  let items: ExploreBasketCard[] = [];
   try {
     items = (await fetchExploreList({ sort: "name", order: "asc" })).items;
   } catch (error) {

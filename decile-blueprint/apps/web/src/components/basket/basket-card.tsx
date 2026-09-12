@@ -1,3 +1,4 @@
+import type { Route } from "next";
 import Link from "next/link";
 
 import { StrategyMark } from "@/components/discover/strategy-mark";
@@ -7,7 +8,9 @@ import { cn } from "@/lib/utils";
 export interface SharedBasketCardModel {
   name: string;
   thesis: string;
-  href: string;
+  /** Where the card goes. `Route` rather than `string`: the card renders it with `next/link`, and
+      a screen's public id is only known at runtime, so the caller makes the assertion once. */
+  href: Route;
   minAmount?: string | number | null;
   headlinePct?: string | number | null;
   headlineLabel?: string | null;

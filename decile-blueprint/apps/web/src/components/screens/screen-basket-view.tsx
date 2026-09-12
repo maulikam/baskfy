@@ -1,6 +1,7 @@
 "use client";
 
 import type { ScreenRunResponse } from "@baskfy/api-client";
+import type { Route } from "next";
 import { useMemo, useState } from "react";
 
 import { BasketDetail } from "@/components/basket/basket-detail";
@@ -250,7 +251,7 @@ export function ScreenBasketView({
           <BasketHealthPanel
             health={health}
             backtestHref={
-              screenPublicId ? `/build/backtests?screen=${screenPublicId}` : undefined
+              screenPublicId ? (`/build/backtests?screen=${screenPublicId}` as Route) : undefined
             }
           />
 

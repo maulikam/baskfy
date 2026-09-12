@@ -135,9 +135,24 @@ async def get_status(session: SessionDep) -> StatusOut:
     ``degraded`` is the extra member docs/11 §Reliability implies: "if the pipeline fails, serve
     the last good `data_version` with a banner". The banner needs something to read, and this is
     it — the analytics endpoints keep answering from the last published version.
+
+    **Why the ordering carries a second key.** A date can hold more than one run: a failure is
+    retried, and ``open_run`` only reuses a run still ``running``. Ordering on ``trade_date``
+    alone left the tie to the planner, so with four runs for 2026-09-11 on the box — three
+    failed, then one that passed the gate and published ``data_version`` 18 — this endpoint
+    picked a *failed* one and served ``degraded: true`` for a day that had published
+    successfully. The banner then said the data was stale while ``as_of`` said otherwise, which
+    is the one thing a freshness endpoint must never do. ``started_at`` decides, ``id`` breaks
+    a same-instant tie: the newest attempt is the one that describes today.
     """
     last_run = (
-        await session.execute(select(PipelineRun).order_by(PipelineRun.trade_date.desc()).limit(1))
+        await session.execute(
+            select(PipelineRun)
+            .order_by(
+                PipelineRun.trade_date.desc(), PipelineRun.started_at.desc(), PipelineRun.id.desc()
+            )
+            .limit(1)
+        )
     ).scalar_one_or_none()
 
     return StatusOut(

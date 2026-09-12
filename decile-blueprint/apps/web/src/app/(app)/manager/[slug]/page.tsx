@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 
 import { DisclosureBlock } from "@/components/explore/disclosure-block";
 import { PageHeader } from "@/components/shell/page-header";
-import { ExploreUnavailable, fetchExploreManager } from "@/lib/explore/fetch";
+import { ExploreNotFound, fetchExploreManager } from "@/lib/explore/fetch";
 
 /**
  * `/manager/[slug]` — Tree 7 / smallcase §6.7.
@@ -45,7 +45,7 @@ export default async function ManagerPage({
   try {
     manager = await fetchExploreManager(slug);
   } catch (error) {
-    if (error instanceof ExploreUnavailable) notFound();
+    if (error instanceof ExploreNotFound) notFound();
     throw error;
   }
 

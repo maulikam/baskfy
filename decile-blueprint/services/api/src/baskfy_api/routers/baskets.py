@@ -33,16 +33,18 @@ import json
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.exc import ProgrammingError
 
+from baskfy_api.auth import require_authenticated
 from baskfy_api.db import SessionDep
 from baskfy_api.desk_schema import DESK_SCHEMA, is_missing_desk_data
 from baskfy_api.problems import Problem, ProblemType
 
-router = APIRouter(tags=["baskets"])
+# Authenticated: the desk basket and rebalance plan are one account's book (AUDIT 0.1 / 2.1).
+router = APIRouter(tags=["baskets"], dependencies=[Depends(require_authenticated)])
 
 #: The schema M19's cutover put the desk's own records in.
 

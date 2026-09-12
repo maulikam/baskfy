@@ -131,7 +131,9 @@ function commonDirectives(): string[] {
     `connect-src 'self' ${apiOrigin()}`.trim(),
     "object-src 'none'",
     "base-uri 'self'",
-    "form-action 'self'",
+    // The Invest panel POSTs the Kite Publisher basket to kite.zerodha.com/connect/basket.
+    // `'self'` alone makes the browser refuse that submit silently (AUDIT 0.2 / 2.3).
+    "form-action 'self' https://kite.zerodha.com",
     "frame-ancestors 'none'",
     "upgrade-insecure-requests",
   ];

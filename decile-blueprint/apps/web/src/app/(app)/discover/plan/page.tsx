@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { BasketUnavailable, fetchLatestPlan } from "@/lib/basket/fetch";
+import { BasketNotFound, BasketUnavailable, fetchLatestPlan } from "@/lib/basket/fetch";
 
 /**
  * `/discover/plan` — M22 §2. The desk's most recent rebalance plan, in full.
@@ -29,7 +29,7 @@ export default async function PlanPage() {
   try {
     plan = await fetchLatestPlan();
   } catch (error) {
-    if (!(error instanceof BasketUnavailable)) throw error;
+    if (!(error instanceof BasketUnavailable || error instanceof BasketNotFound)) throw error;
     return (
       <div className="flex flex-col gap-4">
         <h1 className="text-2xl font-semibold tracking-tight">Rebalance plan</h1>

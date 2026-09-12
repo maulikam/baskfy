@@ -5,7 +5,7 @@ import { BasketDetail } from "@/components/basket/basket-detail";
 import { DisclosureBlock } from "@/components/explore/disclosure-block";
 import { PageHeader } from "@/components/shell/page-header";
 import { SectionTabs } from "@/components/shell/section-tabs";
-import { BasketUnavailable, fetchBasket } from "@/lib/basket/fetch";
+import { BasketNotFound, BasketUnavailable, fetchBasket } from "@/lib/basket/fetch";
 import { EMPTY_FACTS } from "@/lib/basket/holding-facts";
 import type { MaterializedBasket } from "@/lib/basket/materialize";
 import { PAGES } from "@/lib/vocabulary";
@@ -33,7 +33,7 @@ export default async function FeaturedBasketPage() {
   try {
     basket = await fetchBasket();
   } catch (error) {
-    if (!(error instanceof BasketUnavailable)) throw error;
+    if (!(error instanceof BasketUnavailable || error instanceof BasketNotFound)) throw error;
     return (
       <>
         <SectionTabs section="discover" />

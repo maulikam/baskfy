@@ -228,6 +228,11 @@ _STATUS_SYNCED: Final = "Synced"
 #: valuation into a zero, and every place that decides whether to ask it should say why, not 2.
 _MIN_MARKS_FOR_A_RETURN: Final = 2
 
+#: A stored mark of one rupee or less is not a portfolio — it is a placeholder (audit 0.4) that
+#: turns TWR and drawdown into −100 % and the peak tile into ₹1.00. Derived returns use only
+#: marks strictly above this; the chart still shows every stored row.
+_MIN_REAL_VALUATION: Final = ONE
+
 #: The two closes §6.2's "vs previous close" needs, per instrument.
 _CLOSES_PER_INSTRUMENT: Final = 2
 
@@ -1640,20 +1645,19 @@ async def _load_prices(session: AsyncSession, instrument_ids: Sequence[int]) -> 
             dated[instrument_id] = row.date
         else:
             previous[instrument_id] = row.close_raw
-    # LIVE MARKS OVER THE CLOSE, WHERE THE BROKER HAS ONE (M82).
+    # LIVE MARKS OVER THE CLOSE, WHERE THE BROKER HAS ONE (M82 / audit 0.9).
     #
-    # Everything above is `close_raw` — the previous session's print. Correct for a screener, wrong
-    # for the page that answers "what is my money worth": Maulik asked for the market, and on
-    # 2 Sep 2026 ATHERENERG was trading at 1692.50 while this showed the close.
+    # Everything above is `close_raw`. When a live quote overlays `latest`, `previous` must become
+    # the stored recency-1 close (what `latest` was a moment ago) — not recency-2. Leaving
+    # `previous` at recency-2 makes "Today's P&L" span two sessions (Monday LTP − Thursday close).
     #
-    # Only `latest` is overlaid. `previous` stays the prior close, which makes "Today" a live price
-    # against yesterday's close — the same arithmetic the broker's own app does. Overwriting
-    # `previous` too would silently zero the day's change.
-    #
-    # `dated` is left alone as well: it records which session the stored close came from, and a
-    # live mark has no session. Nothing that reads it starts meaning something else.
+    # `dated` is left alone: it records which session the stored close came from, and a live mark
+    # has no session.
     live = await live_prices_by_instrument(session, list(instrument_ids))
     for instrument_id, price in live.items():
+        stored_close = latest.get(instrument_id)
+        if stored_close is not None:
+            previous[instrument_id] = stored_close
         latest[instrument_id] = price
 
     unpriced = tuple(sorted(set(instrument_ids) - set(latest)))
@@ -1859,6 +1863,21 @@ def _nav_point(row: PortfolioNavDaily) -> NavPoint:
     return NavPoint(on=row.date, value=row.market_value + row.cash, net_flow=row.net_flow)
 
 
+def _is_real_valuation(row: PortfolioNavDaily) -> bool:
+    """True when the mark is a real portfolio, not a ₹1 placeholder (audit 0.4)."""
+    return row.market_value + row.cash > _MIN_REAL_VALUATION
+
+
+def _real_nav_points(rows: Sequence[PortfolioNavDaily]) -> list[NavPoint]:
+    """Marks that may feed TWR / drawdown — placeholders of ₹1 or less are dropped."""
+    return [_nav_point(row) for row in rows if _is_real_valuation(row)]
+
+
+def _real_points(points: Sequence[NavPoint]) -> list[NavPoint]:
+    """Same filter for callers that already hold :class:`NavPoint` values."""
+    return [point for point in points if point.value > _MIN_REAL_VALUATION]
+
+
 def _chain_linked(points: Sequence[NavPoint]) -> Decimal | None:
     """The time-weighted return over a series, using ``portfolio_nav``'s own public arithmetic.
 
@@ -1987,10 +2006,14 @@ def _headline_for(portfolio: LedgerPortfolio, points: Sequence[NavPoint]) -> Ret
     make different *claims*, and the routing is at the call site so the person reading this can
     see which claim was meant. Both refuse to invent a number from a series that is too short and
     return a labelled absence instead.
+
+    Placeholder marks of ₹1 or less are dropped first (audit 0.4): a return needs ≥2 real
+    valuations, and a seed mark must not turn the headline into −100 %.
     """
+    real = _real_points(points)
     if portfolio.source is PortfolioSource.HOLDING_GROUP:
-        return _figure_out(since_grouped_figure(portfolio, points))
-    return _figure_out(twr_figure(portfolio, points))
+        return _figure_out(since_grouped_figure(portfolio, real))
+    return _figure_out(twr_figure(portfolio, real))
 
 
 def _model_for(portfolio: LedgerPortfolio, value: Decimal | None) -> ReturnFigureOut | None:
@@ -2214,13 +2237,19 @@ class _SeriesMeta:
 
 
 def _series_out(rows: Sequence[PortfolioNavDaily], meta: _SeriesMeta) -> NavSeriesOut:
-    """Render one NAV series with everything §6.3 draws off it."""
+    """Render one NAV series with everything §6.3 draws off it.
+
+    Chart points keep every stored mark. TWR, daily moves and drawdown use only real valuations
+    (audit 0.4): a ₹1 seed mark must not produce −100 % returns or a peak of ₹1.00.
+    """
     portfolio_id = meta.portfolio_id
     window = meta.window
-    points = [_nav_point(row) for row in rows]
-    drawdown: list[DrawdownPoint] = drawdown_series(points) if points else []
-    worst = max_drawdown(points) if len(points) >= _MIN_MARKS_FOR_A_RETURN else None
-    total = _chain_linked(points)
+    real_points = _real_nav_points(rows)
+    drawdown: list[DrawdownPoint] = (
+        drawdown_series(real_points) if len(real_points) >= _MIN_MARKS_FOR_A_RETURN else []
+    )
+    worst = max_drawdown(real_points) if len(real_points) >= _MIN_MARKS_FOR_A_RETURN else None
+    total = _chain_linked(real_points)
     return NavSeriesOut(
         portfolio_id=portfolio_id,
         range=window,
@@ -2237,7 +2266,7 @@ def _series_out(rows: Sequence[PortfolioNavDaily], meta: _SeriesMeta) -> NavSeri
             for row in rows
         ],
         daily_pnl=[
-            DayPnlOut(on=move.on, amount=move.amount, pct=move.pct) for move in daily_pnl(points)
+            DayPnlOut(on=move.on, amount=move.amount, pct=move.pct) for move in daily_pnl(real_points)
         ],
         drawdown=[
             DrawdownPointOut(
@@ -2254,7 +2283,7 @@ def _series_out(rows: Sequence[PortfolioNavDaily], meta: _SeriesMeta) -> NavSeri
         ),
         total_return=LabelledRateOut(
             label=meta.label,
-            since=rows[0].date if rows else meta.since,
+            since=real_points[0].on if real_points else meta.since,
             value=total,
             unavailable_reason=(
                 None if total is not None else "Not enough end-of-day valuations yet"
@@ -2704,12 +2733,16 @@ def _consolidated_xirr(ledger: _Ledger, closing_value: Decimal) -> LabelledRateO
 
 
 def _consolidated_twr(rows: Sequence[PortfolioNavDaily]) -> LabelledRateOut:
-    """§5.2's consolidated TWR — strategy quality, flow neutral, beside the XIRR, never merged."""
-    points = [_nav_point(row) for row in rows]
+    """§5.2's consolidated TWR — strategy quality, flow neutral, beside the XIRR, never merged.
+
+    Placeholder marks of ₹1 or less are excluded (audit 0.4); fewer than two real valuations
+    yields ``None`` rather than −100 %.
+    """
+    points = _real_nav_points(rows)
     value = _chain_linked(points)
     return LabelledRateOut(
         label="Time-weighted return since your first valuation",
-        since=rows[0].date if rows else None,
+        since=points[0].on if points else None,
         value=value,
         unavailable_reason=(None if value is not None else "Not enough end-of-day valuations yet"),
     )

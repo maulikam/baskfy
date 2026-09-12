@@ -39,6 +39,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
 from typing import Final
+from unittest.mock import AsyncMock
 
 import pytest
 import pytest_asyncio
@@ -1295,6 +1296,110 @@ def test_the_router_has_no_order_path() -> None:
 
 #: Every write ``portfolio_overview`` is allowed to declare, and why each is bookkeeping rather
 #: than an order. A route not in this set fails the guard below until somebody adds it here with
+# ---------------------------------------------------------------------------
+# Audit 0.4 / 0.9 — real valuations and live-overlay previous close
+# ---------------------------------------------------------------------------
+
+
+def test_twr_and_drawdown_are_none_until_two_real_valuations() -> None:
+    """Audit 0.4: a ₹1 seed mark must not produce −100 % TWR / drawdown / a ₹1 peak.
+
+    The old code chain-linked every stored mark. A placeholder first row of ₹1 against a later
+    real mark made every derived return −100 % (or a peak of ₹1.00 on the wealth index). Refuse
+    until ≥2 marks strictly above ₹1 exist.
+    """
+    from baskfy_api.routers.portfolio_overview import (  # noqa: PLC0415 - local to this pin
+        _SeriesMeta,
+        _consolidated_twr,
+        _series_out,
+    )
+
+    seed = PortfolioNavDaily(
+        user_id=1,
+        portfolio_id=None,
+        date=EARLIER,
+        market_value=Decimal("1.00"),
+        cash=Decimal("0"),
+        net_flow=Decimal("0"),
+        pending_reconciliation=False,
+    )
+    alone = PortfolioNavDaily(
+        user_id=1,
+        portfolio_id=None,
+        date=YESTERDAY,
+        market_value=Decimal("9980000.00"),
+        cash=Decimal("0"),
+        net_flow=Decimal("0"),
+        pending_reconciliation=False,
+    )
+    second = PortfolioNavDaily(
+        user_id=1,
+        portfolio_id=None,
+        date=TODAY,
+        market_value=Decimal("10100000.00"),
+        cash=Decimal("0"),
+        net_flow=Decimal("0"),
+        pending_reconciliation=False,
+    )
+
+    # One real mark after a ₹1 seed: still not enough for a return.
+    thin = _series_out(
+        [seed, alone],
+        _SeriesMeta(
+            portfolio_id=None,
+            window=NavRange.ALL,
+            label="Consolidated time-weighted return",
+            since=None,
+        ),
+    )
+    assert thin.total_return.value is None
+    assert thin.max_drawdown is None
+    assert thin.drawdown == []
+    assert _consolidated_twr([seed, alone]).value is None
+
+    # Two real marks: TWR and drawdown are computable, and the ₹1 seed is ignored.
+    ready = _series_out(
+        [seed, alone, second],
+        _SeriesMeta(
+            portfolio_id=None,
+            window=NavRange.ALL,
+            label="Consolidated time-weighted return",
+            since=None,
+        ),
+    )
+    assert ready.total_return.value is not None
+    assert ready.max_drawdown is not None
+    assert _consolidated_twr([seed, alone, second]).value is not None
+    # The seed mark remains on the chart; derived views start from the first real mark.
+    assert [point.value for point in ready.points][0] == Decimal("1.00")
+    assert ready.total_return.since == YESTERDAY
+
+
+@requires_db
+async def test_live_overlay_sets_previous_to_the_stored_recency_one_close(
+    session: AsyncSession, book: Book, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit 0.9: when LTP overlays `latest`, `previous` is the stored recency-1 close.
+
+    The bug left `previous` at recency-2, so Today's P&L spanned two sessions (Monday LTP minus
+    Thursday close). Overlay must push the stored latest into previous before replacing latest.
+    """
+    from baskfy_api.routers import portfolio_overview as overview_mod  # noqa: PLC0415
+
+    # Book fixture: INFY closes are 1100 (earlier / recency-2) then 1200 (yesterday / recency-1).
+    live = {book.infy: Decimal("1250.00")}
+    monkeypatch.setattr(
+        overview_mod,
+        "live_prices_by_instrument",
+        AsyncMock(return_value=live),
+    )
+    prices = await overview_mod._load_prices(session, [book.infy])
+    assert prices.latest[book.infy] == Decimal("1250.00")
+    assert prices.previous[book.infy] == Decimal("1200"), (
+        "previous must be the stored recency-1 close, not recency-2"
+    )
+
+
 #: its reason — which is the review this test exists to force.
 BOOKKEEPING_WRITES = {
     # §4.3: answers a question about a holdings change the sync already observed.

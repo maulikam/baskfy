@@ -45,21 +45,18 @@ MAX_ENDPOINTS_PER_ACCOUNT = 10
 
 
 def _bad_request(detail: str) -> Problem:
-    return Problem(ProblemType.INVALID_SCREEN_DEFINITION, detail, errors=[{"message": detail}])
+    return Problem(ProblemType.BAD_REQUEST, detail, errors=[{"message": detail}])
 
 
 def _check_url(url: str, settings: Settings) -> str:
-    """Refuse anything that is not an absolute ``http(s)`` URL to a named host.
+    """Refuse anything that is not an absolute ``http(s)`` URL to a public host.
 
     This is a *deliberate* server-side request: the operator's own service will POST wherever this
     says. A scheme other than http/https, or a URL with no host, is refused outright. Plain
     ``http`` is allowed only outside production, because a signed payload over cleartext still
     leaks the entries and exits to anyone on the path.
 
-    It does **not** resolve the host or block private ranges. That is the real SSRF control and it
-    is not implemented here — see ``docs/DECISIONS.md`` §20.9 and the module report; a webhook
-    sender that can be pointed at ``169.254.169.254`` is a known gap that the feature's
-    unreleased state, not this function, is currently containing.
+    Private / link-local / loopback targets are refused after DNS resolve (AUDIT 2.6).
     """
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"}:
@@ -68,6 +65,10 @@ def _check_url(url: str, settings: Settings) -> str:
         raise _bad_request("A webhook URL must name a host.")
     if parsed.scheme == "http" and settings.environment == "production":
         raise _bad_request("A webhook URL must be https:// in production.")
+    try:
+        service.assert_public_webhook_url(url)
+    except service.WebhookUrlNotPublic as exc:
+        raise _bad_request(str(exc)) from exc
     return url
 
 

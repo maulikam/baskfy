@@ -43,9 +43,9 @@ from typing import Annotated, Final
 
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, select
 
-from baskfy_api.auth import settings_for
+from baskfy_api.auth import AuthenticatedDep, settings_for
 from baskfy_api.db import SessionDep
 from baskfy_api.kite_basket import build_basket
 from baskfy_api.problems import Problem, ProblemType, not_found
@@ -62,6 +62,11 @@ def _settings(request: Request) -> Settings:
 
 
 SettingsDep = Annotated[Settings, Depends(_settings)]
+
+
+def _published() -> tuple[ColumnElement[bool], ...]:
+    """Same visibility gate as explore: archived-out and non-PUBLISHED baskets are 404."""
+    return (CbBasket.archived_at.is_(None), CbBasket.visibility == "PUBLISHED")
 
 
 class KiteBasketItemOut(BaseModel):
@@ -102,12 +107,15 @@ class KiteBasketOut(BaseModel):
     response_model=KiteBasketOut,
     summary="The latest plan as a Kite Publisher basket (hand-off, not execution)",
 )
-async def plan_as_kite_basket(session: SessionDep, settings: SettingsDep) -> KiteBasketOut:
+async def plan_as_kite_basket(
+    session: SessionDep, settings: SettingsDep, principal: AuthenticatedDep
+) -> KiteBasketOut:
     """Read the desk's latest plan and shape it for Kite's basket form.
 
     404 when the desk has recorded no plans — inherited from `latest_plan`, which is called rather
     than re-queried so there is one piece of SQL reading `rebalance_versions` and not two.
     """
+    del principal
     plan = await latest_plan(session)
     payload = build_basket(
         [(o.symbol, o.side, o.planned_qty) for o in plan.orders],
@@ -141,6 +149,7 @@ async def basket_as_kite_basket(
     amount: Annotated[Decimal, Query(gt=0, description="Rupees to invest")],
     session: SessionDep,
     settings: SettingsDep,
+    principal: AuthenticatedDep,
 ) -> KiteBasketOut:
     """Turn a basket's *weights* into *quantities* for a given amount, then into a Kite basket.
 
@@ -162,9 +171,13 @@ async def basket_as_kite_basket(
     Prices are the latest `close_raw` on or before today — the exchange print, per house rule 6,
     because this figure becomes a share count somebody buys. They are a *reference*: the basket
     goes to Kite as MARKET orders and the user sees live prices there before confirming.
+
+    Visibility is the same `_published()` gate every explore route uses (AUDIT 2.1): a PRIVATE
+    draft or an unpublished basket is a 404, never a hand-off payload.
     """
+    del principal
     basket = await session.scalar(
-        select(CbBasket).where(CbBasket.slug == slug.strip(), CbBasket.archived_at.is_(None))
+        select(CbBasket).where(CbBasket.slug == slug.strip(), *_published())
     )
     if basket is None:
         raise not_found("basket", slug)
@@ -223,7 +236,7 @@ async def basket_as_kite_basket(
             now=dt.datetime.now(tz=dt.UTC),
         )
     except ValueError as error:
-        raise Problem(ProblemType.INVALID_SCREEN_DEFINITION, str(error)) from error
+        raise Problem(ProblemType.BAD_REQUEST, str(error)) from error
 
     # `DeskPlan` is a `TypedDict`, so the legs are subscripted rather than attributes — the same
     # way `routers/curated_plans._preview_from_core` reads them.

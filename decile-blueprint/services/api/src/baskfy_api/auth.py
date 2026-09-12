@@ -128,7 +128,9 @@ def decode_token(token: str, settings: Settings) -> dict[str, object]:
 
 async def _load_user(session: AsyncSession, public_id: str) -> AppUser | None:
     return (
-        await session.execute(select(AppUser).where(AppUser.public_id == public_id))
+        await session.execute(
+            select(AppUser).where(AppUser.public_id == public_id, AppUser.deleted_at.is_(None))
+        )
     ).scalar_one_or_none()
 
 
@@ -142,6 +144,14 @@ def settings_for(request: Request) -> Settings:
     """
     settings = getattr(request.app.state, "settings", None)
     return settings if isinstance(settings, Settings) else get_settings()
+
+
+def _token_epoch(claims: dict[str, object]) -> int:
+    """The session generation the bearer carries. Missing claim = generation 0 (pre-epoch mint)."""
+    raw = claims.get("epoch")
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        return 0
+    return raw
 
 
 async def current_principal(request: Request, session: SessionDep) -> Principal:
@@ -160,6 +170,14 @@ async def current_principal(request: Request, session: SessionDep) -> Principal:
     if user is None:
         log.info("token for unknown subject", extra={"subject": subject})
         raise unauthenticated("The bearer token refers to an unknown account.")
+    # AUDIT 0.8 / 2.2: a stolen cookie must not outlive reset/deletion/revoke-all. The web mint
+    # stamps `epoch`; the API refuses when the account has moved past it.
+    if user.session_epoch > _token_epoch(claims):
+        log.info(
+            "token epoch stale",
+            extra={"subject": subject, "token_epoch": _token_epoch(claims), "user_epoch": user.session_epoch},
+        )
+        raise unauthenticated("The bearer token has been revoked.")
     return Principal(
         kind=PrincipalKind.USER,
         user_id=user.id,
@@ -212,6 +230,7 @@ def encode_token(  # noqa: PLR0913 - one parameter per JWT claim the web app may
     issued_at: dt.datetime | None = None,
     audience: str | None = None,
     issuer: str | None = None,
+    epoch: int = 0,
 ) -> str:
     """Mint a token the way the web app will.
 
@@ -224,6 +243,7 @@ def encode_token(  # noqa: PLR0913 - one parameter per JWT claim the web app may
         "sub": subject,
         "iat": int(moment.timestamp()),
         "exp": int((moment + dt.timedelta(seconds=lifetime_seconds)).timestamp()),
+        "epoch": epoch,
     }
     if audience is not None:
         claims["aud"] = audience

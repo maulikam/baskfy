@@ -39,11 +39,14 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import hmac
+import ipaddress
 import json
 import logging
 import secrets
+import socket
 from dataclasses import dataclass
 from typing import Final
+from urllib.parse import urlparse
 
 import httpx
 from sqlalchemy import select
@@ -59,6 +62,8 @@ log = logging.getLogger(__name__)
 __all__ = [
     "SIGNATURE_HEADER",
     "DeliveryOutcome",
+    "WebhookUrlNotPublic",
+    "assert_public_webhook_url",
     "attempt_delivery",
     "backoff_seconds",
     "due_deliveries",
@@ -98,6 +103,52 @@ MAX_ERROR_CHARS: Final = 500
 
 class WebhookNotConfigured(RuntimeError):
     """No master signing secret, so no endpoint can be created or signed for."""
+
+
+class WebhookUrlNotPublic(ValueError):
+    """The URL resolves to a private, loopback or link-local address (SSRF guard)."""
+
+
+def _is_blocked_ip(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    return bool(
+        address.is_private
+        or address.is_loopback
+        or address.is_link_local
+        or address.is_reserved
+        or address.is_multicast
+        or address.is_unspecified
+    )
+
+
+def assert_public_webhook_url(url: str) -> None:
+    """Resolve the host and refuse RFC1918 / link-local / loopback (AUDIT 2.6).
+
+    Called at create time and again at delivery so a DNS rebinding between the two cannot open
+    an internal target that looked public at registration.
+    """
+    parsed = urlparse(url)
+    host = parsed.hostname
+    if not host:
+        raise WebhookUrlNotPublic("A webhook URL must name a host.")
+    lowered = host.lower()
+    if lowered in {"localhost", "metadata.google.internal"} or lowered.endswith(".localhost"):
+        raise WebhookUrlNotPublic(f"webhook host {host!r} is not a public address")
+    try:
+        literal = ipaddress.ip_address(host)
+    except ValueError:
+        literal = None
+    if literal is not None and _is_blocked_ip(literal):
+        raise WebhookUrlNotPublic(f"webhook URL targets a non-public address ({literal})")
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    try:
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except OSError as exc:
+        raise WebhookUrlNotPublic(f"webhook host {host!r} does not resolve") from exc
+    for info in infos:
+        sockaddr = info[4]
+        ip = ipaddress.ip_address(sockaddr[0])
+        if _is_blocked_ip(ip):
+            raise WebhookUrlNotPublic(f"webhook URL resolves to a non-public address ({ip})")
 
 
 def new_public_id() -> str:
@@ -258,6 +309,19 @@ async def attempt_delivery(  # noqa: PLR0913 - the row, its endpoint, config, tr
     against a real socket would not be tested at all.
     """
     moment = now or dt.datetime.now(tz=dt.UTC)
+    try:
+        assert_public_webhook_url(endpoint.url)
+    except WebhookUrlNotPublic as exc:
+        delivery.attempts += 1
+        delivery.status = "failed"
+        delivery.next_attempt_at = None
+        delivery.last_error = str(exc)[:MAX_ERROR_CHARS]
+        endpoint.consecutive_failures += 1
+        await session.flush()
+        return DeliveryOutcome(
+            delivered=False, status=None, error=str(exc), retrying=False, next_attempt_at=None
+        )
+
     body = json.dumps(delivery.payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
     secret = signing_secret(settings, endpoint.public_id, endpoint.secret_version)
     headers = {

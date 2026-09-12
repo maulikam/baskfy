@@ -91,18 +91,20 @@ export async function GET(request: Request): Promise<Response> {
 
 /** Absolute, because `NextResponse.redirect` requires one and typed routes reject a bare path.
  *
- *  Built from the FORWARDED headers, not from `request.url`. Behind Caddy this handler is reached
- *  as `web:3000`, so `new URL(request.url).origin` is the container's own address — which is how
- *  a real login came back to `https://0.0.0.0:3000/brokers?...`. Caddy sets `X-Forwarded-Proto`
- *  and `X-Forwarded-Host`; `NEXT_PUBLIC_SITE_URL` is the fallback for a context that has neither,
- *  and the request origin the last resort so local `next dev` still works. */
+ *  Prefer `NEXT_PUBLIC_SITE_URL` (AUDIT 2.11). Host / X-Forwarded-* are client-influenced behind
+ *  a misconfigured proxy; the site URL is deployment config. Fall back to forwarded headers only
+ *  when the env is unset (local `next dev`), then the request origin. */
 function redirectTo(request: Request, path: string): Response {
+  const configured = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "");
+  if (configured) {
+    return NextResponse.redirect(new URL(path, configured));
+  }
   const headers = request.headers;
   const forwardedHost = headers.get("x-forwarded-host") ?? headers.get("host");
   const forwardedProto = headers.get("x-forwarded-proto");
   const origin =
     forwardedHost && forwardedProto
       ? `${forwardedProto}://${forwardedHost}`
-      : (process.env.NEXT_PUBLIC_SITE_URL ?? new URL(request.url).origin);
+      : new URL(request.url).origin;
   return NextResponse.redirect(new URL(path, origin));
 }

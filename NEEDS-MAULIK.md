@@ -1153,6 +1153,9 @@ password change, a password reset and an account deletion all now end web sessio
 ones. Returned on `MeOut` and `SessionOut`, frozen into the Auth.js token at sign-in, compared in
 `(app)/layout.tsx` where `GET /me` is already awaited — no extra round trip. Full reasoning, the
 four edge cases and what was rejected are in `docs/DECISIONS-MERGE.md` §SEC2.
+**AF 12 Sep 2026 (AUDIT 0.8/2.2):** this doc said the kill-switch reached the API; the stale half
+was the code — bearer mint now carries `epoch`, API refuses a newer `session_epoch`/`deleted_at`,
+and Auth.js remint throws after `/me`. The layout check remains.
 
 **Two things deliberately NOT changed, which are still yours to call:**
 

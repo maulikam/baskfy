@@ -211,7 +211,7 @@ async def enforce_rate_limit(request: Request, principal: PrincipalDep) -> None:
     limiter: RateLimiter | None = getattr(request.app.state, "rate_limiter", None)
     if limiter is None:
         return
-    client_ip = request.client.host if request.client is not None else None
+    client_ip = _client_ip(request)
     path = request.url.path
     await limiter.enforce(
         principal,
@@ -219,3 +219,20 @@ async def enforce_rate_limit(request: Request, principal: PrincipalDep) -> None:
         auth_endpoint=is_auth_path(path),
         webhook=is_webhook_path(path),
     )
+
+
+def _client_ip(request: Request) -> str | None:
+    """The caller's address for rate-limit keys (AUDIT 2.12).
+
+    Behind Caddy the ASGI client is the proxy. Prefer the left-most ``X-Forwarded-For`` hop
+    (the original client) when present; uvicorn ``--proxy-headers`` / ``forwarded-allow-ips``
+    should also rewrite ``request.client``, and that is the fallback.
+    """
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        first = forwarded.split(",", 1)[0].strip()
+        if first:
+            return first
+    if request.client is not None:
+        return request.client.host
+    return None

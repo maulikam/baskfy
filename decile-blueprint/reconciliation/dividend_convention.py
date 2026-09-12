@@ -55,7 +55,7 @@ from typing import Final
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from baskfy_core.reference_export import to_rows
+from baskfy_providers.reference_export_io import reference_rows
 
 HERE: Final = Path(__file__).resolve().parent
 EVIDENCE: Final = HERE / "RECOVERED-ACTIONS.md"
@@ -180,7 +180,7 @@ async def measure() -> tuple[list[Vote], dict[str, int], int]:
     for action in actions:
         by_symbol.setdefault(action.symbol, []).append(action)
 
-    corpus = {str(r["symbol"]): r for r in to_rows().factors}
+    corpus = {str(r["symbol"]): r for r in reference_rows().factors}
     votes: list[Vote] = []
     considered = 0
 
@@ -270,7 +270,7 @@ async def parity_crosscheck() -> list[str]:
 
     engine = create_async_engine(url)
     async with engine.connect() as conn:
-        for row in to_rows().factors:
+        for row in reference_rows().factors:
             symbol = str(row["symbol"])
             instrument = (
                 await conn.execute(

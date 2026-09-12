@@ -37,9 +37,10 @@ from typing import Final
 
 import polars as pl
 
-from baskfy_core.reference_export import ReferenceRows, to_rows
+from baskfy_core.reference_export import ReferenceRows
 from importlib import resources
 from baskfy_core.trading_calendar import HOLIDAY_FILE, build_calendar, parse_seed_holidays
+from baskfy_providers.reference_export_io import reference_rows
 from baskfy_core.universes import UNIVERSES, slugify_index
 
 #: docs/13: the reference export's trade date. The fixtures end here so they line up with it.
@@ -361,7 +362,7 @@ def synthesise_bars(spec: FixtureSpec, calendar: list[dt.date]) -> list[dict[str
 
 def build(output_dir: Path, rows: ReferenceRows | None = None) -> dict[str, int]:
     """Write every Parquet fixture. Returns row counts per file."""
-    data = rows if rows is not None else to_rows()
+    data = rows if rows is not None else reference_rows()
     specs = select_specs(data)
     calendar = trading_days(FIXTURE_AS_OF)
     output_dir.mkdir(parents=True, exist_ok=True)

@@ -120,7 +120,8 @@ function commonDirectives(): string[] {
     // Next injects a `<style>` element for every CSS module it loads, and there is no nonce hook
     // for them. `unsafe-inline` for styles cannot execute code; it is the standard exception.
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob:",
+    // Razorpay checkout loads brand marks from its CDN (AUDIT 2.7).
+    "img-src 'self' data: blob: https://cdn.razorpay.com https://*.razorpay.com",
     "font-src 'self' data:",
     // The browser calls `services/api` directly (docs/03 §"Request path for a screen run"), so
     // its origin has to be connectable. `*` would defeat the point of having a policy.
@@ -128,7 +129,10 @@ function commonDirectives(): string[] {
     // The **origin**, not the configured URL. A `connect-src` source that carries a path matches
     // that path only — `http://host/api/v1` permits exactly `/api/v1` and blocks `/api/v1/screens`,
     // which is every call the app actually makes.
-    `connect-src 'self' ${apiOrigin()}`.trim(),
+    // Razorpay checkout XHR + the API origin the browser talks to (AUDIT 2.7).
+    `connect-src 'self' ${apiOrigin()} https://api.razorpay.com https://checkout.razorpay.com https://lumberjack.razorpay.com`.trim(),
+    // Checkout renders inside an iframe hosted by Razorpay (AUDIT 2.7).
+    "frame-src https://api.razorpay.com https://checkout.razorpay.com",
     "object-src 'none'",
     "base-uri 'self'",
     // The Invest panel POSTs the Kite Publisher basket to kite.zerodha.com/connect/basket.
@@ -155,7 +159,7 @@ function commonDirectives(): string[] {
  */
 export function staticContentSecurityPolicy(isDev: boolean): string {
   return [
-    `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
+    `script-src 'self' 'unsafe-inline' https://checkout.razorpay.com${isDev ? " 'unsafe-eval'" : ""}`,
     ...commonDirectives(),
   ].join("; ");
 }
@@ -171,7 +175,7 @@ export function contentSecurityPolicy(nonce: string, isDev: boolean): string {
     // "Ignoring duplicate Content-Security-Policy directive 'default-src'" on every page load —
     // console noise that trains a developer to ignore CSP warnings, which is the one class of
     // warning that must stay legible.
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://checkout.razorpay.com${isDev ? " 'unsafe-eval'" : ""}`,
     ...commonDirectives(),
   ];
   return directives.join("; ");

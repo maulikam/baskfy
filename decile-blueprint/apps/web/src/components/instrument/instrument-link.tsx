@@ -1,6 +1,6 @@
 import type { Route } from "next";
 import Link from "next/link";
-import type { MouseEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { hrefFor } from "@/lib/search/hrefs";
 import { cn } from "@/lib/utils";
@@ -14,12 +14,10 @@ export function InstrumentLink({
   symbol,
   className,
   children,
-  onClick,
 }: {
   symbol: string;
   className?: string;
   children?: ReactNode;
-  onClick?: (event: MouseEvent<HTMLAnchorElement>) => void;
 }) {
   const trimmed = symbol.trim();
   if (!trimmed || trimmed === "—") {
@@ -30,7 +28,6 @@ export function InstrumentLink({
     <Link
       href={instrumentHref(ticker)}
       className={cn("font-medium text-foreground underline-offset-4 hover:underline", className)}
-      onClick={onClick}
     >
       {children ?? ticker}
     </Link>

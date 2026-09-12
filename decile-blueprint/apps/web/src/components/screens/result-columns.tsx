@@ -69,8 +69,12 @@ function asText(value: unknown): string {
  * about money, and a silent one. A missing print stays an em dash; a column that is nothing but
  * em dashes is a column that should not have been rendered, which is `buildColumns`'s problem.
  */
-function renderValue(value: unknown, unit: string): string {
+export function renderValue(value: unknown, unit: string, key?: string): string {
   if (value === null || value === undefined || value === "") return EMPTY_CELL;
+  // Audit §1 / §7: a 1-yr return pill must carry `%` even if column meta omits unit=percent.
+  if (key === "ret_12m") {
+    return formatPercent(value as number);
+  }
   switch (unit) {
     case "percent":
       return formatPercent(value as number);
@@ -272,7 +276,7 @@ export function buildColumns(
       size: widthFor(key),
       cell: (info) => {
         const raw = info.getValue();
-        const text = renderValue(raw, unit);
+        const text = renderValue(raw, unit, key);
         const scoreScale = SCORE_COLUMNS.has(key)
           ? scaleForColumn(info.table, key)
           : undefined;

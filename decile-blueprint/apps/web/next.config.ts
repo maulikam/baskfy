@@ -19,6 +19,9 @@ interface WebpackConfig {
  * `typedRoutes` is on because a route typo that only shows up as a 404 in staging is exactly the
  * class of bug a typed codebase should not have.
  */
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "";
+const isStagingHost = /staging\./i.test(siteUrl);
+
 const securityHeaders = [
   // docs/11 §Security: "Strict CSP (`default-src 'self'`), HSTS, `X-Content-Type-Options`,
   // `Referrer-Policy`."
@@ -32,10 +35,16 @@ const securityHeaders = [
     key: "Permissions-Policy",
     value: "camera=(), microphone=(), geolocation=(), interest-cohort=()",
   },
-  {
-    key: "Strict-Transport-Security",
-    value: "max-age=63072000; includeSubDomains; preload",
-  },
+  // AUDIT 2.14: HSTS preload from staging would enrol the staging hostname forever; production
+  // only.
+  ...(isStagingHost
+    ? []
+    : [
+        {
+          key: "Strict-Transport-Security",
+          value: "max-age=63072000; includeSubDomains; preload",
+        },
+      ]),
 ];
 
 /**

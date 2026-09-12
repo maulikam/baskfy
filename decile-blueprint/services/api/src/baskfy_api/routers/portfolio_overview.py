@@ -698,6 +698,8 @@ class OverviewOut(BaseModel):
     #: Audit 1.3 — the one sentence Activity, the command centre and the holdings footer all
     #: render. Built from ``sync_status`` so three surfaces cannot invent three answers.
     sync_summary: str
+    #: Audit 4.1 — true when at least one holding is marked from a live Kite quote.
+    live_overlay: bool = False
     hero: HeroOut
     chart: NavSeriesOut
     attention: list[AttentionOut] = Field(default_factory=list)
@@ -1191,6 +1193,8 @@ class _Prices:
     ``unpriced`` names instruments with no close at all. They are excluded from valuation and
     reported, because :func:`~baskfy_core.allocation_ledger.holding_value` is right to refuse a
     missing price: valuing it at zero produces a total that is wrong and still adds up.
+
+    ``live_overlay`` is true when at least one Kite last_price replaced a close (audit 4.1).
     """
 
     as_of: dt.date | None
@@ -1198,6 +1202,7 @@ class _Prices:
     previous: Mapping[int, Decimal]
     dated: Mapping[int, dt.date]
     unpriced: tuple[int, ...]
+    live_overlay: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -1635,7 +1640,9 @@ async def _load_prices(session: AsyncSession, instrument_ids: Sequence[int]) -> 
     recent dates overall" would then compare a stock against a day it did not trade on.
     """
     if not instrument_ids:
-        return _Prices(as_of=None, latest={}, previous={}, dated={}, unpriced=())
+        return _Prices(
+            as_of=None, latest={}, previous={}, dated={}, unpriced=(), live_overlay=False
+        )
 
     ranked = (
         select(
@@ -1684,7 +1691,14 @@ async def _load_prices(session: AsyncSession, instrument_ids: Sequence[int]) -> 
 
     unpriced = tuple(sorted(set(instrument_ids) - set(latest)))
     as_of = max(dated.values()) if dated else None
-    return _Prices(as_of=as_of, latest=latest, previous=previous, dated=dated, unpriced=unpriced)
+    return _Prices(
+        as_of=as_of,
+        latest=latest,
+        previous=previous,
+        dated=dated,
+        unpriced=unpriced,
+        live_overlay=bool(live),
+    )
 
 
 def _flow_from(row: PortfolioCashFlow) -> LedgerCashFlow:
@@ -2574,6 +2588,7 @@ async def portfolio_overview(
         holdings_synced_label=_label_for_sync(synced_on),
         sync_status=sync_status,
         sync_summary=_sync_summary(sync_status),
+        live_overlay=ledger.prices.live_overlay,
         hero=hero,
         chart=chart,
         attention=[_attention_out(item) for item in ribbon],

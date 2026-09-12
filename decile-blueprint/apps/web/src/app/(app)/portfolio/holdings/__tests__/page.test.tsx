@@ -14,6 +14,7 @@ vi.mock("@/lib/brokers/fetch", () => ({
 vi.mock("@/lib/portfolio/fetch", () => ({
   fetchPortfolioOverview: vi.fn(async () => ({
     sync_summary: "Holdings synced: 2026-09-11",
+  live_overlay: false,
     portfolios: [{ portfolio_id: 1, name: "Bonds", kind: "CAPITAL" }],
     monitoring_views: [],
     unallocated: {

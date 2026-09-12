@@ -1301,6 +1301,15 @@ def test_the_router_has_no_order_path() -> None:
 # ---------------------------------------------------------------------------
 
 
+
+def test_overview_out_exposes_live_overlay() -> None:
+    """Audit 4.1: OverviewOut tells the web whether Kite marks are on."""
+    from baskfy_api.routers.portfolio_overview import OverviewOut
+
+    assert "live_overlay" in OverviewOut.model_fields
+    assert OverviewOut.model_fields["live_overlay"].default is False
+
+
 def test_sync_summary_is_one_sentence_for_every_surface() -> None:
     """Audit 1.3: connected ≠ synced; Activity and the command centre must share one field."""
     from baskfy_api.routers.portfolio_overview import (  # noqa: PLC0415

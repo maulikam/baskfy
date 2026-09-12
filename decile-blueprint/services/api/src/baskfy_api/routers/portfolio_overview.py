@@ -3397,6 +3397,19 @@ async def _apply_allocation(
             f"{existing.holding.quantity} are held"
         )
 
+    # Lock every row that names this physical position before we move quantity (audit 4.14).
+    # Without FOR UPDATE two concurrent allocates can both read the same donor quantities and
+    # write slices that sum past held — 0035 removed the unique index that used to make that
+    # impossible to store.
+    await session.execute(
+        select(PortfolioHolding)
+        .where(
+            PortfolioHolding.instrument_id == allocation.key.instrument_id,
+            PortfolioHolding.broker_account_id == allocation.key.broker_account_id,
+        )
+        .with_for_update()
+    )
+
     # (1) the broker's pile — the unfiled shares, spoken for by nobody — then (2) other slices
     # smallest first. The target's own slice is never a source: taking from it to give to it
     # would be a no-op that also deleted the row.

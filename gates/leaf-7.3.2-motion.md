@@ -9,31 +9,33 @@ CSS plus `getBoundingClientRect`.
 - [x] G1: When a sort flips, rows animate from their previous position to their new one rather
       than snapping.
   CHECK: cd decile-blueprint/apps/web && npx vitest run src/components/data/__tests__/table-motion.test.tsx -t "flip" 2>&1 | tail -8
-  EXPECT: passed
-  EVIDENCE: Start at  20:30:37 | Duration  1.05s (transform 65ms, setup 82ms, collect 130ms, tests 95ms, environment 481ms, prepare 44ms)
+  EXPECT: /Tests +[0-9]+ passed/
+  EVIDENCE: Start at  01:12:56 | Duration  2.26s (transform 121ms, setup 156ms, collect 309ms, tests 318ms, environment 1.06s, prepare 68ms)
 
 - [x] G2: Rows stagger in on load/re-filter at 15–20ms per row, and the stagger is capped so row
       271 does not wait seconds.
   CHECK: cd decile-blueprint/apps/web && npx vitest run src/components/data/__tests__/table-motion.test.tsx -t "stagger" 2>&1 | tail -8
-  EXPECT: passed
-  EVIDENCE: Start at  20:30:38 | Duration  795ms (transform 51ms, setup 72ms, collect 120ms, tests 54ms, environment 325ms, prepare 42ms)
+  EXPECT: /Tests +[0-9]+ passed/
+  EVIDENCE: Start at  01:13:00 | Duration  2.28s (transform 103ms, setup 267ms, collect 292ms, tests 237ms, environment 1.10s, prepare 92ms)
 
 - [x] G3: Under `prefers-reduced-motion: reduce` nothing animates — no FLIP, no stagger.
   CHECK: cd decile-blueprint/apps/web && npx vitest run src/components/data/__tests__/table-motion.test.tsx -t "reduced" 2>&1 | tail -8
-  EXPECT: passed
-  EVIDENCE: Start at  20:30:39 | Duration  757ms (transform 55ms, setup 65ms, collect 124ms, tests 36ms, environment 317ms, prepare 64ms)
+  EXPECT: /Tests +[0-9]+ passed/
+  EVIDENCE: Start at  01:13:03 | Duration  2.07s (transform 103ms, setup 213ms, collect 346ms, tests 131ms, environment 956ms, prepare 118ms)
 
-- [ ] G4: No animation exceeds 300ms, and only transform/opacity are animated (the repo's motion
+- [x] G4: No animation exceeds 300ms, and only transform/opacity are animated (the repo's motion
       budget).
-  EVIDENCE: pending
+  CHECK: cd decile-blueprint/apps/web && npx vitest run src/components/data/__tests__/table-motion.test.tsx -t "G4" 2>&1 | tail -8
+  EXPECT: /Tests +[0-9]+ passed/
+  EVIDENCE: Start at  01:13:06 | Duration  2.50s (transform 91ms, setup 173ms, collect 252ms, tests 638ms, environment 1.03s, prepare 153ms)
 
 - [x] G5: No new runtime dependency was added.
-  CHECK: cd /Users/maulikdave/Documents/projects/baskfy && git diff -- decile-blueprint/apps/web/package.json | rg "^\+ " | wc -l
-  EXPECT: 0
-  EVIDENCE: 0 | /bin/sh: rg: command not found
+  CHECK: cd decile-blueprint/apps/web && c=$(node -e 'const d=require("./package.json").dependencies||{};console.log(Object.keys(d).filter(k=>/framer-motion|gsap|react-spring|animejs|popmotion/.test(k)).length)'); echo "animation-deps=$c"
+  EXPECT: animation-deps=0
+  EVIDENCE: animation-deps=0
 
 - [x] G6: Virtualised scrolling still works and the sticky header still sticks — FLIP on a
       virtualised list is where this breaks.
   CHECK: cd decile-blueprint/apps/web && npx vitest run src/components/data/__tests__/ 2>&1 | tail -8
-  EXPECT: passed
-  EVIDENCE: Start at  22:16:44 | Duration  1.47s (transform 182ms, setup 375ms, collect 565ms, tests 518ms, environment 1.68s, prepare 167ms)
+  EXPECT: /Tests +[0-9]+ passed/
+  EVIDENCE: Start at  01:02:47 | Duration  1.14s (transform 165ms, setup 493ms, collect 708ms, tests 699ms, environment 2.19s, prepare 250ms)

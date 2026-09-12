@@ -27,18 +27,27 @@ touches **ten compressed chunks across 2,338 instruments**.
   EXPECT: /passed/
   EVIDENCE: .ss                                                                      [100%] | 1 passed, 2 skipped, 1087 deselected in 1.85s
 
-- [ ] G3: **The post-run assertion.** After any write, the tool checks for duplicate
+- [x] G3: **The post-run assertion.** After any write, the tool checks for duplicate
       `(instrument_id, date)` pairs and fails loudly if it created any. House rule 7 says a job is
       idempotent; this proves it rather than trusting it.
-  CHECK: cd decile-blueprint && uv run pytest services/worker/tests -k "deep_backfill and duplicate" 2>&1 | tail -3
+      ⚠️ **Repaired 12 Sep 2026: the check was passing on a SKIP.** The test is db-marked and
+      the CHECK set no `BASKFY_TEST_DATABASE_URL`, so it ran as `1 skipped, 1093 deselected` —
+      and the EXPECT `/passed/` does not match that, so the row was red. Had the EXPECT been
+      any looser it would have been green on a test that never ran, which is worse.
+  CHECK: cd /Users/maulikdave/Documents/projects/baskfy/decile-blueprint && BASKFY_TEST_DATABASE_URL=postgresql+asyncpg://baskfy:baskfy@localhost:5433/baskfy_test uv run pytest services/worker/tests -k "deep_backfill and duplicate" -p no:cacheprovider 2>&1 | tail -1
   EXPECT: /passed/
-  EVIDENCE: pending
+  EVIDENCE: 1 passed, 1093 deselected (12 Sep 2026) — `test_duplicate_pairs_counts_zero_on_a_healthy_table`, run against a live Postgres rather than skipped.
 
-- [ ] G4: Re-running the tool over a range it has already written adds **nothing** — the
+- [x] G4: Re-running the tool over a range it has already written adds **nothing** — the
       idempotence the `ON CONFLICT` was always meant to give, now true on a compressed table too.
-  CHECK: cd decile-blueprint && uv run pytest services/worker/tests -k "deep_backfill and idempot" 2>&1 | tail -3
+      ⚠️ **Repaired 12 Sep 2026: the selector matched no test at all.** `-k "deep_backfill and
+      idempot"` deselected all 1094 tests — the test that proves this is called
+      `test_a_second_run_over_the_same_range_writes_nothing`, and the word "idempot" appears
+      nowhere in its name. A `-k` that matches nothing exits 0 with "1094 deselected", so a
+      looser EXPECT would have called this gate green while asserting nothing whatsoever.
+  CHECK: cd /Users/maulikdave/Documents/projects/baskfy/decile-blueprint && BASKFY_TEST_DATABASE_URL=postgresql+asyncpg://baskfy:baskfy@localhost:5433/baskfy_test uv run pytest services/worker/tests -k "second_run_over_the_same_range" -p no:cacheprovider 2>&1 | tail -1
   EXPECT: /passed/
-  EVIDENCE: pending
+  EVIDENCE: 1 passed, 1093 deselected (12 Sep 2026) — `test_a_second_run_over_the_same_range_writes_nothing`. House rule 7, proved rather than trusted.
 
 - [x] G5: The existing behaviour is unchanged where it was already right: zero-close placeholder
       bars still dropped, the splice factor still computed off the non-kite segment, dates at or
@@ -52,9 +61,14 @@ touches **ten compressed chunks across 2,338 instruments**.
   EXPECT: /Success|All checks passed/
   EVIDENCE: All checks passed! | Success: no issues found in 644 source files
 
-- [ ] G7: **The box has no duplicate pairs**, before the run and after it.
-  CHECK: cd /Users/maulikdave/Documents/projects/baskfy && AWS_PROFILE=${AWS_PROFILE:-baskfy-poc} BASKFY_INSTANCE_ID=${BASKFY_INSTANCE_ID:-i-086986250704e4392} bash tools/deploy/box.sh "cd /opt/baskfy && docker compose -f compose.prod.yml --env-file .env.staging.compose exec -T postgres psql -U baskfy -d baskfy -t -A -c \"select count(*) from (select instrument_id,date from ohlcv_daily group by instrument_id,date having count(*)>1) t\"" 2>&1 | tail -1
+- [x] G7: **The box has no duplicate pairs**, before the run and after it.
+      ⚠️ **Repaired 12 Sep 2026: the check could not run.** It nested `psql -c \"select …\"`
+      inside `docker compose exec` inside `box.sh`, and a gate CHECK reaches `sh -c` as one line,
+      so the innermost quotes collapsed and it produced **no output** — read as a failure of the
+      box rather than of the quoting. `tools/deploy/box-sql.sh` now carries the statement over as
+      base64 and feeds psql on stdin, so nothing has to survive a second round of word splitting.
+  CHECK: cd /Users/maulikdave/Documents/projects/baskfy && AWS_PROFILE=baskfy-poc bash tools/deploy/box-sql.sh "select count(*) from (select instrument_id, date from ohlcv_daily group by instrument_id, date having count(*) > 1) d" 2>&1 | tail -1
   EXPECT: /^\s*0\s*$/
-  EVIDENCE: pending
+  EVIDENCE: **0** duplicate `(instrument_id, date)` pairs in `ohlcv_daily` on the box (12 Sep 2026, 12:0x IST), read through `tools/deploy/box-sql.sh`. The box holds 11,215 instruments. This is the first time the row has been measured rather than assumed.
 
 <!-- A checked box whose EVIDENCE reads "pending" is UNMET. ABANDON: G<n> <reason> is the honest exit. -->

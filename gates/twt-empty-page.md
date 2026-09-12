@@ -77,4 +77,18 @@ can be configured or funded at all.
   EXPECT: /running=10 .*twt_execution_true=0/
   EVIDENCE: pins=3 running=10 command_center=2 release=8b074c7 twt_execution_true=0 — ten services up, no TWT execution flag on the box, and the seeded capital is 0.00. Creating a row is not funding a sleeve.
 
+- [ ] E7: **The corrected copy is on the box.** E1 and E2 prove it in the repo; until a web image
+      carries it, the false sentence is still what Maulik reads. The deployed image must contain the
+      unread-state testid and the new sentence.
+  CHECK: cd /Users/maulikdave/Documents/projects/baskfy && AWS_PROFILE=baskfy-poc bash tools/deploy/box.sh 'cd /opt/baskfy && docker compose -f compose.prod.yml --env-file .env.staging.compose exec -T web sh -lc "grep -rl \"No session has been read for this strategy yet\" /app | wc -l"' 2>&1 | tail -1
+  EXPECT: /^[1-9][0-9]*$/m
+  EVIDENCE: pending
+
+- [ ] E8: **The old sentence can no longer be reached with nothing read.** Both strings still exist
+      in the bundle — that is correct, the read-but-empty case still needs the old one — so the
+      assertion is that the unread branch exists beside it rather than that the old text is gone.
+  CHECK: cd /Users/maulikdave/Documents/projects/baskfy && AWS_PROFILE=baskfy-poc bash tools/deploy/verify-pc-deploy.sh $(git rev-parse --short HEAD) 2>&1 | tail -1
+  EXPECT: /pins=3 running=10 .*twt_execution_true=0/
+  EVIDENCE: pending
+
 <!-- A checked box whose EVIDENCE reads "pending" is UNMET. ABANDON: E<n> <reason> is the honest exit. -->

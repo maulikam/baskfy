@@ -38,6 +38,7 @@ import pandas as pd
 from baskfy_core.costs import cost_pct, order_cost, plan_cost
 from baskfy_core.rank_buffer import inside_hold_band
 from baskfy_core.score import stop_from_vol
+from baskfy_core.windows import subtract_months
 
 
 class BasketConfig(Protocol):
@@ -228,16 +229,28 @@ def build_plan(
             for s, sc in raw.items()
         }
     )
-    # normalise to pool, enforce min & half-size
+    # normalise to pool, enforce min, then half-size short-history listings.
+    # Half-size is AFTER the final scale on purpose: renormalising afterwards would push a
+    # capped name back above HALF_SIZE_WEIGHT (AF 3.9). Residual stays cash.
     scale = (pool / capital * 100) / sum(w.values()) if w else 0.0
     w = {s: v * scale for s, v in w.items()}
     for s in list(w):
-        listed_hist_ok = True  # extend: derive from listing date feed if available
-        if not listed_hist_ok:
-            w[s] = min(w[s], cfg.HALF_SIZE_WEIGHT)
         w[s] = max(w[s], cfg.MIN_POSITION_WEIGHT) if w[s] > cfg.MIN_POSITION_WEIGHT / 2 else w[s]
     scale = (pool / capital * 100) / sum(w.values()) if w else 0.0
     w = {s: round(v * scale, 2) for s, v in w.items()}
+    as_of_raw = scored["date"].iloc[0] if len(scored) else None
+    as_of = pd.Timestamp(as_of_raw).date() if as_of_raw is not None else None
+    half_cutoff = subtract_months(as_of, 18) if as_of is not None else None
+    has_listed = "listed_on" in idx.columns
+    for s in list(w):
+        if half_cutoff is None or not has_listed or s not in idx.index:
+            continue
+        raw_listed = idx.loc[s, "listed_on"]
+        if raw_listed is None or (isinstance(raw_listed, float) and np.isnan(raw_listed)):
+            continue
+        listed = pd.Timestamp(raw_listed).date()
+        if listed > half_cutoff:
+            w[s] = min(w[s], cfg.HALF_SIZE_WEIGHT)
 
     cluster_warn = []
     if clusters:

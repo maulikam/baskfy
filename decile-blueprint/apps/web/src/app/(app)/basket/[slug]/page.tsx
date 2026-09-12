@@ -116,18 +116,6 @@ export default async function BasketDetailPage({
         </div>
       </section>
 
-      <nav aria-label="Basket sections" className="flex flex-wrap gap-2 text-sm">
-        <span className="rounded-md border border-accent bg-accent-muted px-2.5 py-1 text-xs font-medium text-accent">
-          Overview
-        </span>
-        <Link
-          href={`/basket/${basket.slug}/constituents`}
-          className="rounded-md border border-border/70 bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-        >
-          Constituents
-        </Link>
-      </nav>
-
       <div className="space-y-3">
         <PerformanceChart
           series={performance.points}

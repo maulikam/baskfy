@@ -1,10 +1,10 @@
 import type { ReactNode } from "react";
 
+import { BasketSectionNav } from "@/components/basket/basket-section-nav";
 import { ShareBasketLink } from "@/components/basket/share-basket-link";
 
 /**
- * Basket segment chrome: share control + children (AF I.5). Versions nav lives on the
- * versions page itself; Overview/Constituents still need a Versions tab link (STATUS).
+ * Basket segment chrome: section tabs + share control (AF I.1 / I.5).
  */
 
 export default async function BasketSlugLayout({
@@ -17,7 +17,8 @@ export default async function BasketSlugLayout({
   const { slug } = await params;
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <BasketSectionNav slug={slug} />
         <ShareBasketLink slug={slug} />
       </div>
       {children}

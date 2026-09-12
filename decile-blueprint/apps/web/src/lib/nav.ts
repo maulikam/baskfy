@@ -160,6 +160,7 @@ export const SECTION_TABS = {
   discover: [
     { href: "/discover" as Route, label: "For you" },
     { href: "/discover/all" as Route, label: "All baskets" },
+    { href: "/discover/search" as Route, label: "Search" },
     { href: "/discover/collections" as Route, label: "Collections" },
     { href: "/discover/compare" as Route, label: "Compare" },
     { href: "/discover/saved" as Route, label: "Saved" },

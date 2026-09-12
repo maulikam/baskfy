@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { DisclosureBlock } from "@/components/explore/disclosure-block";
@@ -93,14 +92,6 @@ export default async function BasketConstituentsPage({
           version && version.version_no > 0
             ? versionBlurb(basket.rebalance_frequency, version, rows.length)
             : "Weights appear here once this basket has a published version."
-        }
-        meta={
-          <Link
-            href={`/basket/${basket.slug}`}
-            className="text-accent underline-offset-4 hover:underline"
-          >
-            ← Overview
-          </Link>
         }
       />
 

@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { VersionDiffPanel } from "@/components/basket/version-diff-panel";
@@ -61,24 +60,6 @@ export default async function BasketVersionsPage({
         title={`${basket.name} · Versions`}
         blurb="Every published cut of this basket. Pick any two to see what changed."
       />
-
-      <nav aria-label="Basket sections" className="flex flex-wrap gap-2 text-sm">
-        <Link
-          href={`/basket/${slug}`}
-          className="rounded-md border border-border/70 bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-        >
-          Overview
-        </Link>
-        <Link
-          href={`/basket/${slug}/constituents`}
-          className="rounded-md border border-border/70 bg-card px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-        >
-          Constituents
-        </Link>
-        <span className="rounded-md border border-accent bg-accent-muted px-2.5 py-1 text-xs font-medium text-accent">
-          Versions
-        </span>
-      </nav>
 
       {versions.count === 0 ? (
         <p className="rounded-xl border border-dashed border-border bg-card/50 px-4 py-10 text-center text-sm text-muted-foreground">

@@ -104,6 +104,12 @@ export default async function DiscoverPage({
             ) : null}
 
             <Link
+              href="/discover/search"
+              className="ml-4 inline-block text-sm text-accent underline-offset-4 hover:underline"
+            >
+              Search baskets
+            </Link>
+            <Link
               href="/discover/all"
               className="inline-block text-sm text-accent underline-offset-4 hover:underline"
             >

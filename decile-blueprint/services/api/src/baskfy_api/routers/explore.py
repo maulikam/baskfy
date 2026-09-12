@@ -855,3 +855,11 @@ async def remove_watchlist(
         raise not_found("watchlist item", slug)
     await session.delete(item)
     await session.commit()
+
+
+# AF lane I: mount version history + instrument watchlist without touching app.py.
+from baskfy_api.routers import curated_versions as _curated_versions  # noqa: E402
+from baskfy_api.routers import watchlist as _instrument_watchlist  # noqa: E402
+
+router.include_router(_curated_versions.router)
+router.include_router(_instrument_watchlist.router)

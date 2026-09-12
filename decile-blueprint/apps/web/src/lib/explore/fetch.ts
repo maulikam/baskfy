@@ -137,9 +137,10 @@ export interface ExploreConstituent {
   symbol: string;
   name: string | null;
   segment: string;
-  /** Percent of the basket, as a string: the API sends a numeric and JSON has no decimal type,
-   * so parsing it to a float here would be the rounding house rule 9 exists to prevent. */
+  /** Fraction of the basket as stored (`0.0500`). Prefer `weight_pct` for display. */
   weight: string;
+  /** Percent of the basket for display (`5.00`), already rounded by the API (house rule 8). */
+  weight_pct: string;
 }
 
 export interface ExploreConstituents {
@@ -149,6 +150,8 @@ export interface ExploreConstituents {
   label: string;
   added_count: number;
   removed_count: number;
+  /** How many versions this basket has published. */
+  version_count: number;
   constituents: ExploreConstituent[];
 }
 

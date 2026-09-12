@@ -341,6 +341,13 @@ async def test_constituents_route_serves_the_newest_version(
     weights = [row.weight for row in out.constituents]
     assert weights == sorted(weights, reverse=True), "heaviest weight must lead"
     assert all(row.symbol for row in out.constituents), "a constituent with no symbol"
+    # Audit 0.3: storage is a fraction of 1.0; the page must render percent, not `0.0500%`.
+    for row in out.constituents:
+        assert row.weight_pct == (row.weight * Decimal(100)).quantize(Decimal("0.01"))
+        assert row.weight_pct >= 1, (
+            f"{row.symbol}: weight_pct={row.weight_pct} looks like a fraction was labelled %"
+        )
+    assert out.version_count >= 1
 
 
 @pytest.mark.asyncio

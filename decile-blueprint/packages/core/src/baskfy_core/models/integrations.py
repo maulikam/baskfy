@@ -115,8 +115,9 @@ class ApiKey(Base):
     #: operator can see that a key was rotated rather than that two unrelated keys exist.
     rotated_from_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("api_key.id"))
 
-    def is_active(self, *, now: dt.datetime | None = None) -> bool:
-        moment = now or dt.datetime.now(tz=dt.UTC)
+    def is_active(self, *, now: dt.datetime) -> bool:
+        """``now`` is required — Law 1 forbids core from reading the wall clock (AF 3.10)."""
+        moment = now
         if self.revoked_at is not None:
             return False
         if self.expires_at is None:

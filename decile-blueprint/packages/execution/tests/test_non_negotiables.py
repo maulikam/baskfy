@@ -37,7 +37,6 @@ from baskfy_execution import (
     ProductGates,
     RiskManager,
     TenantIds,
-    UntouchableInstrumentError,
 )
 from baskfy_execution import (
     gateway as gateway_module,
@@ -99,6 +98,7 @@ def test_non_negotiable_1_dry_run_simulates_an_order_end_to_end(
             order_type="LIMIT",
             price=100.0,
             exchange="NSE",
+            gross_exposure=100.0,
             tenant=TENANT,
             plan_tenant=TENANT,
         )
@@ -184,8 +184,10 @@ def test_non_negotiable_4b_a_stop_can_be_armed_through_the_gateway(
     ("product", "exchange", "gates", "why"),
     [
         ("MIS", "NSE", {"intraday_enabled": False}, "MIS/intraday disabled"),
-        ("NRML", "NFO", {"options_enabled": False}, "F&O disabled"),
-        ("NRML", "BFO", {"options_enabled": False}, "F&O disabled"),
+        ("NRML", "NFO", {"options_enabled": False}, "F&O/derivatives disabled"),
+        ("NRML", "BFO", {"options_enabled": False}, "F&O/derivatives disabled"),
+        ("NRML", "MCX", {"options_enabled": False}, "F&O/derivatives disabled"),
+        ("NRML", "NSE", {}, "only CNC is allowed"),
     ],
 )
 def test_non_negotiable_5_product_gates_block_inside_the_gateway(
@@ -201,6 +203,7 @@ def test_non_negotiable_5_product_gates_block_inside_the_gateway(
             order_type="LIMIT",
             price=100.0,
             exchange=exchange,
+            gross_exposure=100.0,
             tenant=TENANT,
             plan_tenant=TENANT,
         )
@@ -225,7 +228,7 @@ def test_non_negotiable_5b_a_gtt_is_gated_on_the_same_switch(
         )
     )
     assert out["status"] == "BLOCKED"
-    assert "F&O disabled" in str(out["error"])
+    assert "F&O/derivatives disabled" in str(out["error"])
     # An OPTION on the same exchange is refused one layer earlier, by the overnight guard —
     # the same precedence `place()` uses, so enabling options cannot open a GTT door.
     out = asyncio.run(
@@ -323,6 +326,7 @@ def test_non_negotiable_6d_a_replayed_client_id_cannot_double_send(
                 price=100.0,
                 exchange="NSE",
                 client_id="PLAN1:RELIANCE",
+                gross_exposure=100.0,
                 tenant=TENANT,
                 plan_tenant=TENANT,
             )
@@ -340,22 +344,27 @@ def test_non_negotiable_7_an_untouchable_is_refused_before_any_network_call(
     symbol: str, tmp_path: pathlib.Path
 ) -> None:
     """Prefix- and series-aware, not an exact-match set. The set held "SGBDE31III" while the
-    holding was "SGBDE31III-GB", and the planner proposed EXIT -392 on a Rs 60 lakh position."""
+    holding was "SGBDE31III-GB", and the planner proposed EXIT -392 on a Rs 60 lakh position.
+
+    Returned as BLOCKED (AF 3.5), not raised — one SGB leg must not abort a batch mid-flight.
+    """
     gw = make_gateway(tmp_path, dry_run=False)
-    with pytest.raises(UntouchableInstrumentError):
-        asyncio.run(
-            gw.place(
-                symbol=symbol,
-                qty=1,
-                side="SELL",
-                product="CNC",
-                order_type="LIMIT",
-                price=7000.0,
-                exchange="NSE",
-                tenant=TENANT,
-                plan_tenant=TENANT,
-            )
+    out = asyncio.run(
+        gw.place(
+            symbol=symbol,
+            qty=1,
+            side="SELL",
+            product="CNC",
+            order_type="LIMIT",
+            price=7000.0,
+            exchange="NSE",
+            gross_exposure=7000.0,
+            tenant=TENANT,
+            plan_tenant=TENANT,
         )
+    )
+    assert out["status"] == "BLOCKED"
+    assert "protected instrument" in str(out["error"])
 
 
 @pytest.mark.parametrize("symbol", ["SGBDE31III", "SGBDE31III-GB", "SGBJUN29"])
@@ -363,21 +372,25 @@ def test_non_negotiable_7b_an_untouchable_is_refused_a_gtt_in_both_directions(
     symbol: str, tmp_path: pathlib.Path
 ) -> None:
     """Leaf 1.2.1. Arming and cancelling are both refused, and both before the broker is
-    reached — `ExplodingKC` proves the second half."""
+    reached — `ExplodingKC` proves the second half. BLOCKED, not raised (AF 3.5)."""
     gw = make_gateway(tmp_path, dry_run=False)
-    with pytest.raises(UntouchableInstrumentError):
-        asyncio.run(
-            gw.place_gtt_stop(
-                symbol=symbol,
-                qty=1,
-                trigger=6300.0,
-                last_price=7000.0,
-                tenant=TENANT,
-                plan_tenant=TENANT,
-            )
+    out = asyncio.run(
+        gw.place_gtt_stop(
+            symbol=symbol,
+            qty=1,
+            trigger=6300.0,
+            last_price=7000.0,
+            tenant=TENANT,
+            plan_tenant=TENANT,
         )
-    with pytest.raises(UntouchableInstrumentError):
-        asyncio.run(gw.delete_gtt(gtt_id=1, symbol=symbol, tenant=TENANT, plan_tenant=TENANT))
+    )
+    assert out["status"] == "BLOCKED"
+    assert "protected instrument" in str(out["error"])
+    out = asyncio.run(
+        gw.delete_gtt(gtt_id=1, symbol=symbol, tenant=TENANT, plan_tenant=TENANT)
+    )
+    assert out["status"] == "BLOCKED"
+    assert "protected instrument" in str(out["error"])
 
 
 # =====================================================================================
@@ -399,9 +412,14 @@ def test_a_market_order_is_valued_for_risk_by_its_reference_price(
 
     class RecordingRisk(RiskManager):
         def pre_order(
-            self, symbol: str, value: float, gross_exposure: float = 0.0
+            self,
+            symbol: str,
+            value: float,
+            gross: float,
+            *,
+            side: str = "BUY",
         ) -> tuple[bool, str]:
-            seen.append((symbol, value, gross_exposure))
+            seen.append((symbol, value, gross))
             return True, ""
 
     gw = OrderGateway(
@@ -419,6 +437,7 @@ def test_a_market_order_is_valued_for_risk_by_its_reference_price(
             price=None,
             reference_price=250.0,
             market_protection=0.5,
+            gross_exposure=0.0,
             tenant=TENANT,
             plan_tenant=TENANT,
         )
@@ -443,6 +462,7 @@ def test_an_order_with_no_price_and_no_reference_is_blocked_not_valued_at_zero(
             order_type="MARKET",
             price=None,
             reference_price=None,
+            gross_exposure=0.0,
             tenant=TENANT,
             plan_tenant=TENANT,
         )
@@ -482,6 +502,7 @@ def test_market_protection_reaches_the_broker_only_on_a_market_order(
             price=None,
             reference_price=100.0,
             market_protection=0.44,
+            gross_exposure=100.0,
             tenant=TENANT,
             plan_tenant=TENANT,
             client_id="a",
@@ -495,6 +516,7 @@ def test_market_protection_reaches_the_broker_only_on_a_market_order(
             order_type="LIMIT",
             price=100.0,
             market_protection=0.44,
+            gross_exposure=100.0,
             tenant=TENANT,
             plan_tenant=TENANT,
             client_id="b",

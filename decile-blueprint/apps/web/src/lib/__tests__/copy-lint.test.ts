@@ -54,10 +54,20 @@ const WEB_ROOT = resolve(process.cwd(), "src");
  */
 const SCANNED = [
   join(WEB_ROOT, "app", "(marketing)"),
+  join(WEB_ROOT, "app", "(auth)"),
+  join(WEB_ROOT, "app", "(app)", "basket"),
+  join(WEB_ROOT, "app", "(app)", "brokers"),
+  join(WEB_ROOT, "app", "(app)", "portfolio", "watchlist"),
+  join(WEB_ROOT, "app", "(app)", "home"),
   join(WEB_ROOT, "content"),
   join(WEB_ROOT, "components", "marketing"),
   join(WEB_ROOT, "components", "consent"),
+  join(WEB_ROOT, "components", "home"),
+  join(WEB_ROOT, "components", "basket"),
+  join(WEB_ROOT, "components", "backtests", "config-form.tsx"),
+  join(WEB_ROOT, "components", "explore", "return-convention-note.tsx"),
   join(WEB_ROOT, "lib", "marketing"),
+  join(WEB_ROOT, "lib", "vocabulary.ts"),
   join(WEB_ROOT, "components", "data", "disclaimer.tsx"),
 ];
 
@@ -257,6 +267,13 @@ describe("the copy never claims to give investment advice", () => {
   it("scanned a meaningful amount of copy", () => {
     // A scan over nothing passes silently and proves nothing.
     expect(FILES.length).toBeGreaterThan(15);
+  });
+
+  it("never cites internal docs/ paths in rendered strings (audit §1.13)", () => {
+    /* Comments are blanked by copyOnly; a JSX/MDX string that still contains `docs/` after that
+       is user-facing. Internal citations belonged in DECISIONS, not on the page. */
+    const hits = scan(/\bdocs\/[A-Za-z0-9._/-]+/, { allowNegated: false });
+    expect(format(hits)).toBe("");
   });
 
   it("catches an un-negated claim, so a green run means something", () => {

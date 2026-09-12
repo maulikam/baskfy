@@ -8,20 +8,12 @@ import { FactsheetNotFound, fetchFactsheet, fetchHistory } from "@/lib/instrumen
 import { instrumentJsonLd, instrumentMetadata, SPARKLINE_FIELDS } from "@/lib/instrument/seo";
 
 /**
- * `/instruments/[symbol]` — docs/08 §Routes: "**ISR** · SEO-optimised (this is the
- * organic-traffic surface)".
+ * `/instruments/[symbol]` — docs/08 §Routes: SEO-optimised factsheet surface.
  *
- * ISR, not SSR: a factsheet changes once a night, and re-rendering it per request would put a
- * database round-trip in front of every crawler visit for a page whose content is identical
- * between publishes. `revalidate` here is the time-based backstop; the real trigger is
- * `revalidateTag(FACTSHEET_TAG)` from `POST /api/revalidate`, which the nightly publish step
- * calls when `data_version` moves. See `src/lib/instrument/fetch.ts`.
- *
- * `dynamicParams` is left at its default, so any symbol renders on first request and is cached
- * from then on — pre-generating 2,300 pages at build time would be a long build for pages most of
- * which nobody will ask for that day.
+ * Page-level `revalidate` is inert under `(app)/layout` (reads cookies) — AUDIT 4.7. Cache
+ * invalidation is `revalidateTag(FACTSHEET_TAG)` from `POST /api/revalidate` on publish.
+ * See `src/lib/instrument/fetch.ts`.
  */
-export const revalidate = 3600;
 
 export async function generateMetadata({
   params,

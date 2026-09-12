@@ -9,6 +9,7 @@ import {
   ScoreBar,
   scoreBarScale,
 } from "@/components/screens/cell-encodings";
+import { SaveInstrumentButton } from "@/components/watchlist/save-instrument-button";
 import {
   columnDisplayLabel,
   columnDisplayTooltip,
@@ -252,11 +253,14 @@ export function buildColumns(
           const symbol = asText(row.symbol);
           const name = asText(row.name);
           return (
-            <div className="min-w-0">
-              <div className="truncate font-medium">{symbol}</div>
-              {name && name !== symbol ? (
-                <div className="truncate text-xs text-muted-foreground">{name}</div>
-              ) : null}
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-medium">{symbol}</div>
+                {name && name !== symbol ? (
+                  <div className="truncate text-xs text-muted-foreground">{name}</div>
+                ) : null}
+              </div>
+              <SaveInstrumentButton symbol={symbol} className="shrink-0" />
             </div>
           );
         },

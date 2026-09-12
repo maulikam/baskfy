@@ -24,17 +24,10 @@ export interface FormResult {
 /**
  * Where a sign-in with no `?next=` lands.
  *
- * `/build` (Maulik, 27 Aug 2026). This moved to `/home` when SC9 gave the product a landing
- * surface, on the reasoning that "what you hold, what needs a decision" is the answer to "I just
- * signed in". That reasoning assumes a user who already holds something; today's do not, and a
- * landing page with nothing on it is a worse first screen than the tool they came for.
- *
- * **`?next=` still wins.** Someone who followed a deep link while signed out is returned to the
- * page they asked for, not to `/build` — the gate is a detour, not a redirection of intent, and
- * overriding it would break every shared link into the app. This constant is only the fallback
- * for a sign-in that named no destination.
+ * `/onboarding` (AF I.4). First login walks connect → import → pick a basket. Deep links via
+ * `?next=` still win — this constant is only the fallback when no destination was named.
  */
-const DEFAULT_DESTINATION = "/build";
+const DEFAULT_DESTINATION = "/onboarding";
 
 /**
  * `FormData.get` returns `string | File | null`. Stringifying a `File` yields "[object File]",

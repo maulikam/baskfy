@@ -13,3 +13,10 @@ e2e/.auth/
 # local diagnostic scratch
 .diag.mjs
 .e2ebt.mjs
+
+# Local env — secrets (AUTH_SECRET, BASKFY_JWT_SECRET, …). Parent gitignore already
+# covers `.env.*` from decile-blueprint/, but this app must ignore them on its own so a
+# clone that only looks at apps/web cannot stage one (AUDIT 2.8).
+.env
+.env.*
+!.env.example

@@ -2003,3 +2003,7 @@ wrong and superseded.
 **The command, when you want it:** build and push the Python image, then recreate the four
 services. `tools/deploy/push-images.sh` and `tools/deploy/verify-worker-image.sh` are the existing
 path; the verify script is what proves the running tag matches HEAD.
+
+## AFB — rotate web secrets if `.env.local` matched staging (AUDIT 2.8)
+
+`apps/web/.env.local` held 64-byte `AUTH_SECRET` / `BASKFY_JWT_SECRET` and was untracked (`git ls-files` clean). Confirm whether those values equal staging's; if they do, rotate both on the box and locally. Nothing else blocked.

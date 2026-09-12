@@ -285,9 +285,14 @@ export function attentionLink(kind: string): AttentionLink {
  * §6.1 — the two timestamps, formatted but never merged
  * ------------------------------------------------------------------ */
 
-/** "Prices: close of 21 Aug 2026", or the API's own sentence when there is no date. */
-export function pricesLine(overview: Pick<Overview, "prices_as_of" | "prices_label">): string {
+/** "Prices: close of 21 Aug 2026", or live-over-close when a Kite session marked the book. */
+export function pricesLine(
+  overview: Pick<Overview, "prices_as_of" | "prices_label"> & { live_overlay?: boolean },
+): string {
   const date = overview.prices_as_of;
+  if (overview.live_overlay) {
+    return date ? `Prices: live, over close of ${formatTradeDate(date)}` : overview.prices_label;
+  }
   return date ? `Prices: close of ${formatTradeDate(date)}` : overview.prices_label;
 }
 

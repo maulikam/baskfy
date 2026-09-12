@@ -33,6 +33,17 @@ describe("intersection across Build scans", () => {
     expect(result.summary).toMatch(/share 2 stocks/);
   });
 
+  it("intersects Swing and Three weeks tight the same way", () => {
+    const result = intersectionOf([
+      set("Swing", ["RELIANCE", "TCS", "INFY"]),
+      set("Three weeks tight", ["TCS", "INFY", "HDFCBANK"]),
+    ]);
+    expect(result.shared).toEqual(["INFY", "TCS"]);
+    expect(result.sharedCount).toBe(2);
+    expect(result.available).toBe(true);
+    expect(result.summary).toMatch(/Swing and Three weeks tight/);
+  });
+
   it("does not invent a zero when a source could not be read", () => {
     const result = intersectionOf([
       set("Volume breakout", ["TCS"]),

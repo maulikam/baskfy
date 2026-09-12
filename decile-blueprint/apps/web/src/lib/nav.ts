@@ -172,9 +172,10 @@ export const SECTION_TABS = {
     /* Create left Discover; this is where it lives. Removing it from one hub without giving it
        a home in the other would have hidden a real surface behind a direct link. */
     { href: "/create" as Route, label: "Create" },
-    /* AFH 5.5: Swing / Volume breakout / Three weeks tight are operator sleeves — gated behind
-       is_staff in the user menu and direct URLs until SectionTabs can read is_staff
-       (needs shell/section-tabs.tsx). Overlap stays: it is a Build tool, not a sleeve. */
+    /* AFH 5.5: Swing / Volume breakout / Three weeks tight stay off this consumer row.
+       Staff see them appended after Overlap via `buildSectionTabs("build", { isStaff })`.
+       SectionTabs reads isStaff from StaffProvider when the prop is omitted. Overlap stays:
+       it is a Build tool, not a sleeve. */
     { href: "/build/overlap" as Route, label: "Overlap" },
   ],
   /*
@@ -298,6 +299,30 @@ export const LEGACY_REDIRECTS = [
 ] as const;
 
 export type SectionKey = keyof typeof SECTION_TABS;
+
+export type SectionTab = { readonly href: Route; readonly label: string };
+
+/** Vocabulary titles for VBT / TWT are too long for the tab row; keep these short. */
+const STAFF_BUILD_TABS: readonly SectionTab[] = [
+  { href: "/swing" as Route, label: "Swing" },
+  { href: "/vbt" as Route, label: "Volume" },
+  { href: "/twt" as Route, label: "Tight" },
+];
+
+/**
+ * Section tabs for a hub. `SECTION_TABS.build` is the consumer default and stays unchanged.
+ * Staff get Swing / Volume / Tight appended after Overlap.
+ */
+export function buildSectionTabs(
+  section: SectionKey,
+  options?: { isStaff?: boolean },
+): readonly SectionTab[] {
+  const tabs: readonly SectionTab[] = SECTION_TABS[section];
+  if (section === "build" && options?.isStaff) {
+    return [...tabs, ...STAFF_BUILD_TABS];
+  }
+  return tabs;
+}
 
 /** Which primary nav item is active for a pathname. */
 export function primarySection(pathname: string): SectionKey | null {

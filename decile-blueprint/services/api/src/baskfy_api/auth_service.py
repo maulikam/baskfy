@@ -177,6 +177,22 @@ async def record_consent(
 GOOGLE_PROVIDER: Final = "google"
 
 
+async def ensure_staff_from_allowlist(
+    session: AsyncSession, user: AppUser, settings: Settings
+) -> None:
+    """Promote an allowlisted address to staff. Never demotes.
+
+    ``BASKFY_STAFF_ALLOWLIST`` is how the founder stays staff across a rebuilt database
+    without a one-off ``UPDATE``. The list grants; it does not revoke. An address already
+    marked staff stays staff even if it is not on the list.
+    """
+    if user.is_staff:
+        return
+    if settings.is_staff_email(user.email):
+        user.is_staff = True
+        await session.flush()
+
+
 class IdentityConflict(AuthError):
     """The verified address belongs to an account already bound to a *different* Google subject.
 
@@ -225,6 +241,7 @@ async def link_google_identity(
             raise InvalidCredentials("identity points at no account")
         existing.email_at_provider = identity.email
         existing.last_login_at = now()
+        await ensure_staff_from_allowlist(session, user, settings)
         await session.flush()
         return user, False
 
@@ -279,6 +296,7 @@ async def link_google_identity(
             last_login_at=now(),
         )
     )
+    await ensure_staff_from_allowlist(session, user, settings)
     await session.flush()
     return user, created
 

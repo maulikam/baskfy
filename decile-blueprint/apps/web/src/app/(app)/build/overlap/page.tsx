@@ -13,10 +13,11 @@ import { PAGES } from "@/lib/vocabulary";
 /**
  * `/build/overlap` — names that land on more than one Build scan.
  *
- * Two lists on one page, in the order a person asks:
+ * Three lists on one page, in the order a person asks:
  *
  *   1. Volume breakout ∩ Three weeks tight
- *   2. Screens ∩ Volume breakout ∩ Three weeks tight
+ *   2. Swing ∩ Three weeks tight
+ *   3. Screens ∩ Volume breakout ∩ Three weeks tight
  *
  * Read-only. Nothing here queues a scan or places an order — it only intersects what those
  * surfaces already published (plus one fresh screen run so the three-way list is current).
@@ -46,11 +47,15 @@ export default async function BuildOverlapPage({
   const sources = await fetchOverlapSources(firstParam(params.screen) ?? "");
 
   const pair = intersectionOf([sources.vbt, sources.twt]);
+  const swingTwt = intersectionOf([sources.swing, sources.twt]);
   const triple = intersectionOf([sources.screen, sources.vbt, sources.twt]);
 
-  const asOfDates = [sources.asOf.vbt, sources.asOf.twt, sources.asOf.screen].filter(
-    (value): value is string => Boolean(value),
-  );
+  const asOfDates = [
+    sources.asOf.vbt,
+    sources.asOf.twt,
+    sources.asOf.swing,
+    sources.asOf.screen,
+  ].filter((value): value is string => Boolean(value));
   const asOfLabel =
     asOfDates.length === 0
       ? null
@@ -71,15 +76,30 @@ export default async function BuildOverlapPage({
       <SectionTabs section="build" />
 
       <Answer
-        footnote="Symbols only — check each name on Volume breakout, Three weeks tight, or the screen itself before acting."
+        footnote="Symbols only — check each name on Volume breakout, Swing, Three weeks tight, or the screen itself before acting."
       >
-        {!pair.available ? (
-          <>Overlap cannot be computed until Volume breakout and Three weeks tight have been read.</>
+        {!pair.available && !swingTwt.available ? (
+          <>
+            Overlap cannot be computed until Volume breakout, Swing, and Three weeks tight have
+            been read.
+          </>
         ) : (
           <>
-            <Mark>{pair.sharedCount}</Mark>{" "}
-            {pair.sharedCount === 1 ? "name sits" : "names sit"} on both Volume breakout and
-            Three weeks tight
+            {pair.available ? (
+              <>
+                <Mark>{pair.sharedCount}</Mark>{" "}
+                {pair.sharedCount === 1 ? "name sits" : "names sit"} on both Volume breakout and
+                Three weeks tight
+              </>
+            ) : null}
+            {swingTwt.available ? (
+              <>
+                {pair.available ? "; " : null}
+                <Mark>{swingTwt.sharedCount}</Mark>{" "}
+                {swingTwt.sharedCount === 1 ? "name sits" : "names sit"} on both Swing and Three
+                weeks tight
+              </>
+            ) : null}
             {triple.available ? (
               triple.sharedCount > 0 ? (
                 <>
@@ -99,6 +119,13 @@ export default async function BuildOverlapPage({
         title="Volume breakout ∩ Three weeks tight"
         blurb="Names that printed a volume-breakout signal and are also quiet for three weeks."
         result={pair}
+      />
+
+      <OverlapPanel
+        testId="overlap-swing-twt"
+        title="Swing ∩ Three weeks tight"
+        blurb="Names on the swing scan that are also quiet for three weeks."
+        result={swingTwt}
       />
 
       <OverlapPanel

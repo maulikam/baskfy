@@ -5,7 +5,7 @@ import type { Intersection } from "@/lib/overlap/overlap";
 import { cn } from "@/lib/utils";
 
 /**
- * One of the two overlap panels on `/build/overlap`.
+ * One of the overlap panels on `/build/overlap`.
  *
  * A list of symbols with a one-line summary. Links go to the instrument factsheet so a name on
  * both scans can be opened without leaving the product for a charting site.

@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { BottomTabBar } from "@/components/shell/bottom-tab-bar";
 import { MAIN_CONTENT_ID } from "@/components/shell/ids";
 import { SkipLink } from "@/components/shell/skip-link";
+import { StaffProvider } from "@/components/shell/staff-context";
 import { TopNav } from "@/components/shell/top-nav";
 import type { UserMenuProps } from "@/components/shell/user-menu";
 import { Disclaimer } from "@/components/data/disclaimer";
@@ -42,22 +43,24 @@ export interface AppShellProps {
 
 export function AppShell({ user, banner, children }: AppShellProps) {
   return (
-    <div className="min-h-dvh">
-      <SkipLink />
-      {banner}
-      <TopNav user={user} />
-      <main id={MAIN_CONTENT_ID} tabIndex={0} className="-outline-offset-2">
-        {/*
-          One container, one measure, everywhere. Wider than the old frame because the sidebar's
-          224px came back, and capped because a row the full width of a 27-inch display is a row
-          the eye loses on the way across.
-        */}
-        <div className="mx-auto flex w-full max-w-[104rem] flex-col gap-7 px-5 pb-24 pt-8 md:px-7 md:pb-16">
-          {children}
-          <Disclaimer className="mt-4 border-t border-border pt-5" />
-        </div>
-      </main>
-      <BottomTabBar />
-    </div>
+    <StaffProvider value={user.isStaff ?? false}>
+      <div className="min-h-dvh">
+        <SkipLink />
+        {banner}
+        <TopNav user={user} />
+        <main id={MAIN_CONTENT_ID} tabIndex={0} className="-outline-offset-2">
+          {/*
+            One container, one measure, everywhere. Wider than the old frame because the sidebar's
+            224px came back, and capped because a row the full width of a 27-inch display is a row
+            the eye loses on the way across.
+          */}
+          <div className="mx-auto flex w-full max-w-[104rem] flex-col gap-7 px-5 pb-24 pt-8 md:px-7 md:pb-16">
+            {children}
+            <Disclaimer className="mt-4 border-t border-border pt-5" />
+          </div>
+        </main>
+        <BottomTabBar />
+      </div>
+    </StaffProvider>
   );
 }

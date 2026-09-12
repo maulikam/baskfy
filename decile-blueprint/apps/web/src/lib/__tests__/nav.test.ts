@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildSectionTabs,
   LEGACY_REDIRECTS,
   NAV_GROUPS,
   NAV_ITEMS,
@@ -107,6 +108,10 @@ describe("the primary consumer IA", () => {
     expect(SECTION_TABS.build.map((t) => t.href)).not.toContain("/swing");
     expect(SECTION_TABS.build.map((t) => t.href)).not.toContain("/vbt");
     expect(SECTION_TABS.build.map((t) => t.href)).not.toContain("/twt");
+    expect(buildSectionTabs("build").map((t) => t.href)).not.toContain("/swing");
+    expect(buildSectionTabs("build", { isStaff: false }).map((t) => t.href)).not.toContain(
+      "/swing",
+    );
     /* `docs/vbt/05` §2's "Today | Book | Backtest". The middle tab reads **Positions**, matching
        the swing hub's and PORTFOLIO_REDESIGN.md §8's retirement of "book" from reader-facing
        copy; the route keeps its documented path (DECISIONS-VB VB8.5). */
@@ -229,6 +234,37 @@ describe("the primary consumer IA", () => {
     for (const destination of map.values()) {
       expect(destination.startsWith("/me/"), `${destination} still lands under Me`).toBe(false);
     }
+  });
+
+  it("appends operator sleeves on the Build row only for staff", () => {
+    /* AFH 5.5 leftover: consumer SECTION_TABS.build is unchanged; staff get the three
+       sleeves after Overlap via buildSectionTabs. */
+    const civilian = buildSectionTabs("build");
+    const civilianExplicit = buildSectionTabs("build", { isStaff: false });
+    const staff = buildSectionTabs("build", { isStaff: true });
+    expect(civilian.map((t) => t.href)).toEqual(SECTION_TABS.build.map((t) => t.href));
+    expect(civilianExplicit.map((t) => t.href)).toEqual(SECTION_TABS.build.map((t) => t.href));
+    expect(staff.map((t) => t.href)).toEqual([
+      "/build",
+      "/build/backtests",
+      "/create",
+      "/build/overlap",
+      "/swing",
+      "/vbt",
+      "/twt",
+    ]);
+    expect(staff.map((t) => t.label)).toEqual([
+      "Screens",
+      "Backtests",
+      "Create",
+      "Overlap",
+      "Swing",
+      "Volume",
+      "Tight",
+    ]);
+    expect(buildSectionTabs("market", { isStaff: true }).map((t) => t.href)).toEqual(
+      SECTION_TABS.market.map((t) => t.href),
+    );
   });
 
   it("lets a reader find Discover by the name it used to have", () => {

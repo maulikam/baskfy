@@ -112,6 +112,29 @@ class Settings(BaseSettings):
         allowed = self.allowed_logins
         return not allowed or email.strip().lower() in allowed
 
+    #: Comma-separated addresses granted ``app_user.is_staff`` on Google sign-in and on
+    #: ``GET /me``. Unlike :attr:`login_allowlist`, **empty means nobody is auto-promoted** —
+    #: the list grants, it does not revoke, and it does not mean "everyone is staff".
+    #:
+    #: The default is the founder's own addresses so a rebuilt database does not need a
+    #: one-off ``UPDATE app_user SET is_staff``. An address already marked staff stays
+    #: staff even if it is not on this list. Extra operators are added the same way as
+    #: the login allowlist: comma-separated, case-insensitive, a setting rather than a rebuild.
+    staff_allowlist: str = (
+        "mdave.5191@gmail.com,learnwithalacrity@gmail.com,maulikdave05@gmail.com"
+    )
+
+    @property
+    def allowed_staff(self) -> frozenset[str]:
+        """The staff allowlist, lower-cased and trimmed. Empty frozenset means no auto-grant."""
+        return frozenset(
+            part.strip().lower() for part in self.staff_allowlist.split(",") if part.strip()
+        )
+
+    def is_staff_email(self, email: str) -> bool:
+        """Whether ``email`` should be promoted to staff on this deployment."""
+        return email.strip().lower() in self.allowed_staff
+
     # --- Kite Publisher basket hand-off (M47) -------------------------------
     #: The **Publisher** app's api key — not Kite Connect's. It is not a secret: it travels in the
     #: form the user's browser posts to `kite.zerodha.com/connect/basket`, and Zerodha's own

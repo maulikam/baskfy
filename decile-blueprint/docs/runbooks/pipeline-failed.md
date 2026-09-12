@@ -142,8 +142,10 @@ itself.
 
 ## Making yourself staff
 
-`/admin/*` needs `app_user.is_staff`. Nothing sets it — no form, no seed, deliberately. The first
-one is set by hand:
+`/admin/*` needs `app_user.is_staff`. `BASKFY_STAFF_ALLOWLIST` (default
+`mdave.5191@gmail.com`) promotes matching addresses on Google sign-in and on
+`GET /me`. It never demotes. A one-off `UPDATE` still works for an address that
+is not on the list:
 
 ```bash
 docker exec -it decile-postgres psql -U decile -d decile \

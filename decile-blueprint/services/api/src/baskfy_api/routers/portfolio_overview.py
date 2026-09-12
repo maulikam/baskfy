@@ -804,6 +804,9 @@ class HoldingsOut(BaseModel):
     #: Instruments held with no close on record at all. They are excluded from ``total_value``
     #: and named here, because a total that silently drops a position is wrong and still adds up.
     unpriced_instrument_ids: list[int] = Field(default_factory=list)
+    #: Same bit as :class:`OverviewOut` — true when at least one holding is marked from a live
+    #: Kite quote, so the Holdings tab can say so without guessing from the overview.
+    live_overlay: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -1350,10 +1353,12 @@ class _Ledger:
         return holding_value(holding, self.prices.latest)
 
 
-def _label_for_prices(as_of: dt.date | None) -> str:
-    """§6.1's first timestamp, spelled the way §5.1 insists: a close, on a named day."""
+def _label_for_prices(as_of: dt.date | None, *, live_overlay: bool = False) -> str:
+    """§6.1's first timestamp, plus the live overlay when a Kite session supplied marks."""
     if as_of is None:
-        return "No closing prices yet"
+        return "Live marks" if live_overlay else "No closing prices yet"
+    if live_overlay:
+        return f"Prices: live, over close of {as_of.isoformat()}"
     return f"Prices: close of {as_of.isoformat()}"
 
 
@@ -2584,7 +2589,9 @@ async def portfolio_overview(
     sync_status = _sync_status(ledger)
     return OverviewOut(
         prices_as_of=ledger.prices.as_of,
-        prices_label=_label_for_prices(ledger.prices.as_of),
+        prices_label=_label_for_prices(
+            ledger.prices.as_of, live_overlay=ledger.prices.live_overlay
+        ),
         holdings_synced_on=synced_on,
         holdings_synced_label=_label_for_sync(synced_on),
         sync_status=sync_status,
@@ -2945,13 +2952,16 @@ async def portfolio_holdings(
     synced_on = max((row.as_of for row in ledger.broker_cash), default=None)
     return HoldingsOut(
         prices_as_of=ledger.prices.as_of,
-        prices_label=_label_for_prices(ledger.prices.as_of),
+        prices_label=_label_for_prices(
+            ledger.prices.as_of, live_overlay=ledger.prices.live_overlay
+        ),
         holdings_synced_on=synced_on,
         holdings_synced_label=_label_for_sync(synced_on),
         rows=rows,
         total_value=money(total),
         unallocated_count=unallocated_count,
         unpriced_instrument_ids=list(ledger.prices.unpriced),
+        live_overlay=ledger.prices.live_overlay,
     )
 
 

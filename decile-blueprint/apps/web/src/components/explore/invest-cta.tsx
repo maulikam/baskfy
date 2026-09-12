@@ -25,15 +25,18 @@ import { Button } from "@/components/ui/button";
 export function InvestCta({
   basketName,
   basketSlug,
+  minAmount = null,
 }: {
   basketName: string;
   basketSlug: string;
+  /** Catalog min. amount — warned when the typed amount is below it (audit §1.2). */
+  minAmount?: string | number | null;
 }) {
   const [showHandoff, setShowHandoff] = useState(false);
   const [marketClosed, setMarketClosed] = useState(false);
 
   return (
-    <div className="space-y-3">
+    <div className="min-w-0 space-y-3">
       <div className="flex flex-wrap gap-2">
         <Button type="button" variant="primary" onClick={() => setShowHandoff(true)}>
           Invest now
@@ -43,8 +46,12 @@ export function InvestCta({
         </Button>
       </div>
       {showHandoff ? (
-        <div className="space-y-3">
-          <KiteBasketInvest basketSlug={basketSlug} basketName={basketName} />
+        <div className="min-w-0 space-y-3 overflow-x-hidden">
+          <KiteBasketInvest
+            basketSlug={basketSlug}
+            basketName={basketName}
+            minAmount={minAmount}
+          />
           <MarkInvestedForm basketSlug={basketSlug} basketName={basketName} />
         </div>
       ) : null}

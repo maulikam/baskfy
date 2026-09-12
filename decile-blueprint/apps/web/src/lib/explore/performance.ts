@@ -3,16 +3,18 @@ import { serverApiOrigin } from "@/lib/api/config";
 import type { ExploreMetrics } from "@/lib/explore/fetch";
 
 /**
- * Basket performance series for `/basket/[slug]` — Tree-4 leaf 4.5.
+ * Basket performance series for `/basket/[slug]`.
  *
- * Prefers an optional `GET /api/v1/explore/{slug}/performance` series when the API serves one;
- * otherwise chains published return windows (`ret_1m` → `ret_6m` → `ret_1y` → …) into a
- * rebased NAV path. Empty / failed fetches return `[]` so the chart may fall back to its stub.
+ * Prefers `GET /api/v1/explore/{slug}/performance` — covered NAV points only, plus a coverage
+ * fraction. Does **not** invent a two-point line from return windows: that is what made a +48%
+ * basket look like a five-fold climb (audit §1.5).
  */
 
 export interface ExplorePerformanceSeries {
   points: PerformancePoint[];
-  source: "api" | "metrics" | "empty";
+  source: "api" | "empty";
+  /** 0–1 fraction of trading days with full constituent coverage; null when unknown. */
+  coverage: number | null;
 }
 
 interface ApiSeriesPoint {
@@ -29,86 +31,15 @@ function asNumber(value: string | number | null | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function addCalendarMonths(isoDate: string, months: number): string {
-  const [y, m, d] = isoDate.split("-").map(Number);
-  const dt = new Date(Date.UTC(y!, (m ?? 1) - 1, d ?? 1));
-  dt.setUTCMonth(dt.getUTCMonth() + months);
-  return dt.toISOString().slice(0, 10);
-}
-
-function addCalendarYears(isoDate: string, years: number): string {
-  return addCalendarMonths(isoDate, years * 12);
-}
-
-/**
- * Build a short rebased series from explore metrics return windows.
- * Anchor = 100 at the earliest window start; each subsequent point compounds the window return.
- */
-export function performanceSeriesFromMetrics(
-  metrics: ExploreMetrics | null | undefined,
-  asOf: string | null = null,
-): PerformancePoint[] {
-  if (!metrics) return [];
-  const anchor = asOf ?? metrics.as_of_date;
-  if (!anchor) return [];
-
-  type Window = { monthsBefore: number; ret: number | null };
-  const windows: Window[] = [
-    { monthsBefore: 60, ret: asNumber(metrics.cagr_5y) },
-    { monthsBefore: 36, ret: asNumber(metrics.cagr_3y) },
-    { monthsBefore: 12, ret: asNumber(metrics.ret_1y) },
-    { monthsBefore: 6, ret: asNumber(metrics.ret_6m) },
-    { monthsBefore: 1, ret: asNumber(metrics.ret_1m) },
-  ];
-
-  // Prefer total-return style windows; CAGR is annualised — approximate path via (1+cagr)^(years)-1.
-  const points: PerformancePoint[] = [];
-  let nav = 100;
-  let bench = 100;
-  let cursor: string | null = null;
-
-  for (const window of windows) {
-    if (window.ret === null) continue;
-    const years = window.monthsBefore / 12;
-    const totalRet =
-      window.monthsBefore >= 36 ? Math.pow(1 + window.ret, years) - 1 : window.ret;
-    const start = addCalendarMonths(anchor, -window.monthsBefore);
-    if (cursor === null) {
-      points.push({ date: start, basket: nav, benchmark: bench });
-      cursor = start;
-    }
-    nav = 100 * (1 + totalRet);
-    // Benchmark: slightly muted path so the overlay is visible when compare is on.
-    bench = 100 * (1 + totalRet * 0.75);
-    const end =
-      window.monthsBefore === 1
-        ? anchor
-        : addCalendarYears(start, Math.max(years, 0.01));
-    const date = end > anchor ? anchor : end;
-    if (date !== cursor) {
-      points.push({ date, basket: nav, benchmark: bench });
-      cursor = date;
-    }
-  }
-
-  if (points.length === 1) {
-    // Single window — add the as-of point so the chart has ≥2 samples.
-    const only = points[0]!;
-    const ret = asNumber(metrics.ret_1m) ?? asNumber(metrics.ret_1y) ?? 0;
-    points.push({
-      date: anchor,
-      basket: only.basket * (1 + ret),
-      benchmark: (only.benchmark ?? only.basket) * (1 + ret * 0.75),
-    });
-  }
-
-  return points.length >= 2 ? points : [];
-}
-
-function mapApiPoints(raw: unknown): PerformancePoint[] {
-  if (!raw || typeof raw !== "object") return [];
-  const body = raw as { series?: ApiSeriesPoint[]; points?: ApiSeriesPoint[] };
-  const rows = body.series ?? body.points ?? (Array.isArray(raw) ? (raw as ApiSeriesPoint[]) : []);
+function mapApiPoints(raw: unknown): { points: PerformancePoint[]; coverage: number | null } {
+  if (!raw || typeof raw !== "object") return { points: [], coverage: null };
+  const body = raw as {
+    series?: ApiSeriesPoint[];
+    points?: ApiSeriesPoint[];
+    coverage?: number | string | null;
+  };
+  const rows =
+    body.series ?? body.points ?? (Array.isArray(raw) ? (raw as ApiSeriesPoint[]) : []);
   const out: PerformancePoint[] = [];
   for (const row of rows) {
     if (!row || typeof row !== "object" || !row.date) continue;
@@ -121,40 +52,39 @@ function mapApiPoints(raw: unknown): PerformancePoint[] {
       invested: asNumber(row.invested ?? null),
     });
   }
-  return out.length >= 2 ? out : [];
+  return {
+    points: out.length >= 2 ? out : [],
+    coverage: asNumber(body.coverage ?? null),
+  };
 }
 
-/** Attempt optional series endpoint; never throws — empty on any failure. */
+/** Attempt series endpoint; never throws — empty on any failure. */
 export async function fetchExplorePerformanceSeries(
   slug: string,
-): Promise<PerformancePoint[]> {
+): Promise<{ points: PerformancePoint[]; coverage: number | null }> {
   try {
     const response = await fetch(
       `${serverApiOrigin()}/api/v1/explore/${encodeURIComponent(slug)}/performance`,
       { cache: "no-store" },
     );
-    if (!response.ok) return [];
+    if (!response.ok) return { points: [], coverage: null };
     return mapApiPoints(await response.json());
   } catch {
-    return [];
+    return { points: [], coverage: null };
   }
 }
 
 /**
- * Resolve chart series: try API series, then metrics chain. Returns empty when both fail
- * (caller / chart may stub).
+ * Resolve chart series from the API only. Metrics-window chaining is retired: it fabricated
+ * paths that disagreed with the card's own 1Y return.
  */
 export async function resolveBasketPerformanceSeries(
   slug: string,
-  metrics: ExploreMetrics | null | undefined,
+  _metrics?: ExploreMetrics | null | undefined,
 ): Promise<ExplorePerformanceSeries> {
   const fromApi = await fetchExplorePerformanceSeries(slug);
-  if (fromApi.length >= 2) {
-    return { points: fromApi, source: "api" };
+  if (fromApi.points.length >= 2) {
+    return { points: fromApi.points, source: "api", coverage: fromApi.coverage };
   }
-  const fromMetrics = performanceSeriesFromMetrics(metrics);
-  if (fromMetrics.length >= 2) {
-    return { points: fromMetrics, source: "metrics" };
-  }
-  return { points: [], source: "empty" };
+  return { points: [], source: "empty", coverage: fromApi.coverage };
 }

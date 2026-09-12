@@ -1,9 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import {
-  performanceSeriesFromMetrics,
-  resolveBasketPerformanceSeries,
-} from "@/lib/explore/performance";
+import { resolveBasketPerformanceSeries } from "@/lib/explore/performance";
 import type { ExploreMetrics } from "@/lib/explore/fetch";
 
 const METRICS: ExploreMetrics = {
@@ -19,32 +16,41 @@ const METRICS: ExploreMetrics = {
   since_inception_pct: "0.22",
   headline_label: "1Y",
   headline_pct: "0.15",
-  // Every catalog return is a price return (M39.3). Required on the type so a surface
-  // cannot render a number without the sentence that qualifies it.
   return_convention: "PRICE_RETURN",
   dividends_included: false,
   return_convention_note:
     "Returns are price returns computed from split- and bonus-adjusted closes.",
 };
 
-describe("performanceSeriesFromMetrics", () => {
-  it("chains ret windows into ≥2 PerformancePoints", () => {
-    const series = performanceSeriesFromMetrics(METRICS);
-    expect(series.length).toBeGreaterThanOrEqual(2);
-    expect(series[0]?.basket).toBe(100);
-    expect(series.every((p) => typeof p.date === "string" && p.date.length === 10)).toBe(true);
-  });
-
-  it("returns empty when metrics or as_of missing", () => {
-    expect(performanceSeriesFromMetrics(null)).toEqual([]);
-    expect(performanceSeriesFromMetrics({ ...METRICS, as_of_date: null })).toEqual([]);
-  });
-});
-
 describe("resolveBasketPerformanceSeries", () => {
-  it("falls back to metrics when series endpoint is empty", async () => {
+  it("does not invent a metrics path when the series endpoint is empty (audit §1.5)", async () => {
+    /* The old fallback chained ret_1m/6m/1y into two points and drew a straight line that
+       disagreed with the card's own 1Y return. Empty API → empty series, never a fabrication. */
     const resolved = await resolveBasketPerformanceSeries("any-slug", METRICS);
-    expect(resolved.source).toBe("metrics");
-    expect(resolved.points.length).toBeGreaterThanOrEqual(2);
+    expect(resolved.source).toBe("empty");
+    expect(resolved.points).toEqual([]);
+  });
+
+  it("maps covered API points and coverage", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          slug: "any-slug",
+          coverage: "0.9200",
+          points: [
+            { date: "2025-09-01", basket: "100.00" },
+            { date: "2026-09-01", basket: "148.00" },
+          ],
+        }),
+      }),
+    );
+    const resolved = await resolveBasketPerformanceSeries("any-slug", METRICS);
+    expect(resolved.source).toBe("api");
+    expect(resolved.points).toHaveLength(2);
+    expect(resolved.points[1]?.basket).toBe(148);
+    expect(resolved.coverage).toBeCloseTo(0.92);
+    vi.unstubAllGlobals();
   });
 });

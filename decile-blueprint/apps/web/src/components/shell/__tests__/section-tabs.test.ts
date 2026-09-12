@@ -17,6 +17,11 @@ describe("sectionTabIsActive", () => {
     expect(sectionTabIsActive("/build/backtests", "/build/backtests", buildHrefs)).toBe(true);
   });
 
+  it("lights only Overlap on /build/overlap, not Screens", () => {
+    expect(sectionTabIsActive("/build/overlap", "/build", buildHrefs)).toBe(false);
+    expect(sectionTabIsActive("/build/overlap", "/build/overlap", buildHrefs)).toBe(true);
+  });
+
   it("lights only Screens on /build itself", () => {
     expect(sectionTabIsActive("/build", "/build", buildHrefs)).toBe(true);
     expect(sectionTabIsActive("/build", "/build/backtests", buildHrefs)).toBe(false);

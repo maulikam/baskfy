@@ -6928,3 +6928,16 @@ second source. Fallback `2011-01-01` only when the status call fails, matching D
 described different seams (seed day vs mood series vs backfill target).
 
 **Reverse.** Restore the hard-coded floors and About sentence from the parent of this commit.
+
+## Overlap — Build consensus of Volume breakout and Three weeks tight · ⚠ UNREVIEWED
+
+**Choice.** `/build/overlap` shows two lists on one page: (1) Volume breakout ∩ Three weeks
+tight, (2) Screens ∩ Volume breakout ∩ Three weeks tight. "Swing volume breakout" in the ask
+was read as the Volume breakout sleeve (`/vbt`), not the Swing hub (`/swing`). The screen
+defaults to `exmpl0000001` and is selectable via `?screen=`.
+
+**Rejected.** Intersecting Swing ∩ VBT ∩ TWT (would need Swing in both lists); treating
+"screens" as Swing setups.
+
+**Reverse.** Delete `apps/web/src/app/(app)/build/overlap/`, the Overlap tab in `nav.ts`, and
+the `/build/overlap` vocabulary entry.

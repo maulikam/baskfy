@@ -164,6 +164,11 @@ export const PAGES = {
     blurb: "Run a set of rules against the past and see how it would have gone.",
     formerly: "Backtests",
   },
+  "/build/overlap": {
+    title: "Overlap · Build",
+    blurb:
+      "Which names sit on Volume breakout and Three weeks tight together — and which of those also clear a screen.",
+  },
   /* —— The Portfolio hub (PORTFOLIO_REDESIGN.md §2) ——
      Five tabs, one section. `Overview` is the landing tab; `Portfolios` absorbed the tab that
      used to be called `Investments`, because they named the same thing (§1 problem 1). Titles

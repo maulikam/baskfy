@@ -109,22 +109,27 @@ export function computeStoryStats(result: ScreenRunResponse | undefined): StoryS
   const topPickScore =
     scoreRaw === null ? null : scoreRaw.toLocaleString("en-IN", { maximumFractionDigits: 2 });
 
-  let bestReturn: number | null = null;
   const vols: number[] = [];
+  const returns: number[] = [];
   for (const row of result.rows) {
     const record = row as Record<string, unknown>;
     const ret = numericCell(record, "ret_12m");
-    if (ret !== null && (bestReturn === null || ret > bestReturn)) bestReturn = ret;
+    if (ret !== null) {
+      returns.push(ret);
+    }
     const vol = numericCell(record, "vol_12m");
     if (vol !== null) vols.push(vol);
   }
 
+  // Audit §1.9: headline the median of the top slice, not the outlier max.
+  const topSlice = returns.slice(0, Math.min(10, returns.length));
+  const medianTopReturn = median(topSlice);
   const medVol = median(vols);
 
   return {
     topPickSymbol: topSymbol,
     topPickScore,
-    bestReturnText: bestReturn === null ? null : formatPercent(bestReturn),
+    bestReturnText: medianTopReturn === null ? null : formatPercent(medianTopReturn),
     medianVolText: medVol === null ? null : formatFraction(medVol),
     asOfText,
   };

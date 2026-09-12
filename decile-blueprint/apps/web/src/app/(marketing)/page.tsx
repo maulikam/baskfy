@@ -43,7 +43,8 @@ import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, SITE_URL } from "@/lib/site"
  * "in the footer" half of docs/11 §Compliance.
  */
 export const metadata: Metadata = {
-  title: `${SITE_NAME} — momentum, ranked`,
+  title: `${SITE_NAME}`,
+  // Tagline lives in SITE_TAGLINE; do not duplicate the brand in the title suffix.
   description: SITE_DESCRIPTION,
   alternates: { canonical: "/" },
 };

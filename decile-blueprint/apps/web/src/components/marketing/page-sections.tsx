@@ -72,7 +72,7 @@ const STEPS = [
   {
     n: "02",
     title: "Choose, or build, a strategy",
-    body: "Subscribe to a basket a SEBI-registered manager publishes, or write the rule yourself over sixty-four published factors and replay it against the market as it actually stood on a past date.",
+    body: "Subscribe to a basket a SEBI-registered manager publishes, or write the rule yourself over sixty-six published factors and replay it against the market as it actually stood on a past date.",
   },
   {
     n: "03",
@@ -131,7 +131,7 @@ const CATALOG: ReadonlyArray<{ title: string; note: string; chips: readonly stri
   },
   {
     title: "Factor families",
-    note: "Sixty-four factors in all.",
+    note: "Sixty-six factors in all.",
     chips: FACTOR_FAMILIES.map((family) => family.label),
   },
   {

@@ -20,8 +20,6 @@ import { Wordmark } from "@/components/shell/wordmark";
  * signed-out visitor reading the refund policy has no use for a Screens link they cannot open.
  */
 const LINKS = [
-  { href: "/discover", label: "Baskets" },
-  { href: "/market/today", label: "Market" },
   { href: "/pricing", label: "Pricing" },
   { href: "/faq", label: "FAQ" },
   { href: "/about", label: "About" },

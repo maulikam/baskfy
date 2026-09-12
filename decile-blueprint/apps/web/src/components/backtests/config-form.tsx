@@ -340,7 +340,7 @@ export function ConfigForm({
         <span>
           Go to cash while the benchmark is below its 200-day moving average
           <span className="block text-xs text-muted-foreground">
-            docs/10&rsquo;s only risk overlay. Off by default.
+            The catalog&rsquo;s only risk overlay. Off by default.
           </span>
         </span>
       </label>

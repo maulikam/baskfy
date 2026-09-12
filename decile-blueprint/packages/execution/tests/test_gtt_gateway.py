@@ -30,7 +30,6 @@ from baskfy_execution import (
     RiskConfig,
     RiskManager,
     TenantIds,
-    UntouchableInstrumentError,
 )
 from baskfy_execution.gtt import (
     DRY_RUN_GTT,
@@ -197,8 +196,9 @@ def test_an_untouchable_symbol_is_refused_a_gtt_before_the_broker_is_reached(
     """`EXCLUDED_SYMBOLS` holds "SGBDE31III" while the holding was "SGBDE31III-GB" — the guard
     is prefix- and series-aware, not an exact-match set."""
     gw, kc = make_gateway(tmp_path)
-    with pytest.raises(UntouchableInstrumentError):
-        arm(gw, symbol=symbol)
+    out = arm(gw, symbol=symbol)
+    assert out["status"] == "BLOCKED"
+    assert "protected instrument" in str(out["error"])
     assert kc.calls == [], "the broker was reached for an untouchable instrument"
 
 
@@ -207,8 +207,9 @@ def test_a_g_sec_series_is_refused_a_gtt_before_the_broker_is_reached(
     series: str, tmp_path: Path
 ) -> None:
     gw, kc = make_gateway(tmp_path)
-    with pytest.raises(UntouchableInstrumentError):
-        arm(gw, symbol="SOMEBOND", series=series)
+    out = arm(gw, symbol="SOMEBOND", series=series)
+    assert out["status"] == "BLOCKED"
+    assert "protected instrument" in str(out["error"])
     assert kc.calls == []
 
 
@@ -217,8 +218,9 @@ def test_an_untouchable_gtt_cannot_be_cancelled_around_the_guard_either(
     symbol: str, tmp_path: Path
 ) -> None:
     gw, kc = make_gateway(tmp_path)
-    with pytest.raises(UntouchableInstrumentError):
-        cancel(gw, symbol=symbol)
+    out = cancel(gw, symbol=symbol)
+    assert out["status"] == "BLOCKED"
+    assert "protected instrument" in str(out["error"])
     assert kc.calls == []
 
 
@@ -258,7 +260,7 @@ def test_an_fno_gtt_is_blocked_while_options_are_disabled(tmp_path: Path) -> Non
     gw, kc = make_gateway(tmp_path, options_enabled=False)
     out = arm(gw, symbol="NIFTY25SEPFUT", exchange="NFO")
     assert out["status"] == "BLOCKED"
-    assert "F&O disabled" in str(out["error"])
+    assert "F&O/derivatives disabled" in str(out["error"])
     assert kc.calls == []
 
 
@@ -376,8 +378,8 @@ def test_the_instrument_dump_is_fetched_once_per_exchange(tmp_path: Path) -> Non
     [
         ({"qty": 0}, "quantity must be positive"),
         ({"qty": -5}, "quantity must be positive"),
-        ({"trigger": 0.0}, "trigger must be positive"),
-        ({"trigger": -1.0}, "trigger must be positive"),
+        ({"trigger": 0.0}, "finite positive"),
+        ({"trigger": -1.0}, "finite positive"),
         ({"last_price": 0.0}, "cannot be checked against anything"),
         ({"trigger": 100.0}, "at or above the last price"),
         ({"trigger": 120.0}, "at or above the last price"),
@@ -526,6 +528,7 @@ def test_an_order_and_its_stop_do_not_share_an_idempotency_namespace(tmp_path: P
             price=100.0,
             exchange="NSE",
             client_id="PLAN1:RELIANCE",
+            gross_exposure=1000.0,
             tenant=CALLER,
             plan_tenant=CALLER,
         )
@@ -576,8 +579,8 @@ def test_a_refused_gtt_spends_no_rate_limit_slot(tmp_path: Path) -> None:
         await original()
 
     gw.limits.api_slot = counting
-    with pytest.raises(UntouchableInstrumentError):
-        arm(gw, symbol="SGBJUN29")
+    out = arm(gw, symbol="SGBJUN29")
+    assert out["status"] == "BLOCKED"
     arm(gw, trigger=200.0, last_price=100.0)
     assert taken == 0
 

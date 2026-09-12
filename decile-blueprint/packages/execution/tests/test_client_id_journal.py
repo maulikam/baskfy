@@ -169,6 +169,7 @@ class TestAReplayedPlanCannotDoubleSend:
                     price=100.0,
                     exchange="NSE",
                     client_id=cid,
+                    gross_exposure=500.0,
                     tenant=TENANT,
                     plan_tenant=TENANT,
                 )
@@ -201,6 +202,7 @@ class TestAReplayedPlanCannotDoubleSend:
                             price=100.0,
                             exchange="NSE",
                             client_id=mint_client_id(plan_id="plan-1", symbol=symbol),
+                            gross_exposure=500.0,
                             tenant=TENANT,
                             plan_tenant=TENANT,
                         )
@@ -252,6 +254,7 @@ class TestEveryJournalLineCarriesTheClientId:
                 price=100.0,
                 exchange="NSE",
                 client_id=cid,
+                gross_exposure=100.0,
                 tenant=TENANT,
                 plan_tenant=TENANT,
             )
@@ -275,6 +278,7 @@ class TestEveryJournalLineCarriesTheClientId:
                 price=100.0,
                 exchange="NSE",
                 client_id=cid,
+                gross_exposure=100.0,
                 tenant=TENANT,
                 plan_tenant=TENANT,
             )
@@ -300,6 +304,7 @@ class TestEveryJournalLineCarriesTheClientId:
                 price=100.0,
                 exchange="NSE",
                 client_id=cid,
+                gross_exposure=100.0,
                 tenant=TENANT,
                 plan_tenant=TENANT,
             )
@@ -400,6 +405,7 @@ class TestEveryJournalLineCarriesTheClientId:
                 order_type="LIMIT",
                 price=100.0,
                 exchange="NSE",
+                gross_exposure=100.0,
                 tenant=TENANT,
                 plan_tenant=TENANT,
             )

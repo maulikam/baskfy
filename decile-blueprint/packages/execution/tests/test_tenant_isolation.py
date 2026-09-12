@@ -37,6 +37,7 @@ def test_cross_tenant_order_is_blocked_not_raised(tmp_path: Path) -> None:
             order_type="LIMIT",
             price=100.0,
             exchange="NSE",
+            gross_exposure=100.0,
             tenant=CALLER,
             plan_tenant=OTHER,
         )
@@ -57,6 +58,7 @@ def test_matching_tenant_still_dry_runs(tmp_path: Path) -> None:
             order_type="LIMIT",
             price=100.0,
             exchange="NSE",
+            gross_exposure=100.0,
             tenant=CALLER,
             plan_tenant=CALLER,
         )
@@ -81,6 +83,7 @@ def test_mismatch_does_not_call_the_broker_when_dry_run_is_off(tmp_path: Path) -
             order_type="LIMIT",
             price=100.0,
             exchange="NSE",
+            gross_exposure=100.0,
             tenant=CALLER,
             plan_tenant=OTHER,
         )

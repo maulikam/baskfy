@@ -3,10 +3,16 @@ Enforces: instrument guards → risk manager → rate limits → idempotency →
 Sync kiteconnect calls run in a thread pool so the event loop never blocks."""
 
 from __future__ import annotations
-import asyncio, json, os, time, uuid, logging
+import asyncio, json, math, os, time, uuid, logging
 from dataclasses import dataclass
 from typing import Callable
-from .guards import OvernightOptionError, assert_not_overnight_option, assert_tradeable
+from .guards import (
+    OvernightOptionError,
+    UntouchableInstrumentError,
+    assert_not_overnight_option,
+    assert_tradeable,
+    product_exchange_refusal,
+)
 from .gtt import (
     DEFAULT_STOP_BAND,
     DRY_RUN_GTT,
@@ -93,12 +99,16 @@ class OrderGateway:
     ):
         self.kc, self.risk, self.limits = kc, risk, KiteLimits()
         self._sent: dict[str, str] = {}  # client_id -> broker order_id (idempotency)
+        # Reserved under this lock BEFORE any await, so two concurrent place() calls with the
+        # same client_id cannot both pass the membership check and both hit the broker (AF 3.4).
+        self._sent_lock = asyncio.Lock()
         # A SEPARATE idempotency map for GTTs, and it must stay separate. The desk builds
         # client ids as `plan_id:symbol` for orders; a stop armed for the same plan and
         # symbol would collide with the buy that created it and be reported DUPLICATE —
         # a silently skipped stop, which is the one failure this whole path exists to
         # prevent.
         self._gtt_sent: dict[str, object] = {}  # client_id -> broker trigger_id
+        self._gtt_sent_lock = asyncio.Lock()
         self._ticks = TickSizes()
         self._stop_band = stop_band or DEFAULT_STOP_BAND
         # A CALLABLE, not a value, and deliberately: the desk reads DRY_RUN off its config
@@ -107,7 +117,37 @@ class OrderGateway:
         # would have quietly changed that.
         self._gates = gates
         self._journal_path = journal_path
-        os.makedirs(os.path.dirname(journal_path), exist_ok=True)
+        os.makedirs(os.path.dirname(journal_path) or ".", exist_ok=True)
+        self._replay_journal()
+
+    def _replay_journal(self) -> None:
+        """Rebuild ``_sent`` / ``_gtt_sent`` from the durable journal so a restart cannot
+        double-send a client_id that already reached the broker (AF 3.4).
+        """
+        if not os.path.isfile(self._journal_path):
+            return
+        with open(self._journal_path, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                rec = json.loads(line)
+                cid = rec.get("client_id")
+                if not cid:
+                    continue
+                event = rec.get("event")
+                if event == "placed":
+                    oid = rec.get("order_id")
+                    if oid is not None:
+                        self._sent[str(cid)] = str(oid)
+                elif event == "dry_run":
+                    self._sent[str(cid)] = f"DRY-{cid}"
+                elif event == "gtt_placed":
+                    gid = rec.get("gtt_id")
+                    if gid is not None:
+                        self._gtt_sent[str(cid)] = gid
+                elif event == "gtt_dry_run":
+                    self._gtt_sent[str(cid)] = f"DRY-{cid}"
 
     def _journal(self, rec: dict, *, client_id: str | None):
         """Append one line. EVERY line carries the client_id, and that is not decoration.
@@ -140,7 +180,7 @@ class OrderGateway:
         exchange: str = "NSE",
         variety: str = "regular",
         client_id: str | None = None,
-        gross_exposure: float = 0.0,
+        gross_exposure: float,
         series: str | None = None,
         tick_size: float | None = None,
         market_protection: float | None = None,
@@ -171,7 +211,21 @@ class OrderGateway:
         # operator most needs to tie back to a plan. Resolving it here changes nothing about
         # what is placed: an unused uuid for a refused order costs nothing.
         cid = client_id or uuid.uuid4().hex[:10]
-        assert_tradeable(symbol, series)  # layer 1: untouchables
+        # Untouchables return BLOCKED rather than raising, matching the overnight-option
+        # guard: one SGB leg must not abort a batch that has already placed real orders (AF 3.5).
+        try:
+            assert_tradeable(symbol, series)  # layer 1: untouchables
+        except UntouchableInstrumentError as exc:
+            self._journal(
+                {
+                    "event": "untouchable_block",
+                    "symbol": symbol,
+                    "series": series,
+                    "side": side,
+                },
+                client_id=cid,
+            )
+            return {"symbol": symbol, "status": "BLOCKED", "error": str(exc)}
         # Same layer: an option under a carry product would still be open tomorrow morning.
         # Returned as BLOCKED rather than raised so one refused leg cannot abort a batch
         # that has already placed real orders.
@@ -189,21 +243,16 @@ class OrderGateway:
                 client_id=cid,
             )
             return {"symbol": symbol, "status": "BLOCKED", "error": str(exc)}
-        # MIS is an intraday product on every segment. The old NSE/BSE-only check let an
-        # NFO MIS order through with INTRADAY_ENABLED=false as soon as OPTIONS_ENABLED was
-        # set, so enabling options silently enabled an intraday engine as well.
-        if product == "MIS" and not gates.intraday_enabled:
-            return {
-                "symbol": symbol,
-                "status": "BLOCKED",
-                "error": "MIS/intraday disabled (config.INTRADAY_ENABLED)",
-            }
-        if exchange in ("NFO", "BFO") and not gates.options_enabled:
-            return {
-                "symbol": symbol,
-                "status": "BLOCKED",
-                "error": "F&O disabled (config.OPTIONS_ENABLED)",
-            }
+        # Allow-list (AF 0.7): CNC on NSE/BSE; MIS needs intraday; any DERIVATIVE_EXCHANGES
+        # venue needs options_enabled. The old NFO/BFO deny-list let MCX/NRML through.
+        gate_why = product_exchange_refusal(
+            product,
+            exchange,
+            intraday_enabled=gates.intraday_enabled,
+            options_enabled=gates.options_enabled,
+        )
+        if gate_why:
+            return {"symbol": symbol, "status": "BLOCKED", "error": gate_why}
         # LAYER 2 READS A PRICE, AND A MARKET ORDER HAS NONE.
         #
         # This used to be `abs(qty) * float(price or 0)`. That was correct while every buy was a
@@ -216,8 +265,9 @@ class OrderGateway:
         #
         # A MARKET order with neither price nor reference is refused rather than valued at zero.
         # Refusing is recoverable; an unpriced order against a disarmed risk check is not.
+        # NaN/Inf likewise pass every inequality as False — refuse them here (AF 3.6).
         valuation = price if price else reference_price
-        if not valuation:
+        if valuation is None or not math.isfinite(float(valuation)) or float(valuation) <= 0:
             self._journal(
                 {
                     "event": "unpriced_order_block",
@@ -225,6 +275,7 @@ class OrderGateway:
                     "side": side,
                     "qty": qty,
                     "order_type": order_type,
+                    "valuation": valuation,
                 },
                 client_id=cid,
             )
@@ -232,17 +283,29 @@ class OrderGateway:
                 "symbol": symbol,
                 "status": "BLOCKED",
                 "error": (
-                    f"{order_type} order for {symbol} carries no price and no "
-                    "reference_price; the risk check cannot value it"
+                    f"{order_type} order for {symbol} carries no finite positive price and no "
+                    "finite reference_price; the risk check cannot value it"
                 ),
             }
+        if not math.isfinite(float(gross_exposure)):
+            return {
+                "symbol": symbol,
+                "status": "BLOCKED",
+                "error": f"gross_exposure must be finite, got {gross_exposure!r}",
+            }
         value = abs(qty) * float(valuation)
-        ok, why = self.risk.pre_order(symbol, value, gross_exposure)  # layer 2: risk
+        ok, why = self.risk.pre_order(
+            symbol, value, float(gross_exposure), side=side
+        )  # layer 2: risk
         if not ok:
             self._journal({"event": "risk_block", "symbol": symbol, "why": why}, client_id=cid)
             return {"symbol": symbol, "status": "RISK_BLOCKED", "error": why}
-        if cid in self._sent:  # layer 3: idempotency
-            return {"symbol": symbol, "status": "DUPLICATE", "order_id": self._sent[cid]}
+        # Reserve under the lock BEFORE the rate-limit await so a twin request cannot also
+        # pass and double-send (AF 3.4). layer 3: idempotency
+        async with self._sent_lock:
+            if cid in self._sent:
+                return {"symbol": symbol, "status": "DUPLICATE", "order_id": self._sent[cid]}
+            self._sent[cid] = f"PENDING-{cid}"
         await self.limits.order_slot()  # layer 4: rate limits
         if gates.dry_run:
             self._sent[cid] = f"DRY-{cid}"
@@ -285,6 +348,14 @@ class OrderGateway:
             # move a price away from the selected quote. Live contract metadata remains
             # authoritative because exchange tick sizes can change.
             px = float(price)
+            if not math.isfinite(px):
+                async with self._sent_lock:
+                    self._sent.pop(cid, None)
+                return {
+                    "symbol": symbol,
+                    "status": "BLOCKED",
+                    "error": f"LIMIT price must be finite, got {price!r}",
+                }
             params["price"] = (
                 round(round(px / tick_size) * tick_size, 2)
                 if tick_size and tick_size > 0
@@ -298,6 +369,11 @@ class OrderGateway:
         except Exception as exc:
             definitive = type(exc).__name__ in _DEFINITIVE_REFUSALS
             status = "REJECTED" if definitive else "ERROR"
+            # A definitive refusal never reached the exchange — release so a corrected retry
+            # can use the same client_id. An unknown ERROR might have: keep the reservation.
+            if definitive:
+                async with self._sent_lock:
+                    self._sent.pop(cid, None)
             self._journal(
                 {
                     "event": "rejected" if definitive else "error",
@@ -398,7 +474,20 @@ class OrderGateway:
         # Resolved up front for the same reason as in `place()`: every refusal below writes a
         # journal line, and a line an operator cannot tie to a plan is half a record.
         cid = client_id or uuid.uuid4().hex[:10]
-        assert_tradeable(symbol, series)  # GTT layer 1: untouchables
+        try:
+            assert_tradeable(symbol, series)  # GTT layer 1: untouchables
+        except UntouchableInstrumentError as exc:
+            self._journal(
+                {
+                    "event": "gtt_untouchable_block",
+                    "symbol": symbol,
+                    "series": series,
+                    "qty": int(qty),
+                    "trigger": trigger,
+                },
+                client_id=cid,
+            )
+            return {"symbol": symbol, "status": "BLOCKED", "error": str(exc)}
         # A GTT rests at the exchange for up to a year, so an option trigger is an overnight
         # option position by construction — it can only fire on a session this system never
         # intended to be holding one. Checked against the leg's OWN product, which is CNC.
@@ -418,12 +507,14 @@ class OrderGateway:
                 client_id=cid,
             )
             return {"symbol": symbol, "status": "BLOCKED", "error": str(exc)}
-        if exchange in ("NFO", "BFO") and not gates.options_enabled:
-            return {
-                "symbol": symbol,
-                "status": "BLOCKED",
-                "error": "F&O disabled (config.OPTIONS_ENABLED)",
-            }
+        gate_why = product_exchange_refusal(
+            "CNC",
+            exchange,
+            intraday_enabled=gates.intraday_enabled,
+            options_enabled=gates.options_enabled,
+        )
+        if gate_why:
+            return {"symbol": symbol, "status": "BLOCKED", "error": gate_why}
         # GTT layer 1b: is this actually a stop? The desk never asked, because its own planner
         # cannot produce a bad one. Nothing enforced that, and the gateway is where it belongs.
         refusal = refuse_stop(symbol=symbol, qty=qty, trigger=trigger, last_price=last_price)
@@ -476,11 +567,13 @@ class OrderGateway:
                 },
                 client_id=cid,
             )
-        if cid in self._gtt_sent:  # GTT layer 3: idempotency
-            # A re-armed stop is not a no-op: two triggers on one position sell twice what is
-            # held when they fire, which is short delivery and an auction penalty (the 18 Aug
-            # 2026 finding behind `protection.EXCESS`).
-            return {"symbol": symbol, "status": "DUPLICATE", "gtt_id": self._gtt_sent[cid]}
+        async with self._gtt_sent_lock:
+            if cid in self._gtt_sent:  # GTT layer 3: idempotency
+                # A re-armed stop is not a no-op: two triggers on one position sell twice what is
+                # held when they fire, which is short delivery and an auction penalty (the 18 Aug
+                # 2026 finding behind `protection.EXCESS`).
+                return {"symbol": symbol, "status": "DUPLICATE", "gtt_id": self._gtt_sent[cid]}
+            self._gtt_sent[cid] = f"PENDING-{cid}"
         await self.limits.api_slot()  # GTT layer 4: rate limits
         if gates.dry_run:
             # Shape preserved from `kite_client.py:252-254`: the desk reports the UNSNAPPED
@@ -672,7 +765,18 @@ class OrderGateway:
                 {"event": "gtt_delete_block", "gtt_id": gtt_id, "why": why}, client_id=client_id
             )
             return {"symbol": symbol, "gtt_id": gtt_id, "status": "BLOCKED", "error": why}
-        assert_tradeable(symbol, series)  # GTT layer 1: untouchables
+        try:
+            assert_tradeable(symbol, series)  # GTT layer 1: untouchables
+        except UntouchableInstrumentError as exc:
+            self._journal(
+                {
+                    "event": "gtt_delete_untouchable_block",
+                    "symbol": symbol,
+                    "gtt_id": gtt_id,
+                },
+                client_id=client_id,
+            )
+            return {"symbol": symbol, "gtt_id": gtt_id, "status": "BLOCKED", "error": str(exc)}
         # A trigger id is an exchange handle, not a hint. Refusing a malformed one here rather
         # than letting `int()` decide means a bug cannot spend a rate-limit slot, and — worse —
         # cannot truncate into some OTHER live trigger's id and cancel the wrong stop.
@@ -779,7 +883,18 @@ class OrderGateway:
             return {"symbol": symbol, "gtt_id": gtt_id, "status": "BLOCKED", "error": mismatch}
         gates = self._gates()
         cid = client_id or uuid.uuid4().hex[:10]
-        assert_tradeable(symbol, series)  # GTT layer 1: untouchables
+        try:
+            assert_tradeable(symbol, series)  # GTT layer 1: untouchables
+        except UntouchableInstrumentError as exc:
+            self._journal(
+                {
+                    "event": "gtt_modify_untouchable_block",
+                    "symbol": symbol,
+                    "gtt_id": gtt_id,
+                },
+                client_id=cid,
+            )
+            return {"symbol": symbol, "gtt_id": gtt_id, "status": "BLOCKED", "error": str(exc)}
         if not isinstance(gtt_id, int) or isinstance(gtt_id, bool) or gtt_id <= 0:
             why = f"{symbol}: {gtt_id!r} is not a GTT trigger id"
             self._journal(
@@ -989,7 +1104,18 @@ class OrderGateway:
                 client_id=client_id,
             )
             return {"symbol": symbol, "order_id": order_id, "status": "BLOCKED", "error": why}
-        assert_tradeable(symbol, series)  # layer 1: untouchables
+        try:
+            assert_tradeable(symbol, series)  # layer 1: untouchables
+        except UntouchableInstrumentError as exc:
+            self._journal(
+                {
+                    "event": "order_cancel_untouchable_block",
+                    "symbol": symbol,
+                    "order_id": order_id,
+                },
+                client_id=client_id,
+            )
+            return {"symbol": symbol, "order_id": order_id, "status": "BLOCKED", "error": str(exc)}
         if not str(order_id or "").strip():
             why = f"{symbol}: {order_id!r} is not an order id"
             self._journal(

@@ -129,6 +129,7 @@ __all__ = [
     "PublicationCheck",
     "ReconciliationResult",
     "classify",
+    "mark_inferred_holiday",
     "previous_trading_days",
     "reconcile_calendar",
     "require_trading_day",
@@ -239,6 +240,17 @@ async def reconcile_calendar(
 
     return ReconciliationResult(
         confirmed, inferred, int(remaining), tuple(sorted(skipped_published))
+    )
+
+
+async def mark_inferred_holiday(session: AsyncSession, day: dt.date) -> None:
+    """Record ``day`` as an inferred holiday (AF 3.11 catch-up / reconcile shared write)."""
+    await _mark(
+        session,
+        day,
+        is_trading_day=False,
+        source="bhavcopy",
+        holiday_name=INFERRED_HOLIDAY_NAME,
     )
 
 

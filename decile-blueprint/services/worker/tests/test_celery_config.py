@@ -102,6 +102,11 @@ class TestReliability:
     def test_a_lost_worker_rejects_rather_than_drops(self) -> None:
         assert build_celery(settings()).conf.task_reject_on_worker_lost is True
 
+    def test_redeliveries_are_bounded(self) -> None:
+        """AF 3.11 — reject_on_worker_lost must not loop forever on OOM."""
+        app = build_celery(settings())
+        assert app.conf.task_annotations["*"]["max_redeliveries"] == 3
+
     def test_one_long_task_at_a_time_per_process(self) -> None:
         """Prefetching several would let one slow ingest chunk hold up work another worker
         could have taken."""

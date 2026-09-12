@@ -115,10 +115,11 @@ class KiteClientLike(Protocol):
     def quote(self, *instruments: str) -> dict[str, dict[str, object]]: ...
 
 
-def _default_client_factory(api_key: str) -> KiteClientLike:
+def _default_client_factory(api_key: str, *, timeout: float = 30.0) -> KiteClientLike:
     # kiteconnect ships no type information, so the constructor is untyped to mypy. The explicit
     # annotation is where we take responsibility for it satisfying the Protocol.
-    client: KiteClientLike = KiteConnect(api_key=api_key)
+    # AF 3.11: pass timeout explicitly — the SDK's 7 s default is not a product decision.
+    client: KiteClientLike = KiteConnect(api_key=api_key, timeout=timeout)
     return client
 
 
@@ -153,7 +154,17 @@ class KiteProvider:
     def __init__(self, settings: ProviderSettings, runtime: KiteRuntime | None = None) -> None:
         wiring = runtime or KiteRuntime()
         self._settings = settings
-        self._client_factory = wiring.client_factory
+        # Bind the configured timeout into the default factory without changing the Protocol
+        # signature tests inject against.
+        if wiring.client_factory is _default_client_factory:
+            timeout = settings.kite_request_timeout_seconds
+
+            def factory(api_key: str) -> KiteClientLike:
+                return _default_client_factory(api_key, timeout=timeout)
+
+            self._client_factory = factory
+        else:
+            self._client_factory = wiring.client_factory
         self._token_store = wiring.token_store or AccessTokenStore(
             settings.kite_token_path, settings.kite_token_encryption_key
         )

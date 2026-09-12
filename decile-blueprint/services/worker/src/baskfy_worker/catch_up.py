@@ -51,6 +51,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_core.models import PipelineRun, PipelineRunStep, TradingDay
+from baskfy_core.seed_data import NSE_EXCHANGE_ID
+from baskfy_worker.calendar import mark_inferred_holiday
 
 __all__ = [
     "DEFAULT_LOOKBACK_DAYS",
@@ -58,6 +60,7 @@ __all__ = [
     "QUALITY_GATE_STEP",
     "SESSION_DATA_READY_IST",
     "STEP_FAILED",
+    "demote_derived_after_missing_bhavcopy",
     "gate_refused_sessions",
     "landed_sessions",
     "unlanded_sessions",
@@ -205,3 +208,28 @@ def _has_had_time_to_publish(day: dt.date, now: dt.datetime | None) -> bool:
     if day > now.date():
         return False
     return now.time() >= SESSION_DATA_READY_IST
+
+
+async def demote_derived_after_missing_bhavcopy(
+    session: AsyncSession, day: dt.date, *, published: bool
+) -> bool:
+    """Stop catch-up re-proposing a ``derived`` holiday after one missing-bhavcopy answer (AF 3.11).
+
+    A weekday marked ``source='derived'`` / ``is_trading_day=True`` is a seed guess. When the
+    chain (or a publication probe) learns NSE published nothing for that date, treating it as a
+    trading session forever makes every sweep re-run a 404. Mark it an inferred holiday once;
+    ``reconcile_calendar`` can still promote it later if bars appear.
+    """
+    if published:
+        return False
+    row = (
+        await session.execute(
+            select(TradingDay).where(
+                TradingDay.exchange_id == NSE_EXCHANGE_ID, TradingDay.date == day
+            )
+        )
+    ).scalar_one_or_none()
+    if row is None or row.source != "derived" or not row.is_trading_day:
+        return False
+    await mark_inferred_holiday(session, day)
+    return True

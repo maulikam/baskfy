@@ -102,7 +102,7 @@ class TestAgainstTheDatabase:
     async def test_written_bars_are_marked_and_carry_no_adjustment_factor(
         self, session: AsyncSession
     ) -> None:
-        """`source='kite'` is what stops `reprocess_instrument` touching them."""
+        """`source='kite_adjusted'` is what stops `reprocess_instrument` feeding them to adjust_bars."""
         instrument_id = await make_instrument(session, "DEEPCO", token=999002)
         bars = [
             (
@@ -119,7 +119,7 @@ class TestAgainstTheDatabase:
                 select(OhlcvDaily).where(OhlcvDaily.instrument_id == instrument_id)
             )
         ).scalar_one()
-        assert row.source == "kite"
+        assert row.source == "kite_adjusted"
         assert row.adj_factor == Decimal(1), "the adjustment is inside the price, not on top of it"
         assert row.close == row.close_raw, "there is no exchange print for these years"
 
@@ -181,7 +181,7 @@ class TestAgainstTheDatabase:
             )
         ).scalar_one()
         assert deep_row.close == Decimal("10.0000"), "the deep bar was rewritten"
-        assert deep_row.source == "kite", "and it kept its provenance"
+        assert deep_row.source == "kite_adjusted", "and it kept its provenance"
 
 
 class TestItCannotCorruptTheTable:

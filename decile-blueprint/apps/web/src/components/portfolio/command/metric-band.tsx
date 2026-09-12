@@ -29,7 +29,8 @@ import { cn } from "@/lib/utils";
  * printed in grey.
  */
 
-const NOT_AVAILABLE_MARK = "Not available";
+/** AFH 5.2: one short line; the full reason lives on the tooltip. */
+const NOT_AVAILABLE_MARK = "Needs more data";
 
 /** Tabular numerals everywhere, so a column of figures aligns on its decimal point. */
 const FIGURE = "tabular-nums tracking-tight";
@@ -90,21 +91,24 @@ export function MetricCell({
       </Tooltip>
 
       {unavailable ? (
-        /* The brief's rule, made visible: the REASON stands where the figure would. It is not a
-           dash with a tooltip — a reader should not have to hover to find out why a number is
-           missing from their own portfolio. */
-        <div className="mt-1">
-          <p
-            className={cn(
-              "flex items-center gap-1 font-medium text-muted-foreground",
-              emphasis === "hero" ? "text-base" : "text-sm",
-            )}
-          >
-            <CircleAlert aria-hidden="true" className="size-3.5 shrink-0 text-warning" />
-            {NOT_AVAILABLE_MARK}
-          </p>
-          <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{metric.unavailable}</p>
-        </div>
+        /* AFH 5.2: one line in the tile; the reason is on the tooltip, not a paragraph under it. */
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <p
+              className={cn(
+                "mt-1 flex cursor-help items-center gap-1 font-medium text-muted-foreground",
+                emphasis === "hero" ? "text-base" : "text-sm",
+              )}
+              title={metric.unavailable ?? undefined}
+            >
+              <CircleAlert aria-hidden="true" className="size-3.5 shrink-0 text-warning" />
+              {NOT_AVAILABLE_MARK}
+            </p>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-xs text-xs leading-relaxed">
+            {metric.unavailable}
+          </TooltipContent>
+        </Tooltip>
       ) : (
         <p
           className={cn(
@@ -129,7 +133,7 @@ export function MetricCell({
               "0.0199%" for a 1.99% day and "-0.082%" for an 8.2% fall. Forty-five tests were
               green over it because the fixtures used "1.99" and "18.7" — values that type-check
               and that the server never sends. House rule 2 in its least obvious form. */}
-          {percent ? formatPercent(metric.value) : formatRupees(metric.value)}
+          {percent ? formatPercent(metric.value) : formatRupees(metric.value, { decimals: 0 })}
           {metric.pct ? (
             <span className="ml-1.5 text-sm font-medium opacity-80">
               {formatPercent(metric.pct)}

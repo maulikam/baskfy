@@ -75,13 +75,13 @@ export function MetricLine({
         {metric.label}
       </p>
       {missing ? (
-        <>
-          <p className="mt-0.5 flex items-center gap-1 text-sm font-medium text-muted-foreground">
-            <CircleAlert aria-hidden="true" className="size-3.5 shrink-0 text-warning" />
-            Not available
-          </p>
-          <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{metric.unavailable}</p>
-        </>
+        <p
+          className="mt-0.5 flex cursor-help items-center gap-1 text-sm font-medium text-muted-foreground"
+          title={metric.unavailable ?? undefined}
+        >
+          <CircleAlert aria-hidden="true" className="size-3.5 shrink-0 text-warning" />
+          Needs more data
+        </p>
       ) : (
         <p
           className={cn(
@@ -89,7 +89,7 @@ export function MetricLine({
             emphasis ? "text-lg" : "text-sm",
           )}
         >
-          {formatRupees(metric.value)}
+          {formatRupees(metric.value, { decimals: 0 })}
         </p>
       )}
     </div>

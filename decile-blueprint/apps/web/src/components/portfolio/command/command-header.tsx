@@ -467,12 +467,12 @@ export function CommandHeader({
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
-            Portfolio Command Center
+            Details
           </h1>
           <ModeSwitch mode={mode} onChange={onModeChange} counts={counts} />
         </div>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          One reconciled view of your capital, performance and portfolio health.
+          A closer look at capital, performance and portfolio health — same book as Overview.
         </p>
       </div>
 

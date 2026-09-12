@@ -221,9 +221,9 @@ describe("the hover read-out", () => {
 
     /* It opens on the last day of the window, which is the day a reader arrives asking about. */
     expect(readout.textContent ?? "").toMatch(/3 Sept? 2026/);
-    expect(readout).toHaveTextContent("₹1,10,000.00");
+    expect(readout).toHaveTextContent("₹1,10,000");
     expect(readout).toHaveTextContent("That day");
-    expect(readout).toHaveTextContent("₹6,000.00");
+    expect(readout).toHaveTextContent("₹6,000");
     expect(readout).toHaveTextContent("Since the left edge");
     expect(readout).toHaveTextContent("10.00%");
     expect(readout).toHaveTextContent("NIFTY 500");
@@ -239,8 +239,8 @@ describe("the hover read-out", () => {
 
     const readout = screen.getByTestId("performance-readout");
     expect(readout.textContent ?? "").toMatch(/2 Sept? 2026/);
-    expect(readout).toHaveTextContent("₹1,04,000.00");
-    expect(readout).toHaveTextContent("₹4,000.00");
+    expect(readout).toHaveTextContent("₹1,04,000");
+    expect(readout).toHaveTextContent("₹4,000");
   });
 
   it("hover: pointing at the plot moves the read-out to the day under the pointer", () => {
@@ -290,9 +290,9 @@ describe("the hover read-out", () => {
     });
 
     const readout = screen.getByTestId("performance-readout");
-    expect(readout).toHaveTextContent("NIFTY 500 has no close on 2026-09-03");
-    expect(readout).toHaveTextContent("Not available");
+    expect(readout).toHaveTextContent("Needs more data");
     expect(readout.textContent ?? "").not.toContain("—");
+    expect(readout.querySelector("[title*='NIFTY 500']")).not.toBeNull();
   });
 
   it("hover: the first day of the window explains its missing change rather than reading zero", () => {
@@ -300,9 +300,9 @@ describe("the hover read-out", () => {
 
     fireEvent.change(screen.getByTestId("performance-cursor"), { target: { value: "0" } });
 
-    expect(screen.getByTestId("performance-readout")).toHaveTextContent(
-      "first day in the window",
-    );
+    const readout = screen.getByTestId("performance-readout");
+    expect(readout).toHaveTextContent("Needs more data");
+    expect(readout.querySelector("[title*='first day']")).not.toBeNull();
   });
 });
 
@@ -386,11 +386,11 @@ describe("what moved the number", () => {
     const band = screen.getByTestId("attribution-today");
 
     expect(band).toHaveTextContent("Long term");
-    expect(band).toHaveTextContent("₹10,000.00");
+    expect(band).toHaveTextContent("₹10,000");
     expect(band).toHaveTextContent("Swing Manual");
-    expect(band).toHaveTextContent("-₹4,000.00");
+    expect(band).toHaveTextContent("-₹4,000");
     expect(screen.getByTestId("attribution-today-reconciliation")).toHaveTextContent(
-      "These add to ₹6,000.00",
+      "These add to ₹6,000",
     );
     expect(screen.getByTestId("attribution-today-reconciliation")).toHaveTextContent(
       "to the last paisa",
@@ -401,7 +401,7 @@ describe("what moved the number", () => {
     renderWorkspace({ todaysTotal: "6300", unallocatedValue: "180000" });
 
     const line = screen.getByTestId("attribution-today-reconciliation");
-    expect(line).toHaveTextContent("The difference of ₹300.00");
+    expect(line).toHaveTextContent("The difference of ₹300");
     expect(line).toHaveTextContent("no portfolio");
   });
 
@@ -409,7 +409,7 @@ describe("what moved the number", () => {
     renderWorkspace();
 
     expect(screen.getByTestId("attribution-today-offset")).toHaveTextContent(
-      "the portfolios moved ₹14,000.00 between them",
+      "the portfolios moved ₹14,000 between them",
     );
   });
 
@@ -435,7 +435,7 @@ describe("what moved the number", () => {
     renderWorkspace();
     const band = screen.getByTestId("attribution-period");
 
-    expect(band).toHaveTextContent("Not available");
+    expect(band).toHaveTextContent("Needs more data");
     expect(band).toHaveTextContent("each portfolio's own value history");
     /* Apportioning the window's profit by size would assume every portfolio returned the same
        thing, which is the assumption this panel exists to test. */
@@ -473,10 +473,10 @@ describe("what moved the number", () => {
     renderWorkspace({ seriesByPortfolio: byPortfolio });
 
     const band = screen.getByTestId("attribution-period");
-    expect(band).toHaveTextContent("₹6,000.00");
-    expect(band).toHaveTextContent("₹4,000.00");
+    expect(band).toHaveTextContent("₹6,000");
+    expect(band).toHaveTextContent("₹4,000");
     expect(screen.getByTestId("attribution-period-reconciliation")).toHaveTextContent(
-      "These add to ₹10,000.00",
+      "These add to ₹10,000",
     );
   });
 });
@@ -556,12 +556,14 @@ describe("what the panel refuses to invent", () => {
     for (const region of ["performance-headline", "performance-readout", "attribution-today"]) {
       const element = screen.getByTestId(region);
       expect(element.textContent ?? "", `${region} rendered a bare dash`).not.toContain("—");
-      expect(element).toHaveTextContent("Not available");
+      expect(element).toHaveTextContent("Needs more data");
     }
-    /* And every "Not available" is accompanied by the reason, which is the half that matters. */
-    expect(screen.getByTestId("performance-headline")).toHaveTextContent(
-      "Needs at least two end-of-day marks",
-    );
+    /* Metric tiles keep the reason on title; the attribution band still names it in the section. */
+    expect(
+      screen
+        .getByTestId("performance-headline")
+        .querySelector('[title*="Needs at least two end-of-day marks"]'),
+    ).not.toBeNull();
     expect(screen.getByTestId("attribution-today")).toHaveTextContent("No previous close");
   });
 });

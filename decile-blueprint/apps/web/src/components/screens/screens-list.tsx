@@ -56,6 +56,8 @@ export function ScreensList({ initial, error }: ScreensListProps) {
   const create = useCreateScreen();
   const [pendingDelete, setPendingDelete] = useState<ScreenOut | null>(null);
   const [screens, setScreens] = useState<ScreenOut[]>(initial ?? []);
+  const [namePromptOpen, setNamePromptOpen] = useState(false);
+  const [newName, setNewName] = useState("");
 
   const factorLabel = useMemo(() => {
     const byKey = new Map((factors.data ?? []).map((factor) => [factor.key, factor.label]));
@@ -74,12 +76,15 @@ export function ScreensList({ initial, error }: ScreensListProps) {
   const examples = screens.filter((screen) => screen.is_example);
   const mine = screens.filter((screen) => !screen.is_example);
 
-  async function newScreen() {
+  async function createNamedScreen(name: string) {
+    const trimmed = name.trim();
     const created = await create.mutateAsync({
-      name: `New screen ${mine.length + 1}`,
+      name: trimmed.length > 0 ? trimmed : `Screen ${mine.length + 1}`,
       definition: defaultDefinition(),
     });
     setScreens((current) => [...current, created]);
+    setNamePromptOpen(false);
+    setNewName("");
     router.push(`/build/${created.public_id}` as Route);
   }
 
@@ -106,14 +111,17 @@ export function ScreensList({ initial, error }: ScreensListProps) {
             variant="primary"
             size="sm"
             disabled={create.isPending}
-            onClick={() => void newScreen()}
+            onClick={() => {
+              setNewName("");
+              setNamePromptOpen(true);
+            }}
             data-testid="new-screen"
           >
             <Plus aria-hidden="true" />
             New search
           </Button>
         }
-        meta="Saved screens show as baskets. Open one to run it — the result is an investable basket by default."
+        meta="Saved screens live here. Open one to run it."
       />
 
       {create.error ? <ErrorState error={create.error} /> : null}
@@ -121,12 +129,12 @@ export function ScreensList({ initial, error }: ScreensListProps) {
       {remove.error ? <ErrorState error={remove.error} /> : null}
 
       <Section
-        title="Your baskets"
+        title="Your screens"
         testId="your-screens"
         empty={
           <EmptyState
             title="Nothing saved yet"
-            reason="Anything you save shows up here as a basket. The quickest start is to copy one of the ready-made templates below."
+            reason="Anything you save shows up here. The quickest start is to copy one of the ready-made templates below."
           />
         }
         screens={mine}
@@ -147,6 +155,39 @@ export function ScreensList({ initial, error }: ScreensListProps) {
         onDelete={setPendingDelete}
         loading={initial === null}
       />
+
+      <Dialog open={namePromptOpen} onOpenChange={setNamePromptOpen}>
+        <DialogContent className="max-w-md">
+          <DialogTitle className="text-base font-semibold">Name this screen</DialogTitle>
+          <DialogDescription className="mt-2 text-sm text-muted-foreground">
+            Pick a name you will recognise later. You can rename it any time.
+          </DialogDescription>
+          <form
+            className="mt-4 space-y-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void createNamedScreen(newName);
+            }}
+          >
+            <input
+              data-testid="new-screen-name"
+              value={newName}
+              onChange={(event) => setNewName(event.target.value)}
+              placeholder="e.g. Midcap momentum"
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <Button type="submit" variant="primary" size="sm" disabled={create.isPending}>
+                Save screen
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setNamePromptOpen(false)}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={pendingDelete !== null}

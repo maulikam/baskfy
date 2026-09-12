@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { DESK_CONSOLE_URL } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 /**
@@ -10,8 +11,7 @@ import { cn } from "@/lib/utils";
  * When a real `plan_id` arrives, the copy switches to the expiry sentence.
  */
 
-export const DESK_CONSOLE_URL =
-  process.env.NEXT_PUBLIC_DESK_URL ?? "https://desk.modelbasket.in";
+export { DESK_CONSOLE_URL };
 
 export interface PlanHandoffPanelProps {
   basketName?: string;

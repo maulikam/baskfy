@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import pytest
+
 from baskfy_providers.kite import _default_client_factory
 from baskfy_providers.settings import ProviderSettings
 
 
-def test_kite_client_factory_passes_an_explicit_timeout(monkeypatch: object) -> None:
+def test_kite_client_factory_passes_an_explicit_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, object] = {}
 
     class FakeKite:

@@ -222,6 +222,13 @@ ignore_missing_imports = true
 module = ["kiteconnect.*"]
 ignore_missing_imports = true
 
+# Desk TWT execute helpers are imported by packages/core/tests/test_twt_safety_properties.py via
+# a runtime sys.path insert into kite-momentum-rebalancer/tests. That tree is not part of this
+# workspace's typed surface; ignore the missing module rather than type-checking the desk suite.
+[[tool.mypy.overrides]]
+module = ["test_twt_execute"]
+ignore_missing_imports = true
+
 # boto3 ships no inline types. The `boto3-stubs` package models every S3 operation with generated
 # `Unpack[TypedDict]` signatures, which by construction cannot satisfy a narrow structural
 # Protocol — and the narrow Protocol is the thing we actually want to depend on, since

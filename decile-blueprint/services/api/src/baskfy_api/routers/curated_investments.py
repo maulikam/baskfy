@@ -26,7 +26,7 @@ import datetime as dt
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Protocol
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
@@ -34,7 +34,6 @@ from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.auth import AuthenticatedDep
-from baskfy_api.live_prices import live_prices_by_instrument
 from baskfy_api.curated_investments import (
     HoldingIn,
     list_open_pending,
@@ -44,6 +43,7 @@ from baskfy_api.curated_investments import (
 )
 from baskfy_api.curated_tenant import investments_for_user_stmt, scoped_sole_user_id
 from baskfy_api.db import SessionDep
+from baskfy_api.live_prices import live_prices_by_instrument
 from baskfy_api.problems import Problem, ProblemType, not_found
 from baskfy_core.curated_accounting import HoldingPosition
 from baskfy_core.models import (
@@ -281,8 +281,16 @@ def _days_since(when: dt.datetime | None, *, now: dt.datetime) -> int | None:
     return (now.date() - start).days
 
 
+class _HoldingMark(Protocol):
+    """Duck-typed holding used by :func:`_snapshot_for` (ORM row or test stand-in)."""
+
+    instrument_id: int
+    qty: Decimal
+    avg_price: Decimal
+
+
 def _snapshot_for(
-    holdings: Sequence[CbInvestmentHolding],
+    holdings: Sequence[_HoldingMark],
     buy_amounts: Sequence[Decimal],
     first_invested: dt.date,
     as_of: dt.date,
@@ -536,7 +544,7 @@ def _filtered_stmt(
 
 
 @router.get("/cb/investments", response_model=InvestmentListOut)
-async def list_investments(
+async def list_investments(  # noqa: PLR0912 — list path gathers holdings/batches/live marks in one handler
     session: SessionDep,
     principal: AuthenticatedDep,
     portfolio_id: Annotated[

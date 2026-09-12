@@ -284,7 +284,7 @@ async def authenticate(
             "api key rejected", extra={"reason": "secret-mismatch", "prefix": parsed.prefix}
         )
         return None
-    if not row.is_active(now=now):
+    if not row.is_active(now=now or dt.datetime.now(tz=dt.UTC)):
         log.info(
             "api key rejected",
             extra={"reason": "revoked-or-expired", "key_public_id": row.public_id},

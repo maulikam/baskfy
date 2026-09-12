@@ -18,6 +18,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 from decimal import Decimal
+from pathlib import Path
 from typing import Final
 
 import httpx
@@ -28,20 +29,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_core.breadth import ATH_PROXIMITY_PCT
 from baskfy_core.models import Instrument
-from baskfy_core.reference_export import read_export, to_rows
-from pathlib import Path
-
-_REFERENCE_EXPORT = (
-    Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "reference-screen-export-2026-08-18.csv"
-)
-
-
-def _reference_rows():
-    return to_rows(read_export(_REFERENCE_EXPORT))
+from baskfy_core.reference_export import ReferenceRows, read_export, to_rows
 from baskfy_core.universes import (
     DASHBOARD_UNIVERSES,
     MARKET_HEALTH_SLUGS,
 )
+
+_REFERENCE_EXPORT = (
+    Path(__file__).resolve().parents[3]
+    / "tests"
+    / "fixtures"
+    / "reference-screen-export-2026-08-18.csv"
+)
+
+
+def _reference_rows() -> ReferenceRows:
+    return to_rows(read_export(_REFERENCE_EXPORT))
 
 pytestmark = [pytest.mark.db, pytest.mark.redis, requires_db]
 

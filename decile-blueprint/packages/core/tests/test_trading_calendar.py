@@ -15,6 +15,7 @@ import pytest
 from _law1_io import seed_holidays
 from baskfy_core.trading_calendar import (
     EXPECTED_WINDOW_LENGTHS,
+    TradingDayRow,
     build_calendar,
     default_calendar_range,
     is_provisional,
@@ -26,7 +27,7 @@ from baskfy_core.trading_calendar import (
 HOLIDAYS = seed_holidays()
 
 
-def _cal(start: dt.date, end: dt.date):
+def _cal(start: dt.date, end: dt.date) -> list[TradingDayRow]:
     return build_calendar(start, end, HOLIDAYS)
 
 

@@ -11,9 +11,9 @@ to simulate the commit, then flush so ``task_id`` lands on the row.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Protocol, cast
 
-from sqlalchemy import event, update
+from sqlalchemy import Table, event, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session, object_mapper
 
@@ -25,16 +25,25 @@ _PENDING: str = "_baskfy_deferred_publishes"
 _HOOK: str = "_baskfy_deferred_publish_hook"
 
 
+class TaskIdRow(Protocol):
+    """ORM row (or test stand-in) that carries the Celery ``task_id`` column."""
+
+    id: int
+    task_id: str | None
+
+
 def defer_task_publish(
     session: AsyncSession,
     queue: TaskQueue,
     task_name: str,
     run_id: int,
     *,
-    row: Any,
+    row: TaskIdRow | None,
 ) -> None:
     """Queue ``send_task`` for after this session's transaction commits."""
-    pending: list[tuple[TaskQueue, str, int, Any]] = session.info.setdefault(_PENDING, [])
+    pending: list[tuple[TaskQueue, str, int, TaskIdRow | None]] = session.info.setdefault(
+        _PENDING, []
+    )
     pending.append((queue, task_name, run_id, row))
     if session.info.get(_HOOK):
         return
@@ -46,9 +55,11 @@ def defer_task_publish(
         drain_deferred_publishes(sess)
 
 
-def drain_deferred_publishes(info_or_session: AsyncSession | Session | dict[str, Any]) -> None:
+def drain_deferred_publishes(
+    info_or_session: AsyncSession | Session | dict[str, object],
+) -> None:
     """Publish every deferred task. Idempotent; safe to call from tests after a fake commit."""
-    info: dict[str, Any]
+    info: dict[str, object]
     persist_session: Session | None = None
     if isinstance(info_or_session, dict):
         info = info_or_session
@@ -57,7 +68,11 @@ def drain_deferred_publishes(info_or_session: AsyncSession | Session | dict[str,
         persist_session = info_or_session
     else:
         info = info_or_session.info
-    pending: list[tuple[TaskQueue, str, int, Any]] = list(info.pop(_PENDING, []))
+    pending_raw = info.pop(_PENDING, [])
+    pending = cast(
+        list[tuple[TaskQueue, str, int, TaskIdRow | None]],
+        pending_raw if isinstance(pending_raw, list) else [],
+    )
     info.pop(_HOOK, None)
     for queue, task_name, run_id, row in pending:
         try:
@@ -77,9 +92,9 @@ def drain_deferred_publishes(info_or_session: AsyncSession | Session | dict[str,
             _persist_task_id(persist_session, row, task_id)
 
 
-def _persist_task_id(session: Session, row: Any, task_id: str) -> None:
+def _persist_task_id(session: Session, row: TaskIdRow, task_id: str) -> None:
     mapper = object_mapper(row)
-    table = mapper.persist_selectable
+    table = cast(Table, mapper.persist_selectable)
     bind = session.get_bind()
     with Session(bind) as short:
         short.execute(update(table).where(table.c.id == row.id).values(task_id=task_id))

@@ -210,10 +210,9 @@ def invalid_screen_definition(errors: Sequence[Mapping[str, object]]) -> Problem
 
 def bad_request(detail: str, *, errors: Sequence[Mapping[str, object]] | None = None) -> Problem:
     """Generic 400 for a well-typed request the handler still refuses (AUDIT 4.16)."""
-    extra: dict[str, object] = {}
     if errors is not None:
-        extra["errors"] = list(errors)
-    return Problem(ProblemType.BAD_REQUEST, detail, **extra)
+        return Problem(ProblemType.BAD_REQUEST, detail, errors=list(errors))
+    return Problem(ProblemType.BAD_REQUEST, detail)
 
 
 def pipeline_degraded(detail: str) -> Problem:

@@ -7,8 +7,10 @@ import inspect
 from dataclasses import dataclass
 from decimal import Decimal
 
+from typing import Sequence, cast
+
 from baskfy_api.routers import curated_investments as mod
-from baskfy_api.routers.curated_investments import _snapshot_for
+from baskfy_api.routers.curated_investments import _HoldingMark, _snapshot_for
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,7 +23,7 @@ class _Holding:
 def test_snapshot_is_marked_at_cost_when_no_live_quotes() -> None:
     holdings = [_Holding(1, Decimal("10"), Decimal("100"))]
     snap = _snapshot_for(
-        holdings,  # Sequence protocol — duck-typed like CbInvestmentHolding
+        cast(Sequence[_HoldingMark], holdings),
         [Decimal("1000")],
         first_invested=dt.date(2026, 1, 1),
         as_of=dt.date(2026, 9, 12),
@@ -34,7 +36,7 @@ def test_snapshot_is_marked_at_cost_when_no_live_quotes() -> None:
 def test_snapshot_clears_marked_at_cost_when_every_holding_has_a_live_quote() -> None:
     holdings = [_Holding(1, Decimal("10"), Decimal("100"))]
     snap = _snapshot_for(
-        holdings,
+        cast(Sequence[_HoldingMark], holdings),
         [Decimal("1000")],
         first_invested=dt.date(2026, 1, 1),
         as_of=dt.date(2026, 9, 12),

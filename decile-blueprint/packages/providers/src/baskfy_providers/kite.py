@@ -156,6 +156,7 @@ class KiteProvider:
         self._settings = settings
         # Bind the configured timeout into the default factory without changing the Protocol
         # signature tests inject against.
+        self._client_factory: Callable[[str], KiteClientLike]
         if wiring.client_factory is _default_client_factory:
             timeout = settings.kite_request_timeout_seconds
 

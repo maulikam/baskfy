@@ -12,6 +12,8 @@ import { SignJWT } from "jose";
  * differs from this shape is a 401, and `apps/web/src/lib/auth/__tests__/jwt.test.ts` pins them.
  *
  * `sub` is the `app_user.public_id`, because that is what the API looks the account up by.
+ * `epoch` is `app_user.session_epoch` frozen at mint — AUDIT 0.8 / 2.2; the API refuses when the
+ * account has moved past it.
  */
 
 /** docs/11 §Security: "JWT: HS256, 15-min access". */
@@ -24,6 +26,8 @@ export const MIN_SECRET_BYTES = 32;
 export interface AccessTokenClaims {
   /** `app_user.public_id`. */
   subject: string;
+  /** `app_user.session_epoch` at mint time. Defaults to 0 for pre-epoch sessions. */
+  epoch?: number;
   issuedAt?: Date;
   issuer?: string | undefined;
   audience?: string | undefined;
@@ -56,7 +60,7 @@ export async function mintAccessToken(
   const issuedSeconds = Math.floor(issuedAt.getTime() / 1000);
   const expiresSeconds = issuedSeconds + ACCESS_TOKEN_TTL_SECONDS;
 
-  let builder = new SignJWT({})
+  let builder = new SignJWT({ epoch: claims.epoch ?? 0 })
     .setProtectedHeader({ alg: JWT_ALGORITHM })
     .setSubject(claims.subject)
     .setIssuedAt(issuedSeconds)

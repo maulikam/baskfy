@@ -40,12 +40,12 @@ describe("the access token", () => {
     expect(header.alg).toBe(JWT_ALGORITHM);
   });
 
-  it("carries sub, iat and exp, because the API requires all three", async () => {
+  it("carries sub, iat, exp and epoch, because the API requires the first three and refuses a stale epoch", async () => {
     const issuedAt = new Date("2026-08-18T09:00:00Z");
-    const { token } = await mintAccessToken({ subject: "abc123def456", issuedAt }, SECRET);
-    // Verified *as at* the issue time. A fixed timestamp keeps the assertion deterministic; the
-    // alternative — minting relative to `now` — would make the test pass for the wrong reason on
-    // any day, including one where the TTL had been changed to a week.
+    const { token } = await mintAccessToken(
+      { subject: "abc123def456", epoch: 3, issuedAt },
+      SECRET,
+    );
     const { payload } = await jwtVerify(token, new TextEncoder().encode(SECRET), {
       currentDate: issuedAt,
     });
@@ -53,6 +53,13 @@ describe("the access token", () => {
     expect(payload.sub).toBe("abc123def456");
     expect(payload.iat).toBe(Math.floor(issuedAt.getTime() / 1000));
     expect(payload.exp).toBe(Math.floor(issuedAt.getTime() / 1000) + ACCESS_TOKEN_TTL_SECONDS);
+    expect(payload.epoch).toBe(3);
+  });
+
+  it("defaults epoch to zero when the caller omits it", async () => {
+    const { token } = await mintAccessToken({ subject: "abc123def456" }, SECRET);
+    const { payload } = await jwtVerify(token, new TextEncoder().encode(SECRET));
+    expect(payload.epoch).toBe(0);
   });
 
   it("lives exactly fifteen minutes", async () => {

@@ -323,6 +323,7 @@ async def issue_session(
         lifetime_seconds=settings.access_token_ttl_seconds,
         audience=settings.jwt_audience,
         issuer=settings.jwt_issuer,
+        epoch=user.session_epoch,
     )
     return IssuedSession(
         user=user,

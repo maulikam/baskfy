@@ -107,6 +107,8 @@ Wave 2: H+I merged; D2 after ship / suites green.
 | I.5 | I | merged | done |
 | I.6 | I | merged | done |
 | I.BACKLOG | I | merged | done |
-| W.1 | W | in flight | real `next build` must compile under typedRoutes; lint alone missed it (AF W.1) |
+| W.1 | W | merged | done — `f2177c7`; web lint now runs `next typegen` first so it agrees with the build |
 | V.1 | V | in flight | desk suite + image build-arg preflight |
 | D2 | orch | pending | box data job with backup id + alembic 0045 |
+| X.1 | X | merged | done — `83e40ef`: web lint 0 errors, 3268 tests green, openapi/client regenerated |
+| O.1 | orch | noted | database suites are serialized; a result taken during an overlap is void (AF O.1) |

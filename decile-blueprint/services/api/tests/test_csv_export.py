@@ -33,12 +33,13 @@ from baskfy_api.csv_export import (
     quote,
     stream_screen_csv,
 )
-from baskfy_core.reference_export import EXPORT_COLUMNS, default_fixture_path
+from baskfy_core.reference_export import EXPORT_COLUMNS
 from baskfy_core.seed_data import EXAMPLE_SCREENS
 
 INVESTING_001 = EXAMPLE_SCREENS[0].definition
 
-REFERENCE: Path = default_fixture_path()
+_REPO = Path(__file__).resolve().parents[3]
+REFERENCE: Path = _REPO / "tests" / "fixtures" / "reference-screen-export-2026-08-18.csv"
 RAW = REFERENCE.read_bytes()
 
 

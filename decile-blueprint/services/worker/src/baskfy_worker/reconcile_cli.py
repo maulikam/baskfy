@@ -46,7 +46,6 @@ from baskfy_core.reconcile import (
 )
 from baskfy_core.reference_export import (
     FACTOR_COLUMN_MAP,
-    default_fixture_path,
     read_export,
 )
 
@@ -289,8 +288,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.bars is None:
             print(
                 "NOTE: run with --bars to enable docs/13 §5 step 2 (full recomputation). "
-                f"The committed snapshot is {default_fixture_path().name} and carries no price "
-                "history, so no factor was recomputed from bars in this run.",
+                "Without --bars, no factor was recomputed from price history "
+                "(the committed reference CSV is an answer key, not a bar panel).",
             )
 
     return 1 if total_disagreements(results) else 0

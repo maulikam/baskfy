@@ -40,14 +40,14 @@ export default async function PortfolioWatchlistPage() {
       {list.items.length === 0 ? (
         <div className="grid place-items-center rounded-xl border border-dashed border-border bg-card/50 px-6 py-16 text-center">
           <p className="max-w-[52ch] text-sm leading-relaxed text-muted-foreground">
-            Nothing on the watchlist yet. Star a basket from Explore when the toggle lands; until
-            then you can still open the catalog.
+            Nothing on the watchlist yet. Star a basket from Discover — the Save control on any
+            basket card adds it here.
           </p>
           <Link
-            href="/explore"
+            href="/discover"
             className="mt-4 text-sm text-accent underline-offset-4 hover:underline"
           >
-            Explore baskets
+            Discover baskets
           </Link>
         </div>
       ) : (

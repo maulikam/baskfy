@@ -26,6 +26,10 @@ class ProblemType(StrEnum):
     """docs/07 §"Error catalogue", one member per row, in the document's order."""
 
     INVALID_SCREEN_DEFINITION = "invalid-screen-definition"
+    #: Generic 400 for non-screen validation (AUDIT 4.16). Kept beside the screen type so a
+    #: caller that mistook a portfolio amount for a screen rule is not answered with the wrong
+    #: sentence; OpenAPI's single 400 description still collapses by status (see STATUS_FOR).
+    BAD_REQUEST = "bad-request"
     UNAUTHENTICATED = "unauthenticated"
     PAYMENT_REQUIRED = "payment-required"
     NOT_FOUND = "not-found"
@@ -70,6 +74,7 @@ class ProblemType(StrEnum):
 #: status the document does not associate with the type it is reporting.
 STATUS_FOR: Final[Mapping[ProblemType, int]] = {
     ProblemType.INVALID_SCREEN_DEFINITION: 400,
+    ProblemType.BAD_REQUEST: 400,
     ProblemType.UNAUTHENTICATED: 401,
     ProblemType.PAYMENT_REQUIRED: 402,
     ProblemType.NOT_FOUND: 404,
@@ -85,6 +90,7 @@ STATUS_FOR: Final[Mapping[ProblemType, int]] = {
 
 TITLE_FOR: Final[Mapping[ProblemType, str]] = {
     ProblemType.INVALID_SCREEN_DEFINITION: "Invalid screen definition",
+    ProblemType.BAD_REQUEST: "Bad request",
     ProblemType.UNAUTHENTICATED: "Authentication required",
     ProblemType.PAYMENT_REQUIRED: "Your plan does not include this feature",
     ProblemType.NOT_FOUND: "Not found",
@@ -200,6 +206,14 @@ def invalid_screen_definition(errors: Sequence[Mapping[str, object]]) -> Problem
         "The screen definition failed validation.",
         errors=list(errors),
     )
+
+
+def bad_request(detail: str, *, errors: Sequence[Mapping[str, object]] | None = None) -> Problem:
+    """Generic 400 for a well-typed request the handler still refuses (AUDIT 4.16)."""
+    extra: dict[str, object] = {}
+    if errors is not None:
+        extra["errors"] = list(errors)
+    return Problem(ProblemType.BAD_REQUEST, detail, **extra)
 
 
 def pipeline_degraded(detail: str) -> Problem:

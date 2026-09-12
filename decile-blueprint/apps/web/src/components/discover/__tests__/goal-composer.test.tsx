@@ -48,7 +48,10 @@ describe("the composer reads as a sentence", () => {
       />,
     );
     expect(screen.getByLabelText("Risk preference")).toHaveValue("lower");
-    expect(screen.getByLabelText("Investment amount in rupees")).toHaveValue("250000");
+    /* Grouped the Indian way — 2,50,000, not 250,000 and not 250000. AFG (`5e8a0ef`) made the
+       field show the amount as a reader here writes it; the digits are still exactly the amount
+       that was passed in, which is what "reopens as it was sent" means. */
+    expect(screen.getByLabelText("Investment amount in rupees")).toHaveValue("2,50,000");
     expect(screen.getByLabelText("Rebalance preference")).toHaveValue("MONTHLY");
   });
 });
@@ -117,6 +120,11 @@ describe("submitting", () => {
     await user.clear(amount);
     await user.type(amount, "abc");
     await user.click(screen.getByTestId("show-matching"));
-    expect(amount).toHaveValue(String(DEFAULT_PREFERENCES.amount));
+    /* Two halves, because AFG (`5e8a0ef`) groups the displayed amount: the digits on screen are
+       the amount the filter actually ran on — not the nonsense that was typed — and they are
+       grouped the Indian way rather than run together. */
+    const shown = (amount as HTMLInputElement).value;
+    expect(shown.replaceAll(",", "")).toBe(String(DEFAULT_PREFERENCES.amount));
+    expect(shown).toBe("5,00,000");
   });
 });

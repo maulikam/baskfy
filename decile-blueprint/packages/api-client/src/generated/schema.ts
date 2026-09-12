@@ -1611,8 +1611,68 @@ export interface paths {
          *     Prices are the latest `close_raw` on or before today — the exchange print, per house rule 6,
          *     because this figure becomes a share count somebody buys. They are a *reference*: the basket
          *     goes to Kite as MARKET orders and the user sees live prices there before confirming.
+         *
+         *     Visibility is the same `_published()` gate every explore route uses (AUDIT 2.1): a PRIVATE
+         *     draft or an unpublished basket is a 404, never a hand-off payload.
          */
         get: operations["basketAsKiteBasket"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/explore/{slug}/performance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Explore Performance
+         * @description Version-aware NAV for the chart. Covered days only; ``coverage`` names the rest.
+         */
+        get: operations["getExplorePerformance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/explore/{slug}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Basket Versions */
+        get: operations["listBasketVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/explore/{slug}/versions/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Diff Basket Versions
+         * @description Diff constituent weights between any two published versions of a basket.
+         */
+        get: operations["diffBasketVersions"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2122,10 +2182,9 @@ export interface paths {
         put?: never;
         /**
          * Cancel a pending deletion
-         * @description A deactivated account cannot present a token, so this is reached by address plus a code.
+         * @description A deactivated account cannot present a token; restore requires the signed code.
          *
-         *     In practice the web app cancels a deletion by signing in — `/auth/verify-otp` does it. This
-         *     endpoint exists so the same thing is possible without a UI. `docs/12a` §6.
+         *     The code is minted into the deletion e-mail (AUDIT 2.4). Email alone is not enough.
          */
         post: operations["restoreMe"];
         delete?: never;
@@ -3125,6 +3184,8 @@ export interface paths {
          *     A value above its ceiling answers **422 `setting-above-ceiling`** naming the ceiling and the
          *     environment variable that sets it, and the refusal is atomic: a two-field patch that crosses a
          *     ceiling on the second field changes neither.
+         *
+         *     ``now`` is not a query parameter: an audit row's clock is the server's (AUDIT 2.15).
          */
         patch: operations["patchConfig"];
         trace?: never;
@@ -3729,6 +3790,59 @@ export interface paths {
         /** Add Watchlist */
         post: operations["addWatchlist"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/watchlist/discover-preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Discover Preferences */
+        get: operations["getDiscoverPreferences"];
+        /** Put Discover Preferences */
+        put: operations["putDiscoverPreferences"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/watchlist/instruments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Instrument Watchlist */
+        get: operations["listInstrumentWatchlist"];
+        put?: never;
+        /** Add Instrument Watch */
+        post: operations["addInstrumentWatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/watchlist/instruments/{symbol}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Instrument Watch */
+        delete: operations["removeInstrumentWatch"];
         options?: never;
         head?: never;
         patch?: never;
@@ -4606,6 +4720,11 @@ export interface components {
         };
         /** BasketListOut */
         BasketListOut: {
+            /**
+             * Categories
+             * @default []
+             */
+            categories: string[];
             /** Items */
             items: components["schemas"]["BasketCardOut"][];
             /** Total */
@@ -5168,6 +5287,8 @@ export interface components {
             removed_count: number;
             /** Slug */
             slug: string;
+            /** Version Count */
+            version_count: number;
             /** Version No */
             version_no: number;
         };
@@ -5557,6 +5678,72 @@ export interface components {
             value?: string | null;
             /** Weight */
             weight?: string | null;
+        };
+        /** DiffLineOut */
+        DiffLineOut: {
+            /** Change */
+            change: string;
+            /** Name */
+            name: string | null;
+            /** Symbol */
+            symbol: string;
+            /** Weight From */
+            weight_from?: string | null;
+            /** Weight Pct From */
+            weight_pct_from?: string | null;
+            /** Weight Pct To */
+            weight_pct_to?: string | null;
+            /** Weight To */
+            weight_to?: string | null;
+        };
+        /** DiscoverPreferencesIn */
+        DiscoverPreferencesIn: {
+            /** Amount */
+            amount: number | string;
+            /**
+             * Goal
+             * @enum {string}
+             */
+            goal: "steady-compounding" | "long-term-growth" | "high-growth";
+            /**
+             * Horizon
+             * @enum {string}
+             */
+            horizon: "1-3" | "3-5" | "5-plus";
+            /**
+             * Onboarding Completed
+             * @default false
+             */
+            onboarding_completed: boolean;
+            /**
+             * Rebalance
+             * @enum {string}
+             */
+            rebalance: "any" | "WEEKLY" | "MONTHLY" | "QUARTERLY";
+            /**
+             * Risk
+             * @enum {string}
+             */
+            risk: "lower" | "moderate" | "higher";
+        };
+        /** DiscoverPreferencesOut */
+        DiscoverPreferencesOut: {
+            /** Amount */
+            amount: string;
+            /** Goal */
+            goal: string;
+            /** Horizon */
+            horizon: string;
+            /** Onboarding Completed At */
+            onboarding_completed_at?: string | null;
+            /** Rebalance */
+            rebalance: string;
+            /** Risk */
+            risk: string;
+            /** Saved */
+            saved: boolean;
+            /** Updated At */
+            updated_at?: string | null;
         };
         /**
          * DividendPolicy
@@ -6515,6 +6702,36 @@ export interface components {
             /** Data */
             data: components["schemas"]["InstrumentHitOut"][];
         };
+        /** InstrumentWatchAddIn */
+        InstrumentWatchAddIn: {
+            /** Symbol */
+            symbol: string;
+        };
+        /** InstrumentWatchItemOut */
+        InstrumentWatchItemOut: {
+            /** Close At Watch */
+            close_at_watch?: string | null;
+            /** Last Close */
+            last_close?: string | null;
+            /** Moved Pct */
+            moved_pct?: string | null;
+            /** Name */
+            name: string;
+            /** Symbol */
+            symbol: string;
+            /**
+             * Watched At
+             * Format: date-time
+             */
+            watched_at: string;
+        };
+        /** InstrumentWatchlistOut */
+        InstrumentWatchlistOut: {
+            /** Count */
+            count: number;
+            /** Items */
+            items: components["schemas"]["InstrumentWatchItemOut"][];
+        };
         /** InvestBody */
         InvestBody: {
             /** Amount */
@@ -6793,10 +7010,9 @@ export interface components {
             next_cursor?: string | null;
             /**
              * Total
-             * @description Filtered register size (no cursor). AFH 5.8 — page copy "N of M".
              * @default 0
              */
-            total?: number;
+            total: number;
         };
         /** ManagerApplyIn */
         ManagerApplyIn: {
@@ -7351,24 +7567,17 @@ export interface components {
             /** Type */
             type: string;
         };
-        /** PerformanceOut */
-        PerformanceOut: {
-            /** As Of */
-            as_of: string;
-            /** Benchmark Return Pct */
-            benchmark_return_pct?: number | null;
-            /** Cash */
-            cash: number;
-            /** Excess Pct */
-            excess_pct?: number | null;
-            /** Invested */
-            invested: number;
-            /** Nav */
-            nav: number;
-            /** Return Pct */
-            return_pct?: number | null;
-            /** Series */
-            series: components["schemas"]["baskfy_api__routers__desk__NavPointOut"][];
+        /** PerformancePointOut */
+        PerformancePointOut: {
+            /** Basket */
+            basket: string;
+            /** Benchmark */
+            benchmark?: string | null;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
         };
         /** PipelineRunDetailOut */
         PipelineRunDetailOut: {
@@ -8345,6 +8554,19 @@ export interface components {
              * @default true
              */
             unfroze: boolean;
+        };
+        /**
+         * RestoreAccountIn
+         * @description Email plus the signed code from the deletion mail (AUDIT 2.4).
+         */
+        RestoreAccountIn: {
+            /** Code */
+            code: string;
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
         };
         /**
          * ResyncFindingOut
@@ -11203,6 +11425,62 @@ export interface components {
             /** Working From */
             working_from: string | null;
         };
+        /** VersionDiffOut */
+        VersionDiffOut: {
+            /** Added */
+            added: components["schemas"]["DiffLineOut"][];
+            /**
+             * From Effective Date
+             * Format: date
+             */
+            from_effective_date: string;
+            /** From Version */
+            from_version: number;
+            /** Removed */
+            removed: components["schemas"]["DiffLineOut"][];
+            /** Slug */
+            slug: string;
+            /**
+             * To Effective Date
+             * Format: date
+             */
+            to_effective_date: string;
+            /** To Version */
+            to_version: number;
+            /** Unchanged Count */
+            unchanged_count: number;
+            /** Weight Changed */
+            weight_changed: components["schemas"]["DiffLineOut"][];
+        };
+        /** VersionSummaryOut */
+        VersionSummaryOut: {
+            /** Added Count */
+            added_count: number;
+            /** Constituent Count */
+            constituent_count: number;
+            /**
+             * Effective Date
+             * Format: date
+             */
+            effective_date: string;
+            /** Label */
+            label: string;
+            /** Notes Md */
+            notes_md?: string | null;
+            /** Removed Count */
+            removed_count: number;
+            /** Version No */
+            version_no: number;
+        };
+        /** VersionsOut */
+        VersionsOut: {
+            /** Count */
+            count: number;
+            /** Slug */
+            slug: string;
+            /** Versions */
+            versions: components["schemas"]["VersionSummaryOut"][];
+        };
         /**
          * WatchlistAddIn
          * @description docs/07 conventions: unknown keys are rejected.
@@ -11407,6 +11685,25 @@ export interface components {
             /** Nav */
             nav: number;
         };
+        /** PerformanceOut */
+        baskfy_api__routers__desk__PerformanceOut: {
+            /** As Of */
+            as_of: string;
+            /** Benchmark Return Pct */
+            benchmark_return_pct?: number | null;
+            /** Cash */
+            cash: number;
+            /** Excess Pct */
+            excess_pct?: number | null;
+            /** Invested */
+            invested: number;
+            /** Nav */
+            nav: number;
+            /** Return Pct */
+            return_pct?: number | null;
+            /** Series */
+            series: components["schemas"]["baskfy_api__routers__desk__NavPointOut"][];
+        };
         /** ConstituentOut */
         baskfy_api__routers__explore__ConstituentOut: {
             /** Name */
@@ -11417,6 +11714,8 @@ export interface components {
             symbol: string;
             /** Weight */
             weight: string;
+            /** Weight Pct */
+            weight_pct: string;
         };
         /** ManagerOut */
         baskfy_api__routers__explore__ManagerOut: {
@@ -11434,6 +11733,22 @@ export interface components {
             slug: string;
             /** Strategies */
             strategies: string[];
+        };
+        /**
+         * PerformanceOut
+         * @description NAV path for the chart — only days with full constituent price coverage.
+         *
+         *     ``coverage`` is covered trading days / calendar trading days in the series span (0-1).
+         *     A partial series that still plots every day is what made a +48% basket look like a
+         *     five-fold climb: two sparse points joined as if they were a continuous record.
+         */
+        baskfy_api__routers__explore__PerformanceOut: {
+            /** Coverage */
+            coverage: string;
+            /** Points */
+            points: components["schemas"]["PerformancePointOut"][];
+            /** Slug */
+            slug: string;
         };
         /**
          * ManagerOut
@@ -11602,7 +11917,7 @@ export interface operations {
                     "application/json": components["schemas"]["AdminActionListOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -11705,7 +12020,7 @@ export interface operations {
                     "application/json": components["schemas"]["DataVersionListOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -11808,7 +12123,7 @@ export interface operations {
                     "application/json": components["schemas"]["TaskAcceptedOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -11911,7 +12226,7 @@ export interface operations {
                     "application/json": components["schemas"]["PipelineRunListOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -12014,7 +12329,7 @@ export interface operations {
                     "application/json": components["schemas"]["PipelineRunDetailOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -12117,7 +12432,7 @@ export interface operations {
                     "application/json": components["schemas"]["TaskAcceptedOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -12218,7 +12533,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProviderHealthListOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -12319,7 +12634,7 @@ export interface operations {
                     "application/json": components["schemas"]["PublicApiGateOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -12422,7 +12737,7 @@ export interface operations {
                     "application/json": components["schemas"]["ResyncPlanOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -12525,7 +12840,7 @@ export interface operations {
                     "application/json": components["schemas"]["TaskAcceptedOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -12630,7 +12945,7 @@ export interface operations {
                     "application/json": components["schemas"]["AdminUserListOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -12733,7 +13048,7 @@ export interface operations {
                     "application/json": components["schemas"]["AdminUserDetailOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -12840,7 +13155,7 @@ export interface operations {
                     "application/json": components["schemas"]["AdminUserDetailOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -12942,7 +13257,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -13043,7 +13358,7 @@ export interface operations {
                     "application/json": components["schemas"]["ScreenAlertListOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -13148,7 +13463,7 @@ export interface operations {
                     "application/json": components["schemas"]["ScreenAlertOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -13253,7 +13568,7 @@ export interface operations {
                     "application/json": components["schemas"]["UnsubscribeOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -13354,7 +13669,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -13461,7 +13776,7 @@ export interface operations {
                     "application/json": components["schemas"]["ScreenAlertOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -13564,7 +13879,7 @@ export interface operations {
                     "application/json": components["schemas"]["ScreenAlertDeliveryListOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -13669,7 +13984,7 @@ export interface operations {
                     "application/json": components["schemas"]["SessionOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -13768,7 +14083,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -13869,7 +14184,7 @@ export interface operations {
                     "application/json": components["schemas"]["SessionOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -13972,7 +14287,7 @@ export interface operations {
                     "application/json": components["schemas"]["BacktestListOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -14079,7 +14394,7 @@ export interface operations {
                     "application/json": components["schemas"]["BacktestAcceptedOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -14182,7 +14497,7 @@ export interface operations {
                     "application/json": components["schemas"]["BacktestOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -14283,7 +14598,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -14388,7 +14703,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -14491,7 +14806,7 @@ export interface operations {
                     "text/event-stream": string;
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -14596,7 +14911,7 @@ export interface operations {
                     "application/json": components["schemas"]["ExportLinkOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -14703,7 +15018,7 @@ export interface operations {
                     "application/json": components["schemas"]["HoldingPage"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -14809,7 +15124,7 @@ export interface operations {
                     "application/json": components["schemas"]["TradePage"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -14913,7 +15228,7 @@ export interface operations {
                     "application/json": components["schemas"]["BasketOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -15014,7 +15329,7 @@ export interface operations {
                     "application/json": components["schemas"]["RebalancePlanOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -15115,7 +15430,7 @@ export interface operations {
                     "application/json": components["schemas"]["KiteBasketOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -15216,7 +15531,7 @@ export interface operations {
                     "application/json": components["schemas"]["BrokerListOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -15320,7 +15635,7 @@ export interface operations {
                     "application/json": components["schemas"]["CallbackOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -15423,7 +15738,7 @@ export interface operations {
                     "application/json": components["schemas"]["BrokerOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -15526,7 +15841,7 @@ export interface operations {
                     "application/json": components["schemas"]["ConnectOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -15629,7 +15944,7 @@ export interface operations {
                     "application/json": components["schemas"]["SyncHoldingsOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -15734,7 +16049,7 @@ export interface operations {
                     "application/json": components["schemas"]["CreateBasketOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -15839,7 +16154,7 @@ export interface operations {
                     "application/json": components["schemas"]["FromScreenOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -15940,7 +16255,7 @@ export interface operations {
                     "application/json": components["schemas"]["FeeLedgerOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -16041,7 +16356,7 @@ export interface operations {
                     "application/json": components["schemas"]["EnabledStubOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -16147,7 +16462,7 @@ export interface operations {
                     "application/json": components["schemas"]["InvestmentListOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -16252,7 +16567,7 @@ export interface operations {
                     "application/json": components["schemas"]["MarkOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -16355,7 +16670,7 @@ export interface operations {
                     "application/json": components["schemas"]["InvestmentDetailOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -16458,7 +16773,7 @@ export interface operations {
                     "application/json": components["schemas"]["CostsOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -16565,7 +16880,7 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -16672,7 +16987,7 @@ export interface operations {
                     "application/json": components["schemas"]["DriftFixOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -16779,7 +17094,7 @@ export interface operations {
                     "application/json": components["schemas"]["DriftScanOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -16886,7 +17201,7 @@ export interface operations {
                     "application/json": components["schemas"]["InvestmentPortfolioLinkOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -16989,7 +17304,7 @@ export interface operations {
                     "application/json": components["schemas"]["InvestmentPortfolioLinkOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -17092,7 +17407,7 @@ export interface operations {
                     "application/json": components["schemas"]["SipOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -17199,7 +17514,7 @@ export interface operations {
                     "application/json": components["schemas"]["SipOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -17300,7 +17615,7 @@ export interface operations {
                     "application/json": components["schemas"]["EnabledStubOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -17401,7 +17716,7 @@ export interface operations {
                     "application/json": components["schemas"]["EnabledStubOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -17502,7 +17817,7 @@ export interface operations {
                     "application/json": components["schemas"]["PendingActionListOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -17605,7 +17920,7 @@ export interface operations {
                     "application/json": components["schemas"]["PendingActionMutationOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -17708,7 +18023,7 @@ export interface operations {
                     "application/json": components["schemas"]["PendingActionMutationOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -17813,7 +18128,7 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -17918,7 +18233,7 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -18023,7 +18338,7 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -18124,7 +18439,7 @@ export interface operations {
                     "application/json": components["schemas"]["EnabledStubOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -18225,7 +18540,7 @@ export interface operations {
                     "application/json": components["schemas"]["FlagStateOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -18328,7 +18643,7 @@ export interface operations {
                     "application/json": components["schemas"]["FreeAccessOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -18429,7 +18744,7 @@ export interface operations {
                     "application/json": components["schemas"]["TrendingOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -18530,7 +18845,7 @@ export interface operations {
                     "application/json": components["schemas"]["UpdatePostListOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -18635,7 +18950,7 @@ export interface operations {
                     "application/json": components["schemas"]["CheckoutSessionOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -18736,7 +19051,7 @@ export interface operations {
                     "application/json": components["schemas"]["baskfy_api__routers__desk__HoldingsOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -18834,10 +19149,10 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PerformanceOut"];
+                    "application/json": components["schemas"]["baskfy_api__routers__desk__PerformanceOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -18938,7 +19253,7 @@ export interface operations {
                     "application/json": components["schemas"]["ReconcileOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -19039,7 +19354,7 @@ export interface operations {
                     "application/json": components["schemas"]["RegimeOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -19142,7 +19457,7 @@ export interface operations {
                     "application/json": components["schemas"]["TradebookOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -19240,6 +19555,8 @@ export interface operations {
                 sort?: "min_amount" | "ret_1y" | "cagr_3y" | "cagr_5y" | "name" | "launched_at" | "volatility";
                 order?: "asc" | "desc";
                 q?: string | null;
+                limit?: number | null;
+                offset?: number;
             };
             header?: never;
             path?: never;
@@ -19256,7 +19573,7 @@ export interface operations {
                     "application/json": components["schemas"]["BasketListOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -19357,7 +19674,7 @@ export interface operations {
                     "application/json": components["schemas"]["CollectionListOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -19460,7 +19777,7 @@ export interface operations {
                     "application/json": components["schemas"]["CollectionOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -19561,7 +19878,7 @@ export interface operations {
                     "application/json": components["schemas"]["ManagerListOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -19664,7 +19981,7 @@ export interface operations {
                     "application/json": components["schemas"]["baskfy_api__routers__explore__ManagerOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -19767,7 +20084,7 @@ export interface operations {
                     "application/json": components["schemas"]["BasketCardOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -19870,7 +20187,7 @@ export interface operations {
                     "application/json": components["schemas"]["ConstituentsOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -19976,7 +20293,319 @@ export interface operations {
                     "application/json": components["schemas"]["KiteBasketOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getExplorePerformance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["baskfy_api__routers__explore__PerformanceOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    listBasketVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionsOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    diffBasketVersions: {
+        parameters: {
+            query: {
+                from: number;
+                to: number;
+            };
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionDiffOut"];
+                };
+            };
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -20079,7 +20708,7 @@ export interface operations {
                     "application/json": components["schemas"]["IndexDashboardOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -20184,7 +20813,7 @@ export interface operations {
                     "application/json": components["schemas"]["InstrumentSearchOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -20289,7 +20918,7 @@ export interface operations {
                     "application/json": components["schemas"]["FactsheetOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -20392,7 +21021,7 @@ export interface operations {
                     "application/json": components["schemas"]["CorporateActionsOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -20499,7 +21128,7 @@ export interface operations {
                     "application/json": components["schemas"]["InstrumentHistoryOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -20606,7 +21235,7 @@ export interface operations {
                     "application/json": components["schemas"]["RankHistoryOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -20710,7 +21339,7 @@ export interface operations {
                     "application/json": components["schemas"]["InvoicePage"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -20813,7 +21442,7 @@ export interface operations {
                     "application/pdf": unknown;
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -20914,7 +21543,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiKeyListOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -21019,7 +21648,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiKeyIssuedOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -21120,7 +21749,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -21227,7 +21856,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiKeyOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -21330,7 +21959,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiKeyIssuedOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -21435,7 +22064,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiKeyUsageOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -21543,7 +22172,7 @@ export interface operations {
                     "application/json": components["schemas"]["ListingsPage"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -21644,7 +22273,7 @@ export interface operations {
                     "application/json": components["schemas"]["baskfy_api__routers__managers__ManagerOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -21749,7 +22378,7 @@ export interface operations {
                     "application/json": components["schemas"]["baskfy_api__routers__managers__ManagerOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -21852,7 +22481,7 @@ export interface operations {
                     "application/json": components["schemas"]["PublishOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -21955,7 +22584,7 @@ export interface operations {
                     "application/json": components["schemas"]["PublishOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -22056,7 +22685,7 @@ export interface operations {
                     "application/json": components["schemas"]["RevenueShareOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -22163,7 +22792,7 @@ export interface operations {
                     "application/json": components["schemas"]["baskfy_api__routers__managers__ManagerOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -22267,7 +22896,7 @@ export interface operations {
                     "application/json": components["schemas"]["MarketHealthOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -22372,7 +23001,7 @@ export interface operations {
                     "application/json": components["schemas"]["MarketHealthHistoryOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -22473,7 +23102,7 @@ export interface operations {
                     "application/json": components["schemas"]["MeOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -22578,7 +23207,7 @@ export interface operations {
                     "application/json": components["schemas"]["DeletionOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -22683,7 +23312,7 @@ export interface operations {
                     "application/json": components["schemas"]["MeOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -22784,7 +23413,7 @@ export interface operations {
                     "application/json": components["schemas"]["DataExportOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -22876,7 +23505,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["DeleteAccountIn"];
+                "application/json": components["schemas"]["RestoreAccountIn"];
             };
         };
         responses: {
@@ -22889,7 +23518,7 @@ export interface operations {
                     "application/json": components["schemas"]["DeletionOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -22990,7 +23619,7 @@ export interface operations {
                     "application/json": components["schemas"]["ColumnOut"][];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -23091,7 +23720,7 @@ export interface operations {
                     "application/json": components["schemas"]["FactorOut"][];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -23192,7 +23821,7 @@ export interface operations {
                     "application/json": components["schemas"]["StatusOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -23298,7 +23927,7 @@ export interface operations {
                     "application/json": components["schemas"]["TradingDaysOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -23399,7 +24028,7 @@ export interface operations {
                     "application/json": components["schemas"]["UniverseOut"][];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -23500,7 +24129,7 @@ export interface operations {
                     "application/json": components["schemas"]["PlanListOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -23605,7 +24234,7 @@ export interface operations {
                     "application/json": components["schemas"]["baskfy_api__routers__portfolio_overview__PortfolioDetailOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -23710,7 +24339,7 @@ export interface operations {
                     "application/json": components["schemas"]["ActivityOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -23811,7 +24440,7 @@ export interface operations {
                     "application/json": components["schemas"]["baskfy_api__routers__portfolio_overview__HoldingsOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -23915,7 +24544,7 @@ export interface operations {
                     "application/json": components["schemas"]["OverviewOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -24019,7 +24648,7 @@ export interface operations {
                     "application/json": components["schemas"]["ReconciliationInboxOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -24126,7 +24755,7 @@ export interface operations {
                     "application/json": components["schemas"]["ResolveOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -24227,7 +24856,7 @@ export interface operations {
                     "application/json": components["schemas"]["SuggestionsOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -24330,7 +24959,7 @@ export interface operations {
                     "application/json": components["schemas"]["baskfy_api__routers__portfolio_overview__PortfolioDetailOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -24437,7 +25066,7 @@ export interface operations {
                     "application/json": components["schemas"]["baskfy_api__routers__portfolio_overview__PortfolioDetailOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -24543,7 +25172,7 @@ export interface operations {
                     "application/json": components["schemas"]["NavSeriesOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -24644,7 +25273,7 @@ export interface operations {
                     "application/json": components["schemas"]["PortfolioForestOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -24751,7 +25380,7 @@ export interface operations {
                     "application/json": components["schemas"]["PortfolioWriteDetailOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -24861,7 +25490,7 @@ export interface operations {
                     "application/json": components["schemas"]["PortfolioWriteDetailOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -24960,7 +25589,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -25063,7 +25692,7 @@ export interface operations {
                     "application/json": components["schemas"]["baskfy_api__routers__portfolios__PortfolioDetailOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -25164,7 +25793,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -25271,7 +25900,7 @@ export interface operations {
                     "application/json": components["schemas"]["baskfy_api__routers__portfolios__PortfolioDetailOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -25377,7 +26006,7 @@ export interface operations {
                     "application/json": components["schemas"]["AllocationOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -25480,7 +26109,7 @@ export interface operations {
                     "application/json": components["schemas"]["PortfolioRollupOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -25587,7 +26216,7 @@ export interface operations {
                     "application/json": components["schemas"]["PortfolioWriteDetailOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -25694,7 +26323,7 @@ export interface operations {
                     "application/json": components["schemas"]["RebalanceOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -25800,7 +26429,7 @@ export interface operations {
                     "application/json": components["schemas"]["RebalanceHistoryPage"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -25904,7 +26533,7 @@ export interface operations {
                     "application/json": components["schemas"]["RebalanceOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -26007,7 +26636,7 @@ export interface operations {
                     "application/json": components["schemas"]["SleeveListOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -26114,7 +26743,7 @@ export interface operations {
                     "application/json": components["schemas"]["SleeveListOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -26215,7 +26844,7 @@ export interface operations {
                     "application/json": components["schemas"]["ScreenListOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -26322,7 +26951,7 @@ export interface operations {
                     "application/json": components["schemas"]["ScreenOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -26427,7 +27056,7 @@ export interface operations {
                     "application/json": components["schemas"]["ScreenRunResponse"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -26530,7 +27159,7 @@ export interface operations {
                     "application/json": components["schemas"]["ScreenOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -26631,7 +27260,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -26738,7 +27367,7 @@ export interface operations {
                     "application/json": components["schemas"]["ScreenOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -26841,7 +27470,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -26950,7 +27579,7 @@ export interface operations {
                     "application/json": components["schemas"]["ScreenOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -27057,7 +27686,7 @@ export interface operations {
                     "application/json": components["schemas"]["ScreenRunResponse"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -27163,7 +27792,7 @@ export interface operations {
                     "application/json": components["schemas"]["ScreenRunPage"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -27269,7 +27898,7 @@ export interface operations {
                     "application/json": components["schemas"]["CatalogSearchOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -27374,7 +28003,7 @@ export interface operations {
                     "application/json": components["schemas"]["AcceptedOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -27475,7 +28104,7 @@ export interface operations {
                     "application/json": components["schemas"]["SwingConfigView"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -27560,9 +28189,7 @@ export interface operations {
     };
     patchConfig: {
         parameters: {
-            query?: {
-                now?: string | null;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
@@ -27582,7 +28209,7 @@ export interface operations {
                     "application/json": components["schemas"]["SwingConfigView"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -27683,7 +28310,7 @@ export interface operations {
                     "application/json": components["schemas"]["SwingJournalOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -27787,7 +28414,7 @@ export interface operations {
                     "application/json": components["schemas"]["SwingMarketOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -27888,7 +28515,7 @@ export interface operations {
                     "application/json": components["schemas"]["SwingPositionsOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -27989,7 +28616,7 @@ export interface operations {
                     "application/json": components["schemas"]["SwingScanQueuedOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -28092,7 +28719,7 @@ export interface operations {
                     "application/json": components["schemas"]["SwingScanRunOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -28195,7 +28822,7 @@ export interface operations {
                     "application/json": components["schemas"]["SwingSectorsOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -28300,7 +28927,7 @@ export interface operations {
                     "application/json": components["schemas"]["SwingSetupsOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -28406,7 +29033,7 @@ export interface operations {
                     "application/json": components["schemas"]["SwingBarsOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -28510,7 +29137,7 @@ export interface operations {
                     "application/json": components["schemas"]["SwingSignalsOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -28613,7 +29240,7 @@ export interface operations {
                     "application/json": components["schemas"]["SwingWatchListOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -28718,7 +29345,7 @@ export interface operations {
                     "application/json": components["schemas"]["SwingWatchOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -28821,7 +29448,7 @@ export interface operations {
                     "application/json": components["schemas"]["SwingWatchOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -28928,7 +29555,7 @@ export interface operations {
                     "application/json": components["schemas"]["SwingWatchOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -29029,7 +29656,7 @@ export interface operations {
                     "application/json": components["schemas"]["TwtBacktestOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -29130,7 +29757,7 @@ export interface operations {
                     "application/json": components["schemas"]["TwtScanQueuedOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -29233,7 +29860,7 @@ export interface operations {
                     "application/json": components["schemas"]["TwtScanRunOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -29337,7 +29964,7 @@ export interface operations {
                     "application/json": components["schemas"]["TwtTodayOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -29438,7 +30065,7 @@ export interface operations {
                     "application/json": components["schemas"]["VbtBacktestOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -29539,7 +30166,7 @@ export interface operations {
                     "application/json": components["schemas"]["VbtBookOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -29643,7 +30270,7 @@ export interface operations {
                     "application/json": components["schemas"]["VbtBreadthOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -29744,7 +30371,7 @@ export interface operations {
                     "application/json": components["schemas"]["VbtConfigView"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -29849,7 +30476,7 @@ export interface operations {
                     "application/json": components["schemas"]["VbtConfigView"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -29950,7 +30577,7 @@ export interface operations {
                     "application/json": components["schemas"]["VbtScanQueuedOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -30053,7 +30680,7 @@ export interface operations {
                     "application/json": components["schemas"]["VbtScanRunOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -30157,7 +30784,7 @@ export interface operations {
                     "application/json": components["schemas"]["VbtTodayOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -30263,7 +30890,7 @@ export interface operations {
                     "application/json": components["schemas"]["VbtBarsOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -30364,7 +30991,7 @@ export interface operations {
                     "application/json": components["schemas"]["WatchlistOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -30469,7 +31096,520 @@ export interface operations {
                     "application/json": components["schemas"]["WatchlistItemOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getDiscoverPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoverPreferencesOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    putDiscoverPreferences: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscoverPreferencesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoverPreferencesOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    listInstrumentWatchlist: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstrumentWatchlistOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    addInstrumentWatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstrumentWatchAddIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstrumentWatchItemOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    removeInstrumentWatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                symbol: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -30570,7 +31710,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -30671,7 +31811,7 @@ export interface operations {
                     "application/json": components["schemas"]["WebhookEndpointListOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -30776,7 +31916,7 @@ export interface operations {
                     "application/json": components["schemas"]["WebhookEndpointWithSecretOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -30877,7 +32017,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -30984,7 +32124,7 @@ export interface operations {
                     "application/json": components["schemas"]["WebhookEndpointOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -31087,7 +32227,7 @@ export interface operations {
                     "application/json": components["schemas"]["WebhookDeliveryListOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -31190,7 +32330,7 @@ export interface operations {
                     "application/json": components["schemas"]["WebhookEndpointWithSecretOut"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -31294,7 +32434,7 @@ export interface operations {
                     "application/json": components["schemas"]["WebhookAck"];
                 };
             };
-            /** @description Invalid screen definition */
+            /** @description Bad request */
             400: {
                 headers: {
                     [name: string]: unknown;

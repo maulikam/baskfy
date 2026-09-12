@@ -25,16 +25,25 @@ describe("consumer jargon ban (Tree 6)", () => {
     }
   });
 
-  it("featured basket page source has no desk/MomentumScan user-facing copy", () => {
-    const file = join(
-      process.cwd(),
-      "src/app/(app)/discover/featured/page.tsx",
-    );
-    const src = readFileSync(file, "utf8");
-    expect(src).not.toMatch(/MomentumScan/);
-    expect(src).not.toMatch(/for the desk/);
-    expect(src).not.toMatch(/screen_run_id/);
-    expect(src).not.toMatch(/data version/);
+  it("no consumer basket surface carries desk/MomentumScan copy", () => {
+    /*
+     * This named one file — `src/app/(app)/discover/featured/page.tsx` — until `0716204` deleted
+     * it as an orphan: nothing linked to it, and the Discover hub is the catalogue now. The page
+     * went; the guarantee it was standing in for did not, so the sweep moved to the surfaces that
+     * replaced it rather than following the deleted file into the bin.
+     */
+    const pages = [
+      join(process.cwd(), "src/app/(app)/discover"),
+      join(process.cwd(), "src/app/(app)/basket"),
+    ].flatMap((root) => walk(root));
+    expect(pages.length, "the sweep found no pages to read").toBeGreaterThanOrEqual(5);
+    for (const file of pages) {
+      const src = readFileSync(file, "utf8");
+      expect(src, file).not.toMatch(/MomentumScan/);
+      expect(src, file).not.toMatch(/for the desk/);
+      expect(src, file).not.toMatch(/screen_run_id/);
+      expect(src, file).not.toMatch(/data version/);
+    }
   });
 
   it("no app page hardcodes Rebalance Tracker as metadata title", () => {

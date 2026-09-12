@@ -23,7 +23,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { apiOrigin, serverApiOrigin } from "@/lib/api/config";
 
@@ -127,32 +127,28 @@ describe("serverApiOrigin falls back rather than inventing a host", () => {
 describe("apiOrigin is the single public resolver", () => {
   const KEY = "NEXT_PUBLIC_API_URL";
 
+  /*
+   * `vi.stubEnv` rather than `Object.defineProperty(process.env, …)`. Node's `process.env` is an
+   * exotic object that accepts only a configurable, writable *and* enumerable data descriptor,
+   * and the descriptor these two cases used named the first of the three — so both threw a
+   * `TypeError` before reaching their assertion. Vitest special-cases `NODE_ENV` in `stubEnv`
+   * and `unstubAllEnvs` puts it back, which is the same reason `hsts-preload.test.ts` uses it.
+   * The spec asserted is unchanged: production must be told the origin, development may assume.
+   */
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("throws in production when NEXT_PUBLIC_API_URL is unset (no localhost fallback)", () => {
-    const previous = process.env[KEY];
-    const previousNode = process.env.NODE_ENV;
-    delete process.env[KEY];
-    Object.defineProperty(process.env, "NODE_ENV", { value: "production", writable: true });
-    try {
-      expect(() => apiOrigin()).toThrow(/NEXT_PUBLIC_API_URL must be set in production/);
-    } finally {
-      if (previous === undefined) delete process.env[KEY];
-      else process.env[KEY] = previous;
-      Object.defineProperty(process.env, "NODE_ENV", { value: previousNode, writable: true });
-    }
+    vi.stubEnv(KEY, undefined);
+    vi.stubEnv("NODE_ENV", "production");
+    expect(() => apiOrigin()).toThrow(/NEXT_PUBLIC_API_URL must be set in production/);
   });
 
   it("falls back to localhost only outside production", () => {
-    const previous = process.env[KEY];
-    const previousNode = process.env.NODE_ENV;
-    delete process.env[KEY];
-    Object.defineProperty(process.env, "NODE_ENV", { value: "development", writable: true });
-    try {
-      expect(apiOrigin()).toBe("http://localhost:8000");
-    } finally {
-      if (previous === undefined) delete process.env[KEY];
-      else process.env[KEY] = previous;
-      Object.defineProperty(process.env, "NODE_ENV", { value: previousNode, writable: true });
-    }
+    vi.stubEnv(KEY, undefined);
+    vi.stubEnv("NODE_ENV", "development");
+    expect(apiOrigin()).toBe("http://localhost:8000");
   });
 
   it("never reads the retired NEXT_PUBLIC_API_ORIGIN env", () => {

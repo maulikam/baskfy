@@ -166,10 +166,18 @@ describe("nothing is unavailable without its reason", () => {
   });
 
   it("renders a reason rather than a zero when a figure is unavailable", () => {
+    /* AFH 5.2 moved the reason off the tile body and onto the tooltip: "Needs more data" in
+       words, the sentence on `title` and again for a screen reader. So the reason is still
+       mandatory and still reaches every reader — it is no longer a paragraph under every tile.
+       This used to look for the sentence as page text, which the decision made impossible;
+       what it must keep asserting is that there is a reason at all, and that it is not a zero
+       or a dash standing in for one. */
     renderWorkspace(
       <MetricValue metric={metric("Avg price", "what it cost", null, "Your broker did not send one.")} />,
     );
-    expect(screen.getByText("Your broker did not send one.")).toBeInTheDocument();
+    const tile = screen.getByText("Needs more data");
+    expect(tile.closest("[title]")).toHaveAttribute("title", "Your broker did not send one.");
+    expect(screen.getByText("Avg price: Your broker did not send one.")).toBeInTheDocument();
     expect(screen.queryByText("₹0")).not.toBeInTheDocument();
     expect(screen.queryByText(BARE_DASH)).not.toBeInTheDocument();
   });

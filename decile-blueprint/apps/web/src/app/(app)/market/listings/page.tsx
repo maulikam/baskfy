@@ -44,7 +44,7 @@ function listingsHref(parts: {
   if (parts.cursor) query.set("cursor", parts.cursor);
   if (parts.prev) query.set("prev", parts.prev);
   const qs = query.toString();
-  return (qs ? `/market/listings?${qs}` : "/market/listings") as Route;
+  return qs ? `/market/listings?${qs}` : "/market/listings";
 }
 
 export default async function ListingsPage({

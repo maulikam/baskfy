@@ -7065,3 +7065,138 @@ Committing a generated secret — never.
 
 **Reverse.** Drop the `REVALIDATE_SECRET` line from `compose.prod.yml` and the generation step
 from `deploy-swing.sh`; the comment moves are cosmetic and independent.
+
+## AF X.1 — A test that names a deleted file is not a test of nothing · ⚠ UNREVIEWED
+
+**Context.** Six of the seventeen web test failures left by the nine-lane merge were a test and a
+lane disagreeing, with the lane later and deliberate every time. The question in each case was
+which half to move.
+
+| Failure | Later decision | What moved |
+|---|---|---|
+| `jargon-ban` reads `discover/featured/page.tsx` | `0716204` deleted it as an orphan | the sweep, to `(app)/discover` + `(app)/basket` — ten pages instead of one |
+| `nav` pins Discover's five tabs | `dd23b59` (AF I.3) added Search | the expectation, plus a new assertion that the tab has a page and a `PAGES` entry |
+| `login-destination` expects `/build` | `dd23b59` (AF I.4) set `/onboarding` | the expectation, **and the fourteen Playwright waits the test exists to keep in step** |
+| `factsheet` expects `robots: index true` | `d24126a` (AUDIT 4.8) set index false — the page redirects a crawler to `/login` | the expectation and the test's title |
+| `trending-module` expects "Rankings are not available right now" | `f08d60f` (audit §1.14) removed the sentence and stood the module down | the assertion, to *renders nothing* — an empty frame is now the regression |
+| `unavailable` expects a reason paragraph | AFH 5.2 replaced it with one line + tooltip | the assertion, to the tooltip, the `title` and the screen-reader sentence |
+
+**Choice.** Move the test in each case, and say in the test *which commit* made it stale and what
+the surviving guarantee is. No assertion was deleted and none was loosened to "whatever the code
+does": each rewrite still fails if the behaviour regresses, and three of them (`jargon-ban`,
+`nav`, `trending-module`) assert strictly more than they did.
+
+**Rejected.** Reverting the six lane changes to satisfy the tests — each has a commit message
+naming its reason, which the root agreement's "the DECISION wins" section says is a later fact
+than a test written before it. Deleting the assertions — the outcome the audit brief named as the
+one it would refuse.
+
+**Reverse.** Each test names its commit; revert that commit and the assertion follows it back.
+
+## AF X.2 — Two tests were broken by their own harness, not by a decision · ⚠ UNREVIEWED
+
+**Context.** Not every red test is a disagreement about intent. Three failures were a test
+apparatus that had stopped working while the thing it tests stayed correct.
+
+* `api-origin-split` used `Object.defineProperty(process.env, "NODE_ENV", { value, writable })`.
+  Node's `process.env` accepts **only** a configurable, writable *and* enumerable data descriptor,
+  so both cases threw a `TypeError` before reaching their assertion. Now `vi.stubEnv`, the idiom
+  `hsts-preload.test.ts` already uses.
+* `afh-5.1-voice` looked for the literal text `>Details<`. The `<h1>`'s class list grew past the
+  print width and Prettier wrapped the element; not one character a reader sees changed. Now
+  matched against the `<h1>` itself.
+
+**Choice.** Fix the apparatus, leave the spec alone. The assertions are the same assertions.
+
+**Rejected.** Treating the `TypeError` as evidence that production-must-be-configured had been
+relaxed — it had not; `lib/api/config.ts` still throws.
+
+**Reverse.** Nothing depends on these; restore the previous lines.
+
+## AF X.3 — A feed's guid is an address, so the test has to supply one · ⚠ UNREVIEWED
+
+**Context.** `rss.test.ts` asserted `https://baskfy.com/blog/<slug>` guids and got
+`http://localhost:3000/...`. `2e4437e` had made `SITE_URL` read `NEXT_PUBLIC_SITE_URL` and
+*refuse to guess* in production, with `http://localhost:3000` as the development fallback — and a
+bare `vitest run` is development.
+
+**The production path is right and was checked**, because the alternative reading (the feed
+hard-codes the wrong origin) would be a real defect: `tools/deploy/push-images.sh` passes
+`NEXT_PUBLIC_SITE_URL=https://${HOSTNAME_PUBLIC}` as a build arg, and `requiredPublicUrl` throws
+rather than falling back when `NODE_ENV=production`. There is no path on which a shipped feed
+carries a `localhost` guid.
+
+**Choice.** The test configures the origin the way the build does — `vi.stubEnv` then a fresh
+import, the `hsts-preload.test.ts` idiom — and keeps asserting the **literal** permalink. A
+second case asserts the document contains no `localhost` at all.
+
+**Rejected.** Asserting `` `${SITE_URL}/blog/${slug}` ``: the module under test builds the guid
+from that same constant, so the test would agree with the code about the one thing it exists to
+check. Hard-coding the origin in `site.ts` again — that is the fallback `2e4437e` removed on
+purpose.
+
+**Reverse.** Restore the static import and the literal expectation.
+
+## AF X.4 — A redirect stub is exempt from a page's duties, and must prove it is one · ⚠ UNREVIEWED
+
+**Context.** AFH 5.7 (`ed789d0`) made `/discover/saved` a `redirect("/portfolio/watchlist")`.
+Two sweeps then failed on it: every Discover page must carry the standing disclosure block, and
+every basket page must say it is read-only. A page that forwards before rendering has no reader
+to address and nowhere to put either sentence.
+
+**Choice.** Both sweeps skip a page whose whole body is `redirect("/…")` — and the predicate is
+narrow: the moment the file grows a `return (`, it is a rendering page again and owes both. Each
+sweep also now asserts it read at least four *rendering* pages, so the exemption cannot quietly
+empty it. The same pass gave `/discover/search` (AF I.3, `dd23b59`) the disclosure block and the
+read-only line it was shipped without, and a `PAGES` entry like every other Discover route.
+
+**Rejected.** Deleting the two assertions, or excluding `saved/page.tsx` by name — a name-based
+skip survives the file becoming a real page again, which is exactly when the rule matters.
+
+**Reverse.** Drop `isRedirectStub` from both tests and restore the unconditional loops; remove
+the disclosure block from `discover/search/page.tsx`.
+
+## AF X.5 — The checked-in OpenAPI document was the stale half, not the two callers · ⚠ UNREVIEWED
+
+**Context.** `served-paths.test.ts` reported that `version-diff-panel.tsx` fetches
+`/explore/{slug}/versions/diff` and `save-instrument-button.tsx` fetches
+`/watchlist/instruments/{symbol}`, and that `packages/api-client/openapi.json` serves neither. Its
+`KNOWN_UNSERVED` register is empty and checked in both directions precisely so it cannot be used
+to make the suite green.
+
+**The register was the wrong answer**, because the API does serve both:
+`routers/curated_versions.py:195` and `routers/watchlist.py:192`. `uv run python -m
+baskfy_api.openapi --check` said the checked-in document was stale — as CI would have, on the very
+next run.
+
+**Choice.** Regenerate `openapi.json` and the TypeScript client from it (`make openapi` plus the
+client's own `generate`), which is what CI's "openapi.json is current" and
+`git diff --exit-code -- packages/api-client/src/generated` steps require anyway. The diff is
+large because it carries every API change the nine lanes landed, not just these two routes.
+
+**Rejected.** Adding both paths to `KNOWN_UNSERVED` — the register is for open bugs with owners,
+and these are not bugs; the test's own docstring forbids exactly this use.
+
+**Reverse.** `git checkout` the two generated files from this commit's parent. Note that this puts
+CI back to red on its staleness check.
+
+## AF X.6 — Two redirects were left aiming at pages that had been deleted · ⚠ UNREVIEWED
+
+**Context.** `0716204` deleted `/discover/featured` and `/discover/plan` as orphans. Nothing
+linked to them from inside the app — but `next.config.ts` and `lib/nav.ts` still redirected
+`/baskets/featured` and `/baskets/plan` **to** them, so the two permanent redirects whose whole
+purpose is that an old bookmark keeps resolving were resolving to a 404. No test caught it:
+`check-shadowed-routes.mjs` checks that a redirect source does not shadow a page, not that its
+destination is one.
+
+**Choice.** Both now land on `/discover` — the catalogue the featured basket was one shelf of, and
+the hub the plan page handed off from. The stale comment above the block, which still claimed
+`/baskets` was the catalogue with no redirect, is corrected in place rather than deleted: it
+stopped being true at M48 (`6195b57`).
+
+**Rejected.** Deleting the two redirects — a 404 and a silent removal look identical to the person
+following the link, and `permanent: true` means browsers have cached the old hop. Restoring the
+deleted pages — that reverts a lane's deliberate decision to satisfy a redirect table.
+
+**Reverse.** Point both destinations back at `/discover/featured` and `/discover/plan`, which only
+makes sense alongside restoring the pages.

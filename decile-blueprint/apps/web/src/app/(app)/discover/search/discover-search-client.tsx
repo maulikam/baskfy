@@ -29,7 +29,6 @@ export function DiscoverSearchClient({ items }: { items: ExploreBasketCard[] }) 
           placeholder="Name, manager or category"
           className="w-full max-w-xl rounded-md border border-border bg-card px-3 py-2 text-sm"
           data-testid="discover-basket-search-input"
-          autoFocus
         />
       </label>
       <p className="text-xs text-muted-foreground" data-testid="discover-search-count">

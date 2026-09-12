@@ -77,15 +77,21 @@ describe("the primary consumer IA", () => {
 
   it("keeps section tabs for each hub", () => {
     expect(SECTION_TABS.market.map((t) => t.label)).toEqual(["Today", "Mood", "Listings"]);
-    /* Discover's five tabs. "Create" is deliberately gone: it builds a strategy, which is Build's
-       job, and a second entrance from inside Discover made the two sections look like rivals. */
+    /* Discover's six tabs. "Create" is deliberately gone: it builds a strategy, which is Build's
+       job, and a second entrance from inside Discover made the two sections look like rivals.
+       "Search" is the sixth, added with `/discover/search` in `dd23b59` (AF I.3) — the catalogue
+       had no way to find a basket by name, only to scroll one. */
     expect(SECTION_TABS.discover.map((t) => t.label)).toEqual([
       "For you",
       "All baskets",
+      "Search",
       "Collections",
       "Compare",
       "Watchlist",
     ]);
+    /* The tab has to lead somewhere: a label with no page behind it is the drift this asserts. */
+    expect(SECTION_TABS.discover.map((t) => t.href)).toContain("/discover/search");
+    expect(PAGES["/discover/search"]).toBeDefined();
     expect(SECTION_TABS.discover.map((t) => t.href)).not.toContain("/create");
     // Create moved here out of Discover: it builds a strategy, which is this hub's job.
     /* AFH 5.5: Swing / Volume breakout / Three weeks tight left the Build tab row for consumers;

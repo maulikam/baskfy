@@ -132,7 +132,10 @@ const nextConfig: NextConfig = {
   },
   /*
    * Tree 6 IA: old consumer paths → Market · Baskets · Build · Me hubs.
-   * `/baskets` itself is the new catalog (no redirect); featured lives at `/baskets/featured`.
+   *
+   * The second sentence here used to read "`/baskets` itself is the new catalog (no redirect)",
+   * which stopped being true at M48 (`6195b57`): the catalogue is `/discover`, and `/baskets` is
+   * one of the sources below. Mirrored by `LEGACY_REDIRECTS` in `lib/nav.ts`.
    */
   redirects() {
     return Promise.resolve([
@@ -161,8 +164,15 @@ const nextConfig: NextConfig = {
        * bookmark or a link in an old email still lands on the right shelf.
        */
       { source: "/baskets", destination: "/discover", permanent: true },
-      { source: "/baskets/featured", destination: "/discover/featured", permanent: true },
-      { source: "/baskets/plan", destination: "/discover/plan", permanent: true },
+      /*
+       * These two pointed at `/discover/featured` and `/discover/plan` until `0716204` deleted
+       * both pages as orphans, which left the redirects aiming at a 404 — the one thing the
+       * paragraph above promises they will never do. They land on the hub instead: it is the
+       * catalogue the featured basket was a single shelf of, and the surface the plan page
+       * handed off from.
+       */
+      { source: "/baskets/featured", destination: "/discover", permanent: true },
+      { source: "/baskets/plan", destination: "/discover", permanent: true },
       { source: "/baskets/collections", destination: "/discover/collections", permanent: true },
       {
         source: "/baskets/collections/:slug",

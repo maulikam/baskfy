@@ -270,8 +270,9 @@ export const LEGACY_REDIRECTS = [
   { source: "/listings", destination: "/market/listings" },
   { source: "/explore", destination: "/discover" },
   { source: "/baskets", destination: "/discover" },
-  { source: "/baskets/featured", destination: "/discover/featured" },
-  { source: "/baskets/plan", destination: "/discover/plan" },
+  /* Both pages were deleted as orphans in `0716204`; the hub is where they now land. */
+  { source: "/baskets/featured", destination: "/discover" },
+  { source: "/baskets/plan", destination: "/discover" },
   { source: "/baskets/collections", destination: "/discover/collections" },
   { source: "/baskets/collections/momentum", destination: "/discover/collections/momentum" },
   { source: "/screens", destination: "/build" },

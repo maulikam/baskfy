@@ -108,9 +108,15 @@ describe("the trending module", () => {
     expect(screen.queryByText(/cash dividends not/)).toBeNull();
   });
 
-  it("degrades to one honest sentence when the ranking API is unreachable", () => {
-    render(<TrendingModule trending={EMPTY_TRENDING} />);
-    expect(screen.getByText(/Rankings are not available right now/)).toBeTruthy();
+  it("renders nothing at all when there is no ranking to show", () => {
+    /* This expected the sentence "Rankings are not available right now." until AFG (`f08d60f`,
+       audit §1.14) removed it: a Trending heading over an apology is a module the reader has to
+       read to learn it has nothing, and Home already has surfaces that do. The module now stands
+       down entirely. The assertion is the strong half of that — an empty *frame* would be the
+       regression, and this catches it. */
+    const { container } = render(<TrendingModule trending={EMPTY_TRENDING} />);
+    expect(screen.queryByTestId("trending-module")).toBeNull();
+    expect(container).toBeEmptyDOMElement();
   });
 
   it("hardcodes no list of its own — every heading comes from the payload", () => {

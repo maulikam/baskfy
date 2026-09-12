@@ -83,6 +83,8 @@ export interface TwtTightName {
   name: string;
   /** The exchange print (`close_raw`), as a decimal string. */
   close_raw: string | null;
+  /** Kite last_price when a session exists. Weekly closes stay the published pattern. */
+  last_price?: string | null;
   /** The three weekly closes the tight test compared — this week's first. */
   week_close_0: string | null;
   week_close_1: string | null;

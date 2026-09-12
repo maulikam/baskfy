@@ -1,6 +1,7 @@
 import type { Metadata, Route } from "next";
 import Link from "next/link";
 
+import { InstrumentLink } from "@/components/instrument/instrument-link";
 import { Answer, Mark } from "@/components/shell/answer";
 import { PageHeader } from "@/components/shell/page-header";
 import { SectionTabs } from "@/components/shell/section-tabs";
@@ -207,7 +208,7 @@ function SetupTable({
                       ★
                     </span>
                   ) : null}
-                  <span className="font-medium">{row.symbol}</span>
+                  <InstrumentLink symbol={row.symbol} />
                   <span className="ml-2 text-xs text-muted-foreground">{row.name}</span>
                   {row.locked_upper_circuit ? (
                     <span
@@ -230,7 +231,7 @@ function SetupTable({
                   <StatusPill status={row.status} />
                 </td>
                 <td className="py-2 pr-3 tabular-nums">{row.score.toFixed(0)}</td>
-                <td className="py-2 pr-3 tabular-nums">{money(row.close)}</td>
+                <td className="py-2 pr-3 tabular-nums">{money(row.last_price ?? row.close)}</td>
                 <td className="py-2 pr-3 tabular-nums font-medium">{money(row.trigger)}</td>
                 <td className="py-2 pr-3 tabular-nums">{money(row.stop_ref)}</td>
                 <td className="py-2 pr-3 tabular-nums">{percent(row.stop_distance_pct)}</td>

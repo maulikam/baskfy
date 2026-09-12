@@ -137,11 +137,15 @@ describe("the watchlist links out to the catalyst beside the typed note", () => 
 
   it("renders an em dash and nothing else for a name with no catalyst at all", async () => {
     await renderWith([row()]);
-    const cell = screen.getByText("FLAGCO").closest("tr");
-    expect(cell).not.toBeNull();
-    expect(cell?.textContent).toContain("—");
-    expect(cell?.textContent).not.toMatch(/earnings/i);
-    expect(cell?.querySelector("a")).toBeNull();
+    const stock = screen.getByRole("link", { name: "FLAGCO" });
+    expect(stock).toHaveAttribute("href", "/instruments/FLAGCO");
+    const rowEl = stock.closest("tr");
+    expect(rowEl).not.toBeNull();
+    const headers = screen.getAllByRole("columnheader").map((header) => header.textContent);
+    const catalyst = rowEl!.querySelectorAll("td")[headers.indexOf("Catalyst")];
+    expect(catalyst?.textContent).toContain("—");
+    expect(catalyst?.textContent).not.toMatch(/earnings/i);
+    expect(catalyst?.querySelector("a")).toBeNull();
   });
 });
 

@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { formatTradeDate } from "@/lib/format";
 import { columnDisplayLabel, suppressedResultColumns } from "@/lib/screens/column-display";
+import { useLiveMarks, withLivePrice } from "@/lib/screens/live-marks";
 import { cn } from "@/lib/utils";
 
 /*
@@ -176,9 +177,21 @@ export function ResultsPanel({
   const [density, setDensity] = useState<Density>("comfortable");
   const [peeked, setPeeked] = useState<ResultRow | null>(null);
 
-  const rows = useMemo<readonly ResultRow[]>(
+  const publishedRows = useMemo<readonly ResultRow[]>(
     () => result?.rows ?? [],
     [result?.rows],
+  );
+  const symbols = useMemo(
+    () =>
+      publishedRows
+        .map((row) => (typeof row.symbol === "string" ? row.symbol : ""))
+        .filter(Boolean),
+    [publishedRows],
+  );
+  const live = useLiveMarks(symbols);
+  const rows = useMemo<readonly ResultRow[]>(
+    () => publishedRows.map((row) => withLivePrice(row, live.marks)),
+    [publishedRows, live.marks],
   );
 
   const sortingFactorLabel = result?.sorting_factor.label ?? "";
@@ -210,7 +223,11 @@ export function ResultsPanel({
           {isPending ? "…" : `${count} matches`}
         </p>
         <p className="text-sm font-light text-muted-foreground" data-testid="as-of">
-          {isPending ? null : `fresh as of ${asOf}`}
+          {isPending
+            ? null
+            : live.liveOverlay
+              ? `live prices, over close of ${asOf}`
+              : `fresh as of ${asOf}`}
         </p>
         {/* Keep the seeded factor string for e2e / power users; visually quieter. */}
         <p className="sr-only" data-testid="sorting-factor">

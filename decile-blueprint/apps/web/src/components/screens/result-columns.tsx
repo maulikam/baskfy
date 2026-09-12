@@ -9,6 +9,7 @@ import {
   ScoreBar,
   scoreBarScale,
 } from "@/components/screens/cell-encodings";
+import { InstrumentLink } from "@/components/instrument/instrument-link";
 import { SaveInstrumentButton } from "@/components/watchlist/save-instrument-button";
 import {
   columnDisplayLabel,
@@ -255,7 +256,7 @@ export function buildColumns(
           return (
             <div className="flex min-w-0 items-center gap-2">
               <div className="min-w-0 flex-1">
-                <div className="truncate font-medium">{symbol}</div>
+                <InstrumentLink symbol={symbol} className="block truncate" />
                 {name && name !== symbol ? (
                   <div className="truncate text-xs text-muted-foreground">{name}</div>
                 ) : null}
@@ -276,7 +277,10 @@ export function buildColumns(
     const column: ColumnDef<ResultRow, unknown> = {
       id: key,
       header: label,
-      accessorKey: key,
+      accessorFn:
+        key === "close_raw"
+          ? (row) => row.last_price ?? row.close_raw
+          : (row) => row[key],
       size: widthFor(key),
       cell: (info) => {
         const raw = info.getValue();

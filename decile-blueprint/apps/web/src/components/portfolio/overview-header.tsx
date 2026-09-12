@@ -2,7 +2,10 @@
 
 import { Download, Eye, EyeOff, Plus, RefreshCw } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
 
+import { syncHoldingsAction } from "@/app/actions/brokers";
 import { useAmounts } from "@/components/portfolio/amounts";
 import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
@@ -75,6 +78,90 @@ function syncSummary(sync: readonly SyncStatus[]): string {
   return `Connected to ${sync.length} brokers`;
 }
 
+function BrokerSyncMenu({ sync }: { sync: readonly SyncStatus[] }) {
+  const router = useRouter();
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const [syncing, startSync] = useTransition();
+
+  function runSync(brokerId: string) {
+    setNote(null);
+    setPendingId(brokerId);
+    startSync(async () => {
+      const result = await syncHoldingsAction(brokerId);
+      setPendingId(null);
+      setNote(
+        result.persisted
+          ? `${result.written} holding${result.written === 1 ? "" : "s"} synced.`
+          : result.sync_note || result.note || "Could not sync holdings.",
+      );
+      if (result.persisted) router.refresh();
+    });
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button type="button" variant="outline" size="sm" data-testid="sync-status">
+            <RefreshCw aria-hidden="true" className={syncing ? "animate-spin" : undefined} />
+            {syncSummary(sync)}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-80">
+          <DropdownMenuLabel>Broker sync</DropdownMenuLabel>
+          {sync.length === 0 ? (
+            <p className="px-2 py-1.5 text-xs text-muted-foreground">
+              Connect a broker and your holdings appear here. Nothing is bought or sold.{" "}
+              <Link href="/brokers" className="text-foreground underline-offset-4 hover:underline">
+                Open brokers
+              </Link>
+            </p>
+          ) : (
+            <ul className="px-2 py-1 text-xs">
+              {sync.map((row) => {
+                const brokerId = row.broker.broker_id;
+                const busy = syncing && pendingId === brokerId;
+                return (
+                  <li
+                    key={row.broker.broker_account_id}
+                    data-testid="broker-sync-row"
+                    className="flex items-center justify-between gap-3 py-1.5"
+                  >
+                    <span className="min-w-0">
+                      <span className="block font-medium text-foreground">{row.broker.label}</span>
+                      <span className="text-muted-foreground">
+                        {row.synced_on === null || row.synced_on === undefined
+                          ? row.label
+                          : formatTradeDate(row.synced_on)}
+                      </span>
+                    </span>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={syncing}
+                      data-testid={`sync-now-${brokerId}`}
+                      onClick={() => runSync(brokerId)}
+                    >
+                      {busy ? "Syncing…" : "Sync now"}
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {note ? (
+        <p className="max-w-[16rem] text-xs text-muted-foreground" data-testid="sync-note" role="status">
+          {note}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export interface OverviewHeaderProps {
   overview: Overview;
   /** The rows currently on screen — what Export writes. */
@@ -115,39 +202,7 @@ export function OverviewHeader({ overview, rows }: OverviewHeaderProps) {
             {visible ? "Hide amounts" : "Show amounts"}
           </Button>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button type="button" variant="outline" size="sm" data-testid="sync-status">
-                <RefreshCw aria-hidden="true" />
-                {syncSummary(sync)}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80">
-              <DropdownMenuLabel>Broker sync</DropdownMenuLabel>
-              {sync.length === 0 ? (
-                <p className="px-2 py-1.5 text-xs text-muted-foreground">
-                  Connect a broker and your holdings appear here. Nothing is bought or sold.
-                </p>
-              ) : (
-                <ul className="px-2 py-1 text-xs">
-                  {sync.map((row) => (
-                    <li
-                      key={row.broker.broker_account_id}
-                      data-testid="broker-sync-row"
-                      className="flex items-baseline justify-between gap-3 py-1"
-                    >
-                      <span className="font-medium text-foreground">{row.broker.label}</span>
-                      <span className="text-right text-muted-foreground">
-                        {row.synced_on === null || row.synced_on === undefined
-                          ? row.label
-                          : formatTradeDate(row.synced_on)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <BrokerSyncMenu sync={sync} />
 
           <Button variant="primary" size="sm" asChild>
             <Link href="/portfolio/portfolios" data-testid="new-portfolio">

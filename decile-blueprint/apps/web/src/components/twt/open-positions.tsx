@@ -1,3 +1,4 @@
+import { InstrumentLink } from "@/components/instrument/instrument-link";
 import { formatTradeDate } from "@/lib/format";
 import { toneOf } from "@/lib/twt/numbers";
 import type { PositionView } from "@/lib/twt/view";
@@ -81,7 +82,7 @@ export function OpenPositions({ rows }: { rows: readonly PositionView[] }) {
                   data-testid="twt-position-row"
                 >
                   <td className="py-2 pr-3">
-                    <span className="font-medium">{row.symbol}</span>
+                    <InstrumentLink symbol={row.symbol} />
                     <span className="block text-xs text-muted-foreground">{row.name}</span>
                     <span className="mt-1 flex flex-wrap gap-1">
                       {row.halfSize ? (

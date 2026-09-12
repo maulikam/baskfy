@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { InstrumentLink } from "@/components/instrument/instrument-link";
 import { Answer, Mark } from "@/components/shell/answer";
 import { PageHeader } from "@/components/shell/page-header";
 import { SectionTabs } from "@/components/shell/section-tabs";
@@ -173,7 +174,7 @@ export default async function VbtBookPage() {
                     data-expiring={row.expires_tonight ? "true" : undefined}
                   >
                     <td className="py-2 pr-3">
-                      <span className="font-medium">{row.symbol}</span>
+                      <InstrumentLink symbol={row.symbol} />
                       <SimulatedTag simulated={row.simulated} />
                     </td>
                     <td className="py-2 pr-3 tabular-nums">
@@ -246,7 +247,7 @@ export default async function VbtBookPage() {
                 {open.map((row) => (
                   <tr key={row.id} className="border-b border-border/40">
                     <td className="py-2 pr-3">
-                      <span className="font-medium">{row.symbol}</span>
+                      <InstrumentLink symbol={row.symbol} />
                       <SimulatedTag simulated={row.simulated} />
                     </td>
                     <td className="py-2 pr-3">
@@ -259,7 +260,7 @@ export default async function VbtBookPage() {
                       {row.quantity_open}
                     </td>
                     <td className="py-2 pr-3 tabular-nums">
-                      {money(row.last_close)}
+                      {money(row.last_price ?? row.last_close)}
                     </td>
                     <td className="py-2 pr-3 tabular-nums">
                       {money(row.stop_price)}
@@ -323,7 +324,7 @@ export default async function VbtBookPage() {
                 {closed.map((row) => (
                   <tr key={row.id} className="border-b border-border/40">
                     <td className="py-2 pr-3">
-                      <span className="font-medium">{row.symbol}</span>
+                      <InstrumentLink symbol={row.symbol} />
                       <SimulatedTag simulated={row.simulated} />
                     </td>
                     <td className="py-2 pr-3">

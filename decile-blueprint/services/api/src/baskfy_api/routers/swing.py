@@ -57,6 +57,7 @@ from baskfy_api import swing_catalyst, swing_journal, swing_scan, swing_watch
 from baskfy_api.auth import AuthenticatedDep, settings_for
 from baskfy_api.curated_tenant import scoped_sole_user_id
 from baskfy_api.db import SessionDep
+from baskfy_api.live_prices import live_marks_for_symbols
 from baskfy_api.problems import Problem, ProblemType, not_found
 from baskfy_api.settings import Settings
 from baskfy_api.swing_settings import (
@@ -162,6 +163,8 @@ class SwingSetupOut(BaseModel):
     #: and that number is typed into a broker.
     score: Decimal
     close: Decimal | None
+    #: Kite last_price when a session exists. ``close`` stays the signal bar.
+    last_price: Decimal | None = None
     trigger: Decimal | None
     stop_ref: Decimal | None
     pivot_high: Decimal | None
@@ -340,6 +343,8 @@ class SwingWatchOut(BaseModel):
     #: person scanning a watchlist actually reads: "how close is this to going".
     distance_to_trigger_pct: Decimal | None
     last_close: Decimal | None
+    #: Kite last_price when a session exists. ``last_close`` stays the published bar.
+    last_price: Decimal | None = None
     note: str | None
     catalyst: str | None
     state: str
@@ -467,6 +472,8 @@ class SwingPositionOut(BaseModel):
     pnl_inr: Decimal | None
     simulated: bool
     last_close: Decimal | None
+    #: Kite last_price when a session exists. ``last_close`` stays the published bar.
+    last_price: Decimal | None = None
 
 
 class SwingPositionsOut(BaseModel):
@@ -609,6 +616,7 @@ async def get_setups(
         setup=_one_of(setup, swing_service.SETUPS, "setup"),
         status=_one_of(status, swing_service.STATUSES, "status"),
     )
+    marks = await live_marks_for_symbols([row.symbol for row in page.rows])
     return _json(
         SwingSetupsOut(
             as_of=page.as_of,
@@ -630,6 +638,7 @@ async def get_setups(
                     status=row.status,
                     score=row.score,
                     close=row.close,
+                    last_price=marks.get(row.symbol.strip().upper()),
                     trigger=row.trigger,
                     stop_ref=row.stop_ref,
                     pivot_high=row.pivot_high,
@@ -907,7 +916,8 @@ def _distance(trigger: Decimal | None, close: Decimal | None) -> Decimal | None:
     return ((trigger - close) / trigger * 100).quantize(Decimal("0.01"))
 
 
-def _watch_out(row: swing_watch.WatchRow) -> SwingWatchOut:
+def _watch_out(row: swing_watch.WatchRow, live: Decimal | None = None) -> SwingWatchOut:
+    mark = live if live is not None else row.last_close
     return SwingWatchOut(
         id=row.id,
         instrument_id=row.instrument_id,
@@ -919,8 +929,9 @@ def _watch_out(row: swing_watch.WatchRow) -> SwingWatchOut:
         expires_on=row.expires_on,
         trigger=row.trigger,
         stop_ref=row.stop_ref,
-        distance_to_trigger_pct=_distance(row.trigger, row.last_close),
+        distance_to_trigger_pct=_distance(row.trigger, mark),
         last_close=row.last_close,
+        last_price=live,
         note=row.note,
         catalyst=row.catalyst,
         state=row.state,
@@ -947,7 +958,12 @@ async def get_watch(
     user_id = await scoped_sole_user_id(session, principal.user_id)
     wanted = None if state in (None, "all") else state
     rows = await swing_watch.list_watch(session, user_id=user_id, state=wanted)
-    return _json(SwingWatchListOut(data=[_watch_out(row) for row in rows]))
+    marks = await live_marks_for_symbols([row.symbol for row in rows])
+    return _json(
+        SwingWatchListOut(
+            data=[_watch_out(row, marks.get(row.symbol.strip().upper())) for row in rows]
+        )
+    )
 
 
 @router.post("/watch", response_model=SwingWatchOut, summary="Watch a name")
@@ -1044,7 +1060,8 @@ async def _one_watch(
     rows = await swing_watch.list_watch(session, user_id=user_id, state=state)
     for row in rows:
         if row.id == watch_id:
-            return _watch_out(row)
+            marks = await live_marks_for_symbols([row.symbol])
+            return _watch_out(row, marks.get(row.symbol.strip().upper()))
     raise not_found("watchlist row", str(watch_id))
 
 
@@ -1058,6 +1075,7 @@ async def get_positions(session: SessionDep, principal: AuthenticatedDep) -> Res
     user_id = await scoped_sole_user_id(session, principal.user_id)
     rows = await swing_service.positions(session, user_id=user_id)
     plan = await swing_service.latest_plan(session, user_id=user_id)
+    marks = await live_marks_for_symbols([row.symbol for row in rows])
     return _json(
         SwingPositionsOut(
             data=[
@@ -1085,6 +1103,7 @@ async def get_positions(session: SessionDep, principal: AuthenticatedDep) -> Res
                     pnl_inr=row.pnl_inr,
                     simulated=row.simulated,
                     last_close=row.last_close,
+                    last_price=marks.get(row.symbol.strip().upper()),
                 )
                 for row in rows
             ],

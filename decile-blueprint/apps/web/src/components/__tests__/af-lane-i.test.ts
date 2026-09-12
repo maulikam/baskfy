@@ -64,13 +64,15 @@ describe("Activity honest copy (AF I.6)", () => {
     "utf8",
   );
 
-  it("keeps the ledger-not-built sentence on the Activity page", () => {
-    expect(page).toMatch(/ledger behind it is\s+built/);
+  it("renders the real feed and does not invent one", () => {
+    expect(page).toMatch(/fetchPortfolioActivity/);
+    expect(page).toMatch(/ActivityTab/);
+    expect(page).not.toMatch(/ledger behind it is\s+built/);
     expect(page).not.toMatch(/fake transaction|sample fill|demo trade/i);
   });
 
   it("exports the honest strings for reuse", () => {
-    expect(ACTIVITY_EMPTY_CONNECTED).toMatch(/not recorded yet/);
+    expect(ACTIVITY_EMPTY_CONNECTED).toMatch(/will not invent buys and sells/);
     expect(ACTIVITY_EMPTY_DISCONNECTED).toMatch(/Once a broker is connected/);
     expect(ACTIVITY_READ_ONLY).toMatch(/Read-only/);
   });

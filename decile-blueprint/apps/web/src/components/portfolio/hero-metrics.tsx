@@ -48,11 +48,10 @@ function Metric({
   testId: string;
 }) {
   return (
-    <div
-      data-testid={testId}
-      className="min-w-0 flex-1 basis-40 rounded-xl border border-border/70 bg-card p-4"
-    >
-      <div className="eyebrow">{label}</div>
+    <div data-testid={testId} className="min-w-[10.5rem] flex-1 basis-40 px-4 py-4 sm:px-5">
+      <div className="text-[0.6875rem] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </div>
       <div className="mt-1.5">{children}</div>
       {hint ? (
         <p className="mt-1.5 max-w-[34ch] text-[11px] leading-snug text-muted-foreground">{hint}</p>
@@ -67,7 +66,7 @@ function MoveFigure({ move, testId }: { move: Hero["todays_pnl"]; testId: string
   const { visible } = useAmounts();
   return (
     <div title={describeReturn(entry)} data-testid={testId}>
-      <p className={cn("text-2xl font-semibold tabular-nums", toneFor(move.amount))}>
+      <p className={cn("text-2xl font-semibold tabular-nums tracking-tight md:text-[1.75rem]", toneFor(move.amount))}>
         <MoneyDelta value={move.amount ?? null} />
       </p>
       <p className={cn("mt-0.5 text-sm tabular-nums", toneFor(move.pct))}>
@@ -89,7 +88,10 @@ export function HeroMetrics({ hero }: { hero: Hero }) {
 
   return (
     <section aria-label="Portfolio totals" className="space-y-3">
-      <div className="flex flex-wrap gap-3" data-testid="hero-metrics">
+      <div
+        className="flex flex-wrap overflow-hidden rounded-xl border border-border/70 bg-card divide-y divide-border/70 sm:divide-x sm:divide-y-0"
+        data-testid="hero-metrics"
+      >
         <Metric
           label="Current value"
           testId="hero-current-value"
@@ -99,7 +101,7 @@ export function HeroMetrics({ hero }: { hero: Hero }) {
               : null
           }
         >
-          <p className="text-2xl font-semibold tabular-nums tracking-tight">
+          <p className="text-2xl font-semibold tabular-nums tracking-tight md:text-[1.75rem]">
             <Money value={hero.current_value} />
           </p>
         </Metric>
@@ -132,7 +134,7 @@ export function HeroMetrics({ hero }: { hero: Hero }) {
                 : null
           }
         >
-          <p className="text-2xl font-semibold tabular-nums tracking-tight">
+          <p className="text-2xl font-semibold tabular-nums tracking-tight md:text-[1.75rem]">
             {hero.invested === null || hero.invested === undefined ? (
               EMPTY_CELL
             ) : (

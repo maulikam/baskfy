@@ -1,8 +1,6 @@
-import Link from "next/link";
-import type { Route } from "next";
+import { InstrumentLink } from "@/components/instrument/instrument-link";
 
 import type { Intersection } from "@/lib/overlap/overlap";
-import { cn } from "@/lib/utils";
 
 /**
  * One of the overlap panels on `/build/overlap`.
@@ -56,14 +54,7 @@ export function OverlapPanel({
         >
           {result.shared.map((symbol) => (
             <li key={symbol} className="border-b border-border/40 py-1.5 text-sm">
-              <Link
-                href={`/instruments/${encodeURIComponent(symbol)}` as Route}
-                className={cn(
-                  "font-medium tabular-nums text-foreground underline-offset-4 hover:underline",
-                )}
-              >
-                {symbol}
-              </Link>
+              <InstrumentLink symbol={symbol} className="tabular-nums" />
             </li>
           ))}
         </ul>

@@ -3,6 +3,7 @@
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { InstrumentLink } from "@/components/instrument/instrument-link";
 import {
   BumpinessDots,
   RankBadge,
@@ -211,7 +212,7 @@ export function ResultCards({ rows, onActivate, className }: ResultCardsProps) {
         const score = num(row, "sorting_factor");
         const ret = num(row, "ret_12m");
         const vol = num(row, "vol_12m");
-        const close = num(row, "close_raw");
+        const close = num(row, "last_price") ?? num(row, "close_raw");
         const rank = typeof row.rank === "number" ? row.rank : item.index + 1;
         const revealed = item.index < REVEAL_LIMIT;
 
@@ -229,12 +230,9 @@ export function ResultCards({ rows, onActivate, className }: ResultCardsProps) {
               transform: `translateY(${item.start - scrollMargin}px)`,
             }}
           >
-            <button
-              type="button"
-              onClick={() => onActivate(row)}
+            <div
               className={cn(
-                "flex h-full w-full items-start gap-3 overflow-hidden p-3.5 text-left vaaya-card",
-                "outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                "relative flex h-full w-full items-start gap-3 overflow-hidden p-3.5 text-left vaaya-card",
                 revealed &&
                   "motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:duration-200",
               )}
@@ -247,14 +245,23 @@ export function ResultCards({ rows, onActivate, className }: ResultCardsProps) {
                   : undefined
               }
             >
-              <div className="pt-0.5">
+              <button
+                type="button"
+                onClick={() => onActivate(row)}
+                aria-label={`Open details for ${symbol}`}
+                className="absolute inset-0 z-0 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+              <div className="pointer-events-none relative z-10 pt-0.5">
                 <RankBadge rank={rank} />
               </div>
               {/* Every line below is single-line and truncated. That is what makes the card a
                   fixed height, which is what makes the virtualiser's size exact. */}
-              <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <div className="pointer-events-none relative z-10 flex min-w-0 flex-1 flex-col gap-2">
                 <div>
-                  <div className="truncate text-sm font-medium">{symbol}</div>
+                  <InstrumentLink
+                    symbol={symbol}
+                    className="pointer-events-auto block truncate text-sm"
+                  />
                   {name ? (
                     <div className="truncate text-xs text-muted-foreground">{name}</div>
                   ) : null}
@@ -278,7 +285,7 @@ export function ResultCards({ rows, onActivate, className }: ResultCardsProps) {
                   ) : null}
                 </div>
               </div>
-            </button>
+            </div>
           </li>
         );
       })}

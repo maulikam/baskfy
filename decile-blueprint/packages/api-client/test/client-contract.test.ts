@@ -113,6 +113,7 @@ type _StatusShape = Expect<
     | "degraded"
     | "pipeline_running"
     | "data_start_date"
+    | "live_quotes"
   >
 >;
 

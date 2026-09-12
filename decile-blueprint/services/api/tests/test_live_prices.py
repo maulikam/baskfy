@@ -210,3 +210,40 @@ async def test_live_prices_by_instrument_quotes_names_the_book_omitted(
 
     prices = await live_prices.live_prices_by_instrument(cast(AsyncSession, _Session()), [1, 2])
     assert prices == {1: Decimal("10"), 2: Decimal("99")}
+
+
+@pytest.mark.asyncio
+async def test_live_marks_for_symbols_uses_the_book_then_quotes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        live_prices,
+        "holdings_for_broker",
+        lambda _b: HoldingsResult(rows=(_row("GOOD", "10"),), source="live"),
+    )
+    monkeypatch.setattr(live_prices, "quotes_permitted", lambda: True)
+    monkeypatch.setattr(
+        live_prices, "_quote_symbols", lambda symbols: {symbols[0]: Decimal("99")}
+    )
+    marks = await live_prices.live_marks_for_symbols(["good", "CASONLY", "good"])
+    assert marks == {"GOOD": Decimal("10"), "CASONLY": Decimal("99")}
+
+
+@pytest.mark.asyncio
+async def test_live_marks_for_symbols_is_empty_without_names() -> None:
+    assert await live_prices.live_marks_for_symbols([]) == {}
+    assert await live_prices.live_marks_for_symbols(["", "  "]) == {}
+
+
+@pytest.mark.asyncio
+async def test_live_marks_for_symbols_caps_the_page(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    book = {f"S{i}": Decimal("1") for i in range(600)}
+    monkeypatch.setattr(live_prices, "live_prices_by_symbol", lambda: book)
+    monkeypatch.setattr(live_prices, "live_quotes_by_symbol", lambda _symbols: {})
+    marks = await live_prices.live_marks_for_symbols([f"S{i}" for i in range(600)])
+    assert len(marks) == live_prices.MAX_LIVE_MARKS
+    assert "S0" in marks
+    assert "S499" in marks
+    assert "S500" not in marks

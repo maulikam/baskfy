@@ -110,6 +110,7 @@ class TestStatus:
         assert body["last_pipeline_run"]["status"] == "succeeded"
         assert body["degraded"] is False
         assert body["data_start_date"] == DATA_START_DATE.isoformat()
+        assert body["live_quotes"] is False
 
     async def test_a_retry_that_published_is_not_degraded(
         self, api: httpx.AsyncClient, screener_session: AsyncSession
@@ -176,3 +177,10 @@ class TestStatus:
             url("/screens/exmpl0000001/run"), json={"as_of": latest.isoformat()}
         )
         assert response.status_code == 200
+
+
+class TestLiveMarks:
+    async def test_anonymous_callers_are_refused(self, api: httpx.AsyncClient) -> None:
+        """A Kite quote batch is not a public read — it spends the operator session."""
+        response = await api.get(url("/meta/live-marks"), params={"symbols": "RELIANCE"})
+        assert response.status_code == 401

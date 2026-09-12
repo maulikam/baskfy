@@ -70,7 +70,7 @@ export function PortfolioOverviewScreen({
 
   return (
     <AmountsProvider>
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-5">
         <OverviewHeader overview={overview} rows={visibleRows} />
 
         {empty ? (

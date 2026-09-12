@@ -1,8 +1,48 @@
 /** Site-wide constants — docs/14 §"The name" and §"Positioning line". */
+
 export const SITE_NAME = "Baskfy";
 
+/**
+ * Resolve a public URL env var. In production the value must be set explicitly — a silent
+ * fallback would point staging at the production desk / site (AUDIT 2.9 / 4.6).
+ */
+export function requiredPublicUrl(
+  name: string,
+  value: string | undefined,
+  devFallback: string,
+): string {
+  const trimmed = value?.trim();
+  if (trimmed) return trimmed.replace(/\/+$/, "");
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(`${name} must be set in production`);
+  }
+  return devFallback.replace(/\/+$/, "");
+}
+
 /** docs/14: "`baskfy.com` (primary)". */
-export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://baskfy.com";
+export const SITE_URL = requiredPublicUrl(
+  "NEXT_PUBLIC_SITE_URL",
+  process.env.NEXT_PUBLIC_SITE_URL,
+  "http://localhost:3000",
+);
+
+/** Operator desk console. Staging must set this or links silently go to production. */
+export const DESK_CONSOLE_URL = requiredPublicUrl(
+  "NEXT_PUBLIC_DESK_URL",
+  process.env.NEXT_PUBLIC_DESK_URL,
+  "https://desk.modelbasket.in",
+);
+
+/**
+ * On-demand revalidation shared secret. Required in production so `/api/revalidate` cannot
+ * be left open by an empty compare (AUDIT 2.9).
+ */
+export function assertRevalidateSecretConfigured(): void {
+  if (process.env.NODE_ENV !== "production") return;
+  if (!process.env.REVALIDATE_SECRET?.trim()) {
+    throw new Error("REVALIDATE_SECRET must be set in production");
+  }
+}
 
 /**
  * The positioning line.

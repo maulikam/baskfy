@@ -12,6 +12,7 @@ import {
 } from "@/app/actions/portfolio";
 import { CommandCenterScreen } from "@/components/portfolio/command/command-center-screen";
 import { PortfoliosList } from "@/components/portfolios/portfolios-list";
+import { SectionTabs } from "@/components/shell/section-tabs";
 import { serverApi } from "@/lib/api/server";
 import { fetchRegime, type Regime } from "@/lib/desk/fetch";
 import { readerSafeDeskError } from "@/lib/portfolio/desk-error";
@@ -79,6 +80,8 @@ export default async function PortfolioPortfoliosPage() {
 
   return (
     <div className="space-y-8">
+      {/* AFH 5.1: same tab bar as Overview — command centre is the Details drill-down. */}
+      <SectionTabs section="portfolio" />
       {/* PC1 — the command centre replaces the repeating per-portfolio blocks this page used to
           draw. `docs/PORTFOLIO-COMMAND-CENTER.md` carries the plan and, more usefully, the survey
           of which metrics Baskfy can and cannot compute; nothing here invents one. */}

@@ -178,7 +178,7 @@ describe("the capital / views mode switch", () => {
   it("mode switch: sits beside the title and defaults to capital portfolios", () => {
     renderScreen();
 
-    expect(screen.getByRole("heading", { name: "Portfolio Command Center" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Details" })).toBeInTheDocument();
     const swtch = screen.getByTestId("mode-switch");
     expect(swtch).toHaveAttribute("data-mode", "capital");
     expect(within(swtch).getByRole("tab", { name: /Capital portfolios/ })).toHaveAttribute(
@@ -211,7 +211,7 @@ describe("the capital / views mode switch", () => {
        3,680,509.37 — and if the view ever leaked in it would read 4,580,509.37. */
     renderScreen();
 
-    expect(screen.getByTestId("metric-band")).toHaveTextContent("₹36,80,509.37");
+    expect(screen.getByTestId("metric-band")).toHaveTextContent("₹36,80,509");
     expect(screen.getByTestId("metric-band")).not.toHaveTextContent("45,80,509.37");
   });
 
@@ -235,9 +235,9 @@ describe("the executive snapshot", () => {
     const band = screen.getByTestId("metric-band");
 
     expect(band).toHaveTextContent("Net worth");
-    expect(band).toHaveTextContent("₹36,80,509.37");
+    expect(band).toHaveTextContent("₹36,80,509");
     expect(band).toHaveTextContent("Today");
-    expect(band).toHaveTextContent("₹72,029.56");
+    expect(band).toHaveTextContent("₹72,030");
     expect(band).toHaveTextContent("Invested");
     expect(band).toHaveTextContent("XIRR");
     expect(band).toHaveTextContent("Drawdown");
@@ -285,8 +285,10 @@ describe("the executive snapshot", () => {
     });
 
     const band = screen.getByTestId("metric-band");
-    expect(band).toHaveTextContent("Cost basis is missing for 4 holdings.");
-    expect(band).toHaveTextContent("Not available");
+    expect(band).toHaveTextContent("Needs more data");
+    expect(band.textContent ?? "").not.toContain("Cost basis is missing for 4 holdings.");
+    const invested = band.querySelector('[title="Cost basis is missing for 4 holdings."]');
+    expect(invested).not.toBeNull();
   });
 
   it("unavailable: no bare em dash is ever rendered in the band", () => {
@@ -322,7 +324,7 @@ describe("the executive snapshot", () => {
     const band = screen.getByTestId("metric-band");
     expect(band.textContent).not.toContain("—");
     // and every gap says something instead
-    expect(band.textContent).toContain("Not available");
+    expect(band.textContent).toContain("Needs more data");
   });
 });
 

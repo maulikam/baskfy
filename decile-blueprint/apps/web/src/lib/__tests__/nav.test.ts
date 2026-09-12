@@ -84,28 +84,23 @@ describe("the primary consumer IA", () => {
       "All baskets",
       "Collections",
       "Compare",
-      "Saved",
+      "Watchlist",
     ]);
     expect(SECTION_TABS.discover.map((t) => t.href)).not.toContain("/create");
     // Create moved here out of Discover: it builds a strategy, which is this hub's job.
-    /* SW4 added Swing: `docs/swing/05` §1 puts the swing hub inside Build rather than adding a
-       sixth primary destination, because HOME1 fixes the primary chrome at five. */
-    /* VB8 added the third: `docs/vbt/05` §1 puts the volume-breakout hub inside Build for the
-       same reason the swing hub is there — HOME1 fixes the primary chrome at five. */
-    /* TW8 added the fourth strategy tab (`docs/twt/05` §1). Overlap is not a fifth strategy —
-       it intersects the scans above — so it is allowed without reopening the HOME1 five-primary
-       question. The full list is asserted rather than by `toContain` deliberately. */
+    /* AFH 5.5: Swing / Volume breakout / Three weeks tight left the Build tab row for consumers;
+       they stay reachable under the Operator group in the user menu when is_staff. */
     expect(SECTION_TABS.build.map((t) => t.label)).toEqual([
       "Screens",
       "Backtests",
       "Create",
-      "Swing",
-      "Volume breakout",
-      "Three weeks tight",
       "Overlap",
     ]);
     expect(SECTION_TABS.build.map((t) => t.href)).toContain("/build/overlap");
     expect(PAGES["/build/overlap"]).toBeDefined();
+    expect(SECTION_TABS.build.map((t) => t.href)).not.toContain("/swing");
+    expect(SECTION_TABS.build.map((t) => t.href)).not.toContain("/vbt");
+    expect(SECTION_TABS.build.map((t) => t.href)).not.toContain("/twt");
     /* `docs/vbt/05` §2's "Today | Book | Backtest". The middle tab reads **Positions**, matching
        the swing hub's and PORTFOLIO_REDESIGN.md §8's retirement of "book" from reader-facing
        copy; the route keeps its documented path (DECISIONS-VB VB8.5). */
@@ -136,14 +131,11 @@ describe("the primary consumer IA", () => {
     expect(SECTION_TABS.swing.map((t) => t.href)).toContain("/swing/journal");
     expect(SECTION_TABS.build.map((t) => t.href)).toContain("/create");
     /*
-      §2: `Me → Investments | Portfolios | Watchlist` becomes
-      `Portfolio → Overview | Portfolios | Holdings | Activity | Watchlist`. Overview leads
-      because it is the default landing tab; "Investments" is gone as a word, because it and
-      "Portfolios" were two names for one thing (§1 problem 1).
+      AFH 5.1: Portfolios tab became Details (command-centre drill-down). Overview still leads.
     */
     expect(SECTION_TABS.portfolio.map((t) => t.label)).toEqual([
       "Overview",
-      "Portfolios",
+      "Details",
       "Holdings",
       "Activity",
       "Watchlist",
@@ -156,6 +148,7 @@ describe("the primary consumer IA", () => {
       "/portfolio/watchlist",
     ]);
     expect(SECTION_TABS.portfolio.map((t) => t.label)).not.toContain("Investments");
+    expect(SECTION_TABS.portfolio.map((t) => t.label)).not.toContain("Portfolios");
 
     /* §2's other half: Me keeps profile / settings / subscription and no money.
        The "Security" tab went with `/change-password` when Google sign-in replaced the password
@@ -241,10 +234,11 @@ describe("the primary consumer IA", () => {
 });
 
 describe("the sidebar IA", () => {
-  it("has primary, Real money, Account, Help in order", () => {
+  it("has primary, Real money, Operator, Account, Help in order", () => {
     expect(NAV_GROUPS.map((group) => group.label)).toEqual([
       null,
       "Real money",
+      "Operator",
       "Account",
       "Help",
     ]);
@@ -260,8 +254,12 @@ describe("the sidebar IA", () => {
     ]);
   });
 
+  it("lists operator sleeve hubs for staff", () => {
+    expect(NAV_GROUPS[2]?.items.map((item) => item.href)).toEqual(["/swing", "/vbt", "/twt"]);
+  });
+
   it("lists the account group with fees and brokers", () => {
-    expect(NAV_GROUPS[2]?.items.map((item) => item.href)).toEqual([
+    expect(NAV_GROUPS[3]?.items.map((item) => item.href)).toEqual([
       "/pricing",
       "/invoices",
       "/fees",
@@ -273,7 +271,7 @@ describe("the sidebar IA", () => {
   });
 
   it("lists the help group exactly as docs/08 does", () => {
-    expect(NAV_GROUPS[3]?.items.map((item) => item.href)).toEqual(["/faq", "/blog", "/support"]);
+    expect(NAV_GROUPS[4]?.items.map((item) => item.href)).toEqual(["/faq", "/blog", "/support"]);
   });
 
   it("has no duplicate destinations", () => {

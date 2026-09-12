@@ -89,7 +89,7 @@ function Move({ value }: { value: string }) {
         </span>
       ) : null}
       <span className="sr-only">{tone === "up" ? "gain of " : tone === "down" ? "loss of " : ""}</span>
-      {formatRupees(value)}
+      {formatRupees(value, { decimals: 0 })}
     </span>
   );
 }
@@ -128,7 +128,7 @@ function Row({ row, rank }: { row: ContributionRow; rank: number }) {
             <TooltipTrigger asChild>
               <span className="flex cursor-help items-center gap-1 text-xs text-muted-foreground">
                 <CircleAlert aria-hidden="true" className="size-3 shrink-0 text-warning" />
-                Not available
+                Needs more data
               </span>
             </TooltipTrigger>
             <TooltipContent className="max-w-xs text-xs leading-relaxed">
@@ -185,7 +185,7 @@ function Band({ band, testId }: { band: AttributionBand; testId: string }) {
         <p className="flex items-start gap-2 px-4 py-4 text-sm">
           <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning" />
           <span>
-            <strong className="font-medium">Not available.</strong>{" "}
+            <strong className="font-medium">Needs more data.</strong>{" "}
             <span className="text-muted-foreground">{band.unavailable}</span>
           </span>
         </p>
@@ -203,7 +203,7 @@ function Band({ band, testId }: { band: AttributionBand; testId: string }) {
               className="border-t border-border px-4 py-2 text-xs leading-snug text-muted-foreground"
             >
               Gains and losses offset here: the portfolios moved{" "}
-              <strong className="font-medium text-foreground">{formatRupees(band.gross)}</strong>{" "}
+              <strong className="font-medium text-foreground">{formatRupees(band.gross, { decimals: 0 })}</strong>{" "}
               between them, which is what the bars are shares of.
             </p>
           ) : null}
@@ -223,18 +223,18 @@ function Band({ band, testId }: { band: AttributionBand; testId: string }) {
                 <>
                   These add to{" "}
                   <strong className={cn("font-medium", FIGURE)}>
-                    {formatRupees(band.reconciliation.explained)}
+                    {formatRupees(band.reconciliation.explained, { decimals: 0 })}
                   </strong>
                   ; the consolidated figure is{" "}
                   <strong className={cn("font-medium", FIGURE)}>
-                    {formatRupees(band.reconciliation.reported)}
+                    {formatRupees(band.reconciliation.reported, { decimals: 0 })}
                   </strong>
                   .{" "}
                   {band.reconciliation.reconciles ? null : (
                     <>
                       The difference of{" "}
                       <strong className={cn("font-medium", FIGURE)}>
-                        {formatRupees(band.reconciliation.residual)}
+                        {formatRupees(band.reconciliation.residual, { decimals: 0 })}
                       </strong>{" "}
                     </>
                   )}
@@ -277,10 +277,10 @@ function EstimatedCostsPanel({ costs }: { costs: EstimatedCosts | null }) {
     >
       <p className="flex flex-wrap items-baseline gap-x-2 text-sm">
         <span className="font-medium">Fees, brokerage and taxes</span>
-        <span className="font-semibold tabular-nums">{formatRupees(costs.total)}</span>
+        <span className="font-semibold tabular-nums">{formatRupees(costs.total, { decimals: 0 })}</span>
         {costs.bps_of_turnover ? (
           <span className="text-xs text-muted-foreground tabular-nums">
-            {costs.bps_of_turnover} bps of {formatRupees(costs.turnover)} traded
+            {costs.bps_of_turnover} bps of {formatRupees(costs.turnover, { decimals: 0 })} traded
           </span>
         ) : null}
       </p>
@@ -291,7 +291,7 @@ function EstimatedCostsPanel({ costs }: { costs: EstimatedCosts | null }) {
             <dt className="text-xs text-muted-foreground" title={component.note}>
               {component.label}
             </dt>
-            <dd className="text-xs tabular-nums">{formatRupees(costs[component.key])}</dd>
+            <dd className="text-xs tabular-nums">{formatRupees(costs[component.key], { decimals: 0 })}</dd>
           </div>
         ))}
       </dl>
@@ -369,7 +369,7 @@ export function Attribution({
               <p className="flex items-center gap-1.5 text-sm font-medium">
                 {effect.name}
                 <span className="rounded-full bg-muted px-1.5 py-0.5 text-[0.6875rem] font-normal text-muted-foreground">
-                  Not available
+                  Needs more data
                 </span>
               </p>
               <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{effect.reason}</p>

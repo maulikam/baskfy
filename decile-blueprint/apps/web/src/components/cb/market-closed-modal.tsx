@@ -9,8 +9,8 @@ import {
 import { Button } from "@/components/ui/button";
 
 /**
- * Closed-market state for every order-shaped CTA (05-ui-spec).
- * Notify-me is a stub until SC6/SC9 notification wiring exists.
+ * Closed-market dialog for surfaces that still open one.
+ * AFH 5.3: the disabled notification stub is gone — there is no centre to deliver it.
  */
 
 export interface MarketClosedModalProps {
@@ -32,9 +32,6 @@ export function MarketClosedModal({ open, onOpenChange, reopenAt }: MarketClosed
         <div className="mt-4 flex flex-wrap justify-end gap-2">
           <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
             Close
-          </Button>
-          <Button type="button" variant="secondary" size="sm" disabled title="Arrives with notifications">
-            Notify me
           </Button>
         </div>
       </DialogContent>

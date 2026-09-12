@@ -16,6 +16,7 @@ import {
   type RiskKey,
 } from "@/lib/discover/match";
 import { preferencesToQuery, validAmount } from "@/lib/discover/preferences";
+import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /**
@@ -43,7 +44,7 @@ export function GoalComposer({
 }) {
   const router = useRouter();
   const [prefs, setPrefs] = useState<Preferences>(initial);
-  const [amountText, setAmountText] = useState(String(initial.amount));
+  const [amountText, setAmountText] = useState(formatNumber(initial.amount, { decimals: 0 }));
   const amountId = useId();
 
   function submit(event: React.FormEvent) {
@@ -53,7 +54,7 @@ export function GoalComposer({
     const amount = validAmount(amountText);
     const next = { ...prefs, amount };
     setPrefs(next);
-    setAmountText(String(amount));
+    setAmountText(formatNumber(amount, { decimals: 0 }));
     router.push(`/discover?${preferencesToQuery(next)}`);
   }
 

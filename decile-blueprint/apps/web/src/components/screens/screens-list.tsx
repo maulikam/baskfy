@@ -2,6 +2,7 @@
 
 import type { ScreenDefinition, ScreenOut } from "@baskfy/api-client";
 import { Copy, Play, Plus, Trash2 } from "lucide-react";
+import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -75,17 +76,17 @@ export function ScreensList({ initial, error }: ScreensListProps) {
 
   async function newScreen() {
     const created = await create.mutateAsync({
-      name: `Untitled screen ${mine.length + 1}`,
+      name: `New screen ${mine.length + 1}`,
       definition: defaultDefinition(),
     });
     setScreens((current) => [...current, created]);
-    router.push(`/build/${created.public_id}` as never);
+    router.push(`/build/${created.public_id}` as Route);
   }
 
   async function duplicateScreen(screen: ScreenOut) {
     const copy = await duplicate.mutateAsync(screen.public_id);
     setScreens((current) => [...current, copy]);
-    router.push(`/build/${copy.public_id}` as never);
+    router.push(`/build/${copy.public_id}` as Route);
   }
 
   async function confirmDelete(screen: ScreenOut) {
@@ -262,23 +263,23 @@ function ScreenCard({
         basket={{
           name: screen.name,
           thesis,
-          href: `/build/${screen.public_id}`,
+          href: `/build/${screen.public_id}` as Route,
           badge: screen.is_example ? "Template" : "Auto — from your screens",
           minAmount: null,
         }}
         actions={
           <>
             <Button variant="outline" size="sm" asChild>
-              <Link href={`/build/${screen.public_id}` as never}>
+              <Link href={`/build/${screen.public_id}` as Route}>
                 <Play aria-hidden="true" />
                 View
               </Link>
             </Button>
             <Button variant="ghost" size="sm" asChild>
-              <Link href={`/create?screen=${screen.public_id}` as never}>Create basket</Link>
+              <Link href={`/create?screen=${screen.public_id}` as Route}>Create basket</Link>
             </Button>
             <Button variant="ghost" size="sm" asChild>
-              <Link href={`/build/backtests?screen=${screen.public_id}` as never}>Backtest</Link>
+              <Link href={`/build/backtests?screen=${screen.public_id}` as Route}>Backtest</Link>
             </Button>
             <Button variant="ghost" size="sm" onClick={() => onDuplicate(screen)}>
               <Copy aria-hidden="true" />

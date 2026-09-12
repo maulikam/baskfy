@@ -2,6 +2,7 @@
 
 import type { BacktestSummaryOut, ScreenOut } from "@baskfy/api-client";
 import { Plus, Trash2 } from "lucide-react";
+import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -27,6 +28,9 @@ import { formatPercent, formatTradeDate } from "@/lib/format";
  * its result without a reload. The per-user concurrency cap is one (Prompt 15 §4), so the "Run
  * backtest" affordance is disabled while one is in flight rather than letting the user collect a
  * 429 — the constraint is real, so the interface should say so before the request, not after.
+ *
+ * Delete confirms, surfaces `remove.isError`, and the table scrolls horizontally on a narrow
+ * viewport (AUDIT 4.3).
  */
 export interface BacktestsListProps {
   initial: BacktestSummaryOut[] | null;
@@ -35,6 +39,10 @@ export interface BacktestsListProps {
   earliest: string;
   latest: string;
   error: unknown;
+}
+
+function backtestHref(publicId: string): Route {
+  return `/build/backtests/${publicId}` as Route;
 }
 
 export function BacktestsList({
@@ -54,6 +62,19 @@ export function BacktestsList({
 
   const rows = backtests.data ?? [];
   const running = rows.some((row) => row.status === "queued" || row.status === "running");
+
+  function confirmDelete(publicId: string): void {
+    if (
+      !window.confirm(
+        "Delete this backtest? The run and its results will be removed from this account.",
+      )
+    ) {
+      return;
+    }
+    void remove.mutateAsync(publicId).catch(() => {
+      /* `remove.isError` renders below; the promise rejection must not go unhandled. */
+    });
+  }
 
   return (
     <div className="space-y-8">
@@ -89,13 +110,14 @@ export function BacktestsList({
           onSubmit={(config) => {
             void queue.mutateAsync(config).then((accepted) => {
               setShowForm(false);
-              router.push(`/backtests/${accepted.public_id}` as never);
+              router.push(backtestHref(accepted.public_id));
             });
           }}
         />
       ) : null}
 
       {queue.isError ? <ErrorState error={queue.error} /> : null}
+      {remove.isError ? <ErrorState error={remove.error} /> : null}
 
       {backtests.isLoading ? (
         <Skeleton className="h-40 w-full" />
@@ -106,8 +128,8 @@ export function BacktestsList({
           action={{ label: "Configure one", onClick: () => setShowForm(true) }}
         />
       ) : (
-        <div className="overflow-hidden rounded-lg border border-border">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table className="w-full min-w-[40rem] text-sm">
             <caption className="sr-only">Your backtests</caption>
             <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
@@ -124,7 +146,7 @@ export function BacktestsList({
                 <tr key={row.public_id} className="border-t border-border">
                   <td className="px-3 py-2">
                     <Link
-                      href={`/backtests/${row.public_id}` as never}
+                      href={backtestHref(row.public_id)}
                       className="font-medium underline-offset-4 hover:underline"
                     >
                       {row.screen_name ?? row.screen_public_id ?? "Inline definition"}
@@ -154,7 +176,7 @@ export function BacktestsList({
                       variant="ghost"
                       size="sm"
                       aria-label={`Delete backtest ${row.public_id}`}
-                      onClick={() => void remove.mutateAsync(row.public_id)}
+                      onClick={() => confirmDelete(row.public_id)}
                     >
                       <Trash2 aria-hidden="true" className="size-4" />
                     </Button>
@@ -173,7 +195,7 @@ const STATUS_STYLES: Record<string, string> = {
   queued: "bg-muted text-muted-foreground",
   running: "bg-accent/15 text-accent",
   done: "bg-positive/15 text-positive",
-  failed: "bg-destructive/15 text-destructive",
+  failed: "bg-negative/15 text-negative",
 };
 
 function StatusBadge({ status, error }: { status: string; error: string | null }) {

@@ -36,7 +36,9 @@ import datetime as dt
 import logging
 from typing import Annotated, Final
 
+import jwt
 from fastapi import APIRouter, Depends, Request, Response, status
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -66,7 +68,7 @@ from baskfy_api.csrf import (
 )
 from baskfy_api.db import SessionDep
 from baskfy_api.email import Mailer, build_transport
-from baskfy_api.email import templates as mail
+from baskfy_api.email.templates import Message
 from baskfy_api.entitlements import EntitlementsDep
 from baskfy_api.problems import Problem, ProblemType, unauthenticated
 from baskfy_api.schemas import (
@@ -79,7 +81,7 @@ from baskfy_api.schemas import (
     SessionOut,
     UpdateMeIn,
 )
-from baskfy_api.settings import Settings
+from baskfy_api.settings import JWT_ALGORITHM, Settings
 from baskfy_core.models import (
     AccountDeletion,
     AppUser,
@@ -117,6 +119,59 @@ def _mailer(request: Request) -> Mailer:
 
 SettingsDep = Annotated[Settings, Depends(_settings)]
 MailerDep = Annotated[Mailer, Depends(_mailer)]
+
+RESTORE_PURPOSE: Final = "account-restore"
+
+
+class RestoreAccountIn(BaseModel):
+    """Email plus the signed code from the deletion mail (AUDIT 2.4)."""
+
+    email: EmailStr
+    code: str = Field(min_length=20, max_length=2048)
+
+
+def _mint_restore_code(user: AppUser, settings: Settings, *, purge_after: dt.datetime) -> str:
+    """Signed one-shot cancel token. Bound to public_id and the soft-delete window."""
+    now = dt.datetime.now(tz=dt.UTC)
+    return jwt.encode(
+        {
+            "sub": user.public_id,
+            "purpose": RESTORE_PURPOSE,
+            "iat": int(now.timestamp()),
+            "exp": int(purge_after.timestamp()),
+        },
+        settings.jwt_secret,
+        algorithm=JWT_ALGORITHM,
+    )
+
+
+def _restore_code_valid(code: str, user: AppUser, settings: Settings) -> bool:
+    try:
+        claims = jwt.decode(
+            code,
+            settings.jwt_secret,
+            algorithms=[JWT_ALGORITHM],
+            options={"require": ["exp", "sub", "purpose"]},
+        )
+    except jwt.PyJWTError:
+        return False
+    return claims.get("sub") == user.public_id and claims.get("purpose") == RESTORE_PURPOSE
+
+
+def _deletion_mail(to: str, days: int, restore_code: str) -> Message:
+    heading = f"Your Baskfy account is scheduled for deletion"
+    body = [
+        f"Your account has been deactivated and will be permanently erased in {days} days.",
+        "Signing in again before then cancels the deletion and restores the account.",
+        f"To cancel without signing in, POST /me/restore with this code: {restore_code}",
+        "After that, the data is gone and cannot be recovered.",
+    ]
+    return Message(
+        to=to,
+        subject=f"Your Baskfy account will be deleted in {days} days",
+        text="\n\n".join([heading, *body]),
+        html="<br/>".join([heading, *body]),
+    )
 
 
 def _client_ip(request: Request) -> str | None:
@@ -524,15 +579,14 @@ async def delete_me(  # noqa: PLR0913, PLR0917 - FastAPI injects one parameter p
     user = await _load_me(session, principal.require_user())
     if normalise_email(str(body.email)) != normalise_email(user.email):
         raise Problem(
-            ProblemType.INVALID_SCREEN_DEFINITION,
+            ProblemType.BAD_REQUEST,
             "That is not this account's email address.",
             errors=[{"field": "email", "message": "does not match"}],
         )
 
     pending = await request_deletion(session, user, settings)
-    await mailer.deliver(
-        mail.account_deletion_scheduled(user.email, settings.account_purge_after_days)
-    )
+    restore_code = _mint_restore_code(user, settings, purge_after=pending.purge_after)
+    await mailer.deliver(_deletion_mail(user.email, settings.account_purge_after_days, restore_code))
     clear_auth_cookies(response, settings)
     return DeletionOut(
         status="scheduled",
@@ -546,20 +600,23 @@ async def delete_me(  # noqa: PLR0913, PLR0917 - FastAPI injects one parameter p
 
 @router.post("/me/restore", response_model=DeletionOut, summary="Cancel a pending deletion")
 async def restore_me(
-    body: DeleteAccountIn,
+    body: RestoreAccountIn,
     session: SessionDep,
     settings: SettingsDep,
-    mailer: MailerDep,
 ) -> DeletionOut:
-    """A deactivated account cannot present a token, so this is reached by address plus a code.
+    """A deactivated account cannot present a token; restore requires the signed code.
 
-    In practice the web app cancels a deletion by signing in — `/auth/verify-otp` does it. This
-    endpoint exists so the same thing is possible without a UI. `docs/12a` §6.
+    The code is minted into the deletion e-mail (AUDIT 2.4). Email alone is not enough.
     """
-    del settings, mailer
     email = normalise_email(str(body.email))
     user = await find_user_including_deleted(session, email)
-    if user is None or await cancel_deletion(session, user) is False:
+    if user is None or not _restore_code_valid(body.code, user, settings):
+        # Same answer for unknown / bad code: do not publish the customer list.
+        raise Problem(
+            ProblemType.UNAUTHENTICATED,
+            "That restore code is not valid.",
+        )
+    if await cancel_deletion(session, user) is False:
         return DeletionOut(status="cancelled", detail="There is no pending deletion.")
     await revoke_all_for_user(session, user.id, "restored")
     return DeletionOut(status="cancelled", detail="The pending deletion has been cancelled.")

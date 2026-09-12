@@ -53,7 +53,7 @@ export function instrumentMetadata(sheet: FactsheetOut): Metadata {
     title,
     description,
     alternates: { canonical: path },
-    robots: { index: true, follow: true },
+    robots: { index: false, follow: false },
     openGraph: {
       type: "article",
       title,

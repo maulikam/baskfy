@@ -106,13 +106,27 @@ def audit(u: pd.DataFrame, cfg: ScoringConfig) -> dict[str, object]:
 def apply_filters(u: pd.DataFrame, cfg: ScoringConfig) -> pd.DataFrame:
     u = u.copy()
     u["reject"] = ""
-    u.loc[(u.close < u.ma_50) & (u.close < u.ma_200), "reject"] += "below50&200DMA;"
+    # NULL in a filtered column is a reject, not a pass. pandas comparisons with NaN are
+    # False, so without an explicit isna() a missing median_volume / MA / away_from_high
+    # used to sail through (AF 3.8; non-negotiable 7 wants NULL = rejected).
+    u.loc[
+        u.ma_50.isna()
+        | u.ma_200.isna()
+        | ((u.close < u.ma_50) & (u.close < u.ma_200)),
+        "reject",
+    ] += "below50&200DMA;"
     u.loc[(u.absolute_return_three_months < 0) & (u.absolute_return_six_months < 0), "reject"] += (
         "neg3M&6M;"
     )
     u.loc[u.circuits_three_months > cfg.MAX_CIRCUITS_3M, "reject"] += "circuits;"
-    u.loc[u.median_volume_one_year < cfg.MIN_MEDIAN_DAILY_VALUE, "reject"] += "illiquid;"
-    u.loc[u.away_from_high_one_year < cfg.MAX_AWAY_FROM_HIGH, "reject"] += "far_from_high;"
+    u.loc[
+        u.median_volume_one_year.isna() | (u.median_volume_one_year < cfg.MIN_MEDIAN_DAILY_VALUE),
+        "reject",
+    ] += "illiquid;"
+    u.loc[
+        u.away_from_high_one_year.isna() | (u.away_from_high_one_year < cfg.MAX_AWAY_FROM_HIGH),
+        "reject",
+    ] += "far_from_high;"
     u.loc[u.series.isin(cfg.REJECT_SERIES), "reject"] += "T2T_series;"
     u.loc[u.symbol.isin(cfg.EXCLUDED_SYMBOLS), "reject"] += "excluded_instrument;"
     return u

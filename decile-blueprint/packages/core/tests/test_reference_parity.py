@@ -71,10 +71,10 @@ import pytest
 from baskfy_core.blends import BLEND_SHAPES
 from baskfy_core.factors import compute_factors
 from baskfy_core.precision import quantise
+from _law1_io import reference_export_path
 from baskfy_core.reference_export import (
     EXPORT_COLUMNS,
     FACTOR_COLUMN_MAP,
-    default_fixture_path,
     read_export,
 )
 from baskfy_core.universes import UNIVERSE_BY_SLUG
@@ -199,7 +199,7 @@ COLUMN_TOLERANCE: Final[dict[str, Decimal]] = {
 
 @pytest.fixture(scope="module")
 def export() -> pl.DataFrame:
-    return read_export()
+    return read_export(reference_export_path())
 
 
 # ---------------------------------------------------------------------------
@@ -603,11 +603,11 @@ class TestStep6ExportShape:
 
     def test_the_file_is_utf8_with_a_bom(self) -> None:
         """docs/13 §1: "the file is **UTF-8 with BOM** (Excel-friendly) ... Reproduce both"."""
-        assert default_fixture_path().read_bytes().startswith(b"\xef\xbb\xbf")
+        assert reference_export_path().read_bytes().startswith(b"\xef\xbb\xbf")
 
     def test_only_the_name_field_is_quoted(self) -> None:
         """docs/13 §1: "quotes only the `name` field"."""
-        first_data_line = default_fixture_path().read_text(encoding="utf-8-sig").splitlines()[1]
+        first_data_line = reference_export_path().read_text(encoding="utf-8-sig").splitlines()[1]
         assert first_data_line.startswith('"')
         assert first_data_line.count('"') == 2
 

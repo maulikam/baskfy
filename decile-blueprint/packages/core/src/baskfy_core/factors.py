@@ -478,9 +478,16 @@ def _with_rsi(frame: pl.DataFrame, windows: dict[int, FactorWindow]) -> pl.DataF
         return frame.with_columns(empty)
 
     prices = pivot.select(columns).to_numpy().astype(float)
+    # A missing bar is NaN in the shared-date pivot. ``np.where(nan > 0, …)`` treats NaN as
+    # neither a gain nor a loss — a silent zero-change day that lengthens the window without
+    # counting the gap move. Mark those steps NaN and skip any RSI window that contains one
+    # (AF 3.9: RSI gap → skip).
+    finite_pair = np.isfinite(prices[1:]) & np.isfinite(prices[:-1])
     changes = np.diff(prices, axis=0)
-    gains = np.where(changes > 0, changes, 0.0)
-    losses = np.where(changes < 0, -changes, 0.0)
+    gains = np.where(finite_pair & (changes > 0), changes, 0.0)
+    losses = np.where(finite_pair & (changes < 0), -changes, 0.0)
+    gains = np.where(finite_pair, gains, np.nan)
+    losses = np.where(finite_pair, losses, np.nan)
 
     additions: list[pl.DataFrame] = []
     for months, window in windows.items():
@@ -515,12 +522,18 @@ def _cutler_rsi(gains: np.ndarray, losses: np.ndarray, period: int) -> np.ndarra
     if period < 1 or steps < period:
         return out
 
+    gap = np.isnan(gains) | np.isnan(losses)
+    gains_z = np.where(gap, 0.0, gains)
+    losses_z = np.where(gap, 0.0, losses)
     zero = np.zeros((1, instruments), dtype=float)
-    cumulative_gain = np.cumsum(np.vstack((zero, gains)), axis=0)
-    cumulative_loss = np.cumsum(np.vstack((zero, losses)), axis=0)
+    cumulative_gain = np.cumsum(np.vstack((zero, gains_z)), axis=0)
+    cumulative_loss = np.cumsum(np.vstack((zero, losses_z)), axis=0)
+    cumulative_gap = np.cumsum(np.vstack((zero, gap.astype(float))), axis=0)
     avg_gain = (cumulative_gain[period:] - cumulative_gain[:-period]) / period
     avg_loss = (cumulative_loss[period:] - cumulative_loss[:-period]) / period
-    out[period - 1 :] = _rsi_from(avg_gain, avg_loss)
+    gaps_in_window = cumulative_gap[period:] - cumulative_gap[:-period]
+    values = _rsi_from(avg_gain, avg_loss)
+    out[period - 1 :] = np.where(gaps_in_window > 0, np.nan, values)
     return out
 
 

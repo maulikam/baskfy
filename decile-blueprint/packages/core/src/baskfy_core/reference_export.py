@@ -193,21 +193,13 @@ _INT_COLUMNS: Final[frozenset[str]] = frozenset(
 )
 
 
-def default_fixture_path() -> Path:
-    """``tests/fixtures/reference-screen-export-2026-08-18.csv``, found from this file."""
-    for parent in Path(__file__).resolve().parents:
-        candidate = parent / "tests" / "fixtures" / "reference-screen-export-2026-08-18.csv"
-        if candidate.is_file():
-            return candidate
-    raise FileNotFoundError(
-        "reference-screen-export-2026-08-18.csv not found under any parent tests/fixtures/"
-    )
+def read_export(path: Path) -> pl.DataFrame:
+    """Load the export verbatim, with every column typed but no renaming.
 
-
-def read_export(path: Path | None = None) -> pl.DataFrame:
-    """Load the export verbatim, with every column typed but no renaming."""
-    source = path or default_fixture_path()
-    frame = pl.read_csv(source, encoding=EXPORT_ENCODING, infer_schema_length=None)
+    ``path`` is required — Law 1 forbids core from walking the filesystem to find a fixture
+    (AF 3.10). Callers that used ``default_fixture_path`` open the committed CSV themselves.
+    """
+    frame = pl.read_csv(path, encoding=EXPORT_ENCODING, infer_schema_length=None)
     missing = [c for c in EXPORT_COLUMNS if c not in frame.columns]
     unexpected = [c for c in frame.columns if c not in EXPORT_COLUMNS]
     if missing or unexpected:
@@ -279,9 +271,9 @@ def _mask(row: dict[str, object], suffix: str) -> int:
     return mask
 
 
-def to_rows(frame: pl.DataFrame | None = None) -> ReferenceRows:
+def to_rows(frame: pl.DataFrame) -> ReferenceRows:
     """Project the export into instrument / factor / membership rows."""
-    data = frame if frame is not None else read_export()
+    data = frame
     dates = data["date"].unique().to_list()
     if len(dates) != 1:
         raise ValueError(f"expected a single trade date in the export, got {sorted(dates)}")

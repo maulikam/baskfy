@@ -12,6 +12,7 @@ from decimal import Decimal
 
 import pytest
 
+from _law1_io import reference_export_path
 from baskfy_core.reference_export import (
     EXPORT_COLUMNS,
     FACTOR_COLUMN_MAP,
@@ -25,18 +26,18 @@ from baskfy_core.universes import UNIVERSE_BY_SLUG
 
 @pytest.fixture(scope="module")
 def rows() -> ReferenceRows:
-    return to_rows()
+    return to_rows(read_export(reference_export_path()))
 
 
 class TestTheFixtureItself:
     def test_row_count(self) -> None:
         """docs/13: 271 rows."""
-        assert read_export().height == 271
+        assert read_export(reference_export_path()).height == 271
 
     def test_column_count(self) -> None:
         """docs/13: 93 columns."""
         assert len(EXPORT_COLUMNS) == 93
-        assert read_export().width == 93
+        assert read_export(reference_export_path()).width == 93
 
     def test_single_trade_date(self, rows: ReferenceRows) -> None:
         assert rows.as_of.isoformat() == "2026-08-18"

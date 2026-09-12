@@ -553,16 +553,17 @@ def test_buy_for_a_name_already_held_is_BLOCKED(gw) -> None:
 
 
 def test_buy_untouchable_instrument_raises_and_marks_line_REJECTED(gw) -> None:
-    """Non-negotiable 7: the guard raises before any network call; the line cannot be
-    re-posted; the error is not swallowed."""
-    from baskfy_execution.guards import UntouchableInstrumentError
+    """AF 3.5: untouchables return BLOCKED (no raise mid-batch); the line is REJECTED and
+    cannot be re-posted; nothing reaches the broker."""
     store = MemoryStore()
     plan_id = store.add_plan()
     line_id = store.add_line(plan_id, symbol="SGBAUG28")
-    with pytest.raises(UntouchableInstrumentError):
-        execute(store, gw, plan_id, line_id)
+    out = execute(store, gw, plan_id, line_id)
+    assert out.status == "BLOCKED"
+    assert "protected" in out.reason.lower() or "SGB" in out.reason
     assert store.lines[line_id]["state"] == "REJECTED"
     assert store.positions == {}
+    assert gw._sent == {}
 
 
 def test_buy_DUPLICATE_from_gateway_is_BLOCKED_with_no_second_position(gw) -> None:
@@ -1677,18 +1678,16 @@ def test_live_gates_with_an_exploding_kc_are_REJECTED_never_a_position(monkeypat
 
 
 def test_gtt_outside_the_swing_band_is_journalled_not_refused(gw) -> None:
-    """PACK.3 / `StopBand`: a stop outside 0.5–10 % is a finding for a person, never a
-    refusal that leaves the position naked. Re-pinned for SW9.5/SW10.4: a stop 12 % below the
-    entry is `STOP_TOO_WIDE` at the confirm-time gate (`04` §6.1, one ADR or tighter) and never
-    reaches a GTT, so the band's *near* edge is what is left to test — a stop 0.3 % under the
-    entry is inside one ADR, outside the band's 0.5 % floor, and journalled, not refused."""
+    """PACK.3 / `StopBand`: a stop outside 0.5–10 % must not refuse the GTT (position stays
+    armed). AF 3.9: ``too_close`` is journalled only for the weekly 8–12% band; sleeve bands
+    suppress that noise. A stop 0.3% under entry still places; it is not refused."""
     store = MemoryStore()
     plan_id = store.add_plan()
     line_id = store.add_line(plan_id, trigger=D("100.00"), stop=D("99.70"))
     out = execute(store, gw, plan_id, line_id)
     assert out.status == "SIMULATED" and out.gtt["status"] == DRY_RUN_GTT
     assert store.positions[out.position_id]["gtt_id"] is not None
-    assert "gtt_band_warning" in journal_events(gw)
+    assert "gtt_band_warning" not in journal_events(gw)
 
 
 def test_naive_timestamps_are_read_as_ist(gw) -> None:
@@ -2127,17 +2126,13 @@ def test_the_lock_is_taken_for_every_kind_and_spans_the_gateway_call(gw) -> None
 
 
 def test_a_gateway_exception_rolls_the_lock_back_and_records_the_refusal_once(gw) -> None:
-    """Under the lock an untouchable instrument raises out of the gateway: the transaction
-    rolls back (the CONFIRMED mark and the counter with it), then the line is marked
-    REJECTED and the click counted, once — the same end state SW7 promised, reached through
-    the rollback rather than around it."""
-    from baskfy_execution.guards import UntouchableInstrumentError
-
+    """AF 3.5: untouchables return BLOCKED (no raise). The line is REJECTED, the click is
+    counted once, and nothing is written to the book — same end state without mid-batch raise."""
     store = MemoryStore()
     plan_id = store.add_plan()
     line_id = store.add_line(plan_id, symbol="SGBAUG28")
-    with pytest.raises(UntouchableInstrumentError):
-        execute(store, gw, plan_id, line_id)
+    out = execute(store, gw, plan_id, line_id)
+    assert out.status == "BLOCKED"
     assert store.lines[line_id]["state"] == "REJECTED"
     assert store.sessions[NOW.date()]["confirms"] == 1
     assert store.positions == {} and store.fills == []

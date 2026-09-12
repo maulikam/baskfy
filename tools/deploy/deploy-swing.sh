@@ -197,7 +197,7 @@ box "$(step "aws ecr get-login-password --region $REGION | docker login --userna
     "$(step "$C run --rm migrate" "alembic upgrade head" 5)" \
     "$C exec -T postgres psql -U baskfy -d baskfy -tAc 'select version_num from alembic_version'"
 
-say "4. seed reference; seed swing (sleeve ₹$SWING_CAPITAL, risk $SWING_RISK %)"
+say "4. seed reference; seed swing (sleeve ₹$SWING_CAPITAL, risk $SWING_RISK %); seed twt (₹0)"
 # THE LONGEST STEP, AND THE ONE THAT USED TO KILL THE DEPLOY (9 Sep 2026).
 #
 # `run --rm seed` pulls the reference universe and takes several minutes. `box.sh` used to give
@@ -215,8 +215,20 @@ say "4. seed reference; seed swing (sleeve ₹$SWING_CAPITAL, risk $SWING_RISK %
 # The cost is minutes on a box that already has the data; the alternative is a first deploy that
 # silently comes up with an empty universe.
 BOX_TIMEOUT_SECONDS="${SEED_TIMEOUT_SECONDS:-1800}" \
+#
+# TW11 (12 Sep 2026): `seed twt` joined the list because the box had **no `tw_config` row at all**.
+# `sw_config=1`, `vb_config=1`, `tw_config=0` the first time anyone looked, and the reason is this
+# step: it seeds `reference` and `swing` and nothing else, so nothing in the deploy path had ever
+# created the three-weeks-tight sleeve's row. Creation is `seed_twt_config`'s job, it is
+# `ON CONFLICT DO NOTHING`, and it writes `sleeve_capital_inr = 0` explicitly.
+#
+# **No `--capital` here, and that is the point.** The swing line above carries MD1/MD2 because
+# Maulik decided those numbers; TWT's capital is `NEEDS-MAULIK.md` T3 and stays his keystroke. A
+# row at ₹0 plans nothing — every signal is skipped `NO_SLEEVE_CAPITAL` — so this creates the place
+# the number goes without putting a number in it.
 box "$(step "$C run --rm seed" "seed reference" 12)" \
-    "$(step "$C run --rm seed python -m baskfy_api.seed swing --capital $SWING_CAPITAL --risk $SWING_RISK" "seed swing" 4)"
+    "$(step "$C run --rm seed python -m baskfy_api.seed swing --capital $SWING_CAPITAL --risk $SWING_RISK" "seed swing" 4)" \
+    "$(step "$C run --rm seed python -m baskfy_api.seed twt" "seed twt" 4)"
 
 say "5. up"
 box "$(step "$C up -d $RESTART_SERVICES" up 12)" \

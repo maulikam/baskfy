@@ -40,11 +40,29 @@ export function TightNames({
       </h2>
 
       {entries.length === 0 ? (
-        <p className="text-sm text-muted-foreground" data-testid="twt-tight-empty">
-          No name held the pattern on this session. That is an ordinary result: the pattern needs
-          three weekly closes within about 3% of one another, and most weeks most names move more
-          than that.
-        </p>
+        /*
+         * TWO DIFFERENT ABSENCES, AND THE PAGE USED TO STATE THE WRONG ONE (12 Sep 2026).
+         *
+         * "No name held the pattern on this session" asserts that a session WAS read and that
+         * nothing matched. On a database where the detector has never run there is no session at
+         * all, and the sentence is simply false — which is what it said on the box the day TWT was
+         * first deployed, two panels below a gate card correctly reading "Not read yet".
+         *
+         * `session` is the same null the gate card branches on, and it was already a prop here.
+         */
+        session === null ? (
+          <p className="text-sm text-muted-foreground" data-testid="twt-tight-unread">
+            No session has been read for this strategy yet, so there is nothing to say about which
+            names were quiet. The scan runs after the close on a trading day; until one has run,
+            this is empty because nothing has looked, not because nothing qualified.
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground" data-testid="twt-tight-empty">
+            No name held the pattern on this session. That is an ordinary result: the pattern needs
+            three weekly closes within about 3% of one another, and most weeks most names move more
+            than that.
+          </p>
+        )
       ) : (
         <NameTable rows={entries} />
       )}

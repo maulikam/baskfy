@@ -274,15 +274,18 @@ class TestOnlyAConfirmedRequestCanProduceAnOrder:
         assert "confirm" in signature.parameters
         assert "plan_id" in signature.parameters
 
-    def test_the_desk_router_exposes_two_posts_and_only_one_can_order(self) -> None:
-        """VB12 added `/vbt/rescan`. Two POSTs, and the count is not the property — the property
-        is that exactly one of them reaches `execute_line`, which is the only doorway to the
-        gateway. The other writes one `vb_scan_run` row and hands off to a worker with no order
-        path at all (`test_vbt_desk.py::test_the_rescan_route_cannot_reach_an_order`)."""
+    def test_the_desk_router_exposes_three_posts_and_only_one_can_order(self) -> None:
+        """VB12 added `/vbt/rescan` and the scan contract added `/vbt/scan`. Three POSTs, and the
+        count is not the property — the property is that exactly one of them reaches
+        `execute_line`, which is the only doorway to the gateway. The other two are two names for
+        one money-free request: each writes one `vb_scan_run` row through the same store method
+        and hands off to a worker with no order path at all
+        (`test_vbt_desk.py::test_the_scan_routes_cannot_reach_an_order`)."""
         source = inspect.getsource(D)
-        assert source.count("@router.post(") == 2
+        assert source.count("@router.post(") == 3
         assert '@router.post("/vbt/execute"' in source
         assert '@router.post("/vbt/rescan"' in source
+        assert '@router.post("/vbt/scan"' in source
         # Over code, not prose (the docstring names `execute_line` when explaining that it is
         # the single doorway), and matching the **call** rather than the bare name — the handler
         # is itself called `vbt_execute_line`, so a substring count finds two and means one.

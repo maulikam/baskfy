@@ -94,6 +94,7 @@ from baskfy_api.routers import (
     support,
     swing,
     track_b,
+    twt,
     vbt,
     webhook_endpoints,
 )
@@ -603,3 +604,8 @@ def _mount_routers(versioned: APIRouter) -> None:
     # execute route here and there is not going to be one (`docs/vbt/02` Track C §4);
     # `test_vbt_readonly.py` asserts that over the source and the OpenAPI document.
     versioned.include_router(vbt.router)
+    # TW12: the three-weeks-tight sleeve's "Scan now", and nothing else. There is no execute
+    # route here and there is not going to be one (`docs/twt/02` Track C §4); a scan asks the
+    # worker to run the detectors and moves no money (Track A, DECISIONS-TW TW12.3), and
+    # `test_twt_readonly.py` asserts both over the source and the OpenAPI document.
+    versioned.include_router(twt.router)

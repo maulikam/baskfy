@@ -132,6 +132,26 @@ export interface TwtHalfSize {
   execution_enabled: boolean;
 }
 
+/**
+ * One "Scan now" run — the vocabulary is the swing hub's, deliberately (`PLAN-SCAN-SYNC.md`
+ * "The contract"): `QUEUED -> RUNNING -> DONE | FAILED`, and a sleeve that invented its own
+ * spelling would be a second thing to learn for no reason.
+ *
+ * `error` is read but never rendered. The reason a run failed is a sentence written for whoever
+ * can fix it — it names jobs, quote sources and tables — and 11 Sep 2026 established that such a
+ * sentence does not belong on a customer-facing page. It stays in the payload for the operator
+ * surfaces and the page says, in a reader's words, that the run did not finish.
+ */
+export type TwtScanStatus = "QUEUED" | "RUNNING" | "DONE" | "FAILED";
+
+export interface TwtScanRun {
+  id: number;
+  status: TwtScanStatus;
+  requested_at: string | null;
+  finished_at: string | null;
+  error: string | null;
+}
+
 export interface TwtToday {
   /** The last published session. Null means nothing has ever been computed, not that today was quiet. */
   as_of: string | null;
@@ -139,6 +159,13 @@ export interface TwtToday {
   tight: readonly TwtTightName[];
   positions: readonly TwtOpenPosition[];
   half_size: TwtHalfSize;
+  /**
+   * This user's newest "Scan now" run, if the payload carries it inline — the shape `/swing`
+   * serves. Absent is not "no run"; see `fetchLastScan`.
+   */
+  last_scan?: TwtScanRun | null;
+  /** Or just its id, if the payload names the run and leaves the status to its own route. */
+  last_scan_id?: number | null;
 }
 
 /** One point on the equity curve. Money is a string of its exact decimal (house rule 9). */
@@ -257,4 +284,25 @@ export async function fetchToday(date?: string): Promise<TwtToday | null> {
 
 export async function fetchBacktest(): Promise<TwtBacktest | null> {
   return readOrNull<TwtBacktest>("/twt/backtest");
+}
+
+/** `GET /twt/scan/{run_id}` — one run's state. Null while the route or the run is absent. */
+export async function fetchScanRun(runId: number): Promise<TwtScanRun | null> {
+  return readOrNull<TwtScanRun>(`/twt/scan/${runId}`);
+}
+
+/**
+ * The last scan's state, whichever way the payload names it.
+ *
+ * Two shapes are accepted because this page was built to the contract rather than to a running
+ * route, and the contract fixes the *route* (`GET /twt/scan/{run_id}`) rather than whether the
+ * day's payload inlines the run. An inlined run costs no request; an id costs one and is read
+ * through the contract's own route. Neither costs anything before the first scan, when there is
+ * no run to name and this answers `null` without asking — which is the state this sleeve is
+ * genuinely in today, with every detection table at zero rows.
+ */
+export async function fetchLastScan(today: TwtToday | null): Promise<TwtScanRun | null> {
+  if (today?.last_scan) return today.last_scan;
+  const id = today?.last_scan_id;
+  return typeof id === "number" ? fetchScanRun(id) : null;
 }

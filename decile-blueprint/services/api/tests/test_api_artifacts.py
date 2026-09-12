@@ -313,6 +313,24 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     # from live Kite quotes and labels every row provisional; `/swing/setups` carries the label.
     "/swing/scan": {"post"},
     "/swing/scan/{run_id}": {"get"},
+    # TW12 (docs/twt/DECISIONS-TW TW12.1-TW12.3): the same button for the three-weeks-tight
+    # sleeve, and the `/twt` hub's FIRST write. It inserts one `tw_scan_run` row and publishes
+    # `baskfy.twt.scan`, whose worker calls the detector `baskfy.twt.detect` already ships. There
+    # is no provisional path and no `provisional` field: this strategy's signal is three *closed*
+    # weekly ranges, so a bar built from a live quote would change the answer without making it
+    # truer (TW12.2). `test_twt_readonly.py` asserts this POST is the only non-GET under `/twt`.
+    "/twt/scan": {"post"},
+    "/twt/scan/{run_id}": {"get"},
+    # VB15 (docs/vbt/DECISIONS-VB): the same button for the volume-breakout sleeve. Leaf 3 built
+    # the routes and leaf 4 documented its own beside them, so these two were the last pair left
+    # out of `EXPECTED_PATHS` and this set-equality stayed red until they landed — which is the
+    # gate working, not failing: a route reachable without a docs/07 entry is a contract change
+    # nobody agreed to. Both are money-free: the POST inserts one `vb_scan_run` row and publishes
+    # the existing `baskfy.vbt.rescan`, and `test_vbt_readonly.py` asserts this POST is the only
+    # non-GET under `/vbt`. VBT re-detects a CLOSED published session, so there is no provisional
+    # path here either.
+    "/vbt/scan": {"post"},
+    "/vbt/scan/{run_id}": {"get"},
     # VB8 (docs/vbt/05 §2, docs/vbt/02 Track C §4): the volume-breakout sleeve, as a surface.
     # Every route is a GET except the settings form, which writes four numbers and cannot name
     # the DRY_RUN counter or the first-live countdown. `test_vbt_readonly.py` asserts that

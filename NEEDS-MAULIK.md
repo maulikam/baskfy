@@ -24,6 +24,7 @@ blocker in the project.
 
 | | |
 |---|---|
+| **32** | **A Zerodha Console tradebook export.** You asked to "sync transactions from the kite account" — Kite's API cannot supply them, and nothing in Baskfy imports them. One CSV you download is the only path. See §32. |
 | **31** | ✅ **Done 12 Sep 2026.** You logged in; the box went `dd9cc73` → `8b074c7` and `verify-swing.sh` says `SWING OK`. |
 | **1** | ✅ **Shipped 12 Sep 2026** with the rest of the 25 commits, on a Saturday with the market shut. |
 | **9** | Review the 46 irregular corporate actions (probable demergers). Nothing blocked. |
@@ -38,6 +39,69 @@ blocker in the project.
 | **19** | ⚠ **Four legal pages are live and show `[SUPPLIER LEGAL NAME]` to visitors.** Needs seven facts from you, then counsel. `docs/COUNSEL-BRIEF.md` is ready to forward. See §19. |
 | **18** | **The landing page's sample screen is 402-blocked** by the `custom_columns` entitlement, not by data. Unblocking it moves a paywall — your call (D7-adjacent). See §18. |
 | **16** | **Broker credentials for nine brokers** — Upstox, Angel One, Fyers, 5paisa, Dhan, ICICI, Kotak, HDFC (Groww has no public API). Only `BASKFY_KITE_*` exists today. Blocks consolidated holdings for every non-Zerodha account. See §16. |
+
+---
+
+## 32. Transactions cannot be synced from Kite — the API does not have them
+
+**Raised 12 Sep 2026** (leaf 2 of `PLAN-SCAN-SYNC.md`). · **Status:** open, and it is one download.
+· **Full evidence:** `gates/kite-sync.md`, 14/14.
+
+### What is needed
+
+**A Zerodha Console tradebook export** — `console.zerodha.com` → Reports → Tradebook → the full
+date range → download CSV. One file, no credentials to hand over, nothing an agent can fetch.
+
+### Why an agent cannot get it
+
+Zerodha's `/trades` endpoint **takes no date parameter and is flushed nightly**. It returns today's
+fills and nothing else. The desk's own client has said so at the call site since before the merge
+(`kite-momentum-rebalancer/app/kite_client.py:203`):
+
+> */trades takes no date parameter and Zerodha flushes it nightly, so this is the only chance to
+> record a fill through the API — miss the session and it is gone. **Historical fills exist solely
+> in a Console export.***
+
+So this is not a missing feature that could be built. There is no API to build it against. A live
+token does not help — the box has a valid one right now (issued 11:04 IST today) and it still
+cannot answer the question.
+
+### What it blocks
+
+* **Cost basis and holding period for everything you own.** All 20 `portfolio_holding` rows on the
+  box are `history_source='NONE'`, and the two broker-synced ones have `first_bought_on` NULL.
+* **§5.2's since-purchase XIRR and true P&L.** Without a buy date the portfolio can only honestly
+  say "since grouped", which is what it says.
+* **Tax lots.** The desk reconstructs FIFO lots from fills; Baskfy has no fills at all.
+
+### What was found meanwhile — and one of it is worse than the missing CSV
+
+1. **Holdings sync works and is live.** `POST /brokers/{id}/sync-holdings` did a real Kite fetch
+   today and wrote PWL (1,575) and WABAG (92) into your broker pile. It is a **button**, not a
+   schedule — there is no Beat entry for holdings anywhere.
+2. ⚠ **The desk's daily collection is scheduled on the box and cannot run.** `baskfy.desk.daily`
+   fires at 18:30 Mon–Fri and looks for the desk at `/kite-momentum-rebalancer`, which **does not
+   exist in the deployed worker image**. That job is the only scheduled thing in the product that
+   would capture the day's fills — so even same-day trades are not being recorded on the box. It
+   needs a deploy to fix, which no leaf may do.
+3. ⚠ **Your 9,262-fill book is still only on the laptop.** `kite-momentum-rebalancer/data/
+   portfolio.db` holds 9,045 fills from a Console CSV plus 217 captured live, and 8,198
+   reconstructed lot-trades. The box's `desk` schema has the 20 tables and **0 rows in every one**
+   — D8's migration has never been run against it. Nothing is lost; nothing is there either.
+4. **CAS import is written and wired to nothing.** `packages/core/src/baskfy_core/cas_import.py`
+   parses a CDSL/NSDL statement and has **zero callers** — no upload route, no PDF extractor. A CAS
+   would be the *other* way to get buy dates, and it has no way in either.
+
+### What to do with the CSV when you have it
+
+Do not hand it to an agent to load into Baskfy yet — there is nowhere to put it. Postgres has no
+transaction table (108 tables, not one is a trade), and inventing the schema under a money figure
+is the one mistake `cas_import.py`'s docstring spends a page warning about. The order is in
+`gates/kite-sync.md` §"What would make transaction sync real": the CSV, then a `broker_trade`
+migration, then an importer in `services/` reusing the desk's parser and its refusal to half-parse.
+
+The desk *can* eat it today, unchanged, at `POST /tradebook` — that is how the 9,045 rows got
+there. That gets you lots and realised P&L on the desk, not on the Baskfy portfolio screen.
 
 ---
 
@@ -82,6 +146,46 @@ The box serves `dd9cc73`. HEAD is `3ce77de` — **24 commits**, and they are not
 **So the question is whether to ship the UI tree half-finished**, not whether the rest is ready.
 Deploying only the API/worker images and holding `web` is possible — `push-images.sh` builds three
 (`web`, `python`, `desk`) and the web bundle is the one that carries the unfinished screens.
+
+---
+
+## 33. `baskfy.desk.daily` is on Beat every weekday and cannot run — a design call, not a bug fix
+
+**Found 12 Sep 2026** by the Kite-sync investigation, **verified independently by the parent.**
+**Status:** open. Nothing was changed, because the fix is a choice between two shapes and both
+have consequences on a live trading box.
+
+**What is wrong.** `baskfy_worker.tasks.desk` computes
+`DESK_ROOT = Path(__file__).resolve().parents[6] / "kite-momentum-rebalancer"` and then `chdir`s
+into it. In the `baskfy-py` image the module sits under `/repo`, so that resolves to
+`/kite-momentum-rebalancer`, and **the desk tree is not in that image at all** — only
+`decile-blueprint` is. Measured on the box, inside the running `worker` container:
+
+```
+kmr_at_root=no  repo_kmr=no
+```
+
+Two Beat entries point at it: `desk-daily-collection` (18:30 Mon–Fri) and
+`desk-autorun-safety-net` (18:50). Both have been firing into a path that does not exist.
+
+**What it costs.** Same-day fill capture. `capture_live_trades()` reads Kite's `trades()` for the
+session, and Kite flushes that endpoint nightly — so a fill not captured on the day is not
+recoverable from the API at all, only from a Console export. This is the mechanism behind
+item 32: the box's desk schema has all 20 tables and **0 rows in every one**.
+
+**The two fixes, and why the choice is yours:**
+
+| | What it means |
+|---|---|
+| **Ship the desk tree in `baskfy-py`** | `Dockerfile.desk` already copies both trees; `Dockerfile.python` copies one. One line, but it puts the live trading code into the image the *web API and every worker* run, which is a blast-radius change on the auto-execute host |
+| **Move the task to the `desk` container** | Correct by shape — the desk service already runs `baskfy-desk`, which has both trees. Costs a task registration on the desk side and a Beat route change |
+
+The second is the better design and the larger change. **Neither was taken**, because a deploy was
+already in flight and rearranging which container runs the trading collection is not something to
+decide in the last ten minutes of one.
+
+**What was done meanwhile:** nothing that touches it. The defect is recorded here, in
+`gates/kite-sync.md` G9, and in `PLAN-SCAN-SYNC.md`'s status log.
 
 ---
 
@@ -1762,6 +1866,51 @@ will be right about their own data.** The page says so in its own words (`05` §
 pre-2024 corporate actions (403 rows, 2024 →). Both are `docs/07` §4b territory and both are
 Kite-rate limited, not agent-limited. TW9's drift flag makes the re-run a button rather than a
 project.
+
+#### ⚠️ 64.9 % is right, and it is the wrong number to quote on a Friday (measured 12 Sep 2026)
+
+**The 64.9 % above reproduces exactly** — re-measured today against the same 9,254 stock-days:
+64.9 % recall at 61.5 % precision, `no_bar` **832**, `no_volume_average` **602**, look-ahead
+83.1 % at 97.8 %. Nothing here is stale. `gates/twt-chartink-gap.md` G11 is the evidence.
+
+**But it is an average over all five weekdays, and it does not describe a Friday.** Split by the
+weekday it was measured on (G12), point-in-time recall / precision is Mon 61.9/45.7 · Tue
+60.0/51.5 · Wed 57.7/58.5 · Thu 64.4/73.7 · **Fri 83.4/98.8** — level with the look-ahead
+reading's Fri 83.5/98.9.
+
+The reason is `docs/twt/01` §2's own finding taken one step further. Chartink evaluates a
+*completed* weekly candle, so on Monday it knows Friday's close. **On a Friday there is nothing
+left to know**: today's close *is* the week's final close, and the two readings become the same
+function. The 2026-09-11 run proves it rather than arguing it — `point_in_time` and `look_ahead`
+produce byte-identical output (G13).
+
+**So the sentence "expect `/twt` to look thin against Chartink" is true Monday to Thursday and
+close to false on a Friday** — and the weekly rebalance is a Friday job. `docs/twt/05` §1.2's
+caveat should say which days it is about.
+
+#### T4-b — the only thing here that needs your hands: an export of the 12 Sep scan
+
+**What is needed:** Chartink's export (or a screenshot listing) of the three-weeks-tight scan as it
+stood on **12 Sep 2026**, the 68 names you read out.
+
+**Why it is yours:** it is behind your browser session and this repo has no copy. The repo holds
+`research/tight-close/chartink_backtest.csv` (through 11-09-2026) and `chartink_today.csv`
+(captured 11 Sep 15:40); both hold the **same 63 names** for 11 Sep, and **neither contains
+`MATRIMONY` or `AYE`**, which are in your 68. Your list is therefore a fresh 12 Sep run.
+
+**What it blocks:** only the full 68 × 68 reconciliation. It does not block the answer to the
+question you asked.
+
+**What was done meanwhile — and the answer, so this does not read as a blocker.** The detector was
+run locally over the plant's own bars for 2026-09-11 and scored against the 63-name answer key that
+does exist: **57 names produced, 52 of Chartink's 63 found — 82.5 % recall at 91.2 % precision**.
+**Of the 20 names you read out, it produces 19.** The one it does not is `E2E`, and the reason is
+the plant, not the rule: the box holds 21 bars of the last 54 sessions for it and `SMA(Volume, 50)`
+needs 45 of 50. `MATRIMONY` and `AYE` — the two of your names that Chartink's 11 Sep export does
+*not* list — the detector names anyway. Nine of its eleven misses are missing instrument-days
+(exactly the T4 gap above); the other two are `ALIVUS` at 3.092 % and `AVALON` at 3.091 % against a
+3.01 % threshold, and nobody widened it. Full table and sixteen runnable checks in
+`gates/twt-chartink-gap.md`.
 
 ### What this run will never ask you for
 

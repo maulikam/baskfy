@@ -54,6 +54,31 @@ RESCAN_MIN_INTERVAL_SECONDS: Final = 60
 IN_FLIGHT: Final[tuple[str, ...]] = RESCAN_IN_FLIGHT
 
 
+class ScanRefused(Exception):
+    """The two refusals, carrying the HTTP status the contract answers with.
+
+    Raised by :meth:`PgVbtStore.request_scan` so the two routes that ask for a detection —
+    ``POST /vbt/scan`` and the page's older ``POST /vbt/rescan`` — cannot drift apart: one rule,
+    one place, two renderings. ``app/swing_desk.py`` carries the same class for the same reason.
+    """
+
+    def __init__(
+        self,
+        status: int,
+        reason: str,
+        *,
+        run_id: int,
+        run_status: str,
+        retry_after: int | None = None,
+    ) -> None:
+        super().__init__(reason)
+        self.status = status
+        self.reason = reason
+        self.run_id = run_id
+        self.run_status = run_status
+        self.retry_after = retry_after
+
+
 def _as_datetime(value: Any) -> dt.datetime:  # noqa: ANN401 - a driver's timestamp
     """A timestamp from either driver, always tz-aware. sqlite hands back a string."""
     stamp = dt.datetime.fromisoformat(value) if isinstance(value, str) else value
@@ -517,8 +542,12 @@ class PgVbtStore:
             "WHERE user_id = ? ORDER BY requested_at DESC, id DESC LIMIT 1",
             (self.user_id,),
         ).fetchone()
-        if row is None:
-            return None
+        return None if row is None else self._scan_run_row(row)
+
+    def _scan_run_row(self, row: Any) -> dict:  # noqa: ANN401 - a driver row
+        """One `vb_scan_run` row as the page and the route read it. Timestamps are left as the
+        driver handed them over — `newest_scan`'s caller has always normalised with
+        `_as_datetime`, and the JSON route does it once on the way out."""
         detail = row["detail"]
         return {
             "id": int(row["id"]),
@@ -533,13 +562,61 @@ class PgVbtStore:
             "task_id": row["task_id"],
         }
 
-    def request_scan(self, *, now: dt.datetime) -> int:
+    def scan_run(self, run_id: int) -> dict | None:
+        """One run of **this user's**, by id — what ``GET /vbt/scan/{run_id}`` answers.
+
+        Scoped to ``user_id`` rather than looked up by primary key alone: a run is one person's
+        request and there is no shared view of it. Somebody else's id is a 404, not a peek.
+        """
+        row = self.conn.execute(
+            f"SELECT id, requested_at, started_at, finished_at, session_date, status, source, "
+            f"detail, error, task_id FROM {self.t('vb_scan_run')} "
+            "WHERE user_id = ? AND id = ?",
+            (self.user_id, int(run_id)),
+        ).fetchone()
+        return None if row is None else self._scan_run_row(row)
+
+    def request_scan(
+        self,
+        *,
+        now: dt.datetime,
+        min_interval: dt.timedelta | None = None,
+        stale_after: dt.timedelta | None = None,
+    ) -> int:
         """Insert one `QUEUED` row and return its id. The worker's sweep publishes it.
 
         **The desk has no Celery client**, so this is the whole of the button's write: a row.
-        The two refusals the caller applies — one in flight, one a minute — are answered from
-        `newest_scan()` above, from the same table, so the rule holds with no cache configured.
+        The two refusals — one in flight, one a minute — are answered from `newest_scan()`
+        above, from the same table, so the rule holds with no cache configured and is testable
+        against sqlite alone. Both are raised as :class:`ScanRefused`, which carries the status
+        the contract answers with (409, 429); the caller renders it.
+
+        It writes one row into one table. It sizes nothing, prices nothing and reaches no broker.
         """
+        window = min_interval or dt.timedelta(seconds=RESCAN_MIN_INTERVAL_SECONDS)
+        stale = stale_after or dt.timedelta(seconds=RESCAN_STALE_AFTER_SECONDS)
+        newest = self.newest_scan()
+        if newest is not None:
+            age = now - _as_datetime(newest["requested_at"])
+            if newest["status"] in RESCAN_IN_FLIGHT and age < stale:
+                raise ScanRefused(
+                    409,
+                    f"Scan {newest['id']} is {str(newest['status']).lower()}; its result is on "
+                    f"its way.",
+                    run_id=int(newest["id"]),
+                    run_status=str(newest["status"]),
+                )
+            if age < window:
+                wait = window - age
+                seconds = max(1, int(wait.total_seconds() + 0.999))
+                raise ScanRefused(
+                    429,
+                    f"A scan was requested {int(age.total_seconds())} s ago; one a minute is the "
+                    f"limit. Try again in {seconds} s.",
+                    run_id=int(newest["id"]),
+                    run_status=str(newest["status"]),
+                    retry_after=seconds,
+                )
         row = self.conn.execute(
             f"INSERT INTO {self.t('vb_scan_run')} (user_id, requested_at, status, source) "
             "VALUES (?, ?, 'QUEUED', 'desk') RETURNING id",
@@ -848,30 +925,80 @@ def vbt_rescan(request: Request) -> Any:  # noqa: ANN401, ARG001 - a JSON-able d
     """
     now = _now()
     with open_store() as store:
-        newest = store.newest_scan()
-        if newest is not None:
-            age = (now - _as_datetime(newest["requested_at"])).total_seconds()
-            if newest["status"] in IN_FLIGHT and age < RESCAN_STALE_AFTER_SECONDS:
-                return _jsonable(
-                    {
-                        "accepted": False,
-                        "reason": "a re-detect is already in flight",
-                        "run_id": newest["id"],
-                        "status": newest["status"],
-                    }
-                )
-            if age < RESCAN_MIN_INTERVAL_SECONDS:
-                return _jsonable(
-                    {
-                        "accepted": False,
-                        "reason": "too soon",
-                        "retry_after_seconds": int(RESCAN_MIN_INTERVAL_SECONDS - age) + 1,
-                        "run_id": newest["id"],
-                        "status": newest["status"],
-                    }
-                )
-        run_id = store.request_scan(now=now)
+        try:
+            run_id = store.request_scan(now=now)
+        except ScanRefused as refused:
+            body: dict[str, Any] = {
+                "accepted": False,
+                "reason": (
+                    "a re-detect is already in flight" if refused.status == 409 else "too soon"
+                ),
+                "run_id": refused.run_id,
+                "status": refused.run_status,
+            }
+            if refused.retry_after is not None:
+                body["retry_after_seconds"] = refused.retry_after
+            return _jsonable(body)
     return _jsonable({"accepted": True, "run_id": run_id, "status": "QUEUED"})
+
+
+@router.post("/vbt/scan", status_code=202)
+def vbt_scan_now() -> Any:  # noqa: ANN401 - a JSON-able dict
+    """The contract's name for the same request: queue a detection run, 202 with the run to poll.
+
+    ``PLAN-SCAN-SYNC.md`` fixes one shape across the three sleeves — **202** queued, **409** one
+    already in flight, **429** one a minute — so a page written against the swing book's button
+    works here without learning a second vocabulary. `/vbt/rescan` above is the older name the
+    desk page's own form still posts, and both go through `PgVbtStore.request_scan`, so there is
+    one rule rather than two copies of it.
+
+    **What it asks for is still VB12's question, not SW15's.** The swing book scans *today* from
+    live quotes; this sleeve asks for the latest **published** session to be detected again,
+    because VBT-1's lines read the day's volume against its 50-day average and the entry limit is
+    the signal bar's close. The worker (`baskfy.vbt.rescan`) decides which session that is.
+
+    It writes one `vb_scan_run` row. It moves no money, and the task behind it has no order path.
+    """
+    now = _now()
+    with open_store() as store:
+        try:
+            run_id = store.request_scan(now=now)
+        except ScanRefused as refused:
+            headers = (
+                {"Retry-After": str(refused.retry_after)}
+                if refused.retry_after is not None
+                else None
+            )
+            raise HTTPException(
+                refused.status, refused.reason, headers=headers
+            ) from refused
+    return _jsonable({"run_id": run_id, "status": "QUEUED", "requested_at": now})
+
+
+@router.get("/vbt/scan/{run_id}")
+def vbt_scan_run(run_id: int) -> Any:  # noqa: ANN401 - a JSON-able dict
+    """One run's state: `QUEUED | RUNNING | DONE | FAILED`, the session it settled on, the funnel
+    on DONE and the reason on FAILED. A read, scoped to this desk's sole user — an id that is
+    not theirs is a 404 rather than a peek at somebody else's request."""
+    with open_store() as store:
+        row = store.scan_run(run_id)
+    if row is None:
+        raise HTTPException(404, f"No scan {run_id}.")
+    detail = row["detail"] if isinstance(row["detail"], dict) else None
+    return _jsonable(
+        {
+            "run_id": row["id"],
+            "status": row["status"],
+            "source": row["source"],
+            "requested_at": _stamp(row["requested_at"]),
+            "started_at": _stamp(row["started_at"]),
+            "finished_at": _stamp(row["finished_at"]),
+            "session_date": _date(row["session_date"]),
+            "detail": detail,
+            "error": row["error"],
+            "task_id": row["task_id"],
+        }
+    )
 
 
 @router.post("/vbt/execute")

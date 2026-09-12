@@ -1,9 +1,11 @@
 # 03 — Data model: the `tw_` schema
 
-Postgres, Alembic migration **`0041_twt.py`** in
-`decile-blueprint/services/api/alembic/versions/`, revising **`0040_vbt_scan_run`** — the single
-head on 11 Sep 2026 (`alembic heads` confirms it; the VBT pack records what two heads look like
-when a concurrent session lands one, and the symptom is worth knowing). SQLAlchemy models in
+Postgres, Alembic migrations **`0041_twt.py`** (the thirteen tables, §1–§9) and
+**`0042_twt_scan_run.py`** (§11, TW12's "Scan now" row) in
+`decile-blueprint/services/api/alembic/versions/`. `0041` revises **`0040_vbt_scan_run`** and was
+the single head on 11 Sep 2026; `0042` revises `0041` and is the single head on 12 Sep (`alembic
+heads` confirms it; the VBT pack records what two heads look like when a concurrent session lands
+one, and the symptom is worth knowing). SQLAlchemy models in
 `packages/core/src/baskfy_core/models/twt.py`.
 
 Conventions inherited from `models/base.py`: `PRICE` (18,2) for prices and levels, `PRICE_RAW`
@@ -298,3 +300,54 @@ and VBT trees follow, for the same reason: a split between the signal and the mo
 level that was never converted. **On this sleeve the rule has teeth it does not have elsewhere:** a
 line is held for months, so a split *during* the hold is ordinary, and `04` §7.3 says what the
 ratchet does about it.
+
+---
+
+## 11. `tw_scan_run` — one press of "Scan now" (TW12)
+
+Added by migration **`0042_twt_scan_run.py`**, revising `0041_twt`. The fourteenth table, and the
+only one in this document that records a *request* rather than a measurement.
+
+| Column | Type | Meaning |
+|---|---|---|
+| `id` PK | bigint identity | |
+| `user_id` | bigint FK | cascade, as every `tw_` row does |
+| `requested_at` | timestamptz | when the button was pressed. Both refusals are measured from here |
+| `started_at` / `finished_at` | timestamptz | null until the worker claims / finishes it |
+| `session_date` | date | which **published** session was detected. Null until the worker decides — the caller asks for "the latest" and only the worker knows which that is |
+| `status` | text | `QUEUED` → `RUNNING` → `DONE` \| `FAILED`, constrained |
+| `source` | text | `desk` \| `web` \| `cli`, constrained |
+| `detail` | JSONB | what `twt.detect_session` returned, on `DONE` |
+| `error` | text | `"{ExceptionType}: {message}"`, on `FAILED` |
+| `task_id` | text | the broker's message id once published. **Null means nobody has published it**, which is how the desk's button works with no Celery client |
+
+**There is no `provisional` column, and its absence is the design.** `sw_scan_run` has one because
+the swing book's setups can be read off a bar still being formed. This strategy's signal cannot be:
+`04` §2 measures three *weekly* ranges that have closed, against a monthly low, with a
+sessions-out count over closed sessions. A bar built from a live quote would change the answer
+without making it truer. So a scan asks for the latest **published** session to be detected again,
+and the answer never claims to be about today. `vb_scan_run` reached the same shape from different
+arithmetic. (DECISIONS-TW **TW12.2**.)
+
+**It runs the detector that already exists.** `baskfy.twt.scan` claims the row and calls
+`baskfy_worker.tasks.twt.detect_session` — the same function `baskfy.twt.detect` calls — with
+`force=True`, because the nightly's rule is "skip a session that already has a breadth row" and
+that is exactly the session a person presses this button about. Detection is idempotent per
+`(user_id, date)` (house rule 7), so pressing twice overwrites the same rows and moves no counter.
+
+**Two refusals, both answered from this table** rather than from a cache, so they hold on a box
+with no Redis and are testable against the database alone: one scan in flight per user (**409**,
+where "in flight" expires after 600 s so a dead worker does not wedge the button), and one request
+a minute (**429**, with `Retry-After`).
+
+Both windows are API settings — `BASKFY_TWT_SCAN_STALE_AFTER_SECONDS` [600] and
+`BASKFY_TWT_SCAN_MIN_INTERVAL_SECONDS` [60] — and the desk **copies the numbers as constants**,
+because it cannot import the worker (different venv, no Celery) and has no settings object of its
+own. `tests/test_twt_scan_desk.py::TestTheTwoCopiesAgree` reads the worker's file from the desk's
+suite and asserts the two copies match, the way VB12 does for `vb_scan_run`. A copied constant
+nobody checks is a constant that has already drifted.
+
+**It writes no money row.** `tw_signal_daily`, `tw_state_daily` and `tw_breadth_daily` are what the
+detector writes; nothing on this path constructs a plan, an order, a position or a fill, and
+nothing reads or writes `tw_config.sleeve_capital_inr`. `02` Track C §3 is untouched: a TWT order
+still exists only because a person pressed Confirm on an unexpired plan.

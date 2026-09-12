@@ -7,13 +7,16 @@ import { formatTradeDate } from "@/lib/format";
 import {
   fetchBars,
   fetchBreadth,
+  fetchLastScan,
   fetchToday,
   type VbtCandidate,
 } from "@/lib/vbt/fetch";
 import { PAGES } from "@/lib/vocabulary";
 
+import { scanNow } from "./actions";
 import { BreadthGauge } from "./_components/breadth-gauge";
 import { MiniChart, type ChartBar } from "./_components/mini-chart";
+import { ScanNow } from "./_components/scan-now";
 import { breadthLine, funnelLine, gateCopy, shutLine } from "./copy";
 
 /**
@@ -24,10 +27,11 @@ import { breadthLine, funnelLine, gateCopy, shutLine } from "./copy";
  * comes first because a list of candidates above a shut gate is a list of trades not to take, and
  * `01` §3's ablation says the gate is worth more than any single filter.
  *
- * **Nothing on this page mutates anything.** There is no `actions.ts` under this tree and there
- * is not going to be one: `docs/vbt/02` Track C §4 gives the web app no route under `/vbt` that
- * can reach the gateway, and this sleeve confirms every order by hand in the desk console.
- * `__tests__/read-only.test.tsx` asserts that over the whole tree.
+ * **Nothing on this page can place an order.** There is exactly one server action under this
+ * tree — "Scan now", which queues the detector and moves no money — and `docs/vbt/02` Track C §4
+ * still gives the web app no route under `/vbt` that can reach the gateway: this sleeve confirms
+ * every order by hand in the desk console. `__tests__/read-only.test.tsx` is the census that
+ * keeps the set at exactly one (DECISIONS-VB VB14, which supersedes VB8.4's "no action at all").
  *
  * `05` §2 also sketched a per-row **Dismiss** note. It is not built: the data model (`03`) has no
  * table to put a note in, and inventing one to hold a UI affordance nobody has asked for would
@@ -162,9 +166,10 @@ function CandidateTable({
 export default async function VbtTodayPage() {
   const today = await fetchToday();
   const asOf = today?.as_of ?? null;
-  const [breadth, charts] = await Promise.all([
+  const [breadth, charts, lastScan] = await Promise.all([
     fetchBreadth(),
     chartsFor(today?.candidates ?? [], asOf),
+    fetchLastScan(today),
   ]);
 
   const candidates = today?.candidates ?? [];
@@ -177,11 +182,14 @@ export default async function VbtTodayPage() {
         title={PAGES["/vbt"].title}
         blurb={PAGES["/vbt"].blurb}
         meta={
-          asOf ? (
-            <span className="text-sm text-muted-foreground">
-              As of {formatTradeDate(asOf)}
-            </span>
-          ) : null
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            {asOf ? (
+              <span className="text-sm text-muted-foreground">
+                As of {formatTradeDate(asOf)}
+              </span>
+            ) : null}
+            <ScanNow action={scanNow} lastScan={lastScan} />
+          </span>
         }
       />
       <SectionTabs section="vbt" />

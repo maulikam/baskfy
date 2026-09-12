@@ -18,10 +18,38 @@ Resolution order, most specific first:
 1. an **active** NSE instrument with that symbol,
 2. any NSE instrument with that symbol (a delisted holding is still a holding — docs/01 §10 keeps
    delisted rows precisely so a past position can be named),
-3. a ``symbol_alias.old_symbol`` pointing at one.
+3. a ``symbol_alias.old_symbol`` pointing at one,
+4. the same symbol carrying a **G-sec series suffix** — see :data:`GSEC_SERIES_SUFFIXES`.
 
 A tier that returns exactly one row wins. A tier that returns several is ambiguous and resolution
 stops there rather than falling through to a vaguer tier.
+
+Tier 4 and the bond that belonged to nobody (12 Sep 2026)
+---------------------------------------------------------
+Zerodha spells one instrument two ways, and the difference cost a real holding its place in the
+ledger. Kite's **instruments** dump gives the Sovereign Gold Bond as ``SGBDE31III-GB`` — symbol
+plus the ``GB`` series — and that is the row in ``instrument`` (id 12753 on the box, token
+5753857). Kite's **holdings** endpoint reports the very same position as ``SGBDE31III``, bare.
+Resolution was exact-match, so every sync since the account was connected filed that symbol under
+``unresolved`` and moved on: the bond was held by the broker, worth real money, and present in no
+portfolio at all — not even the broker's own pile, which is where everything unfiled is supposed
+to land. It was found by `gates/pktea-phantom.md` P8, as the ``broker_has_unfiled=1`` line of an
+audit looking for something else.
+
+The bridge is a tier rather than a ``symbol_alias`` row because the bare name is not an *old*
+name: nothing was renamed, the two spellings are simultaneous and both current, and filing one
+instrument's row by hand would leave the next bond Maulik buys just as invisible. It is restricted
+to ``GB``/``GS`` — the series `baskfy_execution.guards.UNTOUCHABLE_SERIES` names, the government
+paper this quirk is observed on — and **never** to the ``BE``/``SM``/``ST`` suffixes that share
+the shape: 7,238 of the box's 11,215 symbols carry a dash, and a general rule over those would be
+a machine for silently filing one company's shares under another's name. Over the 178 ``-GB`` and
+``-GS`` instruments the box actually holds, **no** bare counterpart exists, so the tier can never
+shadow a real symbol; and because it runs last, a bare symbol that resolves on its own always wins
+anyway.
+
+Resolving the name is what makes the holding *reconcilable*, which is the point. A row filed by
+hand, against a symbol the sync cannot see, is write-once — the exact defect
+`baskfy_api.broker_holdings_sync` was taught to sweep for on the same day.
 """
 
 from __future__ import annotations
@@ -30,6 +58,7 @@ import datetime as dt
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
+from typing import Final
 
 from sqlalchemy import Select, delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -60,6 +89,7 @@ from baskfy_core.screen_definition import ScreenDefinition
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
 
 __all__ = [
+    "GSEC_SERIES_SUFFIXES",
     "Candidate",
     "PortfolioNotFound",
     "RebalanceOutcome",
@@ -309,6 +339,18 @@ async def replace_holdings(
 # ---------------------------------------------------------------------------
 
 
+#: The series suffixes the instrument master carries and Kite's holdings endpoint drops.
+#:
+#: ``GB`` is the Sovereign Gold Bond series and ``GS`` the dated government securities — the two
+#: `baskfy_execution.guards.UNTOUCHABLE_SERIES` refuses to trade, and the only place this product
+#: has observed Zerodha using two spellings for one instrument at the same time. See the module
+#: docstring for why this is deliberately not widened to ``BE``/``SM``/``ST``: those suffixes mark
+#: a *different listing of a real company*, and guessing across them would file one firm's shares
+#: under another's name. Written with the dash so the constant is the thing appended, not a rule
+#: about how to append it.
+GSEC_SERIES_SUFFIXES: Final[tuple[str, ...]] = ("-GB", "-GS")
+
+
 def _instrument_query() -> Select[tuple[int, str, str, str | None, dt.date | None, bool]]:
     return select(
         Instrument.id,
@@ -323,7 +365,12 @@ def _instrument_query() -> Select[tuple[int, str, str, str | None, dt.date | Non
 async def resolve_symbols(
     session: AsyncSession, symbols: Sequence[str]
 ) -> dict[str, SymbolResolution]:
-    """Resolve every symbol in one pass. Two queries total, whatever the file's length."""
+    """Resolve every symbol in one pass. At most four queries, whatever the file's length.
+
+    Two always (the listing tiers), plus one for the alias tier and one for the G-sec suffix tier
+    — and each of those two runs only when something is still unanswered, so the ordinary file of
+    ordinary symbols still costs exactly two.
+    """
     wanted = list(dict.fromkeys(symbols))
     if not wanted:
         return {}
@@ -384,9 +431,37 @@ async def resolve_symbols(
                 )
             )
 
+    # Tier 4, last and narrowest: the same name with a G-sec series suffix. Only for symbols that
+    # neither a listing nor an alias could answer, so a bare symbol that means something on its
+    # own can never be shadowed by a suffixed one.
+    still_unknown = [symbol for symbol in unresolved if symbol not in aliased]
+    suffixed: dict[str, list[Candidate]] = {}
+    if still_unknown:
+        forms = {
+            f"{symbol}{suffix}": symbol
+            for symbol in still_unknown
+            for suffix in GSEC_SERIES_SUFFIXES
+        }
+        for row in (
+            await session.execute(_instrument_query().where(Instrument.symbol.in_(forms)))
+        ).all():
+            suffixed.setdefault(forms[row.symbol], []).append(
+                Candidate(
+                    instrument_id=row.id,
+                    symbol=row.symbol,
+                    name=row.name,
+                    series=row.series,
+                    delisted_on=row.delisted_on,
+                )
+            )
+
     return {
         symbol: _resolve_one(
-            symbol, active.get(symbol, []), direct.get(symbol, []), aliased.get(symbol, [])
+            symbol,
+            active.get(symbol, []),
+            direct.get(symbol, []),
+            aliased.get(symbol, []),
+            suffixed.get(symbol, []),
         )
         for symbol in wanted
     }
@@ -397,8 +472,14 @@ def _resolve_one(
     active: Sequence[Candidate],
     any_listing: Sequence[Candidate],
     aliases: Sequence[Candidate],
+    series_suffixed: Sequence[Candidate] = (),
 ) -> SymbolResolution:
-    for tier, via_alias in ((active, False), (any_listing, False), (aliases, True)):
+    # ``via_alias`` stays False for the suffixed tier, and that is a statement rather than an
+    # omission: `matched_via_alias` means "this instrument used to be called that", and the bond
+    # was never called anything else. What the caller needs is in `candidates[0].symbol`, which
+    # carries the instrument's real spelling however the tier was reached.
+    tiers = ((active, False), (any_listing, False), (aliases, True), (series_suffixed, False))
+    for tier, via_alias in tiers:
         if len(tier) == 1:
             return SymbolResolution(
                 symbol=symbol,

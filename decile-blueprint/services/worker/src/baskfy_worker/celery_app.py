@@ -74,6 +74,14 @@ TASK_ROUTES: Final[dict[str, dict[str, str]]] = {
     # publishes it is one indexed SELECT and takes the default queue, like the checks.
     "baskfy.vbt.rescan": {"queue": QUEUE_COMPUTE},
     "baskfy.vbt.rescan_sweep": {"queue": QUEUE_DEFAULT},
+    # TW12: the same two for the three-weeks-tight sleeve. The scan re-detects the whole cash
+    # universe and takes the compute queue like the nightly detector it calls; the publisher that
+    # picks up the desk's queued rows is one indexed SELECT a minute and takes the default queue.
+    # It is called `scan_publish` and not `scan_sweep` on purpose -- on this sleeve "sweep" is
+    # `sweep_naked`, the 15:15 GTT chore, and no TWT Beat entry may carry the word
+    # (`test_twt_beat.py::test_the_sweep_is_not_on_a_timer`). DECISIONS-TW TW12.4.
+    "baskfy.twt.scan": {"queue": QUEUE_COMPUTE},
+    "baskfy.twt.scan_publish": {"queue": QUEUE_DEFAULT},
     # SW15: "Scan now". The scan itself is the nightly's body over the liquid universe — a few
     # minutes of Polars — and takes the compute queue; the sweep that publishes the desk's
     # queued rows is one SELECT a minute and takes the default queue for the reason the
@@ -436,6 +444,24 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
     "vbt-rescan-sweep": {
         "task": "baskfy.vbt.rescan_sweep",
         "schedule": crontab(minute="*"),
+        "options": {"queue": QUEUE_DEFAULT},
+    },
+    # --- TW12: the three-weeks-tight sleeve's "Scan now" publisher (DECISIONS-TW TW12.1) --
+    #
+    # Every minute, seven days a week: publish every `tw_scan_run` row that is QUEUED with no
+    # `task_id`. The desk console has no Celery client, so its button writes the row and this
+    # publishes it; the API's button publishes directly and this is its fallback when no broker
+    # was configured. Seven days rather than mon-fri for VB12's reason: the press that matters
+    # most is the one after a night the chain's step was refused, and that night is often a
+    # Friday whose fix happens on Saturday.
+    #
+    # NOT `twt-scan-sweep`. `sweep` on this sleeve is `sweep_naked`, which re-arms GTT stops
+    # through the gateway, and scheduling that would be a second auto-execute exception -- which
+    # is why `test_twt_beat.py` refuses any TWT Beat entry carrying the word, and why it refused
+    # this one until it was renamed. DECISIONS-TW **TW12.4**.
+    "twt-scan-publish": {
+        "task": "baskfy.twt.scan_publish",
+        "schedule": dt.timedelta(seconds=60),
         "options": {"queue": QUEUE_DEFAULT},
     },
     # --- VB7: the checks behind the volume-breakout alerts (docs/vbt/05 §4) -----------

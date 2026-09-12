@@ -1974,6 +1974,196 @@ explicitly, which is the rule the rest of the pack already followed.
 
 ---
 
+## TW12.1 — TWT had no scan-run table, and gets `tw_scan_run` rather than reusing a row · ⚠ UNREVIEWED
+
+**Context.** `PLAN-SCAN-SYNC.md` asks for "Scan now" on the TWT page, in the shape SW15 built for
+the swing book: `POST /twt/scan` answering **202** queued / **409** in flight / **429** rate
+limited, and `GET /twt/scan/{run_id}` for the poll. Both older sleeves have a table behind that
+button — the swing book's `sw_scan_run` (`0033_swing_scan_now`) and VBT-1's `vb_scan_run`
+(`0040_vbt_scan_run`). **TWT had neither**, and the plan left the choice to this leaf: add a table
+by migration, or justify reusing an existing row shape.
+
+**Decision.** Add `tw_scan_run` by migration **`0042_twt_scan_run`** (revising `0041_twt`, the next
+free number; `0043_split_holding_reason` has since chained onto it and the head is single). Twelve
+columns, three check constraints, one index on `(user_id, requested_at)` — the query both refusals
+make. Documented as `docs/twt/03` §11; the sleeve now has fourteen tables and
+`test_twt_schema.py`'s count says so with the reason beside it.
+
+**Rejected: reuse `tw_session`.** It is the closest existing row — one per session the system ran,
+already carrying counters. It is also the *record of a session*, not of a request: it is keyed
+`(user_id, session_date)`, so two presses on the same day would collide, a `FAILED` scan would
+have to be written onto a row the evening job reads as its calendar, and "the scan failed" would
+become indistinguishable from "the session failed". The evening job reads that table to decide
+what to plan from. Corrupting it with request state would be a money bug reachable from a button.
+
+**Rejected: reuse `tw_backtest_run`.** It has the right *shape* — `started_at`, `finished_at`,
+`params`, `error` — and entirely the wrong meaning. A page showing "your last run" would mix scans
+and backtests, and `03` §9's index is `(user_id, source, finished_at)` for "the latest finished run
+per source", which a scan would pollute.
+
+**Rejected: no table at all — publish the Celery task and answer 202 blind.** It is the smallest
+change and it loses the two refusals, which is most of the feature: both are answered *from the
+table* rather than from Redis, deliberately, so they hold on a box with no cache and are testable
+against the database alone (the argument SW15.1 made and VB12 repeated). It also loses the poll,
+and a button with no poll is a button that looks broken for the two minutes the detector runs.
+
+**Why it is narrower than `sw_scan_run`.** See TW12.2: no `provisional` column.
+
+**Why `source` admits `web` where `vb_scan_run`'s admits only `desk` and `cli`.** See TW12.3: the
+`/twt` hub is getting this button, and a row that cannot say which button was pressed is a row that
+cannot be audited afterwards.
+
+**Reversal.** `alembic downgrade 0041_twt` drops the table and its index and nothing else —
+asserted against a throwaway database in `gates/twt-scan-now.md` G2a (`version=0041_twt
+tw_tables=13 scan=0 idx=0`). Then delete `models/twt.py`'s `TwScanRun`, `baskfy_api/twt_scan.py`,
+`baskfy_api/routers/twt.py`, `baskfy_worker/tasks/twt_scan.py`, the two routes in `app/twt_desk.py`
+and the four test files. Nothing else reads any of it. **No row of any existing table changes
+shape**, so a reversal loses only the scan history.
+
+---
+
+## TW12.2 — The scan runs the detector that exists, and there is **no** provisional intraday path · ⚠ UNREVIEWED
+
+**Context.** SW15's "Scan now" does something clever: during the session it builds a bar per liquid
+name out of live Kite quotes and detects on *today so far*, labelling every row `provisional`. It
+is the right answer for the swing book, whose setups — a base, a pivot — are readable off a bar
+still being formed. The obvious way to build this button for TWT is to copy that.
+
+**Decision.** Do not. `baskfy.twt.scan` detects the **latest published session** and calls
+`baskfy_worker.tasks.twt.detect_session` — the same function `baskfy.twt.detect` calls — with
+`force=True`. There is no provisional path, no quote read, no `provisional` column on
+`tw_scan_run`, and no `provisional` field on the API payload.
+
+**Why.** `docs/twt/04` §2 measures three *weekly* ranges that have closed, against a monthly low,
+with a sessions-out count over closed sessions. A bar built at 13:42 would change every one of
+those numbers and make none of them truer — the week is not over. Worse, it would make them
+*actionable-looking*: the whole strategy is "this name has gone quiet for three weeks", and a
+half-formed week is exactly the input that makes a noisy name look quiet. VBT-1 reached the same
+refusal from different arithmetic (`vb_scan_run` has no `provisional` column either, because three
+of its five Chartink lines are closed-day facts). Two sleeves, one conclusion, and the swing book
+is the exception rather than the pattern.
+
+**Why `force=True`, which the nightly does not pass.** The nightly's rule is "skip a session that
+already has a breadth row" (TW4.3, and it is a good rule — this strategy signals about eighteen
+times a year, so "no signals" is the ordinary state of a session that ran perfectly). A person
+pressing **Scan now** is asking for precisely the session that rule skips: the night a threshold
+changed, or the night the quality gate refused the day. Without `force` the button would answer
+`{"skipped": "already detected"}` and look broken. The write underneath is an upsert, so the
+re-run is still idempotent (house rule 7) — asserted by counting `tw_breadth_daily` rows after two
+presses.
+
+**Rejected: a second detector inside `twt_scan.py`.** A second implementation of the tight-state
+rule would drift from the first the moment a threshold moved, and the two would then disagree about
+the same session on the same page. `gates/twt-scan-now.md` G9 and three tests assert the module
+contains no detection of its own.
+
+**Rejected: detect "today" from the exchange calendar.** VB13.4 is the recorded cost of that: the
+calendar calls Friday a trading day from midnight, Friday's bars do not exist until the chain
+publishes that evening, and a press at 14:14 faithfully detected a session the bars had never heard
+of. `latest_published_session` asks `pipeline_run.data_version` instead — the product's own answer
+to "what is the latest session", the one the freshness pill reads.
+
+**Reversal.** Adding a provisional path later is additive: a `provisional` boolean column, a quote
+source on the task, and the swing book's `provisional_bars` for a model. Nothing here forecloses
+it. What it would need first is an answer to "what does a three-week contraction mean two days into
+the third week", and `04` does not have one.
+
+---
+
+## TW12.3 — The `/twt` hub gains its first write, and it is the scan · ⚠ UNREVIEWED
+
+**Context.** `docs/twt/02` Track A says the web app's `/twt` hub is *"read-only — the same rule as
+`/baskets`, `/swing` and `/vbt`: every mutation on it is a 405 except notes and dismissals, which
+change no money."* Track C §4 says *"`apps/web` gets no route under `/twt` that can reach the
+gateway."* Those are two different sentences and only the second is absolute.
+
+`PLAN-SCAN-SYNC.md`'s contract says the web action "posts to the desk through the same path
+`swing/actions.ts::scanNow` uses" — and that path is `swingWrite` → `${API}/api/v1/swing/scan`, the
+**API**, not the desk console. So Leaf 5's button needs `POST /api/v1/twt/scan` to exist. Before
+this leaf there was no `/twt` router in the API at all: `apps/web/src/lib/twt/fetch.ts` asks for
+`/twt/today` and `/twt/backtest` and gets `null`, by design (TW8 built the page ahead of its data).
+
+**Decision.** Add `services/api/src/baskfy_api/routers/twt.py` with exactly two routes — the scan
+and its poll — and register it. The hub's rule becomes "read-only except one money-free write",
+which is the swing book's rule and was already Track A's own carve-out for writes that change no
+money. **Recorded here rather than assumed**, because widening a Track A sentence on this sleeve is
+not a thing to do silently.
+
+**What makes the write defensible, and each of these is asserted.** It writes **one row in one
+table** (`tw_scan_run`) and publishes **one task name** (`baskfy.twt.scan`). The module names no
+broker, no execution package, and does not so much as *read* `twt_execution_enabled` — a scan has
+no business branching on it. Every route resolves the sole tenant rather than trusting the
+principal. `services/api/tests/test_twt_readonly.py` asserts all of it over the source and over the
+OpenAPI document, including that the one mutating route is **exactly** `POST /twt/scan` and not a
+superset.
+
+**Track C §4 is untouched.** There is no `POST /twt/execute` in the API and this leaf did not make
+one easier to add: confirming a line is still the desk's, behind Maulik's own login.
+
+**Rejected: build only the desk route and let Leaf 5 point the web action at the desk console.**
+The desk is on a different host, behind basic auth and an `Origin` check meant for a browser Maulik
+is sitting at. Pointing the public web app's server action at it would put the operator console in
+the web app's trust boundary for the sake of one button — the exact coupling `05` §2 keeps apart.
+
+**Rejected: serve `/twt/today` and `/twt/backtest` here too, since the router had to exist.** They
+are a different module's work with a different acceptance, and a router that grows read surfaces on
+the way to a button is a router nobody reviewed. The path count in `test_twt_readonly.py` is
+asserted at **two**, so whoever serves them reads that file first.
+
+**A consequence for Leaf 5, stated so it is not a surprise.** `apps/web/src/app/(app)/twt/` has no
+`actions.ts` and `src/lib/twt/fetch.ts` says in its own docstring that it has no write helper and
+is not getting one; `__tests__/read-only.test.tsx` asserts it. Adding the button means changing
+that test — which is the same "a new write is a deliberate act" property the desk's route
+discovery gives (`test_twt_safety_properties.py`). This leaf did not change it, because the UI is
+Leaf 5's column.
+
+**Reversal.** Remove the `versioned.include_router(twt.router)` line in `app.py` and delete
+`routers/twt.py`, `twt_scan.py` and their two test files. The desk's `POST /twt/scan` is
+independent and would keep working.
+
+---
+
+## TW12.4 — The publisher is not called a sweep, because on this sleeve that word means the gateway · ⚠ UNREVIEWED
+
+**Context.** TW12's publisher was first written as Beat entry `twt-scan-sweep` firing task
+`baskfy.twt.scan_sweep`, copying `swing-scan-sweep` (SW15) and `vbt-rescan-sweep` (VB12) exactly.
+It does one indexed `SELECT ... WHERE status = 'QUEUED' AND task_id IS NULL` and an
+`apply_async`. It cannot reach a broker, and nothing about it is dangerous.
+
+**`services/worker/tests/test_twt_beat.py::test_the_sweep_is_not_on_a_timer` failed it, and the
+test was right.** Its assertion is that no TWT Beat entry may be *named* for a sweep and none may
+point at a task whose name contains one, with the reason written above it: on this sleeve "sweep"
+is `app.twt_execute.sweep_naked`, the 15:15 chore that re-arms GTT stops **through the gateway**,
+and scheduling that would be a second auto-execute exception — which non-negotiable 1 says an agent
+may not add. TW11.2 says the same thing in this file: *"The sleeve's clock gains the evening and
+the morning, and must never gain the sweep."*
+
+**Decision.** Rename, do not narrow. `baskfy.twt.scan_publish`, Beat entry `twt-scan-publish`,
+`PUBLISH_LIMIT` rather than `SWEEP_LIMIT`, and the module's prose says "publisher" throughout. The
+assertion in `test_twt_beat.py` is unchanged apart from a note recording that it caught this, and
+one added line asserting the publisher is still *there* — so a future rename back to a sweep fails
+twice, once on the word and once on the absence.
+
+**Rejected: narrow the assertion to `sweep_naked` or to an allow-list.** It would have worked and
+it is the wrong trade. The value of that test is that somebody grepping Beat for "twt sweep" at
+3am gets nothing — and a `twt-scan-sweep` entry would give them a hit that looks exactly like the
+thing they are afraid of. A safety check that has to be read carefully before it can be trusted is
+a safety check that will be misread. Weakening it to accommodate a *cosmetic* naming symmetry with
+two other sleeves is the clearest case of "never weaken a test to make a module pass" in this leaf.
+
+**Rejected: keep the name and add an exemption comment.** Same objection, one indirection worse.
+
+**The cost, stated honestly.** The three sleeves' publisher tasks are now named inconsistently:
+`baskfy.swing.scan_sweep`, `baskfy.vbt.rescan_sweep`, `baskfy.twt.scan_publish`. That is a real
+loss — a reader who learns one sleeve no longer guesses the third. It is the smaller loss.
+
+**Reversal.** Rename back in `celery_tasks.py`, `celery_app.py` (routes and Beat),
+`baskfy_api/queue.py` and `EXPECTED_TASKS` in `test_twt_safety_properties.py` — and you will then
+have to weaken `test_the_sweep_is_not_on_a_timer`, which is the point at which this decision should
+be re-read rather than reverted.
+
+---
+
 ## The pack's own standing position on two things it was not asked
 
 **There is no paper phase and this file does not re-open it.** Maulik decided it on 11 Sep 2026,
@@ -1983,3 +2173,82 @@ fill-day rule and TW10's sweep exist.
 
 **The run never flips a flag and never sets a capital.** Root `CLAUDE.md` safety rails. Nothing in
 this file is a reason to.
+
+---
+
+### TW11 — `/twt` gains one server action, "Scan now", and the read-only test becomes a census · ⚠ UNREVIEWED
+
+**Context.** `PLAN-SCAN-SYNC.md` leaf 5: Maulik asked for the swing hub's "Scan now" button on the
+three-weeks-tight and volume-breakout pages. Until 12 Sep 2026 this tree had **no server action at
+all**, and `__tests__/read-only.test.tsx` asserted exactly that — `05` §1 permits two money-free
+writes here (a note and a dismissal), TW8.7 declined both because `03` has no table to put a note
+in, and "no action at all" was therefore the strongest true claim available.
+
+**Decision.** Build the button, and replace that assertion with the swing hub's **census** rather
+than deleting it. The file walk enumerates every export of every `use server` module under the
+tree and the set must be exactly `["scanNow"]`; it pins the hub at one form and one submit button,
+requires the action to go through one write helper, and asserts that helper's path type is a
+**closed union of one literal** — `export type TwtWritePath = "/twt/scan";` — with POST as its only
+method. The 405 assertion survives: no `route.ts` exists under the tree, and a server action is a
+function reference the framework dispatches, not an address anybody can post to by guessing.
+
+**Two extra guarantees this sleeve needs and the sibling does not.** The census also asserts that
+the **write path** — the action plus its helper — can name neither this sleeve's capital nor its
+execution switch. `02` §3 says those are Maulik's "in any circumstance", and the plan's hard rule 2
+repeats it. The check is deliberately scoped to the write path rather than the whole tree, because
+the half-size counter legitimately *reads* the stored switch in order to say that trading is off;
+reading a setting is not setting one.
+
+**Why a scan is allowed where an order is not.** A scan queues the detector: prices in, detection
+rows out. `02` Track C §4 is unchanged, and `05` §2 still puts the click in the desk console.
+
+**The status is mapped to a sentence, and the service's own `detail` is never rendered.** 202, 409
+and 429 become "Scan started…", "A scan is already running…", "A scan has just been run. The next
+one can start in about a minute." A refusal written for an operator names jobs and tables, which
+is the 11 Sep 2026 defect this sleeve's `no-internals` test exists to catch. The write helper
+returns a status and not a string, so the page has nothing internal to leak; a failed run says the
+two facts that are the reader's — nothing changed, and they can start another — and not the reason.
+
+**Which table a run is read from is leaf 4's, not this one's.** The UI reads the last run off the
+day's payload (`last_scan`, or `last_scan_id` resolved through `GET /twt/scan/{run_id}`), so either
+shape leaf 4 ships works without a change here.
+
+**Reversal.** `git revert` the leaf-5 commit; the tree returns to having no action, and TW8.7's
+wording is true again unchanged.
+
+---
+
+## TW12.5 — The Chartink scorer is a neighbour of the goldens harness, not a sixth module of it · ⚠ UNREVIEWED
+
+**Context.** `PLAN-SCAN-SYNC.md` leaf 6 added `tools/twt/twt_chartink_gap.py`, and
+`test_twt_goldens.py::TestTheHarnessIsWhereItSaysItIs::test_the_five_modules_are_on_disk` went
+red — the same red TW7.1 saw when `sweep.py` and `backtest.py` moved in. Two answers were open:
+grow `HARNESS_MODULES` to six, or move the scorer out of `tools/twt/` so the harness's five stay
+alone in the directory.
+
+**Taken.** Neither, and TW7.1 is why: the directory is the sleeve's tool directory and the test
+names *which* file is which. `HARNESS_MODULES` still holds TW2's five; `twt_chartink_gap.py` joins
+`OPERATOR_TOOLS` with a reason of its own. The harness is defined by what it *does* — it
+reproduces the study's 164 trades against `fixtures/twt/golden_trades.csv` (`gates/twt-2.md`,
+`gates/twt-2-harness.md`) — and the scorer grades the **detector against Chartink's export** for
+one session. Same directory, same imports, different answer key. Calling it a sixth harness module
+would make "the harness" mean "whatever is in the folder", which is the proxy TW7.1 refused.
+
+**Rejected.** (a) `HARNESS_MODULES` → six. It is the one-line fix and it dissolves the only claim
+the class exists to make; `test_the_goldens_harness_itself_still_has_exactly_one_writer` is
+derived from `HARNESS_MODULES`, so widening it also quietly widens what the writer claim covers.
+(b) Moving the file to `tools/twt/analysis/`. The scorer is `twt_scan`, `twt_panel` and
+`twt_recall` with a different question asked of them, and it reaches them by a bare
+`sys.path.insert(parent)` — a subdirectory buys a longer import for no separation. It would also
+rewrite ten CHECK lines in a 16/16 gate, `tools/twt/twt-chartink-pull.sh`'s closing instruction,
+`PLAN-SCAN-SYNC.md` §leaf 6 and the module's own usage block: a green gate made stale to keep a
+test green is TW7.1's rejected (b) again, and the runbook loses the same way.
+
+**The property that had to survive, and does.** The assertion is still an **exact** set over the
+union, so an unnamed tenth file in `tools/twt` still fails it. `_ALLOWED_WRITERS` gained nothing:
+the scorer writes no bytes — the box's bars are pulled by `twt-chartink-pull.sh` (a shell file,
+not a `*.py`), and the two AST scans over the directory pass unchanged, as does
+`_THE_ONE_WRITER`.
+
+**Reversal.** Delete the entry and its comment from `OPERATOR_TOOLS`. Nothing else in the sleeve
+reads either name.

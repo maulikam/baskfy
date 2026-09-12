@@ -7,6 +7,8 @@
     GET   /vbt/backtest                 the latest finished run per source, and the study's numbers
     GET   /vbt/config                   the settings, the ceilings, the two only a job may write
     PATCH /vbt/config                   change a setting, audited, bounded
+    POST  /vbt/scan                     "Scan now": queue a re-detection of the last session
+    GET   /vbt/scan/{run_id}            that run's state, its session and its funnel
 
 READ-ONLY EXCEPT FOR ONE ROUTE, AND THAT ROUTE MOVES NO MONEY
 -------------------------------------------------------------
@@ -23,6 +25,13 @@ cannot place, cancel or size an order. The two fields that decide what the *syst
 all, so a caller cannot name them; and every value it accepts is checked against a server-side
 ceiling that no form can reach. ``VbtConfigPatch`` forbids unknown fields, so a patch asking for
 something it does not own is **refused** rather than silently ignored.
+
+``POST /vbt/scan`` is the second write and the first POST, and it moves no money either. It
+inserts one ``vb_scan_run`` row and publishes one task **name**; the worker behind that name
+(`baskfy.vbt.rescan`, shipped with VB12) reads bars and writes ``vb_signal_daily`` and
+``vb_breadth_daily``. A detection is not a plan and a plan is not an order — the evening job is
+still what turns a signal into a plan line, and a person at the desk is still what turns a plan
+line into an order. `baskfy_api.vbt_scan` names no broker and constructs no row but that one.
 
 ``services/api/tests/test_vbt_readonly.py`` asserts all of it over the source and over the
 OpenAPI document, the way ``test_swing_readonly.py`` does for the swing book.
@@ -45,6 +54,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api import vbt as vbt_service
+from baskfy_api import vbt_scan
 from baskfy_api.auth import AuthenticatedDep, settings_for
 from baskfy_api.curated_tenant import scoped_sole_user_id
 from baskfy_api.db import SessionDep
@@ -619,3 +629,103 @@ async def patch_vbt_config(
             dry_run_sessions_required=DRY_RUN_SESSIONS_REQUIRED,
         )
     )
+
+
+class VbtScanRunOut(BaseModel):
+    """One "Scan now" run (VB12). ``status`` walks QUEUED -> RUNNING -> DONE | FAILED.
+
+    ``session_date`` is null until the worker has decided which published session it is
+    re-detecting — the caller asks for "the latest" and only the worker knows which that is.
+    ``funnel`` is the detector's own counts and is filled on DONE; ``error`` is the reason on
+    FAILED; ``detail`` carries the rest, in the shape the nightly step writes so the two read
+    the same. There is no ``provisional`` here and there is no column for one: this sleeve
+    re-detects a **closed** session, never a partial one.
+    """
+
+    run_id: int
+    status: str
+    source: str
+    requested_at: dt.datetime
+    started_at: dt.datetime | None
+    finished_at: dt.datetime | None
+    session_date: dt.date | None
+    funnel: dict[str, object] | None
+    detail: dict[str, object] | None
+    error: str | None
+
+
+class VbtScanQueuedOut(BaseModel):
+    """What `POST /vbt/scan` answers, with a 202: the run to poll."""
+
+    run_id: int
+    status: str
+    requested_at: dt.datetime
+
+
+def _scan_run_out(view: vbt_scan.ScanRunView) -> VbtScanRunOut:
+    return VbtScanRunOut(
+        run_id=view.run_id,
+        status=view.status,
+        source=view.source,
+        requested_at=view.requested_at,
+        started_at=view.started_at,
+        finished_at=view.finished_at,
+        session_date=view.session_date,
+        funnel=view.funnel,
+        detail=view.detail,
+        error=view.error,
+    )
+
+
+@router.post(
+    "/scan",
+    response_model=VbtScanQueuedOut,
+    status_code=202,
+    summary="Scan now: queue a re-detection of the last published session",
+)
+async def post_vbt_scan(
+    request: Request, session: SessionDep, principal: AuthenticatedDep, settings: SettingsDep
+) -> Response:
+    """VB12, over the API. One row in ``vb_scan_run`` and one task name published.
+
+    **What it re-detects is a session that has already closed** — the latest one the pipeline has
+    published, which the worker resolves. It is deliberately not the swing book's "scan today
+    from live quotes": three of VBT-1's five lines read the day's volume against its 50-day
+    average, the close's position inside the day's range and the day's change, and the entry
+    limit *is* the signal bar's close, so an intraday answer would name a price that does not
+    exist yet.
+
+    A scan moves no money. This route reaches no broker and `baskfy_api.vbt_scan` names none. At
+    most one in flight per tenant (409) and one request a minute (429, ``Retry-After``); both are
+    answered from the table rather than a cache, so they hold on a box with no Redis.
+    """
+    user_id = await scoped_sole_user_id(session, principal.user_id)
+    queue = getattr(request.app.state, "task_queue", None)
+    row = await vbt_scan.request_scan(
+        session,
+        user_id=user_id,
+        now=dt.datetime.now(tz=dt.UTC),
+        min_interval=dt.timedelta(seconds=settings.vbt_scan_min_interval_seconds),
+        stale_after=dt.timedelta(seconds=settings.vbt_scan_stale_after_seconds),
+        source="web",
+        queue=queue,
+    )
+    return Response(
+        content=canonical_json(
+            VbtScanQueuedOut(
+                run_id=int(row.id), status=str(row.status), requested_at=row.requested_at
+            ).model_dump(mode="python")
+        ),
+        media_type=JSON_MEDIA_TYPE,
+        status_code=202,
+    )
+
+
+@router.get("/scan/{run_id}", response_model=VbtScanRunOut, summary="One scan's state")
+async def get_vbt_scan(session: SessionDep, principal: AuthenticatedDep, run_id: int) -> Response:
+    """That run, if it is this tenant's. Somebody else's id is a 404, not a peek."""
+    user_id = await scoped_sole_user_id(session, principal.user_id)
+    view = await vbt_scan.scan_run(session, user_id=user_id, run_id=run_id)
+    if view is None:
+        raise not_found("scan", str(run_id))
+    return _json(_scan_run_out(view))

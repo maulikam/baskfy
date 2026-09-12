@@ -47,6 +47,7 @@ import re
 import sys
 from decimal import Decimal
 from pathlib import Path
+from types import ModuleType
 from typing import Final, Protocol
 
 import pytest
@@ -71,7 +72,16 @@ from test_twt_execute import (  # noqa: E402
 
 IST: Final = dt.timezone(dt.timedelta(hours=5, minutes=30))
 
-#: The seven routes ``app/twt_desk.py`` mounts. Five mutate; two only read.
+#: The nine routes ``app/twt_desk.py`` mounts. Six mutate; three only read.
+#:
+#: **TW12 added the last two and this set is why that was a deliberate act.** Adding
+#: ``POST /twt/scan`` and ``GET /twt/scan/{run_id}`` turned
+#: :meth:`test_the_desk_mounts_exactly_the_routes_this_file_covers` red before a line of test was
+#: written for them — which is the whole design of discovering the surface instead of listing it.
+#: ``POST /twt/scan`` mutates (it inserts one ``tw_scan_run`` row) and is nevertheless money-free
+#: by construction: :class:`TestTheScanRoutesAreMoneyFree` drives both against a real gateway with
+#: ``DRY_RUN`` false and asserts the gateway was never called *at all*, which is a stronger claim
+#: than the dry-run answer the confirm paths below can make.
 EXPECTED_ROUTES: Final = frozenset(
     {
         ("GET", "/twt"),
@@ -81,14 +91,33 @@ EXPECTED_ROUTES: Final = frozenset(
         ("POST", "/twt/rearm"),
         ("POST", "/twt/sweep"),
         ("POST", "/twt/reconcile"),
+        ("POST", "/twt/scan"),
+        ("GET", "/twt/scan/{run_id}"),
     }
 )
 
-#: The three Celery tasks the nightly chain registers for this sleeve. ``twt_backtest`` is
-#: deliberately absent: it is a module ``tools/twt/backtest.py`` and ``make twt-backtest`` call,
-#: never a scheduled task, and :meth:`test_no_twt_task_is_scheduled_into_an_execute_path` is the
-#: assertion that keeps it that way.
-EXPECTED_TASKS: Final = frozenset({"baskfy.twt.detect", "baskfy.twt.evening", "baskfy.twt.morning"})
+#: The five Celery tasks the worker registers for this sleeve. ``twt_backtest`` is deliberately
+#: absent: it is a module ``tools/twt/backtest.py`` and ``make twt-backtest`` call, never a
+#: scheduled task, and :meth:`test_no_twt_task_is_scheduled_into_an_execute_path` is the assertion
+#: that keeps it that way.
+#:
+#: ``baskfy.twt.scan`` and ``baskfy.twt.scan_publish`` are TW12's. Neither can confirm anything:
+#: the scan calls ``twt.detect_session`` — the detector ``baskfy.twt.detect`` already calls — and
+#: the publisher sends ids.
+#:
+#: **The publisher is not called a sweep**, although the swing book's and VBT-1's equivalents are.
+#: On this sleeve ``sweep`` is ``sweep_naked``, which re-arms GTT stops through the gateway, and
+#: ``test_twt_beat.py::test_the_sweep_is_not_on_a_timer`` refuses any TWT Beat entry carrying the
+#: word. It refused this one until it was renamed. DECISIONS-TW **TW12.4**.
+EXPECTED_TASKS: Final = frozenset(
+    {
+        "baskfy.twt.detect",
+        "baskfy.twt.evening",
+        "baskfy.twt.morning",
+        "baskfy.twt.scan",
+        "baskfy.twt.scan_publish",
+    }
+)
 
 DESK_TWT_SOURCES: Final = ("twt_desk.py", "twt_execute.py")
 
@@ -302,8 +331,25 @@ class TestTheSurfaceIsWhatWeThinkItIs:
         return found
 
     def _tasks(self) -> set[str]:
-        """Every ``@shared_task(name="baskfy.twt...")`` in the worker's task registry."""
-        source = _source(
+        """Every ``@shared_task(name=...)`` in the worker's registry whose name is a TWT one.
+
+        **This used to be a regex over string literals, and TW12 found the hole.** The registry
+        registers several tasks through module constants (``SWING_SCAN_NOW_TASK``,
+        ``SWING_SCAN_SWEEP_TASK``), and a TWT task registered the same way would have been
+        invisible here — a scheduled path the safety property does not know exists is exactly
+        what "every route and every task" is supposed to make impossible. It never mattered while
+        every ``baskfy.twt.*`` name happened to be spelled inline, which is the worst kind of
+        safe: safe by coincidence.
+
+        So the scan is now AST, and it resolves the two shapes a decorator can take — a literal
+        and a module-level constant bound to a literal. Anything it *cannot* resolve is reported
+        rather than dropped (:meth:`test_no_shared_task_name_is_unresolvable`), because a name
+        this function silently ignores is the same hole in a different place.
+        """
+        return {name for name in self._registered_task_names() if name.startswith("baskfy.twt")}
+
+    def _registry_source(self) -> str:
+        return _source(
             BLUEPRINT
             / "services"
             / "worker"
@@ -312,13 +358,132 @@ class TestTheSurfaceIsWhatWeThinkItIs:
             / "tasks"
             / "celery_tasks.py"
         )
-        return set(re.findall(r'name="(baskfy\.twt[^"]*)"', source))
 
-    def test_the_desk_mounts_exactly_the_seven_routes_this_file_covers(self) -> None:
+    @staticmethod
+    def _string_constants(source: str) -> dict[str, str]:
+        """Module-level ``NAME = "literal"`` / ``NAME: Final = "literal"`` bindings."""
+        found: dict[str, str] = {}
+        for node in ast.parse(source).body:
+            targets: list[ast.expr] = []
+            if isinstance(node, ast.Assign):
+                targets = list(node.targets)
+            elif isinstance(node, ast.AnnAssign):
+                targets = [node.target]
+            value = getattr(node, "value", None)
+            if not isinstance(value, ast.Constant) or not isinstance(value.value, str):
+                continue
+            for target in targets:
+                if isinstance(target, ast.Name):
+                    found[target.id] = value.value
+        return found
+
+    @classmethod
+    def _imported_string_constants(cls, source: str) -> dict[str, str]:
+        """String constants the registry imports from its sibling task modules.
+
+        The third shape, and the one that made this whole scan necessary:
+        ``from baskfy_worker.tasks.swing_backtest import SWING_BACKTEST_TASK`` and then
+        ``@shared_task(name=SWING_BACKTEST_TASK)``. A scan that stops at this module's own
+        constants reports that decorator as unreadable — honest, but it would wedge the suite on
+        a task that is perfectly fine. So the import is followed, one level, into the worker's own
+        package and nowhere else.
+        """
+        resolved: dict[str, str] = {}
+        tasks_dir = BLUEPRINT / "services" / "worker" / "src" / "baskfy_worker" / "tasks"
+        for node in ast.parse(source).body:
+            if not isinstance(node, ast.ImportFrom) or not node.module:
+                continue
+            if not node.module.startswith("baskfy_worker.tasks."):
+                continue
+            path = tasks_dir / f"{node.module.rsplit('.', 1)[-1]}.py"
+            if not path.exists():
+                continue
+            constants = cls._string_constants(_source(path))
+            for alias in node.names:
+                if alias.name in constants:
+                    resolved[alias.asname or alias.name] = constants[alias.name]
+        return resolved
+
+    @classmethod
+    def _shared_task_names(cls, source: str) -> tuple[set[str], set[str]]:
+        """``(resolved names, unresolvable decorator expressions)`` from one module's source."""
+        tree = ast.parse(source)
+        constants: dict[str, str] = {
+            **cls._imported_string_constants(source),
+            **cls._string_constants(source),
+        }
+
+        names: set[str] = set()
+        unresolved: set[str] = set()
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+                continue
+            for deco in node.decorator_list:
+                if not isinstance(deco, ast.Call):
+                    continue
+                func = deco.func
+                label = getattr(func, "id", None) or getattr(func, "attr", None)
+                if label != "shared_task":
+                    continue
+                keyword = next((k for k in deco.keywords if k.arg == "name"), None)
+                if keyword is None:
+                    unresolved.add(f"{node.name}: @shared_task with no name=")
+                    continue
+                if isinstance(keyword.value, ast.Constant) and isinstance(keyword.value.value, str):
+                    names.add(keyword.value.value)
+                elif isinstance(keyword.value, ast.Name) and keyword.value.id in constants:
+                    names.add(constants[keyword.value.id])
+                else:
+                    unresolved.add(f"{node.name}: name={ast.dump(keyword.value)[:60]}")
+        return names, unresolved
+
+    def _registered_task_names(self) -> set[str]:
+        names, _unresolved = self._shared_task_names(self._registry_source())
+        return names
+
+    def test_the_desk_mounts_exactly_the_routes_this_file_covers(self) -> None:
         assert self._routes() == EXPECTED_ROUTES
 
-    def test_the_worker_registers_exactly_the_three_tasks_this_file_covers(self) -> None:
+    def test_the_worker_registers_exactly_the_tasks_this_file_covers(self) -> None:
         assert self._tasks() == EXPECTED_TASKS
+
+    def test_no_shared_task_name_is_unresolvable(self) -> None:
+        """A decorator this scan cannot read is a task it cannot check. Say so, loudly.
+
+        Not "ignore the ones we cannot parse": that is how the literal-only regex this replaced
+        managed to report three TWT tasks when the sleeve had five.
+        """
+        _names, unresolved = self._shared_task_names(self._registry_source())
+        assert unresolved == set(), (
+            "a @shared_task name could not be resolved from source, so the surface scan below "
+            f"cannot claim to be complete: {sorted(unresolved)}"
+        )
+
+    def test_the_task_scan_resolves_a_constant_and_not_only_a_literal(self) -> None:
+        """Non-vacuity for the hardening above, planted rather than trusted.
+
+        Both shapes are registered in the planted module and both must come back. Without the
+        constant arm the regex this replaced would report one of two.
+        """
+        planted = (
+            'LITERAL_ELSEWHERE: Final = "baskfy.twt.sweep_by_constant"\n'
+            '@shared_task(name="baskfy.twt.sweep_by_literal")\n'
+            "def by_literal() -> None:\n    ...\n\n"
+            "@shared_task(name=LITERAL_ELSEWHERE, acks_late=True)\n"
+            "def by_constant() -> None:\n    ...\n"
+        )
+        names, unresolved = self._shared_task_names(planted)
+        assert names == {"baskfy.twt.sweep_by_literal", "baskfy.twt.sweep_by_constant"}
+        assert unresolved == set()
+
+    def test_the_task_scan_reports_a_name_it_cannot_read(self) -> None:
+        """…and the other half: an expression it cannot resolve is reported, not dropped."""
+        planted = (
+            "@shared_task(name=some_function(), acks_late=True)\ndef by_call() -> None:\n    ...\n"
+        )
+        names, unresolved = self._shared_task_names(planted)
+        assert names == set()
+        assert len(unresolved) == 1
 
     def test_the_route_scan_would_notice_a_new_one(self) -> None:
         """Non-vacuity: the parser finds a route in source shaped like a real one."""
@@ -464,6 +629,205 @@ class TestNoTwtPathReachesABrokerWithDryRunFalse:
         assert kc.calls == []
 
 
+class TestTheScanRoutesAreMoneyFree:
+    """TW12's two routes, driven for real with ``DRY_RUN`` **False** and the sleeve flag false.
+
+    **The assertion here is stronger than the one every other route in this file can make.** A
+    confirm path is allowed to reach the gateway and must get a ``DRY_RUN`` answer back; that is
+    what :class:`SpyGateway` checks. A *scan* is allowed to reach the gateway **never** — it
+    inserts one row and asks a worker to run the detectors — so the assertion is that
+    ``gateway.tape`` is empty as well as ``kc.calls``. A scan that produced a dry-run order would
+    pass the weaker test and be a catastrophe.
+
+    ``twt_gateway`` is replaced by a function that fails the test if it is called at all, so the
+    route cannot even *ask* for a broker connection. That is the difference between "did not place
+    an order this time" and "has no path to one".
+    """
+
+    @staticmethod
+    def _desk() -> ModuleType:
+        """``app.twt_desk``, as a module rather than as ``object``.
+
+        House rule 3 forbids an ``Any`` annotation and there is no ``type: ignore`` here either;
+        ``ModuleType`` is the honest type of an imported module and typeshed gives it a
+        ``__getattr__``, so the route functions below are reachable without either escape hatch.
+
+        ``import_module`` rather than ``from app import twt_desk``: the desk tree is not typed
+        from here, so the plain import is ``Any`` and returning it would be the very escape hatch
+        this method exists to avoid. ``importlib.import_module`` is declared to return
+        ``ModuleType``, which is what it is.
+        """
+        import importlib  # noqa: PLC0415 - only this class needs it
+
+        return importlib.import_module("app.twt_desk")
+
+    def _store(self) -> object:
+        """A ``PgTwtStore`` over an in-memory sqlite carrying only ``tw_scan_run``.
+
+        Only that table on purpose: if the route touched anything else — a position, a plan, a
+        config row — this store would raise rather than quietly serve a default, and the test
+        would say which table it reached for.
+        """
+        import sqlite3  # noqa: PLC0415 - only this class needs it
+
+        sqlite3.register_adapter(dt.datetime, lambda value: value.isoformat())
+        conn = sqlite3.connect(":memory:", isolation_level=None)
+        conn.row_factory = sqlite3.Row
+        conn.executescript(
+            """
+            CREATE TABLE tw_scan_run (
+              id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
+              requested_at TEXT NOT NULL, started_at TEXT, finished_at TEXT,
+              session_date TEXT, status TEXT NOT NULL DEFAULT 'QUEUED',
+              source TEXT NOT NULL DEFAULT 'desk', detail TEXT, error TEXT, task_id TEXT);
+            """
+        )
+        return self._desk().PgTwtStore(conn, user_id=1, schema="")
+
+    def _driven(self, monkeypatch: pytest.MonkeyPatch) -> tuple[ModuleType, SpyGateway, CountingKC]:
+        import contextlib  # noqa: PLC0415 - only this class needs it
+
+        desk = self._desk()
+        gateway, kc = _spied()
+        store = self._store()
+        monkeypatch.setattr(desk, "open_store", lambda: contextlib.nullcontext(store))
+        monkeypatch.setattr(desk, "_now", lambda: NOW)
+
+        def _no_gateway() -> object:
+            raise AssertionError(
+                "a scan route asked for a broker gateway — a scan is money-free by construction"
+            )
+
+        monkeypatch.setattr(desk, "twt_gateway", _no_gateway)
+        monkeypatch.setattr(
+            desk,
+            "last_price",
+            lambda _symbol: (_ for _ in ()).throw(
+                AssertionError("a scan route read a broker quote")
+            ),
+        )
+        return desk, gateway, kc
+
+    def test_posting_a_scan_reaches_no_broker_and_no_gateway(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        desk, gateway, kc = self._driven(monkeypatch)
+        answer = desk.twt_scan_now()
+        assert answer["status"] == "QUEUED"
+        assert int(answer["run_id"]) >= 1
+        assert kc.calls == [], f"the scan reached a broker: {kc.calls}"
+        assert gateway.tape == [], f"the scan reached the gateway: {gateway.tape}"
+
+    def test_reading_a_scan_reaches_no_broker_and_no_gateway(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        desk, gateway, kc = self._driven(monkeypatch)
+        run_id = int(desk.twt_scan_now()["run_id"])
+        run = desk.twt_scan_status(run_id)
+        assert run["id"] == run_id
+        assert run["status"] == "QUEUED"
+        assert kc.calls == []
+        assert gateway.tape == []
+
+    def test_the_second_press_is_refused_and_still_reaches_nothing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The 409 path, which is the one that runs most often once somebody starts pressing."""
+        from fastapi import HTTPException  # noqa: PLC0415 - only this test needs it
+
+        desk, gateway, kc = self._driven(monkeypatch)
+        desk.twt_scan_now()
+        with pytest.raises(HTTPException) as refused:
+            desk.twt_scan_now()
+        assert refused.value.status_code == 409
+        assert kc.calls == []
+        assert gateway.tape == []
+
+    def test_the_scan_wrote_one_row_and_only_to_its_own_table(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Non-vacuity, and the money half of it.
+
+        Without this the three tests above would pass against a route that did nothing at all.
+        One ``tw_scan_run`` row exists afterwards, ``QUEUED``, with no ``task_id`` — the desk has
+        no Celery client, so the sweep is what publishes it — and the only table in the database
+        is that one, so nothing else was written because nothing else *could* be.
+        """
+        desk, _gateway, _kc = self._driven(monkeypatch)
+        desk.twt_scan_now()
+        with desk.open_store() as store:
+            rows = store.conn.execute("SELECT status, source, task_id FROM tw_scan_run").fetchall()
+            tables = {
+                row[0]
+                for row in store.conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
+        assert len(rows) == 1
+        assert rows[0]["status"] == "QUEUED"
+        assert rows[0]["source"] == "desk"
+        assert rows[0]["task_id"] is None
+        assert tables == {"tw_scan_run", "sqlite_sequence"}
+
+    def test_the_scan_module_names_no_broker_and_no_execution_package(self) -> None:
+        """The static half: the worker task the row queues cannot reach an order either.
+
+        Prose is stripped first — ``twt_scan.py`` *describes* what it must not do, and a
+        prohibition must not trip the check (the rule ``tools/deploy/verify-safety.sh`` learned
+        for VBT-1).
+        """
+        source = _strip_prose(
+            _source(
+                BLUEPRINT
+                / "services"
+                / "worker"
+                / "src"
+                / "baskfy_worker"
+                / "tasks"
+                / "twt_scan.py"
+            )
+        )
+        for forbidden in (
+            "place_order",
+            "place_gtt",
+            "OrderGateway",
+            "build_twt_gateway",
+            "execute_line",
+            "rearm_gtt",
+            "sweep_naked",
+            "KiteConnect",
+        ):
+            assert forbidden not in source, (
+                f"baskfy_worker.tasks.twt_scan names {forbidden} — the task a scan queues must "
+                f"have no path to an order"
+            )
+
+    def test_the_scan_task_calls_the_detector_that_already_exists(self) -> None:
+        """TW12.2: one detector, not two.
+
+        A second implementation of the tight-state rule would drift from the first the moment a
+        threshold moved, and the two would then disagree about a session on the same page.
+        """
+        source = _strip_prose(
+            _source(
+                BLUEPRINT
+                / "services"
+                / "worker"
+                / "src"
+                / "baskfy_worker"
+                / "tasks"
+                / "twt_scan.py"
+            )
+        )
+        assert "from baskfy_worker.tasks.twt import detect_session" in source
+        assert "detect_session(" in source
+        for reimplemented in ("run_detect_twt", "def detect_session", "tight_state"):
+            assert reimplemented not in source, (
+                f"twt_scan.py contains {reimplemented} — it should call the nightly's detector, "
+                f"not carry one"
+            )
+
+
 class TestTheFlagIsTheReasonAndNotDryRun:
     """The property above must hold *because of the flag*, which these pin exactly."""
 
@@ -517,7 +881,13 @@ class TestThereIsNoAutoExecute:
         paths.extend(sorted(worker.glob("tasks/twt*.py")))
         paths.append(worker / "tasks" / "celery_tasks.py")
         paths.append(worker / "celery_app.py")
-        paths.append(BLUEPRINT / "services" / "api" / "src" / "baskfy_api" / "twt_sleeve.py")
+        api = BLUEPRINT / "services" / "api" / "src" / "baskfy_api"
+        paths.append(api / "twt_sleeve.py")
+        # TW12's two API modules. Added the day they were written: this scan is a list of files,
+        # and a list of files is exactly the thing that stops being complete when somebody adds a
+        # module without remembering it.
+        paths.append(api / "twt_scan.py")
+        paths.append(api / "routers" / "twt.py")
         paths.extend(
             sorted((BLUEPRINT / "packages" / "core" / "src" / "baskfy_core" / "twt").glob("*.py"))
         )
@@ -526,9 +896,11 @@ class TestThereIsNoAutoExecute:
     def test_the_scan_reads_a_real_and_non_empty_set_of_files(self) -> None:
         """Non-vacuity: a scan over nothing would pass the test below for the wrong reason."""
         sources = self._sources()
-        assert len(sources) >= 15, f"only {len(sources)} files scanned"
+        assert len(sources) >= 18, f"only {len(sources)} files scanned"
         assert any(p.name == "twt_execute.py" for p in sources)
         assert any(p.name == "celery_tasks.py" for p in sources)
+        assert any(p.name == "twt_scan.py" and "worker" in str(p) for p in sources)
+        assert any(p.name == "twt_scan.py" and "api" in str(p) for p in sources)
 
     def test_no_source_defines_or_reads_a_twt_auto_execute_flag(self) -> None:
         offenders: list[str] = []

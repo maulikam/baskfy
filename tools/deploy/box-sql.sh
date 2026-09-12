@@ -11,6 +11,11 @@
 # so nothing has to survive a second round of word splitting.
 #
 # Read-only by discipline, not by enforcement: this is the production database. Pass SELECTs.
+#
+# OUTPUT IS CAPPED AT 5 LINES BY DEFAULT, and that cap bit on 12 Sep 2026: a 20-row audit of
+# `portfolio_holding` came back showing 5 rows, which reads as "there are 5" rather than "you were
+# shown 5". A truncated answer to a completeness question is worse than no answer. Raise it with
+# `BOX_SQL_LINES=50`, or aggregate in SQL, which is better still for anything you intend to count.
 set -euo pipefail
 [ $# -ge 1 ] || { echo "usage: box-sql.sh <sql>" >&2; exit 2; }
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -23,4 +28,4 @@ DB="${BASKFY_BOX_DB:-baskfy}"
 B64="$(printf '%s' "$SQL" | base64 | tr -d '\n')"
 bash "$ROOT/tools/deploy/box.sh" \
   "cd /opt/baskfy && echo $B64 | base64 -d | docker compose -f compose.prod.yml --env-file .env.staging.compose exec -T postgres psql -U baskfy -d $DB -t -A -f -" \
-  2>/dev/null | sed '/^$/d' | tail -5
+  2>/dev/null | sed '/^$/d' | tail -"${BOX_SQL_LINES:-5}"

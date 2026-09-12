@@ -83,10 +83,13 @@ HARNESS_MODULES: Final[tuple[str, ...]] = (
     "twt_scan.py",
 )
 
-#: The sleeve's other operator tools, which live in the same directory because ``docs/twt/06``
-#: and ``docs/twt/FIRST-LIVE-MORNING.md`` put them there. They are **not** part of the goldens
-#: harness and neither reads ``research/``; they are named here so that an eighth, unexplained
-#: file in ``tools/twt`` still fails the assertion below. DECISIONS-TW **TW7.1**.
+#: The sleeve's other tools, which live in the same directory because the documents that
+#: commissioned them — ``docs/twt/06``, ``docs/twt/FIRST-LIVE-MORNING.md``, ``PLAN-SCAN-SYNC.md``
+#: — give these paths literally. None of them is part of the goldens harness: not one grades the
+#: study's 164 trades, which is the only thing the harness is for. Where one of them reads
+#: ``research/`` it reads it and nothing else, which the writer scan below is what proves. They
+#: are named here one at a time, with a reason each, so that an unnamed file in ``tools/twt``
+#: still fails the assertion below. DECISIONS-TW **TW7.1**, extended by **TW12.5**.
 OPERATOR_TOOLS: Final[tuple[str, ...]] = (
     #: TW9's run of the sleeve's own engine over the plant's bars (``make twt-backtest``).
     "backtest.py",
@@ -95,6 +98,14 @@ OPERATOR_TOOLS: Final[tuple[str, ...]] = (
     #: TW10's DRY_RUN drill: a whole session end to end, reporting 0 orders reaching a broker.
     #: `docs/twt/FIRST-LIVE-MORNING.md` tells Maulik to run it the night before he goes live.
     "drill.py",
+    #: `PLAN-SCAN-SYNC.md` leaf 6's scorer (``gates/twt-chartink-gap.md``): given the plant's bars
+    #: for a session, which of Chartink's own names the detector's reading produces, and which
+    #: line refused each one it does not. It reads ``research/`` — the panel and the Chartink
+    #: export — and it grades the **detector against Chartink**, never the study's 164 trades,
+    #: so it is a sibling of the harness and not a sixth module of it. Every number in it comes
+    #: from ``twt_scan``'s functions and ``twt_recall.score``; it holds no threshold of its own,
+    #: which ``gates/twt-chartink-gap.md`` G3 asserts.
+    "twt_chartink_gap.py",
 )
 
 #: Calls that put bytes on disk. Nothing in ``tools/twt`` may write to ``research/`` — it is the
@@ -204,11 +215,14 @@ class TestTheHarnessIsWhereItSaysItIs:
     """G1."""
 
     def test_the_five_modules_are_on_disk(self) -> None:
-        """The harness's five, plus the sleeve's operator tools — and **nothing else**.
+        """The harness's five, plus the sleeve's other tools — and **nothing else**.
 
         Still an exact set: a file in ``tools/twt`` that nobody decided on fails here. It is a
-        longer set than it was because ``docs/twt/06`` puts TW7's sweep and TW9's backtest runner
-        in this directory too, beside the tools they are siblings of.
+        longer set than it was because the documents that commission those tools —
+        ``docs/twt/06`` for TW7's sweep and TW9's backtest runner, ``PLAN-SCAN-SYNC.md`` for
+        leaf 6's Chartink scorer — give this directory as the path, beside the tools they are
+        siblings of. The harness is still **five**: the set that reproduces the study's 164
+        trades neither grew nor shrank when a neighbour moved in.
         """
         assert sorted(path.name for path in HARNESS.glob("*.py")) == sorted(
             HARNESS_MODULES + OPERATOR_TOOLS

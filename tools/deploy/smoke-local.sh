@@ -48,10 +48,14 @@ docker build -q -f "$DOCK/Dockerfile.python" -t "$PY_IMAGE" "$BLUE" >/dev/null
 docker build -q -f "$DOCK/Dockerfile.desk"   -t "$DESK_IMAGE" "$ROOT" >/dev/null
 docker image inspect "$WEB_IMAGE" >/dev/null 2>&1 || {
   echo "   building $WEB_IMAGE (slow, once)"
+  # `NEXT_PUBLIC_DESK_URL` is required, not optional: the Dockerfile's default is empty and
+  # `src/lib/site.ts` throws in production rather than falling back to the live desk. Without it
+  # `next build` fails. A local smoke has no desk, so this points at the loopback console port.
   docker build -q -f "$DOCK/Dockerfile.web" -t "$WEB_IMAGE" \
     --build-arg "NEXT_PUBLIC_SITE_URL=http://localhost:$HTTP" \
     --build-arg "NEXT_PUBLIC_API_ORIGIN=http://localhost:$HTTP" \
     --build-arg "NEXT_PUBLIC_API_URL=http://localhost:$HTTP/api/v1" \
+    --build-arg "NEXT_PUBLIC_DESK_URL=http://localhost:$HTTP/desk" \
     --build-arg "BASKFY_RELEASE=smoke" "$BLUE" >/dev/null
 }
 echo "   $PY_IMAGE  $DESK_IMAGE  $WEB_IMAGE"
@@ -67,6 +71,7 @@ grep -q '^BASKFY_SOLE_USER_ID=' "$SCRATCH/.env.staging" || echo 'BASKFY_SOLE_USE
 cat > "$SCRATCH/.env.compose" <<EOF
 BASKFY_DB_PASSWORD=smoke-$(rnd 8)
 BASKFY_JWT_SECRET=$(rnd 32)
+REVALIDATE_SECRET=$(rnd 32)
 BASKFY_GATE_USER=baskfy
 BASKFY_GATE_PASSWORD_HASH=unused-since-M46.4
 BASKFY_SITE_ADDRESS=:80

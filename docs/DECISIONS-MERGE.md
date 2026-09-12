@@ -7024,3 +7024,44 @@ runtime ids return `Route` (the idiom already used by `lib/search/hrefs.ts` and
 check that catches a route typo before staging. `// @ts-expect-error` — house rule 3.
 
 **Reverse.** Revert the `Route` typings; nothing else depends on them.
+
+## AF V.1 — A `#` between a command's arguments is not a comment, it is a truncation · ⚠ UNREVIEWED
+
+**What happened.** Three packaging defects, one root cause and one consequence.
+
+`tools/deploy/push-images.sh` explained `NEXT_PUBLIC_DESK_URL` in a seven-line comment placed
+*inside* the `docker build` continuation chain. `\`-newline is spliced away before tokenizing, so
+an indented `#` line mid-chain does not comment one argument out — it ends the command there. The
+web build ran with no build context and no `NEXT_PUBLIC_DESK_URL`, died under `set -e`, and the
+three lines after the comment parsed as commands (`--build-arg: command not found`). The comment
+describing the fix for a missing build arg was what removed it again.
+
+`tools/deploy/deploy-swing.sh` had the same shape: `BOX_TIMEOUT_SECONDS=... \` sat above a
+TW11 note, so the prefix became a plain unexported assignment and `box` — `bash box.sh`, a
+subprocess — never saw it. `SEED_TIMEOUT_SECONDS` was a dead knob and the seed budget that whole
+note exists to state fell back to box.sh's own default.
+
+Then, once the web image *could* build, it served 500 on every request. Since `2e4437e` the web
+`middleware.ts` calls `assertRevalidateSecretConfigured()`, which throws in production on an empty
+`REVALIDATE_SECRET` — and middleware runs on every path, so marketing pages and the legal
+documents fail with everything else. `compose.prod.yml`'s `web:` service never passed it, and that
+block is the whole of the web container's environment (it takes no `env_file:`), so the sentence
+already in `.env.staging.example` — "Runtime (web container): REVALIDATE_SECRET must be non-empty
+in production/staging" — had no mechanism behind it. A box pulling a post-`2e4437e` image would
+have come up serving 500 everywhere while `docker compose ps` reported it healthy.
+
+**Choice.** Comments about an argument go above the command. `REVALIDATE_SECRET` is wired as
+`${REVALIDATE_SECRET:?...}` — the stack refuses to start and names the variable — and
+`deploy-swing.sh` generates it on the box if absent, idempotently, the same way it already
+generates `BASKFY_DESK_PASSWORD`; it is never sent over the wire and never printed. The three
+local build/verify callers pass the args they need, and `verify-web-image.sh` keeps its build log
+instead of `>/dev/null 2>&1`, which is why "web image did not build" was all anyone ever saw.
+
+**Rejected.** `${REVALIDATE_SECRET:-}` — it starts a stack that 500s on every page, which is the
+failure we just spent a container run diagnosing, and `:?` costs one named error instead. Relaxing
+the middleware assert to `/api/revalidate` only — `2e4437e` is a deliberate fail-closed decision
+with a commit message saying so, and the root agreement's "the DECISION wins" rule applies.
+Committing a generated secret — never.
+
+**Reverse.** Drop the `REVALIDATE_SECRET` line from `compose.prod.yml` and the generation step
+from `deploy-swing.sh`; the comment moves are cosmetic and independent.

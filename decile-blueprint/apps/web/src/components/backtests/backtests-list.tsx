@@ -39,6 +39,8 @@ export interface BacktestsListProps {
   earliest: string;
   latest: string;
   error: unknown;
+  /** AFH 5.9: open the new-run form with this screen selected. */
+  initialScreenId?: string | null;
 }
 
 function backtestHref(publicId: string): Route {
@@ -51,12 +53,13 @@ export function BacktestsList({
   earliest,
   latest,
   error,
+  initialScreenId = null,
 }: BacktestsListProps) {
   const router = useRouter();
   const backtests = useBacktests(initial ?? undefined);
   const queue = useQueueBacktest();
   const remove = useDeleteBacktest();
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(Boolean(initialScreenId));
 
   if (error) return <ErrorState error={error} onRetry={() => router.refresh()} />;
 
@@ -107,6 +110,7 @@ export function BacktestsList({
           submitting={queue.isPending}
           earliest={earliest}
           latest={latest}
+          initialScreenId={initialScreenId}
           onSubmit={(config) => {
             void queue.mutateAsync(config).then((accepted) => {
               setShowForm(false);

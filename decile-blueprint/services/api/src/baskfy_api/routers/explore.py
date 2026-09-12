@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from baskfy_api.auth import AuthenticatedDep
 from baskfy_api.curated_tenant import scoped_sole_user_id
 from baskfy_api.db import SessionDep
+from baskfy_api.invoices import today_ist
 from baskfy_api.problems import not_found
 from baskfy_api.schemas import _In
 from baskfy_core.curated_metrics import (
@@ -332,7 +333,7 @@ async def list_explore_baskets(  # noqa: PLR0913, PLR0917 - one query param per 
     if basket_type is not None:
         stmt = stmt.where(CbBasket.type == basket_type)
     if not include_new:
-        cutoff = dt.date.today() - dt.timedelta(days=30)
+        cutoff = today_ist() - dt.timedelta(days=30)
         stmt = stmt.where(or_(CbBasket.launched_at.is_(None), CbBasket.launched_at < cutoff))
     if q:
         pattern = f"%{q.strip()}%"

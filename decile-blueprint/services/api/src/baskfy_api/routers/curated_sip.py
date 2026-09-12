@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from baskfy_api.auth import AuthenticatedDep
 from baskfy_api.curated_investments import load_investment_for_user
 from baskfy_api.db import SessionDep
+from baskfy_api.invoices import today_ist
 from baskfy_api.problems import Problem, ProblemType, not_found
 from baskfy_core.curated_sip import (
     SIP_MODE_REMINDER,
@@ -139,7 +140,7 @@ async def create_sip_plan(
     inv = await load_investment_for_user(
         session, principal_user_id=principal.user_id, investment_id=investment_id
     )
-    today = dt.datetime.now(tz=dt.UTC).date()
+    today = today_ist()
     dates = await _trading_dates(session, today)
     return await persist_sip_plan(session, inv, body, as_of=today, trading_dates=dates)
 

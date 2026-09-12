@@ -3,7 +3,8 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
-import { signOut } from "@/lib/auth";
+import { serverApiOrigin } from "@/lib/api/config";
+import { auth, signOut } from "@/lib/auth";
 import { callMe, type MutationResult } from "@/lib/auth/me";
 
 /**
@@ -15,6 +16,9 @@ import { callMe, type MutationResult } from "@/lib/auth/me";
  *
  * `changePassword` used to live here. Google sign-in replaced the password entirely
  * (`docs/DECISIONS-MERGE.md` M46), so there is no credential on this side to change.
+ *
+ * **DELETE /me has no client timeout (AUDIT 4.5).** Erasure can succeed after a slow round trip;
+ * aborting early would leave the browser thinking it failed while the account is already gone.
  */
 
 function field(formData: FormData, name: string): string {
@@ -35,6 +39,7 @@ export async function updateProfile(
   return { ok: true, message: "Saved." };
 }
 
+const UNREACHABLE = "We could not reach the accounts service. Try again in a moment.";
 
 /**
  * DPDP erasure — Prompt 12 §5. Signs the browser out on success, because the account it was
@@ -47,8 +52,28 @@ export async function deleteAccount(
   const email = field(formData, "email").trim();
   if (!email) return { ok: false, message: "Type your email address to confirm." };
 
-  const result = await callMe("/me", "DELETE", { email });
-  if (!result.ok) return { ok: false, message: result.detail };
+  const session = await auth();
+  const token = session?.accessToken;
+  if (!token) return { ok: false, message: "You are not signed in." };
+
+  let response: Response;
+  try {
+    // Unbounded on purpose — see file header. PATCH keeps the shared timeout via callMe.
+    response = await fetch(`${serverApiOrigin()}/api/v1/me`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ email }),
+      cache: "no-store",
+    });
+  } catch {
+    return { ok: false, message: UNREACHABLE };
+  }
+
+  if (!response.ok) {
+    const problem = (await response.json().catch(() => null)) as { detail?: string } | null;
+    return { ok: false, message: problem?.detail ?? "That did not work." };
+  }
+
   await signOut({ redirect: false });
   redirect("/login?deleted=1");
 }

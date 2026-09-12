@@ -3,6 +3,7 @@
 import type { CheckoutSessionOut } from "@baskfy/api-client";
 
 import { serverApiOrigin } from "@/lib/api/config";
+import { SERVER_FETCH_TIMEOUT_MS } from "@/lib/api/server-fetch";
 import { auth } from "@/lib/auth";
 
 /**
@@ -27,9 +28,14 @@ export async function startCheckout(planCode: string): Promise<CheckoutResult> {
   try {
     const response = await fetch(`${serverApiOrigin()}/api/v1/checkout/session`, {
       method: "POST",
-      headers: { "content-type": "application/json", Authorization: `Bearer ${token}` },
+      headers: {
+        "content-type": "application/json",
+        Authorization: `Bearer ${token}`,
+        "Idempotency-Key": crypto.randomUUID(),
+      },
       body: JSON.stringify({ plan_code: planCode }),
       cache: "no-store",
+      signal: AbortSignal.timeout(SERVER_FETCH_TIMEOUT_MS),
     });
     if (response.ok) {
       return { ok: true, session: (await response.json()) as CheckoutSessionOut };

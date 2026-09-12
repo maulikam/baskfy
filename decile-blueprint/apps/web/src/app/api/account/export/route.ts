@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { serverApiOrigin } from "@/lib/api/config";
+import { SERVER_FETCH_TIMEOUT_MS } from "@/lib/api/server-fetch";
 import { auth } from "@/lib/auth";
 
 /**
@@ -17,10 +18,16 @@ export async function GET(): Promise<NextResponse> {
   const token = session?.accessToken;
   if (!token) return NextResponse.json({ error: "not signed in" }, { status: 401 });
 
-  const response = await fetch(`${serverApiOrigin()}/api/v1/me/export`, {
-    headers: { Authorization: `Bearer ${token}` },
-    cache: "no-store",
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${serverApiOrigin()}/api/v1/me/export`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+      signal: AbortSignal.timeout(SERVER_FETCH_TIMEOUT_MS),
+    });
+  } catch {
+    return NextResponse.json({ error: "export timed out" }, { status: 504 });
+  }
   if (!response.ok) {
     return NextResponse.json({ error: "export failed" }, { status: response.status });
   }

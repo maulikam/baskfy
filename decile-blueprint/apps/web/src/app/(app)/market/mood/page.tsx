@@ -20,8 +20,9 @@ import { fetchMarketHealth, fetchMarketHealthHistory } from "@/lib/market/fetch"
  *
  * Both the universe and the range live in the URL, so the server fetches exactly what is drawn
  * and the view is shareable. The gauges and the four history charts come from two requests.
+ *
+ * Page-level `revalidate` is inert under `(app)/layout` (reads cookies) — AUDIT 4.7.
  */
-export const revalidate = 3600;
 
 export const metadata: Metadata = {
   title: PAGES["/market/mood"].title,

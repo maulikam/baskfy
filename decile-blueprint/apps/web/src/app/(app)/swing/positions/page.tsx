@@ -280,7 +280,7 @@ export default async function SwingPositionsPage() {
                       {row.gtt_id ? (
                         <span className="text-xs text-muted-foreground">{row.gtt_id}</span>
                       ) : (
-                        <span className="text-xs font-medium text-red-600">none</span>
+                        <span className="text-xs font-medium text-negative">none</span>
                       )}
                     </td>
                   </tr>

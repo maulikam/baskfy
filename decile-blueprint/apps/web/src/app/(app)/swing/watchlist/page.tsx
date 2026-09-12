@@ -161,7 +161,7 @@ export default async function SwingWatchlistPage() {
                     <td className="py-2 pr-3">
                       {row.focus ? (
                         <span
-                          className="mr-1.5 text-amber-600"
+                          className="mr-1.5 text-warning"
                           title="In today's focus — the top five flags by score and every episodic pivot."
                           aria-label="focus"
                         >
@@ -188,11 +188,11 @@ export default async function SwingWatchlistPage() {
                       {share === null ? (
                         "—"
                       ) : (
-                        <span className={willSkip ? "text-amber-700" : undefined}>
+                        <span className={willSkip ? "text-warning" : undefined}>
                           {share.toFixed(2)} ADR
                           {willSkip ? (
                             <span
-                              className="ml-1.5 rounded border border-amber-600/50 px-1 text-[11px] uppercase tracking-wide"
+                              className="ml-1.5 rounded border border-warning/50 px-1 text-[11px] uppercase tracking-wide"
                               title="The stop is wider than one day's average range, so the plan will skip this name rather than size it (STOP_TOO_WIDE)."
                             >
                               will skip

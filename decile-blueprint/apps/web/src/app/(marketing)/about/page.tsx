@@ -43,7 +43,7 @@ const PRINCIPLES = [
 
 const OPEN = [
   "Fundamentals are not ingested, so the price-to-earnings column and its filter are empty.",
-  "Published history starts on 1 November 2024. A longer backfill is the largest outstanding piece of work.",
+  "Published history starts on the date `/meta/status.data_start_date` reports (currently aligned with the plant's earliest bars). A longer backfill may still be running.",
   "The public API is built but switched off, pending a written data-redistribution opinion.",
   "Backtest Sharpe and Sortino figures are excess over a zero risk-free rate until a Treasury-bill series exists.",
 ] as const;

@@ -83,6 +83,7 @@ from baskfy_core.models.curated_baskets import (
     CbWatchlistItem,
 )
 from baskfy_core.models.facts import FactorDaily
+from baskfy_core.models.instrument_watch import InstrumentWatchItem, UserDiscoverPreferences
 from baskfy_core.models.integrations import (
     ALERT_DELIVERY_STATUSES,
     ALERT_FREQUENCIES,
@@ -336,6 +337,7 @@ __all__ = [
     "IndexSnapshotDaily",
     "IngestCursor",
     "Instrument",
+    "InstrumentWatchItem",
     "InvoiceCounter",
     "JsonObject",
     "MarketHealthDaily",
@@ -385,6 +387,7 @@ __all__ = [
     "TwSession",
     "TwSignalDaily",
     "TwStateDaily",
+    "UserDiscoverPreferences",
     "VbBacktestRun",
     "VbBreadthDaily",
     "VbConfig",

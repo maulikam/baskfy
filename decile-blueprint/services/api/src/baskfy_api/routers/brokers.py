@@ -24,6 +24,7 @@ import os
 from decimal import Decimal
 from typing import Annotated, Final
 
+import anyio
 from fastapi import APIRouter, Path, Query, Request
 from pydantic import BaseModel, Field
 
@@ -52,6 +53,7 @@ from baskfy_api.broker_oauth import (
     store_access_token,
     token_store_for,
 )
+from baskfy_api.curated_tenant import scoped_sole_user_id
 from baskfy_api.db import SessionDep
 from baskfy_api.metrics import IST
 from baskfy_api.problems import Problem, ProblemType
@@ -418,7 +420,7 @@ def _broker_out(broker: BrokerDef) -> BrokerOut:
 
 
 def _bad_request(detail: str) -> Problem:
-    return Problem(ProblemType.INVALID_SCREEN_DEFINITION, detail, errors=[{"message": detail}])
+    return Problem(ProblemType.BAD_REQUEST, detail, errors=[{"message": detail}])
 
 
 @router.get("", response_model=BrokerListOut, summary="Broker connect catalog")
@@ -462,6 +464,7 @@ async def oauth_callback(
     and the response says ``connected: false`` — the flow ran; there is no broker behind it.
     """
     user_id = principal.require_user()
+    await scoped_sole_user_id(session, user_id, surface="broker connect")
     if BROKER_OAUTH_REVIEW.blocks_live_oauth:
         raise _bad_request("Broker OAuth is not signed off; callback is closed.")
 
@@ -478,10 +481,12 @@ async def oauth_callback(
             "only Zerodha's token exchange is implemented."
         )
 
-    exchange = exchange_request_token(
-        api_key=os.environ.get("BASKFY_KITE_API_KEY", "").strip(),
-        request_token=request_token,
-        user_id=user_id,
+    exchange = await anyio.to_thread.run_sync(
+        lambda: exchange_request_token(
+            api_key=os.environ.get("BASKFY_KITE_API_KEY", "").strip(),
+            request_token=request_token,
+            user_id=user_id,
+        )
     )
     if exchange.simulated:
         if not simulated_token_storage_enabled():
@@ -545,7 +550,7 @@ async def oauth_callback(
     synced = 0
     sync_note = ""
     try:
-        result = holdings_for_broker(pending.broker_id)
+        result = await anyio.to_thread.run_sync(lambda: holdings_for_broker(pending.broker_id))
         if is_persistable(result):
             broker_account_id = await ensure_default_broker_account(
                 session, user_id, broker_id=pending.broker_id
@@ -756,11 +761,12 @@ async def sync_holdings(
     is empty or a fixture — never crashes, never places an order.
     """
     user_id = principal.require_user()
+    await scoped_sole_user_id(session, user_id, surface="broker holdings sync")
     broker = get_broker(broker_id)
     if broker is None:
         raise Problem(ProblemType.NOT_FOUND, f"No broker with id {broker_id!r}.")
 
-    result = holdings_for_broker(broker_id)
+    result = await anyio.to_thread.run_sync(lambda: holdings_for_broker(broker_id))
     holdings = [BrokerHoldingOut.model_validate(holding_row_to_dict(row)) for row in result.rows]
     dry = dry_run_enabled()
 

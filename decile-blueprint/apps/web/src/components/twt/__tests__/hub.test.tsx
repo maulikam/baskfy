@@ -118,7 +118,7 @@ describe("the twt hub names today's quiet stocks, and what it passed over", () =
             name: "THINCO LIMITED",
             signal_state: "SCAN_ONLY",
             failed_filters: ["TURNOVER"],
-            turnover_avg_20: "4100000",
+            turnover_avg_20: 4_100_000,
           }),
         ],
       }),
@@ -136,8 +136,8 @@ describe("the twt hub names today's quiet stocks, and what it passed over", () =
     const view = todayView(
       today({
         tight: [
-          tightName({ instrument_id: 1, symbol: "SMALLCO", turnover_avg_20: "12000000" }),
-          tightName({ instrument_id: 2, symbol: "BIGCO", turnover_avg_20: "980000000" }),
+          tightName({ instrument_id: 1, symbol: "SMALLCO", turnover_avg_20: 12_000_000 }),
+          tightName({ instrument_id: 2, symbol: "BIGCO", turnover_avg_20: 980_000_000 }),
         ],
       }),
     );

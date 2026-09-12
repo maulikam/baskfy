@@ -109,12 +109,28 @@ describe("the twt hub ranks by the liquidity it can actually use", () => {
     const view = todayView(
       today({
         tight: [
-          { ...today().tight[0]!, instrument_id: 1, symbol: "MID", turnover_avg_20: "50000000" },
+          { ...today().tight[0]!, instrument_id: 1, symbol: "MID", turnover_avg_20: 50_000_000 },
           { ...today().tight[0]!, instrument_id: 2, symbol: "UNKNOWN", turnover_avg_20: null },
-          { ...today().tight[0]!, instrument_id: 3, symbol: "BIG", turnover_avg_20: "900000000" },
+          { ...today().tight[0]!, instrument_id: 3, symbol: "BIG", turnover_avg_20: 900_000_000 },
         ],
       }),
     );
     expect(view.tight.map((row) => row.symbol)).toEqual(["BIG", "MID", "UNKNOWN"]);
+  });
+
+  it("does not throw when turnover is the integer the API actually sends", () => {
+    /* Regression for digest 3692141499 on the box, 12 Sep 2026: compareTurnover called
+       `.split` on a JSON number and the RSC render became "Three weeks tight could not be read"
+       over a `/twt/today` that had answered 200 with 58 names. */
+    expect(() =>
+      todayView(
+        today({
+          tight: [
+            { ...today().tight[0]!, instrument_id: 1, symbol: "A", turnover_avg_20: 5_442_855_635 },
+            { ...today().tight[0]!, instrument_id: 2, symbol: "B", turnover_avg_20: 120_000_000 },
+          ],
+        }),
+      ),
+    ).not.toThrow();
   });
 });

@@ -95,8 +95,15 @@ export interface TwtTightName {
   signal_state: "SIGNAL" | "SCAN_ONLY" | null;
   /** `["TURNOVER"]` on a rejected event, empty otherwise. */
   failed_filters: readonly string[];
-  /** 20-session average turnover in rupees, a decimal string. */
-  turnover_avg_20: string | null;
+  /**
+   * 20-session average turnover in rupees, as an integer.
+   *
+   * The API types this as `int | None` (`TwtTightNameOut.turnover_avg_20`) and stores it as
+   * `bigint` — not a decimal. A page that treated it as a decimal string and called `.split`
+   * crashed the RSC render over a 200 from `/twt/today` (12 Sep 2026, digest `3692141499`:
+   * `TypeError: a.split is not a function`). Match VBT's `turnover_avg_20: number | null`.
+   */
+  turnover_avg_20: number | null;
   locked_upper_circuit: boolean;
 }
 
@@ -108,7 +115,8 @@ export interface TwtOpenPosition {
   name: string;
   entry_date: string;
   entry_avg: string | null;
-  quantity_open: string | null;
+  /** Whole shares open — an integer on the wire, same as `TwtPositionOut.quantity_open`. */
+  quantity_open: number | null;
   /** The highest high since entry, an exchange print, and the session that set it. */
   high_since: string | null;
   high_since_date: string | null;

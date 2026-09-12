@@ -86,7 +86,10 @@ export function tightNameView(row: TwtTightName): TightNameView {
       REASONS.notComputed,
     ),
     turnoverCrore: (() => {
-      const crore = toCrore(row.turnover_avg_20);
+      /* `turnover_avg_20` is an integer rupee count on the wire; `toCrore` wants a decimal string. */
+      const crore = toCrore(
+        row.turnover_avg_20 === null ? null : String(row.turnover_avg_20),
+      );
       return figure(crore === null ? null : `₹${crore} cr`, REASONS.notComputed);
     })(),
     entry:
@@ -147,7 +150,7 @@ export function positionView(row: TwtOpenPosition): PositionView {
       REASONS.notComputed,
     ),
     quantity: figure(
-      row.quantity_open === null ? null : quantity(row.quantity_open),
+      row.quantity_open === null ? null : quantity(String(row.quantity_open)),
       REASONS.notComputed,
     ),
     highSince: figure(
@@ -223,15 +226,19 @@ export function todayView(today: TwtToday | null): TodayView {
   };
 }
 
-function compareTurnover(left: string | null, right: string | null): number {
+function compareTurnover(left: number | null, right: number | null): number {
   if (left === null && right === null) return 0;
   /* A name whose turnover is unknown sorts last rather than first. Treating the unknown as zero
      would be the same mistake in the other direction, but at least it is the safe one: an
      unranked row at the bottom is visibly unranked. */
   if (left === null) return -1;
   if (right === null) return 1;
-  const leftValue = BigInt(left.split(".")[0] ?? "0");
-  const rightValue = BigInt(right.split(".")[0] ?? "0");
+  /* Integer rupees from the API — compare as BigInt so two names a rupee apart never swap, and
+     so a value past `Number.MAX_SAFE_INTEGER` (unlikely, but turnover is a bigint in Postgres)
+     still ranks correctly. Do not call `.split`: that is a decimal-string habit and is what
+     turned a 200 from `/twt/today` into "Three weeks tight could not be read". */
+  const leftValue = BigInt(left);
+  const rightValue = BigInt(right);
   return leftValue === rightValue ? 0 : leftValue > rightValue ? 1 : -1;
 }
 

@@ -35,7 +35,7 @@ export function CatalystLink({
       ) : null}
       {feed.earnings_date ? (
         <span
-          className="rounded border border-amber-600/50 px-1.5 py-0.5 text-[11px] uppercase tracking-wide text-amber-700"
+          className="rounded border border-warning/50 px-1.5 py-0.5 text-[11px] uppercase tracking-wide text-warning"
           title="A result meeting is on the exchange's calendar. A stop through a result is a gap, not a fill."
         >
           earnings {formatTradeDate(feed.earnings_date)}

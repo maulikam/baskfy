@@ -8,8 +8,10 @@ import httpx
 import pytest
 from api_helpers import assert_problem, errors_of, url
 from screener_helpers import AS_OF, DATA_VERSION, requires_db
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.screener import DATA_START_DATE
+from baskfy_core.models import PipelineRun
 from baskfy_core.factor_registry import COLUMN_PICKER_KEYS, FACTORS, SORT_FACTOR_KEYS
 from baskfy_core.universes import UNIVERSES
 
@@ -108,6 +110,57 @@ class TestStatus:
         assert body["last_pipeline_run"]["status"] == "succeeded"
         assert body["degraded"] is False
         assert body["data_start_date"] == DATA_START_DATE.isoformat()
+
+    async def test_a_retry_that_published_is_not_degraded(
+        self, api: httpx.AsyncClient, screener_session: AsyncSession
+    ) -> None:
+        """A date can hold several runs, and the newest attempt is the one that describes it.
+
+        This is the box's own 2026-09-11: three runs failed the quality gate, a fourth passed it
+        and published. Ordering on ``trade_date`` alone left the tie to the planner, so the
+        endpoint served ``degraded: true`` — a stale-data banner over a day whose data was
+        published and current.
+        """
+        screener_session.add(
+            PipelineRun(
+                trade_date=AS_OF,
+                status="failed",
+                started_at=dt.datetime(2026, 8, 18, 13, 0, tzinfo=dt.UTC),
+                finished_at=dt.datetime(2026, 8, 18, 13, 30, tzinfo=dt.UTC),
+                data_version=None,
+            )
+        )
+        await screener_session.flush()
+
+        body = (await api.get(url("/meta/status"))).json()
+        assert body["last_pipeline_run"]["status"] == "succeeded"
+        assert body["last_pipeline_run"]["data_version"] == DATA_VERSION
+        assert body["degraded"] is False
+
+    async def test_a_failure_after_a_publish_still_raises_the_banner(
+        self, api: httpx.AsyncClient, screener_session: AsyncSession
+    ) -> None:
+        """The other direction, so "newest wins" is pinned rather than "success wins".
+
+        docs/11 §Reliability: a failed run serves the last good ``data_version`` *with a banner*.
+        The published version keeps answering — ``as_of`` does not move — but the reader is told.
+        """
+        screener_session.add(
+            PipelineRun(
+                trade_date=AS_OF,
+                status="failed",
+                started_at=dt.datetime(2026, 8, 18, 15, 0, tzinfo=dt.UTC),
+                finished_at=dt.datetime(2026, 8, 18, 15, 30, tzinfo=dt.UTC),
+                data_version=None,
+            )
+        )
+        await screener_session.flush()
+
+        body = (await api.get(url("/meta/status"))).json()
+        assert body["last_pipeline_run"]["status"] == "failed"
+        assert body["degraded"] is True
+        assert body["as_of"] == AS_OF.isoformat()
+        assert body["data_version"] == DATA_VERSION
 
     async def test_the_date_picker_bounds_agree_with_the_run_endpoint(
         self, api: httpx.AsyncClient

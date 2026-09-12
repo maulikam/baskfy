@@ -82,12 +82,13 @@ class TestGatewayEnforcesGuard(unittest.TestCase):
 
         self.gw = OrderGateway(ExplodingKC(), RiskManager())
 
-    def test_gateway_raises_before_any_broker_call(self):
-        with self.assertRaises(UntouchableInstrumentError):
-            asyncio.run(self.gw.place(symbol="SGBDE31III", qty=1, side="SELL", price=7400.0))
-        with self.assertRaises(UntouchableInstrumentError):
-            asyncio.run(self.gw.place(symbol="RRKABEL", qty=1, side="BUY",
-                                      price=2275.0, series="GB"))
+    def test_gateway_blocks_before_any_broker_call(self):
+        # AF 3.5: untouchables return BLOCKED so one SGB leg cannot abort a batch.
+        res = asyncio.run(self.gw.place(symbol="SGBDE31III", qty=1, side="SELL", price=7400.0))
+        self.assertEqual(res["status"], "BLOCKED")
+        res = asyncio.run(self.gw.place(symbol="RRKABEL", qty=1, side="BUY",
+                                        price=2275.0, series="GB"))
+        self.assertEqual(res["status"], "BLOCKED")
 
     def test_gateway_accepts_ordinary_equity(self):
         # DRY_RUN is pinned rather than inherited from .env. Reading the ambient value

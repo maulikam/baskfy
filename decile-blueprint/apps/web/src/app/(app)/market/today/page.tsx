@@ -8,7 +8,7 @@ import { EmptyState } from "@/components/data/empty-state";
 import { fetchIndexDashboardOrDegraded } from "@/lib/market/fetch";
 import { PAGES } from "@/lib/vocabulary";
 
-export const revalidate = 3600;
+/* Page-level `revalidate` is inert under `(app)/layout` (reads cookies) — AUDIT 4.7. */
 
 export const metadata: Metadata = {
   title: PAGES["/market/today"].title,

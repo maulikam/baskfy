@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { buildColumns, type ResultRow } from "@/components/screens/result-columns";
+import {
+  buildColumns,
+  renderValue,
+  type ResultRow,
+} from "@/components/screens/result-columns";
 import { visibleResultColumns } from "@/lib/screens/column-display";
 
 const META = new Map([
@@ -50,5 +54,11 @@ describe("buildColumns dead-column policy", () => {
     expect(closeColumn).toBeDefined();
     const cell = closeColumn?.cell;
     expect(typeof cell).toBe("function");
+  });
+
+  it("ret_12m always formats with a percent sign even if unit meta is wrong", () => {
+    // Old bug: unit fell through to ratio → "605.93" pill next to a "+605.9%" tile.
+    expect(renderValue(605.93, "ratio", "ret_12m")).toBe("+605.93%");
+    expect(renderValue(605.93, "percent", "ret_12m")).toBe("+605.93%");
   });
 });

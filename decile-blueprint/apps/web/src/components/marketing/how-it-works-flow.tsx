@@ -62,7 +62,7 @@ import { cn } from "@/lib/utils";
  *
  * ## What was measured rather than recalled
  *
- * 1. **Sixty-four factors.** `factor_registry.NAMED_FACTOR_COUNT == 64`.
+ * 1. **Sixty-six factors.** `factor_registry.NAMED_FACTOR_COUNT` (64 named + M56 short-horizon blends).
  * 2. **The front door is holdings.** `PORTFOLIO_REDESIGN.md` made the product holdings-first: you
  *    connect a broker, what you already own arrives **Unallocated**, and organising it is the
  *    first thing you do. Hence the engine's `organize` stage and "Connect" as step 1 of five.
@@ -255,7 +255,7 @@ export const ENGINE = [
   {
     name: "screen",
     badge: "Rank",
-    body: "Sixty-four factors, point-in-time",
+    body: "Sixty-six factors, point-in-time",
     footer: "formulas published",
   },
   {
@@ -466,7 +466,7 @@ export function HowItWorksFlow() {
 
               {/*
                 Two across until `xl`, not `lg`. At `lg` the middle column is about 390px, so
-                four stages would be ~84px each and "Sixty-four factors, point-in-time" would set
+                four stages would be ~84px each and "Sixty-six factors, point-in-time" would set
                 six characters to a line. The 7-column layout still arrives at `lg`; only the
                 engine's internal packing waits for the width that makes it readable.
               */}

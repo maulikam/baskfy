@@ -180,7 +180,7 @@ describe("the journey shipped is the journey drawn", () => {
 
   it("still counts the factors the registry actually names", () => {
     // `factor_registry.NAMED_FACTOR_COUNT == 64`. Spelled out, so a digit edit cannot slip past.
-    expect(stageText()).toContain("Sixty-four factors");
+    expect(stageText()).toContain("Sixty-six factors");
   });
 
   it("starts from holdings, which is where the redesign put the front door", () => {

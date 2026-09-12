@@ -9,7 +9,25 @@ import {
   ExploreUnavailable,
   fetchExploreBasket,
   fetchExploreConstituents,
+  type ExploreConstituents,
 } from "@/lib/explore/fetch";
+
+/** Honest rebalance copy when the cut job has not yet written a second version. */
+function versionBlurb(
+  rebalanceFrequency: string,
+  version: ExploreConstituents,
+  nameCount: number,
+): string {
+  const base = `Version ${version.version_no} (${version.label}), effective ${version.effective_date} — ${nameCount} names`;
+  const claimsPeriodic = /month|week|quarter/i.test(rebalanceFrequency);
+  if (claimsPeriodic && version.version_count <= 1) {
+    return `${base}. Next ${rebalanceFrequency.toLowerCase().replace(/_/g, " ")} cut pending — this is still the opening composition.`;
+  }
+  if (version.version_count > 1) {
+    return `${base} · ${version.version_count} versions published`;
+  }
+  return base;
+}
 
 /**
  * `/basket/[slug]/constituents` — the basket's names, as of its newest published version.
@@ -73,7 +91,7 @@ export default async function BasketConstituentsPage({
         title={`${basket.name} · Constituents`}
         blurb={
           version && version.version_no > 0
-            ? `Version ${version.version_no} (${version.label}), effective ${version.effective_date} — ${rows.length} names`
+            ? versionBlurb(basket.rebalance_frequency, version, rows.length)
             : "Weights appear here once this basket has a published version."
         }
         meta={
@@ -113,8 +131,8 @@ export default async function BasketConstituentsPage({
                   <td className="px-4 py-3 font-medium">{row.symbol}</td>
                   <td className="px-4 py-3 text-muted-foreground">{row.name ?? "—"}</td>
                   <td className="px-4 py-3 text-muted-foreground">{row.segment}</td>
-                  {/* The string the API sent, never parsed to a float — house rule 9. */}
-                  <td className="px-4 py-3 text-right tabular-nums">{row.weight}%</td>
+                  {/* weight_pct is the display percent the API already rounded — house rules 8+9. */}
+                  <td className="px-4 py-3 text-right tabular-nums">{row.weight_pct}%</td>
                 </tr>
               ))}
             </tbody>

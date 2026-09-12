@@ -79,7 +79,7 @@ function Money({ value, signed = false }: { value: string | null; signed?: boole
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className="cursor-help text-muted-foreground">Not available</span>
+          <span className="cursor-help text-muted-foreground">Needs more data</span>
         </TooltipTrigger>
         <TooltipContent className="max-w-xs text-xs">{NO_FIGURE_REASON}</TooltipContent>
       </Tooltip>
@@ -100,7 +100,7 @@ function Money({ value, signed = false }: { value: string | null; signed?: boole
           {tone === "up" ? "▲" : "▼"}
         </span>
       ) : null}
-      {formatRupees(value)}
+      {formatRupees(value, { decimals: 0 })}
     </span>
   );
 }
@@ -187,7 +187,7 @@ function RowDetail({
           <div>
             <dt className="text-muted-foreground">Cash</dt>
             <dd className="font-medium tabular-nums">
-              {formatRupees(slice.cash)}
+              {formatRupees(slice.cash, { decimals: 0 })}
             </dd>
           </div>
         </dl>
@@ -321,7 +321,7 @@ export function ComparisonTable({
                     {mode === "capital" ? (
                       <td className="py-2 pr-3 text-right tabular-nums">
                         {slice.weightPct === null ? (
-                          <span className="text-muted-foreground">Not available</span>
+                          <span className="text-muted-foreground">Needs more data</span>
                         ) : (
                           <span className="flex items-center justify-end gap-2">
                             {/* A bar as well as a number — shape reads faster than digits. */}
@@ -349,7 +349,7 @@ export function ComparisonTable({
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <span className="cursor-help text-muted-foreground">
-                              Not available
+                              Needs more data
                             </span>
                           </TooltipTrigger>
                           <TooltipContent className="max-w-xs text-xs">
@@ -453,7 +453,7 @@ export function ComparisonTable({
                   <div className="flex justify-between gap-2">
                     <dt className="text-muted-foreground">Share</dt>
                     <dd className="tabular-nums">
-                      {slice.weightPct === null ? "Not available" : `${slice.weightPct}%`}
+                      {slice.weightPct === null ? "Needs more data" : `${slice.weightPct}%`}
                     </dd>
                   </div>
                 ) : null}

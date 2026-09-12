@@ -6941,3 +6941,51 @@ defaults to `exmpl0000001` and is selectable via `?screen=`.
 
 **Reverse.** Delete `apps/web/src/app/(app)/build/overlap/`, the Overlap tab in `nav.ts`, and
 the `/build/overlap` vocabulary entry.
+
+## AFH 5.1 — Overview default; command centre is Details · ⚠ UNREVIEWED
+
+**Choice.** Keep `/portfolio/overview` as the Portfolio landing tab. Rename the Portfolios tab to Details and retitle the command centre accordingly; share the same section tabs; format command-centre rupees as whole rupees (`decimals: 0`), matching Overview.
+
+**Rejected.** Merging both into one page (too large); keeping dual voices (audit defect).
+
+**Reverse.** Restore the Portfolios label, "Portfolio Command Center" heading, and default `formatRupees` (2 dp) in command components.
+
+## AFH 5.2 — Absence is one line + tooltip · ⚠ UNREVIEWED
+
+**Choice.** Missing metric tiles say "Needs more data" with the reason on the tooltip/title. Delete the `NotYetMeasured` / "What an overview would also say…" spec-gap blocks from detail tabs.
+
+**Rejected.** Keeping long absence paragraphs (audit defect).
+
+**Reverse.** Restore paragraph reasons under tiles and the NotYetMeasured sections.
+
+## AFH 5.3 — Invest CTAs secondary until plans wire · ⚠ UNREVIEWED
+
+**Choice.** Invest more / Exit / Rebalance are outline (secondary) and open the desk PlanHandoffPanel stub. Market-closed is an inline status line. Remove the disabled Notify-me control.
+
+**Rejected.** Building `/cb/plans` web flow now (D3 / Track B gated; lane I backlog).
+
+**Reverse.** Restore primary buttons and the Notify-me stub.
+
+## AFH 5.5 — Build hub consumer vocabulary · ⚠ UNREVIEWED
+
+**Choice.** "Your screens", name prompt on save, hide empty Min. amount on screen cards. Drop Swing / Volume breakout / Three weeks tight from the Build tab row; expose them under a staff-only Operator group in the user menu.
+
+**Rejected.** Keeping operator sleeves on the consumer Build tab bar.
+
+**Reverse.** Restore the three sleeve tabs on `SECTION_TABS.build` and remove the Operator nav group.
+
+## AFH 5.7 — Saved is Watchlist · ⚠ UNREVIEWED
+
+**Choice.** `/discover/saved` redirects to `/portfolio/watchlist`; Discover tab label becomes Watchlist pointing there.
+
+**Rejected.** Keeping two identical lists under two names.
+
+**Reverse.** Restore the saved page list and the Saved tab.
+
+## AFH 5.8 — Catalogue offset; listings Previous · ⚠ UNREVIEWED
+
+**Choice.** Catalogue pages client-side with `?offset=` (API still returns the full list). Listings get Previous via a one-step `prev` cursor in the URL; page count is "N on this page" until the API exposes total.
+
+**Rejected.** Waiting on explore/listings API pagination fields before any UI change.
+
+**Reverse.** Remove offset paging and listings Previous.

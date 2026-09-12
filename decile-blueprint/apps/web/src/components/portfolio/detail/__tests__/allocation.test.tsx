@@ -124,27 +124,16 @@ describe("the allocation tab", () => {
     expect(reliance.getAllByText("not priced").length).toBeGreaterThan(0);
   });
 
-  it("says plainly that the allocation cannot be cut by sector, industry, market cap or geography", () => {
+  it("does not narrate sector/industry/geo gaps as a product section (AFH 5.2)", () => {
     tab();
-    const blocked = within(screen.getByTestId("allocation-blocked"));
-    expect(blocked.getByText("Allocation by sector")).toBeInTheDocument();
-    expect(blocked.getByText("Allocation by industry")).toBeInTheDocument();
-    expect(blocked.getByText("Allocation by market capitalisation")).toBeInTheDocument();
-    expect(blocked.getByText("Allocation by geography")).toBeInTheDocument();
-    expect(screen.getByTestId("allocation-blocked")).toHaveTextContent(
-      "an instrument sector map, sourced and kept current",
-    );
+    expect(screen.queryByTestId("allocation-blocked")).not.toBeInTheDocument();
+    expect(BLOCKED_ALLOCATION).toHaveLength(5);
   });
 
-  it("declares overlap with other portfolios blocked, because this page reads only one", () => {
+  it("keeps overlap with other portfolios out of the rendered allocation tab", () => {
     tab();
-    expect(screen.getByTestId("allocation-blocked")).toHaveTextContent(
-      "Overlap with your other portfolios",
-    );
-    expect(screen.getByTestId("allocation-blocked")).toHaveTextContent(
-      "an overlap endpoint, or the parent fetching every portfolio's holdings",
-    );
-    expect(BLOCKED_ALLOCATION).toHaveLength(5);
+    expect(screen.queryByTestId("allocation-blocked")).not.toBeInTheDocument();
+    expect(BLOCKED_ALLOCATION.some((item) => item.name.includes("Overlap"))).toBe(true);
   });
 
   it("renders an allocation with nothing priced without a single bare dash", () => {

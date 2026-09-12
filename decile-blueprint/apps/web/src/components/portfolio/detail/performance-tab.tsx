@@ -6,12 +6,10 @@ import { CombinedChart } from "@/components/portfolio/combined-chart";
 import {
   Figure,
   MetricValue,
-  NotYetMeasured,
   Panel,
   TradeDate,
 } from "@/components/portfolio/detail/primitives";
 import {
-  BLOCKED_PERFORMANCE,
   bestAndWorst,
   calendarYears,
   drawdownEpisodes,
@@ -449,13 +447,6 @@ export function PerformanceTab({
           </div>
         )}
       </Panel>
-
-      <NotYetMeasured
-        items={BLOCKED_PERFORMANCE}
-        heading="What this tab cannot plot yet"
-        intro="Three of the brief's performance asks need data Baskfy does not keep. Each names what it would take."
-        testId="performance-blocked"
-      />
     </>
   );
 }

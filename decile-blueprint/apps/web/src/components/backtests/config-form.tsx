@@ -27,6 +27,8 @@ export interface ConfigFormProps {
   /** docs/01 §2.13: historical data starts here, so no earlier date can be simulated. */
   earliest: string;
   latest: string;
+  /** AFH 5.9: `?screen=` from "Backtest this screen" pre-selects this public_id. */
+  initialScreenId?: string | null;
 }
 
 type Frequency = BacktestConfigIn["rebalance"]["frequency"];
@@ -68,8 +70,13 @@ export function ConfigForm({
   onSubmit,
   earliest,
   latest,
+  initialScreenId = null,
 }: ConfigFormProps) {
-  const [screenId, setScreenId] = useState(screens[0]?.public_id ?? "");
+  const preferred =
+    initialScreenId && screens.some((screen) => screen.public_id === initialScreenId)
+      ? initialScreenId
+      : (screens[0]?.public_id ?? "");
+  const [screenId, setScreenId] = useState(preferred);
   const [start, setStart] = useState(earliest);
   const [end, setEnd] = useState(latest);
   const [capital, setCapital] = useState("1000000");

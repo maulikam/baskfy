@@ -3,13 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown, CircleAlert, Columns3, X } from "lucide-react";
 
-import { MetricValue, NotYetMeasured, Panel } from "@/components/portfolio/detail/primitives";
+import { MetricValue, Panel } from "@/components/portfolio/detail/primitives";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatTradeDate } from "@/lib/format";
 import type { Metric } from "@/lib/portfolio/command-center";
 import {
-  BLOCKED_COLUMNS,
   HOLDING_COLUMNS,
   applyFilter,
   availableFilters,
@@ -388,12 +387,6 @@ export function HoldingsTab({
             moves no shares and places no order.
           </p>
         </Panel>
-        <NotYetMeasured
-          items={BLOCKED_COLUMNS}
-          heading="Columns this table does not have yet"
-          intro="Each of these is named in the brief and each is absent for a reason about the data, not about the design."
-          testId="holdings-blocked"
-        />
       </>
     );
   }
@@ -697,13 +690,6 @@ export function HoldingsTab({
           </div>
         ) : null}
       </Panel>
-
-      <NotYetMeasured
-        items={BLOCKED_COLUMNS}
-        heading="Columns this table does not have yet"
-        intro="Each of these is named in the brief and each is absent for a reason about the data, not about the design."
-        testId="holdings-blocked"
-      />
     </>
   );
 }

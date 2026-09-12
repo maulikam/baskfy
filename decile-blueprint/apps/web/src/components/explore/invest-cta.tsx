@@ -46,7 +46,7 @@ export function InvestCta({
         </Button>
       </div>
       {showHandoff ? (
-        <div className="min-w-0 space-y-3 overflow-x-hidden">
+        <div className="min-w-0 space-y-3 overflow-x-auto">
           <KiteBasketInvest
             basketSlug={basketSlug}
             basketName={basketName}

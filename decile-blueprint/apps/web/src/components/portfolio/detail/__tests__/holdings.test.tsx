@@ -188,12 +188,9 @@ describe("the holdings table", () => {
     );
   });
 
-  it("names the columns the holdings payload cannot fill rather than drawing them empty", () => {
+  it("does not narrate missing holdings columns as a product section (AFH 5.2)", () => {
     table();
-    const blocked = within(screen.getByTestId("holdings-blocked"));
-    expect(blocked.getByText("Exchange and instrument type")).toBeInTheDocument();
-    expect(blocked.getByText(/Available quantity, free against pledged/)).toBeInTheDocument();
-    expect(blocked.getByText("Price age for one holding")).toBeInTheDocument();
+    expect(screen.queryByTestId("holdings-blocked")).not.toBeInTheDocument();
     expect(screen.queryByTestId("holdings-sort-exchange")).not.toBeInTheDocument();
   });
 

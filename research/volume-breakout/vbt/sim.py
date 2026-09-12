@@ -63,6 +63,13 @@ class Rules:
     gate: Literal["none", "idx_10_20", "idx_above_50", "idx_above_200"] = "none"
     dd_lock_pct: float | None = None        # a fall of this much from the equity peak stops new entries ...
     dd_cooldown: int = 20                   # ... for this many sessions; the peak then resets to current equity
+    # capital-efficiency levers (12 Sep 2026)
+    idle_cash_yield_pct: float = 0.0        # annual yield on idle cash (liquid fund / T-bills), accrued daily
+    dead_money_sessions: int | None = None  # exit at next open if the close is still below entry after this many sessions
+    pyramid_trigger_pct: float | None = None  # add once when the close is this % above entry ...
+    pyramid_frac: float = 0.5               # ... buying this fraction of the original value at the next open
+    vol_sizing: bool = False                # weight ∝ 1 / ADR20, normalised so the average line is equity / max_positions
+    vol_size_cap_pct: float = 15.0
     # costs
     cost_bps_side: float = 25.0             # STT/charges + slippage, each side
     initial_capital: float = 1_000_000.0
@@ -80,11 +87,16 @@ class Position:
     partial_done: bool = False
     pending_exit: str | None = None
     realised: float = 0.0
+    pending_add: bool = False
+    pyramided: bool = False
+    cost_basis: float = 0.0
+    sleeve: int = 0
 
 
 @dc.dataclass
 class Trade:
     symbol: str
+    sleeve: str
     entry_date: np.datetime64
     exit_date: np.datetime64
     entry: float
@@ -121,6 +133,19 @@ def index_gate(p: Panel, idx_dates: np.ndarray, idx_close: np.ndarray, mode: str
         raise ValueError(mode)
     return ok.fillna(False).to_numpy()
 
+@dc.dataclass
+class Sleeve:
+    """One signal + its trade rules, sharing a book with other sleeves in `run_book`."""
+    name: str
+    sig: np.ndarray
+    rules: Rules
+    gate_ok: np.ndarray | None = None
+    entry_level: np.ndarray | None = None
+    stop_level: np.ndarray | None = None
+    rank_key: np.ndarray | None = None
+    hold_state: np.ndarray | None = None
+    max_positions: int | None = None        # per-sleeve cap on open lines (None = only the book cap)
+
 
 def run(p: Panel, ind: Indicators, sig: np.ndarray, rules: Rules, gate_ok: np.ndarray | None = None,
         start_col: int = 0, hold_state: np.ndarray | None = None, rank_key: np.ndarray | None = None,
@@ -128,21 +153,30 @@ def run(p: Panel, ind: Indicators, sig: np.ndarray, rules: Rules, gate_ok: np.nd
     """`hold_state` (N, D) bool: when given, a position whose state is False at a close is sold at
     the next open ("state" exit). `rank_key` (N, D): overrides Rules.rank for candidate ordering
     (higher first)."""
-    R = rules
+    return run_book(p, ind, [Sleeve(rules.name, sig, rules, gate_ok, entry_level, stop_level, rank_key, hold_state)],
+                    book=rules, start_col=start_col)
+
+
+def run_book(p: Panel, ind: Indicators, sleeves: list[Sleeve], book: Rules, start_col: int = 0) -> "Result":
+    """Several sleeves, one book. Capital, costs, the slot cap, sizing, idle-cash yield and the
+    drawdown lock come from `book`; each position is managed by its own sleeve's rules; on a
+    given open the sleeves are offered the free slots in list order (first = priority)."""
+    B = book
     N, D = p.n, p.d
-    if gate_ok is None:
-        gate_ok = np.ones(D, dtype=bool)
+    for S in sleeves:
+        if S.gate_ok is None:
+            S.gate_ok = np.ones(D, dtype=bool)
     ema_tr = {10: ind.ema10, 21: ind.ema21}
     sma_tr = {20: ind.sma20, 50: ind.sma50}
-    cost = R.cost_bps_side / 10_000
-    cash = R.initial_capital
+    cost = B.cost_bps_side / 10_000
+    cash = B.initial_capital
     positions: dict[int, Position] = {}
-    working: dict[int, tuple[int, float]] = {}   # limit_close orders: row -> (signal col, limit)
+    working: list[dict[int, tuple[int, float]]] = [dict() for _ in sleeves]   # per sleeve: row -> (signal col, limit)
     trades: list[Trade] = []
     equity = np.full(D, np.nan)
     n_open = np.zeros(D, dtype=np.int16)
     skipped = {"gap": 0, "slots": 0, "cash": 0, "liquidity": 0, "gate": 0, "stop_wide": 0, "no_bar": 0, "locked": 0, "dd_lock": 0}
-    peak = R.initial_capital; dd_locked_until = -1
+    peak = B.initial_capital; dd_locked_until = -1
 
     def close_pos(pos: Position, col: int, price: float, qty: int, reason: str) -> None:
         nonlocal cash
@@ -153,10 +187,10 @@ def run(p: Panel, ind: Indicators, sig: np.ndarray, rules: Rules, gate_ok: np.nd
         pos.realised += pnl
         if qty == pos.qty:
             total_pnl = pos.realised
-            cost_basis = pos.entry * (pos.qty if not pos.partial_done else pos.qty / (1 - R.partial_frac))
+            cost_basis = pos.cost_basis if pos.cost_basis else pos.entry * (pos.qty if not pos.partial_done else pos.qty / (1 - sleeves[pos.sleeve].rules.partial_frac))
             risk = pos.entry - pos.init_stop
             trades.append(Trade(
-                symbol=str(p.symbols[pos.row]), entry_date=p.dates[pos.entry_col], exit_date=p.dates[col],
+                symbol=str(p.symbols[pos.row]), sleeve=sleeves[pos.sleeve].name, entry_date=p.dates[pos.entry_col], exit_date=p.dates[col],
                 entry=pos.entry, exit=price, qty=qty, pnl=total_pnl, ret_pct=total_pnl / cost_basis * 100,
                 r_mult=(total_pnl / cost_basis) / (risk / pos.entry) if risk > 0 else float("nan"),
                 hold=col - pos.entry_col, reason=reason,
@@ -186,120 +220,139 @@ def run(p: Panel, ind: Indicators, sig: np.ndarray, rules: Rules, gate_ok: np.nd
             if l <= pos.stop:
                 close_pos(pos, j, pos.stop, pos.qty, "stop"); continue
 
+        # ---- 1b. pyramid adds at the open
+        for row in list(positions):
+            pos = positions[row]
+            if pos.pending_add and np.isfinite(p.open[row, j]) and p.open[row, j] > 0:
+                pos.pending_add = False
+                add_val = min(pos.entry * pos.qty * sleeves[pos.sleeve].rules.pyramid_frac, cash)
+                q = int(add_val // (p.open[row, j] * (1 + cost)))
+                if q > 0:
+                    px = p.open[row, j] * (1 + cost); cash -= q * px
+                    pos.cost_basis = pos.entry * pos.qty + q * px
+                    pos.entry = pos.cost_basis / (pos.qty + q); pos.qty += q; pos.pyramided = True
+            elif pos.pending_add:
+                pos.pending_add = False
         # ---- 2. entries at the open (signals from j-1; or working limit orders)
-        if R.entry in ("limit_close", "stop_level") and j >= 1:
-            # new working orders from j-1's signals; stale ones expire
-            for r in np.nonzero(sig[:, j - 1])[0]:
-                if r not in positions and r not in working:
-                    lvl = p.close[r, j - 1] if R.entry == "limit_close" else entry_level[r, j - 1]
-                    if np.isfinite(lvl):
-                        working[r] = (j - 1, lvl)
-            for r in [r for r, (c0, _) in working.items() if j - c0 > R.entry_valid]:
-                skipped["gap"] += 1; del working[r]
         dd_locked = False
-        if R.dd_lock_pct is not None and j > start_col and np.isfinite(equity[j - 1]):
+        if B.dd_lock_pct is not None and j > start_col and np.isfinite(equity[j - 1]):
             if j <= dd_locked_until:
                 dd_locked = True
             else:
                 if dd_locked_until == j - 1:      # cooldown just ended: the peak restarts from here
                     peak = equity[j - 1]
                 peak = max(peak, equity[j - 1])
-                if 1 - equity[j - 1] / peak >= R.dd_lock_pct / 100:
-                    dd_locked = True; dd_locked_until = j + R.dd_cooldown - 1
-        if j >= 1 and gate_ok[j - 1] and dd_locked:
-            skipped["dd_lock"] += int(sig[:, j - 1].sum())
-        if j >= 1 and gate_ok[j - 1] and not dd_locked:
-            if R.entry in ("limit_close", "stop_level"):
-                cand = [r for r in working if r not in positions]
-            else:
-                cand = np.nonzero(sig[:, j - 1])[0]
-                cand = [r for r in cand if r not in positions]
-            if cand:
-                key = {"rvol": ind.rvol, "change": ind.change_pct, "turnover": ind.turnover, "close_pos": ind.close_pos}
-                if rank_key is not None:
-                    key = {R.rank: rank_key}
-                if R.rank != "none":
-                    kc = [working[r][0] if R.entry in ("limit_close", "stop_level") else j - 1 for r in cand]
-                    k = key[R.rank][cand, kc]
-                    cand = [cand[i] for i in np.argsort(-np.nan_to_num(k, nan=-1e9))]
-                new = 0
-                equity_now = cash + sum(pos.qty * (p.close[pos.row, j - 1] if np.isfinite(p.close[pos.row, j - 1]) else pos.entry) for pos in positions.values())
-                for row in cand:
-                    if new >= R.max_new_per_day:
-                        skipped["slots"] += 1; break
-                    if len(positions) >= R.max_positions:
-                        skipped["slots"] += 1; break
-                    o, h, l = p.open[row, j], p.high[row, j], p.low[row, j]
-                    if not np.isfinite(o) or o <= 0:
-                        skipped["no_bar"] += 1; continue
-                    if o == h == l:  # locked limit at the open, no fill possible
-                        skipped["locked"] += 1; continue
-                    sig_col = working[row][0] if R.entry in ("limit_close", "stop_level") else j - 1
-                    sc = p.close[row, sig_col]
-                    if R.entry == "limit_close":
-                        if l > working[row][1] * (1 - R.fill_through_pct / 100):
-                            continue            # not touched today, order keeps working
-                        o = min(o, working[row][1])  # fill at the limit (or better at the open)
-                        del working[row]
-                    elif R.entry == "stop_level":
-                        if h < working[row][1] * (1 + R.fill_through_pct / 100):
-                            continue            # level not reached today, order keeps working
-                        o = max(o, working[row][1])  # fill at the stop level, or at the open if it gapped above
-                        del working[row]
-                    gap = (o / sc - 1) * 100
-                    if R.max_gap_pct is not None and gap > R.max_gap_pct:
-                        skipped["gap"] += 1; continue
-                    if R.min_gap_pct is not None and gap < R.min_gap_pct:
-                        skipped["gap"] += 1; continue
-                    # initial stop
-                    if R.stop_mode == "pct":
-                        stop = o * (1 - R.stop_pct / 100)
-                    elif R.stop_mode == "signal_low":
-                        stop = p.low[row, sig_col]
-                    elif R.stop_mode == "min_low_pct":
-                        stop = max(p.low[row, sig_col], o * (1 - R.stop_pct / 100))
-                    elif R.stop_mode == "level":
-                        lv = stop_level[row, sig_col]
-                        stop = max(lv, o * (1 - R.stop_pct / 100)) if np.isfinite(lv) else o * (1 - R.stop_pct / 100)
-                    elif R.stop_mode == "atr":
-                        a = ind.atr14[row, sig_col]
-                        stop = o - R.atr_mult * a if np.isfinite(a) else o * (1 - R.stop_pct / 100)
-                    else:
-                        raise ValueError(R.stop_mode)
-                    stop = _tick(stop)
-                    if stop >= o:
-                        stop = _tick(o * (1 - R.stop_pct / 100))
-                    stop_dist_pct = (o - stop) / o * 100
-                    if R.max_stop_pct is not None and stop_dist_pct > R.max_stop_pct:
-                        skipped["stop_wide"] += 1; continue
-                    # size
-                    entry_px = o * (1 + cost)
-                    if R.sizing == "equal":
-                        target_val = equity_now / R.max_positions
-                    else:
-                        target_val = (R.risk_pct / 100 * equity_now) / (stop_dist_pct / 100)
-                    target_val = min(target_val, R.max_weight_pct / 100 * equity_now)
-                    liq = ind.turnover_sma20[row, j - 1]
-                    if np.isfinite(liq):
-                        target_val = min(target_val, R.max_pct_of_turnover / 100 * liq)
-                    target_val = min(target_val, cash)
-                    qty = int(target_val // entry_px)
-                    if qty * entry_px < R.min_trade_inr:
-                        if cash < R.min_trade_inr:
-                            skipped["cash"] += 1
+                if 1 - equity[j - 1] / peak >= B.dd_lock_pct / 100:
+                    dd_locked = True; dd_locked_until = j + B.dd_cooldown - 1
+        for si, S in enumerate(sleeves):
+            R = S.rules; sig = S.sig; gate_ok = S.gate_ok; rank_key = S.rank_key; entry_level = S.entry_level; stop_level = S.stop_level; wk = working[si]
+            if R.entry in ("limit_close", "stop_level") and j >= 1:
+                # new working orders from j-1's signals; stale ones expire
+                for r in np.nonzero(sig[:, j - 1])[0]:
+                    if r not in positions and r not in wk:
+                        lvl = p.close[r, j - 1] if R.entry == "limit_close" else entry_level[r, j - 1]
+                        if np.isfinite(lvl):
+                            wk[r] = (j - 1, lvl)
+                for r in [r for r, (c0, _) in wk.items() if j - c0 > R.entry_valid]:
+                    skipped["gap"] += 1; del wk[r]
+            if j >= 1 and gate_ok[j - 1] and dd_locked:
+                skipped["dd_lock"] += int(sig[:, j - 1].sum())
+            if j >= 1 and gate_ok[j - 1] and not dd_locked:
+                if R.entry in ("limit_close", "stop_level"):
+                    cand = [r for r in wk if r not in positions]
+                else:
+                    cand = np.nonzero(sig[:, j - 1])[0]
+                    cand = [r for r in cand if r not in positions]
+                if cand:
+                    key = {"rvol": ind.rvol, "change": ind.change_pct, "turnover": ind.turnover, "close_pos": ind.close_pos}
+                    if rank_key is not None:
+                        key = {R.rank: rank_key}
+                    if R.rank != "none":
+                        kc = [wk[r][0] if R.entry in ("limit_close", "stop_level") else j - 1 for r in cand]
+                        k = key[R.rank][cand, kc]
+                        cand = [cand[i] for i in np.argsort(-np.nan_to_num(k, nan=-1e9))]
+                    new = 0
+                    equity_now = cash + sum(pos.qty * (p.close[pos.row, j - 1] if np.isfinite(p.close[pos.row, j - 1]) else pos.entry) for pos in positions.values())
+                    for row in cand:
+                        if new >= R.max_new_per_day:
+                            skipped["slots"] += 1; break
+                        if len(positions) >= B.max_positions or (S.max_positions is not None and sum(1 for q in positions.values() if q.sleeve == si) >= S.max_positions):
+                            skipped["slots"] += 1; break
+                        o, h, l = p.open[row, j], p.high[row, j], p.low[row, j]
+                        if not np.isfinite(o) or o <= 0:
+                            skipped["no_bar"] += 1; continue
+                        if o == h == l:  # locked limit at the open, no fill possible
+                            skipped["locked"] += 1; continue
+                        sig_col = wk[row][0] if R.entry in ("limit_close", "stop_level") else j - 1
+                        sc = p.close[row, sig_col]
+                        if R.entry == "limit_close":
+                            if l > wk[row][1] * (1 - R.fill_through_pct / 100):
+                                continue            # not touched today, order keeps working
+                            o = min(o, wk[row][1])  # fill at the limit (or better at the open)
+                            del wk[row]
+                        elif R.entry == "stop_level":
+                            if h < wk[row][1] * (1 + R.fill_through_pct / 100):
+                                continue            # level not reached today, order keeps working
+                            o = max(o, wk[row][1])  # fill at the stop level, or at the open if it gapped above
+                            del wk[row]
+                        gap = (o / sc - 1) * 100
+                        if R.max_gap_pct is not None and gap > R.max_gap_pct:
+                            skipped["gap"] += 1; continue
+                        if R.min_gap_pct is not None and gap < R.min_gap_pct:
+                            skipped["gap"] += 1; continue
+                        # initial stop
+                        if R.stop_mode == "pct":
+                            stop = o * (1 - R.stop_pct / 100)
+                        elif R.stop_mode == "signal_low":
+                            stop = p.low[row, sig_col]
+                        elif R.stop_mode == "min_low_pct":
+                            stop = max(p.low[row, sig_col], o * (1 - R.stop_pct / 100))
+                        elif R.stop_mode == "level":
+                            lv = stop_level[row, sig_col]
+                            stop = max(lv, o * (1 - R.stop_pct / 100)) if np.isfinite(lv) else o * (1 - R.stop_pct / 100)
+                        elif R.stop_mode == "atr":
+                            a = ind.atr14[row, sig_col]
+                            stop = o - R.atr_mult * a if np.isfinite(a) else o * (1 - R.stop_pct / 100)
                         else:
-                            skipped["liquidity"] += 1
-                        continue
-                    cash -= qty * entry_px
-                    positions[row] = Position(row=row, qty=qty, entry=entry_px, entry_col=j, stop=stop,
-                                              init_stop=stop, high_since=o)
-                    new += 1
-        elif j >= 1 and not gate_ok[j - 1]:
-            skipped["gate"] += int(sig[:, j - 1].sum())
+                            raise ValueError(R.stop_mode)
+                        stop = _tick(stop)
+                        if stop >= o:
+                            stop = _tick(o * (1 - R.stop_pct / 100))
+                        stop_dist_pct = (o - stop) / o * 100
+                        if R.max_stop_pct is not None and stop_dist_pct > R.max_stop_pct:
+                            skipped["stop_wide"] += 1; continue
+                        # size
+                        entry_px = o * (1 + cost)
+                        if B.sizing == "equal":
+                            target_val = equity_now / B.max_positions
+                            if R.vol_sizing:
+                                a = ind.adr20_pct[row, sig_col]
+                                if np.isfinite(a) and a > 0:
+                                    target_val = min(target_val * (4.0 / a), R.vol_size_cap_pct / 100 * equity_now)
+                        else:
+                            target_val = (B.risk_pct / 100 * equity_now) / (stop_dist_pct / 100)
+                        target_val = min(target_val, B.max_weight_pct / 100 * equity_now)
+                        liq = ind.turnover_sma20[row, j - 1]
+                        if np.isfinite(liq):
+                            target_val = min(target_val, B.max_pct_of_turnover / 100 * liq)
+                        target_val = min(target_val, cash)
+                        qty = int(target_val // entry_px)
+                        if qty * entry_px < B.min_trade_inr:
+                            if cash < B.min_trade_inr:
+                                skipped["cash"] += 1
+                            else:
+                                skipped["liquidity"] += 1
+                            continue
+                        cash -= qty * entry_px
+                        positions[row] = Position(row=row, qty=qty, entry=entry_px, entry_col=j, stop=stop,
+                                                  init_stop=stop, high_since=o, sleeve=si)
+                        new += 1
+            elif j >= 1 and not gate_ok[j - 1]:
+                skipped["gate"] += int(sig[:, j - 1].sum())
 
         # ---- 3. same-session stop on fresh entries; 4. close-of-day management
         for row in list(positions):
-            pos = positions[row]
+            pos = positions[row]; R = sleeves[pos.sleeve].rules; hold_state = sleeves[pos.sleeve].hold_state
             o, h, l, c = p.open[row, j], p.high[row, j], p.low[row, j], p.close[row, j]
             if not np.isfinite(c):
                 continue
@@ -328,6 +381,10 @@ def run(p: Panel, ind: Indicators, sig: np.ndarray, rules: Rules, gate_ok: np.nd
             # time stop
             if R.max_hold is not None and j - pos.entry_col >= R.max_hold:
                 close_pos(pos, j, c, pos.qty, "time"); continue
+            if R.dead_money_sessions is not None and j - pos.entry_col >= R.dead_money_sessions and c < pos.entry:
+                pos.pending_exit = "dead_money"
+            if R.pyramid_trigger_pct is not None and not pos.pyramided and c >= pos.entry * (1 + R.pyramid_trigger_pct / 100):
+                pos.pending_add = True
             # ratchets
             new_stop = pos.stop
             if R.breakeven_r is not None and r_now >= R.breakeven_r:
@@ -359,6 +416,8 @@ def run(p: Panel, ind: Indicators, sig: np.ndarray, rules: Rules, gate_ok: np.nd
             if hold_state is not None and not hold_state[row, j]:
                 pos.pending_exit = "state"
 
+        if B.idle_cash_yield_pct:
+            cash *= 1 + B.idle_cash_yield_pct / 100 / 252
         equity[j] = cash + sum(pos.qty * (p.close[pos.row, j] if np.isfinite(p.close[pos.row, j]) else pos.entry) for pos in positions.values())
         n_open[j] = len(positions)
 
@@ -368,7 +427,7 @@ def run(p: Panel, ind: Indicators, sig: np.ndarray, rules: Rules, gate_ok: np.nd
         pos = positions[row]
         close_pos(pos, last, p.close[row, last] if np.isfinite(p.close[row, last]) else pos.entry, pos.qty, "end")
     equity[last] = cash
-    return Result(rules=R, dates=p.dates[start_col:], equity=equity[start_col:], n_open=n_open[start_col:],
+    return Result(rules=B, dates=p.dates[start_col:], equity=equity[start_col:], n_open=n_open[start_col:],
                   trades=trades, skipped=skipped)
 
 

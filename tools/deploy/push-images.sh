@@ -63,6 +63,14 @@ docker build --platform linux/arm64 -f "$BLUE/infra/docker/Dockerfile.web" \
   --build-arg "NEXT_PUBLIC_SITE_URL=https://${HOSTNAME_PUBLIC}" \
   --build-arg "NEXT_PUBLIC_API_ORIGIN=https://${HOSTNAME_PUBLIC}" \
   --build-arg "NEXT_PUBLIC_API_URL=https://${HOSTNAME_PUBLIC}/api/v1" \
+  # NEXT_PUBLIC_DESK_URL was MISSING here until 12 Sep 2026, and the omission was silent in the
+  # worst way. `Dockerfile.web` declares `ARG NEXT_PUBLIC_DESK_URL=` with an EMPTY default, and
+  # `src/lib/site.ts` falls back to `https://desk.modelbasket.in` -- production. Its own comment
+  # says why that matters: "Staging must set this or links silently go to production." The app now
+  # refuses to build without it rather than shipping a staging page that links an operator at the
+  # live desk, which is how this surfaced: the build failed with
+  # `NEXT_PUBLIC_DESK_URL must be set in production`.
+  --build-arg "NEXT_PUBLIC_DESK_URL=https://desk.${HOSTNAME_PUBLIC}" \
   --build-arg "BASKFY_RELEASE=$TAG" \
   "$BLUE"
 

@@ -14,7 +14,19 @@ export const dynamic = "force-dynamic";
 /** Fallback only when /meta/status is unreachable — never a second source of truth. */
 const FALLBACK_DATA_START = "2011-01-01";
 
-export default async function BuildBacktestsPage() {
+function first(value: string | string[] | undefined): string | undefined {
+  if (Array.isArray(value)) return value[0];
+  return value;
+}
+
+export default async function BuildBacktestsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+  const screen = first(params.screen) ?? null;
+
   const api = await serverApi();
   const [runs, screens, status] = await Promise.all([
     api.GET("/api/v1/backtests"),
@@ -32,6 +44,7 @@ export default async function BuildBacktestsPage() {
       earliest={earliest}
       latest={latest}
       error={runs.data ? null : (runs.error ?? "unreachable")}
+      initialScreenId={screen}
     />
   );
 }

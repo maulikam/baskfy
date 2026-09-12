@@ -3,7 +3,7 @@
 Rollback tag: **e795a71**.
 Wave 1: A–G merged into developer (`a4ee64f`).
 Post-merge: Law-1 callers (`12c1e1f`), house-rule Any + mypy (`1e1fe08`), `make lint` green (`9c24751`).
-Wave 2: I merged; H running (`af/H`); D2 after ship.
+Wave 2: H+I merged; D2 after ship / suites green.
 
 | item | lane | commit | state |
 |---|---|---|---|
@@ -87,19 +87,19 @@ Wave 2: I merged; H running (`af/H`); D2 after ship.
 | 1.22 | G | merged | done |
 | 1.24 | G | merged | done |
 | 7 | G | merged | done |
-| 5.1 | H | merged | pending |
-| 5.2 | H | merged | pending |
-| 5.3 | H | merged | pending |
-| 5.4 | H | merged | pending |
-| 5.5 | H | merged | pending |
-| 5.6 | H | merged | pending |
-| 5.7 | H | merged | pending |
-| 5.8 | H | merged | pending |
-| 5.9 | H | merged | pending |
-| 5.10 | H | merged | pending |
-| 5.11 | H | merged | pending |
-| 5.12 | H | merged | pending |
-| 5.13 | H | merged | pending |
+| 5.1 | H | merged | done |
+| 5.2 | H | merged | done |
+| 5.3 | H | merged | done |
+| 5.4 | H | merged | done |
+| 5.5 | H | merged | done |
+| 5.6 | H | merged | done |
+| 5.7 | H | merged | done |
+| 5.8 | H | merged | done — client page; API limit/offset + listings total still to wire |
+| 5.9 | H | merged | done |
+| 5.10 | H | merged | done |
+| 5.11 | H | merged | done — Versions tab via lane I |
+| 5.12 | H | merged | done |
+| 5.13 | H | merged | done |
 | I.1 | I | merged | done |
 | I.2 | I | merged | done; box migration 0045 at D2 |
 | I.3 | I | merged | done |

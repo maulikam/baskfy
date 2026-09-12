@@ -82,12 +82,9 @@ describe("the risk tab", () => {
     expect(reading?.figure.value).toBeNull();
   });
 
-  it("lists every risk figure the brief asks for that Baskfy cannot compute", () => {
+  it("does not narrate unmeasured risk figures as a product section (AFH 5.2)", () => {
     panel();
-    const blocked = within(screen.getByTestId("risk-blocked"));
-    for (const item of BLOCKED_RISK) {
-      expect(blocked.getByText(item.name)).toBeInTheDocument();
-    }
+    expect(screen.queryByTestId("risk-blocked")).not.toBeInTheDocument();
     expect(BLOCKED_RISK.map((item) => item.name)).toEqual(
       expect.arrayContaining([
         "Beta against the benchmark",
@@ -105,32 +102,11 @@ describe("the risk tab", () => {
   /**
    * WHAT IT WOULD TAKE IS THE READER'S; THE TABLE IT WOULD READ IS NOT.
    *
-   * This test asserted the opposite until 12 Sep 2026. Its middle line pinned
-   * `"a statistics job over portfolio_nav_daily"` — a database table printed onto a retail
-   * investor's Risk tab, through `BlockedList`'s `It needs: {unblockedBy}.` line — and by pinning
-   * it, defended it against anyone who tried to fix it.
-   *
-   * `components/portfolio/__tests__/no-internals.test.tsx` already bans exactly this pattern ("a
-   * database or payload field"), and its own header names `packages/core` and
-   * `todays_contribution` as the defect it was written for. It never caught this one because it
-   * renders `CommandCenterScreen` and nothing else: the *detail tabs* were outside its reach, and
-   * four `BLOCKED_*` entries had been sitting there the whole time with `portfolio_nav_daily`,
-   * `t1_quantity`, `DetailHoldingOut`, `InstrumentRefOut` and `packages/core` in them.
-   *
-   * So the assertion is now the property, not the sentence: every blocked figure says what it
-   * would take, and none says it in the system's own vocabulary. The sibling `no-internals.test.tsx`
-   * carries the same scan across all four tabs, so the gap itself is closed.
+   * Spec-gap UI is gone (AFH 5.2). The BLOCKED_RISK catalogue still must not name internals —
+   * that vocabulary must never return to the product surface.
    */
-  it("says what each unmeasured risk figure would actually take, not just that it is missing", () => {
-    panel();
-    const blocked = screen.getByTestId("risk-blocked");
-    expect(blocked).toHaveTextContent(
-      "a documented model: historical, parametric or Monte Carlo, with its confidence level and horizon",
-    );
-    expect(blocked).toHaveTextContent("a statistics pass over this portfolio's daily value history");
+  it("keeps blocked-risk copy free of table and module names", () => {
     for (const item of BLOCKED_RISK) {
-      expect(blocked).toHaveTextContent(item.unblockedBy);
-      // Neither half of the sentence may name a table, a column or a module.
       expect(item.why).not.toMatch(/\b[a-z][a-z0-9]*(_[a-z0-9]+)+\b/);
       expect(item.unblockedBy).not.toMatch(/\b[a-z][a-z0-9]*(_[a-z0-9]+)+\b/);
       expect(item.why).not.toMatch(/\b(packages|services|src)\/[a-z]/);
@@ -138,13 +114,9 @@ describe("the risk tab", () => {
     }
   });
 
-  it("prints no modelled risk number: the unmeasured section carries no figure at all", () => {
+  it("prints no modelled risk number for figures Baskfy does not compute", () => {
     panel();
-    const blocked = screen.getByTestId("risk-blocked").textContent ?? "";
-    expect(blocked).not.toContain("%");
-    expect(blocked).not.toContain("₹");
-    /* And it never becomes eighteen dashes either, which is the other way to fail this. */
-    expect(blocked).not.toContain("—");
+    expect(screen.queryByTestId("risk-blocked")).not.toBeInTheDocument();
   });
 
   it("never computes a volatility, even though the daily series it would need is right there", () => {

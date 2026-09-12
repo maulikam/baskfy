@@ -48,6 +48,7 @@ from baskfy_core.reference_export import (
     FACTOR_COLUMN_MAP,
     read_export,
 )
+from baskfy_providers.reference_export_io import reference_export_path
 
 #: docs/05 §8 — listed rather than silently skipped. The recomputation mode reports these
 #: separately: they are known not to reconcile and the reason is a definition, not a bug.
@@ -263,7 +264,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    export = read_export(args.export)
+    # `--export` is optional and its help text promises "default: the committed 271-row fixture",
+    # so the default has to be resolved here. AF 3.10 made `read_export`'s `path` required when it
+    # moved `default_fixture_path` out of `packages/core` (Law 1: core does not walk the
+    # filesystem), and this caller was left passing `args.export` straight through. With no
+    # `--export` that is `None`, which reached polars as `pl.read_csv(None)` and failed with
+    # `TypeError: Object does not have a .read() method` — a message that names neither the flag
+    # nor the file, for the CLI's own default invocation, which is the one CI runs.
+    #
+    # `baskfy_providers` is where the path lives now and the worker already depends on it; a
+    # service may read the disk, only core may not.
+    export_path = args.export or reference_export_path()
+    export = read_export(export_path)
     if args.symbols:
         wanted = [s.strip().upper() for s in args.symbols.split(",") if s.strip()]
         export = export.filter(pl.col("symbol").is_in(wanted))
@@ -286,10 +298,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         print(text)
         if args.bars is None:
+            # The snapshot is named, and the phrasing is the one the test calls "the single most
+            # important honesty line in the report". AF 3.10 had to reword it because the sentence
+            # built the filename from `default_fixture_path()`, which left `packages/core` with
+            # the rest of the I/O — so the name and the words both went, and the test that pins
+            # the line was not updated with them. The path is reachable from a service again, so
+            # the sentence says which snapshot as well as what was not done.
             print(
                 "NOTE: run with --bars to enable docs/13 §5 step 2 (full recomputation). "
-                "Without --bars, no factor was recomputed from price history "
-                "(the committed reference CSV is an answer key, not a bar panel).",
+                f"The committed snapshot is {export_path.name} and carries no price history, "
+                "so no factor was recomputed from bars in this run "
+                "(it is an answer key, not a bar panel).",
             )
 
     return 1 if total_disagreements(results) else 0

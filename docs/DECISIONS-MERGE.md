@@ -7200,3 +7200,36 @@ deleted pages — that reverts a lane's deliberate decision to satisfy a redirec
 
 **Reverse.** Point both destinations back at `/discover/featured` and `/discover/plan`, which only
 makes sense alongside restoring the pages.
+
+## AF V.2 — Two reds in `tools/ci-local.sh` that predate the lane merge · ⚠ UNREVIEWED
+
+**`reconcile_cli` with no arguments crashed inside polars.** `--export` is optional and its help
+says "default: the committed 271-row fixture", but AF 3.10 made `read_export`'s `path` required
+when it moved `default_fixture_path` out of `packages/core` (Law 1: core does not walk the
+filesystem), and `e177aeb` left this caller passing `args.export` through unchanged. The default
+invocation — the one CI runs — reached `pl.read_csv(None)` and died with `TypeError: Object does
+not have a .read() method`, naming neither the flag nor the file.
+
+**Choice.** Resolve the default in the CLI from
+`baskfy_providers.reference_export_io.reference_export_path()`. A service may read the disk; only
+core may not, and the worker already depends on providers.
+
+The same commit also reworded the report's "single most important honesty line" — it had built the
+snapshot's filename from `default_fixture_path()`, so when that went, the filename and the wording
+went with it, and `test_reconcile_cli.py` still pinned the old phrase. Every test in that file
+calls `main([])`, so all of them were red anyway. With the path reachable from a service again the
+sentence is restored in full: it names the snapshot *and* says no factor was recomputed from bars.
+The test was not touched — house rule 2, and the assertion was the correct half.
+
+**`tools/check-namespace.sh` has been red since VB10/SW12.** `d5d7c81` settled that "a run's
+historical record may name what was renamed" and excluded `FINAL-REPORT.md` by exact filename.
+`SW-FINAL-REPORT.md` and `VB-FINAL-REPORT.md` arrived afterwards, each naming the "Decile suite"
+in its table of what was measured — the decision already covered them and only its spelling did
+not, so the glob is now `*FINAL-REPORT.md`.
+
+**Rejected.** Rewording the two reports — `d5d7c81`'s own argument is that this would be the
+checker editing history. Adding "Decile suite" to `BRAND_ALLOWED` — that list is for the
+*statistic*, and CLAUDE.md's namespace rule forbids widening the pattern to silence a hit.
+`RUN-AND-TEST.md` and `NEEDS-MAULIK.md` stay in scope, unchanged.
+
+**Reverse.** Restore `default=None`'s bare pass-through and the exact-filename glob.

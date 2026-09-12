@@ -29,12 +29,19 @@ EXCLUDES=(
   ':!MERGE-PROMPTS.md'
   ':!decile-blueprint/PROMPTS.md'
   ':!tools/check-namespace.sh'
-  # FINAL-REPORT.md is the run's historical record. It has to be able to say what was renamed,
+  # A *FINAL-REPORT.md is a run's historical record. It has to be able to say what was renamed,
   # and rewording "`SITE_NAME` was \"Decile\"" to satisfy a checker would be the checker editing
-  # history -- the same argument that allowlists CLAUDE.md D1's sentence below. Deliberately just
-  # this file: RUN-AND-TEST.md and NEEDS-MAULIK.md are live operator documents and stay in scope,
+  # history -- the same argument that allowlists CLAUDE.md D1's sentence below. Still deliberately
+  # narrow: RUN-AND-TEST.md and NEEDS-MAULIK.md are live operator documents and stay in scope,
   # because if either of them ever says the old name, that IS a bug.
-  ':!FINAL-REPORT.md'
+  #
+  # The glob was the exact filename `FINAL-REPORT.md` until 12 Sep 2026, and two more records of
+  # the same kind arrived after it: SW-FINAL-REPORT.md (SW12) and VB-FINAL-REPORT.md (VB10), each
+  # naming the "Decile suite" in the table of what it measured and how. The gate has been red ever
+  # since, for a reason the original exclusion had already settled -- the decision was "a run's
+  # historical record may name what was renamed", and only its spelling was too narrow to cover
+  # the files that decision was about. docs/DECISIONS-MERGE.md AF V.2.
+  ':!*FINAL-REPORT.md'
   # frozen/ is outside every gate (CLAUDE.md safety rails, frozen/strangle/README.md).
   # A namespace sweep that "fixed" a file under here would be exactly the edit that is
   # forbidden, so the check does not look.

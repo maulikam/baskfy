@@ -1,14 +1,9 @@
 /**
  * Screen-page redesign flags.
  *
- * `NEXT_PUBLIC_SCREEN_CHIP_FILTERS` defaults ON. Set to `0` or `false` to fall back to the
- * classic left-rail accordion while iterating.
+ * The `NEXT_PUBLIC_SCREEN_CHIP_FILTERS` legacy-editor escape hatch was deleted (AUDIT 4.10).
+ * Chip filters are the only editor surface.
  */
-export function screenChipFiltersEnabled(): boolean {
-  const raw = process.env.NEXT_PUBLIC_SCREEN_CHIP_FILTERS;
-  if (raw === "0" || raw === "false") return false;
-  return true;
-}
 
 /** Which of the screen editor's two result views is on screen before anything is clicked. */
 export type ScreenDefaultView = "basket" | "table";

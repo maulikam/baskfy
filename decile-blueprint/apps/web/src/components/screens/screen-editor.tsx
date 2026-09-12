@@ -3,7 +3,6 @@
 import type { ScreenOut, StatusOut } from "@baskfy/api-client";
 import { CalendarClock, Columns3, Copy, Loader2, X } from "lucide-react";
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { parseAsString, useQueryState } from "nuqs";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -20,7 +19,6 @@ import { Button } from "@/components/ui/button";
 import { formatTradeDate } from "@/lib/format";
 import { countDefinitionChanges } from "@/lib/screens/change-count";
 import { defaultDefinition } from "@/lib/screens/defaults";
-import { screenChipFiltersEnabled } from "@/lib/screens/feature-flags";
 import {
   useColumns,
   useDuplicateScreen,
@@ -36,19 +34,6 @@ import { PREVIEW_DEBOUNCE_MS, useDebounced } from "@/lib/screens/use-debounced";
 import { STATE_PARAM, decodeState, definitionsEqual, encodeState, parseDefinition } from "@/lib/screens/url-state";
 import { CUSTOM_FILTER_OPERAND_KEYS, OPERAND_LABELS } from "@/lib/screens/operands";
 
-/*
- * The classic left-rail accordion. `NEXT_PUBLIC_SCREEN_CHIP_FILTERS` defaults **on**, so this
- * branch renders for nobody in a default build — and it was still in the first-load bundle,
- * dragging `FilterAccordion`, `FactorCombobox`, `Select`, `Switch` and `filter-sections` with it.
- * That is what put `/build/[id]` over the 250 KB budget docs/11 sets.
- *
- * `ssr` is left at its default (on), so when the flag IS off the server still renders the rail and
- * there is no flash of an empty column; the chunk simply is not requested on the flagged-on path.
- */
-const FilterForm = dynamic(() =>
-  import("@/components/screens/filter-form").then((m) => m.FilterForm),
-);
-
 export interface ScreenEditorProps {
   screen: ScreenOut;
   status: StatusOut | null;
@@ -56,7 +41,6 @@ export interface ScreenEditorProps {
 
 export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
   const router = useRouter();
-  const chipFilters = screenChipFiltersEnabled();
   const { data: screen } = useScreen(initial.public_id, initial);
   const saved = useMemo(() => parseDefinition(screen.definition), [screen.definition]);
   const [raw, setRaw] = useQueryState(
@@ -281,47 +265,22 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
         isPending={preview.isPending && !preview.data}
       />
 
-      {chipFilters ? (
-        <div className="flex min-w-0 flex-col gap-5">
-          <FilterChipBar {...filterProps} />
-          <ResultsPanel
-            result={preview.data}
-            columnMeta={columnMeta}
-            sortingFactorUnit={sortingFactorUnit}
-            isPending={preview.isPending}
-            isFetching={preview.isFetching}
-            error={preview.error}
-            onRetry={() => void preview.refetch()}
-            onLoosenFilters={reset}
-            onUndoLastFilter={undoLastFilter}
-            screenName={screen.name}
-            screenPublicId={screen.public_id}
-          />
-        </div>
-      ) : (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] lg:items-start">
-          <FilterForm {...filterProps} />
-          <ResultsPanel
-            result={preview.data}
-            columnMeta={columnMeta}
-            sortingFactorUnit={sortingFactorUnit}
-            isPending={preview.isPending}
-            isFetching={preview.isFetching}
-            error={preview.error}
-            onRetry={() => void preview.refetch()}
-            onLoosenFilters={reset}
-            onUndoLastFilter={undoLastFilter}
-            screenName={screen.name}
-            screenPublicId={screen.public_id}
-          />
-        </div>
-      )}
-
-      {readOnly ? (
-        <Button data-testid="apply-filters" disabled className="sr-only" tabIndex={-1}>
-          Apply
-        </Button>
-      ) : null}
+      <div className="flex min-w-0 flex-col gap-5">
+        <FilterChipBar {...filterProps} />
+        <ResultsPanel
+          result={preview.data}
+          columnMeta={columnMeta}
+          sortingFactorUnit={sortingFactorUnit}
+          isPending={preview.isPending}
+          isFetching={preview.isFetching}
+          error={preview.error}
+          onRetry={() => void preview.refetch()}
+          onLoosenFilters={reset}
+          onUndoLastFilter={undoLastFilter}
+          screenName={screen.name}
+          screenPublicId={screen.public_id}
+        />
+      </div>
 
       {!readOnly && dirty ? (
         <ApplyFiltersPill

@@ -238,7 +238,9 @@ def build_plan(
         w[s] = max(w[s], cfg.MIN_POSITION_WEIGHT) if w[s] > cfg.MIN_POSITION_WEIGHT / 2 else w[s]
     scale = (pool / capital * 100) / sum(w.values()) if w else 0.0
     w = {s: round(v * scale, 2) for s, v in w.items()}
-    as_of_raw = scored["date"].iloc[0] if len(scored) else None
+    # Desk scan frames may omit `date`; without it the half-size rule cannot run and is
+    # skipped rather than KeyError mid-rebalance (AF 3.9).
+    as_of_raw = scored["date"].iloc[0] if len(scored) and "date" in scored.columns else None
     as_of = pd.Timestamp(as_of_raw).date() if as_of_raw is not None else None
     half_cutoff = subtract_months(as_of, 18) if as_of is not None else None
     has_listed = "listed_on" in idx.columns

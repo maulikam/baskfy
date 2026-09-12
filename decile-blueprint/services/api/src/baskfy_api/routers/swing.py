@@ -106,7 +106,7 @@ def _one_of(value: str | None, allowed: frozenset[str], field: str) -> str | Non
     if value is None or value in allowed:
         return value
     raise Problem(
-        ProblemType.INVALID_SCREEN_DEFINITION,
+        ProblemType.BAD_REQUEST,
         f"{value!r} is not a {field}.",
         errors=[{"field": field, "message": f"choose one of {sorted(allowed)}"}],
     )
@@ -776,13 +776,13 @@ async def get_market(
     if date_from is not None and date_to is not None:
         if date_from > date_to:
             raise Problem(
-                ProblemType.INVALID_SCREEN_DEFINITION,
+                ProblemType.BAD_REQUEST,
                 "`from` is after `to`.",
                 errors=[{"field": "from", "message": "the range runs forwards"}],
             )
         if date_to - date_from > swing_service.MAX_MARKET_SPAN:
             raise Problem(
-                ProblemType.INVALID_SCREEN_DEFINITION,
+                ProblemType.BAD_REQUEST,
                 f"that span is wider than {swing_service.MAX_MARKET_SPAN.days} days.",
                 errors=[{"field": "from", "message": "ask for a narrower range"}],
             )
@@ -1016,7 +1016,7 @@ async def patch_watch(
         raise not_found("watchlist row", str(watch_id)) from exc
     except swing_watch.NotReconfirmable as exc:
         raise Problem(
-            ProblemType.INVALID_SCREEN_DEFINITION,
+            ProblemType.BAD_REQUEST,
             f"Only a WATCHING MANUAL row can be re-confirmed: {exc}.",
             errors=[{"field": "reconfirm", "message": str(exc)}],
         ) from exc
@@ -1157,7 +1157,6 @@ async def patch_config(
     principal: AuthenticatedDep,
     settings: SettingsDep,
     patch: SwingConfigPatch,
-    now: dt.datetime | None = None,
 ) -> Response:
     """The one write on this surface, and it moves no money.
 
@@ -1169,6 +1168,8 @@ async def patch_config(
     A value above its ceiling answers **422 `setting-above-ceiling`** naming the ceiling and the
     environment variable that sets it, and the refusal is atomic: a two-field patch that crosses a
     ceiling on the second field changes neither.
+
+    ``now`` is not a query parameter: an audit row's clock is the server's (AUDIT 2.15).
     """
     user_id = await scoped_sole_user_id(session, principal.user_id)
     await _config_or_404(session, user_id)
@@ -1178,7 +1179,7 @@ async def patch_config(
         patch=patch,
         ceilings=SwingCeilings.from_settings(settings),
         changed_by=f"user:{user_id}",
-        now=now or dt.datetime.now(tz=dt.UTC),
+        now=dt.datetime.now(tz=dt.UTC),
     )
     # No `commit()` here: `baskfy_api.db.get_session` owns the transaction and commits when the
     # handler returns. Committing inside would also break the contract tests, which hand the app

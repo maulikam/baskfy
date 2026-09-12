@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { sectionTabIsActive } from "@/components/shell/section-tab-active";
-import { SECTION_TABS, type SectionKey } from "@/lib/nav";
+import { useIsStaff } from "@/components/shell/staff-context";
+import { buildSectionTabs, type SectionKey } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
 /**
@@ -13,9 +14,18 @@ import { cn } from "@/lib/utils";
  *
  * Active tab = longest matching href — see `section-tab-active.ts` (AUDIT 1.7).
  */
-export function SectionTabs({ section }: { section: SectionKey }) {
+export function SectionTabs({
+  section,
+  isStaff: isStaffProp,
+}: {
+  section: SectionKey;
+  /** When omitted, StaffProvider (AppShell) supplies the bit. Default is civilian. */
+  isStaff?: boolean;
+}) {
   const pathname = usePathname();
-  const tabs = SECTION_TABS[section];
+  const isStaffFromContext = useIsStaff();
+  const isStaff = isStaffProp ?? isStaffFromContext;
+  const tabs = buildSectionTabs(section, { isStaff });
   const hrefs = tabs.map((tab) => tab.href);
 
   return (

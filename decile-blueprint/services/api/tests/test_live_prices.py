@@ -139,3 +139,74 @@ async def test_live_prices_by_instrument_runs_kite_io_via_to_thread(
     prices = await live_prices.live_prices_by_instrument(cast(AsyncSession, _Session()), [1])
     assert prices == {1: Decimal("10")}
     assert ran == ["live_prices_by_symbol"]
+
+
+class TestQuotesAreRefusedWithoutALiveSession:
+    def test_dry_run_is_not_a_live_session(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("DRY_RUN", "true")
+        monkeypatch.setenv("BASKFY_KITE_API_KEY", "not-a-secret-for-this-test")
+        assert live_prices.quotes_permitted() is False
+
+
+class TestQuotesFillNamesTheBookOmitted:
+    """A Kite login marks every held name, not only the ones on the holdings payload."""
+
+    def test_quotes_are_refused_when_the_session_is_not_live(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(live_prices, "quotes_permitted", lambda: False)
+        monkeypatch.setattr(
+            live_prices,
+            "_quote_symbols",
+            lambda _s: (_ for _ in ()).throw(AssertionError("must not quote")),
+        )
+        assert live_prices.live_quotes_by_symbol(["RELIANCE"]) == {}
+
+    def test_a_permitted_session_quotes_the_missing_name(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(live_prices, "quotes_permitted", lambda: True)
+        monkeypatch.setattr(
+            live_prices, "_quote_symbols", lambda symbols: {symbols[0]: Decimal("1692.5")}
+        )
+        quoted = live_prices.live_quotes_by_symbol(["atherenerg"])
+        assert quoted == {"ATHERENERG": Decimal("1692.5")}
+
+    def test_a_quote_that_returns_nothing_leaves_the_close_in_place(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(live_prices, "quotes_permitted", lambda: True)
+        monkeypatch.setattr(live_prices, "_quote_symbols", lambda _s: {})
+        assert live_prices.live_quotes_by_symbol(["RELIANCE"]) == {}
+
+
+@pytest.mark.asyncio
+async def test_live_prices_by_instrument_quotes_names_the_book_omitted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Manual / CAS names stay on close unless a live session can quote them."""
+    monkeypatch.setattr(
+        live_prices,
+        "holdings_for_broker",
+        lambda _b: HoldingsResult(rows=(_row("GOOD", "10"),), source="live"),
+    )
+    monkeypatch.setattr(live_prices, "quotes_permitted", lambda: True)
+    monkeypatch.setattr(
+        live_prices, "_quote_symbols", lambda symbols: {symbols[0]: Decimal("99")}
+    )
+
+    class _Row:
+        def __init__(self, instrument_id: int, symbol: str) -> None:
+            self.id = instrument_id
+            self.symbol = symbol
+
+    class _Result:
+        def all(self) -> list[_Row]:
+            return [_Row(1, "GOOD"), _Row(2, "CASONLY")]
+
+    class _Session:
+        async def execute(self, _stmt: object) -> _Result:
+            return _Result()
+
+    prices = await live_prices.live_prices_by_instrument(cast(AsyncSession, _Session()), [1, 2])
+    assert prices == {1: Decimal("10"), 2: Decimal("99")}

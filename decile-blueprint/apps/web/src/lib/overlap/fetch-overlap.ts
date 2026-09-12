@@ -6,13 +6,16 @@ import {
   type SymbolSet,
   pickScreenId,
 } from "@/lib/overlap/overlap";
-import { fetchToday as fetchVbtToday } from "@/lib/vbt/fetch";
+import { fetchSetups } from "@/lib/swing/fetch";
 import { fetchToday as fetchTwtToday } from "@/lib/twt/fetch";
+import { fetchToday as fetchVbtToday } from "@/lib/vbt/fetch";
 
 /**
- * The three symbol sets the Build overlap page intersects.
+ * The symbol sets the Build overlap page intersects.
  *
  * Volume breakout and Three weeks tight are today's published candidates / tight names.
+ * Swing is today's setups, every status — the question is which names appear on both scans,
+ * not which names cleared a given status filter.
  * Screens is whichever screen the URL names (default: the seeded example), run fresh so the
  * intersection is against the same session the sleeves are showing — not a stale prior run.
  */
@@ -20,12 +23,14 @@ import { fetchToday as fetchTwtToday } from "@/lib/twt/fetch";
 export interface OverlapSources {
   vbt: SymbolSet;
   twt: SymbolSet;
+  swing: SymbolSet;
   screen: SymbolSet;
   screens: readonly ScreenOption[];
   /** Session dates the sleeves reported, for the page header. */
   asOf: {
     vbt: string | null;
     twt: string | null;
+    swing: string | null;
     screen: string | null;
   };
 }
@@ -73,9 +78,10 @@ async function runScreen(publicId: string): Promise<{
 }
 
 export async function fetchOverlapSources(screenId: string): Promise<OverlapSources> {
-  const [vbtToday, twtToday, screens] = await Promise.all([
+  const [vbtToday, twtToday, swingSetups, screens] = await Promise.all([
     fetchVbtToday(),
     fetchTwtToday(),
+    fetchSetups({}),
     listScreens(),
   ]);
   const resolvedId = pickScreenId(screenId, screens);
@@ -94,6 +100,13 @@ export async function fetchOverlapSources(screenId: string): Promise<OverlapSour
          "which names appear on both scans", not "which names cleared the liquidity floor". */
       symbols: twtToday ? symbolsFrom(twtToday.tight) : null,
     },
+    swing: {
+      key: "swing",
+      label: "Swing",
+      /* Every setup still on the scan — every status — because the question is
+         "which names appear on both scans", not "which names cleared a status filter". */
+      symbols: swingSetups ? symbolsFrom(swingSetups.data) : null,
+    },
     screen: {
       key: resolvedId,
       label: screenRun.name,
@@ -103,6 +116,7 @@ export async function fetchOverlapSources(screenId: string): Promise<OverlapSour
     asOf: {
       vbt: vbtToday?.as_of ?? null,
       twt: twtToday?.as_of ?? null,
+      swing: swingSetups?.as_of ?? null,
       screen: screenRun.asOf,
     },
   };

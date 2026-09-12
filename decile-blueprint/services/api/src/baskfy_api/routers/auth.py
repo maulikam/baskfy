@@ -51,6 +51,7 @@ from baskfy_api.auth_service import (
     IssuedSession,
     TokenReused,
     cancel_deletion,
+    ensure_staff_from_allowlist,
     find_user_including_deleted,
     issue_session,
     link_google_identity,
@@ -444,10 +445,16 @@ async def _me_payload(session: AsyncSession, user: AppUser, entitlements: Entitl
 
 @router.get("/me", response_model=MeOut, summary="Profile and entitlements")
 async def get_me(
-    session: SessionDep, principal: AuthenticatedDep, entitlements: EntitlementsDep
+    session: SessionDep,
+    principal: AuthenticatedDep,
+    entitlements: EntitlementsDep,
+    settings: SettingsDep,
 ) -> MeOut:
     """docs/07: `GET /me` -> "profile + entitlements"."""
     user = await _load_me(session, principal.require_user())
+    # An already-signed-in session picks up a staff-allowlist grant on the next
+    # navigation, without a fresh Google sign-in. Never demotes.
+    await ensure_staff_from_allowlist(session, user, settings)
     return await _me_payload(session, user, entitlements)
 
 

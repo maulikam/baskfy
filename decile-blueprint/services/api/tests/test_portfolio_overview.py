@@ -53,10 +53,12 @@ from baskfy_api.auth import Principal, PrincipalKind
 from baskfy_api.problems import Problem, ProblemType
 from baskfy_api.routers.portfolio_overview import (
     BrokerRefOut,
+    HoldingsOut,
     NavRange,
     OverviewOut,
     ResolveBody,
     SyncStatusOut,
+    _label_for_prices,
     _sync_summary,
     portfolio_activity,
     portfolio_detail,
@@ -1307,6 +1309,21 @@ def test_overview_out_exposes_live_overlay() -> None:
     """Audit 4.1: OverviewOut tells the web whether Kite marks are on."""
     assert "live_overlay" in OverviewOut.model_fields
     assert OverviewOut.model_fields["live_overlay"].default is False
+
+
+def test_holdings_out_exposes_live_overlay() -> None:
+    """The Holdings tab uses the same bit — it must not have to guess from the overview."""
+    assert "live_overlay" in HoldingsOut.model_fields
+    assert HoldingsOut.model_fields["live_overlay"].default is False
+
+
+def test_price_label_names_a_live_overlay() -> None:
+    """A live mark must not still read as 'close of' — that is how the page lied after M82."""
+    assert _label_for_prices(TODAY) == f"Prices: close of {TODAY.isoformat()}"
+    assert _label_for_prices(TODAY, live_overlay=True) == (
+        f"Prices: live, over close of {TODAY.isoformat()}"
+    )
+    assert _label_for_prices(None, live_overlay=True) == "Live marks"
 
 
 def test_sync_summary_is_one_sentence_for_every_surface() -> None:

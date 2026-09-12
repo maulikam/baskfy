@@ -34,7 +34,7 @@ export function pickScreenId(
 }
 
 export interface SymbolSet {
-  /** Stable key for tests and React lists — `vbt`, `twt`, a screen public id. */
+  /** Stable key for tests and React lists — `vbt`, `twt`, `swing`, a screen public id. */
   key: string;
   /** What the reader sees above the count. */
   label: string;

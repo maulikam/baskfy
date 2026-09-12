@@ -144,10 +144,12 @@ this is the same list, in full, and it remains the honest record of what has nev
   `docs/DECISIONS.md` §17.6.
 - **Queue depth is read with `LLEN` on the queue name**, which is how Celery's *Redis* transport
   stores a queue. A move to RabbitMQ gives a silent zero, not an error.
-- **`app_user.is_staff` is set by hand and by nothing else.** No form, no seed, deliberately.
-  `docs/runbooks/pipeline-failed.md` §"Making yourself staff" has the `UPDATE`. Do it before an
-  incident: a non-staff caller gets **404** from `/admin/*`, so "the admin page 404s" is what a
-  missing bit looks like (`docs/DECISIONS.md` §17.3).
+- **`app_user.is_staff` is granted by `BASKFY_STAFF_ALLOWLIST` (default: the founder) on Google
+  sign-in and `GET /me`, and can still be set by hand.** The list promotes, never demotes. No
+  self-service form. `docs/runbooks/pipeline-failed.md` §"Making yourself staff" has the
+  `UPDATE` for an address that is not on the list. A non-staff caller gets **404** from
+  `/admin/*`, so "the admin page 404s" is what a missing bit looks like (`docs/DECISIONS.md`
+  §17.3).
 - **There is no `providers login` command,** so replacing an expired Kite token means pasting a
   heredoc at 3am with a single-use token that expires in minutes.
   `docs/runbooks/kite-token-expired.md` §3 says so and says it should be a command.

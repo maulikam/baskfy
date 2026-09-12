@@ -113,6 +113,16 @@ describe("§6.1 — two timestamps, two sentences", () => {
     expect(syncedLine(OVERVIEW)).toBe("Holdings synced: 25 Aug 2026");
   });
 
+  it("names a live overlay instead of implying the close is the mark", () => {
+    expect(
+      pricesLine({
+        prices_as_of: "2026-08-21",
+        prices_label: "Prices: live, over close of 2026-08-21",
+        live_overlay: true,
+      }),
+    ).toBe("Prices: live, over close of 21 Aug 2026");
+  });
+
   it("falls back to the API's own sentence when a date is absent", () => {
     expect(pricesLine({ prices_as_of: null, prices_label: "No closing prices yet" })).toBe(
       "No closing prices yet",

@@ -7,10 +7,21 @@
  */
 import { API_PREFIX } from "@baskfy/api-client";
 
-const FALLBACK_ORIGIN = "http://localhost:8000";
+/** Local-only fallback. Production must set `NEXT_PUBLIC_API_URL` (AUDIT 4.6). */
+const DEV_FALLBACK_ORIGIN = "http://localhost:8000";
 
+/**
+ * The one public API origin resolver. Middleware, the browser client and server fetchers
+ * all call this — the retired dual env name is not read anywhere.
+ */
 export function apiOrigin(): string {
-  const configured = process.env.NEXT_PUBLIC_API_URL ?? FALLBACK_ORIGIN;
+  const configured = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (!configured) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("NEXT_PUBLIC_API_URL must be set in production");
+    }
+    return DEV_FALLBACK_ORIGIN;
+  }
   const trimmed = configured.replace(/\/+$/, "");
   return trimmed.endsWith(API_PREFIX) ? trimmed.slice(0, -API_PREFIX.length) : trimmed;
 }

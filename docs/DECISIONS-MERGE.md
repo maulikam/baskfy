@@ -7254,3 +7254,29 @@ worth doing, but it is a change to the test plumbing that should not be made whi
 filed as a follow-up rather than done under time pressure.
 
 **Reverse.** Nothing to reverse; this is a rule about how the suites are run, not a code change.
+
+## AF I.7 — The version routes asked for a visibility no basket can hold · ⚠ UNREVIEWED
+
+**What happened.** AF I.1's `routers/curated_versions.py` wrote its own copy of the basket
+visibility predicate and filtered on `CbBasket.visibility == "LISTED"`. `BASKET_VISIBILITY` is
+`("PUBLISHED", "PRIVATE")` and a check constraint enforces it, so no row could ever match:
+`GET /explore/{slug}/versions` and `/versions/diff` answered **404 for every basket that exists**,
+and the Versions tab that AFH 5.11 was credited to had nothing behind it.
+
+Two tests covered these routes and neither could have caught it — one asserted the path was in the
+OpenAPI document, the other that the router carried it. A mounted route is not a working one.
+It surfaced as a *type* error (`tuple[object, ...]` where `where()` wants a boolean clause),
+which is why house rule 3's ban on loose types earns its place: the weak annotation was hiding a
+predicate nobody had checked.
+
+**Choice.** The predicate moves to `baskfy_api/curated_visibility.py` and both routers delegate to
+it. `routers/explore.py` includes the version router at the bottom of its own file, so the shared
+helper cannot live in either module. A new test asserts every route asks for the *same* visibility
+and that the value is one `BASKET_VISIBILITY` allows, so a third copy that invents a value fails at
+the predicate rather than in a 404 nobody reads.
+
+**Rejected.** Correcting `"LISTED"` to `"PUBLISHED"` in place — it leaves two copies of a
+predicate that is the only thing standing between a PRIVATE basket and a caller, which is how this
+happened. Importing `explore._visible` — a cycle, and a private name.
+
+**Reverse.** Inline `visible_baskets()` back into each router and delete the module and the test.

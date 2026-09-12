@@ -11,9 +11,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Path, Query
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, select
 
 from baskfy_api.auth import AuthenticatedDep
+from baskfy_api.curated_visibility import visible_baskets
 from baskfy_api.db import SessionDep
 from baskfy_api.problems import bad_request, not_found
 from baskfy_core.models import CbBasket, CbBasketVersion, CbConstituent, Instrument
@@ -24,8 +25,10 @@ SLUG_MAX = 120
 SlugPath = Annotated[str, Path(min_length=1, max_length=SLUG_MAX)]
 
 
-def _visible() -> tuple[object, ...]:
-    return (CbBasket.archived_at.is_(None), CbBasket.visibility == "LISTED")
+def _visible() -> tuple[ColumnElement[bool], ...]:
+    """The shared predicate. This route once wrote its own and filtered on ``"LISTED"``, which
+    ``BASKET_VISIBILITY`` does not contain, so every version read answered 404."""
+    return visible_baskets()
 
 
 class VersionSummaryOut(BaseModel):

@@ -15,11 +15,12 @@ from typing import Annotated, Final, Literal
 
 from fastapi import APIRouter, Path, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import ColumnExpressionArgument, asc, desc, func, or_, select
+from sqlalchemy import ColumnElement, ColumnExpressionArgument, asc, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.auth import AuthenticatedDep
 from baskfy_api.curated_tenant import scoped_sole_user_id
+from baskfy_api.curated_visibility import visible_baskets
 from baskfy_api.db import SessionDep
 from baskfy_api.invoices import today_ist
 from baskfy_api.problems import not_found
@@ -252,7 +253,7 @@ def _card(basket: CbBasket, manager: CbManager, metrics: CbMetrics | None) -> Ba
     )
 
 
-def _visible() -> tuple[ColumnExpressionArgument[bool], ...]:
+def _visible() -> tuple[ColumnElement[bool], ...]:
     """The predicate that decides a basket may be shown at all.
 
     One helper, used by every route that reaches ``cb_basket``, because this used to be spelled
@@ -260,8 +261,11 @@ def _visible() -> tuple[ColumnExpressionArgument[bool], ...]:
     collection expansion each selected by slug or id alone. ``cb_basket`` has no owner column,
     so ``visibility`` is the only thing standing between a PRIVATE basket and the caller, and
     three of the four places that needed it did not have it.
+
+    It now delegates to :mod:`baskfy_api.curated_visibility`, which explains why the predicate
+    had to leave this module: a route that wrote its own copy got the value wrong.
     """
-    return (CbBasket.archived_at.is_(None), CbBasket.visibility == "PUBLISHED")
+    return visible_baskets()
 
 
 _SORT_COLUMNS: dict[SortField, ColumnExpressionArgument[object]] = {

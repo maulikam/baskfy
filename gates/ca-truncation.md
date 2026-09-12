@@ -92,7 +92,22 @@ request is a different file.
 - [ ] G8: **2026-09-11 publishes.** PGIL's bonus is in `corporate_action`, the adjusted series is
       corrected, factors are recomputed on the corrected series, and the data-quality gate passes
       on its own terms rather than being lowered.
-  EVIDENCE: pending
+      ⏳ **Still unmet on 12 Sep 2026, and now for a different reason than before.** It used to be
+      blocked on the deploy; the deploy happened (`8b074c7`, `gates/deploy-pc-command-center.md`),
+      so the *code* that asks NSE for a date range is on the box. **The data has not been re-fetched,
+      and shipping the fetcher does not re-fetch anything.** Measured against the box directly, via
+      `tools/deploy/box-sql.sh`:
+      | | On the box now | NSE holds (G5) |
+      |---|---|---|
+      | `ex_date` in 2026-08-01..2026-09-30 | **147** | 606 |
+      | `ex_date` = 2026-09-11 | **22** | 87 |
+      | PGIL bonus rows | **0** | 1 |
+      So the 76% gap G5 measured is still there, unchanged but for one row. What closes this is a
+      run of the corporate-action fetch against the repaired code — the next nightly chain, or a
+      deliberate backfill of the window. Neither is a deploy and neither happened here: this
+      session was asked to verify the box, and writing 460 rows into the production
+      `corporate_action` table is remediation, not verification.
+  EVIDENCE: pending — code deployed, data not re-fetched. 147/606 for the window, 22/87 for 11 Sep, PGIL bonus absent (12 Sep 2026).
 
 - [x] G9: The quality gate's threshold is **not** weakened anywhere in this repair. The gate was
       right; it is the only reason this was found.

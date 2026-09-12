@@ -130,16 +130,27 @@ absent with the reason recorded in the plan. Nothing here fabricates a financial
       container, which is the commit, and compares it to HEAD.
   CHECK: cd /Users/maulikdave/Documents/projects/baskfy && AWS_PROFILE=${AWS_PROFILE:-baskfy-poc} BASKFY_INSTANCE_ID=${BASKFY_INSTANCE_ID:-i-086986250704e4392} bash tools/deploy/box.sh "docker inspect --format '{{.Config.Image}}' baskfy-staging-web-1" 2>&1 | tail -2
   EXPECT: /baskfy-web:[0-9a-f]{7}/
-  EVIDENCE: 056235107739.dkr.ecr.ap-south-1.amazonaws.com/baskfy-web:dd9cc73
-      commit BEFORE PC1 (`fae98ac`). The box is serving the OLD Portfolios screen. The gate is
-      therefore genuinely unmet rather than unprovable, and it is unmet because nothing has been
-      deployed since 10 Sep, not because the screen is wrong.
-  ABANDON: G18 not deployable from this session — the Docker daemon is not running on this
-      machine (`docker info` fails), so the web image cannot be built or pushed to ECR, and a
+  EVIDENCE: 056235107739.dkr.ecr.ap-south-1.amazonaws.com/baskfy-web:**8b074c7** (12 Sep 2026, 11:52 IST).
+      The box has caught up and the gate is met on its own terms: the running web container's image
+      tag is this commit, and G3–G16 proved this commit renders the command centre — same bytes,
+      same screen. Checked a second way rather than by identity alone, because identity was always
+      the weaker half of the argument: the string "Portfolio Command Center" is compiled into both
+      `/app/apps/web/.next/server/app/(app)/portfolio/portfolios/page.js` and its client chunk
+      inside the deployed image. An unauthenticated GET of the route answers 200 with the sign-in
+      shell, which is the Google gate this gate's opening paragraph describes and is why the fetch
+      proof was never available.
+      **The abandonment below is void, and is kept as the record of why it stood.** Both conditions
+      cleared on 12 Sep 2026: `docker info` succeeds, and Maulik made the call it was waiting on.
+      `gates/deploy-pc-command-center.md` carries the deploy 7/7.
+      **The original text, for the sequence:** *the box was serving `dd9cc73`, the commit BEFORE PC1
+      (`fae98ac`) — the OLD Portfolios screen — and the gate was genuinely unmet rather than
+      unprovable, unmet because nothing had been deployed since 10 Sep, not because the screen was
+      wrong. ABANDON: G18 not deployable from this session — the Docker daemon is not running on
+      this machine (`docker info` fails), so the web image cannot be built or pushed to ECR, and a
       deploy of the Phase-A box is Maulik's call in any case: that box is the live auto-execute
       host. Recorded in `NEEDS-MAULIK.md`. Everything G18 would have proved about the CODE is
-      proved by G3–G16 against this working tree; what is unproved is only that the box has
-      caught up. `gates/pc-integration.md` I12 carries the same handover for PC2–PC6.
+      proved by G3–G16 against this working tree; what is unproved is only that the box has caught
+      up. `gates/pc-integration.md` I12 carries the same handover for PC2–PC6.*
 
 <!--
 Rules:

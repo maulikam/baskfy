@@ -95,12 +95,17 @@ be a broken product; this is where that is caught.
       proved green here is the screen the box serves.
   CHECK: cd /Users/maulikdave/Documents/projects/baskfy && AWS_PROFILE=${AWS_PROFILE:-baskfy-poc} BASKFY_INSTANCE_ID=${BASKFY_INSTANCE_ID:-i-086986250704e4392} bash tools/deploy/box.sh "docker inspect --format '{{.Config.Image}}' baskfy-staging-web-1" 2>&1 | tail -2
   EXPECT: /baskfy-web:[0-9a-f]{7}/
-  EVIDENCE: 056235107739.dkr.ecr.ap-south-1.amazonaws.com/baskfy-web:dd9cc73
-      the pre-redesign screen.
-  ABANDON: I12 same handover as `GATES.md` G18 — the Docker daemon is not running on this machine,
-      so no image can be built or pushed, and a Phase-A deploy is Maulik's call because that box is
-      the live auto-execute host. Written up in `NEEDS-MAULIK.md` under "PC". Nothing about the
-      CODE is unproved by this; only that the box has caught up.
+  EVIDENCE: 056235107739.dkr.ecr.ap-south-1.amazonaws.com/baskfy-web:**8b074c7** (12 Sep 2026, 11:52 IST) — the box has caught up.
+      **The abandonment below is void and is kept only as the record of why it stood.** Both of its
+      conditions cleared on 12 Sep 2026: the Docker daemon is running, and Maulik made the call it
+      was waiting on. `deploy-swing.sh` took the box from `dd9cc73` to `8b074c7`; `verify-swing.sh`
+      ends `SWING OK`; and the "Portfolio Command Center" string is compiled into both halves of the
+      deployed route bundle. `gates/deploy-pc-command-center.md` carries that deploy 7/7.
+      **The original ABANDON, for the sequence:** *same handover as `GATES.md` G18 — the Docker
+      daemon is not running on this machine, so no image can be built or pushed, and a Phase-A
+      deploy is Maulik's call because that box is the live auto-execute host. Written up in
+      `NEEDS-MAULIK.md` under "PC". Nothing about the CODE is unproved by this; only that the box
+      has caught up.*
 
 ---
 

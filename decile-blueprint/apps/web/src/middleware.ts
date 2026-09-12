@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { isPublicPath } from "@/lib/auth/public-routes";
 import { isStaticPublicPath } from "@/lib/marketing/routes";
+import { apiOrigin } from "@/lib/api/config";
 import { assertRevalidateSecretConfigured } from "@/lib/site";
 
 /**
@@ -101,17 +102,6 @@ export function safeNext(candidate: string | null): string | null {
   if (!candidate) return null;
   if (!candidate.startsWith("/") || candidate.startsWith("//")) return null;
   return candidate;
-}
-
-/** The API's scheme and authority, with any path dropped. Empty when it is not configured. */
-function apiOrigin(): string {
-  const configured = process.env.NEXT_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_ORIGIN ?? "";
-  if (!configured) return "";
-  try {
-    return new URL(configured).origin;
-  } catch {
-    return "";
-  }
 }
 
 /** The directives both policies share. Only `script-src` differs between them. */

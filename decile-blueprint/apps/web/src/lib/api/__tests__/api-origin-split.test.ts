@@ -123,3 +123,43 @@ describe("serverApiOrigin falls back rather than inventing a host", () => {
     delete process.env[KEY];
   });
 });
+
+describe("apiOrigin is the single public resolver", () => {
+  const KEY = "NEXT_PUBLIC_API_URL";
+
+  it("throws in production when NEXT_PUBLIC_API_URL is unset (no localhost fallback)", () => {
+    const previous = process.env[KEY];
+    const previousNode = process.env.NODE_ENV;
+    delete process.env[KEY];
+    process.env.NODE_ENV = "production";
+    try {
+      expect(() => apiOrigin()).toThrow(/NEXT_PUBLIC_API_URL must be set in production/);
+    } finally {
+      if (previous === undefined) delete process.env[KEY];
+      else process.env[KEY] = previous;
+      process.env.NODE_ENV = previousNode;
+    }
+  });
+
+  it("falls back to localhost only outside production", () => {
+    const previous = process.env[KEY];
+    const previousNode = process.env.NODE_ENV;
+    delete process.env[KEY];
+    process.env.NODE_ENV = "development";
+    try {
+      expect(apiOrigin()).toBe("http://localhost:8000");
+    } finally {
+      if (previous === undefined) delete process.env[KEY];
+      else process.env[KEY] = previous;
+      process.env.NODE_ENV = previousNode;
+    }
+  });
+
+  it("never reads the retired NEXT_PUBLIC_API_ORIGIN env", () => {
+    // The dual-resolver bug: middleware used to honour _ORIGIN while config ignored it.
+    const source = readFileSync(resolve(process.cwd(), "src/middleware.ts"), "utf8");
+    const configSource = readFileSync(resolve(process.cwd(), "src/lib/api/config.ts"), "utf8");
+    expect(source).not.toMatch(/process\.env\.NEXT_PUBLIC_API_ORIGIN/);
+    expect(configSource).not.toMatch(/process\.env\.NEXT_PUBLIC_API_ORIGIN/);
+  });
+});

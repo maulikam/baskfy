@@ -23,6 +23,7 @@ from typing import Final
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from baskfy_api.invoices import today_ist
 from baskfy_core.models import (
     Instrument,
     OhlcvDaily,
@@ -545,7 +546,7 @@ async def _fill_rate(session: AsyncSession, user_id: int) -> FillRate:
 
 async def book(session: AsyncSession, *, user_id: int, as_of: dt.date | None = None) -> BookView:
     """Working orders, the open book, what is closed, and the fill rate under all of it."""
-    day = as_of or dt.date.today()
+    day = as_of or today_ist()
     orders = list(
         (
             await session.execute(

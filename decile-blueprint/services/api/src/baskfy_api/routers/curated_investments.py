@@ -23,7 +23,7 @@ a schema fact (0019), asserted here by test rather than assumed.
 from __future__ import annotations
 
 import datetime as dt
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Annotated
@@ -34,6 +34,7 @@ from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.auth import AuthenticatedDep
+from baskfy_api.live_prices import live_prices_by_instrument
 from baskfy_api.curated_investments import (
     HoldingIn,
     list_open_pending,
@@ -155,6 +156,9 @@ class SnapshotOut(BaseModel):
     dividends: Decimal
     xirr: Decimal | None = None
     xirr_displayable: bool
+    #: True when any holding is still marked at average cost because no live quote was available
+    #: (audit 3.13). False when every held instrument was overlaid from Kite.
+    marked_at_cost: bool = False
 
 
 class PendingBriefOut(BaseModel):
@@ -282,12 +286,25 @@ def _snapshot_for(
     buy_amounts: Sequence[Decimal],
     first_invested: dt.date,
     as_of: dt.date,
+    *,
+    live_prices: Mapping[int, Decimal] | None = None,
 ) -> SnapshotOut:
+    """Mark holdings at live quotes when a Kite session has them; otherwise at cost (audit 3.13)."""
     positions = [
         HoldingPosition(instrument_id=int(h.instrument_id), qty=h.qty, avg_price=h.avg_price)
         for h in holdings
     ]
     prices = {int(h.instrument_id): h.avg_price for h in holdings}
+    marked_at_cost = False
+    overlay = live_prices or {}
+    for instrument_id in list(prices):
+        live = overlay.get(instrument_id)
+        if live is not None and live > 0:
+            prices[instrument_id] = live
+        else:
+            marked_at_cost = True
+    if not prices:
+        marked_at_cost = False
     raw = snapshot_dict(
         buy_amounts=buy_amounts,
         holdings=positions,
@@ -295,7 +312,8 @@ def _snapshot_for(
         first_invested=first_invested,
         as_of=as_of,
     )
-    return SnapshotOut.model_validate(raw)
+    out = SnapshotOut.model_validate(raw)
+    return out.model_copy(update={"marked_at_cost": marked_at_cost})
 
 
 def _broker_conflict(*, investment_broker_account_id: int, portfolio: Portfolio | None) -> bool:
@@ -330,9 +348,21 @@ class _RowContext:
     now: dt.datetime
 
 
-def _row_out(inv: CbInvestment, basket: CbBasket, ctx: _RowContext) -> InvestmentRowOut:
+def _row_out(
+    inv: CbInvestment,
+    basket: CbBasket,
+    ctx: _RowContext,
+    *,
+    live_prices: Mapping[int, Decimal] | None = None,
+) -> InvestmentRowOut:
     first = inv.created_at or ctx.now
-    snap = _snapshot_for(ctx.holdings, ctx.buy_amounts, first.date(), ctx.now.date())
+    snap = _snapshot_for(
+        ctx.holdings,
+        ctx.buy_amounts,
+        first.date(),
+        ctx.now.date(),
+        live_prices=live_prices,
+    )
     return InvestmentRowOut(
         id=int(inv.id),
         basket_slug=basket.slug,
@@ -575,24 +605,48 @@ async def list_investments(
 
     net = Decimal("0")
     any_value = False
+    inv_ids = [int(inv.id) for inv in rows]
+    holdings_by_inv: dict[int, list[CbInvestmentHolding]] = {iid: [] for iid in inv_ids}
+    batches_by_inv: dict[int, list[CbOrderBatch]] = {iid: [] for iid in inv_ids}
+    if inv_ids:
+        for holding in (
+            await session.scalars(
+                select(CbInvestmentHolding).where(CbInvestmentHolding.investment_id.in_(inv_ids))
+            )
+        ).all():
+            holdings_by_inv.setdefault(int(holding.investment_id), []).append(holding)
+        for batch in (
+            await session.scalars(
+                select(CbOrderBatch).where(CbOrderBatch.investment_id.in_(inv_ids))
+            )
+        ).all():
+            batches_by_inv.setdefault(int(batch.investment_id), []).append(batch)
+
+    basket_ids = {int(inv.basket_id) for inv in rows}
+    baskets: dict[int, CbBasket] = {}
+    if basket_ids:
+        baskets = {
+            int(row.id): row
+            for row in (
+                await session.scalars(select(CbBasket).where(CbBasket.id.in_(basket_ids)))
+            ).all()
+        }
+
+    instrument_ids = sorted(
+        {
+            int(h.instrument_id)
+            for holdings in holdings_by_inv.values()
+            for h in holdings
+        }
+    )
+    live = await live_prices_by_instrument(session, instrument_ids) if instrument_ids else {}
+
     for inv in rows:
-        basket = await session.get(CbBasket, inv.basket_id)
+        basket = baskets.get(int(inv.basket_id))
         if basket is None:
             continue
-        holding_rows = list(
-            (
-                await session.scalars(
-                    select(CbInvestmentHolding).where(CbInvestmentHolding.investment_id == inv.id)
-                )
-            ).all()
-        )
-        batches = list(
-            (
-                await session.scalars(
-                    select(CbOrderBatch).where(CbOrderBatch.investment_id == inv.id)
-                )
-            ).all()
-        )
+        holding_rows = holdings_by_inv.get(int(inv.id), [])
+        batches = batches_by_inv.get(int(inv.id), [])
         buy_amounts = [
             b.requested_amount
             for b in batches
@@ -610,6 +664,7 @@ async def list_investments(
                 ),
                 now=now,
             ),
+            live_prices=live,
         )
         items.append(row)
         if row.snapshot is not None:
@@ -732,6 +787,9 @@ async def get_investment(
         and a.payload.get("basket_id") == inv.basket_id
         for a in pending
     )
+    live = await live_prices_by_instrument(
+        session, [int(h.instrument_id) for h in holding_rows]
+    )
     row = _row_out(
         inv,
         basket,
@@ -742,6 +800,7 @@ async def get_investment(
             portfolio=await _portfolio_of(session, inv),
             now=now,
         ),
+        live_prices=live,
     )
     deployed = sum((h.qty * h.avg_price for h in holding_rows), Decimal("0"))
     symbols: dict[int, str] = {}

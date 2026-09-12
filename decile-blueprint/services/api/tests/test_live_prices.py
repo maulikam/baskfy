@@ -8,10 +8,13 @@ it was simply being discarded.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from decimal import Decimal
+from typing import cast
 
 import pytest
 from baskfy_execution.broker_ports import HoldingRow
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api import live_prices
 from baskfy_api.broker_holdings import HoldingsResult, HoldingsSource
@@ -101,3 +104,38 @@ class TestALiveReadIsPriced:
         live_prices.live_prices_by_symbol()
         live_prices.live_prices_by_symbol()
         assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_live_prices_by_instrument_runs_kite_io_via_to_thread(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Audit 4.11/4.12: sync kiteconnect must not block the async event loop."""
+    ran: list[str] = []
+
+    async def _capture(fn: Callable[..., object], *args: object, **kwargs: object) -> object:
+        ran.append(getattr(fn, "__name__", "fn"))
+        return fn(*args, **kwargs)
+
+    monkeypatch.setattr(live_prices.anyio.to_thread, "run_sync", _capture)
+    monkeypatch.setattr(
+        live_prices,
+        "holdings_for_broker",
+        lambda _b: HoldingsResult(rows=(_row("GOOD", "10"),), source="live"),
+    )
+
+    class _Row:
+        id = 1
+        symbol = "GOOD"
+
+    class _Result:
+        def all(self) -> list[_Row]:
+            return [_Row()]
+
+    class _Session:
+        async def execute(self, _stmt: object) -> _Result:
+            return _Result()
+
+    prices = await live_prices.live_prices_by_instrument(cast(AsyncSession, _Session()), [1])
+    assert prices == {1: Decimal("10")}
+    assert ran == ["live_prices_by_symbol"]

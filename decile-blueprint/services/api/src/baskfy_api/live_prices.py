@@ -25,6 +25,7 @@ import datetime as dt
 import threading
 from decimal import Decimal
 
+import anyio
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -102,10 +103,14 @@ def live_prices_by_symbol(broker_id: str = "zerodha") -> dict[str, Decimal]:
 async def live_prices_by_instrument(
     session: AsyncSession, instrument_ids: list[int], *, broker_id: str = "zerodha"
 ) -> dict[int, Decimal]:
-    """The same marks, keyed by instrument id so a price map can be overlaid directly."""
+    """The same marks, keyed by instrument id so a price map can be overlaid directly.
+
+    Kite I/O is sync (and may ``time.sleep`` on the rate limiter). Run it in a worker thread so an
+    async handler does not stall the whole worker on every memo miss (audit 4.11 / 4.12).
+    """
     if not instrument_ids:
         return {}
-    by_symbol = live_prices_by_symbol(broker_id)
+    by_symbol = await anyio.to_thread.run_sync(live_prices_by_symbol, broker_id)
     if not by_symbol:
         return {}
     rows = (

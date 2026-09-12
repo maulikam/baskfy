@@ -63,7 +63,7 @@ def _out(key: ApiKey, *, requests: int = 0, throttled: int = 0) -> ApiKeyOut:
         revoked_reason=key.revoked_reason,
         requests_30d=requests,
         throttled_30d=throttled,
-        active=key.is_active(),
+        active=key.is_active(now=dt.datetime.now(tz=dt.UTC)),
     )
 
 
@@ -151,7 +151,7 @@ async def rotate_api_key(
     """Issue a replacement and revoke the original immediately — see ``baskfy_api.api_keys``."""
     settings: Settings = settings_for(request)
     key = await _load(session, principal, public_id)
-    if not key.is_active():
+    if not key.is_active(now=dt.datetime.now(tz=dt.UTC)):
         raise _bad_request("That key is already revoked; create a new one instead.")
     try:
         issued = await service.rotate_key(session, key, settings=settings)
@@ -191,7 +191,7 @@ async def delete_api_key(
     history with it. Revoke first, look at what it did, then delete.
     """
     key = await _load(session, principal, public_id)
-    if key.is_active():
+    if key.is_active(now=dt.datetime.now(tz=dt.UTC)):
         raise _bad_request("Revoke the key before deleting it.")
     await session.delete(key)
     await session.flush()

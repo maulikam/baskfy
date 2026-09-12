@@ -38,7 +38,8 @@ from typing import Final
 import polars as pl
 
 from baskfy_core.reference_export import ReferenceRows, to_rows
-from baskfy_core.trading_calendar import build_calendar
+from importlib import resources
+from baskfy_core.trading_calendar import HOLIDAY_FILE, build_calendar, parse_seed_holidays
 from baskfy_core.universes import UNIVERSES, slugify_index
 
 #: docs/13: the reference export's trade date. The fixtures end here so they line up with it.
@@ -306,7 +307,10 @@ def trading_days(end: dt.date, years: int = FIXTURE_YEARS) -> list[dt.date]:
     docs/04a makes reconciliation against real bars a Prompt 3 requirement.
     """
     start = end.replace(year=end.year - years)
-    return [row.date for row in build_calendar(start, end) if row.is_trading_day]
+    holidays = parse_seed_holidays(
+        resources.files("baskfy_core.data").joinpath(HOLIDAY_FILE).read_text(encoding="utf-8")
+    )
+    return [row.date for row in build_calendar(start, end, holidays) if row.is_trading_day]
 
 
 def synthesise_bars(spec: FixtureSpec, calendar: list[dt.date]) -> list[dict[str, object]]:

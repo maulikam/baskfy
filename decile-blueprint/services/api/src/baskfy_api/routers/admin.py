@@ -368,7 +368,7 @@ def _override_out(row: EntitlementOverride, granted_by: str | None) -> Entitleme
         granted_by=granted_by,
         expires_at=row.expires_at,
         created_at=row.created_at,
-        active=row.is_active(),
+        active=row.is_active(now=dt.datetime.now(tz=dt.UTC)),
     )
 
 

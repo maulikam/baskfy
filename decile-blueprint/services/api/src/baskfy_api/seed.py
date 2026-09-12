@@ -24,6 +24,8 @@ sample, 3 years, seeded from fixtures ... no Kite calls, provider stubbed". It g
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import argparse
 import asyncio
 import datetime as dt
@@ -71,7 +73,7 @@ from baskfy_core.models import (
     TwConfig,
     VbConfig,
 )
-from baskfy_core.reference_export import ReferenceRows, to_rows
+from baskfy_core.reference_export import ReferenceRows, read_export, to_rows
 from baskfy_core.seed_data import (
     ALL_PLANS,
     EXAMPLE_SCREENS,
@@ -80,7 +82,13 @@ from baskfy_core.seed_data import (
     PLANS,
     index_def_rows,
 )
-from baskfy_core.trading_calendar import build_calendar, default_calendar_range
+from importlib import resources
+from baskfy_core.trading_calendar import (
+    HOLIDAY_FILE,
+    build_calendar,
+    default_calendar_range,
+    parse_seed_holidays,
+)
 from baskfy_core.universes import (
     FIRST_NON_UNIVERSE_INDEX_ID,
     MARKET_HEALTH_SLUGS,
@@ -88,6 +96,15 @@ from baskfy_core.universes import (
     slugify_index,
 )
 from baskfy_providers.fixtures import FixtureProvider
+
+
+
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_REFERENCE_EXPORT = _REPO_ROOT / "tests" / "fixtures" / "reference-screen-export-2026-08-18.csv"
+
+
+def _reference_rows() -> ReferenceRows:
+    return to_rows(read_export(_REFERENCE_EXPORT))
 
 
 async def seed_exchange(session: AsyncSession) -> int:
@@ -196,7 +213,13 @@ async def seed_trading_days(session: AsyncSession, today: dt.date | None = None)
             "holiday_name": row.holiday_name,
             "source": row.source,
         }
-        for row in build_calendar(start, end)
+        for row in build_calendar(
+            start,
+            end,
+            parse_seed_holidays(
+                resources.files("baskfy_core.data").joinpath(HOLIDAY_FILE).read_text(encoding="utf-8")
+            ),
+        )
     ]
     for chunk in _chunks(rows, 2000):
         stmt = insert(TradingDay).values(chunk)
@@ -216,7 +239,7 @@ async def seed_trading_days(session: AsyncSession, today: dt.date | None = None)
 
 async def seed_reference_fixture(session: AsyncSession, rows: ReferenceRows | None = None) -> int:
     """Load the 271-row reference export into instrument / factor_daily / index_member_daily."""
-    data = rows if rows is not None else to_rows()
+    data = rows if rows is not None else _reference_rows()
 
     instrument_values = [
         {
@@ -449,7 +472,7 @@ async def seed_index_snapshots(
     grows to whatever the exchange publishes.
     """
     source = provider if provider is not None else FixtureProvider()
-    last = end or to_rows().as_of
+    last = end or _reference_rows().as_of
     # Walk calendar days and keep the ones the provider answers for. `index_snapshots(on)` is the
     # whole port — asking it per date is what a backfill does, and it keeps the seed honest about
     # only knowing what the provider will actually serve.
@@ -917,7 +940,7 @@ async def _run(
             # baskets**, and every shelf rendered as an empty box. The e2e database was fixed in
             # M46.6; staging, which runs `all`, was not. `docs/DECISIONS-MERGE.md` M48.
             counts["cb_momentum_scan"] = await seed_momentum_scan_basket(
-                session, ranked_symbols=tuple(row.symbol for row in to_rows().instruments)
+                session, ranked_symbols=tuple(row.symbol for row in _reference_rows().instruments)
             )
         if command in ("all", "bars"):
             await seed_exchange(session)
@@ -942,7 +965,7 @@ async def _run(
         if command in ("all", "market"):
             await seed_reference(session)
             counts["index_snapshot_daily"] = await seed_index_snapshots(session)
-            counts["market_health_daily"] = await seed_market_health(session, to_rows().as_of)
+            counts["market_health_daily"] = await seed_market_health(session, _reference_rows().as_of)
         if command == "e2e":
             counts.update(await seed_reference(session))
             counts["trading_day"] = await seed_trading_days(session)
@@ -959,12 +982,12 @@ async def _run(
             # head is the honest input for a basket called Momentum Scan.
             # `docs/DECISIONS-MERGE.md` M46.6.
             counts["cb_momentum_scan"] = await seed_momentum_scan_basket(
-                session, ranked_symbols=tuple(row.symbol for row in to_rows().instruments)
+                session, ranked_symbols=tuple(row.symbol for row in _reference_rows().instruments)
             )
             # The dashboard, the breadth gauges and the listings register (Prompt 11).
             counts["index_snapshot_daily"] = await seed_index_snapshots(session)
-            counts["market_health_daily"] = await seed_market_health(session, to_rows().as_of)
-            counts["pipeline_run"] = await seed_published_run(session, to_rows().as_of)
+            counts["market_health_daily"] = await seed_market_health(session, _reference_rows().as_of)
+            counts["pipeline_run"] = await seed_published_run(session, _reference_rows().as_of)
             counts["app_user"] = await seed_e2e_account(session)
             # Last: they need the account the line above creates.
             counts["sw_config"] = await seed_swing_config(session)

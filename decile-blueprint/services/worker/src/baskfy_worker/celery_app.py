@@ -572,6 +572,14 @@ def build_celery(settings: WorkerSettings | None = None) -> Celery:
         # A pipeline step that dies with its worker must be re-delivered, not lost: the
         # orchestrator's idea of "this step ran" comes from pipeline_run_step, not from the broker.
         task_reject_on_worker_lost=True,
+        # AF 3.11: reject_on_worker_lost requeues without incrementing Celery retries, so an OOM
+        # loop is unbounded. Cap redeliveries via the task header; see `_bound_redelivery`.
+        task_annotations={
+            "*": {
+                "max_retries": resolved.task_max_retries,
+                "max_redeliveries": resolved.task_max_redeliveries,
+            }
+        },
         # One long ingest chunk at a time per worker process. Prefetching several would let a
         # single slow chunk hold up work that another worker could have taken.
         worker_prefetch_multiplier=1,
@@ -584,7 +592,6 @@ def build_celery(settings: WorkerSettings | None = None) -> Celery:
         task_track_started=True,
         result_expires=dt.timedelta(days=7),
         task_default_retry_delay=resolved.task_retry_backoff_seconds,
-        task_annotations={"*": {"max_retries": resolved.task_max_retries}},
     )
     # `include` rather than `autodiscover_tasks`: the bindings live in one module, and naming it
     # here keeps `baskfy_worker.tasks.__init__` free of an import cycle back through the
@@ -592,7 +599,38 @@ def build_celery(settings: WorkerSettings | None = None) -> Celery:
     app.conf.include = ["baskfy_worker.tasks.celery_tasks"]
     app.autodiscover_tasks(["baskfy_worker.tasks"], related_name="celery_tasks", force=True)
     _install_observability_signals()
+    _install_redelivery_bound(app, resolved.task_max_redeliveries)
     return app
+
+
+def _install_redelivery_bound(app: Celery, max_redeliveries: int) -> None:
+    """Refuse further requeues after ``max_redeliveries`` worker-lost redeliveries (AF 3.11)."""
+    from celery.signals import task_prerun  # noqa: PLC0415
+
+    @task_prerun.connect(weak=False)
+    def _bound_redelivery(
+        sender: object = None,
+        task_id: str | None = None,
+        task: object = None,
+        **_kwargs: object,
+    ) -> None:
+        del sender
+        if task is None or task_id is None:
+            return
+        request = getattr(task, "request", None)
+        if request is None:
+            return
+        delivery = getattr(request, "delivery_info", None) or {}
+        if not delivery.get("redelivered"):
+            return
+        headers = getattr(request, "headers", None) or {}
+        count = int(headers.get("baskfy_redeliveries", 0)) + 1
+        headers["baskfy_redeliveries"] = count
+        if count > max_redeliveries:
+            raise RuntimeError(
+                f"task {task_id} exceeded max_redeliveries={max_redeliveries}; "
+                "acking to stop the OOM requeue loop"
+            )
 
 
 def _install_observability_signals() -> None:

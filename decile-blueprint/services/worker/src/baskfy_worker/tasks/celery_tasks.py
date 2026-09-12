@@ -394,6 +394,17 @@ def _published(chain: JsonObject) -> bool:
     return chain.get("data_version") is not None
 
 
+async def _probe_and_demote_derived(session: AsyncSession, day: dt.date) -> bool:
+    """Publication probe + AF 3.11 demotion for a derived holiday after one miss."""
+    from baskfy_providers.publication import bhavcopy_publication_check  # noqa: PLC0415
+
+    probe = bhavcopy_publication_check(build_pipeline_dependencies().provider)
+    published = bool(probe is not None and await probe(day))
+    return await catch_up.demote_derived_after_missing_bhavcopy(
+        session, day, published=published
+    )
+
+
 @shared_task(name="baskfy.pipeline.session_catch_up", acks_late=True)
 def session_catch_up(
     lookback_days: int = catch_up.DEFAULT_LOOKBACK_DAYS,
@@ -434,34 +445,21 @@ def session_catch_up(
 
     ran: list[JsonObject] = []
     planned: list[JsonObject] = []
+    demoted: list[str] = []
     for day in missing[:max_sessions]:
         log.warning("catch-up: %s never landed; running the chain for it", day.isoformat())
         # The nightly's own body, with an explicit date — which also bypasses its "is today
         # finished" guard, correctly: this list only ever holds sessions that are already over.
         chain = nightly_pipeline(day.isoformat())
         ran.append(chain)
-        # AND THEN THE SWING PLAN FOR IT (M85, closing M84's own open item).
-        #
-        # The chain's twelfth step detects the day's setups; `baskfy.swing.eod` is what turns
-        # them into a plan, and it has only ever existed as a 21:05 Beat entry. So a caught-up
-        # session used to land every bar, every factor and every setup — and no plan, which is
-        # the one artefact Maulik reads in the morning. It ran, the swing book stayed on the
-        # last session that had a plan, and that is "the swing data is lagging" exactly.
-        #
-        # In process and immediately after its own chain, for the ordering `swing_eod_task`'s
-        # own docstring requires: the plan is built from the day's candidates and the day's gate.
-        # Idempotent per date, so a day whose 21:05 entry did fire is rewritten to itself.
-        # Fail soft — a plan that cannot be built must not undo a session that landed.
-        #
-        # ONLY IF THE CHAIN ACTUALLY PUBLISHED (5 Sep 2026 — this was wrong as M85 wrote it).
-        #
-        # The evening ran unconditionally, and on 4-5 Sep that ran it on a day the quality gate
-        # had REFUSED: TCC's uningested 1:5 split made the day's data wrong, the chain said so,
-        # and the evening then built a swing plan on exactly that data and counted a LIVE
-        # session against `first_live_sessions_left` — spending one of the five half-risk
-        # sessions on numbers the pipeline had just rejected. Nothing downstream of a refused
-        # gate should run, and `data_version` is the product's own test for "fit to serve".
         if not _published(chain):
+            # AF 3.11: a derived calendar guess that yields no bhavcopy must not be re-proposed
+            # every sweep. Probe once; demote on a clear "nothing published".
+            was_demoted = run_in_session(
+                lambda session, d=day: _probe_and_demote_derived(session, d)
+            )
+            if was_demoted:
+                demoted.append(day.isoformat())
             planned.append({"date": day.isoformat(), "skipped": "the chain did not publish"})
             continue
         try:
@@ -476,6 +474,7 @@ def session_catch_up(
         "sessions": [day.isoformat() for day in missing],
         "ran": ran,
         "swing_plans": planned,
+        "demoted_derived_holidays": demoted,
         "remaining": [day.isoformat() for day in missing[max_sessions:]],
     }
 

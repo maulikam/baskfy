@@ -51,7 +51,9 @@ describe("the Content-Security-Policy header", () => {
         expect(policy).toContain("default-src 'self'");
         expect(policy).toContain("object-src 'none'");
         expect(policy).toContain("base-uri 'self'");
-        expect(policy).toContain("form-action 'self'");
+        // Spec: Kite Publisher hand-off must be an allowed form target (AUDIT 0.2 / 2.3).
+        // The old pin of exactly `form-action 'self'` locked in the bug that blocked Invest.
+        expect(policy).toContain("form-action 'self' https://kite.zerodha.com");
         expect(policy).toContain("frame-ancestors 'none'");
       });
     }
@@ -59,6 +61,19 @@ describe("the Content-Security-Policy header", () => {
 
   it("keeps the per-request nonce in script-src", () => {
     expect(contentSecurityPolicy("abc123", false)).toContain("'nonce-abc123'");
+  });
+
+
+  it("allows Razorpay checkout frame, connect and image hosts", () => {
+    for (const policy of [
+      contentSecurityPolicy("abc123", false),
+      staticContentSecurityPolicy(false),
+    ]) {
+      expect(policy).toContain("frame-src https://api.razorpay.com https://checkout.razorpay.com");
+      expect(policy).toContain("https://api.razorpay.com");
+      expect(policy).toContain("https://checkout.razorpay.com");
+      expect(policy).toMatch(/img-src[^;]*razorpay\.com/);
+    }
   });
 
   it("allows eval only in development", () => {

@@ -18,11 +18,14 @@ from typing import Annotated, Final
 from fastapi import APIRouter, Query
 from sqlalchemy import select
 
+from baskfy_api.auth import AuthenticatedDep
 from baskfy_api.db import SessionDep
+from baskfy_api.live_prices import live_marks_for_symbols, quotes_permitted
 from baskfy_api.problems import Problem, ProblemType
 from baskfy_api.schemas import (
     ColumnOut,
     FactorOut,
+    LiveMarksOut,
     PipelineRunOut,
     StatusOut,
     TradingDaysOut,
@@ -172,4 +175,20 @@ async def get_status(session: SessionDep) -> StatusOut:
         degraded=last_run is not None and last_run.status in FAILED_RUN_STATUSES,
         pipeline_running=last_run is not None and last_run.status == RUNNING_RUN_STATUS,
         data_start_date=DATA_START_DATE,
+        live_quotes=quotes_permitted(),
     )
+
+
+@router.get("/live-marks", response_model=LiveMarksOut, summary="Live last prices")
+async def get_live_marks(
+    principal: AuthenticatedDep,
+    symbols: Annotated[str, Query(description="Comma-separated NSE symbols, at most 500.")] = "",
+) -> LiveMarksOut:
+    """Display marks only. Ranks, factors and sleeve signals stay on the published session.
+
+    Empty when there is no real Kite session. The page keeps the close in that case.
+    """
+    del principal
+    names = [part.strip() for part in symbols.split(",") if part.strip()]
+    marks = await live_marks_for_symbols(names)
+    return LiveMarksOut(live_overlay=bool(marks), marks=marks)

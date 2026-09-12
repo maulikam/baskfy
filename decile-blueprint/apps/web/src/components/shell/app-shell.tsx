@@ -2,13 +2,17 @@
 
 import type { ReactNode } from "react";
 
+import { useQuery } from "@tanstack/react-query";
+
+import { Disclaimer } from "@/components/data/disclaimer";
+import { LiveRefresh } from "@/components/portfolio/live-refresh";
 import { BottomTabBar } from "@/components/shell/bottom-tab-bar";
+import { fetchStatus, STATUS_QUERY_KEY } from "@/components/shell/freshness-pill";
 import { MAIN_CONTENT_ID } from "@/components/shell/ids";
 import { SkipLink } from "@/components/shell/skip-link";
 import { StaffProvider } from "@/components/shell/staff-context";
 import { TopNav } from "@/components/shell/top-nav";
 import type { UserMenuProps } from "@/components/shell/user-menu";
-import { Disclaimer } from "@/components/data/disclaimer";
 
 /**
  * The application frame — docs/08 §"App shell", departing from it in one deliberate way.
@@ -41,7 +45,17 @@ export interface AppShellProps {
   children: ReactNode;
 }
 
+function quotesLive(data: { live_quotes?: boolean } | undefined): boolean {
+  return data?.live_quotes === true;
+}
+
 export function AppShell({ user, banner, children }: AppShellProps) {
+  const { data } = useQuery({
+    queryKey: STATUS_QUERY_KEY,
+    queryFn: fetchStatus,
+    staleTime: 30_000,
+  });
+
   return (
     <StaffProvider value={user.isStaff ?? false}>
       <div className="min-h-dvh">
@@ -56,6 +70,7 @@ export function AppShell({ user, banner, children }: AppShellProps) {
           */}
           <div className="mx-auto flex w-full max-w-[104rem] flex-col gap-7 px-5 pb-24 pt-8 md:px-7 md:pb-16">
             {children}
+            <LiveRefresh overlayActive={quotesLive(data)} />
             <Disclaimer className="mt-4 border-t border-border pt-5" />
           </div>
         </main>

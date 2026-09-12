@@ -1,7 +1,8 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { syncHoldingsAction } from "@/app/actions/brokers";
 import { PortfolioOverviewScreen } from "@/components/portfolio/overview-screen";
 import type { InspectorData } from "@/lib/portfolio/inspector";
 import { totalOfRows } from "@/lib/portfolio/overview";
@@ -27,6 +28,10 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
+vi.mock("@/app/actions/brokers", () => ({
+  syncHoldingsAction: vi.fn(),
+}));
+
 const NO_INSPECTOR_DATA: InspectorData = {
   detail: null,
   nav: null,
@@ -38,6 +43,7 @@ beforeEach(() => {
   push.mockClear();
   replace.mockClear();
   refresh.mockClear();
+  vi.mocked(syncHoldingsAction).mockReset();
 });
 
 afterEach(cleanup);
@@ -358,6 +364,88 @@ describe("§6.3 — the chart offers the ranges the data supports and no others"
     expect(screen.queryByTestId("drawdown-panel")).not.toBeInTheDocument();
     await user.click(screen.getByTestId("chart-drawdown-toggle"));
     expect(screen.getByTestId("drawdown-panel")).toBeInTheDocument();
+  });
+
+  it("opens on the last day of the window and can be walked to another day", () => {
+    draw();
+    const readout = screen.getByTestId("chart-readout");
+    expect(readout).toHaveTextContent("21 Aug 2026");
+    expect(readout).toHaveTextContent("₹7,02,500");
+    expect(readout).toHaveTextContent("That day");
+    expect(readout).toHaveTextContent("+₹2,280");
+
+    fireEvent.change(screen.getByTestId("chart-cursor"), { target: { value: "0" } });
+    expect(screen.getByTestId("chart-readout")).toHaveTextContent("19 Aug 2026");
+    expect(screen.getByTestId("chart-readout")).toHaveTextContent("₹6,90,000");
+    expect(screen.getByTestId("chart-readout")).toHaveTextContent("First mark in this range");
+  });
+
+  it("moves the readout to the day under the pointer", () => {
+    const spy = vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 900,
+      bottom: 320,
+      width: 900,
+      height: 320,
+      toJSON: () => ({}),
+    });
+    draw();
+    fireEvent.pointerMove(screen.getByTestId("chart-plot"), { clientX: 64 });
+    expect(screen.getByTestId("chart-readout")).toHaveTextContent("19 Aug 2026");
+    spy.mockRestore();
+  });
+});
+
+describe("the broker sync control is an action, not a status label", () => {
+  it("syncs the named broker and refreshes the page when holdings persist", async () => {
+    vi.mocked(syncHoldingsAction).mockResolvedValue({
+      broker_id: "zerodha",
+      persisted: true,
+      written: 19,
+      unresolved: [],
+      source: "kite",
+      degraded: false,
+      note: "",
+      sync_note: "",
+    });
+    const user = userEvent.setup();
+    draw();
+
+    await user.click(screen.getByTestId("sync-status"));
+    await user.click(screen.getByTestId("sync-now-zerodha"));
+
+    await waitFor(() => {
+      expect(syncHoldingsAction).toHaveBeenCalledWith("zerodha");
+      expect(refresh).toHaveBeenCalled();
+    });
+    expect(screen.getByTestId("sync-note")).toHaveTextContent("19 holdings synced.");
+  });
+
+  it("does not refresh when the broker refused the sync", async () => {
+    vi.mocked(syncHoldingsAction).mockResolvedValue({
+      broker_id: "upstox",
+      persisted: false,
+      written: 0,
+      unresolved: [],
+      source: "empty",
+      degraded: false,
+      note: "Reconnect Upstox first.",
+      sync_note: "Reconnect Upstox first.",
+    });
+    const user = userEvent.setup();
+    draw();
+
+    await user.click(screen.getByTestId("sync-status"));
+    await user.click(screen.getByTestId("sync-now-upstox"));
+
+    await waitFor(() => {
+      expect(syncHoldingsAction).toHaveBeenCalledWith("upstox");
+    });
+    expect(refresh).not.toHaveBeenCalled();
+    expect(screen.getByTestId("sync-note")).toHaveTextContent("Reconnect Upstox first.");
   });
 });
 

@@ -2236,6 +2236,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/meta/live-marks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live last prices
+         * @description Display marks only. Ranks, factors and sleeve signals stay on the published session.
+         *
+         *     Empty when there is no real Kite session. The page keeps the close in that case.
+         */
+        get: operations["getLiveMarks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/meta/status": {
         parameters: {
             query?: never;
@@ -2250,6 +2272,15 @@ export interface paths {
          *     ``degraded`` is the extra member docs/11 §Reliability implies: "if the pipeline fails, serve
          *     the last good `data_version` with a banner". The banner needs something to read, and this is
          *     it — the analytics endpoints keep answering from the last published version.
+         *
+         *     **Why the ordering carries a second key.** A date can hold more than one run: a failure is
+         *     retried, and ``open_run`` only reuses a run still ``running``. Ordering on ``trade_date``
+         *     alone left the tie to the planner, so with four runs for 2026-09-11 on the box — three
+         *     failed, then one that passed the gate and published ``data_version`` 18 — this endpoint
+         *     picked a *failed* one and served ``degraded: true`` for a day that had published
+         *     successfully. The banner then said the data was stale while ``as_of`` said otherwise, which
+         *     is the one thing a freshness endpoint must never do. ``started_at`` decides, ``id`` breaks
+         *     a same-instant tie: the newest attempt is the one that describes today.
          */
         get: operations["getStatus"];
         put?: never;
@@ -7014,6 +7045,18 @@ export interface components {
              */
             total: number;
         };
+        /**
+         * LiveMarksOut
+         * @description Last prices for a page of names. Empty ``marks`` when no session is trustworthy.
+         */
+        LiveMarksOut: {
+            /** Live Overlay */
+            live_overlay: boolean;
+            /** Marks */
+            marks: {
+                [key: string]: string;
+            };
+        };
         /** ManagerApplyIn */
         ManagerApplyIn: {
             /** Bio */
@@ -9356,6 +9399,11 @@ export interface components {
             degraded: boolean;
             last_pipeline_run: components["schemas"]["PipelineRunOut"] | null;
             /**
+             * Live Quotes
+             * @default false
+             */
+            live_quotes: boolean;
+            /**
              * Pipeline Running
              * @default false
              */
@@ -9915,6 +9963,8 @@ export interface components {
             instrument_id: number;
             /** Last Close */
             last_close: string | null;
+            /** Last Price */
+            last_price?: string | null;
             /** Naked */
             naked: boolean;
             /** Name */
@@ -10051,6 +10101,8 @@ export interface components {
             gap_pct: string | null;
             /** Instrument Id */
             instrument_id: number;
+            /** Last Price */
+            last_price?: string | null;
             /** Listed Within 2Y */
             listed_within_2y: boolean;
             /** Locked Upper Circuit */
@@ -10241,6 +10293,8 @@ export interface components {
             instrument_id: number;
             /** Last Close */
             last_close: string | null;
+            /** Last Price */
+            last_price?: string | null;
             /** Name */
             name: string;
             /** Note */
@@ -10689,9 +10743,8 @@ export interface components {
          * TwtPositionOut
          * @description One `OPEN` row of `03` §5, marked at the **last published close**.
          *
-         *     `last_price` is that mark, not a quote: this service has no quote path (root `CLAUDE.md`,
-         *     "Which date the product shows"), and null means nothing has printed since the fill — a
-         *     reason, not a zero.
+         *     `last_price` is the live mark when a Kite session exists, otherwise the last published
+         *     close. Null means nothing has printed since the fill — a reason, not a zero.
          */
         TwtPositionOut: {
             /** Entry Avg */
@@ -10802,6 +10855,8 @@ export interface components {
             failed_filters: string[];
             /** Instrument Id */
             instrument_id: number;
+            /** Last Price */
+            last_price?: string | null;
             /** Locked Upper Circuit */
             locked_upper_circuit: boolean;
             /** Month Low Ratio */
@@ -11074,6 +11129,8 @@ export interface components {
             high_20_prior: string | null;
             /** Instrument Id */
             instrument_id: number;
+            /** Last Price */
+            last_price?: string | null;
             /** Limit Price */
             limit_price: string;
             /** Locked Upper Circuit */
@@ -11232,6 +11289,8 @@ export interface components {
             instrument_id: number;
             /** Last Close */
             last_close: string | null;
+            /** Last Price */
+            last_price?: string | null;
             /** Naked */
             naked: boolean;
             /** Name */
@@ -11801,6 +11860,11 @@ export interface components {
             holdings_synced_label: string;
             /** Holdings Synced On */
             holdings_synced_on?: string | null;
+            /**
+             * Live Overlay
+             * @default false
+             */
+            live_overlay: boolean;
             /** Prices As Of */
             prices_as_of?: string | null;
             /** Prices Label */
@@ -23718,6 +23782,110 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FactorOut"][];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getLiveMarks: {
+        parameters: {
+            query?: {
+                /** @description Comma-separated NSE symbols, at most 500. */
+                symbols?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiveMarksOut"];
                 };
             };
             /** @description Bad request */

@@ -198,6 +198,10 @@ describe("G2: scrolling reaches the last row, and a card still opens the drawer"
     const data = rows(SEEDED_ROWS);
     render(<ResultCards rows={data} onActivate={onActivate} />);
 
+    expect(screen.getByRole("link", { name: "SYM000" })).toHaveAttribute(
+      "href",
+      "/instruments/SYM000",
+    );
     await userEvent.click(screen.getByRole("button", { name: /SYM000/ }));
     expect(onActivate).toHaveBeenCalledTimes(1);
     expect(onActivate.mock.calls[0]?.[0]).toBe(data[0]);

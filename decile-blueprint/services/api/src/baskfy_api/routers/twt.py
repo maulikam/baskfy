@@ -80,6 +80,7 @@ from baskfy_api import twt_scan
 from baskfy_api.auth import AuthenticatedDep, settings_for
 from baskfy_api.curated_tenant import scoped_sole_user_id
 from baskfy_api.db import SessionDep
+from baskfy_api.live_prices import live_marks_for_symbols
 from baskfy_api.problems import not_found
 from baskfy_api.settings import Settings
 from baskfy_core.screener import canonical_json
@@ -145,14 +146,15 @@ class TwtTightNameOut(BaseModel):
     failed_filters: list[str]
     turnover_avg_20: int | None
     locked_upper_circuit: bool
+    #: Kite last_price when a session exists. Weekly closes stay the published pattern.
+    last_price: Decimal | None = None
 
 
 class TwtPositionOut(BaseModel):
     """One `OPEN` row of `03` §5, marked at the **last published close**.
 
-    `last_price` is that mark, not a quote: this service has no quote path (root `CLAUDE.md`,
-    "Which date the product shows"), and null means nothing has printed since the fill — a
-    reason, not a zero.
+    `last_price` is the live mark when a Kite session exists, otherwise the last published
+    close. Null means nothing has printed since the fill — a reason, not a zero.
     """
 
     id: int
@@ -340,6 +342,37 @@ def _json_decimals_as_strings(model: BaseModel) -> Response:
     return Response(content=model.model_dump_json(), media_type=JSON_MEDIA_TYPE)
 
 
+def _position_out(row: twt_service.PositionRow, live: Decimal | None) -> TwtPositionOut:
+    last = live if live is not None else row.last_price
+    unrealised = row.unrealised_inr
+    fraction = row.unrealised_fraction
+    if live is not None:
+        unrealised = (live - row.entry_avg) * row.quantity_open
+        cost = row.entry_avg * row.quantity_open
+        fraction = (unrealised / cost).quantize(Decimal("0.0001")) if cost != 0 else None
+    return TwtPositionOut(
+        id=row.id,
+        instrument_id=row.instrument_id,
+        symbol=row.symbol,
+        name=row.name,
+        entry_date=row.entry_date,
+        entry_avg=row.entry_avg,
+        quantity_open=row.quantity_open,
+        high_since=row.high_since,
+        high_since_date=row.high_since_date,
+        gtt_trigger=row.gtt_trigger,
+        gtt_id=row.gtt_id,
+        next_trigger=row.next_trigger,
+        next_trigger_for=row.next_trigger_for,
+        last_price=last,
+        unrealised_inr=unrealised,
+        unrealised_fraction=fraction,
+        hold_sessions=row.hold_sessions,
+        half_size=row.half_size,
+        simulated=row.simulated,
+    )
+
+
 def _run_out(view: twt_scan.ScanRunView) -> TwtScanRunOut:
     return TwtScanRunOut(
         run_id=view.run_id,
@@ -381,6 +414,9 @@ async def get_twt_today(
         day=date,
         execution_enabled=settings.twt_execution_enabled,
     )
+    marks = await live_marks_for_symbols(
+        [row.symbol for row in (*view.tight, *view.positions)]
+    )
     return _json_decimals_as_strings(
         TwtTodayOut(
             as_of=view.as_of,
@@ -411,31 +447,12 @@ async def get_twt_today(
                     failed_filters=list(row.failed_filters),
                     turnover_avg_20=row.turnover_avg_20,
                     locked_upper_circuit=row.locked_upper_circuit,
+                    last_price=marks.get(row.symbol.strip().upper()),
                 )
                 for row in view.tight
             ],
             positions=[
-                TwtPositionOut(
-                    id=row.id,
-                    instrument_id=row.instrument_id,
-                    symbol=row.symbol,
-                    name=row.name,
-                    entry_date=row.entry_date,
-                    entry_avg=row.entry_avg,
-                    quantity_open=row.quantity_open,
-                    high_since=row.high_since,
-                    high_since_date=row.high_since_date,
-                    gtt_trigger=row.gtt_trigger,
-                    gtt_id=row.gtt_id,
-                    next_trigger=row.next_trigger,
-                    next_trigger_for=row.next_trigger_for,
-                    last_price=row.last_price,
-                    unrealised_inr=row.unrealised_inr,
-                    unrealised_fraction=row.unrealised_fraction,
-                    hold_sessions=row.hold_sessions,
-                    half_size=row.half_size,
-                    simulated=row.simulated,
-                )
+                _position_out(row, marks.get(row.symbol.strip().upper()))
                 for row in view.positions
             ],
             half_size=TwtHalfSizeOut(

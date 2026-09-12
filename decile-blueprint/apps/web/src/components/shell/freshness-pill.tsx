@@ -43,7 +43,7 @@ const REFETCH_INTERVAL_MS = 5 * 60_000;
  */
 const PILL_BOX = "h-7 w-[15rem]";
 
-async function fetchStatus(): Promise<StatusOut> {
+export async function fetchStatus(): Promise<StatusOut> {
   const { data, error } = await browserApi().GET("/api/v1/meta/status");
   if (!data) throw ApiError.from(error, "Could not read the data freshness status.");
   return data;
@@ -135,8 +135,8 @@ export function FreshnessPill({ className }: { className?: string }) {
           : degraded
             ? `The last pipeline run did not publish. You are seeing the ${formatTradeDate(data.as_of)} trading session.`
             : behindToday
-              ? `Published for the ${formatTradeDate(data.as_of)} trading session — the last one that has closed. Today's publishes after the market closes. Portfolio marks are close, plus live overlay when a Kite session exists; the swing desk's setups are live from Kite; baskets, factors and market health are end-of-day by design.`
-              : `Published for the ${formatTradeDate(data.as_of)} trading session.`}
+              ? `Published for the ${formatTradeDate(data.as_of)} trading session — the last one that has closed. Today's publishes after the market closes. Displayed prices on screens, scanners, holdings and the portfolio overlay Kite last-price when a session exists. Ranks, factors, baskets and market health stay end-of-day.`
+              : `Published for the ${formatTradeDate(data.as_of)} trading session. Displayed prices overlay Kite last-price when a session exists; ranks and factors stay on this close.`}
       </TooltipContent>
     </Tooltip>
   );

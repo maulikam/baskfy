@@ -75,7 +75,7 @@ export function PeekDrawer({
     setAllOpen(false);
   }
 
-  const price = num(row, "close_raw");
+  const price = num(row, "last_price") ?? num(row, "close_raw");
   const ret = num(row, "ret_12m");
   const score = num(row, "sorting_factor");
   const vol = num(row, "vol_12m");

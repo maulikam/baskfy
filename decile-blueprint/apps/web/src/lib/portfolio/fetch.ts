@@ -33,6 +33,10 @@ import type { GroupingSuggestion } from "@/lib/portfolio/organize";
 
 export type OverviewOut = Schemas["OverviewOut"];
 export type HoldingsOut = Schemas["baskfy_api__routers__portfolio_overview__HoldingsOut"];
+export type ActivityOut = Schemas["ActivityOut"];
+
+/** The global Activity page asks for the widest page the API will serve. */
+export const ACTIVITY_PAGE_LIMIT = 200;
 
 async function authHeaders(): Promise<HeadersInit> {
   const session = await auth();
@@ -90,6 +94,19 @@ export async function readPortfolioOverview(): Promise<{
 export async function fetchPortfolioHoldings(): Promise<HoldingsOut | null> {
   const data = await tryJson("/portfolio/holdings");
   return data === null ? null : (data as HoldingsOut);
+}
+
+/**
+ * §7's activity feed across every portfolio, or `null` when the API did not answer.
+ *
+ * `null` is not an empty feed. The page must say the read failed rather than that nothing
+ * happened — those are opposite sentences.
+ */
+export async function fetchPortfolioActivity(
+  limit = ACTIVITY_PAGE_LIMIT,
+): Promise<ActivityOut | null> {
+  const data = await tryJson(`/portfolio/activity?limit=${limit}`);
+  return data === null ? null : (data as ActivityOut);
 }
 
 /** What §6.6's first-run helper got back, and — when it got nothing — why. */

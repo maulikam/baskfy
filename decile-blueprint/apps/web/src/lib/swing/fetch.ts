@@ -51,6 +51,8 @@ export interface SwingSetup {
   status: string;
   score: number;
   close: number | null;
+  /** Kite last_price when a session exists. `close` stays the signal bar. */
+  last_price?: number | null;
   trigger: number | null;
   stop_ref: number | null;
   pivot_high: number | null;
@@ -231,6 +233,8 @@ export interface SwingWatchRow {
   stop_ref: number | null;
   distance_to_trigger_pct: number | null;
   last_close: number | null;
+  /** Kite last_price when a session exists. `last_close` stays the published bar. */
+  last_price?: number | null;
   note: string | null;
   catalyst: string | null;
   state: string;
@@ -389,6 +393,8 @@ export interface SwingPosition {
   pnl_inr: number | null;
   simulated: boolean;
   last_close: number | null;
+  /** Kite last_price when a session exists. `last_close` stays the published bar. */
+  last_price?: number | null;
 }
 
 export async function fetchWatchlist(

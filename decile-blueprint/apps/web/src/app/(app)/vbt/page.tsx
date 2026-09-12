@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { InstrumentLink } from "@/components/instrument/instrument-link";
 import { Answer, Mark } from "@/components/shell/answer";
 import { PageHeader } from "@/components/shell/page-header";
 import { SectionTabs } from "@/components/shell/section-tabs";
@@ -107,7 +108,7 @@ function CandidateTable({
           {rows.map((row) => (
             <tr key={row.instrument_id} className="border-b border-border/40">
               <td className="py-2 pr-3">
-                <span className="font-medium">{row.symbol}</span>
+                <InstrumentLink symbol={row.symbol} />
                 {row.locked_upper_circuit ? (
                   <span
                     title="Locked at the upper circuit — no plan line is placed for it (04 §7.4)"
@@ -121,7 +122,7 @@ function CandidateTable({
                   {row.name}
                 </span>
               </td>
-              <td className="py-2 pr-3 tabular-nums">{money(row.close)}</td>
+              <td className="py-2 pr-3 tabular-nums">{money(row.last_price ?? row.close)}</td>
               <td className="py-2 pr-3 font-medium tabular-nums">
                 {money(row.limit_price)}
               </td>
@@ -268,9 +269,7 @@ export default async function VbtTodayPage() {
                 key={row.instrument_id}
                 className="rounded-md border border-border/50 px-2.5 py-1 text-sm text-muted-foreground"
               >
-                <span className="font-medium text-foreground">
-                  {row.symbol}
-                </span>
+                <InstrumentLink symbol={row.symbol} />
                 {row.failed_filters.length > 0
                   ? ` — ${row.failed_filters.join(", ")}`
                   : null}

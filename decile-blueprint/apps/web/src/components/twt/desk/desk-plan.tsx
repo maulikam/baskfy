@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { InstrumentLink } from "@/components/instrument/instrument-link";
 import { formatTradeDate } from "@/lib/format";
 import type { DeskLineView, DeskView } from "@/lib/twt/desk";
 import type { PositionView } from "@/lib/twt/view";
@@ -97,7 +98,7 @@ export function DeskPlan({ view, renderConfirm, renderRearm }: DeskPlanProps) {
               .filter((position) => position.naked)
               .map((position) => (
                 <li key={position.id} className="flex items-center gap-3 text-sm">
-                  <span className="font-medium">{position.symbol}</span>
+                  <InstrumentLink symbol={position.symbol} />
                   <span className="text-muted-foreground">has no stop resting</span>
                   {renderRearm(position)}
                 </li>
@@ -220,7 +221,7 @@ function LineRow({
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
         <div>
-          <span className="font-medium">{line.symbol}</span>
+          <InstrumentLink symbol={line.symbol} />
           <span className="ml-2 text-sm text-muted-foreground">{line.action}</span>
         </div>
         <div>

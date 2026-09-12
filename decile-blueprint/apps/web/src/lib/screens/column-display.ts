@@ -32,7 +32,7 @@ export const COLUMN_DISPLAY: Readonly<Record<string, ColumnDisplay>> = {
   },
   close_raw: {
     label: "Price",
-    tooltip: "Last close, unadjusted",
+    tooltip: "Live last price when a Kite session is connected; otherwise the last unadjusted close",
   },
   ma_200: {
     label: "200-day average",

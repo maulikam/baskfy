@@ -211,6 +211,39 @@ def live_quotes_by_symbol(symbols: Sequence[str]) -> dict[str, Decimal]:
     return {symbol: cached[symbol] for symbol in wanted if symbol in cached}
 
 
+#: Kite's quote endpoint accepts 500 instruments per call. A screen or sleeve page never needs more
+#: than the rows it is about to show; asking for the whole universe would burn the rate limit.
+MAX_LIVE_MARKS = 500
+
+
+async def live_marks_for_symbols(symbols: Sequence[str]) -> dict[str, Decimal]:
+    """Read-only last prices for a page of names — screens, scanners, and sleeve tables.
+
+    Holdings first (the book already carries ``last_price``), then a quote for anything the book
+    omitted. Empty when there is no trustworthy session. The caller keeps the close in that case.
+    Ranks, factors and sleeve signals stay on the last published session; this is the display mark
+    only.
+    """
+    wanted: list[str] = []
+    seen: set[str] = set()
+    for raw in symbols:
+        symbol = raw.strip().upper()
+        if not symbol or symbol in seen:
+            continue
+        seen.add(symbol)
+        wanted.append(symbol)
+        if len(wanted) >= MAX_LIVE_MARKS:
+            break
+    if not wanted:
+        return {}
+    by_book = await anyio.to_thread.run_sync(live_prices_by_symbol)
+    missing = [symbol for symbol in wanted if symbol not in by_book]
+    if missing:
+        quoted = await anyio.to_thread.run_sync(live_quotes_by_symbol, tuple(missing))
+        by_book = {**by_book, **quoted}
+    return {symbol: by_book[symbol] for symbol in wanted if symbol in by_book}
+
+
 async def live_prices_by_instrument(
     session: AsyncSession, instrument_ids: list[int], *, broker_id: str = "zerodha"
 ) -> dict[int, Decimal]:

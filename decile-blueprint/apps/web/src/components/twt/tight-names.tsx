@@ -1,3 +1,4 @@
+import { InstrumentLink } from "@/components/instrument/instrument-link";
 import { formatTradeDate } from "@/lib/format";
 import { ENTRY_TODAY, WATCH_ONLY, pointInTimeLine } from "@/lib/twt/copy";
 import type { TightNameView } from "@/lib/twt/view";
@@ -105,7 +106,7 @@ export function TightNames({
           <ul className="space-y-1.5">
             {watchOnly.map((row) => (
               <li key={row.instrumentId} data-testid="twt-watch-only-row">
-                <span className="font-medium text-foreground">{row.symbol}</span>{" "}
+                <InstrumentLink symbol={row.symbol} />{" "}
                 <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                   {WATCH_ONLY}
                 </span>
@@ -163,7 +164,7 @@ function NameTable({ rows }: { rows: readonly TightNameView[] }) {
               data-testid="twt-tight-row"
             >
               <td className="py-2 pr-3">
-                <span className="font-medium">{row.symbol}</span>
+                <InstrumentLink symbol={row.symbol} />
                 {row.lockedUpperCircuit ? (
                   <span
                     className="ml-1.5 text-warning"

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { InstrumentLink } from "@/components/instrument/instrument-link";
 import { PageHeader } from "@/components/shell/page-header";
 import { SectionTabs } from "@/components/shell/section-tabs";
 import { CatalystLink } from "@/components/swing/catalyst-link";
@@ -168,7 +169,7 @@ export default async function SwingWatchlistPage() {
                           ★
                         </span>
                       ) : null}
-                      <span className="font-medium">{row.symbol}</span>
+                      <InstrumentLink symbol={row.symbol} />
                       <span className="ml-2 text-xs text-muted-foreground">{row.name}</span>
                       {row.source === "MANUAL" ? (
                         <span
@@ -180,7 +181,7 @@ export default async function SwingWatchlistPage() {
                       ) : null}
                     </td>
                     <td className="py-2 pr-3">{row.setup}</td>
-                    <td className="py-2 pr-3 tabular-nums">{money(row.last_close)}</td>
+                    <td className="py-2 pr-3 tabular-nums">{money(row.last_price ?? row.last_close)}</td>
                     <td className="py-2 pr-3 tabular-nums font-medium">{money(row.trigger)}</td>
                     <td className="py-2 pr-3 tabular-nums">{distance(row)}</td>
                     <td className="py-2 pr-3 tabular-nums">{money(row.stop_ref)}</td>

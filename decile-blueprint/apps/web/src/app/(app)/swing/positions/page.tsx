@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { InstrumentLink } from "@/components/instrument/instrument-link";
 import { Answer, Mark } from "@/components/shell/answer";
 import { PageHeader } from "@/components/shell/page-header";
 import { SectionTabs } from "@/components/shell/section-tabs";
@@ -45,11 +46,16 @@ function money(value: number | null): string {
 }
 
 /** How many R the position is showing, from the entry and the stop it was taken with. */
+function mark(position: SwingPosition): number | null {
+  return position.last_price ?? position.last_close;
+}
+
 function showingR(position: SwingPosition): string {
-  if (position.last_close === null) return "—";
+  const last = mark(position);
+  if (last === null) return "—";
   const oneR = position.entry_avg - position.initial_stop;
   if (oneR <= 0) return "—";
-  return `${((position.last_close - position.entry_avg) / oneR).toFixed(2)}R`;
+  return `${((last - position.entry_avg) / oneR).toFixed(2)}R`;
 }
 
 /** Calendar days since the entry, on the day the page is read. */
@@ -63,10 +69,11 @@ function daysHeld(position: SwingPosition, today: Date): string {
 /** The trail average's latest value, from the row's own series, and how far the close sits from it. */
 function trailDistance(position: SwingPosition, bars: SwingBar[] | undefined): string {
   const last = bars?.at(-1);
-  if (!last || position.last_close === null) return "—";
+  const price = mark(position);
+  if (!last || price === null) return "—";
   const ma = position.trail === "MA10" ? last.ma_fast : last.ma_slow;
   if (ma === null || ma <= 0) return "—";
-  const pct = ((position.last_close - ma) / ma) * 100;
+  const pct = ((price - ma) / ma) * 100;
   return `${ma.toFixed(2)} · ${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`;
 }
 
@@ -254,7 +261,7 @@ export default async function SwingPositionsPage() {
                 {open.map((row) => (
                   <tr key={row.id} className="border-b border-border/40">
                     <td className="py-2 pr-3">
-                      <span className="font-medium">{row.symbol}</span>
+                      <InstrumentLink symbol={row.symbol} />
                       {row.simulated ? (
                         <span className="ml-2 rounded border border-border px-1 text-[11px] uppercase tracking-wide text-muted-foreground">
                           Simulated
@@ -309,7 +316,7 @@ export default async function SwingPositionsPage() {
                 {closed.map((row) => (
                   <tr key={row.id} className="border-b border-border/40">
                     <td className="py-2 pr-3">
-                      <span className="font-medium">{row.symbol}</span>
+                      <InstrumentLink symbol={row.symbol} />
                       {row.simulated ? (
                         <span className="ml-2 rounded border border-border px-1 text-[11px] uppercase tracking-wide text-muted-foreground">
                           Simulated

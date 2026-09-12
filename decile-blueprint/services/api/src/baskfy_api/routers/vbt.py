@@ -58,6 +58,7 @@ from baskfy_api import vbt_scan
 from baskfy_api.auth import AuthenticatedDep, settings_for
 from baskfy_api.curated_tenant import scoped_sole_user_id
 from baskfy_api.db import SessionDep
+from baskfy_api.live_prices import live_marks_for_symbols
 from baskfy_api.problems import not_found
 from baskfy_api.settings import Settings
 from baskfy_api.vbt_settings import (
@@ -132,6 +133,8 @@ class VbtCandidateOut(BaseModel):
     pct_above_dma: Decimal | None
     locked_upper_circuit: bool
     rank_key: int
+    #: Kite last_price when a session exists. The signal ``close`` / limit stay the published bar.
+    last_price: Decimal | None = None
 
 
 # Declared here, above ``VbtTodayOut``, because that payload inlines one: a forward
@@ -260,6 +263,8 @@ class VbtPositionOut(BaseModel):
     #: page, and `VBT_POSITION_NAKED` in the evening.
     naked: bool
     last_close: Decimal | None
+    #: Kite last_price when a session exists. ``last_close`` stays the published bar.
+    last_price: Decimal | None = None
     ema_21: Decimal | None
     distance_to_ema_pct: Decimal | None
     return_pct: Decimal | None
@@ -353,7 +358,10 @@ class VbtBacktestOut(BaseModel):
 # method name from that, and a second `getBook` in this service silently renames somebody else's.
 
 
-def _candidate_out(row: vbt_service.CandidateRow) -> VbtCandidateOut:
+def _candidate_out(
+    row: vbt_service.CandidateRow, marks: dict[str, Decimal] | None = None
+) -> VbtCandidateOut:
+    live = None if marks is None else marks.get(row.symbol.strip().upper())
     return VbtCandidateOut(
         instrument_id=row.instrument_id,
         symbol=row.symbol,
@@ -374,6 +382,45 @@ def _candidate_out(row: vbt_service.CandidateRow) -> VbtCandidateOut:
         pct_above_dma=row.pct_above_dma,
         locked_upper_circuit=row.locked_upper_circuit,
         rank_key=row.rank_key,
+        last_price=live,
+    )
+
+
+def _open_position_out(
+    row: vbt_service.PositionRow, live: Decimal | None
+) -> VbtPositionOut:
+    return_pct = row.return_pct
+    r_multiple = row.r_multiple
+    if live is not None:
+        return_pct = None if row.entry_avg == 0 else ((live / row.entry_avg - 1) * 100).quantize(
+            Decimal("0.01")
+        )
+        risk = row.entry_avg - row.initial_stop
+        r_multiple = (
+            None if risk <= 0 else ((live - row.entry_avg) / risk).quantize(Decimal("0.01"))
+        )
+    return VbtPositionOut(
+        id=row.id,
+        instrument_id=row.instrument_id,
+        symbol=row.symbol,
+        name=row.name,
+        entry_date=row.entry_date,
+        entry_avg=row.entry_avg,
+        quantity_open=row.quantity_open,
+        initial_stop=row.initial_stop,
+        stop_price=row.stop_price,
+        gtt_id=row.gtt_id,
+        naked=row.naked,
+        last_close=row.last_close,
+        last_price=live,
+        ema_21=row.ema_21,
+        distance_to_ema_pct=row.distance_to_ema_pct,
+        return_pct=return_pct,
+        r_multiple=r_multiple,
+        sessions_held=row.sessions_held,
+        exit_queued_for=row.exit_queued_for,
+        exit_reason_queued=row.exit_reason_queued,
+        simulated=row.simulated,
     )
 
 
@@ -394,6 +441,9 @@ async def get_vbt_today(
     user_id = await scoped_sole_user_id(session, principal.user_id)
     view = await vbt_service.today(session, user_id=user_id, day=date)
     newest = await vbt_scan.newest_run(session, user_id=user_id)
+    marks = await live_marks_for_symbols(
+        [row.symbol for row in (*view.candidates, *view.rejects)]
+    )
     return _json(
         VbtTodayOut(
             as_of=view.as_of,
@@ -406,8 +456,8 @@ async def get_vbt_today(
             funnel=view.funnel,
             shut_sessions_recent=view.shut_sessions_recent,
             shut_window=view.shut_window,
-            candidates=[_candidate_out(row) for row in view.candidates],
-            rejects=[_candidate_out(row) for row in view.rejects],
+            candidates=[_candidate_out(row, marks) for row in view.candidates],
+            rejects=[_candidate_out(row, marks) for row in view.rejects],
             last_scan=None if newest is None else _scan_run_out(vbt_scan.scan_run_view(newest)),
         )
     )
@@ -478,6 +528,7 @@ async def get_vbt_book(session: SessionDep, principal: AuthenticatedDep) -> Resp
     user_id = await scoped_sole_user_id(session, principal.user_id)
     latest = await vbt_service.today(session, user_id=user_id)
     view = await vbt_service.book(session, user_id=user_id, as_of=latest.as_of)
+    marks = await live_marks_for_symbols([row.symbol for row in view.open_positions])
     return _json(
         VbtBookOut(
             working=[
@@ -504,28 +555,7 @@ async def get_vbt_book(session: SessionDep, principal: AuthenticatedDep) -> Resp
                 for row in view.working
             ],
             open_positions=[
-                VbtPositionOut(
-                    id=row.id,
-                    instrument_id=row.instrument_id,
-                    symbol=row.symbol,
-                    name=row.name,
-                    entry_date=row.entry_date,
-                    entry_avg=row.entry_avg,
-                    quantity_open=row.quantity_open,
-                    initial_stop=row.initial_stop,
-                    stop_price=row.stop_price,
-                    gtt_id=row.gtt_id,
-                    naked=row.naked,
-                    last_close=row.last_close,
-                    ema_21=row.ema_21,
-                    distance_to_ema_pct=row.distance_to_ema_pct,
-                    return_pct=row.return_pct,
-                    r_multiple=row.r_multiple,
-                    sessions_held=row.sessions_held,
-                    exit_queued_for=row.exit_queued_for,
-                    exit_reason_queued=row.exit_reason_queued,
-                    simulated=row.simulated,
-                )
+                _open_position_out(row, marks.get(row.symbol.strip().upper()))
                 for row in view.open_positions
             ],
             closed_positions=[

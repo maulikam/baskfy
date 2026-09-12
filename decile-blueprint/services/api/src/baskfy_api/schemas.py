@@ -114,6 +114,18 @@ class StatusOut(_Out):
     #: since the SME universe tripled the instrument count, so this state is visible for a while.
     pipeline_running: bool = False
     data_start_date: dt.date
+    #: A real, unexpired Kite session exists and DRY_RUN is off. Displayed prices on screens,
+    #: scanners, holdings and the portfolio may overlay last_price on top of the published close.
+    #: Ranks and factors stay on ``as_of``. False is the default so an older client that never
+    #: sent the field cannot invent a live book.
+    live_quotes: bool = False
+
+
+class LiveMarksOut(_Out):
+    """Last prices for a page of names. Empty ``marks`` when no session is trustworthy."""
+
+    live_overlay: bool
+    marks: dict[str, Decimal]
 
 
 # ---------------------------------------------------------------------------

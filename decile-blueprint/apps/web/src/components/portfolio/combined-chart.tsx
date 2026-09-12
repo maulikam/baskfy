@@ -9,6 +9,8 @@ import { useAmounts } from "@/components/portfolio/amounts";
 import { ReturnValue } from "@/components/portfolio/return-value";
 import { formatNumber, formatTradeDate } from "@/lib/format";
 import {
+  formatMoney,
+  formatMoneyMove,
   formatRate,
   fromFigure,
   fromRate,
@@ -48,6 +50,10 @@ import { cn } from "@/lib/utils";
  * * **Drawdown** hangs as its own small area below, from zero, y-axis inverted — the same shape
  *   and the same reasoning as `backtests/drawdown-chart`.
  *
+ * The cursor is state, not a hover-only tooltip: it opens on the last mark, the pointer moves it,
+ * and a range input walks it from the keyboard. A panel that only exists under a mouse does not
+ * exist on a phone.
+ *
  * Nothing here is drawn from a stub. With fewer than two marks there is no line to draw, and the
  * panel says which day it has rather than inventing a second one.
  */
@@ -61,11 +67,30 @@ const RANGES: readonly { key: NavRange; label: string }[] = [
 ];
 
 const WIDTH = 900;
-const HEIGHT = 280;
+const HEIGHT = 320;
 const DRAWDOWN_HEIGHT = 130;
-const MARGIN = { top: 12, right: 16, bottom: 26, left: 60 };
+const MARGIN = { top: 16, right: 16, bottom: 28, left: 64 };
 const MIN_POINTS = 2;
 const BASE = 100;
+
+/** Keep the line off the plot edges so a rising book does not sit on the x-axis. */
+export function paddedDomain(values: readonly number[]): [number, number] {
+  if (values.length === 0) return [0, 1];
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min;
+  const pad = span === 0 ? Math.max(Math.abs(max) * 0.08, 1) : span * 0.14;
+  return [min - pad, max + pad];
+}
+
+function nearestIndex(clientX: number, element: SVGSVGElement, count: number): number {
+  const box = element.getBoundingClientRect();
+  if (box.width === 0 || count <= 1) return Math.max(count - 1, 0);
+  const viewX = ((clientX - box.left) / box.width) * WIDTH - MARGIN.left;
+  const innerWidth = WIDTH - MARGIN.left - MARGIN.right;
+  const t = viewX / innerWidth;
+  return Math.min(Math.max(Math.round(t * (count - 1)), 0), count - 1);
+}
 
 type ChartMode = "VALUE" | "RETURN";
 
@@ -147,7 +172,9 @@ export function CombinedChart({ chart, onRangeChange, loading = false }: Combine
   const [mode, setMode] = useState<ChartMode>("VALUE");
   const [showBenchmark, setShowBenchmark] = useState(true);
   const [showDrawdown, setShowDrawdown] = useState(false);
+  const [cursor, setCursor] = useState<number | null>(null);
   const { visible: amountsVisible } = useAmounts();
+  const fillId = `nav-fill-${useId().replace(/:/g, "")}`;
 
   const samples = useMemo(() => samplesFor(chart, mode), [chart, mode]);
   const falls = useMemo(() => drawdownSamples(chart), [chart]);
@@ -167,13 +194,19 @@ export function CombinedChart({ chart, onRangeChange, loading = false }: Combine
     range: [0, innerWidth],
   });
   const yScale = scaleLinear<number>({
-    domain: values.length > 0 ? [Math.min(...values), Math.max(...values)] : [0, 1],
+    domain: paddedDomain(values),
     range: [innerHeight, 0],
     nice: true,
   });
   const ticks = yScale.ticks(4);
   const first = samples[0];
   const last = samples[samples.length - 1];
+  const cursorIndex =
+    samples.length === 0
+      ? 0
+      : Math.min(Math.max(cursor ?? samples.length - 1, 0), samples.length - 1);
+  const hovered = samples[cursorIndex];
+  const previous = cursorIndex > 0 ? samples[cursorIndex - 1] : undefined;
 
   const axisLabel = (tick: number): string =>
     mode === "RETURN"
@@ -182,11 +215,21 @@ export function CombinedChart({ chart, onRangeChange, loading = false }: Combine
         ? `₹${formatNumber(tick, { decimals: 0 })}`
         : "•••";
 
+  const figureLabel = (value: number, signed = mode === "RETURN"): string =>
+    mode === "RETURN"
+      ? `${formatNumber(value, { decimals: 2, signed: true })}%`
+      : signed
+        ? formatMoneyMove(value, amountsVisible)
+        : formatMoney(value, amountsVisible);
+
+  const dayMove =
+    previous === undefined ? null : hovered === undefined ? null : hovered.portfolio - previous.portfolio;
+
   return (
     <section
       aria-label="Combined performance"
       data-testid="combined-chart"
-      className="space-y-3 rounded-xl border border-border/70 bg-card p-4"
+      className="space-y-4 rounded-xl border border-border/70 bg-card p-4 sm:p-5"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
@@ -271,7 +314,7 @@ export function CombinedChart({ chart, onRangeChange, loading = false }: Combine
         </label>
       </div>
 
-      <div className="flex flex-wrap items-end gap-6">
+      <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
         <ReturnValue
           entry={fromRate(chart.total_return)}
           showReason
@@ -303,7 +346,7 @@ export function CombinedChart({ chart, onRangeChange, loading = false }: Combine
             : `A line needs two marks. This range covers ${formatTradeDate(first?.date)} only.`}
         </p>
       ) : (
-        <figure className="flex flex-col gap-2">
+        <figure className="flex flex-col gap-3">
           <figcaption className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
               <span aria-hidden="true" className="inline-block h-0.5 w-4 bg-accent" />
@@ -322,17 +365,75 @@ export function CombinedChart({ chart, onRangeChange, loading = false }: Combine
             {loading ? <span>Loading a new range…</span> : null}
           </figcaption>
 
+          {hovered ? (
+            <div
+              data-testid="chart-readout"
+              className="grid grid-cols-2 gap-x-6 gap-y-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2.5 sm:grid-cols-4"
+            >
+              <div>
+                <p className="text-[11px] text-muted-foreground">On</p>
+                <p className="text-sm font-medium tabular-nums">{formatTradeDate(hovered.date)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-muted-foreground">
+                  {mode === "RETURN" ? "Return" : "Value"}
+                </p>
+                <p className="text-sm font-semibold tabular-nums">{figureLabel(hovered.portfolio)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] text-muted-foreground">That day</p>
+                <p className="text-sm tabular-nums">
+                  {dayMove === null
+                    ? "First mark in this range"
+                    : figureLabel(dayMove, true)}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] text-muted-foreground">
+                  {benchmarkName ?? "The market"}
+                </p>
+                <p className="text-sm tabular-nums">
+                  {hovered.benchmark === null
+                    ? "No print that day"
+                    : figureLabel(hovered.benchmark)}
+                </p>
+              </div>
+            </div>
+          ) : null}
+
+          <label className="sr-only">
+            Day on the chart
+            <input
+              type="range"
+              min={0}
+              max={Math.max(samples.length - 1, 0)}
+              value={cursorIndex}
+              onChange={(event) => setCursor(Number(event.target.value))}
+              data-testid="chart-cursor"
+            />
+          </label>
+
           <svg
             viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
             role="img"
             aria-labelledby={titleId}
-            className="w-full"
+            data-testid="chart-plot"
+            className="w-full touch-none"
+            onPointerMove={(event) =>
+              setCursor(nearestIndex(event.clientX, event.currentTarget, samples.length))
+            }
           >
             <title id={titleId}>
               {`${mode === "RETURN" ? "Return" : "Value"} from ${formatTradeDate(first?.date)} to ${formatTradeDate(last?.date)}${
                 benchmarkDrawn ? `, against ${benchmarkName ?? "the benchmark"}` : ""
               }.`}
             </title>
+            <defs>
+              <linearGradient id={fillId} x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.22} />
+                <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
+              </linearGradient>
+            </defs>
             <g transform={`translate(${MARGIN.left},${MARGIN.top})`}>
               {ticks.map((tick) => (
                 <g key={tick} transform={`translate(0,${yScale(tick)})`}>
@@ -341,12 +442,20 @@ export function CombinedChart({ chart, onRangeChange, loading = false }: Combine
                     x={-8}
                     dy="0.32em"
                     textAnchor="end"
-                    className="fill-muted-foreground text-[10px]"
+                    className="fill-muted-foreground text-[10px] tabular-nums"
                   >
                     {axisLabel(tick)}
                   </text>
                 </g>
               ))}
+              <AreaClosed<Sample>
+                data={samples}
+                x={(sample) => xScale(sample.index)}
+                y={(sample) => yScale(sample.portfolio)}
+                yScale={yScale}
+                curve={curveMonotoneX}
+                fill={`url(#${fillId})`}
+              />
               {benchmarkDrawn ? (
                 <LinePath<Sample>
                   data={withBenchmark}
@@ -365,12 +474,31 @@ export function CombinedChart({ chart, onRangeChange, loading = false }: Combine
                 y={(sample) => yScale(sample.portfolio)}
                 curve={curveMonotoneX}
                 className="stroke-accent"
-                strokeWidth={1.75}
+                strokeWidth={2}
                 fill="none"
               />
+              {hovered ? (
+                <g pointerEvents="none">
+                  <line
+                    x1={xScale(hovered.index)}
+                    x2={xScale(hovered.index)}
+                    y1={0}
+                    y2={innerHeight}
+                    className="stroke-foreground/30"
+                    strokeWidth={1}
+                  />
+                  <circle
+                    cx={xScale(hovered.index)}
+                    cy={yScale(hovered.portfolio)}
+                    r={3.5}
+                    className="fill-accent stroke-card"
+                    strokeWidth={1.5}
+                  />
+                </g>
+              ) : null}
               <text
                 x={0}
-                y={innerHeight + 16}
+                y={innerHeight + 18}
                 className="fill-muted-foreground text-[10px]"
                 textAnchor="start"
               >
@@ -378,7 +506,7 @@ export function CombinedChart({ chart, onRangeChange, loading = false }: Combine
               </text>
               <text
                 x={innerWidth}
-                y={innerHeight + 16}
+                y={innerHeight + 18}
                 className="fill-muted-foreground text-[10px]"
                 textAnchor="end"
               >

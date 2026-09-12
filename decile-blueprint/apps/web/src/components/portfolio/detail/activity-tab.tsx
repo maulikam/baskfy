@@ -50,9 +50,28 @@ const NO_AMOUNT_REASON =
 export interface ActivityTabProps {
   items: readonly ActivityItem[] | null;
   unavailableReason: string | null;
+  /** Override the empty-feed sentence. Default is the per-portfolio wording. */
+  emptyCopy?: string;
+  /** Override the “this filter matched nothing” sentence. */
+  filterEmptyCopy?: string;
+  countsBlurb?: string;
+  feedBlurb?: string;
 }
 
-export function ActivityTab({ items, unavailableReason }: ActivityTabProps) {
+const DEFAULT_EMPTY =
+  "Nothing has happened in this portfolio yet. Every buy, sell, cash assignment, dividend, corporate action and reconciliation answer lands here as it happens.";
+
+const DEFAULT_FILTER_EMPTY =
+  "Nothing of that kind has happened in this portfolio. Every other event is still here; only this view is narrowed.";
+
+export function ActivityTab({
+  items,
+  unavailableReason,
+  emptyCopy = DEFAULT_EMPTY,
+  filterEmptyCopy = DEFAULT_FILTER_EMPTY,
+  countsBlurb = "Every kind of event recorded against this portfolio, and how many of each.",
+  feedBlurb = "Buys, sells, cash you assign, dividends, corporate actions and reconciliation answers, newest first.",
+}: ActivityTabProps) {
   const [kind, setKind] = useState<string | null>(null);
   const counts = useMemo(() => activityCounts(items), [items]);
   const filtered = useMemo(
@@ -65,7 +84,7 @@ export function ActivityTab({ items, unavailableReason }: ActivityTabProps) {
       {counts.length > 0 ? (
         <Panel
           title="What is in this feed"
-          blurb="Every kind of event recorded against this portfolio, and how many of each."
+          blurb={countsBlurb}
           testId="activity-counts"
         >
           <div
@@ -96,7 +115,7 @@ export function ActivityTab({ items, unavailableReason }: ActivityTabProps) {
 
       <Panel
         title="What has happened here"
-        blurb="Buys, sells, cash you assign, dividends, corporate actions and reconciliation answers, newest first."
+        blurb={feedBlurb}
         testId="activity-feed"
       >
         {items === null ? (
@@ -106,16 +125,14 @@ export function ActivityTab({ items, unavailableReason }: ActivityTabProps) {
           </p>
         ) : items.length === 0 ? (
           <p data-testid="activity-empty" className="max-w-[76ch] px-4 py-6 text-sm text-muted-foreground">
-            Nothing has happened in this portfolio yet. Every buy, sell, cash assignment, dividend,
-            corporate action and reconciliation answer lands here as it happens.
+            {emptyCopy}
           </p>
         ) : filtered !== null && filtered.length === 0 ? (
           <p
             data-testid="activity-filter-empty"
             className="max-w-[76ch] px-4 py-6 text-sm text-muted-foreground"
           >
-            Nothing of that kind has happened in this portfolio. Every other event is still here;
-            only this view is narrowed.
+            {filterEmptyCopy}
           </p>
         ) : (
           <ul className="divide-y divide-border/60" data-testid="activity-list">

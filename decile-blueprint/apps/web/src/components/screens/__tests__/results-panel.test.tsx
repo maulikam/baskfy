@@ -7,6 +7,14 @@ import type { ColumnMeta } from "@/components/screens/result-columns";
 import { ResultsPanel } from "@/components/screens/results-panel";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
+vi.mock("@/lib/screens/live-marks", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/screens/live-marks")>();
+  return {
+    ...actual,
+    useLiveMarks: () => ({ liveOverlay: false, marks: {} }),
+  };
+});
+
 /**
  * Leaf 1.1.2: the results panel must actually run the dead-column policy (pass rows into
  * buildColumns), disclose what it hid, put the sort note on the table once, and offer undo

@@ -56,6 +56,8 @@ export interface VbtCandidate {
   pct_above_dma: number | null;
   locked_upper_circuit: boolean;
   rank_key: number;
+  /** Kite last_price when a session exists. `close` stays the signal bar. */
+  last_price?: number | null;
 }
 
 /** The counts `05` §2's empty state is written from, as `vb_breadth_daily.detail` stores them. */
@@ -164,6 +166,8 @@ export interface VbtPosition {
   /** Shares open with no resting GTT — the one state the method forbids. Red, always. */
   naked: boolean;
   last_close: number | null;
+  /** Kite last_price when a session exists. `last_close` stays the published bar. */
+  last_price?: number | null;
   ema_21: number | null;
   distance_to_ema_pct: number | null;
   return_pct: number | null;

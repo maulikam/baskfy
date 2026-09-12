@@ -72,7 +72,13 @@ export function tightNameView(row: TwtTightName): TightNameView {
     instrumentId: row.instrument_id,
     symbol: row.symbol,
     name: row.name,
-    close: figure(row.close_raw === null ? null : rupees(row.close_raw), REASONS.notComputed),
+    close: figure(
+      (() => {
+        const mark = row.last_price ?? row.close_raw;
+        return mark === null || mark === undefined ? null : rupees(mark);
+      })(),
+      REASONS.notComputed,
+    ),
     weekCloses: [row.week_close_0, row.week_close_1, row.week_close_2].map((value) =>
       figure(value === null ? null : rupees(value), REASONS.notComputed),
     ),

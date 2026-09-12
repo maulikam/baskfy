@@ -97,7 +97,18 @@ describe("the bundle budget", () => {
     const source = readFileSync(script, "utf8");
     // docs/11: "JS on the screens route < 250 KB gzip after code-splitting the table and charts."
     expect(source).toMatch(/limitKb:\s*250/);
-    expect(source).toMatch(/\(app\)\/screens\/page/);
+    /*
+     * The screens route is `/(app)/build/[id]` since the nav refactor renamed it. This assertion
+     * pinned the pre-rename path, and the *script* had the same stale list — which is why five of
+     * its six routes read "— not in manifest —" and the budget went unmeasured until 12 Sep 2026.
+     * A test that pins the old name is what would have caught it, and instead it was pinned to the
+     * same wrong value on both sides.
+     *
+     * It now asserts the budgeted route is the one the manifest actually contains, so the next
+     * rename breaks this test rather than silently turning the budget off.
+     */
+    expect(source).toMatch(/\(app\)\/build\/page/);
+    expect(source).toMatch(/\(app\)\/build\/\[id\]\/page/);
   });
 
   it("is wired into package.json", () => {

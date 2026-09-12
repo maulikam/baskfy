@@ -62,11 +62,10 @@ export function useLiveMarks(symbols: readonly string[]): LiveMarks {
 }
 
 /** Prefer the live mark on the Price column; leave every other field on the published row. */
-export function withLivePrice<T extends { symbol?: unknown }>(
-  row: T,
-  marks: Readonly<Record<string, number>>,
-): T {
-  const symbol = typeof row.symbol === "string" ? row.symbol.trim().toUpperCase() : "";
+export function withLivePrice<T>(row: T, marks: Readonly<Record<string, number>>): T {
+  if (typeof row !== "object" || row === null || !("symbol" in row)) return row;
+  const raw = row.symbol;
+  const symbol = typeof raw === "string" ? raw.trim().toUpperCase() : "";
   const live = symbol === "" ? undefined : marks[symbol];
   if (live === undefined) return row;
   return { ...row, last_price: live };

@@ -19,9 +19,11 @@ import type {
  * a fixture written to the *document* is a check on the document, and the moment the real payload
  * arrives the difference between the two is a diff rather than an argument.
  *
- * Every money and price value is a decimal **string**, and every rate carries its unit in the
- * field name — `*_pct` is already a percentage, `*_fraction` is not. `03` stores them as
- * `numeric`, so a fixture that used a `number` would be testing a contract the API does not have.
+ * Money and price values that the API serves as `Decimal` are decimal **strings**. Integer fields
+ * (`turnover_avg_20`, `quantity_open`, the funnel counts) are numbers — matching `TwtTightNameOut`
+ * and VBT's payload. Every rate carries its unit in the field name — `*_pct` is already a
+ * percentage, `*_fraction` is not. A fixture that used a `number` for a Decimal field would be
+ * testing a contract the API does not have.
  */
 
 export function gate(overrides: Partial<TwtGate> = {}): TwtGate {
@@ -53,7 +55,7 @@ export function tightName(overrides: Partial<TwtTightName> = {}): TwtTightName {
     sessions_in_state: 4,
     signal_state: "SIGNAL",
     failed_filters: [],
-    turnover_avg_20: "341200000",
+    turnover_avg_20: 341_200_000,
     locked_upper_circuit: false,
     ...overrides,
   };
@@ -67,7 +69,7 @@ export function position(overrides: Partial<TwtOpenPosition> = {}): TwtOpenPosit
     name: "HOLDCO LIMITED",
     entry_date: "2026-03-12",
     entry_avg: "310.55",
-    quantity_open: "805",
+    quantity_open: 805,
     high_since: "455.00",
     high_since_date: "2026-08-28",
     gtt_trigger: "364.00",

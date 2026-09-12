@@ -7,12 +7,15 @@ import PortfolioActivityPage from "../page";
  * M83. The empty state was static: "Once a broker is connected…" over a "Connect a broker" link,
  * shown to everyone. Maulik read it with Zerodha connected and 17 holdings synced.
  *
- * Two untruths in one box. It implied he was not connected when he was, and it implied connecting
- * would fill the page — when nothing would, because the activity feed does not exist. Prompting an
- * action that cannot help is worse than an empty box: it sends someone to redo work already done.
+ * Audit 1.3: connected ≠ synced. The page must render `overview.sync_summary`, not invent
+ * "holdings are synced" from a connected OAuth token.
  */
 vi.mock("@/lib/brokers/fetch", () => ({
   fetchBrokerCatalog: vi.fn(),
+}));
+
+vi.mock("@/lib/portfolio/fetch", () => ({
+  fetchPortfolioOverview: vi.fn(),
 }));
 
 // `SectionTabs` reads `usePathname`, which is null outside a router. The tabs are not what these
@@ -22,7 +25,9 @@ vi.mock("next/navigation", () => ({
 }));
 
 const { fetchBrokerCatalog } = await import("@/lib/brokers/fetch");
-const mocked = vi.mocked(fetchBrokerCatalog);
+const { fetchPortfolioOverview } = await import("@/lib/portfolio/fetch");
+const mockedCatalog = vi.mocked(fetchBrokerCatalog);
+const mockedOverview = vi.mocked(fetchPortfolioOverview);
 
 const catalog = (connected: boolean) =>
   ({ brokers: [{ id: "zerodha", connected }] }) as unknown as Awaited<
@@ -31,28 +36,46 @@ const catalog = (connected: boolean) =>
 
 describe("the Activity empty state", () => {
   it("does not tell a connected account to connect", async () => {
-    mocked.mockResolvedValue(catalog(true));
+    mockedCatalog.mockResolvedValue(catalog(true));
+    mockedOverview.mockResolvedValue({
+      sync_summary: "Holdings not synced yet",
+    } as Awaited<ReturnType<typeof fetchPortfolioOverview>>);
     render(await PortfolioActivityPage());
     expect(screen.queryByRole("link", { name: "Connect a broker" })).not.toBeInTheDocument();
-    expect(screen.getByTestId("activity-empty")).toHaveTextContent("broker is connected");
+    expect(screen.getByTestId("sync-summary")).toHaveTextContent("Holdings not synced yet");
+  });
+
+  it("does not invent synced from a connected broker alone", async () => {
+    mockedCatalog.mockResolvedValue(catalog(true));
+    mockedOverview.mockResolvedValue({
+      sync_summary: "primary has never synced",
+    } as Awaited<ReturnType<typeof fetchPortfolioOverview>>);
+    render(await PortfolioActivityPage());
+    expect(screen.getByTestId("sync-summary")).toHaveTextContent("primary has never synced");
+    expect(screen.getByTestId("activity-empty")).not.toHaveTextContent("holdings are synced");
   });
 
   it("says plainly that syncing again will not help", async () => {
     // The feed does not exist. Implying otherwise is what sent Maulik back to /brokers.
-    mocked.mockResolvedValue(catalog(true));
+    mockedCatalog.mockResolvedValue(catalog(true));
+    mockedOverview.mockResolvedValue({
+      sync_summary: "Holdings synced: 2026-09-11",
+    } as Awaited<ReturnType<typeof fetchPortfolioOverview>>);
     render(await PortfolioActivityPage());
     expect(screen.getByTestId("activity-empty")).toHaveTextContent("not recorded yet");
   });
 
   it("still offers Connect when nothing is connected", async () => {
-    mocked.mockResolvedValue(catalog(false));
+    mockedCatalog.mockResolvedValue(catalog(false));
+    mockedOverview.mockResolvedValue(null);
     render(await PortfolioActivityPage());
     expect(screen.getByRole("link", { name: "Connect a broker" })).toBeInTheDocument();
   });
 
   it("treats an unreachable catalog as not connected, not as connected", async () => {
     // The cautious direction: offer a link rather than assert a session that may not exist.
-    mocked.mockRejectedValue(new Error("api down"));
+    mockedCatalog.mockRejectedValue(new Error("api down"));
+    mockedOverview.mockResolvedValue(null);
     render(await PortfolioActivityPage());
     expect(screen.getByRole("link", { name: "Connect a broker" })).toBeInTheDocument();
   });

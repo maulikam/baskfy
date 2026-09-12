@@ -695,6 +695,9 @@ class OverviewOut(BaseModel):
     holdings_synced_on: dt.date | None = None
     holdings_synced_label: str
     sync_status: list[SyncStatusOut] = Field(default_factory=list)
+    #: Audit 1.3 — the one sentence Activity, the command centre and the holdings footer all
+    #: render. Built from ``sync_status`` so three surfaces cannot invent three answers.
+    sync_summary: str
     hero: HeroOut
     chart: NavSeriesOut
     attention: list[AttentionOut] = Field(default_factory=list)
@@ -1354,6 +1357,24 @@ def _label_for_sync(on: dt.date | None) -> str:
     if on is None:
         return "Holdings not synced yet"
     return f"Holdings synced: {on.isoformat()}"
+
+
+def _sync_summary(statuses: Sequence[SyncStatusOut]) -> str:
+    """One sentence every surface shares (audit 1.3).
+
+    Connected ≠ synced. A broker OAuth token with no holdings pull must not read as "synced" on
+    Activity while the command centre banner says the opposite.
+    """
+    if not statuses:
+        return "No broker connected"
+    never = [row for row in statuses if row.synced_on is None]
+    if len(never) == len(statuses):
+        return "Holdings not synced yet"
+    if never:
+        names = ", ".join(row.broker.label for row in never)
+        return f"{names} has never synced" if len(never) == 1 else f"Never synced: {names}"
+    latest = max(row.synced_on for row in statuses if row.synced_on is not None)
+    return _label_for_sync(latest)
 
 
 async def _load_ledger(session: AsyncSession, user_id: int) -> _Ledger:
@@ -2545,12 +2566,14 @@ async def portfolio_overview(
     )
 
     synced_on = max((row.as_of for row in ledger.broker_cash), default=None)
+    sync_status = _sync_status(ledger)
     return OverviewOut(
         prices_as_of=ledger.prices.as_of,
         prices_label=_label_for_prices(ledger.prices.as_of),
         holdings_synced_on=synced_on,
         holdings_synced_label=_label_for_sync(synced_on),
-        sync_status=_sync_status(ledger),
+        sync_status=sync_status,
+        sync_summary=_sync_summary(sync_status),
         hero=hero,
         chart=chart,
         attention=[_attention_out(item) for item in ribbon],

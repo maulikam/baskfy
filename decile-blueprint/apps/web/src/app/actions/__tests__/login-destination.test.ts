@@ -1,10 +1,12 @@
 /**
  * Where a sign-in with no `?next=` lands.
  *
- * It has now moved twice: `/build` originally, `/home` when SC9 gave the product a landing
- * surface, and back to `/build` on 27 Aug 2026 at Maulik's instruction — `/home` assumes a user
- * who already holds something, and today's do not, so it lands them on an empty page instead of
- * the tool they came for.
+ * It has now moved three times: `/build` originally, `/home` when SC9 gave the product a landing
+ * surface, back to `/build` on 27 Aug 2026 at Maulik's instruction — `/home` assumes a user who
+ * already holds something, and today's do not — and on to `/onboarding` in `dd23b59` (AF I.4),
+ * once there was a first-login path to land on: connect a broker, import holdings, pick a basket.
+ * The 27 Aug reasoning survives the move rather than being overturned by it; `/onboarding` is
+ * the tool a new account came for, and it is the one screen `/build` could not be.
  *
  * Moving it is one line in `actions/auth.ts`. What makes it worth a test is the second half:
  * seventeen Playwright waits across eleven specs assert the landing, and a mismatch there fails as
@@ -41,11 +43,11 @@ function declaredDestination(): string {
 }
 
 describe("signing in lands on the product's landing surface", () => {
-  it("defaults to /build", () => {
-    // Maulik, 27 Aug 2026: "after login make sure we land into build only". `/home` answers
-    // "what do I hold" for someone who holds something; a new account does not, and the first
-    // screen after signing in should be the one they came to use.
-    expect(declaredDestination()).toBe("/build");
+  it("defaults to /onboarding", () => {
+    // `dd23b59` (AF I.4). The first screen after signing in is the one a new account has work to
+    // do on: connect → import → pick a basket. `?next=` still wins, so a deep link followed while
+    // signed out is not diverted into the wizard — this is only the fallback.
+    expect(declaredDestination()).toBe("/onboarding");
   });
 
   it("declares exactly one default", () => {

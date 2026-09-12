@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { DiscoverSearchClient } from "@/app/(app)/discover/search/discover-search-client";
+import { DisclosureBlock } from "@/components/explore/disclosure-block";
 import { PageHeader } from "@/components/shell/page-header";
 import { SectionTabs } from "@/components/shell/section-tabs";
 import {
@@ -9,6 +10,7 @@ import {
   fetchExploreList,
   type ExploreBasketCard,
 } from "@/lib/explore/fetch";
+import { PAGES } from "@/lib/vocabulary";
 
 /**
  * `/discover/search` — client-side basket search (AF I.3).
@@ -20,8 +22,8 @@ import {
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Search baskets",
-  description: "Filter the catalogue by name, manager or category.",
+  title: PAGES["/discover/search"].title,
+  description: PAGES["/discover/search"].blurb,
   robots: { index: false, follow: false },
 };
 
@@ -50,6 +52,14 @@ export default async function DiscoverSearchPage() {
       ) : (
         <DiscoverSearchClient items={items} />
       )}
+
+      {/* The results carry a headline return, so this page owes the reader the same block every
+          other Discover surface carries. */}
+      <DisclosureBlock variant="performance-not-verified" />
+      <p className="text-xs text-muted-foreground">
+        Searching the catalog is read-only — investing builds an order plan elsewhere; nothing
+        here places an order.
+      </p>
     </div>
   );
 }

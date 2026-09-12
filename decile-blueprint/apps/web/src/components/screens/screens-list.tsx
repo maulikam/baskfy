@@ -5,7 +5,7 @@ import { Copy, Play, Plus, Trash2 } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { BasketCard } from "@/components/basket/basket-card";
 import { EmptyState } from "@/components/data/empty-state";
@@ -58,6 +58,7 @@ export function ScreensList({ initial, error }: ScreensListProps) {
   const [screens, setScreens] = useState<ScreenOut[]>(initial ?? []);
   const [namePromptOpen, setNamePromptOpen] = useState(false);
   const [newName, setNewName] = useState("");
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   const factorLabel = useMemo(() => {
     const byKey = new Map((factors.data ?? []).map((factor) => [factor.key, factor.label]));
@@ -157,7 +158,16 @@ export function ScreensList({ initial, error }: ScreensListProps) {
       />
 
       <Dialog open={namePromptOpen} onOpenChange={setNamePromptOpen}>
-        <DialogContent className="max-w-md">
+        {/* The reader pressed a button that asks them to type a name, so the caret belongs in
+            the name field — named here rather than left to `autoFocus`, which would also fire
+            on a page that merely happened to render this markup. */}
+        <DialogContent
+          className="max-w-md"
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            nameInputRef.current?.focus();
+          }}
+        >
           <DialogTitle className="text-base font-semibold">Name this screen</DialogTitle>
           <DialogDescription className="mt-2 text-sm text-muted-foreground">
             Pick a name you will recognise later. You can rename it any time.
@@ -170,12 +180,12 @@ export function ScreensList({ initial, error }: ScreensListProps) {
             }}
           >
             <input
+              ref={nameInputRef}
               data-testid="new-screen-name"
               value={newName}
               onChange={(event) => setNewName(event.target.value)}
               placeholder="e.g. Midcap momentum"
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-              autoFocus
             />
             <div className="flex gap-2">
               <Button type="submit" variant="primary" size="sm" disabled={create.isPending}>

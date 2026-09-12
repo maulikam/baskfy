@@ -132,6 +132,10 @@ export const PAGES = {
     blurb: "Every published basket, with its risk before its return.",
     formerly: "Explore",
   },
+  "/discover/search": {
+    title: "Search · Discover",
+    blurb: "Find a basket by name, manager or category — the catalogue filtered as you type.",
+  },
   "/discover/compare": {
     title: "Compare · Discover",
     blurb: "Two or three baskets side by side, measured over the same period.",

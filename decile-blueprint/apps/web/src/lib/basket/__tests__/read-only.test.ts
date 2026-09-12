@@ -30,6 +30,11 @@ const SOURCES = [...filesUnder(HERE), ...filesUnder(BASKET_PAGES)].filter(
   (path) => (path.endsWith(".ts") || path.endsWith(".tsx")) && !path.includes("__tests__"),
 );
 
+/** A page whose whole body is `redirect("/…")` — it renders nothing and forwards. */
+function isRedirectStub(source: string): boolean {
+  return /^\s*redirect\("\/[^"]*"\);\s*$/m.test(source) && !/return\s*\(/.test(source);
+}
+
 describe("the basket surfaces are read-only", () => {
   it("has sources to check", () => {
     expect(SOURCES.length).toBeGreaterThan(0);
@@ -72,8 +77,19 @@ describe("the basket surfaces are read-only", () => {
   it("says so on the page, where a person can see it", () => {
     // Not decoration. Someone looking at a plan table needs to know this is a record and not a
     // control, and the guarantee is worth as much to the reader as to the linter.
+    let said = 0;
     for (const page of filesUnder(BASKET_PAGES).filter((p) => p.endsWith("page.tsx"))) {
-      expect(readFileSync(page, "utf8")).toContain("read-only");
+      const source = readFileSync(page, "utf8");
+      /*
+       * AFH 5.7 (`ed789d0`) made `/discover/saved` a redirect to `/portfolio/watchlist`. A page
+       * that forwards before rendering anything has nowhere to put the sentence and no reader to
+       * put it in front of; the destination carries its own. The stub has to actually be a stub,
+       * which is what `isRedirectStub` checks — the moment it renders markup it owes the line.
+       */
+      if (isRedirectStub(source)) continue;
+      said += 1;
+      expect(source, `${page} says it is read-only`).toContain("read-only");
     }
+    expect(said, "the sweep read no rendering page").toBeGreaterThanOrEqual(4);
   });
 });

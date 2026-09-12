@@ -76,7 +76,7 @@ test.describe("the account lifecycle", () => {
 
     // --- login -------------------------------------------------------------
     await signInWithPassword(page, email, PASSWORD);
-    await page.waitForURL(/\/build/, { timeout: 20_000 });
+    await page.waitForURL(/\/onboarding/, { timeout: 20_000 });
 
     await page.goto("/profile");
     await expect(page.getByRole("heading", { level: 1, name: "Profile" })).toBeVisible();
@@ -98,7 +98,7 @@ test.describe("the account lifecycle", () => {
     await signInWithPassword(page, email, PASSWORD);
     await expect(page.getByText(/did not match an account/i)).toBeVisible({ timeout: 15_000 });
     await signInWithPassword(page, email, NEW_PASSWORD);
-    await page.waitForURL(/\/build/, { timeout: 20_000 });
+    await page.waitForURL(/\/onboarding/, { timeout: 20_000 });
 
     // --- delete account ----------------------------------------------------
     await page.goto("/profile");
@@ -140,7 +140,7 @@ test.describe("the account lifecycle", () => {
     await expect(page.getByRole("textbox", { name: "Email" })).toHaveCount(1);
     await page.getByLabel("Six-digit code").fill(code);
     await page.getByRole("button", { name: "Sign in" }).click();
-    await page.waitForURL(/\/build/, { timeout: 20_000 });
+    await page.waitForURL(/\/onboarding/, { timeout: 20_000 });
   });
 
   test("resets a forgotten password from the emailed link", async ({ page, request }) => {
@@ -161,7 +161,7 @@ test.describe("the account lifecycle", () => {
     });
 
     await signInWithPassword(page, email, NEW_PASSWORD);
-    await page.waitForURL(/\/build/, { timeout: 20_000 });
+    await page.waitForURL(/\/onboarding/, { timeout: 20_000 });
   });
 
   test("a gated route sends an anonymous visitor to sign in, and back again", async ({ page }) => {
@@ -182,7 +182,7 @@ test.describe("the account lifecycle", () => {
     await page.getByLabel("Password").fill(PASSWORD);
     await page.getByRole("button", { name: "Sign in" }).click();
 
-    await page.waitForURL(/\/build/, { timeout: 20_000 });
+    await page.waitForURL(/\/onboarding/, { timeout: 20_000 });
     expect(page.url()).not.toContain("example.com");
   });
 
@@ -190,7 +190,7 @@ test.describe("the account lifecycle", () => {
     const email = freshEmail("export");
     await registerAccount(page, email, PASSWORD);
     await signInWithPassword(page, email, PASSWORD);
-    await page.waitForURL(/\/build/, { timeout: 20_000 });
+    await page.waitForURL(/\/onboarding/, { timeout: 20_000 });
 
     await page.goto("/profile");
     const download = page.waitForEvent("download");

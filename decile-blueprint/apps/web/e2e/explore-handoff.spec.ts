@@ -55,7 +55,7 @@ async function signIn(page: Page): Promise<boolean> {
   await page.getByLabel("Password").fill(E2E_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
   try {
-    await page.waitForURL(/\/build/, { timeout: 20_000 });
+    await page.waitForURL(/\/onboarding/, { timeout: 20_000 });
     return true;
   } catch {
     return false;

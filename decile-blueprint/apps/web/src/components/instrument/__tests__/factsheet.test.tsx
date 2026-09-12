@@ -203,9 +203,13 @@ describe("SEO", () => {
     expect(description).toContain("Not investment advice.");
   });
 
-  it("is indexable and canonical, unlike the application routes", () => {
+  it("is canonical, and does not claim to be indexable from behind the gate", () => {
+    /* This asserted `index: true` until AUDIT 4.8 (`d24126a`): an instrument page sits behind
+       the session gate and redirects a crawler to `/login`, so inviting one in was a promise the
+       route could not keep. The canonical stays — it is what makes the two casings of a symbol
+       one page. `lib/instrument/__tests__/seo-robots.test.ts` is the decision's own pin. */
     const metadata = instrumentMetadata(CUPID_FACTSHEET);
-    expect(metadata.robots).toEqual({ index: true, follow: true });
+    expect(metadata.robots).toEqual({ index: false, follow: false });
     expect(metadata.alternates?.canonical).toBe("/instruments/CUPID");
   });
 

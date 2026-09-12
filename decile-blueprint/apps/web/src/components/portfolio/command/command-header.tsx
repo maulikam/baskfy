@@ -472,7 +472,7 @@ export function CommandHeader({
           <ModeSwitch mode={mode} onChange={onModeChange} counts={counts} />
         </div>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          A closer look at capital, performance and portfolio health — same book as Overview.
+          A closer look at capital, performance and health — the same portfolio group as Overview.
         </p>
       </div>
 

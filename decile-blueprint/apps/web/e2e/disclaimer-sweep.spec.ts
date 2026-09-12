@@ -95,7 +95,7 @@ async function signIn(page: Page): Promise<void> {
   await page.getByLabel("Email").fill(EMAIL);
   await page.getByLabel("Password").fill(E2E_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await page.waitForURL(/\/build/);
+  await page.waitForURL(/\/onboarding/);
 }
 
 async function assertDisclaimer(page: Page, path: string): Promise<void> {

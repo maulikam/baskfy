@@ -116,6 +116,11 @@ const SOURCES = [...filesUnder(DISCOVER_PAGES), ...filesUnder(DISCOVER_COMPONENT
   (path) => (path.endsWith(".ts") || path.endsWith(".tsx")) && !path.includes("__tests__"),
 );
 
+/** A page whose whole body is `redirect("/…")` — it renders nothing and forwards. */
+function isRedirectStub(source: string): boolean {
+  return /^\s*redirect\("\/[^"]*"\);\s*$/m.test(source) && !/return\s*\(/.test(source);
+}
+
 describe("the Discover surfaces as a whole", () => {
   it("opens enough files to be a real sweep", () => {
     // Declared, per the anti-laziness rule: a sweep that silently found nothing is not a sweep.
@@ -124,14 +129,24 @@ describe("the Discover surfaces as a whole", () => {
 
   it("keeps every page carrying the standing disclosure block", () => {
     const pages = SOURCES.filter((path) => path.endsWith(`${"page"}.tsx`));
-    expect(pages.length).toBeGreaterThanOrEqual(4);
+    let addressed = 0;
     for (const page of pages) {
       const text = readFileSync(page, "utf8");
       // `plan` hands off to the desk console and carries its own; every other page shows
       // performance and owes the reader the block.
       if (page.includes("/plan/")) continue;
+      /*
+       * AFH 5.7 (`ed789d0`) turned `/discover/saved` into a redirect to `/portfolio/watchlist`:
+       * one list, one door. A page that forwards before rendering anything has no reader to
+       * address, so it carries no block — but it has to genuinely be that, which is what
+       * `isRedirectStub` insists on. Give the stub a paragraph of its own and it owes the block
+       * again, here, in this test.
+       */
+      if (isRedirectStub(text)) continue;
+      addressed += 1;
       expect(text, `${page} carries a disclosure`).toMatch(/DisclosureBlock|DisclosureNote/);
     }
+    expect(addressed, "the sweep read no rendering page").toBeGreaterThanOrEqual(4);
   });
 
   it("never reaches an order path from any Discover surface", () => {

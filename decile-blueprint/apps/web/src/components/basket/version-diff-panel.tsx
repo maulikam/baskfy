@@ -44,16 +44,24 @@ export function VersionDiffPanel({
     Number(initialFrom) || previous || newest || 1,
   );
   const [toNo, setToNo] = useState<number>(Number(initialTo) || newest || 1);
-  const [diff, setDiff] = useState<VersionDiff | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  /*
+   * "Both selects name the same version" is a fact about the current props and state, so it is
+   * derived here rather than written into state from an effect: an effect that calls setState
+   * synchronously renders twice for every pick, and this one used to clear the previous diff on
+   * the second pass rather than the first.
+   */
+  const comparable = fromNo !== toNo && ordered.length >= 2;
+  const pair = `${fromNo}:${toNo}`;
+  /** The last answer the API gave, tagged with the pair it answers — never shown for another. */
+  const [fetched, setFetched] = useState<{
+    pair: string;
+    diff: VersionDiff | null;
+    error: string | null;
+  } | null>(null);
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
-    if (fromNo === toNo || ordered.length < 2) {
-      setDiff(null);
-      setError(fromNo === toNo ? "Pick two different versions." : null);
-      return;
-    }
+    if (!comparable) return;
     let cancelled = false;
     startTransition(() => {
       void (async () => {
@@ -68,8 +76,7 @@ export function VersionDiffPanel({
           }
           const body = (await response.json()) as VersionDiff;
           if (!cancelled) {
-            setDiff(body);
-            setError(null);
+            setFetched({ pair, diff: body, error: null });
             router.replace(
               `/basket/${slug}/versions?from=${fromNo}&to=${toNo}`,
               { scroll: false },
@@ -77,8 +84,11 @@ export function VersionDiffPanel({
           }
         } catch (err) {
           if (!cancelled) {
-            setDiff(null);
-            setError(err instanceof Error ? err.message : "Diff unavailable");
+            setFetched({
+              pair,
+              diff: null,
+              error: err instanceof Error ? err.message : "Diff unavailable",
+            });
           }
         }
       })();
@@ -86,7 +96,15 @@ export function VersionDiffPanel({
     return () => {
       cancelled = true;
     };
-  }, [fromNo, toNo, ordered.length, router, slug]);
+  }, [comparable, pair, fromNo, toNo, router, slug]);
+
+  const answer = fetched?.pair === pair ? fetched : null;
+  const diff = comparable ? (answer?.diff ?? null) : null;
+  const error = comparable
+    ? (answer?.error ?? null)
+    : fromNo === toNo
+      ? "Pick two different versions."
+      : null;
 
   if (ordered.length < 2) {
     return (

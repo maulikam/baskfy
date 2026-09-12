@@ -36,7 +36,11 @@ describe("AFH 5.1 portfolio voice", () => {
 
   it("titles the command header Details, not Portfolio Command Center", () => {
     const header = readFileSync(join(ROOT, "command", "command-header.tsx"), "utf8");
-    expect(header).toContain(">Details<");
+    /* Matched against the `<h1>` rather than as the bare text `>Details<`: the heading's class
+       list grew past the print width and Prettier wrapped the element, which broke the old
+       matcher without changing a character a reader sees. The title is the spec; its formatting
+       is not. */
+    expect(header).toMatch(/<h1[^>]*>\s*Details\s*<\/h1>/);
     expect(header).not.toContain("Portfolio Command Center");
   });
 

@@ -9,8 +9,8 @@ import { fetchPortfolioOverview } from "@/lib/portfolio/fetch";
 /**
  * `/onboarding` — first-login path: connect → import → preferences → pick a basket (AF I.4).
  *
- * Landing after sign-in still defaults to `/build` until `actions/auth.ts` is pointed here
- * (STATUS: needs actions/auth.ts).
+ * A sign-in that named no `?next=` lands here: `actions/auth.ts` `DEFAULT_DESTINATION` was
+ * pointed at this page in `dd23b59`.
  */
 
 export const dynamic = "force-dynamic";
@@ -22,13 +22,10 @@ export const metadata: Metadata = {
 };
 
 export default async function OnboardingPage() {
-  let brokerConnected = false;
-  try {
-    const catalog = await fetchBrokerCatalog();
-    brokerConnected = catalog.brokers.some((broker) => broker.connected);
-  } catch {
-    brokerConnected = false;
-  }
+  // An unreachable catalogue reads as "no broker connected": the wizard's first step is to
+  // connect one, which is the right thing to offer either way.
+  const catalog = await fetchBrokerCatalog().catch(() => null);
+  const brokerConnected = catalog?.brokers.some((broker) => broker.connected) ?? false;
 
   const overview = await fetchPortfolioOverview().catch(() => null);
   const holdingsSynced = Boolean(

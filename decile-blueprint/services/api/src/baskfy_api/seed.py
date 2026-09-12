@@ -99,7 +99,7 @@ from baskfy_providers.fixtures import FixtureProvider
 
 
 
-_REPO_ROOT = Path(__file__).resolve().parents[3]
+_REPO_ROOT = Path(__file__).resolve().parents[4]
 _REFERENCE_EXPORT = _REPO_ROOT / "tests" / "fixtures" / "reference-screen-export-2026-08-18.csv"
 
 

@@ -126,6 +126,9 @@ class WorkerSettings(BaseSettings):
 
     #: Task-level retry budget (deliverable 1).
     task_max_retries: int = Field(default=3, ge=0)
+    #: AF 3.11: ``task_reject_on_worker_lost`` requeues without bumping Celery retries; this caps
+    #: how many times a single message may come back after a worker death (OOM loop guard).
+    task_max_redeliveries: int = Field(default=3, ge=0)
     task_retry_backoff_seconds: int = Field(default=60, gt=0)
 
     def broker_url(self) -> str:

@@ -32,6 +32,9 @@ class ProviderSettings(BaseSettings):
     #: Where the encrypted token blob lives. A file by default; Prompt 17 may move it to a
     #: secret store without touching any call site.
     kite_token_path: str = ".secrets/kite-token.enc"
+    #: Explicit HTTP timeout for KiteConnect (AF 3.11). The SDK defaults to 7 s, which is too
+    #: short for a historical_data chunk on a loaded night and too opaque to tune from env.
+    kite_request_timeout_seconds: float = Field(default=30.0, gt=0)
 
     #: docs/09: "Rate limit ~ 3 req/s". Kite states this as a combined ceiling across every
     #: endpoint, so it is the clock EVERY Kite read waits on, whatever it is asking for.

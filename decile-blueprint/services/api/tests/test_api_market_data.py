@@ -373,6 +373,60 @@ class TestListings:
         rows = as_rows(body_of(await api.get(url("/listings"), params={"search": "CUPID"}))["data"])
         assert [row["symbol"] for row in rows] == ["CUPID"]
 
+    async def test_seam_day_and_rights_entitlements_are_hidden(
+        self, api: httpx.AsyncClient, screener_session: AsyncSession
+    ) -> None:
+        """AF 1.8 — backfill seam IPOs and ``-RE*`` symbols are not listings."""
+        from baskfy_api.market_data import LISTINGS_BACKFILL_SEAM
+
+        screener_session.add_all(
+            [
+                Instrument(
+                    exchange_id=1,
+                    symbol="SEAMIPO",
+                    name="SEAM DAY IPO",
+                    series="EQ",
+                    instrument_type="EQ",
+                    is_active=True,
+                    listed_on=LISTINGS_BACKFILL_SEAM,
+                ),
+                Instrument(
+                    exchange_id=1,
+                    symbol="REALCO-RE",
+                    name="REALCO RIGHTS ENTITLEMENT",
+                    series="EQ",
+                    instrument_type="EQ",
+                    is_active=True,
+                    listed_on=dt.date(2026, 9, 1),
+                ),
+                Instrument(
+                    exchange_id=1,
+                    symbol="REALCO",
+                    name="REALCO LIMITED",
+                    series="EQ",
+                    instrument_type="EQ",
+                    is_active=True,
+                    listed_on=dt.date(2026, 9, 1),
+                ),
+            ]
+        )
+        await screener_session.flush()
+
+        rows = as_rows(
+            body_of(await api.get(url("/listings"), params={"search": "REALCO", "limit": 50}))[
+                "data"
+            ]
+        )
+        symbols = {row["symbol"] for row in rows}
+        assert "REALCO" in symbols
+        assert "REALCO-RE" not in symbols
+        seam_rows = as_rows(
+            body_of(await api.get(url("/listings"), params={"search": "SEAMIPO", "limit": 50}))[
+                "data"
+            ]
+        )
+        assert seam_rows == []
+
     async def test_a_forged_cursor_is_a_400(self, api: httpx.AsyncClient) -> None:
         assert_problem(
             await api.get(url("/listings"), params={"cursor": "not-a-cursor"}),

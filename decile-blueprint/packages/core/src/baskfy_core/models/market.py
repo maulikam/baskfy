@@ -43,21 +43,30 @@ CORPORATE_ACTION_TYPES: tuple[str, ...] = (
     "demerger",
 )
 
-#: docs/04: ohlcv_daily.source
-BAR_SOURCES: tuple[str, ...] = ("kite", "nse")
+#: docs/04: ohlcv_daily.source — ``kite_adjusted`` is M29 deep history (vendor-adjusted, no
+#: exchange print); ``kite`` is a nightly raw candle that ``apply_adjustments`` must cover.
+BAR_SOURCES: tuple[str, ...] = ("kite", "nse", "kite_adjusted")
+
+#: Deep-history / bhavcopy seam (M29). Rows before this with source kite are retagged
+#: ``kite_adjusted`` by migration 0044.
+BHAVCOPY_SEAM: dt.date = dt.date(2024, 1, 1)
 
 
 class OhlcvDaily(Base):
     """Daily bars. TimescaleDB hypertable on ``date`` (1-year chunks), compressed after 90 days.
 
     ``close`` is the adjusted series that every factor reads; ``close_raw`` is the exchange
-    print used wherever the user expects a real price (docs/02 rule 2).
+    print used wherever the user expects a real price (docs/02 rule 2). ``open_raw`` /
+    ``high_raw`` / ``low_raw`` are nullable: NULL when the exchange print is unknown (deep
+    history, or an older row adjusted before those columns existed).
     """
 
     __tablename__ = "ohlcv_daily"
     __table_args__ = (
         PrimaryKeyConstraint("instrument_id", "date"),
-        CheckConstraint("source IN ('kite', 'nse')", name="ohlcv_daily_source"),
+        CheckConstraint(
+            "source IN ('kite', 'nse', 'kite_adjusted')", name="ohlcv_daily_source"
+        ),
     )
 
     instrument_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("instrument.id"))
@@ -69,6 +78,9 @@ class OhlcvDaily(Base):
     volume: Mapped[int] = mapped_column(BigInteger, nullable=False)
     close_raw: Mapped[Decimal] = mapped_column(PRICE_RAW, nullable=False)
     volume_raw: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    open_raw: Mapped[Decimal | None] = mapped_column(PRICE_RAW)
+    high_raw: Mapped[Decimal | None] = mapped_column(PRICE_RAW)
+    low_raw: Mapped[Decimal | None] = mapped_column(PRICE_RAW)
     turnover: Mapped[Decimal | None] = mapped_column(MONEY)
     adj_factor: Mapped[Decimal] = mapped_column(ADJ_FACTOR, nullable=False, server_default="1")
     upper_circuit: Mapped[Decimal | None] = mapped_column(PRICE_RAW)

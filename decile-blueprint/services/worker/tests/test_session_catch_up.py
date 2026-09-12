@@ -175,6 +175,27 @@ class TestItNeverProposesADayThatCannotHaveData:
         assert FRI not in missing
         assert missing == [THU]
 
+    async def test_a_derived_day_is_demoted_after_one_missing_bhavcopy(
+        self, session: AsyncSession
+    ) -> None:
+        """AF 3.11 — catch-up must not re-propose a derived holiday every sweep."""
+        await session.execute(
+            update(TradingDay)
+            .where(TradingDay.date == FRI)
+            .values(is_trading_day=True, source="derived", holiday_name=None)
+        )
+        await session.flush()
+
+        demoted = await catch_up.demote_derived_after_missing_bhavcopy(
+            session, FRI, published=False
+        )
+        assert demoted is True
+        row = (
+            await session.execute(select(TradingDay).where(TradingDay.date == FRI))
+        ).scalar_one()
+        assert row.is_trading_day is False
+        assert await catch_up.unlanded_sessions(session, through=FRI, lookback_days=0) == []
+
     async def test_a_date_the_calendar_does_not_carry_is_not_proposed(
         self, session: AsyncSession
     ) -> None:

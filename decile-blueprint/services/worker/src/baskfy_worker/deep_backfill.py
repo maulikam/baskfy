@@ -22,13 +22,14 @@ instead, and says what it is storing.
 WHAT IT STORES
 --------------
 Kite's series is adjusted at source, so it is written as an **adjusted** series and marked
-`source = 'kite'`. `close_raw` is NOT NULL in the schema, so it carries the same value: for these
-years there is no exchange print on this side, and pretending otherwise would be the lie this
-module was written to avoid. `adj_factor` is 1 — the adjustment is already in the price, not
-applied on top of it.
+`source = 'kite_adjusted'` (AF 0.5 — distinct from nightly raw `kite` candles). `close_raw` is
+NOT NULL in the schema, so it carries the same value: for these years there is no exchange print
+on this side, and pretending otherwise would be the lie this module was written to avoid.
+`adj_factor` is 1 at write — the adjustment is already in the price; later splits rescale this
+segment across the M29 seam (AF 3.1) without re-running `adjust_bars` on it.
 
-`reprocess_instrument` skips `source = 'kite'` rows for exactly that reason (see
-`tasks/adjustments.py`): a bar with no exchange print cannot be re-derived from one.
+`reprocess_instrument` skips `source = 'kite_adjusted'` for the double-count reason (see
+`tasks/adjustments.py`); it rescales the segment by the post-seam factor instead.
 
 THE SEAM, AND WHY IT IS SPLICED
 -------------------------------
@@ -212,7 +213,7 @@ async def _write(
             "volume_raw": int(row["volume"]),
             # The adjustment is already inside the price, not applied on top of it.
             "adj_factor": Decimal(1),
-            "source": "kite",
+            "source": "kite_adjusted",
         }
         for day, row in bars
     ]

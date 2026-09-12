@@ -24,8 +24,8 @@ blocker in the project.
 
 | | |
 |---|---|
-| **31** | ⚠ **`aws sso login --sso-session baskfy`** — the token has expired, so **nothing can reach the box**. Blocks every row below that mentions a deploy. |
-| **1** | Deploy the risk-ceiling lock — outside market hours. The only item needing your hands. |
+| **31** | ✅ **Done 12 Sep 2026.** You logged in; the box went `dd9cc73` → `8b074c7` and `verify-swing.sh` says `SWING OK`. |
+| **1** | ✅ **Shipped 12 Sep 2026** with the rest of the 25 commits, on a Saturday with the market shut. |
 | **9** | Review the 46 irregular corporate actions (probable demergers). Nothing blocked. |
 | **11** | 231 instruments absent from Kite's master — a decision about whether it is worth filling them from the NSE archive. |
 | **12** | Historical breadth is survivorship-biased. The page says so now; the fix needs NSE's index-change announcements. |
@@ -41,9 +41,13 @@ blocker in the project.
 
 ---
 
-## 31. The AWS SSO token has expired — nothing can deploy until you log in
+## 31. ✅ CLEARED 12 Sep 2026 — you logged in, and the stack is deployed
 
-**Raised 12 Sep 2026**, when a deploy was asked for. · **Status:** open, blocking every deploy.
+**Raised and closed 12 Sep 2026.** · **Status:** ✅ done. You ran the login; `push-images.sh` and
+`deploy-swing.sh` then took the box from `dd9cc73` to **`8b074c7`**, 25 commits, and
+`verify-swing.sh` ends `SWING OK`. `gates/deploy-pc-command-center.md` is 7/7.
+**The Portfolio Command Center is what `/portfolio/portfolios` now serves** — the marker string is
+compiled into both halves of the deployed route bundle. The original entry follows.
 
 `aws sts get-caller-identity --profile baskfy-poc` answers:
 

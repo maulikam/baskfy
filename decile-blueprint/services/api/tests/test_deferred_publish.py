@@ -35,18 +35,14 @@ def test_defer_does_not_publish_until_drain(monkeypatch: pytest.MonkeyPatch) -> 
     row = SimpleNamespace(id=42, task_id=None)
     calls: list[tuple[object, str, dict[str, object]]] = []
 
-    def _fake_listens_for(
-        target: object, identifier: str, **kwargs: object
-    ) -> object:
+    def _fake_listens_for(target: object, identifier: str, **kwargs: object) -> object:
         def decorator(fn: object) -> object:
             calls.append((target, identifier, dict(kwargs)))
             return fn
 
         return decorator
 
-    monkeypatch.setattr(
-        "baskfy_api.deferred_publish.event.listens_for", _fake_listens_for
-    )
+    monkeypatch.setattr("baskfy_api.deferred_publish.event.listens_for", _fake_listens_for)
 
     defer_task_publish(
         cast(AsyncSession, session),

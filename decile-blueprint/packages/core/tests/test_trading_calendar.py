@@ -11,8 +11,8 @@ from __future__ import annotations
 import datetime as dt
 
 import pytest
-
 from _law1_io import seed_holidays
+
 from baskfy_core.trading_calendar import (
     EXPECTED_WINDOW_LENGTHS,
     TradingDayRow,

@@ -102,7 +102,7 @@ class TestAgainstTheDatabase:
     async def test_written_bars_are_marked_and_carry_no_adjustment_factor(
         self, session: AsyncSession
     ) -> None:
-        """`source='kite_adjusted'` is what stops `reprocess_instrument` feeding them to adjust_bars."""
+        """`source='kite_adjusted'` stops `reprocess_instrument` feeding them to adjust_bars."""
         instrument_id = await make_instrument(session, "DEEPCO", token=999002)
         bars = [
             (

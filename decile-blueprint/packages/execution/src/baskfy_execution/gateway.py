@@ -127,8 +127,8 @@ class OrderGateway:
         if not os.path.isfile(self._journal_path):
             return
         with open(self._journal_path, encoding="utf-8") as fh:
-            for line in fh:
-                line = line.strip()
+            for raw in fh:
+                line = raw.strip()
                 if not line:
                     continue
                 rec = json.loads(line)

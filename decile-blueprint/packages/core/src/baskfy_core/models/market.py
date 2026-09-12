@@ -64,9 +64,7 @@ class OhlcvDaily(Base):
     __tablename__ = "ohlcv_daily"
     __table_args__ = (
         PrimaryKeyConstraint("instrument_id", "date"),
-        CheckConstraint(
-            "source IN ('kite', 'nse', 'kite_adjusted')", name="ohlcv_daily_source"
-        ),
+        CheckConstraint("source IN ('kite', 'nse', 'kite_adjusted')", name="ohlcv_daily_source"),
     )
 
     instrument_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("instrument.id"))

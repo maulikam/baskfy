@@ -167,13 +167,17 @@ async def _rescale_deep_segment(
     and writing ``baseline * seam_factor`` keeps the join continuous when a new split lands.
     """
     rows = (
-        await session.execute(
-            select(OhlcvDaily).where(
-                OhlcvDaily.instrument_id == instrument_id,
-                OhlcvDaily.source == KITE_ADJUSTED_SOURCE,
+        (
+            await session.execute(
+                select(OhlcvDaily).where(
+                    OhlcvDaily.instrument_id == instrument_id,
+                    OhlcvDaily.source == KITE_ADJUSTED_SOURCE,
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     if not rows:
         return 0
     target = _factor(seam_factor)
@@ -356,9 +360,9 @@ def outcome_note_for(results: Sequence[InstrumentAdjustment]) -> dict[str, objec
 
 
 __all__ = [
+    "KITE_ADJUSTED_SOURCE",
     "AdjustmentOutcome",
     "InstrumentAdjustment",
-    "KITE_ADJUSTED_SOURCE",
     "instruments_with_actions",
     "outcome_note_for",
     "reprocess_instrument",

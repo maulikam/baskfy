@@ -159,7 +159,7 @@ def _restore_code_valid(code: str, user: AppUser, settings: Settings) -> bool:
 
 
 def _deletion_mail(to: str, days: int, restore_code: str) -> Message:
-    heading = f"Your Baskfy account is scheduled for deletion"
+    heading = "Your Baskfy account is scheduled for deletion"
     body = [
         f"Your account has been deactivated and will be permanently erased in {days} days.",
         "Signing in again before then cancels the deletion and restores the account.",
@@ -586,7 +586,9 @@ async def delete_me(  # noqa: PLR0913, PLR0917 - FastAPI injects one parameter p
 
     pending = await request_deletion(session, user, settings)
     restore_code = _mint_restore_code(user, settings, purge_after=pending.purge_after)
-    await mailer.deliver(_deletion_mail(user.email, settings.account_purge_after_days, restore_code))
+    await mailer.deliver(
+        _deletion_mail(user.email, settings.account_purge_after_days, restore_code)
+    )
     clear_auth_cookies(response, settings)
     return DeletionOut(
         status="scheduled",

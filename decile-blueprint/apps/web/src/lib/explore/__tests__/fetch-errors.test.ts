@@ -2,31 +2,34 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/auth", () => ({
-  auth: vi.fn(async () => ({ accessToken: "tok" })),
+  auth: vi.fn(() => Promise.resolve({ accessToken: "tok" })),
 }));
 vi.mock("@/lib/api/config", () => ({
   serverApiOrigin: () => "http://api.test",
 }));
 
 const serverFetchJson = vi.fn();
-vi.mock("@/lib/api/server-fetch", async () => {
+vi.mock("@/lib/api/server-fetch", () => {
   class ServerFetchStatusError extends Error {
     readonly status: number;
-    constructor(url: string, status: number) {
+    readonly problem: Record<string, unknown> | null;
+    constructor(url: string, status: number, problem: Record<string, unknown> | null) {
       super(`${url} responded ${status}`);
       this.status = status;
+      this.problem = problem;
     }
   }
   class ServerFetchTimeoutError extends Error {
-    readonly timeoutMs = 2500;
-    constructor(path: string) {
+    readonly timeoutMs: number;
+    constructor(path: string, timeoutMs: number) {
       super(`Timed out fetching ${path}`);
+      this.timeoutMs = timeoutMs;
     }
   }
   return {
     ServerFetchStatusError,
     ServerFetchTimeoutError,
-    serverFetchJson: (...args: unknown[]) => serverFetchJson(...args),
+    serverFetchJson: (...args: unknown[]) => serverFetchJson(...args) as Promise<unknown>,
   };
 });
 
@@ -47,19 +50,19 @@ describe("readExploreJson error split", () => {
 
   it("throws ExploreNotFound on HTTP 404", async () => {
     serverFetchJson.mockRejectedValue(
-      new ServerFetchStatusError("http://api.test/api/v1/explore/x", 404),
+      new ServerFetchStatusError("http://api.test/api/v1/explore/x", 404, null),
     );
     await expect(readExploreJson("/explore/x")).rejects.toBeInstanceOf(ExploreNotFound);
   });
 
   it("throws ExploreUnavailable on timeout", async () => {
-    serverFetchJson.mockRejectedValue(new ServerFetchTimeoutError("/explore/x"));
+    serverFetchJson.mockRejectedValue(new ServerFetchTimeoutError("/explore/x", 2500));
     await expect(readExploreJson("/explore/x")).rejects.toBeInstanceOf(ExploreUnavailable);
   });
 
   it("throws ExploreUnavailable on HTTP 503", async () => {
     serverFetchJson.mockRejectedValue(
-      new ServerFetchStatusError("http://api.test/api/v1/explore/x", 503),
+      new ServerFetchStatusError("http://api.test/api/v1/explore/x", 503, null),
     );
     await expect(readExploreJson("/explore/x")).rejects.toBeInstanceOf(ExploreUnavailable);
   });

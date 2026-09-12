@@ -80,7 +80,7 @@ export async function fetchExplorePerformanceSeries(
  */
 export async function resolveBasketPerformanceSeries(
   slug: string,
-  _metrics?: ExploreMetrics | null | undefined,
+  _metrics?: ExploreMetrics | null,
 ): Promise<ExplorePerformanceSeries> {
   const fromApi = await fetchExplorePerformanceSeries(slug);
   if (fromApi.points.length >= 2) {

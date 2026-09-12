@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import datetime as dt
 import inspect
+from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
-
-from typing import Sequence, cast
+from typing import cast
 
 from baskfy_api.routers import curated_investments as mod
 from baskfy_api.routers.curated_investments import _HoldingMark, _snapshot_for

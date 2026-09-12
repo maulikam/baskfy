@@ -1,5 +1,4 @@
 import Link from "next/link";
-import type { Route } from "next";
 
 import { UNCOMPUTED_METRIC_KEYS, uncomputedMetrics } from "@/lib/discover/metrics";
 import { definedParams, type ExploreListParams } from "@/lib/explore/fetch";
@@ -75,7 +74,7 @@ function Chip({
 }) {
   return (
     <Link
-      href={href as Route}
+      href={href}
       aria-current={active ? "true" : undefined}
       data-active={active ? "true" : "false"}
       className={cn(
@@ -141,7 +140,7 @@ export function FilterRail({
         <h2 className="text-sm font-semibold">Filters</h2>
         {active ? (
           <Link
-            href={buildHref(base, definedParams({ view: state.view, sort: state.sort, order: state.order })) as Route}
+            href={buildHref(base, definedParams({ view: state.view, sort: state.sort, order: state.order }))}
             data-testid="clear-filters"
             className="text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
           >

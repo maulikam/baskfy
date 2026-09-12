@@ -24,8 +24,6 @@ sample, 3 years, seeded from fixtures ... no Kite calls, provider stubbed". It g
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import argparse
 import asyncio
 import datetime as dt
@@ -33,6 +31,8 @@ import os
 import sys
 from collections.abc import Sequence
 from decimal import Decimal
+from importlib import resources
+from pathlib import Path
 from typing import Final
 
 from sqlalchemy import func, select
@@ -82,7 +82,6 @@ from baskfy_core.seed_data import (
     PLANS,
     index_def_rows,
 )
-from importlib import resources
 from baskfy_core.trading_calendar import (
     HOLIDAY_FILE,
     build_calendar,
@@ -96,8 +95,6 @@ from baskfy_core.universes import (
     slugify_index,
 )
 from baskfy_providers.fixtures import FixtureProvider
-
-
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _REFERENCE_EXPORT = _REPO_ROOT / "tests" / "fixtures" / "reference-screen-export-2026-08-18.csv"
@@ -217,7 +214,9 @@ async def seed_trading_days(session: AsyncSession, today: dt.date | None = None)
             start,
             end,
             parse_seed_holidays(
-                resources.files("baskfy_core.data").joinpath(HOLIDAY_FILE).read_text(encoding="utf-8")
+                resources.files("baskfy_core.data")
+                .joinpath(HOLIDAY_FILE)
+                .read_text(encoding="utf-8")
             ),
         )
     ]
@@ -965,7 +964,9 @@ async def _run(
         if command in ("all", "market"):
             await seed_reference(session)
             counts["index_snapshot_daily"] = await seed_index_snapshots(session)
-            counts["market_health_daily"] = await seed_market_health(session, _reference_rows().as_of)
+            counts["market_health_daily"] = await seed_market_health(
+                session, _reference_rows().as_of
+            )
         if command == "e2e":
             counts.update(await seed_reference(session))
             counts["trading_day"] = await seed_trading_days(session)
@@ -986,7 +987,9 @@ async def _run(
             )
             # The dashboard, the breadth gauges and the listings register (Prompt 11).
             counts["index_snapshot_daily"] = await seed_index_snapshots(session)
-            counts["market_health_daily"] = await seed_market_health(session, _reference_rows().as_of)
+            counts["market_health_daily"] = await seed_market_health(
+                session, _reference_rows().as_of
+            )
             counts["pipeline_run"] = await seed_published_run(session, _reference_rows().as_of)
             counts["app_user"] = await seed_e2e_account(session)
             # Last: they need the account the line above creates.

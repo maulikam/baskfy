@@ -21,7 +21,5 @@ pytestmark = [pytest.mark.db, requires_db]
         "/explore/broad-market-sharpe/kite?amount=100000",
     ],
 )
-async def test_anonymous_desk_basket_kite_routes_are_401(
-    api: httpx.AsyncClient, path: str
-) -> None:
+async def test_anonymous_desk_basket_kite_routes_are_401(api: httpx.AsyncClient, path: str) -> None:
     assert_problem(await api.get(url(path)), 401, "unauthenticated")

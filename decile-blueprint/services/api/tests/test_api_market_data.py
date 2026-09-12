@@ -27,6 +27,7 @@ from api_helpers import assert_problem, url
 from screener_helpers import AS_OF, requires_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from baskfy_api.market_data import LISTINGS_BACKFILL_SEAM
 from baskfy_core.breadth import ATH_PROXIMITY_PCT
 from baskfy_core.models import Instrument
 from baskfy_core.reference_export import ReferenceRows, read_export, to_rows
@@ -45,6 +46,7 @@ _REFERENCE_EXPORT = (
 
 def _reference_rows() -> ReferenceRows:
     return to_rows(read_export(_REFERENCE_EXPORT))
+
 
 pytestmark = [pytest.mark.db, pytest.mark.redis, requires_db]
 
@@ -389,8 +391,6 @@ class TestListings:
         self, api: httpx.AsyncClient, screener_session: AsyncSession
     ) -> None:
         """AF 1.8 — backfill seam IPOs and ``-RE*`` symbols are not listings."""
-        from baskfy_api.market_data import LISTINGS_BACKFILL_SEAM
-
         screener_session.add_all(
             [
                 Instrument(

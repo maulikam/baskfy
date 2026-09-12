@@ -133,7 +133,7 @@ class RiskManager:
             return False, "own daily order cap reached"
         current = float(s.position_value.get(symbol, 0.0))
         side_u = (side or "BUY").upper()
-        if side_u == "BUY":
+        if side_u == "BUY":  # noqa: SIM108 — sell branch carries the exposure rationale
             projected = current + abs(value)
         else:
             # A sell reduces exposure; the cap still refuses a sell larger than any

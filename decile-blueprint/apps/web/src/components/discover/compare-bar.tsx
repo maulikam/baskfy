@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import type { Route } from "next";
 
 import { useSelection } from "@/components/discover/selection-provider";
 import { canCompare, compareHref, selectionSummary } from "@/lib/discover/selection";
@@ -50,7 +49,7 @@ export function CompareBar() {
           </button>
           {ready ? (
             <Link
-              href={compareHref(selection) as Route}
+              href={compareHref(selection)}
               data-testid="compare-bar-go"
               className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground transition-opacity hover:opacity-90"
             >

@@ -230,7 +230,7 @@ _STATUS_SYNCED: Final = "Synced"
 _MIN_MARKS_FOR_A_RETURN: Final = 2
 
 #: A stored mark of one rupee or less is not a portfolio — it is a placeholder (audit 0.4) that
-#: turns TWR and drawdown into −100 % and the peak tile into ₹1.00. Derived returns use only
+#: turns TWR and drawdown into -100 % and the peak tile into ₹1.00. Derived returns use only
 #: marks strictly above this; the chart still shows every stored row.
 _MIN_REAL_VALUATION: Final = ONE
 
@@ -1678,7 +1678,7 @@ async def _load_prices(session: AsyncSession, instrument_ids: Sequence[int]) -> 
     #
     # Everything above is `close_raw`. When a live quote overlays `latest`, `previous` must become
     # the stored recency-1 close (what `latest` was a moment ago) — not recency-2. Leaving
-    # `previous` at recency-2 makes "Today's P&L" span two sessions (Monday LTP − Thursday close).
+    # `previous` at recency-2 makes "Today's P&L" span two sessions (Monday LTP - Thursday close).
     #
     # `dated` is left alone: it records which session the stored close came from, and a live mark
     # has no session.
@@ -2044,7 +2044,7 @@ def _headline_for(portfolio: LedgerPortfolio, points: Sequence[NavPoint]) -> Ret
     return a labelled absence instead.
 
     Placeholder marks of ₹1 or less are dropped first (audit 0.4): a return needs ≥2 real
-    valuations, and a seed mark must not turn the headline into −100 %.
+    valuations, and a seed mark must not turn the headline into -100 %.
     """
     real = _real_points(points)
     if portfolio.source is PortfolioSource.HOLDING_GROUP:
@@ -2276,7 +2276,7 @@ def _series_out(rows: Sequence[PortfolioNavDaily], meta: _SeriesMeta) -> NavSeri
     """Render one NAV series with everything §6.3 draws off it.
 
     Chart points keep every stored mark. TWR, daily moves and drawdown use only real valuations
-    (audit 0.4): a ₹1 seed mark must not produce −100 % returns or a peak of ₹1.00.
+    (audit 0.4): a ₹1 seed mark must not produce -100 % returns or a peak of ₹1.00.
     """
     portfolio_id = meta.portfolio_id
     window = meta.window
@@ -2302,7 +2302,8 @@ def _series_out(rows: Sequence[PortfolioNavDaily], meta: _SeriesMeta) -> NavSeri
             for row in rows
         ],
         daily_pnl=[
-            DayPnlOut(on=move.on, amount=move.amount, pct=move.pct) for move in daily_pnl(real_points)
+            DayPnlOut(on=move.on, amount=move.amount, pct=move.pct)
+            for move in daily_pnl(real_points)
         ],
         drawdown=[
             DrawdownPointOut(
@@ -2775,7 +2776,7 @@ def _consolidated_twr(rows: Sequence[PortfolioNavDaily]) -> LabelledRateOut:
     """§5.2's consolidated TWR — strategy quality, flow neutral, beside the XIRR, never merged.
 
     Placeholder marks of ₹1 or less are excluded (audit 0.4); fewer than two real valuations
-    yields ``None`` rather than −100 %.
+    yields ``None`` rather than -100 %.
     """
     points = _real_nav_points(rows)
     value = _chain_linked(points)

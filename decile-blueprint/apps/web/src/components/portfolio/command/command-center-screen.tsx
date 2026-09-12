@@ -153,7 +153,7 @@ export function CommandCenterScreen({
         <Explain
           title="You do not have access to these portfolios"
           body="The portfolio service refused this request. Your holdings are unaffected; this session is not permitted to read them. If you expect access, ask the account owner to grant it, or sign in again with the account that owns the portfolios."
-          action={{ label: "Check the signed-in account", href: "/profile" as Route }}
+          action={{ label: "Check the signed-in account", href: "/profile" }}
         />
       </Shell>
     );
@@ -165,7 +165,7 @@ export function CommandCenterScreen({
         <Explain
           title="Your portfolios could not be loaded"
           body={`${error} Nothing is wrong with your holdings — this screen could not reach the service that reads them.`}
-          action={{ label: "Try again", href: "/portfolio/portfolios" as Route }}
+          action={{ label: "Try again", href: "/portfolio/portfolios" }}
         />
       </Shell>
     );
@@ -177,7 +177,7 @@ export function CommandCenterScreen({
         <Explain
           title="No portfolio data yet"
           body="Connect a broker and sync your holdings, and this screen will fill in with what you own."
-          action={{ label: "Connect a broker", href: "/portfolio/holdings" as Route }}
+          action={{ label: "Connect a broker", href: "/portfolio/holdings" }}
         />
       </Shell>
     );
@@ -257,7 +257,7 @@ export function CommandCenterScreen({
             <Explain
               title="No monitoring views yet"
               body="A view is a lens over holdings you already own — all your small caps, everything near a stop. It never changes what a portfolio owns."
-              action={{ label: "Create one", href: "/portfolio/holdings" as Route }}
+              action={{ label: "Create one", href: "/portfolio/holdings" }}
             />
           ) : (
             <ComparisonTable slices={viewAnalytics.slices} rows={centre.views} mode="views" />
@@ -278,7 +278,7 @@ export function CommandCenterScreen({
                 <Explain
                   title="Nothing is filed into a portfolio yet"
                   body="Your holdings are all unallocated. Grouping them is what turns a pile of shares into something you can measure."
-                  action={{ label: "Organise holdings", href: "/portfolio/holdings" as Route }}
+                  action={{ label: "Organise holdings", href: "/portfolio/holdings" }}
                 />
               ) : (
                 <ComparisonTable

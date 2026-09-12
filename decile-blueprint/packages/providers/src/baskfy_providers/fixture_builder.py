@@ -32,16 +32,16 @@ import math
 import random
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
+from importlib import resources
 from pathlib import Path
 from typing import Final
 
 import polars as pl
 
 from baskfy_core.reference_export import ReferenceRows
-from importlib import resources
 from baskfy_core.trading_calendar import HOLIDAY_FILE, build_calendar, parse_seed_holidays
-from baskfy_providers.reference_export_io import reference_rows
 from baskfy_core.universes import UNIVERSES, slugify_index
+from baskfy_providers.reference_export_io import reference_rows
 
 #: docs/13: the reference export's trade date. The fixtures end here so they line up with it.
 FIXTURE_AS_OF: Final = dt.date(2026, 8, 18)

@@ -55,7 +55,7 @@ export function itemsFromProblems(problems: readonly HealthProblem[]): Attention
     headline: p.headline,
     detail: p.detail,
     since: p.since,
-    action: p.href ? { label: "Open", href: p.href as Route } : undefined,
+    action: p.href ? { label: "Open", href: p.href } : undefined,
   }));
 }
 

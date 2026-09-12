@@ -16,7 +16,6 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from baskfy_providers.reference_export_io import reference_rows
 from baskfy_providers.errors import ProviderUnavailable, UnexpectedPayload
 from baskfy_providers.fixture_builder import (
     FIXTURE_AS_OF,
@@ -27,6 +26,7 @@ from baskfy_providers.fixture_builder import (
 from baskfy_providers.fixtures import FixtureProvider
 from baskfy_providers.ports import BARS_CAPABILITIES, REFERENCE_CAPABILITIES
 from baskfy_providers.records import BHAVCOPY_SCHEMA, DAILY_BARS_SCHEMA
+from baskfy_providers.reference_export_io import reference_rows
 
 WIDE_WINDOW_START = dt.date(2000, 1, 1)
 
@@ -131,7 +131,8 @@ class TestAnchoredToRealData:
     ) -> None:
         members = fixture_provider.index_constituents("nifty-total-market", FIXTURE_AS_OF)
         assert members
-        real = {m.symbol for m in reference_rows().memberships if m.universe_slug == "nifty-total-market"}
+        rows = reference_rows()
+        real = {m.symbol for m in rows.memberships if m.universe_slug == "nifty-total-market"}
         assert set(members) <= real
 
     def test_the_provenance_file_ships_with_the_fixtures(

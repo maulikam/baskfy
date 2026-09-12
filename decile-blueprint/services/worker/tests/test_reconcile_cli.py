@@ -80,7 +80,10 @@ class TestTheCommand:
         Every input is committed, so this is deterministic.
         """
         assert COMMITTED_REPORT.is_file(), f"{COMMITTED_REPORT} is missing; run `make reconcile`"
-        expected = render(reconcile(read_export(REPO_ROOT / "tests" / "fixtures" / "reference-screen-export-2026-08-18.csv")), limit=25) + "\n"
+        export = read_export(
+            REPO_ROOT / "tests" / "fixtures" / "reference-screen-export-2026-08-18.csv"
+        )
+        expected = render(reconcile(export), limit=25) + "\n"
         assert COMMITTED_REPORT.read_text(encoding="utf-8") == expected, (
             "reconciliation/REPORT.md is stale — re-run `make reconcile`"
         )

@@ -34,6 +34,7 @@ from typing import Final
 import numpy as np
 import polars as pl
 import pytest
+from _law1_io import reference_export_path
 
 from baskfy_core.blends import blend_expr, blend_sql
 from baskfy_core.factor_registry import (
@@ -57,7 +58,6 @@ from baskfy_core.precision import (
     quantise,
     unpriced_numeric_columns,
 )
-from _law1_io import reference_export_path
 from baskfy_core.reference_export import read_export
 from baskfy_core.windows import (
     EXPECTED_WINDOW_LENGTHS_2026_08_18,

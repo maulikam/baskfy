@@ -47,6 +47,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import RowMapping, text
 
+from baskfy_api.auth import require_authenticated
 from baskfy_api.db import SessionDep
 from baskfy_api.desk_schema import DESK_SCHEMA, require_desk_schema
 from baskfy_api.problems import Problem, ProblemType
@@ -56,10 +57,13 @@ from baskfy_api.problems import Problem, ProblemType
 # SQLite (docs/08 D8) — answered **500** on all of them until now, because asyncpg's
 # `UndefinedTableError` reached the client as an unhandled error. "We broke" and "there is no desk
 # history here" are different sentences and different pages. `baskfy_api.desk_schema`.
+#
+# Authenticated: the desk book, trades and plans are one account's money. Anonymous probes on
+# staging reached these handlers (AUDIT 0.1 / 2.1).
 router = APIRouter(
     prefix="/desk",
     tags=["desk"],
-    dependencies=[Depends(require_desk_schema)],
+    dependencies=[Depends(require_authenticated), Depends(require_desk_schema)],
 )
 
 #: The schema M19's cutover put the desk's own records in.

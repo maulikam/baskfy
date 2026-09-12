@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { serverApiOrigin } from "@/lib/api/config";
+import { SERVER_FETCH_TIMEOUT_MS } from "@/lib/api/server-fetch";
 import { auth } from "@/lib/auth";
 import type { MutationResult } from "@/lib/auth/me";
 
@@ -38,6 +39,7 @@ export async function dismissPendingAction(id: string): Promise<MutationResult> 
       method: "POST",
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
+      signal: AbortSignal.timeout(SERVER_FETCH_TIMEOUT_MS),
     });
   } catch {
     return { ok: false, message: UNREACHABLE };

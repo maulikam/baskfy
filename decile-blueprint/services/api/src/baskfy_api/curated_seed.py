@@ -7,6 +7,7 @@ Managers are written by ``make seed`` via ``seed_reference``. The Momentum Scan 
 from __future__ import annotations
 
 import datetime as dt
+import logging
 import os
 from dataclasses import dataclass
 
@@ -37,6 +38,8 @@ from baskfy_core.scan_projection import (
     MOMENTUM_SCAN_BASKET_SLUG,
     project_scan_top_n,
 )
+
+log = logging.getLogger(__name__)
 
 MANAGER_SEED_ROWS: tuple[dict[str, object], ...] = (
     {
@@ -83,10 +86,33 @@ async def resolve_sole_user_id(session: AsyncSession) -> int:
     ``seed.py`` says it plainly: ``seed e2e`` "is not a command anything but a test database
     should ever be pointed at". Seeding belongs in ``make seed``. A request path may look the
     account up; it must not conjure it.
+
+    ## Why a blank or mistyped value is "not set" rather than a crash
+
+    `gates/sleeve-read-contract.md` C5/C6. This used to be ``int(os.environ.get(SOLE_USER_ENV))``
+    with no strip and no empty check, so one env line — ``BASKFY_SOLE_USER_ID=`` or a typo — meant
+    three different things across the product: the worker stripped it, read "no tenant", and every
+    detector logged *skipped*; this function raised ``ValueError`` **out of a request handler**,
+    which is a 500 rather than the 503 the "not configured" branch two lines below exists to give;
+    and the desk raised at import. One typo, three failure modes, and only one of them said what
+    was wrong.
+
+    It now reads the variable exactly as `baskfy_worker.providers._sole_user_id` does — strip,
+    empty is unset, a non-number is a warning and unset — so the writer and the reader answer the
+    same question the same way. Unset then takes the path below, which ends in an operator-shaped
+    503 naming the variable.
     """
-    env_val = os.environ.get(SOLE_USER_ENV)
-    if env_val is not None:
-        return int(env_val)
+    raw = (os.environ.get(SOLE_USER_ENV) or "").strip()
+    if raw:
+        try:
+            return int(raw)
+        except ValueError:
+            log.warning(
+                "%s is not a number (%r); reading it as 'no sole tenant configured', which is "
+                "what baskfy_worker.providers._sole_user_id does with the same value",
+                SOLE_USER_ENV,
+                raw,
+            )
     # Local import breaks ``seed`` <-> ``curated_seed`` circular dependency.
     from baskfy_api.seed import E2E_PUBLIC_ID  # noqa: PLC0415
 

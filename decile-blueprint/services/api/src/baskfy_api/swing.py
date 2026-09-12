@@ -333,11 +333,12 @@ class BarPoint:
 
 
 async def latest_setup_date(session: AsyncSession, user_id: int) -> dt.date | None:
-    """The most recent day the detectors wrote anything for this user.
+    """The most recent day a **candidate** was written for this user.
 
-    Deliberately **not** the pipeline's `as_of`: the swing step can be skipped (a failed quality
-    gate, a deployment with no tenant) while the screener publishes normally, and a page that
-    asked for the published date would then render an empty day rather than the last real one.
+    Kept because "when did this book last flag anything" is a real question, but it is **not**
+    the page's clock — see :func:`latest_detected_date`. A session on which nothing met the bar
+    writes no `sw_setup_daily` row at all, so this answers the last *interesting* session rather
+    than the last session the detector ran.
     """
     return (
         await session.execute(
@@ -352,6 +353,36 @@ async def latest_market_date(session: AsyncSession, user_id: int) -> dt.date | N
             select(func.max(SwMarketDaily.date)).where(SwMarketDaily.user_id == user_id)
         )
     ).scalar_one_or_none()
+
+
+async def latest_detected_date(session: AsyncSession, user_id: int) -> dt.date | None:
+    """The most recent session the **detector ran** for this user — the page's clock.
+
+    `gates/sleeve-read-contract.md` C1. This used to be `max(sw_setup_daily.date)`, and that is a
+    table `baskfy_worker.tasks.swing._detect_swing` leaves empty on any session where nothing met
+    the bar, while `write_market_row` runs unconditionally — "no flags today" is a fact worth
+    writing. So on a zero-candidate session the writer wrote today and the reader answered
+    yesterday: **yesterday's triggers and yesterday's gate, stamped yesterday, on a page that
+    looked perfectly current.** Not hypothetical — on the box the gate has been RED since
+    2026-09-04 and the candidate count walked 21 → 22 → 16 → 19 → 12 → 9.
+
+    The rule here is the one VBT already follows (`baskfy_api.vbt._latest_breadth`, keyed on
+    `vb_breadth_daily`) and the one TWT's reader was built to (`baskfy_api.twt._latest`, keyed on
+    `tw_breadth_daily`): **key the clock on the row the detector writes every session, whatever
+    the tape did.** For swing that row is `sw_market_daily`.
+
+    Deliberately **not** the pipeline's `as_of`: the swing step can be skipped (a failed quality
+    gate, a deployment with no tenant) while the screener publishes normally, and a page that
+    asked for the published date would then render an empty day rather than the last real one.
+
+    The fall back to `max(sw_setup_daily.date)` covers a book whose setups predate its market
+    rows; when both exist the market row is at or ahead of the setups, so the fallback never
+    *lowers* the answer.
+    """
+    detected = await latest_market_date(session, user_id)
+    if detected is not None:
+        return detected
+    return await latest_setup_date(session, user_id)
 
 
 def _setup_query(user_id: int, on: dt.date) -> Select[tuple[SwSetupDaily, str, str]]:
@@ -377,7 +408,7 @@ async def setups(
     the funnel, because "no EPs today" is a fact about the market and "no rows at all" is a fact
     about the job.
     """
-    as_of = on or await latest_setup_date(session, user_id)
+    as_of = on or await latest_detected_date(session, user_id)
     last_scan = await latest_scan_run(session, user_id=user_id)
     if as_of is None:
         return SetupsPage(None, (), None, None, None, None, None, None, last_scan=last_scan)

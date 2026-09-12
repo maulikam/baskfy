@@ -1,4 +1,5 @@
-import { formatDateTimeIST } from "@/lib/format";
+import { formatTradeDate } from "@/lib/format";
+import { whenPhrase } from "@/lib/scan-age";
 import type { VbtScanRun, VbtToday } from "@/lib/vbt/fetch";
 
 /**
@@ -126,23 +127,80 @@ export function scanButtonLabel(pending: boolean, inFlight: boolean): string {
 }
 
 /**
- * The last run, beside the button.
+ * The one fact the run row carries beyond its own columns, served inline on `/vbt/today`.
  *
- * A finished run gets its wall clock in IST rather than the reader's zone, for the reason
- * `formatDateTimeIST` gives: every schedule this strategy runs on is an IST wall-clock time tied
- * to the session, and a local rendering turns "is this fresh?" into arithmetic.
- *
- * A failed run gets no reason. `VbtScanRun.error` says things like which quote source was
- * missing; that is a sentence for the operator surfaces, and the reader needs only the two facts
- * that are theirs — nothing changed, and they can press it again.
+ * Declared here rather than widened onto `VbtScanRun` for the reason the `/twt` copy gives: this
+ * is copy's view of a run, the fetch module is the transport's. Optional, so a run that predates it
+ * still type-checks and still renders.
  */
-export function scanRunLine(run: VbtScanRun | null | undefined): string {
-  if (!run) return "";
-  if (run.status === "QUEUED") return "Scan queued.";
-  if (run.status === "RUNNING") return "Scanning now.";
+export interface VbtScanFacts {
+  /**
+   * How many signals the run produced. `null` or absent is "the run did not say"; `0` is "it
+   * looked and found none", and the line renders the two differently on purpose.
+   */
+  found?: number | null;
+}
+
+/** What the page knows that the run row does not. */
+export interface ScanLineContext {
+  /**
+   * The browser's clock, once the control has mounted — `null` on the server's pass and on the
+   * hydrating one, where a reading of its own would be a text mismatch. See `@/lib/scan-age`.
+   */
+  now?: number | null;
+  /** The latest session this strategy has published, for the case where no run exists at all. */
+  session?: string | null;
+}
+
+/**
+ * What the run found, in this sleeve's own noun. About thirteen signals a week in a normal
+ * market and **none at all when the tape is thin** (`VbtFunnel`), so zero is a legitimate
+ * answer and the sentence must not read as a fault.
+ */
+function foundClause(found: number | null | undefined): string {
+  if (found === null || found === undefined) return "";
+  if (found === 0) return " — no signals, which is an ordinary day when the tape is quiet.";
+  return found === 1 ? " — 1 signal." : ` — ${found.toLocaleString("en-IN")} signals.`;
+}
+
+/** What the line says when this user has never pressed the button. */
+export function neverScannedLine(session: string | null | undefined): string {
+  return session
+    ? `No scan has been started from here yet — what is shown is the nightly run's, for the ${formatTradeDate(session)} session.`
+    : "No scan has run yet.";
+}
+
+/**
+ * The last run, beside the button — **when it ran, whether it finished, and what it found.**
+ *
+ * Before 12 Sep 2026 this said nothing at all until a run existed, and said only "Last scan
+ * finished <stamp>" when one did. Both halves were wrong for the reader: a strategy whose
+ * candidates came from the nightly looked as though it had never been scanned, and a run that
+ * finished looked identical whether it had flagged fifty names or none.
+ *
+ * A finished run's time is relative while it is recent ("12 minutes ago") and an IST wall clock
+ * once it is not — `@/lib/scan-age` carries the reasoning, including why `now` is passed in
+ * rather than read here.
+ *
+ * A failed run still gets **no reason**. `VbtScanRun.error` says things like which quote source
+ * was missing; that is a sentence for the operator surfaces, and the reader needs only the three
+ * facts that are theirs — when it stopped, that nothing changed, and that they can press again.
+ */
+export function scanRunLine(
+  run: (VbtScanRun & VbtScanFacts) | null | undefined,
+  context: ScanLineContext = {},
+): string {
+  const now = context.now ?? null;
+  if (!run) return neverScannedLine(context.session);
+  if (run.status === "QUEUED") return "Scan queued. This page updates when it finishes.";
+  if (run.status === "RUNNING") return "Scanning now. This page updates when it finishes.";
+
+  const when = whenPhrase(run.finished_at ?? run.requested_at, now);
   if (run.status === "FAILED") {
-    return "The last scan did not finish, so nothing changed. You can start another.";
+    const stopped = when ? ` It stopped ${when}.` : "";
+    return `The last scan did not finish, so nothing changed.${stopped} You can start another.`;
   }
-  const when = run.finished_at ?? run.requested_at;
-  return when ? `Last scan finished ${formatDateTimeIST(when)}.` : "The last scan finished.";
+  const lead = when ? `Last scanned ${when}` : "The last scan finished";
+  const found = foundClause(run.found);
+  return found ? `${lead}${found}` : `${lead}.`;
 }

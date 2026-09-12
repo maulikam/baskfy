@@ -6,6 +6,7 @@ import { useActionState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import type { SwingScanRun } from "@/lib/swing/fetch";
 import type { SwingFormResult } from "@/lib/swing/write";
+import { useTickingNow } from "@/lib/use-ticking-now";
 import { cn } from "@/lib/utils";
 
 import { scanLine, scanRunLine } from "../copy";
@@ -32,13 +33,21 @@ type ScanAction = (
 export function ScanNow({
   action,
   lastScan,
+  session = null,
   intervalMs = POLL_MS,
 }: {
   action: ScanAction;
   lastScan: SwingScanRun | null;
+  /**
+   * The latest session the book has published. It is what the line falls back to when no run
+   * exists — a book whose setups came from the nightly has been scanned, and saying nothing
+   * there was the gap of 12 Sep 2026.
+   */
+  session?: string | null;
   intervalMs?: number;
 }) {
   const router = useRouter();
+  const now = useTickingNow();
   const [result, formAction, pending] = useActionState(action, null);
   const inFlight = lastScan?.status === "QUEUED" || lastScan?.status === "RUNNING";
 
@@ -72,7 +81,7 @@ export function ScanNow({
         )}
       >
         {result === null
-          ? scanRunLine(lastScan)
+          ? scanRunLine(lastScan, { now, session })
           : result.ok
             ? result.message
             : result.error}

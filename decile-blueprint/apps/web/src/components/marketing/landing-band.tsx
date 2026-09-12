@@ -112,9 +112,17 @@ export function LandingMarquee() {
         />
       </div>
 
-      {/* The ticker. `//BASKFY` is pinned; the sentence behind it scrolls under it. */}
-      <div className="relative flex items-center overflow-hidden border-t border-white/15 bg-[#f8fafc] py-3.5">
-        <span className="absolute left-6 z-10 hidden rounded-full bg-white px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-[#6f6f6f] shadow-[0_2px_20px_rgba(0,0,0,0.05)] sm:block">
+      {/*
+        The ticker. `//BASKFY` is pinned; the sentence behind it scrolls under it.
+
+        `band-light` rather than `bg-[#f8fafc]`: the rail is painted the LIGHT canvas in both
+        themes, so in dark mode its `text-muted-foreground` was resolving to the dark theme's
+        #a6a6a6 and landing on #f8fafc at **2.05:1** — three of axe's twenty on 12 Sep 2026, and
+        the exact mirror of what the dark bands got wrong. A surface that ignores the theme has to
+        supply the palette that goes with it.
+      */}
+      <div className="band-light relative flex items-center overflow-hidden border-t border-white/15 py-3.5">
+        <span className="absolute left-6 z-10 hidden rounded-full bg-card px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.08em] text-quiet-foreground shadow-[0_2px_20px_rgba(0,0,0,0.05)] sm:block">
           //Baskfy
         </span>
         {/*

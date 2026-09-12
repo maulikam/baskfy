@@ -5,6 +5,10 @@ import {
   ServerFetchTimeoutError,
   serverFetchJson,
 } from "@/lib/api/server-fetch";
+import {
+  SleeveUnavailableError,
+  sleeveUnavailable,
+} from "@/lib/api/sleeve-read";
 import { auth } from "@/lib/auth";
 
 /**
@@ -311,6 +315,11 @@ async function readJson(
     if (error instanceof ServerFetchTimeoutError) {
       throw new VbtUnavailable(`${path} timed out after ${error.timeoutMs}ms`);
     }
+    /* C7 (`gates/sleeve-read-contract.md`): a refusal, a degraded deployment and a 500 are not
+       "the detector has not run". They leave here as `SleeveUnavailableError` so no page can
+       render them as its empty state; everything else keeps the old behaviour exactly. */
+    const unavailable = sleeveUnavailable(error);
+    if (unavailable !== null) throw new SleeveUnavailableError(path, unavailable);
     throw new VbtUnavailable(
       error instanceof Error ? error.message : `${path} unavailable`,
     );
@@ -323,6 +332,13 @@ async function readJson(
  * Before the first detection run there is nothing to show and that is not an error — the page
  * renders its empty state. A page that threw here would turn "the job has not run" into a 500,
  * and this sleeve's whole first month is a database with nothing in it.
+ *
+ * **`null` means the API answered and there was nothing there** — not "the read failed".
+ * `gates/sleeve-read-contract.md` C7: a refusal (a second account on a single-tenant
+ * deployment), a 503 and a 5xx leave `readJson` as `SleeveUnavailableError` and are *not*
+ * caught here, so no page can render one of them as its empty state. A timeout or an
+ * unreachable API still answers `null`, and that limit is named at the top of
+ * `@/lib/api/sleeve-read`.
  */
 async function readOrNull<T>(
   path: string,

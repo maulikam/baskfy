@@ -31,7 +31,7 @@ blocker in the project.
 | **11** | 231 instruments absent from Kite's master — a decision about whether it is worth filling them from the NSE archive. |
 | **12** | Historical breadth is survivorship-biased. The page says so now; the fix needs NSE's index-change announcements. |
 | **2, 5, 7** | Housekeeping — strangle collectors, two credential items, and a scratch directory to delete. |
-| **14** | **Git remote URL** so local SC/D3 commits can be pushed. |
+| **14** | **An SSH key an agent can use** — the remote itself is no longer missing (`origin git@github.com:maulikam/baskfy.git`, `developer` tracks `origin/developer`). Agent `git ls-remote` → `Permission denied (publickey)`; `ssh-add -l` has no identities. Corrected 12 Sep 2026 — this row had said "Git remote URL", which is the half that resolved. See §14 and §SW-10. |
 | **13** | ✅ **D3 written** (posture B in `docs/DECISIONS-MERGE.md` §D3, 23 Aug 2026). OAuth gate flipped. Counsel checklist C1–C3 (algo ID, research vs advice, RA/empanelment) remains open but **non-blocking** — see §13 below. |
 | **D7 / D10** | ⚠ UNREVIEWED stubs in `docs/DECISIONS-MERGE.md` (Track B flags stay false; no public market-data API). Amounts + licensing opinion still need Maulik / counsel before any flag flip. |
 | **15** | ✅ **Fundamentals — cleared.** The diagnosis in this row was wrong: NSE had *retired* `/api/quote-equity` (403 from Akamai), so no night would ever have filled the table. Provider repointed at `GetQuoteApi`; `fundamental_daily` filled to 82.2% of the published date and the factsheet serves real M-cap and P/E. Finish the last 18% with `make fundamentals DATE=2026-08-18`. See §15. |
@@ -780,12 +780,26 @@ for it.
 **What is needed:** a decision on whether the marketing page's teaser table may show gated
 columns to a visitor with no account. Two lines of code either way; neither is mine to pick.
 
+**⚠ What happens now — corrected 12 Sep 2026. The 402 is gone; the decision is not.**
+`/` **loads** and renders the teaser table. `6195b57` ("M48: green — the empty pages were an empty
+database…", 27 Aug 2026) narrowed `SAMPLE_COLUMNS` in
+`apps/web/src/lib/marketing/sample-screen.ts` to `["close_raw", "ret_12m", "vol_12m"]` — it took
+the third bullet below, dropping the gated columns rather than moving the paywall, and said so in
+the file. **So the M-cap and per-name Sharpe columns are not 402-blocked; they are absent.** The
+screen is still *ranked* by the Sharpe blend; only the columns are withheld. Your decision is
+unchanged and still open: widen the entitlement and the two columns come back in one line
+(`sample-screen.ts` says exactly where), or leave it as it is.
+
+<details><summary>The original entry, which described the page as failing to load</summary>
+
 **What happens now.** `/` renders *"The sample screen could not be loaded — the data service did
 not answer when this page was built."* That is its honest empty state, and the cause is not the
 data service. `fetchSampleScreen` posts to `/api/v1/screens/preview` asking for
 `close_raw, marketcap_cr, ret_12m, sharpe_12m, vol_12m`. `ANONYMOUS` grants only
 `Feature.SCREENER`, and `DEFAULT_RESULT_COLUMNS` is `(ret_12m, vol_12m, close_raw)` — so three of
 those five are "custom columns" and the call returns **402 payment-required**.
+
+</details>
 
 **Why it lands here rather than being fixed.** The page's own copy says the sample is there to be
 read "without an account", so the intent is clear enough — but every way of honouring it changes

@@ -392,7 +392,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       page("/profile", "user"),
       page("/brokers", "plug"),
       /* SW14: the swing allocation's limits, under Me (`docs/swing/05` §2). */
-      page("/me/swing" as PagePath & Route, "wrench"),
+      page("/me/swing", "wrench"),
     ],
   },
   {

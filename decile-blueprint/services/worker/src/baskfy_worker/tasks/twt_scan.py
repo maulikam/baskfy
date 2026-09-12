@@ -51,8 +51,9 @@ from typing import Final
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from baskfy_core.models import PipelineRun, TwScanRun
+from baskfy_core.models import TwScanRun
 from baskfy_core.models.base import JsonObject
+from baskfy_worker.tasks.published_session import last_published_session
 from baskfy_worker.tasks.twt import detect_session
 
 log = logging.getLogger(__name__)
@@ -116,18 +117,12 @@ async def latest_published_session(session: AsyncSession, on_or_before: dt.date)
     precisely what VB12's first live press did on 11 Sep 2026 before `vbt_rescan` was given this
     same query. Copied deliberately rather than re-derived: it is the product's own answer to
     "what is the latest session", the one the freshness pill reads (`docs/README`, the two clocks).
+
+    **Copied is now shared**: the query lives in `baskfy_worker.tasks.published_session` and all
+    three sleeves' scans delegate to it, so there is one definition to be wrong rather than three
+    to drift (`gates/sleeve-read-contract.md` C3).
     """
-    return (
-        await session.execute(
-            select(PipelineRun.trade_date)
-            .where(
-                PipelineRun.data_version.is_not(None),
-                PipelineRun.trade_date <= on_or_before,
-            )
-            .order_by(PipelineRun.data_version.desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
+    return await last_published_session(session, on_or_before)
 
 
 async def unpublished_runs(session: AsyncSession, *, limit: int = PUBLISH_LIMIT) -> list[TwScanRun]:

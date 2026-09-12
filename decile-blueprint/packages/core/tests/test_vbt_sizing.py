@@ -156,9 +156,32 @@ def test_money_never_becomes_a_float() -> None:
     sized = size()
     for value in (sized.limit_price, sized.stop_price, sized.value_inr, sized.risk_inr):
         assert isinstance(value, Decimal)
+    # The threshold those figures are *compared against* is money too, and until 12 Sep 2026 it
+    # was the one rupee field in this pack declared `float`. A test that checks the outputs and
+    # not the constant they are measured against leaves the rule half-enforced.
+    assert isinstance(SIZING.min_trade_value_inr, Decimal)
 
 
 def test_the_documented_defaults_are_the_ones_in_force() -> None:
+    """
+    THE RUPEE THRESHOLD IS ASSERTED EXACTLY, BECAUSE IT IS MONEY.
+
+    Until 12 Sep 2026 the last line read ``== pytest.approx(10_000.0)`` — a *tolerance* on a
+    rupee figure, four lines below ``test_money_never_becomes_a_float``, and it passed because
+    ``min_trade_value_inr`` really was declared ``float`` in ``vbt/config.py`` and
+    ``swing/config.py``. House rule 9 is "money and prices are ``numeric``, never ``float``", and
+    the ``_inr`` suffix plus this module's own "Units, stated once" note both say this is rupees.
+
+    The test was not lazy; it was a careful test of the wrong thing, and it was what would have
+    failed on anyone changing the declaration to the right type. The TWT sleeve never had the
+    defect — ``twt/config.py`` has always carried ``Decimal("10000")`` and
+    ``test_twt_docs_parity.py`` pins it as a ``Decimal`` — so two sleeves disagreed on the type
+    of the same threshold and only one of them was tested for it.
+
+    ``max_position_vs_turnover`` stays a ``float``: it is a dimensionless fraction of turnover,
+    not an amount of money, and house rule 9 is about money and prices.
+    """
     assert (SIZING.max_slots, SIZING.max_position_pct) == (10, 12.5)
     assert SIZING.max_position_vs_turnover == pytest.approx(0.01)
-    assert SIZING.min_trade_value_inr == pytest.approx(10_000.0)
+    assert SIZING.min_trade_value_inr == Decimal("10000")
+    assert isinstance(SIZING.min_trade_value_inr, Decimal)

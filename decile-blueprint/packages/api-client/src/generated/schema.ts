@@ -3401,6 +3401,45 @@ export interface paths {
         patch: operations["patchWatch"];
         trace?: never;
     };
+    "/api/v1/twt/backtest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What the rule did, and its terms
+         * @description `05` §3's page — the twin of `/twt/today`, absent for the same reason and fixed the same way.
+         *
+         *     `apps/web/src/lib/twt/fetch.ts` has asked for this path since TW8 and `readOrNull` turned its
+         *     404 into `null`, so the Backtest tab rendered its empty state whatever `tw_backtest_run` held.
+         *     That was honest while the table was empty and would have gone on looking honest after TW9's
+         *     job ran, which is the failure: an absent reader and an absent writer are indistinguishable to
+         *     the person the page is for.
+         *
+         *     **On the box the table still holds 0 rows**, so this route answers `runs: []` there — and says
+         *     in `reason` which of the three absences that is. Nothing about this route makes a backtest
+         *     run; `make twt-backtest` and the worker's task do that.
+         *
+         *     **The latest finished run per source, and only that.** `03` §9 makes the table append-only and
+         *     every settled row carries a full nine-year equity curve; serving the history would grow
+         *     without bound to answer a question about two numbers. Finished *and* carrying stats, so a run
+         *     in flight or a failed re-run never displaces the last good number.
+         *
+         *     **`01` §8 rides along.** House rule 9 — disclaimers are components, not footers — and `05` §3
+         *     restates it here by name. The page renders them from its own panel; what this field adds is
+         *     that the numbers cannot leave this service without the conditions attached, for any reader.
+         */
+        get: operations["getTwtBacktest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/twt/scan": {
         parameters: {
             query?: never;
@@ -3445,6 +3484,35 @@ export interface paths {
          *     else's row — the same scoping the rest of the sleeve's surfaces use.
          */
         get: operations["getTwtScan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/twt/today": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The session's gate, names and book
+         * @description `05` §1's hub: may it buy at all, which names are quiet enough, and what is already open.
+         *
+         *     **The default session is the latest one the detector wrote**, not today's date and not the
+         *     latest `pipeline_run`. That is the whole point of the route: the writer detects "the latest
+         *     published session", so a reader resolving the day any other way would ask for a session the
+         *     writer has not detected — which is precisely how a scan that succeeded came to render an
+         *     empty page on 12 Sep 2026. Asking the writer's own newest row cannot drift ahead of it.
+         *
+         *     A `date` with no reading answers an empty view stamped with the date that was asked for, so
+         *     the page can name the session it found nothing for rather than claiming nothing exists.
+         */
+        get: operations["getTwtToday"];
         put?: never;
         post?: never;
         delete?: never;
@@ -10234,6 +10302,191 @@ export interface components {
             return_convention_note: string;
         };
         /**
+         * TwtBacktestCaveatOut
+         * @description One paragraph of `01` §8, with the id `05` §3's own panel gives it.
+         */
+        TwtBacktestCaveatOut: {
+            /** Id */
+            id: string;
+            /** Text */
+            text: string;
+        };
+        /**
+         * TwtBacktestOut
+         * @description `05` §3's page: at most one settled run per source, under `01` §8's conditions.
+         *
+         *     `reason` is null whenever `runs` is non-empty; when `runs` is empty it names **which** of the
+         *     three absences this is — never asked for, still running, or finished without a result — so a
+         *     reader is told why there is no number instead of being handed one sentence that is right two
+         *     times in three.
+         */
+        TwtBacktestOut: {
+            /** Caveats */
+            caveats: components["schemas"]["TwtBacktestCaveatOut"][];
+            /** Reason */
+            reason: string | null;
+            /** Runs */
+            runs: components["schemas"]["TwtBacktestRunOut"][];
+        };
+        /**
+         * TwtBacktestRunOut
+         * @description One settled `tw_backtest_run` row, exactly as `05` §3's card reads it.
+         *
+         *     `params`, `stats` and `drift` are the JSONB the run stored, passed through rather than
+         *     re-derived: every figure in them is already a decimal **string** written by the job (house
+         *     rule 9, all the way to the database), and a route that parsed and re-rendered them would
+         *     round a second time. A key a run could not produce is absent rather than null (TW9.5), and
+         *     stays absent here.
+         */
+        TwtBacktestRunOut: {
+            /** Drift */
+            drift: {
+                [key: string]: unknown;
+            } | null;
+            /** Error */
+            error: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Id */
+            id: number;
+            /** Params */
+            params: {
+                [key: string]: unknown;
+            };
+            /** Source */
+            source: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Stats */
+            stats: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /**
+         * TwtGateOut
+         * @description ``03`` §4's reading for one session, and the funnel behind it.
+         *
+         *     Every funnel count is nullable, and a null is served rather than a zero: the web app's
+         *     ``funnelSteps`` drops a missing step, because "no reading was taken" and "none of the market"
+         *     render identically and only one of them is a statement about the market.
+         */
+        TwtGateOut: {
+            /** Above Count */
+            above_count: number | null;
+            /** Date */
+            date: string | null;
+            /** Gate */
+            gate: string | null;
+            /** Measured Count */
+            measured_count: number | null;
+            /** Pct Above Dma */
+            pct_above_dma: string | null;
+            /** Thin Session */
+            thin_session: boolean;
+            /** Threshold Pct */
+            threshold_pct: string;
+            /** Universe Count */
+            universe_count: number | null;
+            /** With Bar Count */
+            with_bar_count: number | null;
+        };
+        /**
+         * TwtHalfSizeOut
+         * @description `05` §1.4 — the first-live discipline as a counter a reader can see without a settings
+         *     page. `execution_enabled` is false for the whole of this run, and the counter says so rather
+         *     than counting down in the dark.
+         */
+        TwtHalfSizeOut: {
+            /** Entries Left */
+            entries_left: number;
+            /** Entries Total */
+            entries_total: number;
+            /** Execution Enabled */
+            execution_enabled: boolean;
+        };
+        /**
+         * TwtLastScanOut
+         * @description The newest "Scan now" run, inlined so the hub costs one request rather than two.
+         *
+         *     `id` and not `run_id`: this is the shape `/swing` serves and the shape `fetch.ts` reads, and
+         *     a sleeve that invented its own spelling would be a second thing to learn for no reason. The
+         *     poll route `GET /twt/scan/{run_id}` keeps its own name — it answers about *a* run, this one
+         *     names *the* run.
+         */
+        TwtLastScanOut: {
+            /** Error */
+            error: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Found */
+            found?: number | null;
+            /** Id */
+            id: number;
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /** Session Date */
+            session_date?: string | null;
+            /** Status */
+            status: string;
+        };
+        /**
+         * TwtPositionOut
+         * @description One `OPEN` row of `03` §5, marked at the **last published close**.
+         *
+         *     `last_price` is that mark, not a quote: this service has no quote path (root `CLAUDE.md`,
+         *     "Which date the product shows"), and null means nothing has printed since the fill — a
+         *     reason, not a zero.
+         */
+        TwtPositionOut: {
+            /** Entry Avg */
+            entry_avg: string;
+            /**
+             * Entry Date
+             * Format: date
+             */
+            entry_date: string;
+            /** Gtt Id */
+            gtt_id: string | null;
+            /** Gtt Trigger */
+            gtt_trigger: string | null;
+            /** Half Size */
+            half_size: boolean;
+            /** High Since */
+            high_since: string;
+            /** High Since Date */
+            high_since_date: string | null;
+            /** Hold Sessions */
+            hold_sessions: number | null;
+            /** Id */
+            id: number;
+            /** Instrument Id */
+            instrument_id: number;
+            /** Last Price */
+            last_price: string | null;
+            /** Name */
+            name: string;
+            /** Next Trigger */
+            next_trigger: string | null;
+            /** Next Trigger For */
+            next_trigger_for: string | null;
+            /** Quantity Open */
+            quantity_open: number;
+            /** Simulated */
+            simulated: boolean;
+            /** Symbol */
+            symbol: string;
+            /** Unrealised Fraction */
+            unrealised_fraction: string | null;
+            /** Unrealised Inr */
+            unrealised_inr: string | null;
+        };
+        /**
          * TwtScanQueuedOut
          * @description What ``POST /twt/scan`` answers, with a 202: the run to poll.
          */
@@ -10268,6 +10521,8 @@ export interface components {
             error: string | null;
             /** Finished At */
             finished_at: string | null;
+            /** Found */
+            found?: number | null;
             /**
              * Requested At
              * Format: date-time
@@ -10281,6 +10536,63 @@ export interface components {
             started_at: string | null;
             /** Status */
             status: string;
+        };
+        /**
+         * TwtTightNameOut
+         * @description One name in the state, with its entry event where it had one.
+         *
+         *     `failed_filters` carries `["TURNOVER"]` on a `SCAN_ONLY` reject and is empty otherwise. The
+         *     rejects are served rather than filtered away (`05` §1.2): a screen that hides what it passed
+         *     over cannot be audited by the person whose money it is.
+         */
+        TwtTightNameOut: {
+            /** Close Raw */
+            close_raw: string;
+            /** Failed Filters */
+            failed_filters: string[];
+            /** Instrument Id */
+            instrument_id: number;
+            /** Locked Upper Circuit */
+            locked_upper_circuit: boolean;
+            /** Month Low Ratio */
+            month_low_ratio: string;
+            /** Name */
+            name: string;
+            /** Sessions In State */
+            sessions_in_state: number;
+            /** Signal State */
+            signal_state: string | null;
+            /** Symbol */
+            symbol: string;
+            /** Turnover Avg 20 */
+            turnover_avg_20: number | null;
+            /** Week Close 0 */
+            week_close_0: string;
+            /** Week Close 1 */
+            week_close_1: string;
+            /** Week Close 2 */
+            week_close_2: string;
+            /** Week Range Pct */
+            week_range_pct: string;
+        };
+        /**
+         * TwtTodayOut
+         * @description `05` §1's hub, in one call.
+         *
+         *     `as_of` null means the detector has never written a session — **not** that the session was
+         *     quiet, and **not** that today's bars are missing. It is the last completed trading session by
+         *     construction (`04` §11.1, root `CLAUDE.md`'s two clocks), so on a Saturday it reads Friday.
+         */
+        TwtTodayOut: {
+            /** As Of */
+            as_of: string | null;
+            gate: components["schemas"]["TwtGateOut"];
+            half_size: components["schemas"]["TwtHalfSizeOut"];
+            last_scan: components["schemas"]["TwtLastScanOut"] | null;
+            /** Positions */
+            positions: components["schemas"]["TwtPositionOut"][];
+            /** Tight */
+            tight: components["schemas"]["TwtTightNameOut"][];
         };
         /**
          * UnallocatedHoldingOut
@@ -10762,6 +11074,8 @@ export interface components {
             error: string | null;
             /** Finished At */
             finished_at: string | null;
+            /** Found */
+            found?: number | null;
             /** Funnel */
             funnel: {
                 [key: string]: unknown;
@@ -10805,6 +11119,7 @@ export interface components {
             gate: string | null;
             /** Gate Threshold Pct */
             gate_threshold_pct: string;
+            last_scan?: components["schemas"]["VbtScanRunOut"] | null;
             /** Measured Count */
             measured_count: number | null;
             /** Pct Above Dma */
@@ -28668,6 +28983,107 @@ export interface operations {
             };
         };
     };
+    getTwtBacktest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TwtBacktestOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     postTwtScan: {
         parameters: {
             query?: never;
@@ -28787,6 +29203,110 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TwtScanRunOut"];
+                };
+            };
+            /** @description Invalid screen definition */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getTwtToday: {
+        parameters: {
+            query?: {
+                /** @description a detected session; default the latest */
+                date?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TwtTodayOut"];
                 };
             };
             /** @description Invalid screen definition */

@@ -17,7 +17,9 @@ import { FACTOR_FAMILIES } from "@/lib/marketing/factor-families";
  *
  * The measurements are the ones read off the live page: a `max-w-6xl` column with `px-5 sm:px-7
  * lg:px-10`, headings at weight 300 with -0.02em tracking, 26px cards, and the dark bands set on
- * `#0a0a0a` with `#141414` panels.
+ * `#0a0a0a` with `#141414` panels — those two values now live in `.band-dark` (`globals.css`) as
+ * `--background` and `--card`, so the markup below asks for `bg-background`/`bg-card` and gets
+ * them.
  */
 
 /* ------------------------------------------------------------------ shared */
@@ -32,16 +34,28 @@ function Column({ children, className = "" }: { children: React.ReactNode; class
 /**
  * A dark band.
  *
- * Not `.dark` — that would flip the theme class and take the user's own preference with it. This
- * paints the two tokens the band needs and nothing else, so a reader in dark mode sees the same
- * alternation a reader in light mode does.
+ * Not `.dark` — that would flip the theme class and take the user's own preference with it. The
+ * band is a dark *surface* inside whichever theme the reader chose, so it repoints the palette and
+ * nothing else, and the alternation reads the same in both themes.
+ *
+ * **It used to paint two tokens inline, and 12 Sep 2026 proved two is not enough.** `--muted` fell
+ * through to the reader's theme, so the footer's block `<Disclaimer/>` painted the LIGHT `--muted`
+ * over near-black and put its text on it at 1.69:1; and the quiet ink tier had no token at all, so
+ * it was retyped as `#6f6f6f` — 3.67:1 on a `#141414` panel. Axe caught both on the landing page.
+ * The whole palette now lives in `.band-dark` in `globals.css`, where `contrast.test.ts` can parse
+ * it, and everything inside a band is written in semantic classes.
+ *
+ * It forwards the rest of a `<section>`'s props, which is not cosmetic: both callers pass
+ * `aria-labelledby`, TypeScript exempts hyphenated JSX attributes from excess-property checking,
+ * and so the label was being dropped in silence and neither band was a named region.
  */
-function DarkBand({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+function DarkBand({
+  children,
+  className = "",
+  ...rest
+}: React.ComponentPropsWithoutRef<"section">) {
   return (
-    <section
-      className={`bg-[#0a0a0a] text-[#f7f7f7] ${className}`}
-      style={{ ["--border" as string]: "#262626", ["--muted-foreground" as string]: "#a6a6a6" }}
-    >
+    <section className={`band-dark ${className}`} {...rest}>
       {children}
     </section>
   );
@@ -89,14 +103,14 @@ export function StepsPanel() {
 
           <ul className="space-y-3">
             {STEPS.map((step) => (
-              <li key={step.n} className="rounded-[26px] bg-[#0a0a0a] p-7 text-[#f7f7f7]">
+              <li key={step.n} className="band-dark rounded-[26px] p-7">
                 <div className="flex items-baseline gap-4">
-                  <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[#8a8a8a]">
+                  <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-quiet-foreground">
                     // {step.n}
                   </span>
                   <h3 className="text-[17px] font-medium">{step.title}</h3>
                 </div>
-                <p className="mt-4 text-[15px] leading-relaxed text-[#a6a6a6]">{step.body}</p>
+                <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground">{step.body}</p>
               </li>
             ))}
           </ul>
@@ -159,7 +173,7 @@ export function CatalogGrid() {
         <h2 id="catalog" className="vaaya-display max-w-[22ch] text-[2.25rem] sm:text-[3rem]">
           Every list, every factor, every index — written down.
         </h2>
-        <p className="mt-7 max-w-[62ch] text-[15px] leading-relaxed text-[#a6a6a6]">
+        <p className="mt-7 max-w-[62ch] text-[15px] leading-relaxed text-muted-foreground">
           Nothing here is a black box you are asked to trust. Each family carries its algebra, each
           list carries the date its membership was true, and every number traces back to the nightly
           run that produced it.
@@ -167,19 +181,19 @@ export function CatalogGrid() {
 
         <ul className="mt-14 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {CATALOG.map((card) => (
-            <li key={card.title} className="rounded-[26px] bg-[#141414] p-6">
+            <li key={card.title} className="rounded-[26px] bg-card p-6">
               <div className="flex items-baseline justify-between gap-3">
                 <h3 className="text-[17px] font-medium">{card.title}</h3>
-                <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-[#6f6f6f]">
+                <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-quiet-foreground">
                   {card.chips.length}
                 </span>
               </div>
-              <p className="mt-1 text-[13px] text-[#6f6f6f]">{card.note}</p>
+              <p className="mt-1 text-[13px] text-quiet-foreground">{card.note}</p>
               <ul className="mt-5 flex flex-wrap gap-1.5">
                 {card.chips.map((chip) => (
                   <li
                     key={chip}
-                    className="rounded-full border border-[#262626] px-2.5 py-1 text-[12px] text-[#a6a6a6]"
+                    className="rounded-full border border-border px-2.5 py-1 text-[12px] text-muted-foreground"
                   >
                     {chip}
                   </li>
@@ -225,12 +239,12 @@ const ASSUMPTION = `Assumptions attached to every backtest
 
 export function Inspectable() {
   return (
-    <DarkBand aria-labelledby="inspect" className="border-t border-[#262626]">
+    <DarkBand aria-labelledby="inspect" className="border-t border-border">
       <Column className="py-20 lg:py-28">
         <h2 id="inspect" className="vaaya-display max-w-[18ch] text-[2.25rem] sm:text-[3rem]">
           Built to be checked, not believed.
         </h2>
-        <p className="mt-7 max-w-[62ch] text-[15px] leading-relaxed text-[#a6a6a6]">
+        <p className="mt-7 max-w-[62ch] text-[15px] leading-relaxed text-muted-foreground">
           The same numbers reach the API, the results table and the CSV export, because they are
           rounded once when they are written. Every run states the assumptions it made and the data
           version it read.
@@ -240,7 +254,7 @@ export function Inspectable() {
           {[RESPONSE, ASSUMPTION].map((block, index) => (
             <pre
               key={index}
-              className="overflow-x-auto rounded-[26px] bg-[#141414] p-7 font-mono text-[12px] leading-relaxed text-[#a6a6a6]"
+              className="overflow-x-auto rounded-[26px] bg-card p-7 font-mono text-[12px] leading-relaxed text-muted-foreground"
             >
               {block}
             </pre>
@@ -259,7 +273,7 @@ export function Inspectable() {
             <li key={label}>
               <Link
                 href={href}
-                className="border-b border-[#3f3f3f] pb-0.5 transition-colors hover:border-[#f7f7f7]"
+                className="border-b border-[#3f3f3f] pb-0.5 transition-colors hover:border-foreground"
               >
                 {label}
               </Link>
@@ -314,18 +328,18 @@ export function FaqSection() {
 
           <ul className="space-y-2.5">
             {items.map((item) => (
-              <li key={item.id} className="rounded-[18px] bg-[#0a0a0a] text-[#f7f7f7]">
+              <li key={item.id} className="band-dark rounded-[18px]">
                 <details className="group">
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-6 px-6 py-4 text-[15px] font-medium [&::-webkit-details-marker]:hidden">
                     {item.question}
                     <span
                       aria-hidden="true"
-                      className="shrink-0 text-[#8a8a8a] transition-transform group-open:rotate-45"
+                      className="shrink-0 text-quiet-foreground transition-transform group-open:rotate-45"
                     >
                       +
                     </span>
                   </summary>
-                  <div className="space-y-3 px-6 pb-5 text-[15px] leading-relaxed text-[#a6a6a6]">
+                  <div className="space-y-3 px-6 pb-5 text-[15px] leading-relaxed text-muted-foreground">
                     {item.answer.map((paragraph) => (
                       <p key={paragraph.slice(0, 32)}>{paragraph}</p>
                     ))}

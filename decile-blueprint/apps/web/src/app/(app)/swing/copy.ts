@@ -1,3 +1,5 @@
+import { formatTradeDate } from "@/lib/format";
+import { whenPhrase } from "@/lib/scan-age";
 import type { SwingMarketDay, SwingScanRun } from "@/lib/swing/fetch";
 
 /**
@@ -86,20 +88,71 @@ export function scanLine(provisional: boolean, scannedAt: string | null | undefi
   return when ? `re-scanned ${when} from published bars` : "";
 }
 
-/** The last run beside the button: "scanning…", "scanned 13:42 IST · 41 liquid, 2 flags", "failed: …". */
-export function scanRunLine(run: SwingScanRun | null | undefined): string {
-  if (!run) return "";
-  if (run.status === "QUEUED") return "Scan queued…";
-  if (run.status === "RUNNING") return "Scanning…";
+/** What the page knows that the run row does not. */
+export interface ScanLineContext {
+  /**
+   * The browser's clock, once the control has mounted — `null` on the server's pass and on the
+   * hydrating one, where a reading of its own would be a text mismatch. See `@/lib/scan-age`.
+   */
+  now?: number | null;
+  /** The latest session the book has published, for the case where no run exists at all. */
+  session?: string | null;
+}
+
+/**
+ * What the run found, from the funnel it already carries: how many names were liquid enough to
+ * look at, and how many of those were flagged.
+ *
+ * Zero flags is the **ordinary** answer — `docs/swing/05` §2 makes the funnel compulsory for
+ * exactly that reason, because an empty list and a job that never ran render identically without
+ * it — so it is said as a result and not as a fault.
+ */
+function foundClause(funnel: SwingScanRun["funnel"]): string {
+  const liquid = funnel?.liquid;
+  if (liquid === undefined) return "";
+  const flagged = Object.values(funnel?.candidates ?? {}).reduce((sum, count) => sum + count, 0);
+  const liquidWord = `${liquid.toLocaleString("en-IN")} liquid`;
+  if (flagged === 0) return ` — ${liquidWord}, no setups, which is an ordinary day.`;
+  return ` — ${liquidWord}, ${flagged === 1 ? "1 setup" : `${flagged} setups`}.`;
+}
+
+/** What the line says when this user has never pressed the button. */
+export function neverScannedLine(session: string | null | undefined): string {
+  return session
+    ? `No scan has been started from here yet — what is shown is the nightly run's, for the ${formatTradeDate(session)} session.`
+    : "No scan has run yet.";
+}
+
+/**
+ * The last run beside the button — **when it ran, whether it finished, and what it found.**
+ *
+ * Before 12 Sep 2026 this said nothing at all until a run existed, so a book whose setups came
+ * from the nightly looked as though it had never been scanned. It also repeated `run.error`
+ * verbatim on a failure, which is the defect of 11 Sep 2026 said again: that sentence names
+ * jobs, quote sources and tables and is written for whoever can fix it, not for the person whose
+ * money it is. Both are corrected here; the reader gets when it stopped, that nothing changed,
+ * and that they may press again.
+ *
+ * A finished run's time is relative while it is recent ("12 minutes ago") and an IST wall clock
+ * once it is not — `@/lib/scan-age` carries the reasoning, including why `now` is passed in
+ * rather than read here.
+ */
+export function scanRunLine(
+  run: SwingScanRun | null | undefined,
+  context: ScanLineContext = {},
+): string {
+  const now = context.now ?? null;
+  if (!run) return neverScannedLine(context.session);
+  if (run.status === "QUEUED") return "Scan queued. This page updates when it finishes.";
+  if (run.status === "RUNNING") return "Scanning now. This page updates when it finishes.";
+
+  const when = whenPhrase(run.finished_at ?? run.requested_at, now);
   if (run.status === "FAILED") {
-    return `The last scan failed${run.error ? `: ${run.error}` : "."}`;
+    const stopped = when ? ` It stopped ${when}.` : "";
+    return `The last scan did not finish, so nothing changed.${stopped} You can start another.`;
   }
-  const when = timeIST(run.finished_at) ?? timeIST(run.requested_at);
-  const liquid = run.funnel?.liquid;
-  const candidates = run.funnel?.candidates ?? {};
-  const found = Object.values(candidates).reduce((sum, count) => sum + count, 0);
-  const counts =
-    liquid === undefined ? "" : ` · ${liquid.toLocaleString("en-IN")} liquid, ${found} flagged`;
-  const what = run.provisional ? " from live quotes" : " from published bars";
-  return `Last scan ${when ?? "done"}${what}${counts}`;
+  const from = run.provisional ? " from live quotes" : " from published bars";
+  const lead = when ? `Last scanned ${when}` : "The last scan finished";
+  const found = foundClause(run.funnel);
+  return found ? `${lead}${from}${found}` : `${lead}${from}.`;
 }

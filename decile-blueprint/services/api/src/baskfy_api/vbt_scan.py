@@ -83,6 +83,12 @@ class ScanRunView:
     funnel: dict[str, object] | None
     detail: dict[str, object] | None
     error: str | None
+    #: How many signals the run produced — the one number a page needs to say "found 4 signals"
+    #: rather than "DONE". ``None`` while the run has not finished, and for a run written before
+    #: the worker recorded it. **Zero is a real answer**, not a missing one: about thirteen
+    #: signals a week in a normal market and none at all when the tape is thin, so the page must
+    #: be able to tell "none" from "we do not know".
+    found: int | None = None
 
 
 def source_of(row: VbScanRun) -> str:
@@ -99,6 +105,21 @@ def source_of(row: VbScanRun) -> str:
     return named if isinstance(named, str) and named else str(row.source)
 
 
+def found_in(detail: dict[str, object] | None) -> int | None:
+    """How many signals the run produced, out of the detail the worker wrote.
+
+    ``baskfy_worker.tasks.vbt_rescan`` writes ``{"signals": n, "status": ..., **funnel}`` — the
+    funnel's counts flattened onto the row, in the shape the nightly step writes — so the count
+    is a top-level key and not one inside a nested ``funnel``. A row written before that, or one
+    that failed before detecting anything, has no key and answers ``None``; the page then says
+    when it ran without claiming a number it does not have.
+    """
+    if detail is None:
+        return None
+    value = detail.get("signals")
+    return int(value) if isinstance(value, int) and not isinstance(value, bool) else None
+
+
 def scan_run_view(row: VbScanRun) -> ScanRunView:
     detail = row.detail if isinstance(row.detail, dict) else None
     funnel = detail.get("funnel") if detail is not None else None
@@ -113,6 +134,7 @@ def scan_run_view(row: VbScanRun) -> ScanRunView:
         funnel=funnel if isinstance(funnel, dict) else None,
         detail=detail,
         error=row.error,
+        found=found_in(detail),
     )
 
 

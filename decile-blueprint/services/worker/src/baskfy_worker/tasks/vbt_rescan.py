@@ -29,9 +29,10 @@ from typing import Final
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from baskfy_core.models import PipelineRun, VbScanRun
+from baskfy_core.models import VbScanRun
 from baskfy_core.models.base import JsonObject
 from baskfy_worker.steps import StepOutcome
+from baskfy_worker.tasks.published_session import last_published_session
 from baskfy_worker.tasks.vbt import run_detect_vbt
 
 log = logging.getLogger(__name__)
@@ -93,18 +94,12 @@ async def latest_published_session(session: AsyncSession, on_or_before: dt.date)
     `published_trade_date`'s query is the product's own answer to "what is the latest session",
     the same one the freshness pill and the swing book's health check read — a run with a
     `data_version` is a run whose bars are on the page (`docs/README`, the two clocks).
+
+    **The query itself now lives in one place** — `baskfy_worker.tasks.published_session` — and
+    all three sleeves' scans delegate to it (`gates/sleeve-read-contract.md` C3). This one was
+    already right; swing's was `max(ohlcv_daily.date)` and is the one that moved.
     """
-    return (
-        await session.execute(
-            select(PipelineRun.trade_date)
-            .where(
-                PipelineRun.data_version.is_not(None),
-                PipelineRun.trade_date <= on_or_before,
-            )
-            .order_by(PipelineRun.data_version.desc())
-            .limit(1)
-        )
-    ).scalar_one_or_none()
+    return await last_published_session(session, on_or_before)
 
 
 async def unpublished_runs(session: AsyncSession, *, limit: int = 10) -> list[VbScanRun]:

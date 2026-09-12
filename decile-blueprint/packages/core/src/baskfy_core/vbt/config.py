@@ -25,6 +25,7 @@ that ``grid2.py`` still applies are not fields here (DECISIONS-VB VB0.2).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from decimal import Decimal
 from enum import StrEnum
 from typing import Final
 
@@ -207,7 +208,14 @@ class SizingConfig:
     #: and will at ₹1 crore; it is in from day one so that day is a line on a page.
     max_position_vs_turnover: float = 0.01
     #: Below this the brokerage dominates the edge (the desk's own ``MIN_TRADE_VALUE``).
-    min_trade_value_inr: float = 10_000.0
+    #:
+    #: ``Decimal``, not ``float``, since 12 Sep 2026. House rule 9 — "money and prices are
+    #: ``numeric``, never ``float``" — and this is rupees, as the ``_inr`` suffix and the units
+    #: note at the top of this module both say. It was a ``float`` and every use site laundered it
+    #: straight back with ``Decimal(str(...))``, which is the code admitting the declaration was
+    #: the wrong type. The TWT sleeve has always had it right (``twt/config.py``), so the two
+    #: sleeves disagreed on the type of the same threshold.
+    min_trade_value_inr: Decimal = Decimal("10000")
     #: "Start small" (`02` §3.5): the first live sessions plan at half a slot, applied **at plan
     #: time** before every cap, so the line shown is the line sent. A paper plan is full size.
     risk_multiplier_first_live: float = 0.5

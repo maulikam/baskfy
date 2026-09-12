@@ -118,12 +118,20 @@ describe("Scan now is on the hub, and it is the only control there", () => {
     render(await TwtPage());
   }
 
-  it("offers the button in the header, enabled, with nothing said about a run yet", async () => {
+  /**
+   * Nobody has pressed the button, and the page still answers "when did this last scan?" — with
+   * the nightly run that produced the session it is showing. Saying nothing here was the gap of
+   * 12 Sep 2026; it made a strategy that had been scanned overnight look as though it never had.
+   */
+  it("names the nightly run when nobody has pressed the button", async () => {
     await renderHub();
 
     const control = screen.getByTestId("twt-scan-now");
     expect(within(control).getByRole("button", { name: "Scan now" })).toBeEnabled();
-    expect(screen.getByTestId("twt-scan-status")).toHaveTextContent("");
+    expect(screen.getByTestId("twt-scan-status")).toHaveTextContent(
+      "No scan has been started from here yet — what is shown is the nightly run's, for the " +
+        "10 Sept 2026 session.",
+    );
   });
 
   it("shows the last run's state beside it when the payload names one", async () => {

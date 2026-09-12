@@ -84,6 +84,21 @@
    * now asserted, so the next token that is illegible on its own surface fails arithmetically
    * rather than waiting for somebody to open a browser. */
   --muted-foreground: #686868;
+  /* The fourth ink tier, added 12 Sep 2026 — eyebrows, captions, the fine print under a card.
+   *
+   * It exists because it was already being used and was not a token: `#6f6f6f` was hardcoded on
+   * eight card subtexts, three footer headings and a copyright line, and on the painted-dark
+   * bands (`.band-dark`) those render on `#141414`/`#0a0a0a`, where `#6f6f6f` is **3.67:1** and
+   * **3.94:1**. Axe found all twenty of them on the landing page, in both themes. A quiet tier is
+   * a real design need; a quiet tier spelled as a hex on the component is what broke.
+   *
+   * Light is #6c6c6c — background 5.02, card 5.25, muted 4.61. Note how little room there is:
+   * `--muted-foreground` is 5.33 on the same canvas, so at AA the light theme affords barely a
+   * step between "muted" and "quiet". It is a step, and it is the largest one AA allows. Dark is
+   * #8a8a8a — background 5.73, card 5.34, muted 5.04, a clear tier under #a6a6a6.
+   *
+   * Asserted against all three surfaces in `contrast.test.ts`, per the 11 Sep lesson above. */
+  --quiet-foreground: #6c6c6c;
   --border: #e8e8e8;
   --input: #d6d6d6;
   --ring: #0a0a0a;
@@ -208,6 +223,11 @@
   --muted: #1a1a1a;
   /* #8a8a8a would clear 4.5 on the canvas and only 5.34 on a panel; #a6a6a6 keeps both clear. */
   --muted-foreground: #a6a6a6;
+  /* The quiet tier on a dark canvas has the room the light one does not: #8a8a8a is 5.73 on
+   * `--background`, 5.34 on `--card` and 5.04 on `--muted`, a full tier below #a6a6a6. It is the
+   * same value the note in `:root` cites, and the value `.band-dark` pins, because a band painted
+   * dark in both themes is a dark surface whatever the reader's theme says. */
+  --quiet-foreground: #8a8a8a;
   --border: #262626;
   --input: #333333;
   --ring: #f7f7f7;
@@ -250,6 +270,7 @@
   --color-popover-foreground: var(--popover-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-quiet-foreground: var(--quiet-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -445,7 +466,7 @@
  */
 @keyframes flow-ack {
   0% {
-    opacity: 0.7;
+    opacity: 0.6;
     transform: translateY(0);
   }
   2% {
@@ -453,11 +474,11 @@
     transform: translateY(-1px);
   }
   7% {
-    opacity: 0.7;
+    opacity: 0.6;
     transform: translateY(0);
   }
   100% {
-    opacity: 0.7;
+    opacity: 0.6;
     transform: translateY(0);
   }
 }
@@ -684,6 +705,62 @@
     background: color-mix(in srgb, var(--card) 92%, transparent);
     box-shadow: var(--v-elev-1);
   }
+
+  /*
+   * --- The painted bands (12 Sep 2026) -------------------------------------
+   *
+   * A band that is `#0a0a0a` in light mode *and* in dark mode is not "the page"; it is a dark
+   * surface living inside whichever theme the reader chose. Everything drawn on it — ink, hairline,
+   * panel, muted copy — has to come from the dark palette or it is measuring itself against a
+   * canvas that is not there.
+   *
+   * `page-sections.tsx` and `site-footer.tsx` each did this inline, and each re-pointed **two**
+   * tokens: `--border` and `--muted-foreground`. Everything else either fell through to the
+   * reader's theme or was retyped as a hex beside it, and both halves of that failed in a browser:
+   *
+   *   - `--muted` was never re-pointed, so the footer's `<Disclaimer variant="block"/>` painted
+   *     `bg-muted/50` — the LIGHT `#f0f0f0` at half alpha over `#0a0a0a` — and put `#a6a6a6` text
+   *     on it at **1.69:1**. That is axe's `aside > p` on the landing page in light.
+   *   - the quiet tier was retyped as `#6f6f6f`, which is 3.67:1 on `#141414` and 3.94:1 on
+   *     `#0a0a0a`: twelve more of the twenty.
+   *
+   * So the palette lives here, once, in the token layer, and the components carry semantic classes
+   * (`text-muted-foreground`, `text-quiet-foreground`, `bg-card`, `border-border`) that are correct
+   * inside a band, outside one, and in either theme. `contrast.test.ts` parses these two blocks
+   * exactly as it parses `:root` and `.dark`, because a theme-invariant surface is still a theme.
+   */
+  .band-dark {
+    color-scheme: dark;
+    --background: #0a0a0a;
+    --foreground: #f7f7f7;
+    --card: #141414;
+    --card-foreground: #f7f7f7;
+    --muted: #1a1a1a;
+    --muted-foreground: #a6a6a6;
+    --quiet-foreground: #8a8a8a;
+    --border: #262626;
+    --input: #333333;
+    background-color: var(--background);
+    color: var(--foreground);
+  }
+
+  /* The ticker rail is the mirror image: painted `#f8fafc` in both themes, so in DARK it was the
+   * light surface carrying dark-theme ink — `--muted-foreground` #a6a6a6 on #f8fafc, **2.05:1**,
+   * which is axe's three `.marquee-track` rows. Same fix, other direction. */
+  .band-light {
+    color-scheme: light;
+    --background: #f8fafc;
+    --foreground: #0a0a0a;
+    --card: #ffffff;
+    --card-foreground: #0a0a0a;
+    --muted: #f0f0f0;
+    --muted-foreground: #686868;
+    --quiet-foreground: #6c6c6c;
+    --border: #e8e8e8;
+    --input: #d6d6d6;
+    background-color: var(--background);
+    color: var(--foreground);
+  }
 }
 
 @layer utilities {
@@ -736,8 +813,24 @@
     animation-name: flow-sweep;
   }
 
+  /*
+   * The rest opacity is the mute. It is NOT a dimmer laid over an already-muted colour, and that
+   * distinction is the whole of the 12 Sep 2026 contrast fix.
+   *
+   * The eyebrow used to be `text-muted-foreground` *and* `opacity: 0.7`, i.e. muted twice. The
+   * composite was #939494 on the light canvas (**2.91:1**) and #777777 on the dark one
+   * (**4.42:1**) — seven of axe's twenty in light, five in dark. There is no rescuing that with a
+   * smaller dim: `--muted-foreground` is only 5.33:1 to begin with, so in light even 0.88 alpha
+   * still fails, and an ack that runs 0.88 -> 1 is not an ack.
+   *
+   * So the label carries `--foreground` and this opacity does the muting, which makes the mute
+   * self-compensating against whatever surface it lands on. 0.6 renders #696a6b on `--background`
+   * (5.18) and #6c6c6c on `--card` (5.25) in light; #989898 (6.86) and #9c9c9c (6.71) in dark —
+   * within a hair of the muted tier's own colour, so the stage looks unchanged. The ack itself
+   * gains range: 0.6 -> 1 is a brighter beat than 0.7 -> 1 was.
+   */
   .flow-ack {
-    opacity: 0.7;
+    opacity: 0.6;
     animation-name: flow-ack;
     animation-timing-function: ease-out;
     animation-iteration-count: infinite;
@@ -769,9 +862,12 @@
     display: none;
   }
 
+  /* `opacity: 0.6`, not 1 -- the rest opacity IS the eyebrow's muted colour now (see `.flow-ack`
+   * above), so restoring it to 1 here would hand a reader who asked for less motion the only
+   * full-ink eyebrows on the page. What stops is the animation, not the mute. */
   .flow-ack {
     animation: none;
-    opacity: 1;
+    opacity: 0.6;
     transform: none;
   }
 }

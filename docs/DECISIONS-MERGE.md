@@ -6734,3 +6734,186 @@ decision and not this leaf's.
 `sync_holdings_into_portfolio` (the function and its tests can stay — they are then unreached), and
 `alembic downgrade 0042_twt_scan_run`. The downgrade is **not** a no-op: resolve or dismiss any
 `SPLIT_HOLDING` items first, because the narrowed constraint revalidates the table.
+
+## D-ROUTE — three API paths that a page-tree rename carried off with it ⚠ UNREVIEWED
+
+**The finding.** `apps/web/src/lib/basket/fetch.ts` fetched `/discover` and `/discover/plan`, and
+`apps/web/src/lib/create/fetch.ts` posted to `/api/v1/cb/discover`. The API serves none of the
+three and never has. Its live route table (`create_app().openapi()`, not the checked-in
+`openapi.json`) carries `/api/v1/baskets`, `/api/v1/baskets/plan` and `/api/v1/cb/baskets`, and
+`/api/v1/discover*` does not appear anywhere in it.
+
+**Which side drifted, and the evidence.** `git log -S` puts all three hunks in one commit —
+**M48, `6195b57`, Maulik, 27 Aug 2026** — which renamed the page tree `app/(app)/baskets/` →
+`app/(app)/discover/`. `git show --find-renames` shows the directory move; `lib/nav.ts` still
+carries the `/baskets → /discover` and `/baskets/plan → /discover/plan` redirects, so the **UI**
+rename was the decision. The commit message enumerates four bug reports and three causes — an
+unseeded staging database, a `seed all` argument bug, and a nested Radix popover — and mentions no
+API path at all. Under the root `CLAUDE.md` rule ("a commit message naming Maulik and giving a
+reason is a decision… if there is no such commit, it may genuinely be a bug"), the page-tree move
+is the decision and these three strings are collateral: the rename swept them because they read
+like routes and they are not. The API side never moved — `routers/baskets.py` has served both
+routes since M22 and `routers/curated_create.py` `POST /cb/baskets` since SC8.
+
+**`/explore` is not the answer, and it looked like it.** `/explore` is a *former UI route*
+(`lib/nav.ts` redirects it to `/discover`) that also happens to be a *live API resource* — the
+curated catalog, `routers/explore.py`, read by `lib/explore/fetch.ts`. It is a different resource
+from the momentum basket `fetchBasket` wants, whose `BasketOut` it does not return. Pointing the
+basket fetcher at `/explore` would have compiled, returned JSON, and been wrong.
+
+**They are live, not dead code.** `fetchBasket` is called by `app/(app)/discover/featured/page.tsx`,
+`fetchLatestPlan` by `app/(app)/discover/plan/page.tsx`, and `createPrivateBasket` by
+`components/create/create-basket-form.tsx`. The two read pages have rendered "There is no featured
+basket to show yet" / "The desk has recorded no plans yet" since 27 Aug, and the save button on
+`/create` has failed, because each wrapper turns a non-OK response into a domain error
+(`BasketUnavailable`, `CreateBasketError`) that the page renders as an empty state. **A 404 and an
+empty database are the same pixels** — which is the reason this survived two weeks inside a commit
+whose own subject line is "the empty pages were an empty database".
+
+**Taken.** Point the web back at `/baskets`, `/baskets/plan` and `/api/v1/cb/baskets` — five lines,
+no new routes, no alias. `docs/07` and `EXPECTED_PATHS` in `services/api/tests/test_api_artifacts.py`
+are unchanged because nothing about the API changed; all three paths are already listed there.
+Each fix site carries a comment saying these are API paths and do not follow the page tree, so the
+next rename does not repeat it.
+
+**Rejected.** (a) *Adding `/discover*` routes to the API* — two names for one resource is how this
+happens again, and it would have needed `docs/07` entries for routes nobody designed.
+(b) *An alias/redirect layer* — same objection, plus it would have made the page-tree rename look
+retroactively like an API decision. (c) *Repointing `fetchBasket` at `/explore`* — wrong resource
+(above). (d) *Fixing `/twt/backtest`* — the same class, but it is the TWT sleeve's route and
+`routers/twt.py` is in another agent's hands; it is registered instead (below).
+
+**The class test.** `apps/web/src/lib/api/__tests__/served-paths.test.ts` scans every `.ts`/`.tsx`
+under `apps/web/src` (comments stripped by a small tokenizer, so a docstring naming a route is not
+a finding) for the two shapes an API path can take here — a literal containing `/api/v1`, and a
+string handed to one of the ~19 modules' private `readJson`/`readOrNull`/`post` wrappers around
+`` `${serverApiOrigin()}/api/v1${path}` `` — and asserts each resolves against `openapi.json`,
+with `{}`-interpolations matching `{param}` segments. It finds ~193 call sites and fails on all
+three of M48's casualties when they are reintroduced. It runs under `pnpm --filter @baskfy/web run
+test`, which is CI's `web` job.
+
+`KNOWN_UNSERVED` in that file is a register, not an allowlist, and is asserted in **both**
+directions: an entry that stops being unserved fails the suite, so whoever lands the route deletes
+the line in the same commit, and an entry nothing fetches any more fails too. It holds exactly one
+path today — **`/twt/backtest`** (`lib/twt/fetch.ts` `fetchBacktest`; `routers/twt.py` serves only
+`/twt/today`, `/twt/scan`, `/twt/scan/{run_id}`), owned by the TWT work.
+
+**To reverse:** restore `/discover`, `/discover/plan`, `/api/v1/cb/discover` in the two web
+fetchers and delete `served-paths.test.ts`. There is nothing to migrate — no schema, no data, no
+route was added or removed.
+
+
+## SRC-F — five of Agent C's six writer/reader disagreements, closed; the sixth named ⚠ UNREVIEWED
+
+**Context.** `gates/sleeve-read-contract.md` (Agent C, 12 Sep 2026) proved six places where a
+sleeve's writer and its reader do not compute the session, or the tenant, with the same function
+— the general case of the `/twt` bug where 58 `tw_state_daily` rows sat under a page saying
+nothing had been read. Agent F fixed five and left the sixth red on purpose. The full record,
+with a runnable check per row, is `gates/sleeve-contract-fixes.md`.
+
+**Taken.**
+
+* **C1 (the live one).** `baskfy_api.swing.setups` took the page's `as_of` from
+  `max(sw_setup_daily.date)` — a table the detector leaves empty on a session where nothing met
+  the bar, while `write_market_row` runs unconditionally. New `latest_detected_date` keys on
+  `sw_market_daily`, the row written every session, which is the rule VBT and TWT already follow.
+  On a zero-candidate session the page used to serve **yesterday's triggers and yesterday's gate,
+  stamped yesterday**. On the box the gate has been RED since 2026-09-04 and the candidate count
+  walked 21 → 22 → 16 → 19 → 12 → 9.
+* **C3.** One query for "the last published session" —
+  `baskfy_worker.tasks.published_session.last_published_session` — and all three "Scan now"
+  writers delegate to it. Swing asked `max(ohlcv_daily.date)`, which is the newest date with a
+  *bar*; bars land before a run is published, so on 2026-09-11 (run 48: bars 4,358 rows, then
+  `data_quality_gate failed`) a swing scan would have re-detected a day the gate refused.
+  `test_swing_scan_now.py`'s fixtures now write the `pipeline_run` beside the bars.
+* **C5 / C6.** `curated_seed.resolve_sole_user_id` reads `BASKFY_SOLE_USER_ID` exactly as
+  `baskfy_worker.providers._sole_user_id` does — strip, empty is unset, a non-number is a warning
+  and unset — so a blank or mistyped variable is the documented 503 rather than a `ValueError`
+  escaping a request handler as a 500.
+* **C7.** `curated_tenant.scoped_sole_user_id` no longer answers `No watchlist with id '6'.` for
+  every surface it guards, and it now carries an RFC 9457 extension member
+  (`reason: "not-the-sole-tenant"`, the constant `SOLE_TENANT_REFUSED`). The web layer reads that
+  member in the new `apps/web/src/lib/api/sleeve-read.ts`, and all three sleeves' `readOrNull`
+  let a refusal, a 503 and a 5xx out as `SleeveUnavailableError` instead of `null`; new
+  `error.tsx` boundaries under `/swing`, `/vbt`, `/twt` catch them. It has to be a body member
+  and not a status: the refusal is deliberately a 404 rather than a 403 (M43.4), which by design
+  makes it look exactly like absence to anything reading the status alone.
+
+**Not taken — C4, and this is the one to read.** `kite-momentum-rebalancer/app/config.py:15` still
+reads `SOLE_USER_ID = int(os.getenv("BASKFY_SOLE_USER_ID", "1"))`, so a desk that lost the
+variable would keep stamping user 1 on every order and confirmed plan line while the worker beside
+it wrote nothing. It is **latent, not live**: `.env.staging` sets it to 1 in both containers. The
+safe fix is not a one-liner — the constant is read at *import* time and has seven call sites
+(`core/gateway.py:54`, `swing_desk.py:1481`, `vbt_desk.py:827`, `twt_desk.py:1018`, three
+`*_execute.py` TenantIds builders), and `tests/test_swing_track_c.py:392` pins their exact
+spelling by scanning the source. That is a cross-tree change on the order path with swing
+auto-execute armed, so it is a `pytest.mark.xfail(strict=True)` carrying the recipe instead of a
+rushed edit. **Never make the desk's fallback anything other than an explicit refusal.**
+
+**Rejected.** (a) *Making every 404 visible in the web layer* — the sole-tenant refusal is a
+deliberate 404, but so is an unknown instrument on `/swing/setups/{id}/bars`; that rule would turn
+an ordinary absence into a broken page. (b) *Distinguishing by problem `detail` text* — matching
+prose is not a contract. (c) *Surfacing timeouts too* — `server-fetch.ts` exists so an RSC render
+fails fast into empty UI; making a 4s timeout take a trading page down is a bigger change than the
+audit asked for, and it is named as the remaining half of C7 rather than folded in.
+
+**To reverse.** C1: point `setups()` back at `latest_setup_date`. C3: restore the
+`max(ohlcv_daily.date)` query in `swing_scan_now` and drop `published_session.py`. C5/C6: restore
+`int(os.environ.get(SOLE_USER_ENV))`. C7: drop the `reason=` kwarg and `sleeve-read.ts`, and the
+three `error.tsx` files. Nothing here migrates data, adds a route or changes a schema.
+
+---
+
+## §P — pinned-wrong-behaviour sweep (Agent P, 12 Sep 2026) ⚠ UNREVIEWED
+
+Full record and runnable checks: `gates/pinned-wrong-behaviour.md` (11/11).
+
+**P.1 — Taken.** Three passing tests that asserted wrong behaviour were fixed **functionality
+first, test second**: the `/me/swing` ceiling refusal no longer prints
+`BASKFY_SWING_RISK_PER_TRADE_PCT_MAX` (or a raw snake_case field) at the reader; four portfolio
+`BLOCKED_*` entries no longer print `portfolio_nav_daily`, `packages/core`, `t1_quantity`,
+`DetailHoldingOut` or `InstrumentRefOut` on the detail tabs; and `min_trade_value_inr` is a
+`Decimal` in the VBT and swing sleeves, matching TWT and house rule 9. A new
+`components/portfolio/detail/__tests__/no-internals.test.tsx` closes the class the existing scan
+could not see (it renders `CommandCenterScreen` only). Five `X or True` tautologies were removed
+across the Python tree, one of which — `test_twt_backtest_job.py:632` — was a **correct** assertion
+someone had switched off, and it passes re-enabled.
+
+**Two cross-sleeve tripwires moved, and were declared rather than silenced.**
+`test_vbt_neighbours.py::SWING_TREE_SHA256` and `test_twt_neighbours.py::VBT_CONFIG_SHA256` both
+say in their own comments that updating them *is* how a change to the neighbouring sleeve is
+declared. The `Decimal` sweep legitimately touches both neighbours — it is one house rule applied
+to both at once, bringing them into line with TWT rather than the reverse — so both constants were
+updated with the reason written beside them. Neither guard was weakened or deleted. Separately,
+`docs/vbt/04` §12's row rendered the default as `10000.0`; under the root rule *"when the code and
+a doc disagree, the DECISION wins"* the doc was the stale half and now reads `10000`. The value
+never changed, only its rendering.
+
+**Reverse:** each is a self-contained diff; the copy strings and the `float` declarations can be
+restored verbatim from this commit's parent, along with the two SHA constants and the §12 row.
+
+**P.2 — DELIBERATELY NOT TAKEN, and this is the one to read.** The instrument factsheet's metric
+card labelled **"Closing Price"** reads the **adjusted** close for both its value
+(`factor_daily.close`) and its median (`ohlcv_daily.close`), while the header on the same page
+reads `close_raw` with a comment citing house rule 6. On any instrument with a split or bonus the
+two numbers differ, and the card is the one labelled with the words a user reads as "the price".
+
+It was **not** fixed because the resolution is genuinely ambiguous and it is a money path:
+
+* **(a) both raw** — obeys house rule 6 ("display uses `close_raw` where the user expects a real
+  price") and agrees with the header, but makes the median meaningless across a split, since the
+  series then mixes pre- and post-split prints.
+* **(b) both adjusted** (today) — keeps the card's stated purpose coherent (`docs/01` §5 block 4:
+  *"cheap/dear vs its own history"*, for which a 10:1 split must not read as a 90% fall), but
+  leaves a figure labelled "Closing Price" that is not the exchange print and disagrees with the
+  header above it.
+
+`docs/10a` §5 settles which *table* each median comes from and is silent on adjusted versus raw, so
+there is no prior decision to defer to. Per the hunt's own instruction — *a wrong "fix" to a money
+path is worse than a known-wrong test* — this is recorded rather than guessed. Note the existing
+test (`test_api_instruments.py:413`) is a **gap, not a pin**: it asserts only `observations > 700`
+and `median < value`, an ordering that holds either way.
+
+**Needs Maulik**, or a session willing to settle it deliberately. Cheapest reversible option if
+someone wants movement now: make the card's value `close_raw`, keep the median adjusted, and say on
+the card which basis each is on — but that is a product-copy decision, not an engineering one.

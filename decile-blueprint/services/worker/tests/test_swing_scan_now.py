@@ -36,6 +36,7 @@ from baskfy_core.models import (
     IndexDef,
     IndexSnapshotDaily,
     OhlcvDaily,
+    PipelineRun,
     SwConfig,
     SwMarketDaily,
     SwScanRun,
@@ -103,6 +104,41 @@ def _bar_numbers(index: int, close: float, total: int) -> tuple[float, float, in
     return close * 1.025, close * 0.975, volume
 
 
+async def _publish(session: AsyncSession, on: dt.date) -> None:
+    """The chain's own record that ``on`` is on the page — `pipeline_run` with a `data_version`.
+
+    `gates/sleeve-read-contract.md` C3: `decide_session` asks
+    `baskfy_worker.tasks.published_session.last_published_session`, the rule all three sleeves'
+    scans now share, and that rule reads the *published run* rather than `max(ohlcv_daily.date)`.
+    Bars land before a run is published — on the box, 2026-09-11's run fetched 4,358 rows and
+    then failed the data quality gate — so a fixture that writes bars without a published run is
+    describing a day the product would (correctly) refuse to scan. These helpers write both,
+    which is what an evening on the box actually leaves behind.
+    """
+    found = (
+        await session.execute(
+            sa.select(PipelineRun.id).where(
+                PipelineRun.trade_date == on, PipelineRun.data_version.is_not(None)
+            )
+        )
+    ).scalar_one_or_none()
+    if found is not None:
+        return
+    version = (
+        await session.execute(sa.select(sa.func.max(PipelineRun.data_version)))
+    ).scalar_one_or_none()
+    session.add(
+        PipelineRun(
+            trade_date=on,
+            status="succeeded",
+            started_at=dt.datetime.combine(on, dt.time(18, 45), tzinfo=dt.UTC),
+            finished_at=dt.datetime.combine(on, dt.time(19, 0), tzinfo=dt.UTC),
+            data_version=(version or 0) + 1,
+        )
+    )
+    await session.flush()
+
+
 async def _write_flag_but_the_last_bar(
     session: AsyncSession, symbol: str, dates: Sequence[dt.date], *, adj_factor: str = "1"
 ) -> tuple[int, QuoteRecord]:
@@ -130,6 +166,7 @@ async def _write_flag_but_the_last_bar(
             )
         )
     await session.flush()
+    await _publish(session, dates[-2])
     last = closes[-1]
     high, low, volume = _bar_numbers(len(dates) - 1, last, len(dates))
     raw = 1 / float(factor)
@@ -167,6 +204,7 @@ async def _write_real_last_bar(
         )
     )
     await session.flush()
+    await _publish(session, on)
 
 
 async def _queue(session: AsyncSession, user_id: int, *, source: str = "web") -> int:

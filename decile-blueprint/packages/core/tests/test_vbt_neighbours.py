@@ -57,7 +57,15 @@ def _tree_hash(root: Path) -> str:
 #: touched the swing package since the commit this run branched from.
 #: **Updating this constant is how a swing change is declared.** If it moves without a swing
 #: commit beside it, something in the VB tree reached into the wrong sleeve.
-SWING_TREE_SHA256 = "725af9e7ec6f0df9aea4ac1641c0ba01d17ad308a5589197efc83279694f1325"
+#: **Moved 12 Sep 2026, deliberately, and declared here as this constant asks.**
+#: `swing/config.py` and `swing/sizing.py` changed `min_trade_value_inr` from `float` to
+#: `Decimal` under CLAUDE.md house rule 9 ("money and prices are `numeric`, never `float`")
+#: — the same edit was made to the VBT sleeve in the same commit, and the TWT sleeve has
+#: always been correct. This is not the VB tree reaching into the swing sleeve: it is one
+#: house rule applied to both sleeves at once, with the value and behaviour unchanged
+#: (`Decimal("10000")` compares identically to the `Decimal(str(10_000.0))` the call site
+#: was building anyway). See `gates/pinned-wrong-behaviour.md` P3.
+SWING_TREE_SHA256 = "1169ea2b69eddcdcc2e4bdb783339d729bd29decc00536652fea244bcb1ea734"
 
 
 class TestTheSwingRulesDidNotMove:

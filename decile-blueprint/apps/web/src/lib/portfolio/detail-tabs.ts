@@ -223,12 +223,18 @@ export const BLOCKED_COLUMNS: readonly BlockedMetric[] = [
   {
     name: "Exchange and instrument type",
     why: "the payload identifies an instrument by id, symbol and name only, so there is nothing that says NSE or BSE, equity or ETF",
-    unblockedBy: "an exchange and instrument-type column on instrument, carried into InstrumentRefOut",
+    // Engineering: an `exchange` and `instrument_type` column on `instrument`, carried into
+    // `InstrumentRefOut`. The reader gets what it would take, not the spelling of the column.
+    unblockedBy: "the exchange and the instrument type carried through with each holding",
   },
   {
     name: "Available quantity, free against pledged and T1",
     why: "one quantity arrives per holding; the broker's free, T1 and collateral split is not carried into the portfolio payload",
-    unblockedBy: "carrying the broker's quantity, t1_quantity and collateral_quantity through into DetailHoldingOut",
+    // Engineering: carry `quantity`, `t1_quantity` and `collateral_quantity` separately through
+    // into `DetailHoldingOut`. The *total* is already correct — non-negotiable #2 sums all
+    // three — so this is about showing the split, never about a different total.
+    unblockedBy:
+      "the broker's own three-way split carried through beside the total, not just the total",
   },
   {
     name: "Price age for one holding",
@@ -252,7 +258,8 @@ export const BLOCKED_COLUMNS: readonly BlockedMetric[] = [
   },
   {
     name: "Brokerage, taxes and charges on a position",
-    why: "the cost model in packages/core belongs to the weekly rebalancer, not to an arbitrary portfolio",
+    // Engineering: the cost model lives in `packages/core`, wired to the weekly rebalancer.
+    why: "Baskfy's brokerage and tax model was written for the weekly rebalancer's own trades, and has never been wired to an arbitrary portfolio",
     unblockedBy: "wiring the existing cost model through the portfolio path",
   },
 ];
@@ -298,7 +305,11 @@ export const BLOCKED_RISK: readonly BlockedMetric[] = [
   {
     name: "Beta against the benchmark",
     why: "no return-series statistics are computed anywhere in Baskfy",
-    unblockedBy: "a statistics job over portfolio_nav_daily and an aligned benchmark series",
+    // Engineering: a statistics job over `portfolio_nav_daily`, joined to an index series on the
+    // same sessions. The reader needs to know it takes a return series and a matching
+    // benchmark; the table it would read is the business of whoever writes the job.
+    unblockedBy:
+      "a statistics pass over this portfolio's daily value history, and a benchmark series on the same sessions",
   },
   {
     name: "Annualised volatility",

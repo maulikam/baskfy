@@ -2252,3 +2252,259 @@ not a `*.py`), and the two AST scans over the directory pass unchanged, as does
 
 **Reversal.** Delete the entry and its comment from `OPERATOR_TOOLS`. Nothing else in the sleeve
 reads either name.
+
+---
+
+## TW13.1 — The hub's read is built, because the button was never the bug · ⚠ UNREVIEWED
+
+**Context.** 12 Sep 2026. Maulik pressed "Scan now" on `/twt`. The scan ran and succeeded: two
+`tw_scan_run` rows, both `DONE`, ~19 s each, and the detector wrote — for user 1, session
+2026-09-11 — one `tw_breadth_daily` row (`OPEN`, 51.1588% of 1,769 measured names), two
+`tw_signal_daily` rows (IOLCP and OPTIEMUS, both `SIGNAL`) and 58 `tw_state_daily` rows. An
+independent local run of the same detector for the same session produced 57 names
+(`gates/twt-chartink-gap.md`), so the data was right. The page still said **"Nothing has been
+read for this strategy yet."**
+
+Two explanations were plausible and both were checked before anything was changed. **A date
+mismatch** — the scan's own docstring says the worker detects "the latest *published* session",
+and a reader asking for today (a Saturday) or for the newest `pipeline_run` would find nothing.
+**A tenant mismatch** — `BASKFY_SOLE_USER_ID` is absent from the box's `.env.staging.compose`,
+portfolios exist for users 1 and 6, and a reader defaulting to a different user than the writer
+produces exactly this symptom.
+
+Neither was it. The tenant is resolved by the same `scoped_sole_user_id` on both sides, and the
+API container has `BASKFY_SOLE_USER_ID=1` set from `compose.prod.yml` regardless of the env file
+— so both halves resolved user 1, which is the user the rows are under. And the date could not
+disagree, because **there was no reader at all**: `create_app().openapi()` on the box returns
+exactly `['/api/v1/twt/scan', '/api/v1/twt/scan/{run_id}']`. `apps/web/src/lib/twt/fetch.ts` has
+asked for `/api/v1/twt/today` since TW8; `readOrNull` turns its 404 into `null` **on purpose**,
+so a page whose job has not run yet renders an empty state instead of a 500; and `null` is
+exactly what an empty database produces. The two states are indistinguishable at the component.
+
+**Taken.** Serve `GET /twt/today` — `baskfy_api.twt` (the read service) and one GET on
+`routers/twt.py` — returning the gate's reading with its funnel, every name in the state joined
+to its entry event where it had one, the sleeve's own open book and the half-size counter. The
+session it resolves is **the latest `tw_breadth_daily` row the detector wrote**, which is the
+only resolution that cannot drift ahead of the writer: "the latest published session" is what the
+worker detected, and asking its own newest row is asking the writer. `?date=` overrides it, and a
+named date with no reading answers an empty view *stamped with that date*, so the page can say
+which session it found nothing for rather than claiming nothing has ever been read.
+
+**Rejected.** (a) *Have the reader resolve the latest `pipeline_run`.* It is the same date today
+and would not have been on 8 Sep, when M88 published a partial day and the quality gate refused
+it three times: the published session is the one the **next** scan will detect, not the one the
+last scan did. A reader that leads the writer renders an empty page on exactly the days somebody
+is looking. (b) *Serve only the names with a signal.* Two rows instead of fifty-eight, and it
+would have looked like it worked — `05` §1.2's table is the names in the state, and the rejects
+are in it on purpose, because a screen that hides what it passed over cannot be audited by the
+person whose money it is. (c) *Make `readOrNull` distinguish 404 from an empty payload and say
+"this surface is not built".* Honest, cheap, and it fixes the message rather than the hole; the
+data existed and the owner still could not see it. Worth doing anyway, and not instead.
+(d) *Build `/twt/backtest` in the same pass.* That page's rows genuinely do not exist yet, so its
+`null` is still true. This router does not grow a surface on speculation twice.
+
+**Reversal.** Delete `services/api/src/baskfy_api/twt.py`, the one `@router.get("/today")` block
+and `services/api/tests/test_api_twt_today.py`; restore the path counts in
+`test_twt_readonly.py` (3 → 2) and the `/twt/today` entry in `test_api_artifacts.py`; run
+`make openapi` and `make client`. The page returns to its empty state, which is where it was.
+
+---
+
+## TW13.2 — The hub reports the execution flag; only the scan is forbidden to read it · ⚠ UNREVIEWED
+
+**Context.** `test_twt_readonly.py::test_no_twt_module_reads_the_execution_flag_at_all` asserted
+that neither `routers/twt.py` nor `twt_scan` names `twt_execution_enabled`, on the reasoning that
+"a scan does not care whether execution is enabled, so a scan module that read the flag would be
+a scan module with a branch nobody asked for". TW13.1's route turned it red, because `05` §1.4's
+half-size counter **must** say whether trading is switched off — "a counter that ticks when
+nothing can trade is a number describing an event that has not occurred" — and `TwtHalfSize`
+carries `execution_enabled` in the shape `fetch.ts` reads.
+
+**Taken.** Scope the criterion to what it is about. The claim splits in two: `twt_scan` and the
+new read service `baskfy_api.twt` still may not name the flag at all (the read service takes
+`execution_enabled` as a keyword and hands it back — a value passing through, not a setting being
+consulted), and `routers/twt.py` may name it **exactly once**, as
+`execution_enabled=settings.twt_execution_enabled` passed into the read view, with no branch on
+it asserted by name. Recorded rather than assumed, per the autonomy charter's rule that a
+criterion is a proxy for its Goal.
+
+**Rejected.** (a) *Read the flag inside `baskfy_api.twt` from a fresh `Settings()`.* It keeps the
+router's source clean and breaks the reason `settings_for(request)` exists: the app is
+constructed with its settings, and a freshly read singleton is not the app's. Tests that build an
+app with a flag set would stop being able to. (b) *Drop `execution_enabled` from the payload.*
+The counter then counts down in the dark, which `05` §1.4 wrote itself against. Hiding the flag
+would not have made the surface safer, only quieter.
+
+**The property that had to survive, and does.** Nothing under `/twt` *acts* on the flag: no
+branch, no early return, no route that appears only when it is set. `POST /twt/execute` still
+does not exist, `test_no_module_names_the_execution_package` now covers `baskfy_api.twt` too, and
+so do the capital rail and the auto-execute rail.
+
+**Reversal.** Restore the single `test_no_twt_module_reads_the_execution_flag_at_all` over both
+modules and serve `execution_enabled=False` as a literal. The counter then always reads "off",
+which is true today and would become a lie the day it is not.
+
+---
+
+## TW13.3 — The hub's decimals are quoted, because `JSON.parse` is where precision dies · ⚠ UNREVIEWED
+
+**Context.** The sleeve routers encode with `baskfy_core.screener.canonical_json`, whose decimals
+are **unquoted** tokens — `149.6000` rather than `"149.60"`. That is right for the screener, whose
+determinism guarantee is about bytes. `apps/web/src/lib/twt/fetch.ts` types every money and rate
+field as a **string**, and `@/lib/twt/numbers` does `BigInt` arithmetic over decimal strings
+because "money is a decimal string end to end, never a `number` in between" (house rule 9, and
+the 11 Sep 2026 incident where a 1.99% day rendered as 0.0199%).
+
+Both cannot be true one hop apart: `JSON.parse("149.6000")` is the double `149.6`. The digits
+survive the network and die in the browser.
+
+**Taken.** `GET /twt/today` is encoded with Pydantic's own JSON (`model_dump_json`), in which a
+`Decimal` is a quoted string at full stored precision. That is also what this service's OpenAPI
+document has **always declared** for these fields (`{"type": "string", "pattern": ...}`) and what
+`routers/portfolio_overview.py` — the payload `fetch.ts` names as its precedent for `*_fraction`
+— actually sends. The route is matching the contract, not inventing one. The scan routes keep
+`_json`: their payload carries no `Decimal` at all.
+
+**Rejected.** (a) *Keep `canonical_json` and retype `fetch.ts` as `number`, as `/vbt`'s does.* It
+is the smaller diff in the API and the larger one everywhere else: `numbers.ts`, `view.ts`, every
+`/twt` component and its tests are built on exact decimal strings, and retyping them trades a
+tested exactness for a float. `/vbt`'s page made the other choice and lives with it; this one
+should not be converted to it by a bug fix. (b) *Change `canonical_json` to quote decimals.* It
+would silently change `/swing`, `/vbt` and every screener payload — one fix becoming three — and
+the screener's guarantee is the one that names bytes.
+
+**The cost, stated.** This service now has two encoders on one surface, and the difference is
+visible to anyone reading `routers/twt.py`. `_json_decimals_as_strings` carries the whole reason
+in its docstring so the next reader does not "tidy" it back. If the sleeves are ever unified,
+unify them towards the quoted form: it is what the OpenAPI document already promises.
+
+**Reversal.** Swap the one call back to `_json`, retype `fetch.ts`'s decimal fields as `number`,
+and rewrite `@/lib/twt/numbers` to take numbers. The middle step is the expensive one.
+
+---
+
+## TW13.4 — The page no longer says open positions are marked live · ⚠ UNREVIEWED
+
+**Context.** `/twt`'s footnote read "Open positions are marked at the live price." `services/api`
+has **no quote path** — `get_ltp` and `get_quotes` appear only in the desk's
+`kite-momentum-rebalancer/app/` — so TW13.1's route marks an open line at the session's published
+close, through `twt_sleeve.load_sleeve`, which is the arithmetic the evening job and the desk
+already share.
+
+**Taken.** The footnote says "marked at that session's close, not at a live price", and
+`PositionRow.last_price` is that close, `None` when nothing has printed since the fill — a reason
+rather than a zero, which `@/lib/twt/copy`'s `noQuote` already has words for. Root `CLAUDE.md`'s
+"Which date the product shows" section is the precedent and the warning: a working agreement that
+misstated where a money figure came from was believed, and the owner had to correct it.
+
+**Rejected.** *Serve the entry price as `last_price` when nothing has printed.* `04` §9.1 keeps
+that fallback for the sleeve's **equity**, where dropping a suspended holding would report money
+the sleeve does not have. Showing it as a last price would invent a quote on the one page whose
+subject is how far a line sits from its stop.
+
+**Reversal.** Restore the sentence — the day somebody builds the quote path, and not before.
+
+---
+
+## TW14.1 — `/twt/backtest` is served, and TW13.1(d) was the half of that decision that was wrong · ⚠ UNREVIEWED
+
+**Context.** 12 Sep 2026, an hour after TW13. `apps/web/src/lib/twt/fetch.ts:286` calls
+`readOrNull<TwtBacktest>("/twt/backtest")`; nothing served it; `readOrNull` turns the 404 into
+`null`; `null` is `BacktestCard`'s empty state. The Backtest tab has rendered "No completed run
+has been recorded yet" since TW8 and would have gone on rendering it forever.
+
+TW13.1 **rejected (d) building this in the same pass**, on the reasoning that "that page's rows
+genuinely do not exist yet, so its `null` is still true" and that a router "does not grow a
+surface on speculation twice". The first clause is a fact and remains one — `tw_backtest_run`
+holds **0 rows on the box**, verified read-only today. The second does not follow from it, and
+this entry is the correction.
+
+**Why the true empty state was the more dangerous of the two.** The hub's bug was loud: 58
+detected names in the database against a page saying nothing had been read, and Maulik found it
+the same afternoon. This one is silent. The card's sentence is *true today*, by accident, and it
+would have stayed on the screen word for word the first evening TW9's job wrote a settled result
+— a number at 22.17 % CAGR sitting in a table with nobody able to see it, and no symptom to
+notice. A reader that does not exist and a writer that has not run are the same silence; only one
+of them is a bug, and the page cannot tell you which. "Its `null` is still true" measured the
+sentence and not the seam.
+
+It is also not speculation in the sense TW13.1 meant. TW9 shipped the writer — `tools/twt/
+backtest.py`, `baskfy_worker.tasks.twt_backtest`, the `tw_backtest_run` table, `gates/twt-9.md`
+8/8 with the plant's own run measured at 22.17 % / -26.47 % / 169 trades. The rows have a shape,
+a producer and a page built to them. What was missing was the four lines between.
+
+**Taken.** Serve `GET /twt/backtest`: `baskfy_api.twt.backtest` (added to the same read module
+TW13.1 built) and one GET on `routers/twt.py`. It returns the latest **finished** run per source
+— finished *and* carrying stats, the same pair of facts `latest_finished` and the page's
+`latestFinished` already filter on — with `docs/twt/01` §8's caveats and, when there is nothing
+to serve, the reason there is nothing (TW14.2). It computes nothing and writes nothing.
+
+**Rejected.** (a) *Serve every row.* The table is append-only by `03` §9 and each settled row
+carries a nine-year equity curve; the history would grow without bound and would ship megabytes
+to answer a question about two numbers. `ix_tw_backtest_run_latest` exists for the query the page
+makes, and this route makes that one. (b) *Serve the latest finished row regardless of source.*
+`05` §3 is explicit that the plant's run and the research reproduction are never mixed and never
+averaged — they answer different questions and the card gives each a column. (c) *Wait until a
+backtest has run on the box.* That is the order that produced this bug twice: a reader built
+after its data is a reader nobody tests, and the run that finally lands is the one nobody sees.
+(d) *Fix it in `readOrNull` instead, by distinguishing a 404 from an empty payload.* Same answer
+as TW13.1 gave: worth doing, and not instead — it improves the message about a hole rather than
+closing it. That change belongs to whoever owns `lib/twt/fetch.ts`.
+
+**Reversal.** Delete the `@router.get("/backtest")` block, the `backtest(...)` half of
+`services/api/src/baskfy_api/twt.py` (everything below its TW14 banner comment) and
+`services/api/tests/test_twt_backtest_to_page.py`; restore the counts in `test_twt_readonly.py`
+(4 → 3) and drop the `/twt/backtest` entry from `test_api_artifacts.py`; run `make openapi` and
+`make client`. The tab returns to its empty state, which is where it was.
+
+---
+
+## TW14.2 — An empty backtest answer names *which* absence it is, and `01` §8 rides in the payload · ⚠ UNREVIEWED
+
+**Context.** On the box this route answers `runs: []` and will until somebody runs a backtest.
+That is the correct answer, and it is also indistinguishable — to the card and to whoever reads
+it — from the 404 it replaces. "The tab is still empty after the fix" had to stop being evidence
+of nothing.
+
+`BacktestCard`'s empty state is one sentence: *"No completed run has been recorded yet."* It is
+serving three different facts. **No run has ever been asked for** (the box, today). **A run is in
+flight** and has not produced a result. **A run finished and failed**, with `03` §9 setting
+`finished_at` on failure precisely so that "still running" and "failed" are different states
+rather than the same silence — and then the page collapses them back into one sentence anyway.
+Two times in three the sentence is not what happened.
+
+**Taken.** Two additive fields on the payload. `reason` is null whenever `runs` is non-empty and
+otherwise carries one of three sentences, chosen from one aggregate over the book's own rows, so
+the answer is a measurement and not a guess. `caveats` carries `docs/twt/01` §8's four paragraphs
+**verbatim** — whitespace normalised, nothing else touched — checked against the document itself
+by `gates/twt-backtest-route.md` B3, so a caveat softened on its way to a reader fails a gate
+rather than passing a review. House rule 9 makes disclaimers components rather than footers and
+`05` §3 restates it for this page by name; what the field adds is that the numbers cannot leave
+this service without the terms attached, for any reader, not only the one page that happens to
+render its own copy. `routers/backtests.py` already ships a `DISCLAIMER` constant beside its
+results on the same reasoning.
+
+**The one caveat about the caveats, recorded rather than left to be rediscovered.** §8's fourth
+paragraph opens "One thing no backtest **in this repository** has measured", and DECISIONS-TW
+**TW8.2** deliberately did *not* transcribe that phrase to the page: a repository is a fact about
+where the code is kept, and nothing from the inside of the system reaches a reader's eyes. So the
+served text is the **record**, and `components/twt/caveats.tsx` remains the **rendered copy**. A
+renderer that decided to print this field instead owes TW8.2's cleaning first, and both the
+constant and the route say so in place.
+
+**Rejected.** (a) *Serve the component's reader-facing wording instead of the document's.* It
+would put a second copy of the prose in a second language in a second tree, and "verbatim" would
+then be checkable against nothing. (b) *Serve a machine code (`NO_RUN`, `IN_FLIGHT`, `FAILED`)
+and let the page write the sentence.* The page cannot be changed from here — `lib/twt/fetch.ts`
+and `lib/twt/view.ts` are another agent's — and a code with no renderer is an empty state that
+still says the wrong thing. A sentence is useful the moment anything reads it. (c) *Say nothing
+and let `runs: []` speak.* That is what the 404 did.
+
+**Not yet wired.** `TwtBacktest` in `lib/twt/fetch.ts` types only `runs`, so `reason` and
+`caveats` arrive and are ignored by today's card — harmless (extra JSON keys are dropped by
+TypeScript at runtime) and inert. Rendering `reason` in place of the card's one-size sentence is
+a small change in `fetch.ts`/`backtest-card.tsx` and belongs to whoever owns them.
+
+**Reversal.** Drop the two fields from `TwtBacktestOut` and `BacktestView`, and the constants
+`CAVEATS`, `NO_RUN_AT_ALL`, `RUN_IN_FLIGHT`, `RUN_FAILED` with them; `make openapi && make
+client`. The route still serves `runs` and the card still renders exactly what it renders today.

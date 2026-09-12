@@ -335,8 +335,11 @@ describe("Scan now, and the header that says the rows are provisional (SW15)", (
     expect(button).toBeEnabled();
     expect(control.tagName).toBe("FORM");
     expect(control).not.toHaveAttribute("method");
+    // When it ran, that it finished, and what it found — the three facts the gap of 12 Sep 2026
+    // was missing. Past a day the age gives way to the IST wall clock; `scan-now.test.tsx` in
+    // the sibling sleeves asserts the recent half.
     expect(within(control).getByRole("status")).toHaveTextContent(
-      "Last scan 13:42 IST from live quotes · 41 liquid, 2 flagged",
+      "Last scanned at 2 Sept 2026, 13:42 IST from live quotes — 41 liquid, 2 setups.",
     );
     expect(refresh).not.toHaveBeenCalled();
   });
@@ -360,10 +363,19 @@ describe("Scan now, and the header that says the rows are provisional (SW15)", (
     });
     const control = screen.getByTestId("scan-now");
     expect(within(control).getByRole("button", { name: "Scanning…" })).toBeDisabled();
-    expect(within(control).getByRole("status")).toHaveTextContent("Scanning…");
+    expect(within(control).getByRole("status")).toHaveTextContent(
+      "Scanning now. This page updates when it finishes.",
+    );
   });
 
-  it("shows the reason when the last scan failed", async () => {
+  /**
+   * THE REASON IS NOT THE READER'S. This test asserted the opposite until 12 Sep 2026: it pinned
+   * `run.error` onto a customer-facing page, which is the defect of 11 Sep 2026 said again — that
+   * sentence names jobs, quote sources and tables and is written for whoever can fix it. `/vbt`
+   * and `/twt` already refused to render it; the book now agrees with them. The reader gets the
+   * three facts that are theirs: when it stopped, that nothing changed, that they may press again.
+   */
+  it("says a run did not finish without repeating the reason it gives itself", async () => {
     await renderWith([setup()], {
       setups: {
         last_scan: {
@@ -380,9 +392,13 @@ describe("Scan now, and the header that says the rows are provisional (SW15)", (
         },
       },
     });
-    expect(within(screen.getByTestId("scan-now")).getByRole("status")).toHaveTextContent(
-      "The last scan failed: ScanNotRunnable: the market is open and there is no Kite quote source",
+    const status = within(screen.getByTestId("scan-now")).getByRole("status");
+    expect(status).toHaveTextContent(
+      "The last scan did not finish, so nothing changed. It stopped at 2 Sept 2026, 13:41 IST. " +
+        "You can start another.",
     );
+    expect(status.textContent).not.toContain("ScanNotRunnable");
+    expect(status.textContent).not.toContain("Kite");
     expect(screen.getByRole("button", { name: "Scan now" })).toBeEnabled();
   });
 });

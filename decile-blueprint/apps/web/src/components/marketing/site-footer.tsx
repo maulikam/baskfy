@@ -30,19 +30,22 @@ export function SiteFooter() {
       viewport rather than fitted to it.
 
       The tokens are painted rather than inherited, so this band stays dark for a reader whose theme
-      is light and for one whose theme is dark. `--border` and `--muted-foreground` are re-pointed
-      locally so `<Disclaimer/>` — which is a component precisely so it is never re-typed (CLAUDE.md
-      house rule 9) — reads correctly against it without knowing it is on a dark ground.
+      is light and for one whose theme is dark — `.band-dark` in `globals.css` is where that palette
+      now lives, in one place, parsed by `contrast.test.ts`.
+
+      It used to be two tokens set inline here, `--border` and `--muted-foreground`, and the one it
+      did NOT set is exactly the one that broke. `<Disclaimer variant="block"/>` — a component
+      precisely so it is never re-typed (CLAUDE.md house rule 9) — paints `bg-muted/50`, so it took
+      the LIGHT `--muted` at half alpha over near-black and rendered its own text at **1.69:1**.
+      That is axe's `aside > p` on the landing page, 12 Sep 2026. A component cannot be expected to
+      know it is standing on a dark ground; the ground has to say so, completely.
     */
-    <footer
-      className="relative mt-24 overflow-hidden bg-[#0a0a0a] text-[#f7f7f7]"
-      style={{ ["--border" as string]: "#262626", ["--muted-foreground" as string]: "#a6a6a6" }}
-    >
+    <footer className="band-dark relative mt-24 overflow-hidden">
       <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-col gap-12 px-5 pb-16 pt-20 sm:px-7 lg:px-10">
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
           <div className="lg:col-span-1">
             <Wordmark />
-            <p className="mt-5 max-w-[34ch] text-[15px] leading-relaxed text-[#a6a6a6]">
+            <p className="mt-5 max-w-[34ch] text-[15px] leading-relaxed text-muted-foreground">
               One place for every strategy you run on Indian equities — a manager&rsquo;s basket, a
               rule you wrote, or the holdings you keep by hand.
             </p>
@@ -50,13 +53,13 @@ export function SiteFooter() {
 
           {COLUMNS.map((column) => (
             <nav key={column.heading} aria-label={column.heading} className="space-y-4">
-              <h2 className="font-mono text-[11px] uppercase tracking-[0.08em] text-[#6f6f6f]">
+              <h2 className="font-mono text-[11px] uppercase tracking-[0.08em] text-quiet-foreground">
                 {column.heading}
               </h2>
               <ul className="space-y-2.5 text-[15px]">
                 {column.routes.map((route) => (
                   <li key={route.href}>
-                    <Link className="text-[#a6a6a6] transition-colors hover:text-[#f7f7f7]" href={route.href}>
+                    <Link className="text-muted-foreground transition-colors hover:text-foreground" href={route.href}>
                       {route.label}
                     </Link>
                   </li>
@@ -66,9 +69,9 @@ export function SiteFooter() {
           ))}
         </div>
 
-        <div className="space-y-5 border-t border-[#262626] pt-8">
+        <div className="space-y-5 border-t border-border pt-8">
           <Disclaimer variant="block" />
-          <p className="text-[13px] text-[#6f6f6f]">
+          <p className="text-[13px] text-quiet-foreground">
             © 2026 {SITE_NAME}. Market data is sourced from NSE and from Zerodha Kite under a
             licence for our own use; the site publishes derived analytics, not vendor bars.
           </p>
@@ -82,7 +85,7 @@ export function SiteFooter() {
       */}
       <p
         aria-hidden="true"
-        className="pointer-events-none absolute inset-x-0 -bottom-[0.18em] select-none text-center text-[26vw] font-medium leading-[0.75] tracking-[-0.04em] text-[#f7f7f7]/[0.055]"
+        className="pointer-events-none absolute inset-x-0 -bottom-[0.18em] select-none text-center text-[26vw] font-medium leading-[0.75] tracking-[-0.04em] text-foreground/[0.055]"
       >
         {SITE_NAME}
       </p>

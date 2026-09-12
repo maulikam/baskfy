@@ -23,6 +23,7 @@ from baskfy_worker.tasks.quality import (
     CHECKS,
     CheckStatus,
     GateContext,
+    GateReport,
     check_bar_count_against_baseline,
     check_factor_rows_match_bars,
     check_index_level_agreement,
@@ -53,10 +54,45 @@ class TestTheGateItself:
     async def test_a_skipped_assertion_does_not_block_publishing(
         self, session: AsyncSession
     ) -> None:
-        """Skips are honest reporting, not failures — but they are always visible."""
+        """Skips are honest reporting, not failures — but they are always visible.
+
+        THIS ASSERTED NOTHING UNTIL 12 Sep 2026. The line was
+
+            assert all(r.status is not CheckStatus.PASSED or True for r in report.results)
+
+        and ``X or True`` is ``True`` for every ``X``, so the generator was evaluated and
+        discarded. The second line, ``report.passed is (len(report.failures) == 0)``, restated
+        ``QualityReport.passed``'s implementation rather than the rule. Between them the test
+        named the most consequential rule in this module — a skip must not stop a night's data
+        publishing — and checked neither half of it, on the gate that decides whether a session
+        is published at all.
+
+        What the rule actually is, in three parts: skips exist here (or the test is vacuous),
+        a skip is never counted as a failure, and a report carrying skips and no failures still
+        passes.
+        """
         report = await run_data_quality_gate(session, StepOutcome(), TRADE_DATE)
-        assert all(r.status is not CheckStatus.PASSED or True for r in report.results)
-        assert report.passed is (len(report.failures) == 0)
+
+        # 1. Skips really happen on this fixture. Without this the rest is vacuous — which is
+        #    precisely how the old line went unnoticed.
+        assert report.skipped, "this fixture produces no skip, so the rule below is untested"
+        assert all(r.status is CheckStatus.SKIPPED for r in report.skipped)
+
+        # 2. A skip is never a failure, and never blocks a publish on its own.
+        assert not [r for r in report.skipped if r in report.failures]
+        assert not any(r.blocks_publish for r in report.skipped)
+
+        # 3. The rule, isolated. This fixture's database is empty enough that assertion 5
+        #    genuinely fails, so `report.passed` here is False for a reason that has nothing to
+        #    do with skips — and asserting `passed is True` on it would be asserting the failure
+        #    away. Instead: take this run's own skipped results, put them in a report with no
+        #    failures, and show that a night made only of passes and skips publishes.
+        skips_only = GateReport(
+            trade_date=report.trade_date,
+            results=tuple(r for r in report.results if r.status is not CheckStatus.FAILED),
+        )
+        assert skips_only.skipped == report.skipped
+        assert skips_only.passed is True, "skips alone must never stop a session publishing"
 
     async def test_the_step_payload_records_every_verdict(self, session: AsyncSession) -> None:
         """docs/09 §Observability makes pipeline_run_step the operator UI."""

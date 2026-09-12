@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TwtScanRun, TwtScanStatus } from "@/lib/twt/fetch";
 import type { TwtScanResult } from "@/lib/twt/write";
 
+import type { TwtScanFacts } from "../copy";
 import {
   SCAN_ALREADY_RUNNING,
   SCAN_QUEUED,
@@ -40,7 +41,10 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh }),
 }));
 
-function run(status: TwtScanStatus, overrides: Partial<TwtScanRun> = {}): TwtScanRun {
+function run(
+  status: TwtScanStatus,
+  overrides: Partial<TwtScanRun & TwtScanFacts> = {},
+): TwtScanRun & TwtScanFacts {
   return {
     id: 11,
     status,
@@ -186,16 +190,96 @@ describe("says: the three answers the contract names, in a reader's words", () =
     expect(scanRefusal(0)).toBe(SCAN_UNAVAILABLE);
   });
 
-  it("says what the last run did before anything is pressed", () => {
+  /**
+   * THE GAP OF 12 SEP 2026. "None of the scan shows when the last scan performed in any
+   * strategy" — the plumbing was all here and every state rendered the empty string or a bare
+   * stamp. What a reader wants is three facts: when it ran, whether it finished, and whether it
+   * found anything. Each is asserted below, in each state it can be in.
+   */
+  it("says when the last run finished, in the words a person uses", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-12T08:24:00+00:00")); // twelve minutes after it finished
     render(
       <ScanNow
         action={answering({ ok: true, message: SCAN_QUEUED })}
-        lastScan={run("DONE")}
+        lastScan={run("DONE", { found: 3 })}
       />,
     );
 
-    expect(statusText()).toMatch(/^Last scan finished /);
-    expect(statusText()).toContain("IST");
+    expect(statusText()).toBe("Last scanned 12 minutes ago — 3 signals.");
+  });
+
+  it("says what it found, so a finished run is not just DONE", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-12T08:24:00+00:00"));
+    render(
+      <ScanNow
+        action={answering({ ok: true, message: SCAN_QUEUED })}
+        lastScan={run("DONE", { found: 58 })}
+      />,
+    );
+
+    expect(statusText()).toContain("58 signals");
+    expect(statusText()).not.toMatch(/\bDONE\b/);
+  });
+
+  /**
+   * Finding nothing is the ordinary result for this strategy, not a fault. It must read as an
+   * answer, and it must be distinguishable from a run that did not say — which is why `found`
+   * is `number | null` and not a number defaulted to zero.
+   */
+  it("says a run that found nothing found nothing, and does not read as a failure", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-12T08:24:00+00:00"));
+    render(
+      <ScanNow
+        action={answering({ ok: true, message: SCAN_QUEUED })}
+        lastScan={run("DONE", { found: 0 })}
+      />,
+    );
+
+    expect(statusText()).toBe("Last scanned 12 minutes ago — no signals, which is the ordinary result here.");
+    expect(statusText()).not.toMatch(/fail|error|problem|wrong/i);
+    expect(screen.getByTestId("twt-scan-status").className).toContain(
+      "text-muted-foreground",
+    );
+  });
+
+  it("says only when it ran when the run did not say what it found", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-12T08:24:00+00:00"));
+    render(
+      <ScanNow action={answering({ ok: true, message: SCAN_QUEUED })} lastScan={run("DONE")} />,
+    );
+
+    expect(statusText()).toBe("Last scanned 12 minutes ago.");
+  });
+
+  /**
+   * "Two days ago" is not a useful phrase and "17,412 minutes ago" is worse, so past a day the
+   * line degrades to the IST wall clock — the zone every schedule this strategy runs on is in.
+   */
+  it("says the wall clock instead of an age once the run is more than a day old", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-15T08:24:00+00:00"));
+    render(
+      <ScanNow action={answering({ ok: true, message: SCAN_QUEUED })} lastScan={run("DONE")} />,
+    );
+
+    expect(statusText()).toBe("Last scanned at 12 Sept 2026, 13:42 IST.");
+  });
+
+  it("says a scan is queued and a scan is running, and says what happens next", () => {
+    const view = render(
+      <ScanNow action={answering({ ok: true, message: SCAN_QUEUED })} lastScan={run("QUEUED")} />,
+    );
+    expect(statusText()).toBe("Scan queued. This page updates when it finishes.");
+    view.unmount();
+
+    render(
+      <ScanNow action={answering({ ok: true, message: SCAN_QUEUED })} lastScan={run("RUNNING")} />,
+    );
+    expect(statusText()).toBe("Scanning now. This page updates when it finishes.");
   });
 
   /**
@@ -203,22 +287,60 @@ describe("says: the three answers the contract names, in a reader's words", () =
    * press it again — and not the reason, which names jobs and quote sources and is a sentence for
    * whoever can act on it.
    */
-  it("says a run did not finish without repeating the reason it gives itself", () => {
+  it("says a run did not finish, and when, without repeating the reason it gives itself", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-12T08:24:00+00:00"));
     const failed = run("FAILED", {
       error: "ScanNotRunnable: no quote source while ohlcv_daily is mid-write",
     });
     render(<ScanNow action={answering({ ok: true, message: SCAN_QUEUED })} lastScan={failed} />);
 
-    expect(statusText()).toBe(scanRunLine(failed));
+    expect(statusText()).toBe(scanRunLine(failed, { now: Date.now() }));
     expect(statusText()).toMatch(/did not finish/);
+    // The three facts that are the reader's: when it stopped, that nothing changed, that they
+    // may press again. Not the fourth, which names a job and a table.
+    expect(statusText()).toContain("12 minutes ago");
+    expect(statusText()).toContain("nothing changed");
+    expect(statusText()).toContain("start another");
     expect(statusText()).not.toContain("ScanNotRunnable");
     expect(statusText()).not.toContain("ohlcv_daily");
   });
 
-  it("says nothing at all when no scan has ever been run", () => {
+  /**
+   * Before 12 Sep 2026 this said the empty string, which is how a strategy whose rows came from
+   * the nightly came to look as though it had never been scanned at all. Two different states,
+   * two different sentences.
+   */
+  it("says no scan has run when none has, rather than saying nothing", () => {
     render(<ScanNow action={answering({ ok: true, message: SCAN_QUEUED })} lastScan={null} />);
 
-    expect(statusText()).toBe("");
+    expect(statusText()).toBe("No scan has run yet.");
+  });
+
+  it("names the nightly run when nobody has pressed the button but a session is published", () => {
+    render(
+      <ScanNow
+        action={answering({ ok: true, message: SCAN_QUEUED })}
+        lastScan={null}
+        session="2026-09-11"
+      />,
+    );
+
+    expect(statusText()).toBe(
+      "No scan has been started from here yet — what is shown is the nightly run's, for the " +
+        "11 Sept 2026 session.",
+    );
+  });
+
+  /**
+   * The server renders this control too, and a clock read during render disagrees with the one
+   * the browser reads a moment later. `null` is the server's reading and it yields the stamp,
+   * which cannot mismatch; the age appears on the pass after hydration.
+   */
+  it("says the stamp rather than an age when there is no clock to compare against", () => {
+    expect(scanRunLine(run("DONE", { found: 3 }), { now: null })).toBe(
+      "Last scanned at 12 Sept 2026, 13:42 IST — 3 signals.",
+    );
   });
 });
 
@@ -240,26 +362,36 @@ const BANNED: ReadonlyArray<{ readonly name: string; readonly pattern: RegExp }>
 
 describe("internal: nothing from the inside of the system reaches the reader", () => {
   it("internal: names no route, column, file or setting in any state of the control", () => {
-    const states: Array<TwtScanRun | null> = [
+    const states: Array<(TwtScanRun & TwtScanFacts) | null> = [
       null,
       run("QUEUED"),
       run("RUNNING"),
       run("DONE"),
+      run("DONE", { found: 0 }),
+      run("DONE", { found: 58 }),
       run("FAILED", { error: "ScanNotRunnable: BASKFY_VBT_SCAN_ENABLED is false" }),
     ];
-    for (const lastScan of states) {
-      const view = render(
-        <ScanNow action={answering({ ok: true, message: SCAN_QUEUED })} lastScan={lastScan} />,
-      );
-      const text = document.body.textContent ?? "";
-      for (const { name, pattern } of BANNED) {
-        const hit = pattern.exec(text);
-        expect(
-          hit,
-          `${lastScan?.status ?? "no run"}: ${name} reached the screen — "${hit?.[0] ?? ""}"`,
-        ).toBeNull();
+    // Both spellings of every state: with a published session behind it and without, because
+    // the sentence differs and the one that names the nightly run is new.
+    for (const session of [null, "2026-09-11"]) {
+      for (const lastScan of states) {
+        const view = render(
+          <ScanNow
+            action={answering({ ok: true, message: SCAN_QUEUED })}
+            lastScan={lastScan}
+            session={session}
+          />,
+        );
+        const text = document.body.textContent ?? "";
+        for (const { name, pattern } of BANNED) {
+          const hit = pattern.exec(text);
+          expect(
+            hit,
+            `${lastScan?.status ?? "no run"}: ${name} reached the screen — "${hit?.[0] ?? ""}"`,
+          ).toBeNull();
+        }
+        view.unmount();
       }
-      view.unmount();
     }
   });
 

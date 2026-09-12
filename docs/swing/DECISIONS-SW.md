@@ -2770,3 +2770,28 @@ and it is bounded by the same three-entries-a-session cap.
 **Reversal.** `monitor_close = (10, 45)` in `swing/config.py` and redeploy: one line, and the
 desk is back to the opening 90 minutes. `BASKFY_SWING_AUTO_EXECUTE=false` remains the wider
 brake — it does not narrow the window, but it puts a human click back in front of every order.
+
+## SW27 — the hub's clock is the session the detector **ran**, not the last one that flagged · ⚠ UNREVIEWED
+
+`GET /swing/setups` took its `as_of` from `max(sw_setup_daily.date)`. That table gains no row on a
+session where nothing met the bar, while `_detect_swing` calls `write_market_row` unconditionally
+— "no flags today" is a fact worth writing. So a zero-candidate session served **yesterday's
+triggers and yesterday's gate, stamped yesterday**, on a page that looked perfectly current.
+
+Proved by `services/api/tests/test_sleeve_read_contract.py::TestTheReadersDate` (Agent C's audit,
+`gates/sleeve-read-contract.md` C1) and fixed by `baskfy_api.swing.latest_detected_date`, which
+reads `max(sw_market_daily.date)` and falls back to the setup date only for a book with no market
+row at all. This is not an invention: it is the rule `baskfy_api.vbt._latest_breadth`
+(`vb_breadth_daily`) and `baskfy_api.twt._latest` (`tw_breadth_daily`) already follow — **key the
+clock on the row the detector writes every session, whatever the tape did.**
+
+Not visible on the box the day it landed: `max(sw_market_daily.date)` and `max(sw_setup_daily.date)`
+were both 2026-09-11 for user 1. It bites on the next session with no candidate, and the count has
+walked 21 → 22 → 16 → 19 → 12 → **9** with the gate RED since 2026-09-04.
+
+`latest_setup_date` is kept and now says what it is — the last session this book *flagged*
+something, which is a different and still-useful question. The monitor's own clock
+(`max(sw_signal.session_date)`) and the market page's (`max(sw_market_daily.date)`) are unchanged.
+
+**Reversal.** Point `setups()` back at `latest_setup_date`. Full record and runnable checks:
+`gates/sleeve-contract-fixes.md` F1, and `docs/DECISIONS-MERGE.md` SRC-F.

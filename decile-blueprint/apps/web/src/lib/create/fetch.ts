@@ -6,7 +6,7 @@ import { accessToken } from "@/lib/api/browser";
 import { apiOrigin } from "@/lib/api/config";
 
 /**
- * Client POST for SC8 `/create` → `POST /api/v1/cb/discover` (leaf 3.4 / leaf 2.2 API).
+ * Client POST for SC8 `/create` → `POST /api/v1/cb/baskets` (leaf 3.4 / leaf 2.2 API).
  *
  * Bearer auth via Auth.js session token — same pattern as instrument search / export.
  * No order path: create persists a PRIVATE MANUAL basket only.
@@ -136,8 +136,11 @@ async function post<T>(path: string, body: unknown, whenAnonymous: string): Prom
 export async function createPrivateBasket(
   body: CreateBasketRequest,
 ): Promise<CreateBasketResponse> {
+  // `/cb/baskets`, not `/cb/discover`: M48's `baskets` -> `discover` page-tree rename swept this
+  // API path along with it (see `lib/basket/fetch.ts`). The route is curated_create.py's
+  // `POST /cb/baskets`, which has never been renamed.
   return post<CreateBasketResponse>(
-    "/api/v1/cb/discover",
+    "/api/v1/cb/baskets",
     body,
     "Sign in to save a private basket.",
   );

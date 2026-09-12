@@ -134,6 +134,35 @@ class VbtCandidateOut(BaseModel):
     rank_key: int
 
 
+# Declared here, above ``VbtTodayOut``, because that payload inlines one: a forward
+# reference would build only by luck of import order.
+class VbtScanRunOut(BaseModel):
+    """One "Scan now" run (VB12). ``status`` walks QUEUED -> RUNNING -> DONE | FAILED.
+
+    ``session_date`` is null until the worker has decided which published session it is
+    re-detecting — the caller asks for "the latest" and only the worker knows which that is.
+    ``funnel`` is the detector's own counts and is filled on DONE; ``error`` is the reason on
+    FAILED; ``detail`` carries the rest, in the shape the nightly step writes so the two read
+    the same. There is no ``provisional`` here and there is no column for one: this sleeve
+    re-detects a **closed** session, never a partial one.
+    """
+
+    run_id: int
+    status: str
+    source: str
+    requested_at: dt.datetime
+    started_at: dt.datetime | None
+    finished_at: dt.datetime | None
+    session_date: dt.date | None
+    funnel: dict[str, object] | None
+    detail: dict[str, object] | None
+    error: str | None
+    #: How many signals the run produced, lifted out of ``detail`` so a page can say what it
+    #: found without parsing the worker's payload. ``None`` means "the run did not say"; ``0``
+    #: means "it looked and found none", and the two must not render the same.
+    found: int | None = None
+
+
 class VbtTodayOut(BaseModel):
     """`05` §2's Today tab.
 
@@ -154,6 +183,16 @@ class VbtTodayOut(BaseModel):
     shut_window: int
     candidates: list[VbtCandidateOut]
     rejects: list[VbtCandidateOut]
+    #: This user's newest "Scan now" run, whatever state it is in — the shape ``/swing/setups``
+    #: already serves, and the reason the page could not say when it last scanned.
+    #:
+    #: It was **deliberately left out** when this route was built: the contract fixes the route
+    #: (``GET /vbt/scan/{run_id}``) rather than whether the day's payload inlines the run, and
+    #: the page was built to accept either. What that left in practice was a page with no run id
+    #: to ask about until somebody pressed the button in that same tab — so "when did this last
+    #: scan?" had no answer on a cold load. Inlining costs one extra query on a route that
+    #: already runs several and removes a whole round trip from the page.
+    last_scan: VbtScanRunOut | None = None
 
 
 class VbtBarOut(BaseModel):
@@ -354,6 +393,7 @@ async def get_vbt_today(
     """
     user_id = await scoped_sole_user_id(session, principal.user_id)
     view = await vbt_service.today(session, user_id=user_id, day=date)
+    newest = await vbt_scan.newest_run(session, user_id=user_id)
     return _json(
         VbtTodayOut(
             as_of=view.as_of,
@@ -368,6 +408,7 @@ async def get_vbt_today(
             shut_window=view.shut_window,
             candidates=[_candidate_out(row) for row in view.candidates],
             rejects=[_candidate_out(row) for row in view.rejects],
+            last_scan=None if newest is None else _scan_run_out(vbt_scan.scan_run_view(newest)),
         )
     )
 
@@ -631,29 +672,6 @@ async def patch_vbt_config(
     )
 
 
-class VbtScanRunOut(BaseModel):
-    """One "Scan now" run (VB12). ``status`` walks QUEUED -> RUNNING -> DONE | FAILED.
-
-    ``session_date`` is null until the worker has decided which published session it is
-    re-detecting — the caller asks for "the latest" and only the worker knows which that is.
-    ``funnel`` is the detector's own counts and is filled on DONE; ``error`` is the reason on
-    FAILED; ``detail`` carries the rest, in the shape the nightly step writes so the two read
-    the same. There is no ``provisional`` here and there is no column for one: this sleeve
-    re-detects a **closed** session, never a partial one.
-    """
-
-    run_id: int
-    status: str
-    source: str
-    requested_at: dt.datetime
-    started_at: dt.datetime | None
-    finished_at: dt.datetime | None
-    session_date: dt.date | None
-    funnel: dict[str, object] | None
-    detail: dict[str, object] | None
-    error: str | None
-
-
 class VbtScanQueuedOut(BaseModel):
     """What `POST /vbt/scan` answers, with a 202: the run to poll."""
 
@@ -674,6 +692,7 @@ def _scan_run_out(view: vbt_scan.ScanRunView) -> VbtScanRunOut:
         funnel=view.funnel,
         detail=view.detail,
         error=view.error,
+        found=view.found,
     )
 
 

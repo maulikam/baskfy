@@ -74,13 +74,17 @@ class DiscoverPreferencesOut(BaseModel):
 async def _resolve_active_instrument(session: SessionDep, symbol: str) -> Instrument | None:
     needle = symbol.strip().upper()
     rows = (
-        await session.execute(
-            select(Instrument)
-            .where(Instrument.symbol == needle, Instrument.is_active.is_(True))
-            .order_by(Instrument.id.asc())
-            .limit(2)
+        (
+            await session.execute(
+                select(Instrument)
+                .where(Instrument.symbol == needle, Instrument.is_active.is_(True))
+                .order_by(Instrument.id.asc())
+                .limit(2)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     if len(rows) == 1:
         return rows[0]
     if len(rows) > 1:

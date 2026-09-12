@@ -153,12 +153,16 @@ async def list_basket_versions(
         raise not_found("basket", slug)
 
     versions = (
-        await session.execute(
-            select(CbBasketVersion)
-            .where(CbBasketVersion.basket_id == basket.id)
-            .order_by(CbBasketVersion.version_no.desc())
+        (
+            await session.execute(
+                select(CbBasketVersion)
+                .where(CbBasketVersion.basket_id == basket.id)
+                .order_by(CbBasketVersion.version_no.desc())
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     counts = {
         int(version_id): int(n)

@@ -120,7 +120,9 @@ def _is_blocked_ip(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bo
     )
 
 
-def resolve_webhook_host(host: str, port: int) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+def resolve_webhook_host(
+    host: str, port: int
+) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
     """DNS for :func:`assert_public_webhook_url`. Tests monkeypatch this — ``network_guard``
     blocks ``socket.getaddrinfo`` (Prompt 2), and delivery must still exercise the public-IP
     check without opening a socket.

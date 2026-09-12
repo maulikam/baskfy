@@ -21,7 +21,12 @@ def upgrade() -> None:
     op.create_table(
         "instrument_watch_item",
         sa.Column("id", sa.BigInteger(), sa.Identity(always=True), primary_key=True),
-        sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("app_user.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "user_id",
+            sa.BigInteger(),
+            sa.ForeignKey("app_user.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("instrument_id", sa.BigInteger(), sa.ForeignKey("instrument.id"), nullable=False),
         sa.Column("watched_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("close_at_watch", sa.Numeric(18, 2), nullable=True),
@@ -33,7 +38,12 @@ def upgrade() -> None:
 
     op.create_table(
         "user_discover_preferences",
-        sa.Column("user_id", sa.BigInteger(), sa.ForeignKey("app_user.id", ondelete="CASCADE"), primary_key=True),
+        sa.Column(
+            "user_id",
+            sa.BigInteger(),
+            sa.ForeignKey("app_user.id", ondelete="CASCADE"),
+            primary_key=True,
+        ),
         sa.Column("goal", sa.String(), nullable=False),
         sa.Column("horizon", sa.String(), nullable=False),
         sa.Column("risk", sa.String(), nullable=False),

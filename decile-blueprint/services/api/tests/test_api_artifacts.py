@@ -215,6 +215,7 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     # missing from this table, which had made `test_nothing_undocumented_is_exposed` red since
     # SC6 shipped, and added it rather than leaving a red test in the tree.
     "/explore/{slug}/constituents": {"get"},
+    "/explore/{slug}/performance": {"get"},
     # SC2 watchlist. User-scoped writes to the sole tenant's own watchlist -- a bookmark, not an
     # order; `test_explore_no_orders.py` fails if an order-shaped verb ever appears here.
     "/watchlist": {"get", "post"},

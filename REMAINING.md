@@ -243,8 +243,24 @@ command rather than taken as green because its gate file was.
 
 ## 3. Everything waiting on one deploy
 
-**The box is serving `dd9cc73`**, which predates both the Portfolio Command Center and the
-corporate-action fix. HEAD is `43b34dd`. Four separate gate sets are blocked on this single
+✅ **Deployed 12 Sep 2026, 11:40 IST.** The box went from `dd9cc73` to **`8b074c7`** — 25 commits —
+on a Saturday with the market shut. `verify-swing.sh` ends `SWING OK`, all ten services run the new
+tag, alembic is at `0041_twt`, and **the Portfolio Command Center is what `/portfolio/portfolios`
+serves**: the marker is compiled into both the server page and the client chunk of the deployed
+route bundle. `gates/deploy-pc-command-center.md` is 7/7 with evidence.
+
+**The four rows below are no longer blocked on the deploy** — they are now simply unverified
+against the box, which is a different and much smaller job. Nothing here re-checked them.
+
+**What did not change, and it matters:** `BASKFY_SWING_AUTO_EXECUTE=true` is the box's live
+setting and this deploy did not touch it. `deploy-swing.sh` writes four keys into
+`.env.staging.compose` — three image pins and a desk password — and its own comments call that flag
+the box's live setting. `verify-swing.sh` reports `** UNATTENDED LIVE ORDERS ARMED **`, which is
+the SW25 posture Maulik set, not a change made today. `BASKFY_TWT_EXECUTION_ENABLED` is absent from
+the box entirely, so T2 remains his alone.
+
+**The original text, for the sequence:** the box was serving `dd9cc73`, which predated both the
+Portfolio Command Center and the corporate-action fix. Four separate gate sets are blocked on this single
 deploy, and **none of them is coding work**:
 
 | Blocked | Where | What the box is doing wrong today |

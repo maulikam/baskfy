@@ -6,6 +6,8 @@ verify-stack.sh local: FAIL (local compose not up) — box verified via verify-p
 
 Notes: `4.11` = brokers `to_thread` (A); live_prices `to_thread` tracked under `4.12` (C). `1.23` = kitchen-sink + openapi (F); orphan `/discover/{featured,plan}` under G `1.24` ownership list.
 
+Lane F deferred/needs: `services/api` openapi.json auth/shut for 1.23 remainder; `components/screens/screens-list.tsx` (+ related screens) replace remaining `as never` hrefs.
+
 | item | lane | commit | state |
 |---|---|---|---|
 | 0.1 | A | — | pending |
@@ -57,17 +59,17 @@ Notes: `4.11` = brokers `to_thread` (A); live_prices `to_thread` tracked under `
 | 3.8 | E | — | pending |
 | 3.9 | E | — | pending |
 | 3.10 | E | — | pending |
-| 0.10 | F | — | pending |
-| 1.7 | F | — | pending |
-| 1.23 | F | — | pending |
-| 4.2 | F | — | pending |
-| 4.3 | F | — | pending |
-| 4.4 | F | — | pending |
-| 4.5 | F | — | pending |
-| 4.7 | F | — | pending |
-| 4.8 | F | — | pending |
-| 4.9 | F | — | pending |
-| 4.10 | F | — | pending |
+| 0.10 | F | 7d1163c | done |
+| 1.7 | F | c1d9a43 | done |
+| 1.23 | F | 9d2ebb7 | done (kitchen-sink); deferred openapi.json → needs services/api |
+| 4.2 | F | e7e5180 | done |
+| 4.3 | F | 16906cb | done |
+| 4.4 | F | f2e7881 | done |
+| 4.5 | F | 62ae0ec | done |
+| 4.7 | F | 807c48e | done |
+| 4.8 | F | d24126a | done |
+| 4.9 | F | d65f5fc | done |
+| 4.10 | F | da7b6b3 | done |
 | 0.3 | G | — | pending |
 | 1.1 | G | — | pending |
 | 1.2 | G | — | pending |

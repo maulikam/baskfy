@@ -12,11 +12,11 @@ import { VolatilityChip } from "@/components/explore/volatility-chip";
 import { PageHeader } from "@/components/shell/page-header";
 import { ExploreUnavailable, fetchExploreBasket } from "@/lib/explore/fetch";
 import { resolveBasketPerformanceSeries } from "@/lib/explore/performance";
-import { EMPTY_CELL, formatNumber, formatPercent, formatTradeDate } from "@/lib/format";
+import { EMPTY_CELL, formatNumber, formatTradeDate } from "@/lib/format";
+import { BasketDescription } from "@/components/basket/basket-description";
 
 /**
  * `/basket/[slug]` — SC5 detail. Overview + disclosures + Invest hand-off.
- * Constituents timeline deepens in a later pass; a stub link is wired now.
  */
 
 export const dynamic = "force-dynamic";
@@ -65,18 +65,13 @@ export default async function BasketDetailPage({
     metrics.headline_label !== null &&
     (metrics.cagr_3y === null || metrics.cagr_5y === null);
 
-  // Leaf 4.5: attempt API/metrics series before the chart's stub fallback.
   const performance = await resolveBasketPerformanceSeries(basket.slug, metrics);
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-6">
       <PageHeader
         title={basket.name}
-        blurb={
-          basket.description_md
-            ? basket.description_md.replace(/[#*_`]/g, "").slice(0, 180)
-            : `Managed by ${basket.manager.name}.`
-        }
+        blurb={`Managed by ${basket.manager.name}.`}
         meta={
           <span className="flex flex-wrap items-center gap-2">
             <AccessBadge access={basket.access} />
@@ -93,23 +88,26 @@ export default async function BasketDetailPage({
             </span>
           </span>
         }
-        actions={<InvestCta basketName={basket.name} basketSlug={slug} />}
+        actions={
+          <InvestCta
+            basketName={basket.name}
+            basketSlug={slug}
+            minAmount={metrics?.min_amount ?? null}
+          />
+        }
       />
 
+      {basket.description_md ? (
+        <BasketDescription markdown={basket.description_md} />
+      ) : null}
+
+      {/* One strip only — headline return, min amount, volatility. No second 1Y / MED pair. */}
       <section
         aria-label="Returns and costs"
-        className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+        className="grid grid-cols-2 gap-3 sm:grid-cols-3"
       >
         <ReturnStat label={metrics?.headline_label} value={metrics?.headline_pct} />
         <Stat label="Min. amount" value={rupees(metrics?.min_amount)} />
-        <Stat
-          label="1Y return"
-          value={
-            metrics?.ret_1y === null || metrics?.ret_1y === undefined
-              ? EMPTY_CELL
-              : formatPercent(metrics.ret_1y)
-          }
-        />
         <div>
           <div className="eyebrow">Volatility</div>
           <div className="mt-1.5">
@@ -136,7 +134,11 @@ export default async function BasketDetailPage({
           basketLabel={basket.name}
           benchmarkLabel="NIFTY 50"
           defaultRange="1Y"
-          incompleteHistory={young || performance.source === "empty"}
+          incompleteHistory={
+            young ||
+            performance.source === "empty" ||
+            (performance.coverage !== null && performance.coverage < 0.95)
+          }
         />
         <ReturnConventionNote metrics={basket.metrics ?? null} />
         <DisclosureBlock variant="performance-not-verified" />
@@ -151,8 +153,8 @@ export default async function BasketDetailPage({
             className="font-medium text-foreground underline-offset-4 hover:underline"
           >
             {basket.manager.name}
-          </Link>{" "}
-          ({basket.manager.kind.toLowerCase().replace(/_/g, " ")}).
+          </Link>
+          .
         </p>
         {basket.manager.kind === "HUMAN" ? (
           <DisclosureBlock variant="registration-pending" />

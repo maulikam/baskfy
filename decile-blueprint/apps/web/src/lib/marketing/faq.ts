@@ -42,7 +42,7 @@ export const FAQ_SECTIONS: readonly FaqSection[] = [
         id: "what-is-baskfy",
         question: "What does Baskfy actually do?",
         answer: [
-          "Every night after the NSE session, Baskfy computes sixty-four ranking factors for every listed equity and stores one wide row per instrument per date. A screen is then a filter and a sort over that table: pick a universe, pick a factor, add as many of the twenty-odd filters as you want, and read the ranking.",
+          "Every night after the NSE session, Baskfy computes sixty-six ranking factors for every listed equity and stores one wide row per instrument per date. A screen is then a filter and a sort over that table: pick a universe, pick a factor, add as many of the twenty-odd filters as you want, and read the ranking.",
           "It is a measurement tool. It tells you how a set of names ranks on a stated formula on a stated date. It does not tell you what to do with that.",
         ],
       },

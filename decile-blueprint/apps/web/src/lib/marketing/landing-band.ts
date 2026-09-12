@@ -109,7 +109,7 @@ export interface LandingCategory {
 export const LANDING_CATEGORIES: readonly LandingCategory[] = [
   {
     title: "Screen",
-    body: "Rank every listed name on sixty-four published measures, filter what survives, and save the rule so it runs again tomorrow.",
+    body: "Rank every listed name on sixty-six published measures, filter what survives, and save the rule so it runs again tomorrow.",
   },
   {
     title: "Baskets",

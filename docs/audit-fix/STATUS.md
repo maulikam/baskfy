@@ -51,11 +51,11 @@ Notes: `4.11` = brokers `to_thread` (A); live_prices `to_thread` tracked under `
 | D2 | D | — | pending |
 | 0.7 | E | 8cbe278 | done |
 | 3.4 | E | 1051e43 | done |
-| 3.5 | E | ddbcfbb | done |
+| 3.5 | E | ddbcfbb+166ba22 | done |
 | 3.6 | E | 3d5e89c | done |
 | 3.7 | E | 9448850 | done |
 | 3.8 | E | 89f9964 | done |
-| 3.9 | E | 2e91d73 | done |
+| 3.9 | E | 2e91d73+823ea61 | done |
 | 3.10 | E | e1ab53e | done |
 | 0.10 | F | — | pending |
 | 1.7 | F | — | pending |

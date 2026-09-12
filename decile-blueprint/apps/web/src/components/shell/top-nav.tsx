@@ -10,7 +10,7 @@ import { SearchButton } from "@/components/shell/search-button";
 import { ThemeToggle } from "@/components/shell/theme-toggle";
 import { UserMenu, type UserMenuProps } from "@/components/shell/user-menu";
 import { Wordmark } from "@/components/shell/wordmark";
-import { PRIMARY_NAV, SECTION_LABEL, primarySection, type ReadyNavItem } from "@/lib/nav";
+import { PRIMARY_NAV, SECTION_LABEL, primarySection, type NavItem } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
 /**
@@ -35,7 +35,7 @@ export interface TopNavProps {
   destination (`me`, since PORTFOLIO_REDESIGN.md §2 moved the money out of it) simply matches
   nothing, which is the right answer: it is drawn in the user menu, not the pill row.
 */
-function sectionHref(item: ReadyNavItem, pathname: string): boolean {
+function sectionHref(item: NavItem, pathname: string): boolean {
   const section = primarySection(pathname);
   if (!section) return pathname === item.href || pathname.startsWith(`${item.href}/`);
   return item.label === SECTION_LABEL[section];

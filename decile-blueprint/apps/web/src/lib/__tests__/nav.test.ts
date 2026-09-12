@@ -278,10 +278,8 @@ describe("the sidebar IA", () => {
     expect(new Set(hrefs).size).toBe(hrefs.length);
   });
 
-  it("gives every not-yet-built destination a prompt to point at", () => {
-    for (const item of NAV_ITEMS.filter((entry) => entry.status === "planned")) {
-      expect(item.arrivesIn, `${item.label} has no arrival`).toMatch(/^Prompt \d+$/);
-    }
+  it("has no planned destinations left", () => {
+    expect(NAV_ITEMS.every((entry) => entry.status === "ready")).toBe(true);
   });
 });
 

@@ -124,13 +124,10 @@ export function CommandPalette() {
   }, []);
 
   /**
-   * Only `ready` destinations navigate. A planned item is listed so the palette can say when it
-   * arrives, but selecting it would go to a 404 — and `NavItem` types `href` as a real `Route`
-   * only for the ready ones, so this is checked rather than remembered.
+   * Every nav destination navigates — the `planned` status was deleted (AUDIT 4.10).
    */
   const go = useCallback(
     (item: NavItem) => {
-      if (item.status !== "ready") return;
       dismiss();
       router.push(item.href);
     },
@@ -253,13 +250,9 @@ export function CommandPalette() {
               <CommandItem
                 key={item.href}
                 value={item.href}
-                disabled={item.status !== "ready"}
                 onSelect={() => go(item)}
               >
                 <span className="flex-1">{item.label}</span>
-                {item.status === "planned" ? (
-                  <span className="text-xs text-muted-foreground">{item.arrivesIn}</span>
-                ) : null}
               </CommandItem>
             ))}
           </CommandGroup>

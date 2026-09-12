@@ -103,6 +103,17 @@ def build(
     )
 
 
+class TestThrottleIsMandatory:
+    """AF 3.11 — an unthrottled NSE client must refuse, not silently fire."""
+
+    def test_throttle_raises_without_a_limiter(self, settings: ProviderSettings) -> None:
+        from baskfy_providers.errors import ProviderUnavailable
+
+        provider = NSEProvider(settings)
+        with pytest.raises(ProviderUnavailable, match="rate limiter"):
+            provider._throttle()
+
+
 class TestCapabilities:
     def test_it_offers_only_reference_data(self, settings: ProviderSettings) -> None:
         """docs/09's table: NSE provides ReferenceProvider. Bars come from Kite."""
@@ -376,6 +387,24 @@ class TestCorporateActionPurposes:
             None,
             None,
             None,
+        )
+
+    def test_split_and_bonus_emit_both_legs(self) -> None:
+        """AF 3.2 — a combined purpose must not drop the bonus leg."""
+        from baskfy_providers.nse import parse_corporate_action_purposes
+
+        legs = parse_corporate_action_purposes(
+            "FACE VALUE SPLIT FROM RS.10/- TO RE.1/- AND BONUS 1:1"
+        )
+        assert [leg[0] for leg in legs] == ["split", "bonus"]
+
+    def test_dividend_legs_are_summed(self) -> None:
+        """AF 3.3 — every RS amount in the purpose contributes."""
+        assert parse_corporate_action_purpose("DIVIDEND - RS.2.50 + RS.1.00 PER SHARE") == (
+            "dividend",
+            None,
+            None,
+            Decimal("3.50"),
         )
 
     @pytest.mark.parametrize(

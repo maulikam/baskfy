@@ -38,7 +38,9 @@ export default async function LoginPage({
         </p>
       ) : null}
       {next ? (
-        <p className="text-sm text-muted-foreground">Sign in to continue to {next}.</p>
+        <p className="text-sm text-muted-foreground">
+          Sign in to continue where you left off.
+        </p>
       ) : null}
 
       <LoginForm next={next} />

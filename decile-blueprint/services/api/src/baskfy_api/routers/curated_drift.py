@@ -95,7 +95,12 @@ async def _desk_holdings(session: AsyncSession) -> list[BrokerHoldingIn]:
             .mappings()
             .first()
         )
-    except (ProgrammingError, SQLAlchemyError):
+    except ProgrammingError:
+        # Desk schema absent — a normal state for an API-only database.
+        return []
+    except SQLAlchemyError:
+        # An aborted transaction must not be continued (audit 4.15). Roll back and stop.
+        await session.rollback()
         return []
     if row is None:
         return []

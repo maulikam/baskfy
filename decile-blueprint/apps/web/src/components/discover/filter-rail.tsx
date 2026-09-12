@@ -1,3 +1,4 @@
+import type { Route } from "next";
 import Link from "next/link";
 
 import { UNCOMPUTED_METRIC_KEYS, uncomputedMetrics } from "@/lib/discover/metrics";
@@ -54,13 +55,18 @@ const SORTS: readonly { label: string; sort: string; order: string }[] = [
   { label: "Newest", sort: "launched_at", order: "desc" },
 ];
 
-export function buildHref(base: string, state: FilterState): string {
+/**
+ * `typedRoutes` is on, and a query string assembled from filter state is not a literal the
+ * generated route union can check — so the cast happens once, here, rather than at every `<Link>`
+ * this rail draws. The path half is the caller's `base`, which is a route this app owns.
+ */
+export function buildHref(base: string, state: FilterState): Route {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(definedParams(state))) {
     if (value) query.set(key, String(value));
   }
   const encoded = query.toString();
-  return encoded ? `${base}?${encoded}` : base;
+  return (encoded ? `${base}?${encoded}` : base) as Route;
 }
 
 function Chip({
@@ -70,7 +76,7 @@ function Chip({
 }: {
   label: string;
   active: boolean;
-  href: string;
+  href: Route;
 }) {
   return (
     <Link
@@ -119,7 +125,7 @@ export function FilterRail({
 }) {
   // `definedParams` drops the keys whose value is undefined, which is what
   // `exactOptionalPropertyTypes` requires and what keeps a cleared filter out of the URL.
-  const toggle = (key: keyof FilterState, value: string): string =>
+  const toggle = (key: keyof FilterState, value: string): Route =>
     buildHref(base, definedParams({ ...state, [key]: state[key] === value ? undefined : value }));
 
   const active = Boolean(

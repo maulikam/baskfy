@@ -1,3 +1,5 @@
+import type { Route } from "next";
+
 import {
   allocationAnalytics,
   percentOf,
@@ -126,7 +128,9 @@ export interface HealthProblem {
    * field and leaving a reader to assume the alert is fresh.
    */
   readonly since: string;
-  readonly href?: string;
+  /** Where to go to fix it. `Route`, because the attention rail links to it and a problem about
+      one portfolio names that portfolio's numeric id. */
+  readonly href?: Route;
 }
 
 /** The reconcile pass is when a problem with the book would have been noticed. */
@@ -218,7 +222,7 @@ function countProblems(overview: Overview, unallocated: Unallocated | null): Hea
         detail:
           "Its performance is frozen until the difference is resolved, so the return shown for it is the last one we could stand behind.",
         since: detected,
-        href: `/portfolio/${row.portfolio_id}`,
+        href: `/portfolio/${row.portfolio_id}` as Route,
       });
     }
   }

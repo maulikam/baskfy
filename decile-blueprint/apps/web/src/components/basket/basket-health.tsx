@@ -1,3 +1,4 @@
+import type { Route } from "next";
 import Link from "next/link";
 
 import { formatFraction, formatPercent } from "@/lib/format";
@@ -19,8 +20,9 @@ export function BasketHealthPanel({
   className,
 }: {
   health: BasketHealth;
-  /** When the basket came from a saved screen, a link to Replay that rule. */
-  backtestHref?: string | undefined;
+  /** When the basket came from a saved screen, a link to Replay that rule. `Route`, because the
+      screen's public id reaches it at runtime and `typedRoutes` cannot check a `?screen=` query. */
+  backtestHref?: Route | undefined;
   className?: string;
 }) {
   if (health.names === 0) return null;

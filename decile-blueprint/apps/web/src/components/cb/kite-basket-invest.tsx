@@ -120,7 +120,7 @@ export function KiteBasketInvest({
   return (
     <div
       className={cn(
-        "flex min-w-0 max-w-full flex-col gap-3 overflow-x-hidden rounded-xl border border-border bg-card p-4",
+        "flex min-w-0 max-w-full flex-col gap-3 overflow-x-auto rounded-xl border border-border bg-card p-4",
         className,
       )}
     >

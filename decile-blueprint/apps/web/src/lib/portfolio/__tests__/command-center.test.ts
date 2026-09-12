@@ -91,6 +91,8 @@ function overview(over: Partial<Overview> = {}): Overview {
     prices_as_of: "2026-09-10",
     holdings_synced_label: "Holdings reconciled today at 09:18",
     holdings_synced_on: "2026-09-11",
+    sync_summary: "Holdings synced: 2026-09-11",
+    live_overlay: false,
     monitoring_excluded_note: "Views overlap and are excluded from total value.",
     open_reconciliation_count: 0,
     portfolios: [row(1, "Long term", "2000000"), row(2, "Swing Manual", "1500000")],

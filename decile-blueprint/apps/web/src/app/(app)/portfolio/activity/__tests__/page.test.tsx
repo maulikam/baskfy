@@ -39,6 +39,7 @@ describe("the Activity empty state", () => {
     mockedCatalog.mockResolvedValue(catalog(true));
     mockedOverview.mockResolvedValue({
       sync_summary: "Holdings not synced yet",
+      live_overlay: false,
     } as Awaited<ReturnType<typeof fetchPortfolioOverview>>);
     render(await PortfolioActivityPage());
     expect(screen.queryByRole("link", { name: "Connect a broker" })).not.toBeInTheDocument();
@@ -49,6 +50,7 @@ describe("the Activity empty state", () => {
     mockedCatalog.mockResolvedValue(catalog(true));
     mockedOverview.mockResolvedValue({
       sync_summary: "primary has never synced",
+      live_overlay: false,
     } as Awaited<ReturnType<typeof fetchPortfolioOverview>>);
     render(await PortfolioActivityPage());
     expect(screen.getByTestId("sync-summary")).toHaveTextContent("primary has never synced");
@@ -60,6 +62,7 @@ describe("the Activity empty state", () => {
     mockedCatalog.mockResolvedValue(catalog(true));
     mockedOverview.mockResolvedValue({
       sync_summary: "Holdings synced: 2026-09-11",
+      live_overlay: false,
     } as Awaited<ReturnType<typeof fetchPortfolioOverview>>);
     render(await PortfolioActivityPage());
     expect(screen.getByTestId("activity-empty")).toHaveTextContent("not recorded yet");

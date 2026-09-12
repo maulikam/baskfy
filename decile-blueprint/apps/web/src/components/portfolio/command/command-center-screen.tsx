@@ -231,18 +231,14 @@ export function CommandCenterScreen({
 
       <HealthStrip health={centre.health} />
 
-      {/* Which clock the figures are on. The root CLAUDE.md has a whole section on this, and it
-          has been "fixed" and reverted twice: baskets, factors and the published series are the
-          last COMPLETED session, while portfolio marks are live quotes. So "today's P&L" means
-          two different things depending on whether the exchange is open, and a reader deserves to
-          be told which — rather than a freshness date that reads as staleness at 13:15 on a
-          Tuesday and as finality at 18:00. Rendered only when the caller supplies the answer:
-          this component takes no clock, and a guessed session is worse than no label. */}
+      {/* Which clock the figures are on (audit 4.1). Close is the base; live overlay applies when
+          a Kite session exists. Baskets/factors stay end-of-day. Rendered only when the caller
+          supplies whether the market is open — a guessed session is worse than no label. */}
       {marketOpen === undefined ? null : (
         <p data-testid="market-session" className="text-xs text-muted-foreground">
           {marketOpen
-            ? "Market open. Prices and today's P&L are live and will keep moving until the close."
-            : "Market closed. Today's P&L is final for the session; it will not change again until the next one opens."}
+            ? "Market open. Marks are close, plus live overlay when a Kite session exists — today's P&L moves with the overlay until the close."
+            : "Market closed. Marks are the session close (plus any final quote overlay); today's P&L will not change again until the next session opens."}
         </p>
       )}
 

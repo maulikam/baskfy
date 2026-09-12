@@ -5262,6 +5262,11 @@ export interface components {
              * @default false
              */
             collected: boolean;
+            /**
+             * Marked At Cost
+             * @default false
+             */
+            marked_at_cost: boolean;
             /** Returns After Fees */
             returns_after_fees: string;
             snapshot: components["schemas"]["CostsSnapshotOut"];
@@ -5278,6 +5283,11 @@ export interface components {
             current_value: string;
             /** Dividends */
             dividends: string;
+            /**
+             * Marked At Cost
+             * @default false
+             */
+            marked_at_cost: boolean;
             /** Money Put In */
             money_put_in: string;
             /** Realized Pnl */
@@ -7228,6 +7238,11 @@ export interface components {
             /** Holdings Synced On */
             holdings_synced_on?: string | null;
             /**
+             * Live Overlay
+             * @default false
+             */
+            live_overlay: boolean;
+            /**
              * Monitoring Excluded Note
              * @default Monitoring view — overlaps with other portfolios, excluded from totals.
              */
@@ -7247,6 +7262,8 @@ export interface components {
             prices_label: string;
             /** Sync Status */
             sync_status?: components["schemas"]["SyncStatusOut"][];
+            /** Sync Summary */
+            sync_summary: string;
             unallocated: components["schemas"]["UnallocatedOut"];
         };
         /**
@@ -9021,6 +9038,11 @@ export interface components {
             current_value: string;
             /** Dividends */
             dividends: string;
+            /**
+             * Marked At Cost
+             * @default false
+             */
+            marked_at_cost: boolean;
             /** Money Put In */
             money_put_in: string;
             /** Realized Pnl */

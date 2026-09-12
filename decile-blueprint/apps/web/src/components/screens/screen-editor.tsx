@@ -3,6 +3,7 @@
 import type { ScreenOut, StatusOut } from "@baskfy/api-client";
 import { CalendarClock, Columns3, Copy, Loader2, X } from "lucide-react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { parseAsString, useQueryState } from "nuqs";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -11,7 +12,6 @@ import { ErrorState } from "@/components/data/error-state";
 import { ApplyFiltersPill } from "@/components/screens/apply-filters-pill";
 import { ExportButton } from "@/components/screens/export-button";
 import { FilterChipBar } from "@/components/screens/filter-chip-bar";
-import { FilterForm } from "@/components/screens/filter-form";
 import { ResultsPanel } from "@/components/screens/results-panel";
 import type { ColumnMeta } from "@/components/screens/result-columns";
 import { ShareButton } from "@/components/screens/share-button";
@@ -35,6 +35,19 @@ import { buildStorySentence } from "@/lib/screens/story";
 import { PREVIEW_DEBOUNCE_MS, useDebounced } from "@/lib/screens/use-debounced";
 import { STATE_PARAM, decodeState, definitionsEqual, encodeState, parseDefinition } from "@/lib/screens/url-state";
 import { CUSTOM_FILTER_OPERAND_KEYS, OPERAND_LABELS } from "@/lib/screens/operands";
+
+/*
+ * The classic left-rail accordion. `NEXT_PUBLIC_SCREEN_CHIP_FILTERS` defaults **on**, so this
+ * branch renders for nobody in a default build — and it was still in the first-load bundle,
+ * dragging `FilterAccordion`, `FactorCombobox`, `Select`, `Switch` and `filter-sections` with it.
+ * That is what put `/build/[id]` over the 250 KB budget docs/11 sets.
+ *
+ * `ssr` is left at its default (on), so when the flag IS off the server still renders the rail and
+ * there is no flash of an empty column; the chunk simply is not requested on the flagged-on path.
+ */
+const FilterForm = dynamic(() =>
+  import("@/components/screens/filter-form").then((m) => m.FilterForm),
+);
 
 export interface ScreenEditorProps {
   screen: ScreenOut;

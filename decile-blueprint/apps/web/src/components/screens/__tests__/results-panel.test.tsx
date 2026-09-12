@@ -124,6 +124,32 @@ function priceHeader() {
   return screen.queryByRole("columnheader", { name: /price/i });
 }
 
+/**
+ * `DataTable` is loaded with `next/dynamic` so @tanstack/react-table stays out of the route's
+ * first-load bundle (docs/11's "after code-splitting the table"). In jsdom that means the grid is
+ * absent for a tick after render.
+ *
+ * **Every assertion about a header has to await this first, including the negative ones.** Without
+ * it `expect(priceHeader()).not.toBeInTheDocument()` passes because the whole table is missing,
+ * which is a test that can no longer fail — it would go green if the Price column were dropped, and
+ * equally green if the table never rendered at all. `symbol` is the anchor because the column
+ * policy never drops it (leaf-7.1.2 G3).
+ */
+/**
+ * `DataTable` is loaded with `next/dynamic` so @tanstack/react-table stays out of the route's
+ * first-load bundle — docs/11's "after code-splitting the table", which took `/build/[id]` from
+ * 263.1 KB to 238.7 KB against a 250 KB budget. In jsdom the grid therefore arrives a tick after
+ * render (`src/test/setup.ts` resolves the split module through `React.lazy`).
+ *
+ * **Every assertion about a header awaits this first, the negative ones especially.** Without it
+ * `expect(priceHeader()).not.toBeInTheDocument()` is green when the Price column is correctly
+ * dropped and equally green when no table rendered at all — a test that cannot fail. `findByRole`
+ * throws when the grid never appears, which is what keeps those three assertions honest.
+ */
+async function tableReady() {
+  await screen.findByRole("grid");
+}
+
 beforeEach(() => {
   mockScrollMetrics();
 });
@@ -133,7 +159,7 @@ afterEach(() => {
 });
 
 describe("dead columns", () => {
-  it("drops the Price header when every close_raw is null, and discloses it", () => {
+  it("drops the Price header when every close_raw is null, and discloses it", async () => {
     renderPanel(
       run({
         result_count: 2,
@@ -144,6 +170,7 @@ describe("dead columns", () => {
       }),
     );
 
+    await tableReady();
     expect(priceHeader()).not.toBeInTheDocument();
     const note = screen.getByTestId("suppressed-columns");
     expect(note).toHaveTextContent("Price");
@@ -151,14 +178,15 @@ describe("dead columns", () => {
     expect(note).toHaveTextContent("every row came back empty");
   });
 
-  it("keeps the Price header when close_raw is populated", () => {
+  it("keeps the Price header when close_raw is populated", async () => {
     renderPanel(run());
+    await tableReady();
 
     expect(priceHeader()).toBeInTheDocument();
     expect(screen.queryByTestId("suppressed-columns")).not.toBeInTheDocument();
   });
 
-  it("names every empty requested column, not the ones the diet already dropped", () => {
+  it("names every empty requested column, not the ones the diet already dropped", async () => {
     renderPanel(
       run({
         columns: [
@@ -180,6 +208,7 @@ describe("dead columns", () => {
     expect(note).toHaveTextContent("Price");
     expect(note).toHaveTextContent("rsi_1y");
     expect(note).not.toHaveTextContent("Market cap");
+    await tableReady();
     expect(priceHeader()).not.toBeInTheDocument();
   });
 });
@@ -219,8 +248,9 @@ describe("empty state", () => {
 });
 
 describe("sort note", () => {
-  it("is present on the table and not duplicated as a paragraph", () => {
+  it("is present on the table and not duplicated as a paragraph", async () => {
     renderPanel(run());
+    await tableReady();
 
     const note = screen.getByTestId("sort-note");
     expect(note).toHaveAttribute("aria-label", SORT_NOTE);

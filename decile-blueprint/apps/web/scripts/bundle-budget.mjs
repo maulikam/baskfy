@@ -36,18 +36,31 @@ const MANIFEST = join(NEXT_DIR, "app-build-manifest.json");
  *
  * @type {Array<{route: string, label: string, limitKb: number | null, resultKey?: string}>}
  */
+/*
+ * ⚠️ Repaired 12 Sep 2026. Five of these six routes had been renamed by the nav refactor and this
+ * table was never updated, so every one of them read "— not in manifest —" and the check reported
+ * nothing. `instruments/[symbol]` kept its path, which is why the script still looked like it
+ * worked: one route measured, five silently absent.
+ *
+ * **The 250 KB budget docs/11 sets on the screens route had therefore not been enforced since the
+ * rename.** That is the part worth knowing — a budget nobody measures is not a budget.
+ *
+ * screens -> build · screens/[id] -> build/[id] · dashboard -> home · market-health -> market ·
+ * backtests -> build/backtests. `resultKey` stays `screens_bundle` so the historical series in
+ * `benchmarks/results/` remains one continuous measurement across the rename.
+ */
 const BUDGETS = [
   {
-    route: "/(app)/screens/page",
-    label: "screens",
+    route: "/(app)/build/page",
+    label: "build (was screens)",
     limitKb: 250,
     resultKey: "screens_bundle",
   },
-  { route: "/(app)/screens/[id]/page", label: "screens/[id]", limitKb: 250 },
-  { route: "/(app)/dashboard/page", label: "dashboard", limitKb: null },
+  { route: "/(app)/build/[id]/page", label: "build/[id]", limitKb: 250 },
+  { route: "/(app)/home/page", label: "home (was dashboard)", limitKb: null },
   { route: "/(app)/instruments/[symbol]/page", label: "instruments/[symbol]", limitKb: null },
-  { route: "/(app)/market-health/page", label: "market-health", limitKb: null },
-  { route: "/(app)/backtests/page", label: "backtests", limitKb: null },
+  { route: "/(app)/market/page", label: "market (was market-health)", limitKb: null },
+  { route: "/(app)/build/backtests/page", label: "build/backtests", limitKb: null },
 ];
 
 function loadManifest() {

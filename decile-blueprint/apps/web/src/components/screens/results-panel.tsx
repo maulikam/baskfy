@@ -1,12 +1,12 @@
 "use client";
 
 import type { ScreenRunResponse } from "@baskfy/api-client";
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 
-import { DataTable, type Density } from "@/components/data/data-table";
+import type { DataTable as DataTableComponent, Density } from "@/components/data/data-table";
 import { EmptyState } from "@/components/data/empty-state";
 import { ErrorState } from "@/components/data/error-state";
-import { PeekDrawer } from "@/components/screens/peek-drawer";
 import { ResultCards } from "@/components/screens/result-cards";
 import {
   buildColumns,
@@ -21,6 +21,32 @@ import { Switch } from "@/components/ui/switch";
 import { formatTradeDate } from "@/lib/format";
 import { columnDisplayLabel, suppressedResultColumns } from "@/lib/screens/column-display";
 import { cn } from "@/lib/utils";
+
+/*
+ * docs/11: "JS on the screens route < 250 KB gzip **after code-splitting the table and charts**."
+ * That sentence had never been acted on, and it was not noticed because `bundle-budget.mjs` was
+ * pointed at the pre-rename routes and measured nothing (see gates/leaf-7.5.1-verify.md G6).
+ *
+ * `DataTable` carries @tanstack/react-table — 19.5 KB gzip of the route's 263 KB, in its own
+ * chunk. Splitting it costs no paint: the results arrive from a client fetch, so this subtree is
+ * behind `isPending` and its `LoadingOneLiner` either way, and the chunk downloads while the query
+ * is in flight rather than before it starts.
+ *
+ * `PeekDrawer` is pure interaction weight — it opens when a row is clicked and renders nothing
+ * until then.
+ */
+// `next/dynamic` returns a non-generic component, and `DataTable` is generic over its row type —
+// without restoring the signature every call site would degrade to `ColumnDef<unknown>`. The cast
+// is to the module's own exported type, not to `any`: it re-states what the component already is
+// rather than widening anything (house rule 3).
+const DataTable = dynamic(() =>
+  import("@/components/data/data-table").then((m) => m.DataTable),
+) as typeof DataTableComponent;
+
+const PeekDrawer = dynamic(() =>
+  import("@/components/screens/peek-drawer").then((m) => m.PeekDrawer),
+);
+
 
 const LOADING_LINES = [
   "Crunching tickers…",

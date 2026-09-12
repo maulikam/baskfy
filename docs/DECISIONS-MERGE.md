@@ -7280,3 +7280,49 @@ predicate that is the only thing standing between a PRIVATE basket and a caller,
 happened. Importing `explore._visible` — a cycle, and a private name.
 
 **Reverse.** Inline `visible_baskets()` back into each router and delete the module and the test.
+
+## AF T.1 — The broker unit tests handed an unbound session to a route that now reads the tenant · ⚠ UNREVIEWED
+
+**What happened.** `90cb1be` (AFA 2.5) opened every broker route with `scoped_sole_user_id`, which
+is right: a principal who is not this deployment's sole tenant must be refused rather than
+collapsed onto it. `test_broker_oauth.py` and `test_broker_holdings_provenance.py` call those
+route functions directly with a bare `AsyncSession()`, because what they assert — which file a
+token is written to, what a response *says* about where its rows came from — needs no rows. The
+new first line made all seventeen of them raise `UnboundExecutionError` before reaching their
+subject, so the non-database `make test` had been red since 19:47 on 12 Sep.
+
+**Choice.** Set `BASKFY_SOLE_USER_ID` in each file's existing autouse fixture and speak as that
+account. `curated_seed.resolve_sole_user_id` prefers the variable and returns without a query, so
+the guard still runs — against a real value, on the real code path — and the session stays
+unbound. The refusal the guard exists for keeps being asserted where it belongs, in the tenancy
+tests that use a database.
+
+**Rejected.** Monkeypatching `scoped_sole_user_id` away, which would delete the guard from the
+only tests that exercise these routes as functions. Marking both files `db` and giving them a real
+session — it converts ~60 fast unit tests into database tests to satisfy one line that reads an
+environment variable first.
+
+**Reverse.** Delete the two `monkeypatch.setenv("BASKFY_SOLE_USER_ID", ...)` lines and the
+`SOLE_USER_ID` constants.
+
+## AF T.2 — Two gates had been red since the lanes that tripped them landed · ⚠ UNREVIEWED
+
+**What happened.** `test_no_undocumented_tables` and `test_nothing_undocumented_is_exposed` are the
+gates that say a table nobody wrote down is a table nobody maintains, and a route served without a
+docs entry is a contract change nobody agreed to. AF lane I added `instrument_watch_item` and
+`user_discover_preferences` (migration 0045) and three `/watchlist/instruments` and
+`/watchlist/discover-preferences` routes; AF I.1 added `/explore/{slug}/versions` and
+`/versions/diff`. None was written down, so both gates were red.
+
+**Choice.** Write them down. The two tables are now in `DOCUMENTED_TABLES` with their primary keys
+and an addendum of their own — `decile-blueprint/docs/04e-stocks-watchlist-addendum.md` — which
+says why a watched *symbol* is not a `cb_watchlist_item`, why `close_at_watch` is nullable rather
+than defaulted (a baseline nobody has must not be invented), and that every route over them is
+behind `scoped_sole_user_id`. The five routes are in `EXPECTED_PATHS` with the comment the
+neighbouring entries carry: what the route is for, and that it has no order path.
+
+**Rejected.** Widening either gate to ignore unknown names, which is the one change that would
+make both tests permanently useless.
+
+**Reverse.** Remove the five `EXPECTED_PATHS` entries, the two `DOCUMENTED_TABLES` entries and the
+addendum; both gates go red again and say exactly why.

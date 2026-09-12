@@ -51,6 +51,17 @@ from baskfy_providers.errors import AccessTokenExpired
 WIRED = "zerodha"
 UNWIRED = "upstox"
 
+#: The account every principal below speaks as, and the value `BASKFY_SOLE_USER_ID` carries.
+#:
+#: These tests call the route functions directly with an unbound ``AsyncSession()``, because
+#: what they assert — what the response SAYS about where its rows came from — needs no rows.
+#: Since `90cb1be` the broker routes open with `scoped_sole_user_id`, which reads the sole
+#: tenant; with the variable set it answers from the environment and never touches a database
+#: (`curated_seed.resolve_sole_user_id`), so the guard still runs, against a real value, and
+#: the session stays unbound. Set it to the principal's id and the guard passes; the refusal
+#: it exists for is asserted where it belongs, in the tenancy tests.
+SOLE_USER_ID = 1
+
 
 class _FakeToken:
     """Just enough of ``baskfy_providers.tokens.AccessToken`` for the live path."""
@@ -111,6 +122,7 @@ def _dry_run_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
     """Safety rail: every test starts in DRY_RUN with no fixture and no broker session."""
     monkeypatch.setenv("DRY_RUN", "true")
     monkeypatch.delenv("BASKFY_BROKER_HOLDINGS_FIXTURE", raising=False)
+    monkeypatch.setenv("BASKFY_SOLE_USER_ID", str(SOLE_USER_ID))
 
 
 @pytest.fixture
@@ -123,7 +135,8 @@ def live_session(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def principal_stub() -> MagicMock:
     principal = MagicMock()
-    principal.require_user.return_value = 1
+    principal.require_user.return_value = SOLE_USER_ID
+    principal.user_id = SOLE_USER_ID
     return principal
 
 

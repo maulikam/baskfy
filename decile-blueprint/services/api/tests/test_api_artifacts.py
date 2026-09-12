@@ -216,10 +216,25 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     # SC6 shipped, and added it rather than leaving a red test in the tree.
     "/explore/{slug}/constituents": {"get"},
     "/explore/{slug}/performance": {"get"},
+    # The rebalance history behind the constituents tab: every published version of a basket,
+    # and the added / removed / reweighted diff between any two of them
+    # (`services/api/src/baskfy_api/routers/curated_versions.py`). Reads of
+    # `cb_basket_version` / `cb_constituent` through the same `_visible()` predicate the card
+    # uses, so an unlisted basket is a 404 here too.
+    "/explore/{slug}/versions": {"get"},
+    "/explore/{slug}/versions/diff": {"get"},
     # SC2 watchlist. User-scoped writes to the sole tenant's own watchlist -- a bookmark, not an
     # order; `test_explore_no_orders.py` fails if an order-shaped verb ever appears here.
     "/watchlist": {"get", "post"},
     "/watchlist/{slug}": {"delete"},
+    # AF lane I: the Stocks half of the same page. `/watchlist` bookmarks a basket; these
+    # bookmark a *symbol*, and the preferences row is what `/discover` reads when there is no
+    # query string. Writes are the user's own rows behind `scoped_sole_user_id`, there is no
+    # broker path on any of them, and the tables are described in
+    # docs/04e-stocks-watchlist-addendum.md.
+    "/watchlist/instruments": {"get", "post"},
+    "/watchlist/instruments/{symbol}": {"delete"},
+    "/watchlist/discover-preferences": {"get", "put"},
     # SC8 (leaf 2.2): create a PRIVATE STOCK basket + its GENESIS version for the sole tenant.
     # A catalog write with no broker path -- argued for in `test_baskets_readonly.py`'s
     # `DELIBERATE_MUTATING_BASKET_ROUTES`, which is where the order gate is decided.

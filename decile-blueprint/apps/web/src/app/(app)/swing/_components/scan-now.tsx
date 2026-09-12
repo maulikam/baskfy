@@ -102,7 +102,7 @@ export function ScanLabel({
   if (!line) return null;
   return (
     <span
-      className={cn("text-sm", provisional ? "text-amber-700" : "text-muted-foreground")}
+      className={cn("text-sm", provisional ? "text-warning" : "text-muted-foreground")}
       data-testid="scan-label"
       title={
         provisional

@@ -192,7 +192,7 @@ export default async function VbtBookPage() {
                     <td
                       className={
                         row.expires_tonight
-                          ? "py-2 pr-3 font-medium text-amber-700"
+                          ? "py-2 pr-3 font-medium text-warning"
                           : "py-2 pr-3 text-muted-foreground"
                       }
                     >

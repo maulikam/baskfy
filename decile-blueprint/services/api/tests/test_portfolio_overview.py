@@ -1301,6 +1301,44 @@ def test_the_router_has_no_order_path() -> None:
 # ---------------------------------------------------------------------------
 
 
+def test_sync_summary_is_one_sentence_for_every_surface() -> None:
+    """Audit 1.3: connected ≠ synced; Activity and the command centre must share one field."""
+    from baskfy_api.routers.portfolio_overview import (  # noqa: PLC0415
+        BrokerRefOut,
+        SyncStatusOut,
+        _sync_summary,
+    )
+
+    none = _sync_summary([])
+    assert none == "No broker connected"
+
+    never = _sync_summary(
+        [
+            SyncStatusOut(
+                broker=BrokerRefOut(
+                    broker_account_id=1, broker_id="zerodha", label="primary"
+                ),
+                synced_on=None,
+                label="Holdings not synced yet",
+            )
+        ]
+    )
+    assert never == "Holdings not synced yet"
+
+    dated = _sync_summary(
+        [
+            SyncStatusOut(
+                broker=BrokerRefOut(
+                    broker_account_id=1, broker_id="zerodha", label="primary"
+                ),
+                synced_on=TODAY,
+                label=f"Holdings synced: {TODAY.isoformat()}",
+            )
+        ]
+    )
+    assert dated == f"Holdings synced: {TODAY.isoformat()}"
+
+
 def test_twr_and_drawdown_are_none_until_two_real_valuations() -> None:
     """Audit 0.4: a ₹1 seed mark must not produce −100 % TWR / drawdown / a ₹1 peak.
 

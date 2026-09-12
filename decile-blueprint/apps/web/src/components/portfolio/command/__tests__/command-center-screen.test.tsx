@@ -127,6 +127,7 @@ function overview(over: Partial<Overview> = {}): Overview {
     prices_as_of: "2026-09-10",
     holdings_synced_label: "Holdings reconciled today at 09:18",
     holdings_synced_on: "2026-09-11",
+    sync_summary: "Holdings synced: 2026-09-11",
     monitoring_excluded_note:
       "Monitoring views may contain overlapping holdings and are excluded from total portfolio value.",
     open_reconciliation_count: 0,

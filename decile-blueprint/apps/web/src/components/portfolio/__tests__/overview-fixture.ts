@@ -224,6 +224,7 @@ export const OVERVIEW: Overview = {
   prices_label: "Prices: close of 2026-08-21",
   holdings_synced_on: "2026-08-25",
   holdings_synced_label: "Holdings synced: 2026-08-25",
+  sync_summary: "Upstox has never synced",
   sync_status: [
     { broker: BROKER, label: "Holdings synced: 2026-08-25", synced_on: "2026-08-25" },
     { broker: SECOND_BROKER, label: "Holdings not synced yet", synced_on: null },
@@ -252,6 +253,7 @@ export const EMPTY_OVERVIEW: Overview = {
   prices_label: "No closing prices yet",
   holdings_synced_on: null,
   holdings_synced_label: "Holdings not synced yet",
+  sync_summary: "No broker connected",
   sync_status: [],
   hero: {
     current_value: "0.00",

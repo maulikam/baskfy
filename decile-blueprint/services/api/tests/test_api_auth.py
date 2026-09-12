@@ -564,7 +564,7 @@ class TestDpdp:
                 "DELETE", url("/me"), json={"email": "someone.else@example.com"}, headers=headers
             ),
             400,
-            "invalid-screen-definition",
+            "bad-request",
         )
 
     async def test_signing_in_again_cancels_the_deletion(
@@ -576,19 +576,35 @@ class TestDpdp:
             "DELETE", url("/me"), json={"email": EMAIL}, headers=await self._token(api)
         )
 
-        await api.post(url("/me/restore"), json={"email": EMAIL})
-        assert (await sign_in(api)).status_code == 200
+        mail = outbox.last_for(EMAIL)
+        # AUDIT 2.4: restore requires the signed code from the deletion e-mail, not email alone.
+        assert "this code: " in mail.text
+        code = mail.text.rsplit("this code: ", 1)[1].strip().split()[0]
+        bare = await api.post(url("/me/restore"), json={"email": EMAIL})
+        assert bare.status_code in {400, 422}
+        assert bare.status_code != 200
+        assert_problem(
+            await api.post(
+                url("/me/restore"),
+                json={"email": EMAIL, "code": "not-a-real-restore-code-xxxxx"},
+            ),
+            401,
+            "unauthenticated",
+        )
 
+        restored = await api.post(url("/me/restore"), json={"email": EMAIL, "code": code})
+        assert restored.status_code == 200
+        assert (await sign_in(api)).status_code == 200
 
 class TestSessionEpoch:
     """``app_user.session_epoch`` — the only thing that can end a *web* session.
 
     Why revoking refresh tokens is not enough, and never was: the web app has never held one. Its
-    session is an Auth.js JWT cookie, it mints access tokens from the shared secret, and
-    ``current_principal`` checks only that ``sub`` names a row — so revoking rows nobody reads
-    left the session that actually mattered alive for the rest of its thirty days
-    (``NEEDS-MAULIK.md`` §22). The epoch is what the web app compares against, so these assert the
-    number, not the rows.
+    session is an Auth.js JWT cookie, it mints access tokens from the shared secret, and until
+    AUDIT 0.8 / 2.2 ``current_principal`` checked only that ``sub`` named a row — so revoking rows
+    nobody reads left the session that actually mattered alive for the rest of its thirty days
+    (``NEEDS-MAULIK.md`` §22, now fixed: bearer carries ``epoch``, refused when stale). The epoch
+    is what the web app compares against, so these assert the number, not the rows.
 
     **What bumps it changed with M46.** It used to be a password change or a reset, and both are
     gone. Account deletion and restore are what remain (``auth_service.revoke_all_for_user``), and
@@ -627,6 +643,9 @@ class TestSessionEpoch:
 
         deleted = await api.request("DELETE", url("/me"), json={"email": EMAIL}, headers=headers)
         assert deleted.status_code == 200, deleted.text
+
+        # AUDIT 0.8 / 2.2: the pre-deletion bearer is dead — epoch + deleted_at, not only the layout.
+        assert_problem(await api.get(url("/me"), headers=headers), 401, "unauthenticated")
 
         # Signing in again cancels the deletion (Prompt 12 §5) and reports the new generation.
         after = body_of(await sign_in(api))["session_epoch"]

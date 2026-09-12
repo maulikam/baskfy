@@ -77,11 +77,12 @@ export default async function BrokersPage() {
            is no login to open and no holdings to sync. `docs/DECISIONS-MERGE.md` M55. */
         <p className="rounded-md border border-border bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
           <strong className="font-medium text-foreground">
-            Baskfy sends baskets to your broker; it never connects to your account.
+            Zerodha Kite hand-off is live; account connect is not.
           </strong>{" "}
           Choose a basket and an amount, and it opens in your own Zerodha as a ready-made order
-          basket for you to review and confirm. Baskfy places no orders and holds no broker
-          credentials. To track what you already own, import a holdings CSV on{" "}
+          basket for you to review and confirm. Baskfy places no orders. Holdings sync and other
+          broker tiles are planned — they are not marked ready. To track what you already own,
+          import a holdings CSV on{" "}
           <Link href="/portfolio/portfolios" className="text-accent underline-offset-4 hover:underline">
             My portfolios
           </Link>

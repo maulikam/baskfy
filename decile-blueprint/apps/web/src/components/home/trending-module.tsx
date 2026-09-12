@@ -75,11 +75,21 @@ function WithheldCard({ list }: { list: TrendingList }) {
 }
 
 export function TrendingModule({ trending, className }: TrendingModuleProps) {
-  const published = trending.items.filter((list) => list.withheld_reason === null);
-  const withheld = trending.items.filter((list) => list.withheld_reason !== null);
-  const showsAReturn = trending.items.some(
+  // Audit §1.14: drop a list whose every entry shares one metric_date — "Just reviewed" that
+  // ranks five baskets on the same genesis day does not differentiate anything.
+  const usable = trending.items.filter((list) => {
+    if (list.withheld_reason !== null) return true;
+    const dates = list.entries.map((e) => e.metric_date).filter(Boolean);
+    if (dates.length < 2) return true;
+    return new Set(dates).size > 1;
+  });
+  const published = usable.filter((list) => list.withheld_reason === null);
+  const withheld = usable.filter((list) => list.withheld_reason !== null);
+  const showsAReturn = usable.some(
     (list) => list.price_return_caveat && list.withheld_reason === null,
   );
+
+  if (usable.length === 0) return null;
 
   return (
     <section aria-label="Trending" data-testid="trending-module" className={cn("space-y-3", className)}>
@@ -92,12 +102,6 @@ export function TrendingModule({ trending, className }: TrendingModuleProps) {
           Browse everything
         </Link>
       </div>
-
-      {trending.items.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-border bg-card/50 px-4 py-6 text-center text-sm text-muted-foreground">
-          Rankings are not available right now.
-        </p>
-      ) : null}
 
       {published.length > 0 ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">

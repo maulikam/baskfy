@@ -18,7 +18,7 @@ import { SITE_NAME, SITE_TAGLINE } from "@/lib/site";
  * an explicit `display`, and any glyph outside the bundled font would trigger a network font fetch
  * at render time, which fails a build with no egress. There is no `₹` here for that reason.
  */
-export const alt = `${SITE_NAME} — momentum, ranked`;
+export const alt = SITE_NAME;
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 

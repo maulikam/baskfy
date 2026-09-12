@@ -57,6 +57,8 @@ export interface KiteBasketFormProps {
   batches?: readonly (readonly KiteBasketItem[])[];
   /** Symbols the API's guard refused. Named, never merely counted — see below. */
   excluded?: readonly string[];
+  /** Names dropped because the amount buys zero whole shares. */
+  zeroShareDrops?: readonly string[];
   className?: string;
 }
 
@@ -67,6 +69,7 @@ export function KiteBasketForm({
   items,
   batches,
   excluded = [],
+  zeroShareDrops = [],
   className,
 }: KiteBasketFormProps) {
   /* Fall back to a single basket when the caller passes none, so an older caller keeps working —
@@ -94,7 +97,7 @@ export function KiteBasketForm({
   const sell = items.length - buy;
 
   return (
-    <div className={cn("flex flex-col gap-3", className)}>
+    <div className={cn("flex min-w-0 max-w-full flex-col gap-3 overflow-x-hidden", className)}>
       {/*
         One form per basket. Kite accepts at most ten instruments per basket, and the ordinary
         momentum basket is fifteen — so two buttons is the normal case here, not an edge case.
@@ -108,6 +111,7 @@ export function KiteBasketForm({
           method="POST"
           target="_blank"
           rel="noopener noreferrer"
+          className="min-w-0"
         >
           <input type="hidden" name="api_key" value={apiKey} />
           <input type="hidden" name="data" value={JSON.stringify(group)} />
@@ -119,7 +123,7 @@ export function KiteBasketForm({
         </form>
       ))}
 
-      <p className="text-sm leading-relaxed text-muted-foreground">
+      <p className="min-w-0 break-words text-sm leading-relaxed text-muted-foreground">
         {buy > 0 && sell > 0
           ? `${buy} to buy, ${sell} to sell. `
           : buy > 0
@@ -132,17 +136,20 @@ export function KiteBasketForm({
           : ""}
       </p>
 
-      {/*
-        Named, not counted. "9 of 10 orders" tells someone a row is missing and leaves them to
-        guess which; a plan they cannot reconcile against what Kite shows is a plan they are right
-        to distrust.
+      {zeroShareDrops.length > 0 ? (
+        <p className="min-w-0 break-words text-sm leading-relaxed text-muted-foreground">
+          Zero whole shares at this amount, so left out:{" "}
+          <span className="font-medium text-foreground">{zeroShareDrops.join(", ")}</span>.
+          Raise the amount to include {zeroShareDrops.length === 1 ? "it" : "them"}.
+        </p>
+      ) : null}
 
-        Nothing is left out on policy grounds — this is a malformed row, not a forbidden one. No
-        instrument is filtered: the account is the user's and the basket is theirs to edit or
-        reject in Kite. (`docs/DECISIONS-MERGE.md` M47.)
+      {/*
+        Named, not counted. Nothing is left out on policy grounds — this is a malformed row,
+        not a forbidden one.
       */}
       {excluded.length > 0 ? (
-        <p className="text-sm leading-relaxed text-muted-foreground">
+        <p className="min-w-0 break-words text-sm leading-relaxed text-muted-foreground">
           Left out: <span className="font-medium text-foreground">{excluded.join(", ")}</span> —
           the plan did not give a usable quantity or side for{" "}
           {excluded.length === 1 ? "it" : "them"}.

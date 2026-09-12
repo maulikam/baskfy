@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { browserApi } from "@/lib/api/browser";
+import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /**
@@ -50,10 +51,13 @@ interface KiteBasket {
 export function KiteBasketInvest({
   basketSlug,
   basketName,
+  minAmount = null,
   className,
 }: {
   basketSlug: string;
   basketName?: string;
+  /** Catalog minimum — warn when the typed amount is below it (audit §1.2). */
+  minAmount?: string | number | null;
   className?: string;
 }) {
   const amountId = useId();
@@ -61,6 +65,18 @@ export function KiteBasketInvest({
   const [basket, setBasket] = useState<KiteBasket | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+
+  const minRupees =
+    minAmount === null || minAmount === undefined || minAmount === ""
+      ? null
+      : Number(minAmount);
+  const amountRupees = Number(amount);
+  const underMin =
+    minRupees !== null &&
+    Number.isFinite(minRupees) &&
+    Number.isFinite(amountRupees) &&
+    amountRupees > 0 &&
+    amountRupees < minRupees;
 
   /* `void`-returning, with the promise handled inside. An `async` handler passed straight to
      `onSubmit` returns a promise React never awaits, so a rejection becomes an unhandled one —
@@ -102,19 +118,24 @@ export function KiteBasketInvest({
   }
 
   return (
-    <div className={cn("flex flex-col gap-3 rounded-xl border border-border bg-card p-4", className)}>
-      <div className="space-y-1">
+    <div
+      className={cn(
+        "flex min-w-0 max-w-full flex-col gap-3 overflow-x-hidden rounded-xl border border-border bg-card p-4",
+        className,
+      )}
+    >
+      <div className="min-w-0 space-y-1">
         <h2 className="text-sm font-semibold text-foreground">
           Trade {basketName ?? "this basket"} in Kite
         </h2>
-        <p className="text-sm leading-relaxed text-muted-foreground">
+        <p className="break-words text-sm leading-relaxed text-muted-foreground">
           Choose an amount and we work out the share counts. The basket opens in your own Zerodha
           account, where you review every line and confirm — nothing is placed from here.
         </p>
       </div>
 
-      <form onSubmit={build} className="flex flex-wrap items-end gap-2">
-        <div className="flex flex-col gap-1.5">
+      <form onSubmit={build} className="flex min-w-0 flex-wrap items-end gap-2">
+        <div className="flex min-w-0 flex-col gap-1.5">
           <Label htmlFor={amountId}>Amount to invest (₹)</Label>
           <Input
             id={amountId}
@@ -125,13 +146,20 @@ export function KiteBasketInvest({
             step={AMOUNT_STEP}
             value={amount}
             onChange={(event) => setAmount(event.currentTarget.value)}
-            className="tnum w-40"
+            className="tnum w-40 max-w-full"
           />
         </div>
         <Button type="submit" variant="outline" size="sm" disabled={pending}>
           {pending ? "Working it out…" : basket ? "Recalculate" : "Work out the shares"}
         </Button>
       </form>
+
+      {underMin && minRupees !== null ? (
+        <p role="status" className="break-words text-sm text-muted-foreground">
+          This amount is below the catalog minimum of ₹{formatNumber(minRupees, { decimals: 0 })}.
+          Some names will buy zero shares until you raise it.
+        </p>
+      ) : null}
 
       <p role="status" aria-live="polite" className="min-h-5 text-sm text-negative">
         {error ?? ""}
@@ -145,14 +173,9 @@ export function KiteBasketInvest({
             configured={basket.configured}
             items={basket.items}
             batches={basket.batches ?? []}
-            excluded={basket.excluded ?? []}
+            zeroShareDrops={basket.excluded ?? []}
           />
-          {/*
-            Whole shares only, so the amount is a ceiling rather than a target. Saying so beside
-            the button matters: someone who asked for ₹100,000 and sees a basket worth ₹97,400 has
-            to be able to tell that it is rounding and not a bug.
-          */}
-          <p className="text-sm leading-relaxed text-muted-foreground">
+          <p className="break-words text-sm leading-relaxed text-muted-foreground">
             Share counts are whole numbers, so the basket comes to a little under your amount. Kite
             shows live prices before you confirm; these are worked out from the last close.
           </p>

@@ -104,8 +104,9 @@ class EntitlementOverride(Base):
     expires_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[CreatedAt]
 
-    def is_active(self, *, now: dt.datetime | None = None) -> bool:
-        moment = now or dt.datetime.now(tz=dt.UTC)
+    def is_active(self, *, now: dt.datetime) -> bool:
+        """``now`` is required — Law 1 forbids core from reading the wall clock (AF 3.10)."""
+        moment = now
         if self.expires_at is None:
             return True
         expiry = self.expires_at

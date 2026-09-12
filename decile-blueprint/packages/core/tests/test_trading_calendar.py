@@ -12,16 +12,22 @@ import datetime as dt
 
 import pytest
 
+from _law1_io import seed_holidays
 from baskfy_core.trading_calendar import (
     EXPECTED_WINDOW_LENGTHS,
     build_calendar,
     default_calendar_range,
     is_provisional,
-    load_seed_holidays,
     reconcile,
     snap_backward,
     snap_forward,
 )
+
+HOLIDAYS = seed_holidays()
+
+
+def _cal(start: dt.date, end: dt.date):
+    return build_calendar(start, end, HOLIDAYS)
 
 
 class TestRange:
@@ -32,25 +38,25 @@ class TestRange:
         assert end == dt.date(2026, 12, 31)
 
     def test_every_calendar_day_gets_a_row(self) -> None:
-        rows = build_calendar(dt.date(2026, 1, 1), dt.date(2026, 1, 31))
+        rows = _cal(dt.date(2026, 1, 1), dt.date(2026, 1, 31))
         assert len(rows) == 31
         assert [r.date.day for r in rows] == list(range(1, 32))
 
     def test_rejects_an_inverted_range(self) -> None:
         with pytest.raises(ValueError, match="precedes"):
-            build_calendar(dt.date(2026, 2, 1), dt.date(2026, 1, 1))
+            _cal(dt.date(2026, 2, 1), dt.date(2026, 1, 1))
 
 
 class TestClassification:
     def test_weekends_are_not_trading_days(self) -> None:
-        rows = {r.date: r for r in build_calendar(dt.date(2026, 8, 14), dt.date(2026, 8, 17))}
+        rows = {r.date: r for r in _cal(dt.date(2026, 8, 14), dt.date(2026, 8, 17))}
         assert rows[dt.date(2026, 8, 15)].source == "weekend"  # Saturday
         assert rows[dt.date(2026, 8, 16)].source == "weekend"  # Sunday
         assert not rows[dt.date(2026, 8, 15)].is_trading_day
         assert rows[dt.date(2026, 8, 17)].is_trading_day  # Monday
 
     def test_a_seeded_holiday_is_not_a_trading_day(self) -> None:
-        rows = {r.date: r for r in build_calendar(dt.date(2026, 1, 20), dt.date(2026, 1, 31))}
+        rows = {r.date: r for r in _cal(dt.date(2026, 1, 20), dt.date(2026, 1, 31))}
         republic_day = rows[dt.date(2026, 1, 26)]
         assert not republic_day.is_trading_day
         assert republic_day.source == "holiday"
@@ -58,17 +64,17 @@ class TestClassification:
 
     def test_a_weekday_with_nothing_against_it_is_only_derived(self) -> None:
         """The weakest claim in the table must not masquerade as an observed fact."""
-        rows = {r.date: r for r in build_calendar(dt.date(2026, 8, 17), dt.date(2026, 8, 18))}
+        rows = {r.date: r for r in _cal(dt.date(2026, 8, 17), dt.date(2026, 8, 18))}
         assert rows[dt.date(2026, 8, 18)].source == "derived"
 
 
 class TestProvisionality:
     def test_a_freshly_seeded_calendar_is_provisional(self) -> None:
         """It rests on an incomplete holiday list, and must say so rather than imply authority."""
-        assert is_provisional(build_calendar(dt.date(2026, 1, 1), dt.date(2026, 12, 31)))
+        assert is_provisional(_cal(dt.date(2026, 1, 1), dt.date(2026, 12, 31)))
 
     def test_reconciliation_promotes_dates_with_real_bars(self) -> None:
-        rows = build_calendar(dt.date(2026, 8, 17), dt.date(2026, 8, 21))
+        rows = _cal(dt.date(2026, 8, 17), dt.date(2026, 8, 21))
         reconciled = reconcile(rows, frozenset({dt.date(2026, 8, 18)}))
         promoted = next(r for r in reconciled if r.date == dt.date(2026, 8, 18))
         assert promoted.source == "bhavcopy"
@@ -76,12 +82,12 @@ class TestProvisionality:
 
     def test_reconciliation_does_not_close_a_day_merely_for_missing_bars(self) -> None:
         """An absent bar can be a backfill gap; only Prompt 3's universe-wide view can decide."""
-        rows = build_calendar(dt.date(2026, 8, 17), dt.date(2026, 8, 18))
+        rows = _cal(dt.date(2026, 8, 17), dt.date(2026, 8, 18))
         reconciled = reconcile(rows, frozenset())
         assert all(r.is_trading_day for r in reconciled)
 
     def test_a_fully_reconciled_calendar_is_no_longer_provisional(self) -> None:
-        rows = build_calendar(dt.date(2026, 8, 17), dt.date(2026, 8, 18))
+        rows = _cal(dt.date(2026, 8, 17), dt.date(2026, 8, 18))
         every_day = frozenset(r.date for r in rows)
         assert not is_provisional(reconcile(rows, every_day))
 
@@ -111,15 +117,15 @@ class TestSnapping:
 
 class TestSeedFile:
     def test_holiday_dates_are_unique(self) -> None:
-        holidays = load_seed_holidays()
+        holidays = seed_holidays()
         assert len(holidays) == len({d for d in holidays})
 
     def test_no_holiday_falls_on_a_weekend(self) -> None:
         """A weekend entry is noise: the calendar already closes those days."""
-        assert [d for d in load_seed_holidays() if d.weekday() >= 5] == []
+        assert [d for d in seed_holidays() if d.weekday() >= 5] == []
 
     def test_every_year_from_2011_is_represented(self) -> None:
-        years = {d.year for d in load_seed_holidays()}
+        years = {d.year for d in seed_holidays()}
         assert set(range(2011, 2027)) <= years
 
 

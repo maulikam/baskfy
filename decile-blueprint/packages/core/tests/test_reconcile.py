@@ -31,12 +31,13 @@ from baskfy_core.reconcile import (
     skip_month_evidence,
     total_disagreements,
 )
+from _law1_io import reference_export_path
 from baskfy_core.reference_export import read_export
 
 
 @pytest.fixture(scope="module")
 def export() -> pl.DataFrame:
-    return read_export()
+    return read_export(reference_export_path())
 
 
 @pytest.fixture(scope="module")

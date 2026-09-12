@@ -32,9 +32,8 @@ from __future__ import annotations
 
 import csv
 import datetime as dt
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
-from importlib import resources
 from typing import Final, Literal
 
 TradingDaySource = Literal["weekend", "holiday", "derived", "bhavcopy"]
@@ -47,7 +46,9 @@ PROVISIONAL_SOURCES: Final[frozenset[str]] = frozenset({"holiday", "derived"})
 #: Asserted by Prompt 5; recorded here so the target is stated next to the calendar itself.
 EXPECTED_WINDOW_LENGTHS: Final[dict[int, int]] = {1: 22, 3: 64, 6: 121, 9: 185, 12: 247}
 
-_HOLIDAY_FILE: Final = "nse_trading_holidays.csv"
+#: Committed holiday CSV name — callers open ``baskfy_core.data`` / this file themselves.
+HOLIDAY_FILE: Final = "nse_trading_holidays.csv"
+_HOLIDAY_FILE: Final = HOLIDAY_FILE  # backwards-compatible alias for importers
 
 #: ``date.weekday()`` values from Saturday onward.
 _SATURDAY: Final = 5
@@ -63,9 +64,12 @@ class TradingDayRow:
     source: TradingDaySource
 
 
-def load_seed_holidays() -> dict[dt.date, str]:
-    """Read the committed holiday list. Keys are dates; values are the holiday name."""
-    text = resources.files("baskfy_core.data").joinpath(_HOLIDAY_FILE).read_text(encoding="utf-8")
+def parse_seed_holidays(text: str) -> dict[dt.date, str]:
+    """Parse a holiday CSV body. Keys are dates; values are the holiday name.
+
+    The package no longer opens ``baskfy_core.data`` itself (Law 1 / AF 3.10): the caller —
+    seed job, test, or worker — reads the committed file and hands the text in.
+    """
     holidays: dict[dt.date, str] = {}
     for row in csv.DictReader(text.splitlines()):
         holidays[dt.date.fromisoformat(row["date"])] = row["name"]
@@ -82,14 +86,17 @@ def iter_days(start: dt.date, end: dt.date) -> Iterator[dt.date]:
         day += dt.timedelta(days=1)
 
 
-def build_calendar(start: dt.date, end: dt.date) -> list[TradingDayRow]:
+def build_calendar(
+    start: dt.date,
+    end: dt.date,
+    holidays: Mapping[dt.date, str],
+) -> list[TradingDayRow]:
     """Materialise every calendar day in ``[start, end]``.
 
     Every day gets a row — including weekends and holidays — so that "not a trading day" and
     "outside the loaded range" are distinguishable, and so snapping is an indexed lookup rather
     than a loop over an unbounded gap.
     """
-    holidays = load_seed_holidays()
     rows: list[TradingDayRow] = []
     for day in iter_days(start, end):
         if day.weekday() >= _SATURDAY:

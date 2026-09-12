@@ -57,6 +57,7 @@ from baskfy_core.precision import (
     quantise,
     unpriced_numeric_columns,
 )
+from _law1_io import reference_export_path
 from baskfy_core.reference_export import read_export
 from baskfy_core.windows import (
     EXPECTED_WINDOW_LENGTHS_2026_08_18,
@@ -156,7 +157,7 @@ class TestGolden1SharpeIdentity:
 
     def test_the_fixtures_own_cupid_row_reproduces(self) -> None:
         """The committed export is 18 Aug, where the same identity gives 12.54 and a 5.13 blend."""
-        row = read_export().filter(pl.col("symbol") == "CUPID").to_dicts()[0]
+        row = read_export(reference_export_path()).filter(pl.col("symbol") == "CUPID").to_dicts()[0]
         computed = float(row["absolute_return_one_year"]) / (
             float(row["volatility_one_year"]) * 100
         )
@@ -206,7 +207,7 @@ class TestGolden2AwayFromHigh:
 
     def test_the_fixtures_own_cupid_row(self) -> None:
         """On 18 Aug the same formula gives -5.01, which is what the export stores."""
-        row = read_export().filter(pl.col("symbol") == "CUPID").to_dicts()[0]
+        row = read_export(reference_export_path()).filter(pl.col("symbol") == "CUPID").to_dicts()[0]
         computed = (float(row["close"]) / float(row["high_all_time"]) - 1) * 100
         assert quantise(computed, 2) == quantise(row["away_from_high_all_time"], 2)
         assert quantise(computed, 2) == Decimal("-5.01")

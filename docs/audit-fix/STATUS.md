@@ -5,6 +5,7 @@ Box: pins=3 running=10 release=e795a71 twt_execution_true=0.
 verify-stack.sh local: FAIL (local compose not up) — box verified via verify-pc-deploy.
 
 Notes: `4.11` = brokers `to_thread` (A); live_prices `to_thread` tracked under `4.12` (C). `1.23` = kitchen-sink + openapi (F); orphan `/discover/{featured,plan}` under G `1.24` ownership list.
+G deferred: needs `services/worker/.../celery_app.py` schedule SCAN/version cut Beat job (version_count stays 1 until then); box-sql returned empty this session (AWS/SSM); needs `app/(app)/market/listings/page.tsx` Prefer Market→Today live copy (D); needs `components/data/factor-combobox.tsx` Sixty-four→Sixty-six (not G); 4.16 INVALID_SCREEN — none in `explore.py` / `curated_versions.py` (A owns the 49 elsewhere). F `as never` hrefs fixed in `screens-list` + `new-screen-redirect` under 5e8a0ef.
 
 | item | lane | commit | state |
 |---|---|---|---|
@@ -68,26 +69,26 @@ Notes: `4.11` = brokers `to_thread` (A); live_prices `to_thread` tracked under `
 | 4.8 | F | — | pending |
 | 4.9 | F | — | pending |
 | 4.10 | F | — | pending |
-| 0.3 | G | — | pending |
-| 1.1 | G | — | pending |
-| 1.2 | G | — | pending |
-| 1.5 | G | — | pending |
-| 1.9 | G | — | pending |
-| 1.10 | G | — | pending |
-| 1.11 | G | — | pending |
-| 1.12 | G | — | pending |
-| 1.13 | G | — | pending |
-| 1.14 | G | — | pending |
-| 1.15 | G | — | pending |
-| 1.16 | G | — | pending |
-| 1.17 | G | — | pending |
-| 1.18 | G | — | pending |
-| 1.19 | G | — | pending |
-| 1.20 | G | — | pending |
-| 1.21 | G | — | pending |
-| 1.22 | G | — | pending |
-| 1.24 | G | — | pending |
-| 7 | G | — | pending |
+| 0.3 | G | 4c5312d | done |
+| 1.1 | G | 4c5312d | done |
+| 1.2 | G | c212b00 | done |
+| 1.5 | G | 4c5312d+82e5475 | done |
+| 1.9 | G | 5ab7042 | done |
+| 1.10 | G | 7036d35 | done |
+| 1.11 | G | 7036d35 | done |
+| 1.12 | G | c212b00 | done |
+| 1.13 | G | eb89ec4 | done |
+| 1.14 | G | f08d60f | done |
+| 1.15 | G | 4fa3aa0 | done |
+| 1.16 | G | b75a6b2 | done |
+| 1.17 | G | — | deferred |
+| 1.18 | G | 5e8a0ef | done |
+| 1.19 | G | 5e8a0ef | done |
+| 1.20 | G | d229683 | done |
+| 1.21 | G | 11de575 | done |
+| 1.22 | G | c3d39d7 | done |
+| 1.24 | G | 0716204 | done |
+| 7 | G | eb89ec4+11de575+5e8a0ef+b75a6b2+4fa3aa0 | done |
 | 5.1 | H | — | pending |
 | 5.2 | H | — | pending |
 | 5.3 | H | — | pending |

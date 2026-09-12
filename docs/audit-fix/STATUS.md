@@ -1,99 +1,107 @@
-# AF run status — AUDIT-2026-09-12
+# AF run status
 
-Rollback tag: `e795a71` (box release from verify-pc-deploy.sh, 2026-09-12)
+Rollback tag: **e795a71**.
+Wave 1: A–G merged into developer (`a4ee64f`).
 
 | item | lane | commit | state |
-|------|------|--------|-------|
-| 0.1 | A | | pending |
-| 0.2 | B | | pending |
-| 0.3 | G | | pending |
-| 0.4 | C | | pending |
-| 0.5 | D | | pending |
-| 0.6 | D | | pending |
-| 0.7 | E | | pending |
-| 0.8 | A | | pending |
-| 0.9 | C | | pending |
-| 0.10 | F | | pending |
-| 1.1 | G | | pending |
-| 1.2 | G | | pending |
-| 1.3 | C | | pending |
-| 1.4 | D | | pending |
-| 1.5 | G | | pending |
-| 1.6 | C | | pending |
-| 1.7 | F | | pending |
-| 1.8 | D | | pending |
-| 1.9 | G | | pending |
-| 1.10 | G | | pending |
-| 1.11 | G | | pending |
-| 1.12 | G | | pending |
-| 1.13 | G | | pending |
-| 1.14 | G | | pending |
-| 1.15 | G | | pending |
-| 1.16 | G | | pending |
-| 1.17 | G | | pending |
-| 1.18 | G | | pending |
-| 1.19 | G | | pending |
-| 1.20 | G | | pending |
-| 1.21 | G | | pending |
-| 1.22 | G | | pending |
-| 1.23 | F/G | | pending |
-| 1.24 | G | | pending |
-| 2.1 | A | | pending |
-| 2.2 | A | | pending |
-| 2.3 | B | | pending |
-| 2.4 | A | | pending |
-| 2.5 | A | | pending |
-| 2.6 | A | | pending |
-| 2.7 | B | | pending |
-| 2.8 | B | | pending |
-| 2.9 | B | | pending |
-| 2.10 | A | | pending |
-| 2.11 | A | | pending |
-| 2.12 | A | | pending |
-| 2.13 | A | | pending |
-| 2.14 | A | | pending |
-| 2.15 | A | | pending |
-| 3.1 | D | | pending |
-| 3.2 | D | | pending |
-| 3.3 | D | | pending |
-| 3.4 | E | | pending |
-| 3.5 | E | | pending |
-| 3.6 | E | | pending |
-| 3.7 | E | | pending |
-| 3.8 | E | | pending |
-| 3.9 | E | | pending |
-| 3.10 | E | | pending |
-| 3.11 | D | | pending |
-| 3.12 | C | | pending |
-| 3.13 | C | | pending |
-| 4.1 | C | | pending |
-| 4.2 | F | | pending |
-| 4.3 | F | | pending |
-| 4.4 | F | | pending |
-| 4.5 | F | | pending |
-| 4.6 | B | | pending |
-| 4.7 | F | | pending |
-| 4.8 | F | | pending |
-| 4.9 | F | | pending |
-| 4.10 | F | | pending |
-| 4.11 | A/C | | pending |
-| 4.12 | C | | pending |
-| 4.13 | C | | pending |
-| 4.14 | C | | pending |
-| 4.15 | C | | pending |
-| 4.16 | A | | pending |
-| 5.1 | H | | pending |
-| 5.2 | H | | pending |
-| 5.3 | H | | pending |
-| 5.4 | H | | pending |
-| 5.5 | H | | pending |
-| 5.6 | H | | pending |
-| 5.7 | H | | pending |
-| 5.8 | H | | pending |
-| 5.9 | H | | pending |
-| 5.10 | H | | pending |
-| 5.11 | H | | pending |
-| 5.12 | H | | pending |
-| 5.13 | H | | pending |
-| 7 | G | | pending |
-| D2 | D | | pending |
+|---|---|---|---|
+| 0.1 | A | merged | done |
+| 0.8 | A | merged | done |
+| 2.1 | A | merged | done |
+| 2.2 | A | merged | done |
+| 2.4 | A | merged | done |
+| 2.5 | A | merged | done |
+| 2.6 | A | merged | done |
+| 2.10 | A | merged | done |
+| 2.11 | A | merged | done |
+| 2.12 | A | merged | done |
+| 2.13 | A | merged | done |
+| 2.14 | A | merged | done |
+| 2.15 | A | merged | done |
+| 4.11 | A | merged | done |
+| 4.16 | A | merged | done (owned; other routers deferred) |
+| 0.2 | B | merged | done |
+| 2.3 | B | merged | done |
+| 2.7 | B | merged | done |
+| 2.8 | B | merged | done |
+| 2.9 | B | merged | done |
+| 4.6 | B | merged | done |
+| 0.4 | C | merged | done |
+| 0.9 | C | merged | done |
+| 1.3 | C | merged | done |
+| 1.6 | C | merged | done |
+| 3.12 | C | merged | done |
+| 3.13 | C | merged | done |
+| 4.1 | C | merged | done |
+| 4.12 | C | merged | done |
+| 4.13 | C | merged | done |
+| 4.14 | C | merged | done |
+| 4.15 | C | merged | done |
+| 0.5 | D | merged | done |
+| 0.6 | D | merged | done |
+| 1.4 | D | merged | done |
+| 1.8 | D | merged | done |
+| 3.1 | D | merged | done |
+| 3.2 | D | merged | done |
+| 3.3 | D | merged | done |
+| 3.11 | D | merged | done |
+| D2 | D | — | wave2 |
+| 0.7 | E | merged | done |
+| 3.4 | E | merged | done |
+| 3.5 | E | merged | done |
+| 3.6 | E | merged | done |
+| 3.7 | E | merged | done |
+| 3.8 | E | merged | done |
+| 3.9 | E | merged | done |
+| 3.10 | E | merged | done |
+| 0.10 | F | merged | done |
+| 1.7 | F | merged | done |
+| 1.23 | F | merged | done |
+| 4.2 | F | merged | done |
+| 4.3 | F | merged | done |
+| 4.4 | F | merged | done |
+| 4.5 | F | merged | done |
+| 4.7 | F | merged | done |
+| 4.8 | F | merged | done |
+| 4.9 | F | merged | done |
+| 4.10 | F | merged | done |
+| 0.3 | G | merged | done |
+| 1.1 | G | merged | done |
+| 1.2 | G | merged | done |
+| 1.5 | G | merged | done |
+| 1.9 | G | merged | done |
+| 1.10 | G | merged | done |
+| 1.11 | G | merged | done |
+| 1.12 | G | merged | done |
+| 1.13 | G | merged | done |
+| 1.14 | G | merged | done |
+| 1.15 | G | merged | done |
+| 1.16 | G | merged | done |
+| 1.17 | G | merged | done |
+| 1.18 | G | merged | done |
+| 1.19 | G | merged | done |
+| 1.20 | G | merged | done |
+| 1.21 | G | merged | done |
+| 1.22 | G | merged | done |
+| 1.24 | G | merged | done |
+| 7 | G | merged | done |
+| 5.1 | H | merged | pending |
+| 5.2 | H | merged | pending |
+| 5.3 | H | merged | pending |
+| 5.4 | H | merged | pending |
+| 5.5 | H | merged | pending |
+| 5.6 | H | merged | pending |
+| 5.7 | H | merged | pending |
+| 5.8 | H | merged | pending |
+| 5.9 | H | merged | pending |
+| 5.10 | H | merged | pending |
+| 5.11 | H | merged | pending |
+| 5.12 | H | merged | pending |
+| 5.13 | H | merged | pending |
+| I.1 | I | merged | pending |
+| I.2 | I | merged | pending |
+| I.3 | I | merged | pending |
+| I.4 | I | merged | pending |
+| I.5 | I | merged | pending |
+| I.6 | I | merged | pending |
+| I.BACKLOG | I | merged | pending |

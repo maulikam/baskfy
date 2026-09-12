@@ -34,7 +34,7 @@ const WAYS = [
   },
   {
     title: "Build the rule yourself",
-    body: "Sixty-four published factors over fourteen lists of stocks. Write a screen, replay it against the market as it actually stood on a past date, read what the run could not know, and keep it as an allocation inside a portfolio if it survives.",
+    body: "Sixty-six published factors over fourteen lists of stocks. Write a screen, replay it against the market as it actually stood on a past date, read what the run could not know, and keep it as an allocation inside a portfolio if it survives.",
     href: "/build",
     cta: "Open the builder",
   },

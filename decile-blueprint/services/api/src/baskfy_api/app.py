@@ -326,6 +326,8 @@ def register_middleware(app: FastAPI, settings: Settings) -> None:
             "Content-Type",
             REQUEST_ID_HEADER,
             "Idempotency-Key",
+            # Cookie refresh path (baskfy_api.csrf): a cross-origin SPA must be able to send it.
+            "X-CSRF-Token",
             # W3C trace context, set by `@baskfy/api-client` so a browser call joins the
             # trace the page render started (Prompt 17 deliverable 1).
             "traceparent",

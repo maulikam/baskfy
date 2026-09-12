@@ -52,7 +52,8 @@ def test_non_negotiable_1b_dry_run_simulates_end_to_end() -> None:
                       journal_path="data/outputs/_test_journal.jsonl")
     out = asyncio.run(gw.place(symbol="RELIANCE", qty=1, side="BUY", product="CNC",
                                order_type="LIMIT", price=100.0, exchange="NSE",
-                               tenant=tenant, plan_tenant=tenant))
+                               tenant=tenant, plan_tenant=tenant,
+                               gross_exposure=100.0))
     assert out["status"] == "DRY_RUN"
     assert out["order_id"].startswith("DRY-")
 
@@ -104,8 +105,8 @@ def test_non_negotiable_4_every_buy_is_stopped_and_the_stop_is_vol_scaled() -> N
     ("product", "exchange", "gates", "why"),
     [
         ("MIS", "NSE", {"intraday_enabled": False}, "MIS/intraday disabled"),
-        ("NRML", "NFO", {"options_enabled": False}, "F&O disabled"),
-        ("NRML", "BFO", {"options_enabled": False}, "F&O disabled"),
+        ("NRML", "NFO", {"options_enabled": False}, "F&O"),
+        ("NRML", "BFO", {"options_enabled": False}, "F&O"),
     ],
 )
 def test_non_negotiable_5_product_gates_block_inside_the_gateway(
@@ -123,7 +124,8 @@ def test_non_negotiable_5_product_gates_block_inside_the_gateway(
                       journal_path="data/outputs/_test_journal.jsonl")
     out = asyncio.run(gw.place(symbol="RELIANCE", qty=1, side="BUY", product=product,
                                order_type="LIMIT", price=100.0, exchange=exchange,
-                               tenant=tenant, plan_tenant=tenant))
+                               tenant=tenant, plan_tenant=tenant,
+                               gross_exposure=100.0))
     assert out["status"] == "BLOCKED"
     assert why in out["error"]
 
@@ -191,7 +193,7 @@ def test_non_negotiable_7_an_untouchable_is_refused_before_any_network_call(symb
 
 
 def test_non_negotiable_7b_the_guard_runs_before_the_broker_is_touched() -> None:
-    from baskfy_execution import OrderGateway, ProductGates, RiskManager, TenantIds, UntouchableInstrumentError
+    from baskfy_execution import OrderGateway, ProductGates, RiskManager, TenantIds
 
     class ExplodingKC:
         def place_order(self, **_: object) -> str:
@@ -201,7 +203,10 @@ def test_non_negotiable_7b_the_guard_runs_before_the_broker_is_touched() -> None
     gw = OrderGateway(ExplodingKC(), RiskManager(),
                       gates=lambda: ProductGates(dry_run=False),
                       journal_path="data/outputs/_test_journal.jsonl")
-    with pytest.raises(UntouchableInstrumentError):
-        asyncio.run(gw.place(symbol="SGBDE31III-GB", qty=1, side="SELL", product="CNC",
-                             order_type="LIMIT", price=7000.0, exchange="NSE",
-                             tenant=tenant, plan_tenant=tenant))
+    # AF 3.5: untouchables return BLOCKED (same as overnight-option), not raise mid-batch.
+    out = asyncio.run(gw.place(symbol="SGBDE31III-GB", qty=1, side="SELL", product="CNC",
+                               order_type="LIMIT", price=7000.0, exchange="NSE",
+                               tenant=tenant, plan_tenant=tenant,
+                               gross_exposure=7000.0))
+    assert out["status"] == "BLOCKED"
+    assert "protected" in out["error"].lower() or "SGB" in out["error"]

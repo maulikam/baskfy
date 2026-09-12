@@ -1,5 +1,7 @@
 import "server-only";
 
+import { cache } from "react";
+
 import type {
   IndexDashboardOut,
   ListingsPage,
@@ -8,6 +10,7 @@ import type {
 } from "@baskfy/api-client";
 
 import { serverApiOrigin } from "@/lib/api/config";
+import { SERVER_FETCH_TIMEOUT_MS } from "@/lib/api/server-fetch";
 
 /**
  * Server-side reads for the market-data surfaces — docs/07 §"Market data surfaces".
@@ -20,6 +23,10 @@ import { serverApiOrigin } from "@/lib/api/config";
  * The tag is shared with the instrument pages: one `revalidateTag` at publish invalidates every
  * page that reads published data, which is what "revalidate on `data_version`" means when the
  * version is not in the URL. `POST /api/revalidate` is the trigger. `docs/11a` §6.
+ *
+ * Loaders are wrapped in React `cache()` (AUDIT 4.4). Each request carries an AbortSignal
+ * timeout (AUDIT 4.7) — the page-level `export const revalidate` was inert under a cookie-reading
+ * layout and is gone.
  */
 
 export { FACTSHEET_TAG as PUBLISHED_DATA_TAG } from "@/lib/instrument/fetch";
@@ -47,9 +54,18 @@ async function readJson(path: string, search: Record<string, string> = {}): Prom
   const url = new URL(`${serverApiOrigin()}/api/v1${path}`);
   for (const [key, value] of Object.entries(search)) url.searchParams.set(key, value);
 
-  const response = await fetch(url, {
-    next: { tags: [TAG], revalidate: FALLBACK_REVALIDATE_SECONDS },
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      next: { tags: [TAG], revalidate: FALLBACK_REVALIDATE_SECONDS },
+      signal: AbortSignal.timeout(SERVER_FETCH_TIMEOUT_MS),
+    });
+  } catch (error) {
+    if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+      throw new MarketDataUnavailable(`${path} timed out`);
+    }
+    throw error;
+  }
   if (!response.ok) throw new MarketDataUnavailable(`${path} responded ${response.status}`);
   return response.json();
 }
@@ -64,9 +80,6 @@ async function readJson(path: string, search: Record<string, string> = {}): Prom
 async function readJsonOrDegraded(
   path: string,
   search: Record<string, string> = {},
-  // `unknown`, not `unknown | null`: `unknown` already admits null, and spelling the union out
-  // reads as a promise the type does not make. The nullability that matters is on the exported
-  // wrappers, where it is `IndexDashboardOut | null` and does mean something.
 ): Promise<unknown> {
   try {
     return await readJson(path, search);
@@ -78,9 +91,9 @@ async function readJsonOrDegraded(
   }
 }
 
-export async function fetchIndexDashboard(): Promise<IndexDashboardOut> {
+export const fetchIndexDashboard = cache(async function fetchIndexDashboard(): Promise<IndexDashboardOut> {
   return (await readJson("/indices/dashboard")) as IndexDashboardOut;
-}
+});
 
 /**
  * The index dashboard, or `null` while the pipeline has published nothing.
@@ -90,15 +103,19 @@ export async function fetchIndexDashboard(): Promise<IndexDashboardOut> {
  * occurred", digest and all. The API was behaving correctly and saying so precisely; the page
  * turned a 503 into a 500.
  */
-export async function fetchIndexDashboardOrDegraded(): Promise<IndexDashboardOut | null> {
-  return (await readJsonOrDegraded("/indices/dashboard")) as IndexDashboardOut | null;
-}
+export const fetchIndexDashboardOrDegraded = cache(
+  async function fetchIndexDashboardOrDegraded(): Promise<IndexDashboardOut | null> {
+    return (await readJsonOrDegraded("/indices/dashboard")) as IndexDashboardOut | null;
+  },
+);
 
-export async function fetchMarketHealth(universe: string): Promise<MarketHealthOut> {
+export const fetchMarketHealth = cache(async function fetchMarketHealth(
+  universe: string,
+): Promise<MarketHealthOut> {
   return (await readJson("/market-health", { universe })) as MarketHealthOut;
-}
+});
 
-export async function fetchMarketHealthHistory(
+export const fetchMarketHealthHistory = cache(async function fetchMarketHealthHistory(
   universe: string,
   from: string,
 ): Promise<MarketHealthHistoryOut> {
@@ -106,7 +123,7 @@ export async function fetchMarketHealthHistory(
     universe,
     from,
   })) as MarketHealthHistoryOut;
-}
+});
 
 export interface ListingQuery {
   cursor?: string | undefined;
@@ -114,10 +131,12 @@ export interface ListingQuery {
   search?: string | undefined;
 }
 
-export async function fetchListings(query: ListingQuery): Promise<ListingsPage> {
+export const fetchListings = cache(async function fetchListings(
+  query: ListingQuery,
+): Promise<ListingsPage> {
   const search: Record<string, string> = {};
   if (query.cursor) search.cursor = query.cursor;
   if (query.series) search.series = query.series;
   if (query.search) search.search = query.search;
   return (await readJson("/listings", search)) as ListingsPage;
-}
+});

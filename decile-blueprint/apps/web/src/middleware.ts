@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { isPublicPath } from "@/lib/auth/public-routes";
 import { isStaticPublicPath } from "@/lib/marketing/routes";
+import { assertRevalidateSecretConfigured } from "@/lib/site";
 
 /**
  * Two jobs, both from docs/11 §Security (Prompt 12 deliverables 2 and 4).
@@ -182,6 +183,7 @@ export function contentSecurityPolicy(nonce: string, isDev: boolean): string {
 }
 
 export function middleware(request: NextRequest): NextResponse {
+  assertRevalidateSecretConfigured();
   const { pathname, searchParams } = request.nextUrl;
   const gated = !isPublicPath(pathname);
 

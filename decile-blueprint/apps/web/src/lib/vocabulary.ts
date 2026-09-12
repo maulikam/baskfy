@@ -284,7 +284,7 @@ export const PAGES = {
   "/profile": { title: "Profile", blurb: "Your name, your email, and your data." },
   "/brokers": {
     title: "Brokers",
-    blurb: "Connect Zerodha, HDFC, Kotak, ICICI and more in a few clicks.",
+    blurb: "Zerodha Kite hand-off is live. Other brokers are listed as planned, not ready.",
     formerly: "Broker connections",
   },
   "/faq": {

@@ -37,7 +37,7 @@ convention).
 
 | Setting | Where | Ceiling (system-only env) |
 |---|---|---|
-| `tw_config.sleeve_capital_inr` | `tw_config`, user-editable | none; **seeded at 0** — nothing is planned until Maulik sets it |
+| `tw_config.sleeve_capital_inr` | `tw_config`, user-editable | none; **seeded at ₹25 lakh** (TW15.1). Column default 0 — a raw insert still plans nothing |
 | `tw_config.max_open_positions` | `tw_config` | `BASKFY_TWT_MAX_OPEN_POSITIONS_MAX` [15] |
 | `tw_config.max_position_pct` | `tw_config` | `BASKFY_TWT_MAX_POSITION_PCT_MAX` [15.00] |
 | `tw_config.stop_pct` | `tw_config` | `BASKFY_TWT_STOP_PCT_MAX` [25.00] |

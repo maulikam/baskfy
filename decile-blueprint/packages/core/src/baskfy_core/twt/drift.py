@@ -13,8 +13,8 @@ let a genuine break through as "close enough".
 **The flag is not a verdict.** It says the two numbers stopped agreeing, not which one is wrong.
 On this sleeve there are four differences that are *known* before the first run and are expected to
 show up in the delta rather than be corrected out of it (DECISIONS-TW **TW2.13**): the exchange's
-₹0.05 tick against the study's paisa, the shipped ₹5 crore liquidity floor against the study's ₹2
-crore, real corporate actions where the research panel had none, and whatever the plant's own
+₹0.05 tick against the study's paisa, real corporate actions where the research panel had none,
+and whatever the plant's own
 history holds that the export did not. The banner asks a person to explain the difference; it never
 prefers either number, and nothing here widens a tolerance to make one disappear.
 

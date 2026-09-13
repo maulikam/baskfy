@@ -25,7 +25,7 @@ THE PLANTED WINDOW
 ------------------
 A year of flat bars, two names that go tight on the same session and one that never does, and a
 tail that makes one winner and one loser. It exists so the chain — the universe query, the bar
-loader, the thin-session drop, `with_twt_columns`, `signal_mask` at the shipped ₹5 crore floor,
+loader, the thin-session drop, `with_twt_columns`, `signal_mask` at the shipped ₹2 crore floor,
 breadth, the gate vector, the engine, the row — is exercised end to end on numbers a person can
 check by hand:
 
@@ -330,9 +330,9 @@ class TestThePlantedWindow:
         assert row.params["start"] == FIRST.isoformat()
         assert row.params["end"] == LAST.isoformat()
         assert row.params["source"] == SOURCE_PLANT
-        # The shipped sleeve, not the study's: the exchange's tick and `04` §3.5's ₹5 crore.
+        # The shipped sleeve: the exchange's tick and `04` §3.5 / TW15.1's ₹2 crore.
         assert row.params["tick"] == TICK_INR
-        assert row.params["min_turnover_inr"] == "50000000"
+        assert row.params["min_turnover_inr"] == "20000000"
         config = row.params["config"]
         assert isinstance(config, dict)
         assert config["breadth.min_pct_above_dma"] == 40.0

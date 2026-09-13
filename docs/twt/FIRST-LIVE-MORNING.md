@@ -23,6 +23,16 @@ safety rails say so in the same words. No agent sets a flag, sets a capital, con
 places an order. If you are an agent reading this file: it is documentation of a human procedure.
 Run nothing in it.
 
+### Authorized path, 13 Sep 2026 (TW15.2)
+
+Do **not** start this morning until TW15.1 is committed, reviewed, and **deployed** (api /
+worker / desk images; **hold web**). Then:
+
+1. You flip both TWT flags and confirm `BASKFY_DESK_DRY_RUN=false` (§3.4). Agents do not.
+2. You enable the Kite login nudge on the box (§3.1). The address stays off the repo.
+3. First live morning: login → seed `--capital 2500000` → verify `tw_config_audit` → **then**
+   Confirm a plan. No `BASKFY_TWT_AUTO_*`.
+
 ### The legend, and why half this file is marked
 
 Most of this sleeve does not exist yet. TW0 is green, TW1 and TW3 are in flight, TW4–TW10 are not
@@ -186,7 +196,13 @@ At 08:45 on a weekday, if no usable token is stored, one email arrives — subje
 needed before 09:15" — carrying a single login link. **Tap it, log in on Zerodha's page, done.**
 A link is good for 30 minutes and can be used once; a second and last one follows at 09:05.
 
-No email? Log in by hand at `$WEB` → Portfolio → connect Zerodha. `[REAL]`
+**The nudge is off in the repo** (`BASKFY_KITE_LOGIN_NUDGE_ENABLED=false` in both
+`.env.example` files). You authorized turning it **on the box** on 13 Sep 2026 (NEEDS-MAULIK
+T1-nudge). After this pack is deployed, in an SSM shell: set
+`BASKFY_KITE_LOGIN_NUDGE_ENABLED=true` and `BASKFY_KITE_LOGIN_NUDGE_TO=<your address>` on
+`/opt/baskfy/.env.staging.compose`, confirm `BASKFY_BROKER_OAUTH_STATE_PATH` is on the shared
+`baskfy-state` volume, then `up -d worker beat`. **Do not commit the address.** No email until
+that is done — log in by hand at `$WEB` → Portfolio → connect Zerodha. `[REAL]`
 
 To force the nudge yourself:
 
@@ -259,12 +275,11 @@ parameters are retained in CloudTrail):
    key is `BASKFY_TWT_EXECUTION_ENABLED` and change its value from `false` to the opposite.
 2. Open `/opt/baskfy/.env.staging` — this is what the **api, worker and beat** read. Same key,
    same change.
-3. While you are in the first file, confirm `BASKFY_DESK_DRY_RUN` is `false`. **The TWT flag alone
-   changes nothing while the desk is in dry run.** This is the thing the swing book's first live
-   morning found: *"a live flip is two files and three lines, not one."*
-   Note what else that line does — `BASKFY_DESK_DRY_RUN=false` takes the **weekly book** out of
-   dry run on the same desk. Its Friday `/execute` still needs your confirm click, but it is live
-   too from that moment. Know that before you type it.
+3. While you are in the first file, **confirm** `BASKFY_DESK_DRY_RUN` is `false`. You already
+   run the weekly book live with swing (13 Sep 2026); this is a keep/confirm, not a new live-up
+   of that book. **The TWT flag alone changes nothing while the desk is in dry run.** This is
+   the thing the swing book's first live morning found: *"a live flip is two files and three
+   lines, not one."*
 
 Then:
 
@@ -287,9 +302,11 @@ pressed Confirm on an unexpired plan.
 
 ### 3.5 The capital — your keystroke
 
-`NEEDS-MAULIK.md` T3. Seeded at **0**; the run never writes it. A sleeve at ₹0 plans nothing and
-every signal is skipped `NO_SLEEVE_CAPITAL` — **that is the intended behaviour and not a fault to
-debug at 09:10.**
+`NEEDS-MAULIK.md` T3. **After the flag flip, on this first live morning**, fund the sleeve and
+verify the audit **before any Confirm**. A new in-repo seed writes ₹25 lakh; a box seeded
+before TW15.1 is still 0 (`ON CONFLICT DO NOTHING`). A sleeve at ₹0 plans nothing
+(`NO_SLEEVE_CAPITAL`) — **that is the intended behaviour and not a fault to debug at 09:10.**
+Do not raw-`UPDATE`.
 
 **This is the command. It is real and it is the one to use** (TW11, 12 Sep 2026):
 
@@ -340,9 +357,9 @@ travels as **a string**, the way the swing form sends its decimals: `Number("250
 float and money is never a float (house rule 9).
 
 **One thing worth your eye before you type it** (`NEEDS-MAULIK.md` T3): **no backtest in this
-repository was produced at ₹25 lakh.** Every number in `docs/twt/01` was measured at ₹10 lakh. The
-₹5 crore liquidity floor is the pack's answer to the size change; it is not a measurement at the
-new size.
+repository was produced at ₹25 lakh.** Every number in `docs/twt/01` was measured at ₹10 lakh.
+TW15.1 set the live floor to ₹2 crore at this capital, so a name at the floor is turnover-capped
+to ₹2 lakh. That is the strategy, not a wiring fault.
 
 ---
 
@@ -446,11 +463,11 @@ Each one is a real failure mode, not a worry.
    wrong upstream of all three.
 7. **A `RAISE_GTT_STOP` at or above the last traded price.** It would fire the moment it was
    armed, selling the position at the next tick for no reason.
-8. **A line whose note says `TURNOVER_CAP` bound.** At ₹25,00,000 over ten slots this is
-   arithmetically impossible: the cap is 1 % of a name's 20-session average turnover, the
-   liquidity floor is ₹5 crore, so the smallest cap any planned name can have is ₹5,00,000 —
-   twice a full line and four times a half one. If you see it, either the capital is not what you
-   think it is or the floor is not what the config says.
+8. **A line whose note says `TURNOVER_CAP` bound.** After TW15.1 this is **expected** on names
+   between ₹2 crore and ₹2.5 crore a day: ten slots at ₹25 lakh is a ₹2.5 lakh line and 1 % of
+   ₹2 crore is ₹2 lakh. A name at the floor is sized by the cap. If you see it on a name turning
+   over well above ₹2.5 crore, either the capital is not what you think it is or the floor is
+   not what the config says.
 9. **A `TWT_ADJUSTMENT_RESET` note on a held name.** A split or a bonus has moved the ground under
    a stop that has been resting for months, and the resting GTT at the exchange is now quoting a
    pre-split price on a post-split instrument. **A person has to look at it.** The sleeve will

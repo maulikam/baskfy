@@ -13,15 +13,14 @@ Anything needing his **hands** rather than his opinion is in `/NEEDS-MAULIK.md` 
 **Default the run builds against: ₹25,00,000.** Stated in the kickoff prompt of 11 Sep 2026 and
 not re-litigated here.
 
-`tw_config.sleeve_capital_inr` is **seeded at 0** and the run never sets it. A sleeve at ₹0 plans
-nothing — every signal is skipped `NO_SLEEVE_CAPITAL` — so the number reaching the database is his
-keystroke on the first live morning, and `FIRST-LIVE-MORNING.md` is where it happens.
+`tw_config.sleeve_capital_inr` is **seeded at ₹25 lakh** (TW15.1, 13 Sep 2026). The column's
+server default stays 0, so a raw insert still plans nothing (`NO_SLEEVE_CAPITAL`). An existing
+zero row is funded with `baskfy-seed twt --capital 2500000`, not by re-seeding.
 
-One consequence worth his eye: at ₹25 lakh over ten slots a line is ₹2.5 lakh, and `04` §6.2's
-1 %-of-turnover cap needs ₹2.5 crore of daily turnover before it stops binding. **No backtest in
-this repository was produced at ₹25 lakh** — every number in `01` §6 was produced at ₹10 lakh,
-where that cap binds on nothing. This is why the liquidity floor ships at ₹5 crore rather than the
-research's ₹2 crore (`04` §3.5).
+At ₹25 lakh over ten slots a line is ₹2.5 lakh, and `04` §6.2's 1 %-of-turnover cap binds until a
+name turns over ₹2.5 crore a day. TW15.1 set the live floor to ₹2 crore, so a name at the floor is
+capped at ₹2 lakh. **No backtest in this repository was produced at ₹25 lakh** — every number in
+`01` §6 was produced at ₹10 lakh.
 
 ## Q2 — Equal weight, or something else
 

@@ -6,7 +6,7 @@ to bind, because "which cap bound" is part of the answer a plan line has to give
 liquidity.
 
 The numbers are the sleeve's own: ₹25 lakh over ten slots is a ₹2.5 lakh line, which is the size
-``04`` §3.5's whole argument about the ₹5 crore liquidity floor is made at.
+``04`` §3.5 / TW15.1's floor-vs-cap arithmetic is made at.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from baskfy_core.twt.sizing import (
 )
 
 SIZING = DEFAULT_TWT_CONFIG.sizing
-#: The sleeve's own capital (``docs/twt/02``: ₹25 lakh, seeded at 0 and set by Maulik).
+#: The sleeve's own capital (``docs/twt/02``: ₹25 lakh, TW15.1).
 EQUITY = Decimal("2500000")
 #: A tenth of it. Every cap below is compared against this number.
 SLOT = Decimal("250000")
@@ -92,9 +92,8 @@ class TestTheCapsInOrder:
         assert sized.caps_applied == (SizeCap.POSITION_PCT,)
 
     def test_the_turnover_cap_binds_on_a_two_crore_name_at_twenty_five_lakh(self) -> None:
-        """``04`` §3.5's argument, as a test. 1 % of ₹2 crore is ₹2 lakh against a ₹2.5 lakh line:
-        a floor below the cap means the plan is routinely sized by the cap rather than by the
-        strategy, which is why this sleeve ships at ₹5 crore."""
+        """TW15.1: 1 % of ₹2 crore is ₹2 lakh against a ₹2.5 lakh line, so a name at the
+        shipped floor is sized by the cap. That is the strategy Maulik chose."""
         sized = size(turnover=Decimal("20000000"))
         assert sized.cap is SizeCap.TURNOVER
         assert sized.value_inr == Decimal("200000")

@@ -40,8 +40,8 @@ not ``_MAX``), and its own named test.
 
 Nothing here reaches a broker, and nothing here can size a position. It stores numbers that
 ``baskfy_core.twt.sizing`` and ``baskfy_core.twt.exits`` later read. In particular **nothing here
-sets ``sleeve_capital_inr``**: the seeder writes 0, the person writes the rest, and the root
-``CLAUDE.md`` safety rails say no agent ever does.
+sets ``sleeve_capital_inr`` on a confirm**: the seeder writes ₹25 lakh (TW15.1),
+``baskfy-seed twt --capital`` funds an existing zero row, and a person can still PATCH it.
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
 """TW9: the study, re-run from the plant's own bars, with its drift named (`docs/twt/06` TW9).
 
     the `04` §1 universe and its bars → drop the thin sessions → `with_twt_columns`
-      → `signal_mask` at the **shipped** ₹5 crore floor → breadth → the gate vector
+      → `signal_mask` at the **shipped** ₹2 crore floor → breadth → the gate vector
       → two books over **one** detection pass
       → one appended `tw_backtest_run` row
 
@@ -468,8 +468,8 @@ async def run_twt_backtest(  # noqa: PLR0913 - one keyword per input the stored 
             )
         clean, calendar = drop_thin_sessions(bars, config)
         detected = with_twt_columns(clean, calendar, config)
-        # No `floor_inr`: the shipped ₹5 crore (`04` §3.5, DECISIONS-TW TW0.3). TW2 passes the
-        # research's ₹2 crore here and that is the one difference between the two runs' scans.
+        # No `floor_inr`: the shipped ₹2 crore (`04` §3.5, DECISIONS-TW TW15.1). TW2 still
+        # passes ``research_min_turnover_inr`` explicitly; after TW15.1 the two are equal.
         tagged = detected.with_columns(signal_mask(detected, config).alias("signal"))
         breadth = breadth_series(detected, config)
         books = two_books(tagged, breadth, params)

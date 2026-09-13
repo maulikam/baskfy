@@ -11,7 +11,7 @@ Five claims, each one a thing that would otherwise be discovered in production:
    strategy cannot produce, a trigger with no session, a thin session with an open gate, an
    order for a signal nobody stored. Each is asserted by making the database say no, because a
    ``CHECK`` nobody has ever triggered is a sentence in a file rather than a guarantee.
-4. **The seed ships ``sleeve_capital_inr = 0`` and is idempotent.** House rule 7, and the safety
+4. **The seed ships ``sleeve_capital_inr = 2_500_000`` (TW15.1) and is idempotent.** House rule 7, and the safety
    rail of ``docs/twt/02`` §3: a sleeve at ₹0 plans nothing, and re-running the seeder must
    never reset a capital, a stop or a trail a person has chosen.
 5. **The vocabulary is the document's.** Every state, kind and reason the check constraints
@@ -552,20 +552,20 @@ class TestTheSchemaOnARealDatabase:
 
 
 @requires_db
-class TestTheSeedIsZeroCapitalAndIdempotent:
-    async def test_the_seed_writes_zero_capital_and_the_documents_defaults(
+class TestTheSeedWritesOperatorCapitalAndIsIdempotent:
+    async def test_the_seed_writes_twenty_five_lakh_and_the_documents_defaults(
         self, twt_url: str, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """**The safety rail of this module.** `04` §9.3: a sleeve at ₹0 plans nothing, so a
-        freshly seeded database can propose no line at all until Maulik enters the capital
-        himself. The other five defaults are `04`'s: ten slots, 12.5 %, a 20 % stop, a 20 %
-        trail, ten first-live entries."""
+        """TW15.1: Maulik set the operator capital at ₹25 lakh. The seed writes that number;
+        the column server default stays 0 so a raw insert still plans nothing. The other five
+        defaults are `04`'s: ten slots, 12.5 %, a 20 % stop, a 20 % trail, ten first-live
+        entries."""
         async with _rolled_back(twt_url) as session:
             user_id = await _fresh_user(session, "seeded")
             monkeypatch.setenv("BASKFY_SOLE_USER_ID", str(user_id))
             assert await seed_twt_config(session) == 1
             row = await read_config(session, user_id)
-            assert row.sleeve_capital_inr == Decimal("0.00")
+            assert row.sleeve_capital_inr == Decimal("2500000.00")
             assert row.max_open_positions == 10
             assert row.max_position_pct == Decimal("12.50")
             assert row.stop_pct == Decimal("20.00")
@@ -589,7 +589,7 @@ class TestTheSeedIsZeroCapitalAndIdempotent:
             monkeypatch.setenv("BASKFY_SOLE_USER_ID", str(user_id))
             assert await seed_twt_config(session) == 1
             row = await read_config(session, user_id)
-            row.sleeve_capital_inr = Decimal("2500000.00")
+            row.sleeve_capital_inr = Decimal("1000000.00")
             row.stop_pct = Decimal("22.00")
             row.trail_pct = Decimal("25.00")
             await session.flush()
@@ -597,7 +597,7 @@ class TestTheSeedIsZeroCapitalAndIdempotent:
             assert await seed_twt_config(session) == 1
             session.expire_all()
             row = await read_config(session, user_id)
-            assert row.sleeve_capital_inr == Decimal("2500000.00")
+            assert row.sleeve_capital_inr == Decimal("1000000.00")
             assert row.stop_pct == Decimal("22.00")
             assert row.trail_pct == Decimal("25.00")
             count = (

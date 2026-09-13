@@ -11,9 +11,9 @@ the *same* write the settings form makes: the engine's bounds first, one `tw_con
 field that actually moves, and nothing at all on a re-run. A second path into `tw_config` without a
 trail would pass a test that only checked the value.
 
-**And the safety rail is asserted too** (`TestTheZeroSurvives`): funding the sleeve is something a
-person opts into with an explicit flag. Seeding without one still writes ₹0, which is what makes
-`gates/twt-root.md` R11 true of the changed seeder and not only of the old one.
+**And the safety rail is asserted too** (`TestTheSeedWritesOperatorCapital`): TW15.1's seeder
+writes ₹25 lakh; `set_twt_sleeve` still runs only when `--capital` is passed, so a deploy that
+re-seeds an existing row does not reset a chosen number.
 """
 
 from __future__ import annotations
@@ -84,19 +84,19 @@ class TestTheCommandLine:
         assert "--risk" in capsys.readouterr().err
 
 
-class TestTheZeroSurvives:
-    def test_the_seeder_still_writes_an_explicit_zero(self) -> None:
-        """`gates/twt-root.md` R11's `capital_seed=1`, asserted here rather than only by grep.
+class TestTheSeedWritesOperatorCapital:
+    def test_the_seeder_writes_twenty_five_lakh_and_funding_stays_opt_in(self) -> None:
+        """TW15.1: creation writes ₹25 lakh. ``set_twt_sleeve`` still runs only on ``--capital``.
 
-        The safety rail is that creation writes ₹0 and only an explicit `--capital` moves it. If
-        someone ever wires `set_twt_sleeve` into the `twt` branch unconditionally, this fails.
+        If someone wires ``set_twt_sleeve`` into the ``twt`` branch unconditionally, a deploy
+        that re-seeds would reset a chosen capital. That half of the rail is unchanged.
         """
         source = inspect.getsource(seed_module.seed_twt_config)
-        assert 'sleeve_capital_inr=Decimal("0")' in source
+        assert 'sleeve_capital_inr=Decimal("2500000")' in source
         run = inspect.getsource(seed_module._run)
         twt_branch = run[run.index('if command in ("all", "twt")') :]
         twt_branch = twt_branch[: twt_branch.index('if command in ("all", "market")')]
-        assert "if capital is not None:" in twt_branch, "the sleeve must only be funded on request"
+        assert "if capital is not None:" in twt_branch, "the sleeve must only be re-funded on request"
 
 
 @pytest.fixture(scope="module")
@@ -144,6 +144,11 @@ class TestSetTwtSleeve:
             async with session.begin():
                 user_id = await _ensure_user(session)
                 assert await seed_twt_config(session) == 1
+                seeded = await read_config(session, user_id)
+                assert seeded.sleeve_capital_inr == Decimal("2500000.00")
+                # A box that still reads 0 is the path this function exists for (TW15.1).
+                seeded.sleeve_capital_inr = Decimal("0.00")
+                await session.flush()
                 before = await _audit_count(session, user_id)
                 assert await set_twt_sleeve(session, capital_inr=Decimal("2500000")) == 1
             session.expire_all()

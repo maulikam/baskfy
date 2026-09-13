@@ -377,16 +377,25 @@ class TestTheLiquidityFloorAndTheRanking:
         assert rows[0]["signal_state"] == SignalState.SIGNAL.value
         assert signal_mask(detected.filter(pl.col("date") == WHEN)).sum() == 1
 
-    def test_the_research_floor_is_reachable_only_by_passing_it(self) -> None:
-        """DECISIONS-TW TW0.3: ₹2 crore exists for exactly one caller, TW2's goldens."""
+    def test_a_different_floor_is_reachable_only_by_passing_it(self) -> None:
+        """TW15.1: shipped and research floors are both ₹2 crore, so they no longer disagree.
+
+        ``signal_mask`` / ``detect_signals`` still take ``floor_inr`` so TW2's goldens stay
+        pinned if the shipped floor moves again. This name turns over 90 × 400,000 = ₹3.6
+        crore: it clears ₹2 crore and fails the old ₹5 crore sensitivity floor.
+        """
         bars = with_background(tight_bars(volume=400_000.0), count=COUNT)
         detected = with_twt_columns(bars, calendar_for(bars))
         shipped = detect_signals(detected, WHEN).to_dicts()[0]
+        override = detect_signals(
+            detected, WHEN, floor_inr=Decimal("50000000")
+        ).to_dicts()[0]
         research = detect_signals(
             detected, WHEN, floor_inr=DEFAULT_TWT_CONFIG.entry.research_min_turnover_inr
         ).to_dicts()[0]
-        assert shipped["signal_state"] == SignalState.SCAN_ONLY.value
+        assert shipped["signal_state"] == SignalState.SIGNAL.value
         assert research["signal_state"] == SignalState.SIGNAL.value
+        assert override["signal_state"] == SignalState.SCAN_ONLY.value
 
     def test_the_rank_key_is_the_signal_sessions_own_turnover(self) -> None:
         row = evaluate(tight_bars(volume=1_000_000.0))

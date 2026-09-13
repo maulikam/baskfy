@@ -260,8 +260,8 @@ def liquidity_floor(
     """``turnover_avg_20 >= the floor`` — ``04`` §3.5, with a null read as a fail.
 
     ``floor_inr`` exists for **exactly one caller**: TW2's golden parameter set, which passes
-    ``EntryConfig.research_min_turnover_inr`` [₹2 crore] because the research's headline used it.
-    The detector, the plan and every page pass nothing and get ``min_turnover_inr`` [₹5 crore].
+    ``EntryConfig.research_min_turnover_inr``. After TW15.1 that equals the shipped floor
+    [₹2 crore]; the detector, the plan and every page pass nothing and get ``min_turnover_inr``.
     """
     floor = config.entry.min_turnover_inr if floor_inr is None else floor_inr
     return _true(pl.col("turnover_avg_20") >= floor)

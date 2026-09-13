@@ -31,7 +31,7 @@ TWO THINGS THIS MODULE DOES THAT VBT-1'S EVENING DOES NOT
 ---------------------------------------------------------
 **It offers ``SCAN_ONLY`` rows to the plan.** VBT-1 drops them before building; ``04`` §10.1
 names ``BELOW_LIQUIDITY_FLOOR`` as one of its skips in order, and a skip the plan never sees is
-a skip that cannot be recorded. The funnel is the argument for a ₹5 crore floor, and a plan that
+a skip that cannot be recorded. The funnel is the argument for the ₹2 crore floor, and a plan that
 silently dropped the names the floor rejected could not show it. DECISIONS-TW **TW6.1**.
 
 **It tells the two causes of a null trigger apart.** A position with no ``RAISE_GTT_STOP`` line

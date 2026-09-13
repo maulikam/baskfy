@@ -233,7 +233,7 @@ class NameSpec:
     """One instrument of a panel."""
 
     symbol: str
-    #: Shares a day. 600,000 at ₹100 is ₹6 crore, which clears `04` §3.5's ₹5 crore floor;
+    #: Shares a day. 600,000 at ₹100 is ₹6 crore, which clears `04` §3.5's ₹2 crore floor;
     #: 20,000 is ₹20 lakh, which does not and produces the `SCAN_ONLY` row `03` §3 keeps.
     volume: int = 600_000
     #: The stored adjusted series is the exchange print times this. 0.5 is a 1:2 split.

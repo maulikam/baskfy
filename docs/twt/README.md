@@ -67,7 +67,7 @@ so the morning plan is arithmetic that has already been done.
 | "Three weekly closes within 3 %" | `weekly_closes` — today's close plus the last close of each of the two preceding weeks the calendar holds (`04` §3.2) |
 | "≥ 1.3 × the low of three months ago" | `month_low_back` — the low of the calendar month three months before this session's month (`04` §3.3) |
 | The entry event | `entry_events` — the state is true today and was false on each of the previous five sessions (`04` §3.4) |
-| Tradability | `min_turnover_inr` [₹5 crore] on the 20-session average turnover (`04` §3.5; the research used ₹2 crore — **DECISIONS-TW TW0.3**) |
+| Tradability | `min_turnover_inr` [₹2 crore] on the 20-session average turnover (`04` §3.5; TW15.1 restored the research floor — TW0.3's ₹5 crore is a sensitivity row) |
 | The regime gate | `baskfy_core.twt.breadth` — share of the traded universe above its own 200-DMA, `> 40 %` (`04` §4). The same measurement VBT-1 uses, over the same universe |
 | Entry | Next session's **open, market** — `TwtLineKind.BUY_AT_OPEN` (`04` §5) |
 | Sizing | Ten equal slots, 1 % of turnover, ₹10,000 floor, half size for the first ten live entries (`04` §6) |

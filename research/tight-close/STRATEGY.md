@@ -96,7 +96,7 @@ result is the same). ≈ 40 signals a week; the book takes at most three a day.
 **Next session's open, market order.** The base-high breakout (3.7 % CAGR) and the
 pullback limit (11.6 %) are both worse — the third time in three studies that waiting costs
 money on a momentum entry. Equal weight, **10 slots, 10 % each, at most 3 new a session**,
-ranked by 20-day turnover when there are more signals than slots (ranking by day-change,
+ranked by the signal day's own turnover (`close_raw × volume`) when there are more signals than slots (ranking by day-change,
 relative volume or nothing: 16–17 %), never more than 1 % of the name's turnover.
 
 ### Exits

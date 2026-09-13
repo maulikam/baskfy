@@ -744,20 +744,13 @@ async def seed_vbt_config(session: AsyncSession) -> int:
 
 
 async def seed_twt_config(session: AsyncSession) -> int:
-    """One ``tw_config`` row for the sole tenant, with ``sleeve_capital_inr = 0`` (TW3).
+    """One ``tw_config`` row for the sole tenant, with ``sleeve_capital_inr = 2_500_000`` (TW15.1).
 
-    **Zero capital is the point, not an oversight**, and for the same reason it is for the swing
-    book and VBT-1 above. ``docs/twt/04-business-rules.md`` §9.3: *"A sleeve at ₹0 plans nothing:
-    every signal is skipped ``NO_SLEEVE_CAPITAL``."* So a freshly seeded database has a
-    three-weeks-tight sleeve that detects, ranks, stores and plans **nothing to buy** until a
-    person decides what it may risk.
-
-    **And on this sleeve the zero is a safety rail with a name on it.** ``docs/twt/02`` §3 and the
-    root ``CLAUDE.md`` both say it in the same words: *an agent never sets
-    ``tw_config.sleeve_capital_inr``.* Maulik enters the capital himself on the first live
-    morning. ``sleeve_capital_inr`` is therefore written here **explicitly as zero** rather than
-    left to the column's server default — not because the default would be wrong, but because
-    the one number this function must never get wrong should be visible in it.
+    Maulik set the operator capital on 13 Sep 2026: ₹25 lakh, ten slots, ₹2.5 lakh a line.
+    The column's server default stays 0 (a raw insert still plans nothing); **this** function is
+    the creation path and writes the number he chose. Existing rows are not touched —
+    ``ON CONFLICT DO NOTHING`` — so a box that still reads 0 is funded with
+    ``baskfy-seed twt --capital 2500000``, not by re-seeding.
 
     The other five defaults are the column defaults, which are ``docs/twt/04``'s: ten slots,
     12.5 % per position, a 20 % stop, a 20 % trail, ten first-live entries.
@@ -774,7 +767,7 @@ async def seed_twt_config(session: AsyncSession) -> int:
     if user_id is None:
         return 0
     statement = insert(TwConfig).values(
-        user_id=user_id, sleeve_capital_inr=Decimal("0"), updated_by="seed"
+        user_id=user_id, sleeve_capital_inr=Decimal("2500000"), updated_by="seed"
     )
     await session.execute(statement.on_conflict_do_nothing(index_elements=[TwConfig.user_id]))
     return 1
@@ -851,8 +844,8 @@ async def set_twt_sleeve(
     it, `2500000` against a stored `2500000.00` would audit a change every single deploy.
 
     Returns 1 when the row exists (whether or not anything moved) and 0 when there is no
-    `tw_config` row yet. It never creates the row: :func:`seed_twt_config` owns creation, and owns
-    the ₹0 that creation writes.
+    `tw_config` row yet. It never creates the row: :func:`seed_twt_config` owns creation (₹25 lakh
+    after TW15.1). This function funds an existing row that is still at 0.
     """
     user_id = await _sole_user_id(session)
     if user_id is None:

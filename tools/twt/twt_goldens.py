@@ -92,8 +92,9 @@ GOLDEN_TICK: Final = Decimal("0.01")
 
 #: The sleeve's own configuration, unchanged. TW2 grades the sleeve, not a variant of it.
 GOLDEN_CONFIG: Final[TwtConfig] = DEFAULT_TWT_CONFIG
-#: The research's liquidity floor [₹2 crore], passed to ``signal_mask``'s ``floor_inr`` keyword —
-#: the one knob ``04`` §3.5 provides for this one caller. The shipped floor is ₹5 crore.
+#: The research's liquidity floor [₹2 crore], passed to ``signal_mask``'s ``floor_inr`` keyword.
+#: After TW15.1 the shipped floor is the same number; the named field stays so this caller is
+#: still the one place ``research_min_turnover_inr`` is read.
 GOLDEN_FLOOR_INR: Final[Decimal] = DEFAULT_TWT_CONFIG.entry.research_min_turnover_inr
 #: The column the backtest reads as "this session is an entry signal".
 GOLDEN_SIGNAL_COLUMN: Final[str] = "signal"

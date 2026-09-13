@@ -98,9 +98,8 @@ def test_the_gate_off_row_is_the_one_01_7_names() -> None:
 def test_the_shipped_floors_row_is_the_one_01_7_names() -> None:
     """`no liquidity filter / **turnover ≥ ₹5 cr** | 19.5 / **22.5** | -28 / **-27** | 169 / 169`.
 
-    This is the row TW9's run over the plant should be read against, because `01` §6's headline
-    was produced at the research's ₹2 crore floor and the sleeve ships at ₹5 crore. A drift
-    measured against the headline contains the floor, and DECISIONS-TW **TW9.3** says by how much.
+    This is `01` §7's ₹5 crore **sensitivity** row (TW9's first plant run used that then-shipped
+    floor). TW15.1 restored the live floor to ₹2 crore; the numbers stay as a measured experiment.
     """
     numbers = re.findall(r"-?\d+(?:\.\d+)?", _row_of("turnover ≥ ₹5 cr"))
     assert str(PUBLISHED.shipped_floor_cagr_pct) in numbers

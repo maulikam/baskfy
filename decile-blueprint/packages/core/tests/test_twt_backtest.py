@@ -557,7 +557,7 @@ class TestTheEngineRunsOnThePlantsShape:
     def test_the_defaults_are_the_shipped_sleeves_and_not_the_studys(self) -> None:
         default = BacktestParams()
         assert default.tick == Decimal(TICK_INR), "the exchange's ₹0.05, not the study's paisa"
-        assert default.config.entry.min_turnover_inr == Decimal("50000000")
+        assert default.config.entry.min_turnover_inr == Decimal("20000000")
         assert default.sleeve_inr == DEFAULT_TWT_CONFIG.backtest.initial_capital_inr
         assert default.cost_pct_per_side == DEFAULT_TWT_CONFIG.costs.cost_bps_per_side / 100
 

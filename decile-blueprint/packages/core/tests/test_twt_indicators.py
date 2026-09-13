@@ -92,8 +92,8 @@ class TestTheRollingWindowsCountSessions:
         assert cell(indicate(bars), DAYS[-1], "vol_sma") == expected
 
     def test_the_turnover_average_reads_the_exchange_print(self) -> None:
-        """``04`` §3.5's ₹5 crore is a rupee number about ``close_raw x volume``, not about the
-        adjusted series: a 1:2 split does not double a name's rupee turnover."""
+        """``04`` §3.5's ₹2 crore floor is a rupee number about ``close_raw x volume``, not
+        about the adjusted series: a 1:2 split does not double a name's rupee turnover."""
         bars = flat_bars(count=COUNT, close=100.0, volume=100_000.0)
         bars = bars.with_columns(
             pl.when(pl.col("instrument_id") == 1)

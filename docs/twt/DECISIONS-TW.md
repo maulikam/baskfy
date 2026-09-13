@@ -2508,3 +2508,79 @@ a small change in `fetch.ts`/`backtest-card.tsx` and belongs to whoever owns the
 **Reversal.** Drop the two fields from `TwtBacktestOut` and `BacktestView`, and the constants
 `CAVEATS`, `NO_RUN_AT_ALL`, `RUN_IN_FLIGHT`, `RUN_FAILED` with them; `make openapi && make
 client`. The route still serves `runs` and the card still renders exactly what it renders today.
+
+## TW15.1 — Floor ₹2 crore, seed ₹25 lakh, go live is confirm-gated on the box
+
+**Context.** Maulik, 13 Sep 2026, in so many words: **floor 2 cr, go live, capital 25 lac.**
+TW0.3 had shipped `EntryConfig.min_turnover_inr = 50 000 000` so a ₹2.5 lakh line would not be
+sized by the 1 %-of-turnover cap, and the seeder wrote `sleeve_capital_inr = 0` so a fresh
+database planned nothing until a person typed the number. Both were standing defaults. This
+overrides them.
+
+**Taken.**
+
+1. **Live floor ₹2 crore.** `EntryConfig.min_turnover_inr = 20 000 000`.
+   `research_min_turnover_inr` stays as a named field (TW2's goldens still pass it) and after
+   this decision equals the shipped floor. At ₹25 lakh / 10 slots a name that just clears the
+   floor is turnover-capped to ₹2 lakh — that is now the strategy. The ₹5 crore sensitivity
+   row in `01` §7 and TW9's first plant run stay as measured experiments; they are not the
+   live floor.
+2. **Sleeve capital ₹25 lakh.** `seed_twt_config` writes `Decimal("2500000")`. The column
+   server default stays 0 (a raw insert still plans nothing). `ON CONFLICT DO NOTHING`, so a
+   box that still reads 0 is funded with `baskfy-seed twt --capital 2500000`, not by
+   re-seeding. `BacktestConfig.initial_capital_inr` stays ₹10 lakh (the research window).
+3. **Go live = operator confirm, not auto-execute.** In-repo `BASKFY_TWT_EXECUTION_ENABLED`
+   stays **false** (`os.getenv(..., "false")` and both `.env.example` files). There is no
+   `BASKFY_TWT_AUTO_*` and none is added. Real CNC/GTT on the box needs Maulik's hand in two
+   files (`NEEDS-MAULIK.md` T2 / `FIRST-LIVE-MORNING.md` §3.4) **and**
+   `BASKFY_DESK_DRY_RUN=false`. Plans still expire in 30 minutes; `POST /twt/execute` still
+   needs `confirm=true`.
+
+**Rejected.** (a) Flipping the in-repo default to true — `test_twt_safety_properties.py` pins
+the getenv default false, and an agent-created environment must stay `DRY_RUN=true`. (b)
+Adding `BASKFY_TWT_AUTO_EXECUTE` — non-negotiable 1's one named exception is the swing
+sleeve's. (c) Leaving the seed at 0 — he named the number. (d) Keeping the ₹5 crore floor
+because the cap then never binds — he named the floor.
+
+**Reversal.** Set `min_turnover_inr` back to `50 000 000` and the seeder back to `0`, and
+record why. The box flag is reversed by editing the two `/opt/baskfy/.env.staging*` files
+back to `false` and restarting desk / worker / beat. No migration is required either way.
+
+**Not done by this decision, and still Maulik's hands:** the sequence in **TW15.2**. No agent
+placed an order, posted `/execute`, or touched `portfolio.db`.
+
+## TW15.2 — The authorized go-live path, and three closures (13 Sep 2026)
+
+**Context.** Maulik answered the remaining NEEDS-MAULIK TWT questions the same day as TW15.1.
+
+**Taken.**
+
+1. **Go-live mode.** Flip `BASKFY_TWT_EXECUTION_ENABLED=true` in **both** box env files
+   (`/opt/baskfy/.env.staging.compose` and `/opt/baskfy/.env.staging`) **and** keep/confirm
+   `BASKFY_DESK_DRY_RUN=false` (real CNC/GTT; the weekly book is already live with swing).
+   Confirm-gated. There is no `BASKFY_TWT_AUTO_*` and none is added.
+2. **When.** After TW15.1 is **committed and deployed**, **then Maulik flips**. Agents do not
+   flip box env, do not SSH, do not deploy.
+3. **Deploy shape (docs only).** api / worker / desk images. **Hold web** until UI polish is
+   green.
+4. **Capital.** On the first live morning, **after** the flag flip:
+   `uv run python -m baskfy_api.seed twt --capital 2500000`, then verify `tw_config_audit`
+   **before any Confirm**. No raw `UPDATE`.
+5. **T4-b closed.** Skip the 12 Sep 68×68 Chartink export. The 11 Sep 82.5 % recall is enough.
+6. **Kite login nudge.** Enable `BASKFY_KITE_LOGIN_NUDGE_ENABLED=true` and his address **on
+   the box** (T1-nudge). The in-repo default stays false. The address is not committed.
+7. **`baskfy.desk.daily`.** Move the task to the `desk` container — recorded in
+   `NEEDS-MAULIK.md` §33. **Another agent implements it.** This decision does not start that
+   work.
+
+**Sequence, in order:** commit TW15.1 → Maulik reviews → deploy api/worker/desk (not web) →
+he flips both TWT flags and confirms `DRY_RUN=false` → he enables the login nudge on the box
+→ first live morning: Kite login → `seed twt --capital 2500000` → verify audit → he confirms
+a plan.
+
+**Rejected.** (a) An agent flipping the box flags — he said he flips. (b) Deploying web with
+this pack. (c) Funding the sleeve before the flag is on. (d) Re-opening T4-b.
+
+**Reversal.** Leave the box flags false; do not run the seed; T4-b stays closed unless he
+asks for the 68-name export again. The desk.daily move is reversed by not merging that other
+agent's change.

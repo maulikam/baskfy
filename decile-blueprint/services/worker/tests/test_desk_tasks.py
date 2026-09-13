@@ -1,24 +1,26 @@
-"""M19 §1 — the desk's jobs on Beat, and the property the retirement protocol rests on.
+"""The desk's collection jobs — no longer on Beat (NEEDS-MAULIK §33, 13 Sep 2026).
 
-The systemd timers on the Mumbai box keep running until five green Beat runs are recorded (M19 §2).
-During that overlap both schedulers can fire the same job on the same evening, and that is safe for
-exactly one reason: every step is independently idempotent. This asserts it instead of trusting the
-docstring that claims it.
+Beat used to fire ``baskfy.desk.daily`` on this worker, whose image does not contain the
+desk tree. Maulik: the desk-daily container runs the collection. These tests assert that
+Beat no longer schedules it, that leftover Celery names refuse rather than collect, and
+that the ``--check`` wrapper is still idempotent in the monorepo where ``DESK_ROOT`` exists.
+
+The schedule itself — 18:30 daily, 18:50 autorun, Persistent=true catch-up — lives in
+``kite-momentum-rebalancer/scripts/desk_daily_loop.py`` and is asserted there.
 """
 
 from __future__ import annotations
 
 import inspect
 import os
+import re
 import sqlite3
 import sys
 import types
 from collections.abc import Callable
 from pathlib import Path
-from typing import cast
 
 import pytest
-from celery.schedules import crontab
 
 from baskfy_worker import celery_app
 from baskfy_worker.tasks import desk
@@ -114,45 +116,71 @@ def test_it_finds_the_desk() -> None:
 
 
 # =====================================================================================
-# the schedule mirrors the timers it will eventually replace
+# Beat must not fire collection — the desk-daily container does
 # =====================================================================================
-def test_beat_fires_when_the_systemd_timer_fires() -> None:
-    """`momentum-daily.timer` is `OnCalendar=Mon..Fri 18:30`. Beat must match it.
+_COMPOSE = Path(__file__).resolve().parents[3] / "infra" / "docker" / "compose.prod.yml"
 
-    Not for tidiness: during the overlap both fire, and a Beat entry at a different hour would be
-    collecting a *different* session's data while claiming to be the same job.
+
+def test_beat_does_not_schedule_desk_collection() -> None:
+    """A Beat entry here is a weekday failure: this image has no desk tree.
+
+    The retired keys must stay gone, and no new entry may point at ``baskfy.desk.*``.
     """
-    entry = celery_app.BEAT_SCHEDULE["desk-daily-collection"]
-    # BEAT_SCHEDULE is typed `dict[str, object]` because celery's entries are heterogeneous;
-    # the cast says what this key actually holds rather than loosening the annotation upstream.
-    schedule = cast(crontab, entry["schedule"])
+    assert "desk-daily-collection" not in celery_app.BEAT_SCHEDULE
+    assert "desk-autorun-safety-net" not in celery_app.BEAT_SCHEDULE
+    leftover = [
+        key
+        for key, entry in celery_app.BEAT_SCHEDULE.items()
+        if isinstance(entry, dict) and str(entry.get("task", "")).startswith("baskfy.desk.")
+    ]
+    assert leftover == [], f"Beat still fires desk collection: {leftover}"
 
-    assert entry["task"] == "baskfy.desk.daily"
-    assert schedule.hour == {18}
-    assert schedule.minute == {30}
-    assert schedule.day_of_week == {1, 2, 3, 4, 5}  # Monday..Friday
+
+def test_the_desk_image_runs_the_collection() -> None:
+    """The other half of the route: compose starts desk-daily from the desk image."""
+    text = _COMPOSE.read_text()
+    match = re.search(r"^  desk-daily:(.*?)(?=^  [A-Za-z]|\Z)", text, flags=re.M | re.S)
+    assert match is not None, "compose.prod.yml lost the desk-daily service"
+    body = match.group(1)
+    assert "<<: *desk" in body
+    assert "command: [desk-daily-loop]" in body
 
 
-def test_the_autorun_net_is_after_the_collection_not_before() -> None:
-    """It exists to pick up what 18:30 could not. Firing first would make it the primary path."""
-    daily = cast(crontab, celery_app.BEAT_SCHEDULE["desk-daily-collection"]["schedule"])
-    net = cast(crontab, celery_app.BEAT_SCHEDULE["desk-autorun-safety-net"]["schedule"])
-    assert (min(net.hour), min(net.minute)) > (min(daily.hour), min(daily.minute))
+def test_the_celery_names_refuse_rather_than_collect() -> None:
+    """A leftover Redis message must not chdir into a missing tree and look like success."""
+    daily = desk.run_desk_daily()
+    autorun = desk.run_desk_autorun()
+    assert daily["exit_code"] == autorun["exit_code"] == 2
+    assert daily["entry"] == "daily"
+    assert autorun["entry"] == "autorun"
+
+
+def test_a_missing_desk_tree_is_reported_not_raised(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(desk, "DESK_ROOT", tmp_path / "absent")
+    result = desk._run(["--check"], "daily")
+    assert result["exit_code"] == 2
+    assert result["entry"] == "daily"
 
 
 def test_the_desk_tasks_are_routed() -> None:
+    """Leftover messages still land on default, which this worker consumes."""
     assert "baskfy.desk.*" in celery_app.TASK_ROUTES
 
 
-def test_the_task_names_are_the_ones_beat_calls() -> None:
-    """A Beat entry naming a task that does not exist fails at 18:30, silently, forever."""
+def test_the_retired_names_are_still_registered() -> None:
+    """Unregistered leftover messages look like a broker bug. A refusal is a log line."""
     registered = {
         desk.run_desk_daily.name,
         desk.run_desk_autorun.name,
         desk.check_desk_daily.name,
     }
-    for key in ("desk-daily-collection", "desk-autorun-safety-net"):
-        assert celery_app.BEAT_SCHEDULE[key]["task"] in registered
+    assert registered == {
+        "baskfy.desk.daily",
+        "baskfy.desk.autorun",
+        "baskfy.desk.daily_check",
+    }
 
 
 # =====================================================================================

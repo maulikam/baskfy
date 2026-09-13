@@ -117,7 +117,7 @@ SLEEVE="$(compose exec -T postgres psql -U baskfy -d baskfy -tAc 'select sleeve_
 echo "   sw_config: $SLEEVE"
 
 say "up"
-compose up -d api worker ingest-worker beat desk swing-monitor web caddy 2>&1 | grep -E "Error|error" && fail "up" || true
+compose up -d api worker ingest-worker beat desk desk-daily swing-monitor web caddy 2>&1 | grep -E "Error|error" && fail "up" || true
 for i in $(seq 1 60); do
   H="$(compose ps --format '{{.Service}} {{.Health}}' | grep -E '^(api|desk) ' | awk '{print $2}' | sort -u | tr '\n' ' ')"
   [ "$H" = "healthy " ] && break
@@ -165,6 +165,9 @@ compose exec -T desk sh -c 'touch /var/lib/baskfy/state/x 2>/dev/null' && fail "
 compose logs --no-log-prefix swing-monitor 2>/dev/null | grep -q 'swing-monitor: flag off; next run' \
   || fail "swing-monitor is not idling with the flag off"
 echo "   swing-monitor: $(compose logs --no-log-prefix swing-monitor 2>/dev/null | tail -1)"
+compose logs --no-log-prefix desk-daily 2>/dev/null | grep -q 'desk-daily: next' \
+  || fail "desk-daily is not waiting for a collection slot"
+echo "   desk-daily: $(compose logs --no-log-prefix desk-daily 2>/dev/null | tail -1)"
 N="$(compose exec -T postgres psql -U baskfy -d baskfy -tAc "select count(*) from information_schema.tables where table_schema='desk'")"
 [ "${N:-0}" -gt 0 ] || fail "the desk schema has no tables"
 echo "   desk schema: $N tables (the desk migrated itself into Postgres)"

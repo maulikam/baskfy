@@ -9,19 +9,18 @@ what was done meanwhile.
 
 ## 34. Commit + deploy ranking engine phases 1.2–1.5
 
-**Raised 13 Sep 2026.** · **Status:** ranking slice committed this session; deploy + verify next
-(user asked agent to finish commit and deploy — Track B / TWT / auto-execute untouched).
+**Raised 13 Sep 2026.** · **Status:** ranking committed (`dd09526`); deploy in progress after
+Docker Desktop recovered.
 
 **What is in HEAD (laptop):**
 
-* Gates ALL MET: `gates/ranking-1.2.md` … `1.5.md` plus root `GATES.md` Phase 1.2 backend (27/27).
-* Explainability UI (peek A–F + rank history via existing API), research module, selection wrapper,
-  presets + `desk_quality` validation harness.
-* Decisions tagged ⚠ UNREVIEWED in `docs/DECISIONS-MERGE.md`; status in `docs/ranking/PLAN.md`.
+* Commit `dd09526` — Ranking: phases 1.2–1.5 (desk_score Sort By, explainability UI,
+  research/selection/presets). Gates were ALL MET before commit.
+* AWS SSO for `baskfy-poc` is valid. No remote push required for image build.
 
-**What remains:** image push + `KEEP_MONITOR=1` deploy + `verify-swing.sh` on `baskfy-poc`. Smoke:
-Sort By → Desk Momentum Quality Score; peek → A–F; saved screen rank history once `screen_run`
-rows exist. Clear this entry when verify is green.
+**What remains:** image push + `KEEP_MONITOR=1` deploy + `verify-swing.sh` from a clean
+`dd09526` worktree (dirty tree still has uncommitted `desk-daily` compose/scripts — do not
+ship those). Smoke: Sort By → Desk Momentum Quality Score; peek → A–F. Clear when verify is green.
 
 ---
 
@@ -42,7 +41,7 @@ blocker in the project.
 
 | | |
 |---|---|
-| **34** | **Deploy ranking engine (1.2–1.5).** Ranking slice is committed; image push + verify still open. See §34. |
+| **34** | **Deploy ranking (`dd09526`).** Commit done; Docker Desktop on the laptop will not start (`docker ps` → unable to start). See §34. |
 | **32** | **A Zerodha Console tradebook export.** You asked to "sync transactions from the kite account" — Kite's API cannot supply them, and nothing in Baskfy imports them. One CSV you download is the only path. See §32. |
 | **31** | ✅ **Done 12 Sep 2026.** You logged in; the box went `dd9cc73` → `8b074c7` and `verify-swing.sh` says `SWING OK`. |
 | **1** | ✅ **Shipped 12 Sep 2026** with the rest of the 25 commits, on a Saturday with the market shut. |

@@ -175,7 +175,16 @@ while True:
     print(f"swing-monitor: app.swing_monitor exited {rc}", flush=True)
     time.sleep(90)  # past 09:14 before the next next_run(), never twice in one minute
 EOF
-RUN chmod 0755 /usr/local/bin/desk-entrypoint /usr/local/bin/swing-monitor-loop
+# Same-day fill capture (NEEDS-MAULIK §33, Maulik 13 Sep 2026). Beat used to fire
+# `baskfy.desk.daily` on baskfy-py, which does not contain this tree. The schedule itself
+# lives in `scripts.desk_daily_loop` so a test can import it; this wrapper is the compose
+# command, matching `swing-monitor-loop`. Collection, not orders.
+RUN cat > /usr/local/bin/desk-daily-loop <<'EOF'
+#!/bin/sh
+set -eu
+exec python -m scripts.desk_daily_loop
+EOF
+RUN chmod 0755 /usr/local/bin/desk-entrypoint /usr/local/bin/swing-monitor-loop /usr/local/bin/desk-daily-loop
 
 WORKDIR /desk
 USER baskfy

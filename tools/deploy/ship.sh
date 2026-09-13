@@ -55,9 +55,9 @@ bash tools/deploy/verify-swing.sh || die "verify-swing failed -- the box is up b
 OUT="$(bash tools/deploy/verify-pc-deploy.sh "$TAG")"
 echo "   $OUT"
 case "$OUT" in
-  *"pins=3"*"running=10"*"twt_execution_true=0"*) ;;
+  *"pins=3"*"running=11"*"twt_execution_true=0"*) ;;
   *) die "post-deploy check failed: $OUT" ;;
 esac
 
-printf '\n\033[32m✓ DEPLOYED %s\033[0m — all three images pinned, ten services up, no execution flag moved.\n' "$TAG"
+printf '\n\033[32m✓ DEPLOYED %s\033[0m — all three images pinned, eleven services up (desk-daily joined 13 Sep 2026), no execution flag moved.\n' "$TAG"
 echo "  rollback: the tag lines in /opt/baskfy/.env.staging.compose back to the previous sha, then 'up -d'."

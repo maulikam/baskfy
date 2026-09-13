@@ -40,6 +40,7 @@ from baskfy_api.screener import (
     warm_screen_cache,
 )
 from baskfy_api.settings import get_settings as get_api_settings
+from baskfy_api.swing_health import is_session_day
 from baskfy_api.swing_scan import request_scan
 from baskfy_core.models import PipelineRun
 from baskfy_core.models.base import JsonObject
@@ -53,7 +54,7 @@ from baskfy_worker import catch_up, kite_session_cli, ops
 from baskfy_worker.alerts import Alert, AlertName, Severity, dispatch
 from baskfy_worker.bhavcopy_backfill import backfill_bars_from_bhavcopy
 from baskfy_worker.celery_app import IST, QUEUE_COMPUTE, QUEUES
-from baskfy_worker.db import run_checkpointed, run_in_session
+from baskfy_worker.db import run_checkpointed, run_in_session, session_scope
 from baskfy_worker.orchestrator import PipelineOutcome, run_nightly_pipeline
 from baskfy_worker.providers import build_cache, build_pipeline_dependencies, sole_user_id
 from baskfy_worker.settings import get_worker_settings
@@ -514,9 +515,25 @@ def check_kite_token_task() -> JsonObject:
 
     Hourly. The check is arithmetic over the stored issue time and makes no network call, so
     running it often costs nothing and the warning lands with hours to spare.
+
+    Hourly evaluation is not hourly email (14 Sep 2026, an NSE holiday that sent 24): it raises
+    nothing on a day that is not a session, and delivers at most once per stored token per IST
+    day — ``ops.run_kite_token_check`` carries the rule and DECISIONS-MERGE carries why.
     """
-    alert = ops.check_kite_token()
-    return {"alert": None if alert is None else _raise_alert(alert)}
+
+    async def calendar(day: dt.date) -> bool:
+        async with session_scope() as session:
+            return await is_session_day(session, day)
+
+    async def check() -> JsonObject:
+        cache = build_cache()
+        try:
+            return await ops.run_kite_token_check(calendar, cache)
+        finally:
+            if cache is not None:
+                await cache.aclose()
+
+    return asyncio.run(check())
 
 
 @shared_task(name="baskfy.ops.check_queue_backlog")

@@ -59,6 +59,14 @@ five days is needed — operator-led, capped, outside nightly/market hours.
 "Rank over time" and desk A–F; Portfolio fit (informational). Screenshots in
 `docs/ranking/screens/`.
 
+
+### 35b. Holiday flood of token-expiry emails, and a calendar that did not know 14 Sep was a holiday (added 04:40 IST)
+
+* **What happened.** The worker's hourly `check_kite_token` emailed `BASKFY_OPS_ALERT_EMAIL` every hour on a market holiday. **Muted at ~04:15 IST** by commenting the address out of `/opt/baskfy/.env.staging` (backup `.env.staging.pre-mute-token-alert-*`) and recreating only `worker`. This mutes *all* ops alert email until restored.
+* **Fix (committed, not yet deployed):** the token alert now emails only on NSE trading days and at most once per token per IST day (Redis marker, fails open). It ships after the ranking backfill, and the address is restored in the same step.
+* **Root cause underneath:** `trading_day` had 2026-09-14 as `derived` (a guess) — the seeded calendar has no lunar holidays (`calendar.py` docstring, docs/04a). Set by hand to `is_trading_day=false, source='holiday', holiday_name='Ganesh Chaturthi …'` on your word that the market is shut. Reverse: set it back to `true, 'derived', NULL`.
+* **Yours:** the rest of 2026's NSE holiday circular (Dussehra, Diwali/Laxmi Pujan, Guru Nanak Jayanti, …) is not in `trading_day`. Until loaded, each such day is treated as a session by the swing monitor, the nightly and the alerts. There is no CLI for it today.
+
 ---
 
 ## 34. Commit + deploy ranking engine phases 1.2–1.5

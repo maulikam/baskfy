@@ -157,9 +157,20 @@ class AlertRaised(Exception):
 
 
 async def dispatch(
-    alert: Alert, settings: Settings | None = None, *, mailer: Mailer | None = None
+    alert: Alert,
+    settings: Settings | None = None,
+    *,
+    mailer: Mailer | None = None,
+    suppressed: str | None = None,
 ) -> JsonObject:
     """Raise ``alert`` to every configured sink. Never raises. Returns what was sent.
+
+    ``suppressed`` is the one way to record an alert *without* delivering it: the counter and the
+    ``alert`` log line still happen — they are the evaluation record, and a Loki rule may count
+    them — but Sentry, email and the webhook are skipped, and the reason is logged and returned.
+    It exists for a check that re-evaluates a condition someone has already been told about
+    (``baskfy_worker.ops.run_kite_token_check``, "once per token per day"); a check that wants
+    silence should return no alert at all.
 
     Async because the mail transport is (``baskfy_api.email.Mailer.deliver``), and every caller —
     the orchestrator, the ops tasks — is already inside a coroutine. Wrapping an ``asyncio.run``
@@ -181,11 +192,16 @@ async def dispatch(
             "severity": alert.severity.value,
             "summary": alert.summary,
             "runbook": alert.runbook,
+            **({"suppressed": suppressed} if suppressed is not None else {}),
             **{f"alert_{key}": value for key, value in alert.labels.items()},
         },
     )
 
     delivered: list[str] = ["log"]
+    if suppressed is not None:
+        payload["delivered_to"] = delivered
+        payload["suppressed"] = suppressed
+        return payload
     if sentry.sentry_is_active():
         sentry.capture(AlertRaised(alert), alert=alert.name.value, severity=alert.severity.value)
         delivered.append("sentry")

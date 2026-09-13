@@ -33,16 +33,21 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Final
 
+from redis.asyncio import Redis
+from redis.exceptions import RedisError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from baskfy_api.email import Mailer
 from baskfy_api.metrics import IST
 from baskfy_api.settings import Settings, get_settings
 from baskfy_core.models import PipelineRun, TradingDay
+from baskfy_core.models.base import JsonObject
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
-from baskfy_worker.alerts import Alert, AlertName, Severity
+from baskfy_worker.alerts import Alert, AlertName, Severity, dispatch
 from baskfy_worker.steps import RunStatus
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
@@ -51,6 +56,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
 log = logging.getLogger(__name__)
 
 __all__ = [
+    "KITE_TOKEN_ALERT_MARKER_TTL_SECONDS",
     "RUNBOOKS",
     "alert_for_outcome",
     "begin_run",
@@ -58,7 +64,10 @@ __all__ = [
     "check_publish_deadline",
     "check_queue_backlog",
     "fail_run",
+    "kite_token_alert_marker",
+    "kite_token_alert_session_day",
     "reap_abandoned_runs",
+    "run_kite_token_check",
 ]
 
 #: Alert name -> the runbook that says what to do. Prompt 17 deliverable 5 writes the files; this
@@ -408,6 +417,150 @@ def _token_alert(
         detail=detail,
         runbook=RUNBOOKS[AlertName.KITE_TOKEN_EXPIRING],
     )
+
+
+# ---------------------------------------------------------------------------
+# The token alert's delivery rule: trading days only, once per token per day
+# ---------------------------------------------------------------------------
+
+#: How long the "this token's alert was already delivered today" marker lives. The key carries
+#: the IST date, so the TTL is only garbage collection: 36 hours outlives the day it names
+#: whatever hour it was written, and never reaches a second day with the same key.
+KITE_TOKEN_ALERT_MARKER_TTL_SECONDS: Final = 36 * 60 * 60
+
+KITE_TOKEN_ALERT_MARKER_PREFIX: Final = "ops:kite-token-alert:"
+
+_SATURDAY: Final = 5
+
+
+def kite_token_alert_marker(alert: Alert, day: dt.date) -> str:
+    """The Redis key that says ``alert`` was delivered for this stored token on ``day`` (IST).
+
+    Keyed on the token's **issue time**, never its value: the issue time is not a credential, and
+    a fresh login stores a new one — so a new token is a new key, and its first warning still
+    sends. The two alerts that have no token to name are keyed on their state instead: "none is
+    stored" and "the blob could not be read" are each one condition a day, not one per hour.
+    """
+    issued_at = alert.detail.get("issued_at")
+    if issued_at is not None:
+        token_ref = f"issued:{issued_at}"
+    elif "error" in alert.detail:
+        token_ref = "unreadable"
+    else:
+        token_ref = "absent"
+    return f"{KITE_TOKEN_ALERT_MARKER_PREFIX}{day.isoformat()}:{token_ref}"
+
+
+async def kite_token_alert_session_day(
+    calendar: Callable[[dt.date], Awaitable[bool]], day: dt.date
+) -> bool:
+    """Whether ``day`` is an NSE session, for the purpose of *raising* the token alert.
+
+    Weekends are ruled out by the weekday; holidays by ``calendar`` — in production
+    :func:`baskfy_api.swing_health.is_session_day` over the ``trading_day`` table, the same rule
+    the 08:45 login nudge uses. That function treats a date the calendar does not carry as a
+    session, and an unreadable calendar is treated the same way here: an alert check must fail
+    towards speaking. A database outage is its own incident, and it must not also swallow the
+    warning that the next bar fetch will fail.
+    """
+    if day.weekday() >= _SATURDAY:
+        return False
+    try:
+        return await calendar(day)
+    except Exception as exc:  # fail open, loudly: see the docstring
+        log.warning(
+            "kite token check: the trading calendar could not be read; treating %s as a session",
+            day.isoformat(),
+            extra={"error": type(exc).__name__},
+        )
+        return True
+
+
+async def _claim_marker(cache: Redis | None, marker: str) -> bool:
+    """``SET NX`` the marker. True when this run is the first today, *or* when Redis cannot say.
+
+    Failing open is the decision: a Redis outage costing an hourly repeat of a real warning is
+    recoverable noise, while a Redis outage silencing it is a missed night.
+    """
+    if cache is None:
+        log.warning("kite token check: no Redis client; delivering without de-duplication")
+        return True
+    try:
+        claimed = await cache.set(marker, "1", nx=True, ex=KITE_TOKEN_ALERT_MARKER_TTL_SECONDS)
+    except (RedisError, OSError) as exc:
+        log.warning(
+            "kite token check: Redis is unavailable; delivering without de-duplication",
+            extra={"error": type(exc).__name__},
+        )
+        return True
+    return bool(claimed)
+
+
+async def _release_marker(cache: Redis | None, marker: str) -> None:
+    """Give the day back when no sink took the alert, so the next hourly run tries again."""
+    if cache is None:
+        return
+    try:
+        await cache.delete(marker)
+    except (RedisError, OSError) as exc:
+        log.warning(
+            "kite token check: could not release an undelivered marker",
+            extra={"error": type(exc).__name__},
+        )
+
+
+async def run_kite_token_check(
+    calendar: Callable[[dt.date], Awaitable[bool]],
+    cache: Redis | None,
+    settings: Settings | None = None,
+    *,
+    now: dt.datetime | None = None,
+    mailer: Mailer | None = None,
+) -> JsonObject:
+    """The hourly token check as Beat runs it: trading days only, delivered once per token per day.
+
+    DECISIONS-MERGE "Ops: token-expiry alert on trading days, once per day" (14 Sep 2026). On the
+    NSE holiday of 14 Sep 2026 an expired token emailed every hour: nothing needed a login that
+    day, and 24 identical emails a day train the reader to ignore the one that matters.
+
+    * **Not a session, no alert** — not logged, not counted, not sent. The IST calendar day.
+    * **A session, a token alert** — :func:`check_kite_token` is evaluated every run, and every
+      run increments the counter and writes the ``alert`` log line. Only the delivery sinks
+      (Sentry, email, webhook) are de-duplicated: the first run of the IST day for this stored
+      token delivers, later runs are recorded as suppressed with the reason.
+    * **A new token** has a new issue time, so a new marker: its first warning sends.
+    * **Redis unavailable** delivers (fail open) and logs that it did.
+    * **No sink took it** (a failed email, or none configured) releases the marker, so the next
+      run tries again rather than burning the day on an alert nobody received.
+    """
+    resolved = settings or get_settings()
+    moment = now or dt.datetime.now(tz=dt.UTC)
+    day = moment.astimezone(IST).date()
+
+    if not await kite_token_alert_session_day(calendar, day):
+        return {
+            "alert": None,
+            "skipped": f"{day.isoformat()} is not an NSE trading session",
+        }
+
+    alert = check_kite_token(resolved, now=moment)
+    if alert is None:
+        return {"alert": None}
+
+    marker = kite_token_alert_marker(alert, day)
+    if not await _claim_marker(cache, marker):
+        reason = (
+            f"already delivered for this stored token on {day.isoformat()} (IST); "
+            "delivered at most once per token per trading day"
+        )
+        log.info("kite token check: delivery suppressed", extra={"reason": reason})
+        return {"alert": await dispatch(alert, resolved, mailer=mailer, suppressed=reason)}
+
+    payload = await dispatch(alert, resolved, mailer=mailer)
+    delivered = payload.get("delivered_to")
+    if not isinstance(delivered, list) or delivered == ["log"]:
+        await _release_marker(cache, marker)
+    return {"alert": payload}
 
 
 async def check_queue_backlog(

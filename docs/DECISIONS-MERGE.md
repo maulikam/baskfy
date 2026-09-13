@@ -7993,3 +7993,62 @@ broker; the worker's sweep will publish it" on every login, which is false.
 
 **Reverse.** Delete the two lines (`row.task_id = task_id`, `await session.flush()`) and their
 comment in `request_login_scan`, and the one new test.
+
+## Ops: token-expiry alert on trading days, once per day · ⚠ UNREVIEWED
+
+**Context.** 14 Sep 2026 was an NSE holiday (market shut) and Maulik got an email every hour
+saying the Kite token was expiring or expired. Beat runs `baskfy.ops.check_kite_token` hourly at
+:05 (`celery_app.py`, "kite-token-expiry"). The task called `ops.check_kite_token()` and
+`alerts.dispatch` on every run. It did not know about trading days and did not de-duplicate, so an
+expired token meant 24 emails a day, holidays and weekends included. Nothing needs a login on a
+day with no session, and 24 identical emails teach the reader to ignore the one that matters.
+`BASKFY_OPS_ALERT_EMAIL` is muted on the box until this ships.
+
+**Choice.** `ops.run_kite_token_check` (called by the task) adds two rules around the unchanged
+`check_kite_token`:
+
+1. **Trading days only (IST calendar day).** If the day is a weekend, or `trading_day` marks it a
+   holiday, there is no alert: no log line, no counter, no send. It uses the same calendar function
+   as the 08:45 login nudge (`baskfy_api.swing_health.is_session_day`). A date the calendar does
+   not carry counts as a session, and so does an unreadable calendar (DB down, logged). An alert
+   check should fail towards speaking.
+2. **Once per stored token per IST day.** The first run that finds a token alert delivers it
+   (Sentry, email, webhook) and sets a Redis marker with `SET NX`, TTL 36 h. The key is
+   `ops:kite-token-alert:<IST date>:issued:<issued_at>`, or `:absent` / `:unreadable` when there is
+   no token to name. It is never keyed on the secret. Later runs that day still increment
+   `baskfy_alerts_total` and write the `alert` log line, but `dispatch(..., suppressed=reason)`
+   skips the delivery sinks, and the reason is logged and returned. A new login stores a new
+   `issued_at`, so it gets a new key and its first warning still sends. The next trading day has a
+   new date and sends again. **If Redis is unavailable, it delivers anyway (fail open) and logs
+   that.** If no sink took the alert (for example a failed email), the marker is released so the
+   next hourly run tries again instead of burning the day.
+
+Warning and expired never collide on one key. Expiry is the IST midnight after issue, so the
+6-hour warning (18:00 onwards) and the expired alert (00:00 onwards) always fall on different IST
+days.
+
+Tests: `services/worker/tests/test_ops_and_alerts.py::TestKiteTokenAlertDelivery` (live Postgres
+calendar + Redis DB 3). They cover a holiday, a weekend, send-once-then-suppress, the next session,
+a new token, Redis down, an unreadable calendar, and an undelivered alert. No existing test
+asserted hourly re-sending.
+
+**Known gap, not closed here.** This only helps on holidays the `trading_day` table knows about.
+The seed holiday list does not include lunar holidays such as Ganesh Chaturthi, and
+`is_session_day` treats a `derived` weekday as a session. If the box's calendar did not mark
+14 Sep closed ahead of time, the holiday rule alone would still have sent one email that day
+(once-per-day would have capped it at one). Loading the year's NSE holiday circular into
+`trading_day` is the fix for that, and it is an ops step.
+
+**Rejected.** *Muting the email permanently*: it throws away the one warning docs/09 calls "the #1
+pipeline failure". *Lowering the beat frequency* (for example daily): fewer emails, but a real
+18:00 warning could arrive hours late and a token replaced after 18:45 costs a night's data. The
+check itself is free (no network call), so the fix belongs in delivery, not in evaluation.
+*De-duplicating inside `dispatch` for every alert*: other alerts have their own once-rules (the
+publish deadline fires once by construction). A global rule would need a key per alert kind, which
+is a bigger change than this incident justifies.
+
+**Reverse.** In `check_kite_token_task`, go back to `alert = ops.check_kite_token()` /
+`_raise_alert(alert)`. Delete `run_kite_token_check`, `kite_token_alert_marker`,
+`kite_token_alert_session_day`, `_claim_marker`, `_release_marker` and the marker constants from
+`ops.py`, the `suppressed` keyword from `alerts.dispatch`, and `TestKiteTokenAlertDelivery`. Stale
+markers expire on their own within 36 h.

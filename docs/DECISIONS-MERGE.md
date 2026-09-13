@@ -7699,6 +7699,29 @@ with under a year of universe history (the early backfill) fail desk scoring and
 failed. The desk's code is not patched from this tree. Reverse: fix in the desk, re-run the backfill
 for failed days.
 
+**2C.5 The desk bars are bounded per instrument (14 Sep 2026, incident).** `backfill-ranking
+--from 2026-07-27 --to 2026-09-11` took the production box (7.8 GB) down before its first day
+finished, and committed nothing. Cause: `load_desk_bars` read **all history since 2011** for every
+scanned name (2B.1's "pass all history"), ~3,100 names x up to ~3,900 sessions = ~8-12 M rows,
+held as driver rows (~1.3 KB each, measured: 10-15 GB) and then run through `compute_factors`
+(~1.4 KB per row, measured: 11-17 GB). The nightly `compute_factors` step ran the same load. Choice:
+each scanned name's **last `max(N12 + 1, 252) + 20` bars** (`desk_bar_lookback`, ~272), read as a
+date range from the lookback-th trading day plus a `LATERAL ... LIMIT` top-up for names with a hole
+in that range, streamed 50,000 rows at a time: ~0.85 M rows, ~90 MB of driver rows at once, ~1.2 GB
+in Polars. This is 2B.1's "truncation proven identical": every column `score.required` takes from
+bars is a row-count window over the instrument's own rows, the longest `vol_12m` at N12 + 1 bars;
+measured identical at N12 + 1 and different at N12 on synthetic history with suspensions and late
+listings, and pinned by `services/worker/tests/test_desk_score_bounds.py` (bounded load scores equal
+the whole history's; every bar statement carries a bound). A date-only bound was rejected: a name
+suspended for years would lose the pre-suspension bars its whole-history windows read, and its score
+would move. `load_history` keeps its 3-year floor (the ATR's Wilder recursion reads from the start
+of what it is handed, so shortening it would move C1 values) but is streamed too. Not a bit-level
+guarantee: Polars' sliding `rolling_std` accumulates last-bit float drift from where a series
+starts, invisible after storage rounding except at an exact rounding tie. Seen while proving it, not
+changed: `_with_rsi` pivots in first-seen date order, so a date the lowest-id instrument lacks is
+appended at the end of the pivot, and every name's `rsi_1m` window skips it. Reverse: pass the
+whole history again (`load_desk_bars` with the pre-2C.5 query) — which needs a bigger box.
+
 ## Ranking 2.E — portfolio-aware selection (`select_portfolio`, contract C5) · ⚠ UNREVIEWED
 
 **Context.** C5 names the rules and reason codes but leaves the semantics a portfolio manager
@@ -7829,6 +7852,46 @@ selection rule (lets the two drift); drift-weighted holds (turnover then depends
 separate IS and OOS runs (OOS would start without the holdings IS left it). **Reverse.** Each is
 one `ValidationConfig` field or one step in `_Simulator`; the buffer default moves when the grid
 result is recorded.
+
+**2F.2 Evidence and statuses (14 Sep 2026, gate G4/G5).** `docs/ranking/VALIDATION.md` is
+written. `research/ranking-validation/render_validation.py` generates its tables from
+`out/ablation.csv` and applies the promotion rule in code.
+
+*Choices.*
+- (a) **Rule.** The gate's example rule is used, because PLAN names none: OOS net CAGR ≥ control,
+  OOS max DD not worse by more than 2 pts, OOS turnover up by no more than 25%.
+- (b) **Testability comes first.** Coverage 0, or a runner `note` recording a data limit, makes a
+  factor "not testable", which leaves it at `research`. This covers `rs_persist_126` (NIFTY 500
+  levels absent) and `nse_momentum_score` (membership only from 2021-08-02, so its IS window and its
+  OOS drawdown are base's). The rule passed both rows; that pass is shown and not used.
+- (c) **Outcome.** 1 validated (`rank_persist_20`), 17 rejected, 2 not testable. The registry
+  carries this as `C8_VALIDATION_STATUS`. `test_factor_registry_c1.py` parses the document, so the
+  registry and the document cannot drift apart.
+- (d) **Grid.** A cell is "OOS-stable" when it passes the rule against 20/40 in both IS and OOS.
+  The best cell is the one with the highest OOS CAGR: **15/60**, just ahead of 20/60. Its ranks are
+  carried over as absolute ranks, so `SelectionConstraints` becomes `retention_rank` 30 → 60 with
+  entry 15 and `max_names` 15 unchanged. The API's `SelectionConstraintsIn`, `openapi.json`, the
+  generated `schema.ts` default comment and PLAN C5 are updated to match.
+- (e) **`ValidationConfig` stays 20/40.** It is the incumbent the CSV was measured against.
+- (f) **Presets.** No preset's `sort_by` was modelled, so no preset status moves.
+- (g) **Fixture.** `services/api/tests/test_screener_db.py` seeded C1 columns by testing
+  `status is RESEARCH`. It now tests `is not LEGACY`, so the validated and rejected columns are
+  still seeded. This test is DB-backed and was not run here (no Postgres).
+
+*Rejected.*
+- Marking `nse_momentum_score` validated on a partial window.
+- Adding a `not_testable` enum value. That is an API enum change, and `research` already means
+  "no verdict".
+- Scaling the cell to the 15-name book (11/45), which is a second assumption stacked on the first.
+- Moving `ValidationConfig`, which would make `ablation.csv` unreproducible.
+
+*Reverse.* Edit `C8_VALIDATION_STATUS`, or the rule constants in the render script, and re-render.
+The buffer is one default in `ranking_selection.py` plus its API mirror (`schemas.py`, then
+`make openapi`).
+
+*Limits.* The limits in VALIDATION.md §3 apply: the base is the runner's choice, there is no sector
+data, entry 25 ≡ entry 20, base turnover is about 3.7 a year, IS covers only 21 months, the book is
+20 names here against 15 in the product, and several gaps are a fraction of a point.
 
 ## Ranking 2.G — API: ranking engine route-through, provenance, explain, selection (C6) · Phase 2 wave 3 · ⚠ UNREVIEWED
 

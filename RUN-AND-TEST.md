@@ -539,6 +539,41 @@ screen sleeves to that cap. Applying it withholds capital as cash; a crore stays
 
 ---
 
+## 3e. `backfill-ranking` on the box (gate G6, `gates/ranking-2.C-worker.md`)
+
+**Always cap the container's memory.** The first attempt, on `403e6fa`, ran the CLI without a
+memory cap. It loaded every bar since 2011 for the whole universe — roughly 20–30 GB — and the
+box became unresponsive; it was rebooted at 01:37 IST with nothing written. Fixed in `f52df2c`
+(`docs/DECISIONS-MERGE.md` 2C.5), which bounds the per-name load. The command below always sets
+`docker update --memory` right after starting the container — never run it without that line.
+
+```bash
+cd /opt/baskfy && C='docker compose --env-file .env.staging.compose -f compose.prod.yml'
+$C run -d --no-deps --name ranking-backfill worker python -m baskfy_worker.factors_cli backfill-ranking --from D1 --to D2 [--force]
+docker update --memory 3500m --memory-swap 3500m ranking-backfill
+docker logs -f ranking-backfill
+```
+
+Run it through `tools/deploy/box.sh` (there is no SSH to the box) with `AWS_PROFILE=baskfy-poc`.
+
+**Measured 14 Sep 2026** on the production box (t4g.large, 2 vCPU, 7.8 GB, 11 services up),
+release `f52df2c`: one trading day (2026-09-11) took **682.5 s**, computing `factor_rows=4358`
+and `desk_rows=4358`. Container memory plateaued at 1.37 GB with a brief peak of 2.67 GB; the
+box's available memory never went below 2.7 GB. At that rate a 35-day run is **~6.6 h**.
+
+**Where the time goes.** Each day recomputes factors over a 3-year history for the whole
+universe — a known optimisation target, not fixed yet.
+
+**Rules for running it:**
+
+- Never inside the nightly window (18:40–21:15 IST) or during market hours.
+- Try one day first (`--from`/`--to` the same date) before committing to a longer range.
+- `--force` recomputes days that are already complete — it upserts, it does not duplicate rows.
+- After any run, check for duplicates with `tools/deploy/box-sql.sh` — the `GROUP BY
+  instrument_id, date HAVING count(*) > 1` query against the ranking tables.
+
+---
+
 ## 4. Testing everything
 
 ```bash

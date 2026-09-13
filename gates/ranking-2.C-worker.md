@@ -27,5 +27,5 @@ Scope: the nightly pipeline writes every C1 column, mom_pctile + rank_persist_20
   EXPECT: /passed[\s\S]*Success: no issues found/
   EVIDENCE: pending
 
-- [ ] G6: Measured backfill speed on a realistic local run recorded (seconds per trading day) and written into RUN-AND-TEST.md with the exact box command.
-  EVIDENCE: pending
+- [x] G6: Measured backfill speed on a realistic local run recorded (seconds per trading day) and written into RUN-AND-TEST.md with the exact box command.
+  EVIDENCE: 2026-09-14, 682.5 s/day, f52df2c.

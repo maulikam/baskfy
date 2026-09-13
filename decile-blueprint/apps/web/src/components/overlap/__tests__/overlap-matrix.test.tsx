@@ -14,7 +14,7 @@ const membership = membershipOf([
 
 describe("OverlapMatrix", () => {
   it("defaults to names on two or more sources, and includes the screen as a column", () => {
-    render(<OverlapMatrix membership={membership} screenKey="exmpl0000001" />);
+    render(<OverlapMatrix membership={membership} screenKeys={["exmpl0000001"]} />);
 
     const table = screen.getByTestId("overlap-matrix-table");
     expect(within(table).getByRole("columnheader", { name: /Volume/ })).toBeInTheDocument();
@@ -32,7 +32,7 @@ describe("OverlapMatrix", () => {
 
   it("shows screen-only names when asked for the screen view", async () => {
     const user = userEvent.setup();
-    render(<OverlapMatrix membership={membership} screenKey="exmpl0000001" />);
+    render(<OverlapMatrix membership={membership} screenKeys={["exmpl0000001"]} />);
 
     await user.click(screen.getByTestId("overlap-matrix-view-screen"));
 
@@ -48,7 +48,7 @@ describe("OverlapMatrix", () => {
       { key: "twt", label: "Three weeks tight", symbols: null },
       { key: "swing", label: "Swing", symbols: ["TCS"] },
     ]);
-    render(<OverlapMatrix membership={unread} screenKey={null} />);
+    render(<OverlapMatrix membership={unread} screenKeys={[]} />);
 
     expect(screen.getByTestId("overlap-matrix-summary").textContent).toMatch(/could not be read/);
     expect(screen.queryByRole("columnheader", { name: /Tight/ })).toBeNull();

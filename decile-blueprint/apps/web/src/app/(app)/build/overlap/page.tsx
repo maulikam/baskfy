@@ -14,12 +14,13 @@ import { PAGES } from "@/lib/vocabulary";
 /**
  * `/build/overlap` — names that land on more than one Build scan.
  *
- * The table lists every name across Volume breakout, Three weeks tight, Swing, and the selected
- * screen. The named lists below it are the pairwise (and one three-way) cuts a person still asks
- * for by name.
+ * The table lists every name across Volume breakout, Three weeks tight, Swing, and up to three
+ * screens. The named lists below it are the pairwise (and one three-way) cuts a person still
+ * asks for by name.
  *
  * Read-only. Nothing here queues a scan or places an order — it only intersects what those
- * surfaces already published (plus one fresh screen run so the screen column is current).
+ * surfaces already published (plus a fresh run of each picked screen so those columns are
+ * current).
  */
 
 export const dynamic = "force-dynamic";
@@ -30,11 +31,11 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-function firstParam(
-  value: string | string[] | undefined,
-): string | undefined {
-  if (Array.isArray(value)) return value[0];
-  return value;
+function screenParams(value: string | string[] | undefined): string[] {
+  if (value === undefined) return [];
+  return (Array.isArray(value) ? value : [value])
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 }
 
 export default async function BuildOverlapPage({
@@ -43,19 +44,28 @@ export default async function BuildOverlapPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const sources = await fetchOverlapSources(firstParam(params.screen) ?? "");
+  const sources = await fetchOverlapSources(screenParams(params.screen));
+  const selectedScreens = sources.selectedScreens;
+  const primaryScreen = selectedScreens[0];
 
-  const membership = membershipOf([sources.vbt, sources.twt, sources.swing, sources.screen]);
+  const membership = membershipOf([
+    sources.vbt,
+    sources.twt,
+    sources.swing,
+    ...selectedScreens,
+  ]);
   const pair = intersectionOf([sources.vbt, sources.twt]);
   const swingTwt = intersectionOf([sources.swing, sources.twt]);
   const swingVbt = intersectionOf([sources.swing, sources.vbt]);
-  const triple = intersectionOf([sources.screen, sources.vbt, sources.twt]);
+  const triple = primaryScreen
+    ? intersectionOf([primaryScreen, sources.vbt, sources.twt])
+    : intersectionOf([sources.vbt, sources.twt]);
 
   const asOfDates = [
     sources.asOf.vbt,
     sources.asOf.twt,
     sources.asOf.swing,
-    sources.asOf.screen,
+    ...sources.asOf.screens,
   ].filter((value): value is string => Boolean(value));
   const asOfLabel =
     asOfDates.length === 0
@@ -63,6 +73,15 @@ export default async function BuildOverlapPage({
       : [...new Set(asOfDates)].map((date) => formatTradeDate(date)).join(" · ");
 
   const sharedAcross = membership.rows.filter((row) => row.count >= 2).length;
+  const screenNames = selectedScreens.map((screen) => screen.label);
+  const screenList =
+    screenNames.length === 0
+      ? "a screen"
+      : screenNames.length === 1
+        ? `“${screenNames[0]}”`
+        : screenNames.length === 2
+          ? `“${screenNames[0]}” and “${screenNames[1]}”`
+          : `“${screenNames.slice(0, -1).join("”, “")}”, and “${screenNames[screenNames.length - 1]}”`;
 
   return (
     <div className="flex w-full max-w-[104rem] flex-col gap-6">
@@ -72,7 +91,10 @@ export default async function BuildOverlapPage({
         meta={
           <span className="flex flex-wrap items-center gap-x-4 gap-y-2">
             {asOfLabel ? <span>As of {asOfLabel}</span> : null}
-            <ScreenPicker screens={sources.screens} selected={sources.screen.key} />
+            <ScreenPicker
+              screens={sources.screens}
+              selected={selectedScreens.map((screen) => screen.key)}
+            />
           </span>
         }
       />
@@ -90,7 +112,7 @@ export default async function BuildOverlapPage({
           <>
             <Mark>{sharedAcross}</Mark>{" "}
             {sharedAcross === 1 ? "name sits" : "names sit"} on at least two of Volume breakout,
-            Three weeks tight, Swing, and “{sources.screen.label}”
+            Three weeks tight, Swing, and {screenList}
             {pair.available ? (
               <>
                 ; <Mark>{pair.sharedCount}</Mark> on both Volume and Tight
@@ -111,7 +133,10 @@ export default async function BuildOverlapPage({
         )}
       </Answer>
 
-      <OverlapMatrix membership={membership} screenKey={sources.screen.key} />
+      <OverlapMatrix
+        membership={membership}
+        screenKeys={selectedScreens.map((screen) => screen.key)}
+      />
 
       <OverlapPanel
         testId="overlap-pair"
@@ -137,7 +162,11 @@ export default async function BuildOverlapPage({
       <OverlapPanel
         testId="overlap-triple"
         title="Screens ∩ Volume breakout ∩ Three weeks tight"
-        blurb={`Names on “${sources.screen.label}”, Volume breakout, and Three weeks tight together.`}
+        blurb={
+          primaryScreen
+            ? `Names on “${primaryScreen.label}”, Volume breakout, and Three weeks tight together.`
+            : "Names on a screen, Volume breakout, and Three weeks tight together."
+        }
         result={triple}
       />
     </div>

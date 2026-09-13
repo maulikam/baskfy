@@ -7357,3 +7357,15 @@ two panels.
 
 **Reverse.** Remove `membershipOf` / `OverlapMatrix` and the Swing ∩ Volume panel; restore the
 three-list page.
+
+## Overlap — three screens from the dropdown · ⚠ UNREVIEWED
+
+**Context.** `/build/overlap` listed every saved screen in one dropdown but only intersected the
+one that was selected. Maulik asked for at least three screens to pick from the dropdown.
+
+**Choice.** Default to three screen columns (Investing 001 first). Three dropdowns, each listing
+every visible screen; `?screen=` repeats. The named triple still uses the first screen.
+
+**Rejected.** Keeping a single screen column (the previous page); a native multi-select.
+
+**Reverse.** Restore `pickScreenId` and one `ScreenPicker` select.

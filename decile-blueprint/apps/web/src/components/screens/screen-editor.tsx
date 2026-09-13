@@ -5,12 +5,14 @@ import { CalendarClock, Columns3, Copy, Loader2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { parseAsString, useQueryState } from "nuqs";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { ErrorState } from "@/components/data/error-state";
 import { ApplyFiltersPill } from "@/components/screens/apply-filters-pill";
 import { ExportButton } from "@/components/screens/export-button";
 import { FilterChipBar } from "@/components/screens/filter-chip-bar";
+import { PortfolioFit } from "@/components/screens/portfolio-fit";
+import { PresetsMenu } from "@/components/screens/presets-menu";
 import { ResultsPanel } from "@/components/screens/results-panel";
 import type { ColumnMeta } from "@/components/screens/result-columns";
 import { ScreenIdentity } from "@/components/screens/screen-identity";
@@ -60,9 +62,13 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
 
   const [draftName, setDraftName] = useState(screen.name);
   const [pendingDelete, setPendingDelete] = useState(false);
-  useEffect(() => {
+  // Reset the draft when the saved name or the screen itself changes. Adjusting state during
+  // render against the last-seen source avoids the extra render a synchronising effect costs.
+  const [draftSource, setDraftSource] = useState({ name: screen.name, publicId: screen.public_id });
+  if (draftSource.name !== screen.name || draftSource.publicId !== screen.public_id) {
+    setDraftSource({ name: screen.name, publicId: screen.public_id });
     setDraftName(screen.name);
-  }, [screen.name, screen.public_id]);
+  }
   const factors = useFactors();
   const columns = useColumns();
   const universes = useUniverses();
@@ -226,6 +232,12 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
             </Button>
           ) : null}
 
+          <PresetsMenu
+            definition={working}
+            patch={patch}
+            disabled={readOnly && !screen.is_example}
+          />
+
           <Button
             variant="outline"
             size="icon"
@@ -321,6 +333,12 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
           onUndoLastFilter={undoLastFilter}
           screenName={screen.name}
           screenPublicId={screen.public_id}
+          definition={settled}
+        />
+        <PortfolioFit
+          definition={settled}
+          asOf={preview.data?.as_of}
+          dataVersion={preview.data?.data_version}
         />
       </div>
 
@@ -348,7 +366,7 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
               onClick={() => {
                 void remove.mutateAsync(screen.public_id).then(() => {
                   setPendingDelete(false);
-                  router.push("/build" as never);
+                  router.push("/build");
                 });
               }}
             >

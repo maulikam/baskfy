@@ -2267,11 +2267,10 @@ export interface paths {
         };
         /**
          * Named ranking presets
-         * @description docs/ranking/PLAN.md §1.5 / C6: the named presets with their promotion status.
+         * @description docs/ranking/PLAN.md C6 / C7: the named presets with their promotion status.
          *
          *     Reference data like ``/meta/factors``: served straight from ``baskfy_core.ranking_presets``,
-         *     no database, no principal. ``nse_momentum`` is absent because core refuses it (PLAN
-         *     correction #8). ``patch`` is what the editor merges into a definition to apply one.
+         *     no database, no principal. ``patch`` is what the editor merges into a definition to apply one.
          */
         get: operations["getRankingPresets"];
         put?: never;
@@ -5703,12 +5702,16 @@ export interface components {
             b_momentum: number | null;
             /** C Sharpe */
             c_sharpe: number | null;
+            /** Components */
+            components: components["schemas"]["DeskComponentOut"][];
             /** D Consistency */
             d_consistency: number | null;
             /** E Liquidity */
             e_liquidity: number | null;
             /** Eligible */
             eligible: boolean;
+            /** Ext Over 20Dma */
+            ext_over_20dma: number | null;
             /** F Penalty */
             f_penalty: number | null;
             /** Rank */
@@ -5717,6 +5720,28 @@ export interface components {
             reject: string;
             /** Score */
             score: number | null;
+            /** Score Version */
+            score_version: string | null;
+        };
+        /**
+         * DeskComponentOut
+         * @description ``ranking_engine.DeskComponent``: one A-F grade, its clip range and its stored inputs.
+         */
+        DeskComponentOut: {
+            /** Grade */
+            grade: string;
+            /** Inputs */
+            inputs: components["schemas"]["DeskInputOut"][];
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Max Points */
+            max_points: number;
+            /** Min Points */
+            min_points: number;
+            /** Points */
+            points: number | null;
         };
         /**
          * DeskHoldingOut
@@ -5752,6 +5777,18 @@ export interface components {
             unrealised_pct?: number | null;
             /** Value */
             value?: number | null;
+        };
+        /**
+         * DeskInputOut
+         * @description ``ranking_engine.DeskInput``: one stored raw value a grade was computed from.
+         */
+        DeskInputOut: {
+            /** Label */
+            label: string;
+            /** Name */
+            name: string;
+            /** Value */
+            value: number | null;
         };
         /** DeskTradeOut */
         DeskTradeOut: {
@@ -6120,6 +6157,23 @@ export interface components {
          * @enum {string}
          */
         ExitReason: "rank_outside_buffer" | "not_in_screen" | "delisted";
+        /**
+         * ExplainRankHistoryOut
+         * @description ``ranking_engine.RankHistory``: today's rank beside the previous session's run.
+         *
+         *     ``previous`` is ``null`` when the name was not ranked on ``previous_as_of``; ``change`` is
+         *     ``previous - today`` (positive = places gained) and ``null`` unless both ranks exist.
+         */
+        ExplainRankHistoryOut: {
+            /** Change */
+            change: number | null;
+            /** Previous */
+            previous: number | null;
+            /** Previous As Of */
+            previous_as_of: string | null;
+            /** Today */
+            today: number | null;
+        };
         /**
          * ExportLinkOut
          * @description docs/07: `GET /backtests/{id}/export` → "CSV/Parquet signed URL".
@@ -8413,6 +8467,7 @@ export interface components {
             provenance: components["schemas"]["RankProvenanceOut"];
             /** Rank */
             rank: number | null;
+            rank_history: components["schemas"]["ExplainRankHistoryOut"];
             /** Symbol */
             symbol: string | null;
             /** Terms */
@@ -8503,16 +8558,19 @@ export interface components {
         };
         /**
          * RankingPresetOut
-         * @description One named ranking preset — ``baskfy_core.ranking_presets`` (docs/ranking/PLAN.md §1.5).
+         * @description One named ranking preset — ``baskfy_core.ranking_presets`` (docs/ranking/PLAN.md C6/C7).
          *
          *     ``patch`` is merged into a ``ScreenDefinition`` payload to apply the preset; ``status`` is
-         *     ``ready`` (safe as Sort By today) or ``research`` (a starting point, not a product default).
+         *     ``ready`` (every factor it ranks by passed validation) or ``research`` (a starting point, not
+         *     a product default). ``label`` is the display name; ``nse_momentum``'s is C7's exact wording.
          */
         RankingPresetOut: {
             /** Description */
             description: string;
             /** Key */
             key: string;
+            /** Label */
+            label: string;
             /** Patch */
             patch: {
                 [key: string]: components["schemas"]["JsonValue"];
@@ -9617,7 +9675,7 @@ export interface components {
             max_per_sector?: number | null;
             /**
              * Retention Rank
-             * @default 30
+             * @default 60
              */
             retention_rank: number;
             /** Turnover Budget Names */

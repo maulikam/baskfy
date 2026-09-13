@@ -43,6 +43,14 @@ async def test_costs_returns_after_accrued_fees(monkeypatch: pytest.MonkeyPatch)
 
     monkeypatch.setattr(curated_costs, "load_investment_for_user", _load)
 
+    # Since AFC (``2a4e3a2``) the handler overlays live Kite marks before it prices the snapshot.
+    # This is a unit test of the fee arithmetic with a mocked session, so the overlay is stubbed
+    # to the no-Kite-session answer — no quotes — rather than let it reach a broker from a test.
+    async def _no_live_marks(*_args: object, **_kwargs: object) -> dict[int, Decimal]:
+        return {}
+
+    monkeypatch.setattr(curated_costs, "live_prices_by_instrument", _no_live_marks)
+
     holding = MagicMock()
     holding.instrument_id = 1
     holding.qty = Decimal("10")
@@ -72,4 +80,6 @@ async def test_costs_returns_after_accrued_fees(monkeypatch: pytest.MonkeyPatch)
     out = await get_investment_costs(4, session, principal)
     assert out.accrued_fees_total == fee.total
     assert out.collected is False
+    # No live quote, so the holding is marked at its average price and the payload says so.
+    assert out.marked_at_cost is True
     assert out.returns_after_fees == out.snapshot.current_returns - fee.total

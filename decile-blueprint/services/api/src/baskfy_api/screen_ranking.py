@@ -47,6 +47,42 @@ class InstrumentNotInUniverse(LookupError):
 # ---------------------------------------------------------------------------
 
 
+async def previous_trading_day(session: AsyncSession, as_of: dt.date) -> dt.date | None:
+    """The NSE trading day strictly before ``as_of``, or ``None`` before the calendar starts."""
+    return (
+        await session.execute(
+            select(func.max(TradingDay.date)).where(
+                TradingDay.exchange_id == NSE_EXCHANGE_ID,
+                TradingDay.is_trading_day.is_(True),
+                TradingDay.date < as_of,
+            )
+        )
+    ).scalar_one_or_none()
+
+
+async def previous_session_rank(
+    session: AsyncSession, definition: ScreenDefinition, instrument_id: int, as_of: dt.date
+) -> tuple[dt.date | None, int | None]:
+    """The previous session and ``instrument_id``'s rank in the same definition's run on it.
+
+    The run is :func:`rank_definition` as of that day — the same engine path, over that day's
+    point-in-time frame (membership, factor rows and the ``desk_score_daily`` row of that date;
+    house rule 5), never today's frame re-read. A name the run did not rank, or a day with no
+    rows, is ``None``: nothing is carried forward or guessed.
+    """
+    previous = await previous_trading_day(session, as_of)
+    if previous is None:
+        return None, None
+    ranked = await rank_definition(session, definition, previous)
+    if ranked.result is None:
+        return previous, None
+    rows = ranked.result.ranked
+    matches = rows.loc[rows[ranking_engine.INSTRUMENT_ID] == instrument_id]
+    if matches.empty:
+        return previous, None
+    return previous, int(str(matches.iloc[0][ranking_engine.RANK]))
+
+
 async def recent_corporate_action(
     session: AsyncSession, instrument_id: int, as_of: dt.date
 ) -> bool:
@@ -84,6 +120,7 @@ async def explain_symbol(
 
     The row comes from ``result.scored`` — every row of the universe, ranked or not — so a name
     that failed a filter is explained too, with ``rank`` null and the failures named.
+    ``rank_history`` compares with the previous session's run (:func:`previous_session_rank`).
     Raises :class:`InstrumentNotInUniverse` when the universe has no such row.
     """
     ranked = await rank_definition(session, definition, as_of)
@@ -99,6 +136,9 @@ async def explain_symbol(
     row[ranking_engine.RECENT_CORPORATE_ACTION] = await recent_corporate_action(
         session, instrument_id, as_of
     )
+    previous_as_of, previous_rank = await previous_session_rank(
+        session, definition, instrument_id, as_of
+    )
     context = ranking_engine.ExplainContext(
         result=ranked.result,
         universe=ranked.query.universe_slug,
@@ -108,6 +148,8 @@ async def explain_symbol(
             await desk_score_version(session, as_of) if uses_desk_score(definition) else None
         ),
         clause_details=ranked.query.clause_details,
+        previous_as_of=previous_as_of,
+        previous_rank=previous_rank,
     )
     return ranking_engine.explain(row, context)
 

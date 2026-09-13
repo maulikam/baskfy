@@ -1,12 +1,13 @@
 "use client";
 
-import type { ScreenRunResponse } from "@baskfy/api-client";
+import type { ScreenDefinition, ScreenRunResponse } from "@baskfy/api-client";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 
 import type { DataTable as DataTableComponent, Density } from "@/components/data/data-table";
 import { EmptyState } from "@/components/data/empty-state";
 import { ErrorState } from "@/components/data/error-state";
+import { ProvenanceHeader } from "@/components/screens/provenance-header";
 import { ResultCards } from "@/components/screens/result-cards";
 import {
   buildColumns,
@@ -84,6 +85,8 @@ export interface ResultsPanelProps {
   topN?: number;
   /** Needed to save the basket; absent for an unsaved definition, which has nothing to link to. */
   screenPublicId?: string;
+  /** The definition that produced ``result``; with ``ranking_terms`` the peek explains each rank. */
+  definition?: ScreenDefinition | undefined;
 }
 
 const TABLE_HEIGHT = 560;
@@ -173,6 +176,7 @@ export function ResultsPanel({
   screenName = "Screen basket",
   topN,
   screenPublicId,
+  definition,
 }: ResultsPanelProps) {
   const [density, setDensity] = useState<Density>("comfortable");
   const [peeked, setPeeked] = useState<ResultRow | null>(null);
@@ -253,6 +257,8 @@ export function ResultsPanel({
         </div>
       </div>
 
+      {result?.provenance ? <ProvenanceHeader provenance={result.provenance} /> : null}
+
       {isPending ? <LoadingOneLiner /> : null}
 
       {!isPending && suppressed.length > 0 ? (
@@ -332,6 +338,9 @@ export function ResultsPanel({
         meta={columnMeta}
         sortingFactorLabel={result?.sorting_factor.label ?? ""}
         screenPublicId={screenPublicId}
+        definition={definition}
+        asOf={result?.as_of}
+        dataVersion={result?.data_version}
         onClose={() => setPeeked(null)}
       />
     </div>

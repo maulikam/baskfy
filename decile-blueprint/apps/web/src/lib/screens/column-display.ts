@@ -18,6 +18,12 @@ export const COLUMN_DISPLAY: Readonly<Record<string, ColumnDisplay>> = {
     label: "Consistency score",
     tooltip: "The factor this screen ranks on",
   },
+  /* Composite mode's 0–100 total (`ranking_engine.COMPOSITE_SCORE`). Without an entry the header
+     fell back to the raw key, "composite_score" — seen in the G7 browser check, 14 Sep 2026. */
+  composite_score: {
+    label: "Composite score",
+    tooltip: "0–100: each ranking term scored against the scope, then added up by weight",
+  },
   ret_12m: {
     label: "1-yr return",
     tooltip: "Absolute price return, 365d",
@@ -52,35 +58,35 @@ export const COLUMN_DISPLAY: Readonly<Record<string, ColumnDisplay>> = {
   },
   desk_a_trend: {
     label: "Desk A · Trend",
-    tooltip: "Book SCORE component A (trend / MA stack)",
+    tooltip: "Desk score component A (trend / MA stack)",
   },
   desk_b_momentum: {
     label: "Desk B · Momentum",
-    tooltip: "Book SCORE component B (blended returns)",
+    tooltip: "Desk score component B (blended returns)",
   },
   desk_c_sharpe: {
     label: "Desk C · Sharpe",
-    tooltip: "Book SCORE component C (blended Sharpe)",
+    tooltip: "Desk score component C (blended Sharpe)",
   },
   desk_d_consistency: {
     label: "Desk D · Consistency",
-    tooltip: "Book SCORE component D (positive-days path)",
+    tooltip: "Desk score component D (positive-days path)",
   },
   desk_e_liquidity: {
     label: "Desk E · Liquidity",
-    tooltip: "Book SCORE component E (liquidity)",
+    tooltip: "Desk score component E (liquidity)",
   },
   desk_f_penalty: {
     label: "Desk F · Penalty",
-    tooltip: "Book SCORE component F (circuits / hygiene penalty)",
+    tooltip: "Desk score component F (circuits / hygiene penalty)",
   },
   desk_reject: {
     label: "Desk reject",
-    tooltip: "Why the book rejected this name (empty when eligible)",
+    tooltip: "Why the desk score rejected this name (empty when eligible)",
   },
   desk_eligible: {
     label: "Desk eligible",
-    tooltip: "True when the book SCORE has no reject reason",
+    tooltip: "True when the desk score has no reject reason",
   },
 };
 

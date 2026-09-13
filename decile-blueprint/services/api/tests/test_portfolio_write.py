@@ -58,6 +58,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from test_portfolio_overview import BOOKKEEPING_WRITES
 
 from baskfy_api.auth import Principal, PrincipalKind
+from baskfy_api.invoices import today_ist
 from baskfy_api.problems import Problem, ProblemType
 from baskfy_api.routers.portfolio_overview import (
     _NO_INPUTS,
@@ -804,14 +805,19 @@ async def test_creating_a_capital_portfolio_allocates_the_named_holdings(
             HoldingKeyIn(instrument_id=pile.tcs, broker_account_id=pile.zerodha),
         ],
     )
+    ist_day_before = today_ist()
     detail = await new_portfolio(body, session, pile.owner)
+    ist_day_after = today_ist()
 
     assert detail.summary.name == "Indian IT"
     assert detail.summary.kind is PortfolioKind.CAPITAL
     assert detail.summary.source is PortfolioSource.HOLDING_GROUP
     assert detail.summary.counts_toward_total is True
     assert detail.summary.value == SECTOR_VALUE
-    assert detail.summary.started_on == dt.datetime.now(tz=dt.UTC).date()
+    # The day the grouping begins is the IST calendar day (audit 3.12, ``41c247a``): between
+    # 00:00 and 05:30 IST the UTC date is still yesterday. Bracketed, so a create that straddles
+    # IST midnight is not a flake.
+    assert detail.summary.started_on in {ist_day_before, ist_day_after}
     assert {row.instrument.instrument_id for row in detail.holdings} == {pile.infy, pile.tcs}
 
     new_id = detail.summary.portfolio_id

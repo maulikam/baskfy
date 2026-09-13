@@ -85,15 +85,15 @@ async def get_factors() -> list[FactorOut]:
     summary="Named ranking presets",
 )
 async def get_ranking_presets() -> list[RankingPresetOut]:
-    """docs/ranking/PLAN.md §1.5 / C6: the named presets with their promotion status.
+    """docs/ranking/PLAN.md C6 / C7: the named presets with their promotion status.
 
     Reference data like ``/meta/factors``: served straight from ``baskfy_core.ranking_presets``,
-    no database, no principal. ``nse_momentum`` is absent because core refuses it (PLAN
-    correction #8). ``patch`` is what the editor merges into a definition to apply one.
+    no database, no principal. ``patch`` is what the editor merges into a definition to apply one.
     """
     return [
         RankingPresetOut(
             key=row["key"],
+            label=row["label"],
             description=row["description"],
             status=row["status"],
             sort_by=row["sort_by"],

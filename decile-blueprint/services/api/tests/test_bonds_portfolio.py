@@ -72,6 +72,7 @@ from baskfy_api.routers.portfolio_overview import (
     new_portfolio,
 )
 from baskfy_core.allocation_ledger import PortfolioKind, PortfolioSource
+from baskfy_core.curated_baskets import SOLE_USER_ENV
 from baskfy_core.models import (
     BrokerAccount,
     Exchange,
@@ -535,6 +536,12 @@ async def test_a_holding_filed_into_bonds_is_still_refused_by_the_gateway(
     BUY and SELL both, because a guard that blocks only buys traps a position it cannot close and
     is worse than the risk it was written for. `DRY_RUN` is off and the broker raises on contact,
     so "refused" here means refused before any network call — not simulated.
+
+    Refused as a ``BLOCKED`` result, not a raised ``UntouchableInstrumentError``: the gateway
+    catches the guard's error and journals it since AF 3.5 (``1051e43``), so one SGB leg cannot
+    abort a batch that has already placed real orders. The guard itself still raises — see
+    ``test_both_of_the_brokers_spellings_are_refused`` — and the exploding broker proves the
+    refusal came before any network call.
     """
     body = NewPortfolioIn(
         name=BONDS,
@@ -549,16 +556,17 @@ async def test_a_holding_filed_into_bonds_is_still_refused_by_the_gateway(
 
     gateway = _gateway(tmp_path)
     for side in ("BUY", "SELL"):
-        with pytest.raises(UntouchableInstrumentError):
-            await gateway.place(
-                symbol=BOND_AS_THE_MASTER_SPELLS_IT,
-                qty=1,
-                side=side,
-                price=float(BOND_CLOSE),
-                tenant=TENANT,
-                plan_tenant=TENANT,
-                gross_exposure=0.0,
-            )
+        out = await gateway.place(
+            symbol=BOND_AS_THE_MASTER_SPELLS_IT,
+            qty=1,
+            side=side,
+            price=float(BOND_CLOSE),
+            tenant=TENANT,
+            plan_tenant=TENANT,
+            gross_exposure=0.0,
+        )
+        assert out["status"] == "BLOCKED"
+        assert "protected instrument" in str(out["error"])
 
 
 def test_both_of_the_brokers_spellings_are_refused() -> None:
@@ -610,6 +618,16 @@ def test_an_ordinary_share_is_not_caught_by_any_of_this() -> None:
 # ---------------------------------------------------------------------------
 
 
+def _serve_as_the_sole_tenant(monkeypatch: pytest.MonkeyPatch, user_id: int) -> None:
+    """Make this test's user the deployment's one account, as the box's env does.
+
+    ``sync_holdings`` has refused any principal that is not the sole tenant since ``90cb1be``
+    (AFA 2.5, sole-tenant broker paths). On the box ``BASKFY_SOLE_USER_ID`` names Maulik's
+    account; here it names the user the test just made, so the handler runs as deployed.
+    """
+    monkeypatch.setenv(SOLE_USER_ENV, str(user_id))
+
+
 @pytest_asyncio.fixture
 async def committable(ledger_url: str) -> AsyncIterator[AsyncSession]:
     """A session whose ``commit()`` is real to the code under test and undone by the test.
@@ -658,6 +676,7 @@ async def test_the_box_command_files_the_bond_end_to_end(
     exchange_id = await _exchange(session)
     user_id, public_id = await make_user(session, "bonds.rehearsal@example.com")
     principal = _principal(user_id, public_id)
+    _serve_as_the_sole_tenant(monkeypatch, user_id)
     account = BrokerAccount(user_id=user_id, broker_id="zerodha", label="primary")
     session.add(account)
     await session.flush()
@@ -725,6 +744,7 @@ async def test_without_the_bridge_the_sync_reports_the_bond_as_unresolved(
     exchange_id = await _exchange(session)
     user_id, public_id = await make_user(session, "bonds.regression@example.com")
     principal = _principal(user_id, public_id)
+    _serve_as_the_sole_tenant(monkeypatch, user_id)
     session.add(BrokerAccount(user_id=user_id, broker_id="zerodha", label="primary"))
     bond_id = await _instrument(
         session, exchange_id, BOND_AS_THE_MASTER_SPELLS_IT, "Sovereign Gold Bond 2031-III"

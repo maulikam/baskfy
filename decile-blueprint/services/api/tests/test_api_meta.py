@@ -77,23 +77,26 @@ class TestRankingPresets:
     async def test_it_returns_every_core_preset_with_its_status(
         self, api: httpx.AsyncClient
     ) -> None:
-        """docs/ranking/PLAN.md §1.5 / C6: served from ``baskfy_core.ranking_presets``."""
+        """docs/ranking/PLAN.md C6 / C7: served from ``baskfy_core.ranking_presets``."""
         response = await api.get(url("/meta/ranking-presets"))
         assert response.status_code == 200
         body = response.json()
         assert [row["key"] for row in body] == list(PRESET_SPECS)
         for row in body:
             spec = PRESET_SPECS[row["key"]]
-            assert set(row) == {"key", "description", "status", "sort_by", "patch"}
+            assert set(row) == {"key", "label", "description", "status", "sort_by", "patch"}
+            assert row["label"] == spec.label
             assert row["status"] == spec.status
             assert row["description"] == spec.description
             assert row["patch"] == spec.patch
             assert row["sort_by"] == spec.patch["sort_by"]
 
-    async def test_nse_momentum_is_never_offered(self, api: httpx.AsyncClient) -> None:
-        """PLAN correction #8: that label needs the exact NSE methodology first."""
-        text = (await api.get(url("/meta/ranking-presets"))).text
-        assert "nse_momentum" not in text
+    async def test_nse_momentum_is_offered_with_c7s_label(self, api: httpx.AsyncClient) -> None:
+        """PLAN correction 8 / C7: the NSE label, with NSE's universe, once the score exists."""
+        body = (await api.get(url("/meta/ranking-presets"))).json()
+        row = next(r for r in body if r["key"] == "nse_momentum")
+        assert row["label"] == "NIFTY200 Momentum 30 score (NSE methodology)"
+        assert row["patch"]["index"] == "nifty-200"
 
     async def test_it_needs_no_principal(self, api: httpx.AsyncClient) -> None:
         """Same posture as ``/meta/factors``: static catalogue, no auth, no database."""

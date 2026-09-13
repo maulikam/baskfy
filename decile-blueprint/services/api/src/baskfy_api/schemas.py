@@ -79,13 +79,15 @@ class FactorOut(_Out):
 
 
 class RankingPresetOut(_Out):
-    """One named ranking preset — ``baskfy_core.ranking_presets`` (docs/ranking/PLAN.md §1.5).
+    """One named ranking preset — ``baskfy_core.ranking_presets`` (docs/ranking/PLAN.md C6/C7).
 
     ``patch`` is merged into a ``ScreenDefinition`` payload to apply the preset; ``status`` is
-    ``ready`` (safe as Sort By today) or ``research`` (a starting point, not a product default).
+    ``ready`` (every factor it ranks by passed validation) or ``research`` (a starting point, not
+    a product default). ``label`` is the display name; ``nse_momentum``'s is C7's exact wording.
     """
 
     key: str
+    label: str
     description: str
     status: str
     sort_by: str
@@ -342,6 +344,39 @@ class DataQualityOut(_Out):
     recent_corporate_action: bool
 
 
+class DeskInputOut(_Out):
+    """``ranking_engine.DeskInput``: one stored raw value a grade was computed from."""
+
+    name: str
+    label: str
+    value: float | None
+
+
+class DeskComponentOut(_Out):
+    """``ranking_engine.DeskComponent``: one A-F grade, its clip range and its stored inputs."""
+
+    grade: str
+    key: str
+    label: str
+    points: float | None
+    min_points: float
+    max_points: float
+    inputs: list[DeskInputOut]
+
+
+class ExplainRankHistoryOut(_Out):
+    """``ranking_engine.RankHistory``: today's rank beside the previous session's run.
+
+    ``previous`` is ``null`` when the name was not ranked on ``previous_as_of``; ``change`` is
+    ``previous - today`` (positive = places gained) and ``null`` unless both ranks exist.
+    """
+
+    today: int | None
+    previous: int | None
+    previous_as_of: dt.date | None
+    change: int | None
+
+
 class DeskBlockOut(_Out):
     """The book's stored ``desk_score_daily`` row for the instrument — never re-scored (C2)."""
 
@@ -355,6 +390,9 @@ class DeskBlockOut(_Out):
     f_penalty: float | None
     reject: str
     eligible: bool
+    ext_over_20dma: float | None
+    score_version: str | None
+    components: list[DeskComponentOut]
 
 
 class RankProvenanceOut(_Out):
@@ -390,6 +428,7 @@ class RankExplanationOut(_Out):
     data_quality: DataQualityOut
     desk: DeskBlockOut | None
     provenance: RankProvenanceOut
+    rank_history: ExplainRankHistoryOut
 
 
 #: The longest correlation window the API will read from ``ohlcv_daily``: three years of sessions.
@@ -403,8 +442,10 @@ class SelectionConstraintsIn(_In):
     """C5's knobs, with C5's defaults. Decimals travel as strings or numbers, never floats."""
 
     max_names: int = Field(default=15, ge=1)
+    # entry/retention mirror SelectionConstraints: C8's best OOS-stable grid cell,
+    # docs/ranking/VALIDATION.md §6 (retention was 30).
     entry_rank: int = Field(default=15, ge=1)
-    retention_rank: int = Field(default=30, ge=1)
+    retention_rank: int = Field(default=60, ge=1)
     max_per_sector: int | None = Field(default=None, ge=1)
     capital_inr: Decimal | None = Field(default=None, gt=0)
     max_adv_participation_pct: Decimal | None = Field(default=Decimal("1.0"), gt=0)

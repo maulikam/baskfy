@@ -24,7 +24,14 @@ import httpx
 import numpy as np
 import pytest
 from api_helpers import ORDER_PATH_TOKENS, assert_problem, bearer, make_user, url
-from screener_helpers import AS_OF, DATA_VERSION, make_row, requires_db
+from screener_helpers import (
+    AS_OF,
+    DATA_VERSION,
+    add_factor_row,
+    add_member,
+    make_row,
+    requires_db,
+)
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,7 +39,7 @@ from baskfy_api import screen_ranking
 from baskfy_api.routers import screens as screens_router
 from baskfy_api.schemas import ScreenSelectionOut
 from baskfy_core import factor_registry, ranking_selection
-from baskfy_core.models import OhlcvDaily, TradingDay
+from baskfy_core.models import DeskScoreDaily, OhlcvDaily, TradingDay
 from baskfy_core.nse_momentum import NSE_MOMENTUM_VERSION
 from baskfy_core.ranking_engine import RANKING_ENGINE_VERSION
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
@@ -71,6 +78,7 @@ EXPLAIN_KEYS = {
     "data_quality",
     "desk",
     "provenance",
+    "rank_history",
 }
 
 
@@ -217,6 +225,13 @@ class TestExplainRoute:
             "scope": "filtered_results",
             "mode": "single",
         }
+        # The session before AS_OF is SYNTHETIC, which carries no reference rows: nothing ranked.
+        assert obj(body["rank_history"]) == {
+            "today": 10,
+            "previous": None,
+            "previous_as_of": SYNTHETIC.isoformat(),
+            "change": None,
+        }
 
     async def test_explain_composite_terms_positives_deductions_and_eligibility(
         self, api: httpx.AsyncClient, screener_session: AsyncSession
@@ -329,6 +344,125 @@ class TestExplainRoute:
         assert flags["EXPG"]["recent_corporate_action"] is True
         assert flags["EXPF"]["stale_price"] is False
 
+    async def test_explain_rank_history_ranks_the_previous_session_point_in_time(
+        self, api: httpx.AsyncClient, screener_session: AsyncSession
+    ) -> None:
+        """Previous rank = the same definition ranked on the session before, from that day's rows.
+
+        Single ret_12m (higher), ``min_return_1y=8``, NIFTY 500 members only.
+        Previous session P: HISA 10, HISB 30, HISD 25; HISC not a member that day.
+        -> P ranks HISB 1, HISD 2, HISA 3.
+        SYNTHETIC: HISA 30, HISB 20, HISC 10, HISD 5 (fails the filter).
+        -> today HISA 1, HISB 2, HISC 3; HISD unranked.
+        change = previous - today: HISA 3-1 = +2, HISB 1-2 = -1; HISC has no previous rank and
+        HISD no rank today, so neither claims a change. Were today's rows re-read for P, HISA
+        would be 1 on both days — the +2 is what proves the previous run read P's rows.
+        """
+        headers = await subscriber(screener_session, "explain.history@example.com")
+        ids = await seed(
+            screener_session,
+            {
+                "HISA": {"ret_12m": Decimal("30")},
+                "HISB": {"ret_12m": Decimal("20")},
+                "HISC": {"ret_12m": Decimal("10")},
+                "HISD": {"ret_12m": Decimal("5")},
+            },
+        )
+        previous, today = await sessions_up_to(screener_session, SYNTHETIC, 2)
+        assert today == SYNTHETIC
+        for symbol, value in (("HISA", "10"), ("HISB", "30"), ("HISD", "25")):
+            await add_member(screener_session, NIFTY_500.index_id, ids[symbol], previous)
+            await add_factor_row(
+                screener_session,
+                ids[symbol],
+                previous,
+                {"series": "EQ", "ret_12m": Decimal(value)},
+            )
+        definition = synthetic(
+            min_return_1y="8", ranking_terms=[{"factor": "ret_12m", "preference": "higher"}]
+        )
+        histories: dict[str, Json] = {}
+        for symbol in ("HISA", "HISB", "HISC", "HISD"):
+            response = await api.post(
+                url("/screens/explain"),
+                json={"definition": definition, "symbol": symbol},
+                headers=headers,
+            )
+            assert response.status_code == 200, response.text
+            histories[symbol] = obj(obj(response.json())["rank_history"])
+        on = previous.isoformat()
+        assert histories == {
+            "HISA": {"today": 1, "previous": 3, "previous_as_of": on, "change": 2},
+            "HISB": {"today": 2, "previous": 1, "previous_as_of": on, "change": -1},
+            "HISC": {"today": 3, "previous": None, "previous_as_of": on, "change": None},
+            "HISD": {"today": None, "previous": 2, "previous_as_of": on, "change": None},
+        }
+
+    async def test_explain_desk_block_carries_the_stored_inputs_behind_each_grade(
+        self, api: httpx.AsyncClient, screener_session: AsyncSession
+    ) -> None:
+        """C2: the desk block is the ``desk_score_daily`` row as stored, grade by grade.
+
+        The row stores one raw input, ``ext_over_20dma``, which ``score.score`` reads in A and
+        F; B-E store none. Ranges are the formula's clips (A/B 0-25, C 0-20, D/E 0-10, F -10..0).
+        """
+        headers = await subscriber(screener_session, "explain.deskinputs@example.com")
+        ids = await seed(screener_session, {"DSKA": {"ret_12m": Decimal("30")}})
+        screener_session.add(
+            DeskScoreDaily(
+                instrument_id=ids["DSKA"],
+                date=SYNTHETIC,
+                score=Decimal("66.5"),
+                score_rank=4,
+                a_trend=Decimal("21.0000"),
+                b_momentum=Decimal("18.2500"),
+                c_sharpe=Decimal("14.0000"),
+                d_consistency=Decimal("7.5000"),
+                e_liquidity=Decimal("7.2500"),
+                f_penalty=Decimal("-1.5000"),
+                ext_over_20dma=Decimal("19.4000"),
+                reject="",
+                score_version="desk-score-test",
+            )
+        )
+        await screener_session.flush()
+        response = await api.post(
+            url("/screens/explain"),
+            json={
+                "definition": synthetic(
+                    ranking_terms=[{"factor": "ret_12m", "preference": "higher"}]
+                ),
+                "symbol": "DSKA",
+            },
+            headers=headers,
+        )
+        assert response.status_code == 200, response.text
+        desk = obj(obj(response.json())["desk"])
+        assert (desk["score"], desk["rank"], desk["eligible"]) == (66.5, 4, True)
+        assert (desk["ext_over_20dma"], desk["score_version"]) == (19.4, "desk-score-test")
+        components = arr(desk["components"])
+        assert [
+            (c["grade"], c["key"], c["points"], c["min_points"], c["max_points"])
+            for c in components
+        ] == [
+            ("A", "a_trend", 21.0, 0.0, 25.0),
+            ("B", "b_momentum", 18.25, 0.0, 25.0),
+            ("C", "c_sharpe", 14.0, 0.0, 20.0),
+            ("D", "d_consistency", 7.5, 0.0, 10.0),
+            ("E", "e_liquidity", 7.25, 0.0, 10.0),
+            ("F", "f_penalty", -1.5, -10.0, 0.0),
+        ]
+        assert {
+            str(c["grade"]): [(i["name"], i["value"]) for i in arr(c["inputs"])] for c in components
+        } == {
+            "A": [("ext_over_20dma", 19.4)],
+            "B": [],
+            "C": [],
+            "D": [],
+            "E": [],
+            "F": [("ext_over_20dma", 19.4)],
+        }
+
     async def test_explain_a_symbol_outside_the_universe_is_not_found(
         self, api: httpx.AsyncClient, screener_session: AsyncSession
     ) -> None:
@@ -413,7 +547,7 @@ class TestSelectionRoute:
     async def test_selection_over_an_owned_portfolio(
         self, api: httpx.AsyncClient, screener_session: AsyncSession
     ) -> None:
-        """C5 rules 1 and 3 with the defaults (15 names, entry 15, retention 30).
+        """C5 rules 1 and 3 with the defaults (15 names, entry 15, retention 60 — VALIDATION.md §6).
 
         Held: rank 1 (kept), rank 100 (exits, outside retention), rank 2 with no quantity
         (not a position C5 can count — named, not held). Entrants are ranks 2..15, all 14 of

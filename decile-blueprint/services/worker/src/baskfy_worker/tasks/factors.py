@@ -46,6 +46,7 @@ from baskfy_core.seed_data import NSE_EXCHANGE_ID
 from baskfy_core.universes import UNIVERSE_BY_SLUG, UNIVERSES
 from baskfy_worker.engine import LoadedHistory, PolarsFactorEngine, load_fundamentals, load_history
 from baskfy_worker.steps import StepOutcome
+from baskfy_worker.tasks.ranking import run_rank_columns
 
 UPSERT_CHUNK: int = 2000
 
@@ -131,6 +132,11 @@ async def run_compute_factors(
         )
         written += len(chunk)
 
+    # docs/ranking/PLAN.md C1: `mom_pctile` is cross-sectional and `rank_persist_20` cross-date,
+    # so the engine leaves both NULL and they are filled from the rows just written (and, for
+    # persistence, from earlier dates' stored `mom_pctile`). Only those two columns are updated.
+    rank_columns = await run_rank_columns(session, on)
+
     mismatches = await assert_mask_matches_membership(session, on)
     outcome.rows_out = written
     outcome.note(
@@ -144,6 +150,7 @@ async def run_compute_factors(
         top_beta_flagged=sum(1 for v in risk.beta.values() if v),
         top_volatility_flagged=sum(1 for v in risk.volatility.values() if v),
         mask_mismatches=mismatches or None,
+        rank_columns=rank_columns,
     )
     return written
 

@@ -20,7 +20,14 @@ from helpers import PRIOR_DATE, TRADE_DATE, add_bar, make_instrument, requires_d
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from baskfy_core.models import CorporateAction, IngestCursor, OhlcvDaily, PipelineRun
+from baskfy_core.models import (
+    CorporateAction,
+    FactorDaily,
+    IngestCursor,
+    OhlcvDaily,
+    PipelineRun,
+    PipelineRunStep,
+)
 from baskfy_providers.records import DAILY_BARS_SCHEMA, InstrumentRecord, conform
 from baskfy_worker.backfill import (
     STATUS_DONE,
@@ -30,7 +37,8 @@ from baskfy_worker.backfill import (
 )
 from baskfy_worker.deps import PipelineDependencies
 from baskfy_worker.orchestrator import run_nightly_pipeline
-from baskfy_worker.steps import PipelineStep, RunStatus
+from baskfy_worker.steps import PipelineStep, RunStatus, StepOutcome
+from baskfy_worker.tasks import desk_score as desk_score_task
 from baskfy_worker.tasks.adjustments import reprocess_instrument
 from baskfy_worker.tasks.publish import current_data_version
 from baskfy_worker.tasks.quality import NOMINAL_SIZES
@@ -47,6 +55,9 @@ CHECKSUMMED_TABLES = (
     "market_health_daily",
     "corporate_action",
     "instrument",
+    # Ranking 2.C: the nightly now writes the book's SCORE inside `compute_factors`'s step (the
+    # stub's history is too short to score, so this pins that the step changes nothing either).
+    "desk_score_daily",
 )
 
 
@@ -331,6 +342,92 @@ class TestCriterion2GateBlocksPublish:
             ).scalar_one()
         assert run.status == RunStatus.FAILED
         assert run.data_version is None
+
+
+class TestDeskScoreInTheChain:
+    """Ranking 2.C (docs/ranking/PLAN.md C2): the chain writes `desk_score_daily` after factors,
+    and a failure in it is reported on the step without holding back publication."""
+
+    async def test_the_desk_score_step_runs_after_the_days_factor_rows_exist(
+        self, engine: AsyncEngine, clean_db: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Order and wiring. The real step's output is `test_ranking_worker.py`'s subject; the
+        stub's two-bar history gives the book nothing to score (every factor column is NULL, and
+        `score.apply_filters` cannot compare an all-NULL column), so the call is recorded here."""
+        del clean_db
+        seen: list[tuple[dt.date, int]] = []
+
+        async def _recording(session: AsyncSession, outcome: StepOutcome, on: dt.date) -> int:
+            rows = await session.execute(
+                select(func.count()).select_from(FactorDaily).where(FactorDaily.date == on)
+            )
+            seen.append((on, int(rows.scalar_one())))
+            outcome.rows_out = 7
+            return 7
+
+        monkeypatch.setattr(desk_score_task, "run_compute_desk_score", _recording)
+        maker = async_sessionmaker(engine, expire_on_commit=False)
+        async with maker() as session, session.begin():
+            outcome = await run_nightly_pipeline(session, TRADE_DATE, deps(StubProvider()))
+        assert outcome.published, outcome.error
+
+        assert len(seen) == 1
+        assert seen[0][0] == TRADE_DATE
+        assert seen[0][1] > 0, "desk score must run after compute_factors has written the day"
+        async with maker() as session:
+            step = (
+                await session.execute(
+                    select(PipelineRunStep).where(
+                        PipelineRunStep.run_id == outcome.run_id,
+                        PipelineRunStep.step == PipelineStep.COMPUTE_FACTORS.value,
+                    )
+                )
+            ).scalar_one()
+        assert step.error is not None
+        desk = step.error["desk_score"]
+        assert isinstance(desk, dict)
+        assert desk["status"] == "succeeded"
+        assert step.error["desk_score_rows"] == 7
+
+    async def test_a_desk_score_failure_does_not_abort_publication(
+        self, engine: AsyncEngine, clean_db: None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The failure is a database error, the worst kind: without the savepoint it would abort
+        the chain's single transaction and take the quality gate and `publish` down with it."""
+        del clean_db
+
+        async def _broken(session: AsyncSession, outcome: StepOutcome, on: dt.date) -> int:
+            del outcome, on
+            await session.execute(text("SELECT 1 / 0"))
+            return 0
+
+        monkeypatch.setattr(desk_score_task, "run_compute_desk_score", _broken)
+        maker = async_sessionmaker(engine, expire_on_commit=False)
+        async with maker() as session, session.begin():
+            outcome = await run_nightly_pipeline(session, TRADE_DATE, deps(StubProvider()))
+
+        assert outcome.status is RunStatus.SUCCEEDED, outcome.error
+        assert outcome.published
+        async with maker() as session:
+            assert await current_data_version(session) == outcome.data_version
+            step = (
+                await session.execute(
+                    select(PipelineRunStep).where(
+                        PipelineRunStep.run_id == outcome.run_id,
+                        PipelineRunStep.step == PipelineStep.COMPUTE_FACTORS.value,
+                    )
+                )
+            ).scalar_one()
+            factor_rows = await session.execute(
+                select(func.count()).select_from(FactorDaily).where(FactorDaily.date == TRADE_DATE)
+            )
+        assert step.status == "succeeded"
+        assert step.error is not None
+        desk = step.error["desk_score"]
+        assert isinstance(desk, dict)
+        assert desk["status"] == "failed"
+        assert "division by zero" in str(desk["error"])
+        assert int(factor_rows.scalar_one()) > 0
 
 
 class TestCriterion3SplitAdjustment:

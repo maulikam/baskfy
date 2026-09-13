@@ -77,6 +77,7 @@ from baskfy_worker.tasks import (
     quality,
     snapshots,
 )
+from baskfy_worker.tasks import desk_score as desk_score_task
 from baskfy_worker.tasks import fundamentals as fundamentals_task
 from baskfy_worker.tasks import instruments as instruments_task
 from baskfy_worker.tasks import swing as swing_task
@@ -323,6 +324,16 @@ async def _run_chain(  # noqa: PLR0915 - one block per pipeline step, and docs/0
     # --- 7. compute_factors ----------------------------------------------
     async with record_step(session, run.id, PipelineStep.COMPUTE_FACTORS, trade_date) as step:
         await factors.run_compute_factors(session, step, trade_date, deps.factor_engine)
+        # docs/ranking/PLAN.md C2: the book's SCORE for the session, from the factor rows just
+        # written. Folded into this step the way fundamentals are folded into
+        # `refresh_index_snapshots` (T9.1) -- not a fifteenth pipeline identity -- and unable to
+        # fail it: a missing `desk_score_daily` day is a ranking with no desk_score column, while
+        # a failed chain is a screener serving yesterday to everybody.
+        desk = await run_compute_desk_score_step(session, trade_date)
+        step.note(
+            desk_score={**desk.detail, "status": desk.status.value},
+            desk_score_rows=desk.rows_out,
+        )
     outcome.steps_completed.append(PipelineStep.COMPUTE_FACTORS)
 
     # --- 8. compute_market_health ----------------------------------------
@@ -384,6 +395,33 @@ async def _run_chain(  # noqa: PLR0915 - one block per pipeline step, and docs/0
     # can hold, while "whichever went first tonight" is not.
     await run_compute_twt_step(session, run.id, trade_date, deps)
     outcome.steps_completed.append(PipelineStep.COMPUTE_TWT)
+
+
+async def run_compute_desk_score_step(session: AsyncSession, trade_date: dt.date) -> StepOutcome:
+    """C2's nightly ``desk_score_daily`` write, which **cannot raise** and cannot poison the chain.
+
+    Runs inside ``compute_factors``'s step, after the factor rows exist, because the book's
+    ``carried`` columns are read from them. Two guarantees, both needed because the whole chain is
+    one transaction:
+
+    * **A SAVEPOINT.** A database error inside the write would otherwise leave the outer
+      transaction aborted, and every later statement -- the quality gate, ``publish`` -- would
+      fail with it. ``begin_nested`` rolls back to the savepoint instead, so the screener's rows
+      and the run's audit trail survive a desk-score failure intact.
+    * **No exception escapes.** It is caught, recorded on the returned outcome with its type and
+      message (the caller folds that into the step row), and logged. Not silent: the failure is on
+      ``/admin/pipeline`` as ``desk_score.status = failed``.
+    """
+    desk = StepOutcome()
+    try:
+        async with session.begin_nested():
+            await desk_score_task.run_compute_desk_score(session, desk, trade_date)
+    except Exception as exc:
+        desk.status = StepStatus.FAILED
+        desk.rows_out = 0
+        desk.note(error=f"{type(exc).__name__}: {exc}")
+        log.warning("compute_desk_score failed for %s: %s", trade_date, exc)
+    return desk
 
 
 async def run_compute_twt_step(

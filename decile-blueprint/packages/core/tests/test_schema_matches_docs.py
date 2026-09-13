@@ -203,6 +203,10 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     # reads when there is no query string. docs/04e-stocks-watchlist-addendum.md.
     "instrument_watch_item": ("id",),
     "user_discover_preferences": ("user_id",),
+    # Ranking Phase 2, leaf 2.B (migration 0047): the weekly book's Momentum Quality Score stored
+    # per instrument per day, so the screener reads the book's number instead of re-scoring a
+    # different population. docs/04 "Desk score" section; docs/ranking/PLAN.md C2.
+    "desk_score_daily": ("instrument_id", "date"),
 }
 
 #: docs/04 opening paragraph: "Money in numeric, never float."

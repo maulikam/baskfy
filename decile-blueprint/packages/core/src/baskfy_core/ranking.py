@@ -5,7 +5,7 @@ not only a longer Sort By dropdown. This module is the contract for that engine.
 
 Hard rules
 ----------
-* Desk SCORE / A–F come from :func:`baskfy_core.score.score` only. Reimplementing them in the
+* Desk SCORE / A-F come from :func:`baskfy_core.score.score` only. Reimplementing them in the
   screener is forbidden — subtle drift in windows, percentiles or rounding would invent a second
   book.
 * Stock quality rank and portfolio selection stay separate. Nothing here reads holdings.
@@ -16,13 +16,13 @@ Hard rules
 from __future__ import annotations
 
 import datetime as dt
-from collections.abc import Collection
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
-from typing import Final
+from typing import Final, SupportsFloat
 
 import pandas as pd
 
+from baskfy_core.desk_config import DESK_CONFIG, DeskConfig
 from baskfy_core.reference_export import FACTOR_COLUMN_MAP
 from baskfy_core.score import ScoringConfig, score
 from baskfy_core.universes import UNIVERSE_BY_SLUG
@@ -30,7 +30,7 @@ from baskfy_core.universes import UNIVERSE_BY_SLUG
 #: Sort By key for the book's Momentum Quality Score (docs/ranking/PLAN.md Phase 1.2).
 DESK_SCORE_KEY: Final = "desk_score"
 
-#: Result-value keys for A–F explainability when ``sort_by=desk_score``.
+#: Result-value keys for A-F explainability when ``sort_by=desk_score``.
 DESK_SCORE_EXPLAIN_COLUMNS: Final[tuple[str, ...]] = (
     "desk_a_trend",
     "desk_b_momentum",
@@ -76,44 +76,14 @@ DESK_SCORE_INPUT_COLUMNS: Final[tuple[str, ...]] = (
 )
 
 
-@dataclass(frozen=True, slots=True)
-class DeskScoringDefaults:
-    """Book scoring knobs from ``kite-momentum-rebalancer/app/config.py``, frozen in core.
-
-    Core must not import the desk (Law 1). These values match the live book; changing them is a
-    product decision, not a silent tweak.
-    """
-
-    EXCLUDED_SYMBOLS: Collection[str] = frozenset({"SGBDE31III"})
-    REJECT_SERIES: Collection[str] = frozenset({"BE", "BZ"})
-    MIN_MEDIAN_DAILY_VALUE: float = 5e7
-    MAX_AWAY_FROM_HIGH: float = -30.0
-    MAX_CIRCUITS_3M: float = 5.0
-    PENALTY_CIRCUITS_1Y: float = 8.0
-    MOMENTUM_BLEND: dict[str, float] = field(
-        default_factory=lambda: {
-            "one_month": 0.10,
-            "three_months": 0.30,
-            "six_months": 0.30,
-            "nine_months": 0.15,
-            "one_year": 0.15,
-        }
-    )
-    SHARPE_BLEND: dict[str, float] = field(
-        default_factory=lambda: {
-            "three_months": 0.35,
-            "six_months": 0.35,
-            "nine_months": 0.15,
-            "one_year": 0.15,
-        }
-    )
-    STOP_VOL_MULT: float = 2.2
-    STOP_MIN: float = 0.08
-    STOP_MAX: float = 0.12
-
+#: Book scoring knobs. Phase 1 kept a hand copy of ``kite-momentum-rebalancer/app/config.py`` here
+#: that no test tied to the desk; the values now live once, in :mod:`baskfy_core.desk_config`,
+#: where ``kite-momentum-rebalancer/tests/test_desk_config_parity.py`` holds them to the desk.
+#: The old name stays so nothing importing it breaks.
+DeskScoringDefaults = DeskConfig
 
 #: Default config for screener ``sort_by=desk_score``. Duck-types as :class:`ScoringConfig`.
-DEFAULT_DESK_SCORING_CONFIG: Final = DeskScoringDefaults()
+DEFAULT_DESK_SCORING_CONFIG: Final = DESK_CONFIG
 
 
 class FactorPreference(StrEnum):
@@ -161,9 +131,10 @@ class RankingScope(StrEnum):
 DEFAULT_RANKING_MODE: Final = RankingMode.COMPOSITE
 DEFAULT_RANKING_SCOPE: Final = RankingScope.FILTERED_RESULTS
 
+
 @dataclass(frozen=True, slots=True)
 class DeskScoreBreakdown:
-    """Explainable desk score for one symbol — total, A–F, eligibility."""
+    """Explainable desk score for one symbol — total, A-F, eligibility."""
 
     symbol: str
     score: float | None
@@ -235,6 +206,8 @@ def _optional_float(value: object) -> float | None:
         return None if pd.isna(number) else number
     if isinstance(value, str) and value.strip() == "":
         return None
+    if not isinstance(value, str | SupportsFloat):
+        return None
     try:
         number = float(value)
     except (TypeError, ValueError):
@@ -252,13 +225,13 @@ def ensure_nifty_fno_flag(frame: pd.DataFrame) -> pd.DataFrame:
     if "is_nifty_fno" in frame.columns:
         return frame
     if "universe_mask" not in frame.columns:
-        raise ValueError(
-            "desk SCORE needs is_nifty_fno or universe_mask on the survivor frame"
-        )
+        raise ValueError("desk SCORE needs is_nifty_fno or universe_mask on the survivor frame")
     out = frame.copy()
     out["is_nifty_fno"] = (
-        out["universe_mask"].fillna(0).astype("int64").to_numpy() & _NIFTY_FNO_MASK
-    ).astype(bool).astype(int)
+        (out["universe_mask"].fillna(0).astype("int64").to_numpy() & _NIFTY_FNO_MASK)
+        .astype(bool)
+        .astype(int)
+    )
     return out
 
 
@@ -270,7 +243,7 @@ def rerank_survivors_by_desk_score(
     limit: int | None = None,
     as_of: dt.date | None = None,
 ) -> tuple[pd.DataFrame, list[DeskScoreBreakdown]]:
-    """Order filtered survivors by the book's SCORE and attach A–F explain columns.
+    """Order filtered survivors by the book's SCORE and attach A-F explain columns.
 
     Pure: no database, no network, no clock. Percentiles inside ``score`` are over this
     survivor set (after the screener's own filters), matching how the book scores a scan.
@@ -295,16 +268,11 @@ def rerank_survivors_by_desk_score(
     )
     rejected = scored.loc[~eligible_mask]
     ordered = pd.concat([eligible, rejected], ignore_index=True)
-    if limit is not None:
-        ordered = ordered.head(limit).copy()
-    else:
-        ordered = ordered.copy()
+    ordered = ordered.head(limit).copy() if limit is not None else ordered.copy()
 
     ordered["sorting_factor"] = ordered["SCORE"]
     ordered["desk_a_trend"] = ordered["A_trend"] if "A_trend" in ordered.columns else pd.NA
-    ordered["desk_b_momentum"] = (
-        ordered["B_momentum"] if "B_momentum" in ordered.columns else pd.NA
-    )
+    ordered["desk_b_momentum"] = ordered["B_momentum"] if "B_momentum" in ordered.columns else pd.NA
     ordered["desk_c_sharpe"] = ordered["C_sharpe"] if "C_sharpe" in ordered.columns else pd.NA
     ordered["desk_d_consistency"] = (
         ordered["D_consistency"] if "D_consistency" in ordered.columns else pd.NA
@@ -312,9 +280,7 @@ def rerank_survivors_by_desk_score(
     ordered["desk_e_liquidity"] = (
         ordered["E_liquidity"] if "E_liquidity" in ordered.columns else pd.NA
     )
-    ordered["desk_f_penalty"] = (
-        ordered["F_penalty"] if "F_penalty" in ordered.columns else pd.NA
-    )
+    ordered["desk_f_penalty"] = ordered["F_penalty"] if "F_penalty" in ordered.columns else pd.NA
     ordered["desk_reject"] = ordered["reject"].fillna("").astype(str)
     ordered["desk_eligible"] = ordered["desk_reject"] == ""
     ordered["screen_rank"] = range(1, len(ordered) + 1)
@@ -324,7 +290,7 @@ def rerank_survivors_by_desk_score(
 
 #: Named presets — Phase 1 ships the list; weighted composites land with validation.
 RANKING_PRESETS: Final[dict[str, str]] = {
-    "desk_quality": "Weekly book's Momentum Quality Score (A–F) via baskfy_core.score",
+    "desk_quality": "Weekly book's Momentum Quality Score (A-F) via baskfy_core.score",
     "path_quality": "Positive-days and path measures (promote only with drawdown pairing)",
     "trend_structure": "MA stack and MA distance (distance is target-range, not higher-is-better)",
     "participation": "Volume expansion versus a preceding baseline",

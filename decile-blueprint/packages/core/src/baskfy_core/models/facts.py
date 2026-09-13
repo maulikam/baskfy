@@ -34,6 +34,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     PrimaryKeyConstraint,
     SmallInteger,
     String,
@@ -50,6 +51,13 @@ from baskfy_core.models.base import (
     RSI,
     Base,
 )
+
+#: docs/ranking/PLAN.md C1 — an ATR is a price distance, kept at 4 dp because it divides
+#: ``atr_ext_20`` and a 2-dp ATR on a low-priced name would move the extension it produces.
+ATR_4DP = Numeric(18, 4)
+#: docs/ranking/PLAN.md C1 — dimensionless ratios compared against bands (extension in ATRs,
+#: efficiency, scaled acceleration, volume expansion), 4 dp.
+RATIO_4DP = Numeric(10, 4)
 
 #: docs/04: factor_daily.regime — Wasserstein regime label.
 REGIMES: tuple[str, ...] = ("BULL", "BEAR", "NEUTRAL")
@@ -164,6 +172,36 @@ class FactorDaily(Base):
     series: Mapped[str | None] = mapped_column(String)
 
     regime: Mapped[str | None] = mapped_column(String)
+
+    # --- Stored ranking factors (docs/ranking/PLAN.md C1, migration 0046) -------------------
+    # Computed by baskfy_core.factors_ranking on adjusted prices, point-in-time, NULL when the
+    # window is not full. `mom_pctile` and `rank_persist_20` are cross-sectional/cross-date and
+    # are filled by the worker after the day's rows exist.
+    atr_14: Mapped[Decimal | None] = mapped_column(ATR_4DP)
+    atr_ext_20: Mapped[Decimal | None] = mapped_column(RATIO_4DP)
+    ma50_slope_20: Mapped[Decimal | None] = mapped_column(PCT_2DP)
+    eff_ratio_63: Mapped[Decimal | None] = mapped_column(RATIO_4DP)
+    max_dd_6m: Mapped[Decimal | None] = mapped_column(PCT_2DP)
+    max_dd_12m: Mapped[Decimal | None] = mapped_column(PCT_2DP)
+    downside_vol_6m: Mapped[Decimal | None] = mapped_column(RATIO_10DP)
+    downside_vol_12m: Mapped[Decimal | None] = mapped_column(RATIO_10DP)
+    sortino_6m: Mapped[Decimal | None] = mapped_column(PCT_2DP)
+    sortino_12m: Mapped[Decimal | None] = mapped_column(PCT_2DP)
+    underwater_12m: Mapped[Decimal | None] = mapped_column(POS_DAYS)
+    ret_ex_top3_12m: Mapped[Decimal | None] = mapped_column(PCT_2DP)
+    accel_21_105: Mapped[Decimal | None] = mapped_column(RATIO_10DP)
+    accel_21_105_vs: Mapped[Decimal | None] = mapped_column(RATIO_4DP)
+    vol_exp_21_126: Mapped[Decimal | None] = mapped_column(RATIO_4DP)
+    vol_persist_20: Mapped[int | None] = mapped_column(SmallInteger)
+    excess_ret_3m: Mapped[Decimal | None] = mapped_column(PCT_2DP)
+    excess_ret_6m: Mapped[Decimal | None] = mapped_column(PCT_2DP)
+    excess_ret_12m: Mapped[Decimal | None] = mapped_column(PCT_2DP)
+    resid_ret_12m: Mapped[Decimal | None] = mapped_column(PCT_2DP)
+    rs_persist_126: Mapped[Decimal | None] = mapped_column(POS_DAYS)
+    mom_pctile: Mapped[Decimal | None] = mapped_column(POS_DAYS)
+    rank_persist_20: Mapped[Decimal | None] = mapped_column(POS_DAYS)
+    nse_mr6: Mapped[Decimal | None] = mapped_column(RATIO_10DP)
+    nse_mr12: Mapped[Decimal | None] = mapped_column(RATIO_10DP)
 
     # --- Denormalised universe + risk flags (docs/04, docs/06 "Universe flags") ---
     # One bit per index_def.id; see baskfy_core.universes.UNIVERSE_MASK_BIT.

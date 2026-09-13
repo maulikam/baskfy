@@ -14,6 +14,7 @@
         "m9": 999
       },
       "custom_filters": [],
+      "factor_ranges": [],
       "factor_three": {
         "enabled": false,
         "sort_by": null,
@@ -24,6 +25,7 @@
         "sort_by": null,
         "sort_direction": "desc"
       },
+      "family_weights": null,
       "historical_date": null,
       "ignore_above_beta": 100,
       "ignore_top_beta": {
@@ -41,6 +43,7 @@
       },
       "median_volume_1y": null,
       "min_return_1y": null,
+      "missing_data": "penalize",
       "moving_average": {
         "above_100": false,
         "above_20": false,
@@ -70,6 +73,8 @@
       },
       "ranking_mode": "composite",
       "ranking_scope": "filtered_results",
+      "ranking_terms": [],
+      "regime_in": null,
       "series": [
         "EQ"
       ],
@@ -106,6 +111,7 @@
           "right": "ma_200"
         }
       ],
+      "factor_ranges": [],
       "factor_three": {
         "enabled": false,
         "sort_by": null,
@@ -116,6 +122,7 @@
         "sort_by": null,
         "sort_direction": "desc"
       },
+      "family_weights": null,
       "historical_date": null,
       "ignore_above_beta": 100,
       "ignore_top_beta": {
@@ -133,6 +140,7 @@
       },
       "median_volume_1y": 10000000,
       "min_return_1y": null,
+      "missing_data": "penalize",
       "moving_average": {
         "above_100": false,
         "above_20": false,
@@ -162,6 +170,8 @@
       },
       "ranking_mode": "composite",
       "ranking_scope": "filtered_results",
+      "ranking_terms": [],
+      "regime_in": null,
       "series": [
         "EQ"
       ],
@@ -306,6 +316,7 @@
         "m9": 999
       },
       "custom_filters": [],
+      "factor_ranges": [],
       "factor_three": {
         "enabled": false,
         "sort_by": null,
@@ -316,6 +327,7 @@
         "sort_by": null,
         "sort_direction": "desc"
       },
+      "family_weights": null,
       "historical_date": null,
       "ignore_above_beta": 100,
       "ignore_top_beta": {
@@ -333,6 +345,7 @@
       },
       "median_volume_1y": null,
       "min_return_1y": null,
+      "missing_data": "penalize",
       "moving_average": {
         "above_100": false,
         "above_20": false,
@@ -362,6 +375,8 @@
       },
       "ranking_mode": "composite",
       "ranking_scope": "filtered_results",
+      "ranking_terms": [],
+      "regime_in": null,
       "series": [
         "EQ"
       ],
@@ -421,6 +436,7 @@
         "m9": 999
       },
       "custom_filters": [],
+      "factor_ranges": [],
       "factor_three": {
         "enabled": false,
         "sort_by": null,
@@ -431,6 +447,7 @@
         "sort_by": null,
         "sort_direction": "desc"
       },
+      "family_weights": null,
       "historical_date": null,
       "ignore_above_beta": 100,
       "ignore_top_beta": {
@@ -448,6 +465,7 @@
       },
       "median_volume_1y": null,
       "min_return_1y": null,
+      "missing_data": "penalize",
       "moving_average": {
         "above_100": false,
         "above_20": false,
@@ -477,6 +495,8 @@
       },
       "ranking_mode": "composite",
       "ranking_scope": "filtered_results",
+      "ranking_terms": [],
+      "regime_in": null,
       "series": [
         "EQ"
       ],
@@ -523,6 +543,7 @@
         "m9": 999
       },
       "custom_filters": [],
+      "factor_ranges": [],
       "factor_three": {
         "enabled": false,
         "sort_by": null,
@@ -533,6 +554,7 @@
         "sort_by": null,
         "sort_direction": "desc"
       },
+      "family_weights": null,
       "historical_date": null,
       "ignore_above_beta": 100,
       "ignore_top_beta": {
@@ -550,6 +572,7 @@
       },
       "median_volume_1y": null,
       "min_return_1y": null,
+      "missing_data": "penalize",
       "moving_average": {
         "above_100": false,
         "above_20": false,
@@ -579,6 +602,8 @@
       },
       "ranking_mode": "composite",
       "ranking_scope": "filtered_results",
+      "ranking_terms": [],
+      "regime_in": null,
       "series": [
         "EQ"
       ],
@@ -625,6 +650,7 @@
         "m9": 999
       },
       "custom_filters": [],
+      "factor_ranges": [],
       "factor_three": {
         "enabled": false,
         "sort_by": null,
@@ -635,6 +661,7 @@
         "sort_by": null,
         "sort_direction": "desc"
       },
+      "family_weights": null,
       "historical_date": null,
       "ignore_above_beta": 100,
       "ignore_top_beta": {
@@ -652,6 +679,7 @@
       },
       "median_volume_1y": null,
       "min_return_1y": null,
+      "missing_data": "penalize",
       "moving_average": {
         "above_100": false,
         "above_20": false,
@@ -681,6 +709,8 @@
       },
       "ranking_mode": "composite",
       "ranking_scope": "filtered_results",
+      "ranking_terms": [],
+      "regime_in": null,
       "series": [
         "EQ"
       ],
@@ -736,6 +766,7 @@
         "m9": 999
       },
       "custom_filters": [],
+      "factor_ranges": [],
       "factor_three": {
         "enabled": false,
         "sort_by": null,
@@ -746,6 +777,7 @@
         "sort_by": null,
         "sort_direction": "desc"
       },
+      "family_weights": null,
       "historical_date": null,
       "ignore_above_beta": 100,
       "ignore_top_beta": {
@@ -763,6 +795,7 @@
       },
       "median_volume_1y": null,
       "min_return_1y": null,
+      "missing_data": "penalize",
       "moving_average": {
         "above_100": false,
         "above_20": false,
@@ -792,6 +825,8 @@
       },
       "ranking_mode": "composite",
       "ranking_scope": "filtered_results",
+      "ranking_terms": [],
+      "regime_in": null,
       "series": [
         "SM",
         "ST"
@@ -826,6 +861,7 @@
         "m9": 999
       },
       "custom_filters": [],
+      "factor_ranges": [],
       "factor_three": {
         "enabled": false,
         "sort_by": null,
@@ -836,6 +872,7 @@
         "sort_by": null,
         "sort_direction": "desc"
       },
+      "family_weights": null,
       "historical_date": null,
       "ignore_above_beta": 100,
       "ignore_top_beta": {
@@ -853,6 +890,7 @@
       },
       "median_volume_1y": null,
       "min_return_1y": null,
+      "missing_data": "penalize",
       "moving_average": {
         "above_100": false,
         "above_20": false,
@@ -882,6 +920,8 @@
       },
       "ranking_mode": "composite",
       "ranking_scope": "filtered_results",
+      "ranking_terms": [],
+      "regime_in": null,
       "series": [
         "EQ",
         "SM"
@@ -1014,6 +1054,7 @@
         "m9": 999
       },
       "custom_filters": [],
+      "factor_ranges": [],
       "factor_three": {
         "enabled": false,
         "sort_by": null,
@@ -1024,6 +1065,7 @@
         "sort_by": "vol_12m",
         "sort_direction": "asc"
       },
+      "family_weights": null,
       "historical_date": null,
       "ignore_above_beta": 100,
       "ignore_top_beta": {
@@ -1041,6 +1083,7 @@
       },
       "median_volume_1y": null,
       "min_return_1y": null,
+      "missing_data": "penalize",
       "moving_average": {
         "above_100": false,
         "above_20": false,
@@ -1070,6 +1113,8 @@
       },
       "ranking_mode": "composite",
       "ranking_scope": "filtered_results",
+      "ranking_terms": [],
+      "regime_in": null,
       "series": [
         "EQ"
       ],
@@ -1134,6 +1179,7 @@
         "m9": 999
       },
       "custom_filters": [],
+      "factor_ranges": [],
       "factor_three": {
         "enabled": false,
         "sort_by": null,
@@ -1144,6 +1190,7 @@
         "sort_by": null,
         "sort_direction": "desc"
       },
+      "family_weights": null,
       "historical_date": null,
       "ignore_above_beta": 100,
       "ignore_top_beta": {
@@ -1161,6 +1208,7 @@
       },
       "median_volume_1y": null,
       "min_return_1y": null,
+      "missing_data": "penalize",
       "moving_average": {
         "above_100": false,
         "above_20": false,
@@ -1190,6 +1238,8 @@
       },
       "ranking_mode": "composite",
       "ranking_scope": "filtered_results",
+      "ranking_terms": [],
+      "regime_in": null,
       "series": [
         "EQ"
       ],
@@ -1231,6 +1281,7 @@
         "m9": 999
       },
       "custom_filters": [],
+      "factor_ranges": [],
       "factor_three": {
         "enabled": false,
         "sort_by": null,
@@ -1241,6 +1292,7 @@
         "sort_by": null,
         "sort_direction": "desc"
       },
+      "family_weights": null,
       "historical_date": "2025-04-15",
       "ignore_above_beta": 100,
       "ignore_top_beta": {
@@ -1258,6 +1310,7 @@
       },
       "median_volume_1y": null,
       "min_return_1y": null,
+      "missing_data": "penalize",
       "moving_average": {
         "above_100": false,
         "above_20": false,
@@ -1287,6 +1340,8 @@
       },
       "ranking_mode": "composite",
       "ranking_scope": "filtered_results",
+      "ranking_terms": [],
+      "regime_in": null,
       "series": [
         "EQ"
       ],
@@ -1322,6 +1377,1368 @@
       "index": "nifty-500",
       "sort_by": "ret_12m",
       "sort_direction": "sideways"
+    }
+  },
+  {
+    "materialised": {
+      "apply_filters_on": "all",
+      "away_from_high": {
+        "ath": 100,
+        "one_year": 100
+      },
+      "circuits": {
+        "m1": 999,
+        "m12": 999,
+        "m3": 999,
+        "m6": 999,
+        "m9": 999
+      },
+      "custom_filters": [],
+      "factor_ranges": [],
+      "factor_three": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "factor_two": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "family_weights": {
+        "momentum": 60.0,
+        "participation": null,
+        "path_quality": null,
+        "risk_execution": 40.0,
+        "trend_structure": null
+      },
+      "historical_date": null,
+      "ignore_above_beta": 100,
+      "ignore_top_beta": {
+        "count": 0,
+        "enabled": false
+      },
+      "ignore_top_volatility": {
+        "count": 0,
+        "enabled": false
+      },
+      "index": "nifty-500",
+      "marketcap": {
+        "from": null,
+        "to": null
+      },
+      "median_volume_1y": null,
+      "min_return_1y": null,
+      "missing_data": "neutral",
+      "moving_average": {
+        "above_100": false,
+        "above_20": false,
+        "above_200": false,
+        "above_50": false,
+        "below_100": false,
+        "below_20": false,
+        "below_200": false,
+        "below_50": false,
+        "enabled": false
+      },
+      "pe": {
+        "enabled": false,
+        "from": null,
+        "to": null
+      },
+      "positive_days": {
+        "m1": 0,
+        "m12": 0,
+        "m3": 0,
+        "m6": 0,
+        "m9": 0
+      },
+      "price": {
+        "from": null,
+        "to": null
+      },
+      "ranking_mode": "composite",
+      "ranking_scope": "fixed_universe",
+      "ranking_terms": [
+        {
+          "factor": "ret_12m",
+          "preference": "higher",
+          "target_max": null,
+          "target_min": null,
+          "weight": 2.0
+        },
+        {
+          "factor": "vol_12m",
+          "preference": "lower",
+          "target_max": null,
+          "target_min": null,
+          "weight": 1.0
+        },
+        {
+          "factor": "ma_dist_20",
+          "preference": "target_range",
+          "target_max": 5.5,
+          "target_min": 0.0,
+          "weight": 1.0
+        }
+      ],
+      "regime_in": null,
+      "series": [
+        "EQ"
+      ],
+      "sort_by": "ret_12m",
+      "sort_direction": "desc"
+    },
+    "name": "ranking-terms-composite",
+    "reason": "C3: composite of weighted terms, family weights, a missing-data policy and a scope",
+    "valid": true,
+    "value": {
+      "family_weights": {
+        "momentum": 60,
+        "risk_execution": 40
+      },
+      "index": "nifty-500",
+      "missing_data": "neutral",
+      "ranking_mode": "composite",
+      "ranking_scope": "fixed_universe",
+      "ranking_terms": [
+        {
+          "factor": "ret_12m",
+          "preference": "higher",
+          "weight": 2
+        },
+        {
+          "factor": "vol_12m",
+          "preference": "lower"
+        },
+        {
+          "factor": "ma_dist_20",
+          "preference": "target_range",
+          "target_max": 5.5,
+          "target_min": 0
+        }
+      ],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": {
+      "apply_filters_on": "all",
+      "away_from_high": {
+        "ath": 100,
+        "one_year": 100
+      },
+      "circuits": {
+        "m1": 999,
+        "m12": 999,
+        "m3": 999,
+        "m6": 999,
+        "m9": 999
+      },
+      "custom_filters": [],
+      "factor_ranges": [],
+      "factor_three": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "factor_two": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "family_weights": null,
+      "historical_date": null,
+      "ignore_above_beta": 100,
+      "ignore_top_beta": {
+        "count": 0,
+        "enabled": false
+      },
+      "ignore_top_volatility": {
+        "count": 0,
+        "enabled": false
+      },
+      "index": "nifty-500",
+      "marketcap": {
+        "from": null,
+        "to": null
+      },
+      "median_volume_1y": null,
+      "min_return_1y": null,
+      "missing_data": "penalize",
+      "moving_average": {
+        "above_100": false,
+        "above_20": false,
+        "above_200": false,
+        "above_50": false,
+        "below_100": false,
+        "below_20": false,
+        "below_200": false,
+        "below_50": false,
+        "enabled": false
+      },
+      "pe": {
+        "enabled": false,
+        "from": null,
+        "to": null
+      },
+      "positive_days": {
+        "m1": 0,
+        "m12": 0,
+        "m3": 0,
+        "m6": 0,
+        "m9": 0
+      },
+      "price": {
+        "from": null,
+        "to": null
+      },
+      "ranking_mode": "composite",
+      "ranking_scope": "filtered_results",
+      "ranking_terms": [
+        {
+          "factor": "ret_12m",
+          "preference": "target_range",
+          "target_max": 80.0,
+          "target_min": null,
+          "weight": 1.0
+        }
+      ],
+      "regime_in": null,
+      "series": [
+        "EQ"
+      ],
+      "sort_by": "ret_12m",
+      "sort_direction": "desc"
+    },
+    "name": "ranking-terms-target-range-one-bound",
+    "reason": "C3: target_range needs at least one bound, not both",
+    "valid": true,
+    "value": {
+      "index": "nifty-500",
+      "ranking_terms": [
+        {
+          "factor": "ret_12m",
+          "preference": "target_range",
+          "target_max": 80
+        }
+      ],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": {
+      "apply_filters_on": "all",
+      "away_from_high": {
+        "ath": 100,
+        "one_year": 100
+      },
+      "circuits": {
+        "m1": 999,
+        "m12": 999,
+        "m3": 999,
+        "m6": 999,
+        "m9": 999
+      },
+      "custom_filters": [],
+      "factor_ranges": [],
+      "factor_three": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "factor_two": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "family_weights": null,
+      "historical_date": null,
+      "ignore_above_beta": 100,
+      "ignore_top_beta": {
+        "count": 0,
+        "enabled": false
+      },
+      "ignore_top_volatility": {
+        "count": 0,
+        "enabled": false
+      },
+      "index": "nifty-500",
+      "marketcap": {
+        "from": null,
+        "to": null
+      },
+      "median_volume_1y": null,
+      "min_return_1y": null,
+      "missing_data": "exclude",
+      "moving_average": {
+        "above_100": false,
+        "above_20": false,
+        "above_200": false,
+        "above_50": false,
+        "below_100": false,
+        "below_20": false,
+        "below_200": false,
+        "below_50": false,
+        "enabled": false
+      },
+      "pe": {
+        "enabled": false,
+        "from": null,
+        "to": null
+      },
+      "positive_days": {
+        "m1": 0,
+        "m12": 0,
+        "m3": 0,
+        "m6": 0,
+        "m9": 0
+      },
+      "price": {
+        "from": null,
+        "to": null
+      },
+      "ranking_mode": "sequential",
+      "ranking_scope": "filtered_results",
+      "ranking_terms": [
+        {
+          "factor": "desk_score",
+          "preference": "higher",
+          "target_max": null,
+          "target_min": null,
+          "weight": 1.0
+        },
+        {
+          "factor": "ma_dist_20",
+          "preference": "lower",
+          "target_max": null,
+          "target_min": null,
+          "weight": 1.0
+        },
+        {
+          "factor": "vol_12m",
+          "preference": "lower",
+          "target_max": null,
+          "target_min": null,
+          "weight": 1.0
+        }
+      ],
+      "regime_in": null,
+      "series": [
+        "EQ"
+      ],
+      "sort_by": "desk_score",
+      "sort_direction": "desc"
+    },
+    "name": "ranking-terms-sequential",
+    "reason": "C3: sequential orders by each term's raw value; weights stay at their default",
+    "valid": true,
+    "value": {
+      "index": "nifty-500",
+      "missing_data": "exclude",
+      "ranking_mode": "sequential",
+      "ranking_terms": [
+        {
+          "factor": "desk_score",
+          "preference": "higher"
+        },
+        {
+          "factor": "ma_dist_20",
+          "preference": "lower"
+        },
+        {
+          "factor": "vol_12m",
+          "preference": "lower"
+        }
+      ],
+      "sort_by": "desk_score"
+    }
+  },
+  {
+    "materialised": {
+      "apply_filters_on": "all",
+      "away_from_high": {
+        "ath": 100,
+        "one_year": 100
+      },
+      "circuits": {
+        "m1": 999,
+        "m12": 999,
+        "m3": 999,
+        "m6": 999,
+        "m9": 999
+      },
+      "custom_filters": [],
+      "factor_ranges": [],
+      "factor_three": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "factor_two": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "family_weights": null,
+      "historical_date": null,
+      "ignore_above_beta": 100,
+      "ignore_top_beta": {
+        "count": 0,
+        "enabled": false
+      },
+      "ignore_top_volatility": {
+        "count": 0,
+        "enabled": false
+      },
+      "index": "nifty-500",
+      "marketcap": {
+        "from": null,
+        "to": null
+      },
+      "median_volume_1y": null,
+      "min_return_1y": null,
+      "missing_data": "penalize",
+      "moving_average": {
+        "above_100": false,
+        "above_20": false,
+        "above_200": false,
+        "above_50": false,
+        "below_100": false,
+        "below_20": false,
+        "below_200": false,
+        "below_50": false,
+        "enabled": false
+      },
+      "pe": {
+        "enabled": false,
+        "from": null,
+        "to": null
+      },
+      "positive_days": {
+        "m1": 0,
+        "m12": 0,
+        "m3": 0,
+        "m6": 0,
+        "m9": 0
+      },
+      "price": {
+        "from": null,
+        "to": null
+      },
+      "ranking_mode": "single",
+      "ranking_scope": "filtered_results",
+      "ranking_terms": [
+        {
+          "factor": "ret_12m",
+          "preference": "higher",
+          "target_max": null,
+          "target_min": null,
+          "weight": 1.0
+        }
+      ],
+      "regime_in": null,
+      "series": [
+        "EQ"
+      ],
+      "sort_by": "ret_12m",
+      "sort_direction": "desc"
+    },
+    "name": "ranking-terms-single",
+    "reason": "C3: single ranks by exactly one term",
+    "valid": true,
+    "value": {
+      "index": "nifty-500",
+      "ranking_mode": "single",
+      "ranking_terms": [
+        {
+          "factor": "ret_12m",
+          "preference": "higher"
+        }
+      ],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": {
+      "apply_filters_on": "all",
+      "away_from_high": {
+        "ath": 100,
+        "one_year": 100
+      },
+      "circuits": {
+        "m1": 999,
+        "m12": 999,
+        "m3": 999,
+        "m6": 999,
+        "m9": 999
+      },
+      "custom_filters": [],
+      "factor_ranges": [],
+      "factor_three": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "factor_two": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "family_weights": null,
+      "historical_date": null,
+      "ignore_above_beta": 100,
+      "ignore_top_beta": {
+        "count": 0,
+        "enabled": false
+      },
+      "ignore_top_volatility": {
+        "count": 0,
+        "enabled": false
+      },
+      "index": "nifty-500",
+      "marketcap": {
+        "from": null,
+        "to": null
+      },
+      "median_volume_1y": null,
+      "min_return_1y": null,
+      "missing_data": "penalize",
+      "moving_average": {
+        "above_100": false,
+        "above_20": false,
+        "above_200": false,
+        "above_50": false,
+        "below_100": false,
+        "below_20": false,
+        "below_200": false,
+        "below_50": false,
+        "enabled": false
+      },
+      "pe": {
+        "enabled": false,
+        "from": null,
+        "to": null
+      },
+      "positive_days": {
+        "m1": 0,
+        "m12": 0,
+        "m3": 0,
+        "m6": 0,
+        "m9": 0
+      },
+      "price": {
+        "from": null,
+        "to": null
+      },
+      "ranking_mode": "composite",
+      "ranking_scope": "within_sector",
+      "ranking_terms": [
+        {
+          "factor": "ret_12m",
+          "preference": "higher",
+          "target_max": null,
+          "target_min": null,
+          "weight": 1.0
+        },
+        {
+          "factor": "pos_days_6m",
+          "preference": "higher",
+          "target_max": null,
+          "target_min": null,
+          "weight": 0.5
+        }
+      ],
+      "regime_in": null,
+      "series": [
+        "EQ"
+      ],
+      "sort_by": "ret_12m",
+      "sort_direction": "desc"
+    },
+    "name": "ranking-terms-within-sector",
+    "reason": "C3: within_sector is allowed once terms rank in composite",
+    "valid": true,
+    "value": {
+      "index": "nifty-500",
+      "ranking_scope": "within_sector",
+      "ranking_terms": [
+        {
+          "factor": "ret_12m",
+          "preference": "higher"
+        },
+        {
+          "factor": "pos_days_6m",
+          "preference": "higher",
+          "weight": 0.5
+        }
+      ],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": {
+      "apply_filters_on": "all",
+      "away_from_high": {
+        "ath": 100,
+        "one_year": 100
+      },
+      "circuits": {
+        "m1": 999,
+        "m12": 999,
+        "m3": 999,
+        "m6": 999,
+        "m9": 999
+      },
+      "custom_filters": [],
+      "factor_ranges": [
+        {
+          "enabled": true,
+          "factor": "ret_6m",
+          "max": null,
+          "min": 0.0
+        },
+        {
+          "enabled": false,
+          "factor": "vol_12m",
+          "max": 0.6,
+          "min": 0.1
+        }
+      ],
+      "factor_three": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "factor_two": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "family_weights": null,
+      "historical_date": null,
+      "ignore_above_beta": 100,
+      "ignore_top_beta": {
+        "count": 0,
+        "enabled": false
+      },
+      "ignore_top_volatility": {
+        "count": 0,
+        "enabled": false
+      },
+      "index": "nifty-500",
+      "marketcap": {
+        "from": null,
+        "to": null
+      },
+      "median_volume_1y": null,
+      "min_return_1y": null,
+      "missing_data": "penalize",
+      "moving_average": {
+        "above_100": false,
+        "above_20": false,
+        "above_200": false,
+        "above_50": false,
+        "below_100": false,
+        "below_20": false,
+        "below_200": false,
+        "below_50": false,
+        "enabled": false
+      },
+      "pe": {
+        "enabled": false,
+        "from": null,
+        "to": null
+      },
+      "positive_days": {
+        "m1": 0,
+        "m12": 0,
+        "m3": 0,
+        "m6": 0,
+        "m9": 0
+      },
+      "price": {
+        "from": null,
+        "to": null
+      },
+      "ranking_mode": "composite",
+      "ranking_scope": "filtered_results",
+      "ranking_terms": [],
+      "regime_in": [
+        "BULL",
+        "NEUTRAL"
+      ],
+      "series": [
+        "EQ"
+      ],
+      "sort_by": "ret_12m",
+      "sort_direction": "desc"
+    },
+    "name": "factor-ranges-and-regime-on-legacy-path",
+    "reason": "C3: factor_ranges and regime_in are eligibility filters, valid without terms",
+    "valid": true,
+    "value": {
+      "factor_ranges": [
+        {
+          "factor": "ret_6m",
+          "min": 0
+        },
+        {
+          "enabled": false,
+          "factor": "vol_12m",
+          "max": 0.6,
+          "min": 0.1
+        }
+      ],
+      "index": "nifty-500",
+      "regime_in": [
+        "BULL",
+        "NEUTRAL"
+      ],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": {
+      "apply_filters_on": "all",
+      "away_from_high": {
+        "ath": 100,
+        "one_year": 100
+      },
+      "circuits": {
+        "m1": 999,
+        "m12": 999,
+        "m3": 999,
+        "m6": 999,
+        "m9": 999
+      },
+      "custom_filters": [],
+      "factor_ranges": [],
+      "factor_three": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "factor_two": {
+        "enabled": false,
+        "sort_by": null,
+        "sort_direction": "desc"
+      },
+      "family_weights": null,
+      "historical_date": null,
+      "ignore_above_beta": 100,
+      "ignore_top_beta": {
+        "count": 0,
+        "enabled": false
+      },
+      "ignore_top_volatility": {
+        "count": 0,
+        "enabled": false
+      },
+      "index": "nifty-500",
+      "marketcap": {
+        "from": null,
+        "to": null
+      },
+      "median_volume_1y": null,
+      "min_return_1y": null,
+      "missing_data": "penalize",
+      "moving_average": {
+        "above_100": false,
+        "above_20": false,
+        "above_200": false,
+        "above_50": false,
+        "below_100": false,
+        "below_20": false,
+        "below_200": false,
+        "below_50": false,
+        "enabled": false
+      },
+      "pe": {
+        "enabled": false,
+        "from": null,
+        "to": null
+      },
+      "positive_days": {
+        "m1": 0,
+        "m12": 0,
+        "m3": 0,
+        "m6": 0,
+        "m9": 0
+      },
+      "price": {
+        "from": null,
+        "to": null
+      },
+      "ranking_mode": "composite",
+      "ranking_scope": "fixed_universe",
+      "ranking_terms": [],
+      "regime_in": null,
+      "series": [
+        "EQ"
+      ],
+      "sort_by": "desk_score",
+      "sort_direction": "desc"
+    },
+    "name": "desk-score-fixed-universe",
+    "reason": "C2: desk_score is read from desk_score_daily, so scope cannot change its order",
+    "valid": true,
+    "value": {
+      "index": "nifty-500",
+      "ranking_scope": "fixed_universe",
+      "sort_by": "desk_score"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "ranking-terms-sort-by-mismatch",
+    "reason": "C3: sort_by must equal ranking_terms[0].factor",
+    "valid": false,
+    "value": {
+      "index": "nifty-500",
+      "ranking_terms": [
+        {
+          "factor": "vol_12m",
+          "preference": "lower"
+        }
+      ],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "ranking-terms-with-factor-two",
+    "reason": "C3: explicit terms replace factor_two/factor_three",
+    "valid": false,
+    "value": {
+      "factor_two": {
+        "enabled": true,
+        "sort_by": "vol_12m",
+        "sort_direction": "asc"
+      },
+      "index": "nifty-500",
+      "ranking_terms": [
+        {
+          "factor": "ret_12m",
+          "preference": "higher"
+        }
+      ],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "ranking-terms-single-with-two-terms",
+    "reason": "C3: single ⇒ exactly one term",
+    "valid": false,
+    "value": {
+      "index": "nifty-500",
+      "ranking_mode": "single",
+      "ranking_terms": [
+        {
+          "factor": "ret_12m",
+          "preference": "higher"
+        },
+        {
+          "factor": "vol_12m",
+          "preference": "lower"
+        }
+      ],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "ranking-terms-duplicate-factor",
+    "reason": "a factor named twice would double its weight silently",
+    "valid": false,
+    "value": {
+      "index": "nifty-500",
+      "ranking_terms": [
+        {
+          "factor": "ret_12m",
+          "preference": "higher"
+        },
+        {
+          "factor": "ret_12m",
+          "preference": "lower"
+        }
+      ],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "ranking-terms-nine",
+    "reason": "C3: at most eight terms",
+    "valid": false,
+    "value": {
+      "index": "nifty-500",
+      "ranking_terms": [
+        {
+          "factor": "ret_12m",
+          "preference": "higher"
+        },
+        {
+          "factor": "ret_6m",
+          "preference": "higher"
+        },
+        {
+          "factor": "sharpe_12m",
+          "preference": "higher"
+        },
+        {
+          "factor": "vol_12m",
+          "preference": "higher"
+        },
+        {
+          "factor": "ma_dist_20",
+          "preference": "higher"
+        },
+        {
+          "factor": "ma_stack_score",
+          "preference": "higher"
+        },
+        {
+          "factor": "pos_days_6m",
+          "preference": "higher"
+        },
+        {
+          "factor": "avg_sharpe_12_6_3_1",
+          "preference": "higher"
+        },
+        {
+          "factor": "vol_expansion_1w_12m",
+          "preference": "higher"
+        }
+      ],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "ranking-terms-target-range-without-bounds",
+    "reason": "C3: target_range needs ≥1 bound",
+    "valid": false,
+    "value": {
+      "index": "nifty-500",
+      "ranking_terms": [
+        {
+          "factor": "ret_12m",
+          "preference": "target_range"
+        }
+      ],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "ranking-terms-target-range-inverted",
+    "reason": "C3: target_min ≤ target_max",
+    "valid": false,
+    "value": {
+      "index": "nifty-500",
+      "ranking_terms": [
+        {
+          "factor": "ret_12m",
+          "preference": "target_range",
+          "target_max": 5,
+          "target_min": 10
+        }
+      ],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "ranking-terms-bounds-on-higher",
+    "reason": "a bound on a monotonic preference would be silently ignored",
+    "valid": false,
+    "value": {
+      "index": "nifty-500",
+      "ranking_terms": [
+        {
+          "factor": "ret_12m",
+          "preference": "higher",
+          "target_min": 1
+        }
+      ],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "ranking-terms-weight-zero",
+    "reason": "C3: 0 < weight",
+    "valid": false,
+    "value": {
+      "index": "nifty-500",
+      "ranking_terms": [
+        {
+          "factor": "ret_12m",
+          "preference": "higher",
+          "weight": 0
+        }
+      ],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "ranking-terms-weight-above-100",
+    "reason": "C3: weight ≤ 100",
+    "valid": false,
+    "value": {
+      "index": "nifty-500",
+      "ranking_terms": [
+        {
+          "factor": "ret_12m",
+          "preference": "higher",
+          "weight": 100.5
+        }
+      ],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "ranking-terms-unknown-preference",
+    "reason": "C3: preference ∈ higher | lower | target_range (eligibility is a filter)",
+    "valid": false,
+    "value": {
+      "index": "nifty-500",
+      "ranking_terms": [
+        {
+          "factor": "ret_12m",
+          "preference": "eligibility"
+        }
+      ],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "ranking-terms-unknown-key",
+    "reason": "extra=forbid applies to ranking terms too",
+    "valid": false,
+    "value": {
+      "index": "nifty-500",
+      "ranking_terms": [
+        {
+          "factor": "ret_12m",
+          "preference": "higher",
+          "wieght": 2
+        }
+      ],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "ranking-terms-weight-in-sequential",
+    "reason": "C3: weights only meaningful in composite",
+    "valid": false,
+    "value": {
+      "index": "nifty-500",
+      "ranking_mode": "sequential",
+      "ranking_terms": [
+        {
+          "factor": "ret_12m",
+          "preference": "higher",
+          "weight": 3
+        },
+        {
+          "factor": "vol_12m",
+          "preference": "lower"
+        }
+      ],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "family-weights-in-sequential",
+    "reason": "C3: family_weights are composite only",
+    "valid": false,
+    "value": {
+      "family_weights": {
+        "momentum": 1
+      },
+      "index": "nifty-500",
+      "ranking_mode": "sequential",
+      "ranking_terms": [
+        {
+          "factor": "ret_12m",
+          "preference": "higher"
+        }
+      ],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "family-weights-negative",
+    "reason": "C3: family weights are ≥ 0",
+    "valid": false,
+    "value": {
+      "family_weights": {
+        "momentum": -1
+      },
+      "index": "nifty-500",
+      "ranking_terms": [
+        {
+          "factor": "ret_12m",
+          "preference": "higher"
+        }
+      ],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "family-weights-unknown-family",
+    "reason": "C3 names exactly five weight families",
+    "valid": false,
+    "value": {
+      "family_weights": {
+        "value": 1
+      },
+      "index": "nifty-500",
+      "ranking_terms": [
+        {
+          "factor": "ret_12m",
+          "preference": "higher"
+        }
+      ],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "family-weights-without-terms",
+    "reason": "family weights mean nothing to the legacy sum-of-ranks path",
+    "valid": false,
+    "value": {
+      "family_weights": {
+        "momentum": 1
+      },
+      "index": "nifty-500",
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "missing-data-without-terms",
+    "reason": "the legacy path always sorts NULLs last; a policy there would be ignored",
+    "valid": false,
+    "value": {
+      "index": "nifty-500",
+      "missing_data": "neutral",
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "missing-data-unknown",
+    "reason": "C3: penalize | neutral | exclude",
+    "valid": false,
+    "value": {
+      "index": "nifty-500",
+      "missing_data": "impute",
+      "ranking_terms": [
+        {
+          "factor": "ret_12m",
+          "preference": "higher"
+        }
+      ],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "within-sector-without-terms",
+    "reason": "the legacy SQL path has no sector; within_sector needs the ranking engine",
+    "valid": false,
+    "value": {
+      "index": "nifty-500",
+      "ranking_scope": "within_sector",
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "within-sector-sequential",
+    "reason": "sequential orders by raw values, so a sector scope would change nothing",
+    "valid": false,
+    "value": {
+      "index": "nifty-500",
+      "ranking_mode": "sequential",
+      "ranking_scope": "within_sector",
+      "ranking_terms": [
+        {
+          "factor": "ret_12m",
+          "preference": "higher"
+        }
+      ],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "factor-range-without-bounds",
+    "reason": "C3: a range needs min, max or both",
+    "valid": false,
+    "value": {
+      "factor_ranges": [
+        {
+          "factor": "ret_6m"
+        }
+      ],
+      "index": "nifty-500",
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "factor-range-inverted",
+    "reason": "C3: min ≤ max",
+    "valid": false,
+    "value": {
+      "factor_ranges": [
+        {
+          "factor": "ret_6m",
+          "max": 1,
+          "min": 5
+        }
+      ],
+      "index": "nifty-500",
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "factor-ranges-eleven",
+    "reason": "C3: at most ten factor ranges",
+    "valid": false,
+    "value": {
+      "factor_ranges": [
+        {
+          "factor": "ret_6m",
+          "min": 0
+        },
+        {
+          "factor": "ret_6m",
+          "min": 1
+        },
+        {
+          "factor": "ret_6m",
+          "min": 2
+        },
+        {
+          "factor": "ret_6m",
+          "min": 3
+        },
+        {
+          "factor": "ret_6m",
+          "min": 4
+        },
+        {
+          "factor": "ret_6m",
+          "min": 5
+        },
+        {
+          "factor": "ret_6m",
+          "min": 6
+        },
+        {
+          "factor": "ret_6m",
+          "min": 7
+        },
+        {
+          "factor": "ret_6m",
+          "min": 8
+        },
+        {
+          "factor": "ret_6m",
+          "min": 9
+        },
+        {
+          "factor": "ret_6m",
+          "min": 10
+        }
+      ],
+      "index": "nifty-500",
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "regime-in-empty",
+    "reason": "an empty regime list matches no row; null is the 'off' value",
+    "valid": false,
+    "value": {
+      "index": "nifty-500",
+      "regime_in": [],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "regime-in-unknown-label",
+    "reason": "C1: regimes are BULL | NEUTRAL | BEAR",
+    "valid": false,
+    "value": {
+      "index": "nifty-500",
+      "regime_in": [
+        "BULL",
+        "SIDEWAYS"
+      ],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "regime-in-duplicated",
+    "reason": "a duplicated regime would double-count in the IN predicate",
+    "valid": false,
+    "value": {
+      "index": "nifty-500",
+      "regime_in": [
+        "BULL",
+        "BULL"
+      ],
+      "sort_by": "ret_12m"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "desk-score-with-factor-two",
+    "reason": "PLAN Phase 1.2: desk_score never sums row numbers with another factor",
+    "valid": false,
+    "value": {
+      "factor_two": {
+        "enabled": true,
+        "sort_by": "ret_12m",
+        "sort_direction": "desc"
+      },
+      "index": "nifty-500",
+      "sort_by": "desk_score"
+    }
+  },
+  {
+    "materialised": null,
+    "name": "single-with-factor-two",
+    "reason": "ranking_mode='single' cannot combine an active factor_two",
+    "valid": false,
+    "value": {
+      "factor_two": {
+        "enabled": true,
+        "sort_by": "vol_12m",
+        "sort_direction": "asc"
+      },
+      "index": "nifty-500",
+      "ranking_mode": "single",
+      "sort_by": "ret_12m"
     }
   }
 ]

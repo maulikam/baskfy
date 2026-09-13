@@ -11,9 +11,9 @@ Five claims, each one a thing that would otherwise be discovered in production:
    strategy cannot produce, a trigger with no session, a thin session with an open gate, an
    order for a signal nobody stored. Each is asserted by making the database say no, because a
    ``CHECK`` nobody has ever triggered is a sentence in a file rather than a guarantee.
-4. **The seed ships ``sleeve_capital_inr = 2_500_000`` (TW15.1) and is idempotent.** House rule 7, and the safety
-   rail of ``docs/twt/02`` §3: a sleeve at ₹0 plans nothing, and re-running the seeder must
-   never reset a capital, a stop or a trail a person has chosen.
+4. **The seed ships ``sleeve_capital_inr = 2_500_000`` (TW15.1) and is idempotent.** House rule 7,
+   and the safety rail of ``docs/twt/02`` §3: a sleeve at ₹0 plans nothing, and re-running the
+   seeder must never reset a capital, a stop or a trail a person has chosen.
 5. **The vocabulary is the document's.** Every state, kind and reason the check constraints
    admit is transcribed from ``docs/twt/03`` and ``04`` and asserted against them here, because
    ``baskfy_core.twt`` (TW1) does not exist yet to import them from. DECISIONS-TW **TW3.1**.

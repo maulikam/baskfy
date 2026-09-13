@@ -381,15 +381,13 @@ class TestTheLiquidityFloorAndTheRanking:
         """TW15.1: shipped and research floors are both ₹2 crore, so they no longer disagree.
 
         ``signal_mask`` / ``detect_signals`` still take ``floor_inr`` so TW2's goldens stay
-        pinned if the shipped floor moves again. This name turns over 90 × 400,000 = ₹3.6
+        pinned if the shipped floor moves again. This name turns over 90 x 400,000 = ₹3.6
         crore: it clears ₹2 crore and fails the old ₹5 crore sensitivity floor.
         """
         bars = with_background(tight_bars(volume=400_000.0), count=COUNT)
         detected = with_twt_columns(bars, calendar_for(bars))
         shipped = detect_signals(detected, WHEN).to_dicts()[0]
-        override = detect_signals(
-            detected, WHEN, floor_inr=Decimal("50000000")
-        ).to_dicts()[0]
+        override = detect_signals(detected, WHEN, floor_inr=Decimal("50000000")).to_dicts()[0]
         research = detect_signals(
             detected, WHEN, floor_inr=DEFAULT_TWT_CONFIG.entry.research_min_turnover_inr
         ).to_dicts()[0]

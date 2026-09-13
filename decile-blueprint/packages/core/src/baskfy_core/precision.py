@@ -66,6 +66,36 @@ COLUMN_PRECISION: Final[dict[str, int]] = {
     "beta_12m": RATIO_DP,
     # P/E keeps NSE's own 4 dp (docs/04 numeric(14,4)).
     "pe": RSI_DP,
+    # --- Ranking 2.A: the stored ranking factors (docs/ranking/PLAN.md C1) ------------------
+    #
+    # Each place count is the scale of the column's numeric(p, s) in C1, and
+    # `baskfy_core.factors_ranking.RANKING_NUMERIC_TYPES` carries the same (p, s) for the
+    # storage-range guard; `test_factors_ranking.py` pins all three (this table, that one and the
+    # ORM model) to each other. Written as literals, one per line, so a grep for a column finds it.
+    "atr_14": RSI_DP,
+    "atr_ext_20": RSI_DP,
+    "ma50_slope_20": PERCENT_DP,
+    "eff_ratio_63": RSI_DP,
+    "max_dd_6m": PERCENT_DP,
+    "max_dd_12m": PERCENT_DP,
+    "downside_vol_6m": RATIO_DP,
+    "downside_vol_12m": RATIO_DP,
+    "sortino_6m": PERCENT_DP,
+    "sortino_12m": PERCENT_DP,
+    "underwater_12m": PERCENT_DP,
+    "ret_ex_top3_12m": PERCENT_DP,
+    "accel_21_105": RATIO_DP,
+    "accel_21_105_vs": RSI_DP,
+    "vol_exp_21_126": RSI_DP,
+    "excess_ret_3m": PERCENT_DP,
+    "excess_ret_6m": PERCENT_DP,
+    "excess_ret_12m": PERCENT_DP,
+    "resid_ret_12m": PERCENT_DP,
+    "rs_persist_126": PERCENT_DP,
+    "mom_pctile": PERCENT_DP,
+    "rank_persist_20": PERCENT_DP,
+    "nse_mr6": RATIO_DP,
+    "nse_mr12": RATIO_DP,
     # --- SW3: `sw_setup_daily` (docs/swing/03 §2) --------------------------------------
     #
     # The same rule for the same reason: the detector's numbers are written once, rounded, and
@@ -157,6 +187,8 @@ INTEGER_COLUMNS: Final[frozenset[str]] = frozenset(
         "circuits_6m",
         "circuits_9m",
         "circuits_12m",
+        # Ranking 2.A (C1): a count of the last 20 sessions, `smallint` on `factor_daily`.
+        "vol_persist_20",
         # SW3: `sw_setup_daily.turnover_avg` is bigint rupees, like every other volume column.
         "turnover_avg",
         # VB4: `vb_signal_daily`'s volumes and rupee turnovers, and the rank key, which is one
@@ -189,13 +221,20 @@ def quantise(value: object, places: int) -> Decimal | None:
 
 
 def round_expr(column: str, places: int) -> pl.Expr:
-    """Round a float column half-up at write time, as a Polars expression."""
+    """Round a float column half-up at write time, as a Polars expression.
+
+    The half-up decision is the ``floor(|x| * 10^p + 0.5)``. The trailing ``.round(places)`` does
+    not re-decide it: Polars' divide-by-literal kernel can land one ulp off ``k / 10^p`` (it wrote
+    ``89.47370000000001`` for ``894737 / 1e4`` once a frame's chunk layout changed under Ranking
+    2.A), and a stored value one ulp off its decimal is a different byte in every CSV. Snapping to
+    the nearest double of an already-decided decimal is exact and cannot move a half.
+    """
     scale = pl.lit(10.0**places)
     value = pl.col(column)
     return (
         pl.when(value.is_null() | value.is_infinite() | value.is_nan())
         .then(None)
-        .otherwise((value.abs() * scale + 0.5).floor() / scale * value.sign())
+        .otherwise(((value.abs() * scale + 0.5).floor() / scale).round(places) * value.sign())
         .alias(column)
     )
 

@@ -5,8 +5,7 @@ from __future__ import annotations
 import datetime as dt
 
 from baskfy_core.screen_definition import ExtraFactor, ScreenDefinition
-from baskfy_core.screener import build_screen_query
-
+from baskfy_core.screener import _ranked_pipeline, build_screen_query
 
 AS_OF = dt.date(2026, 8, 18)
 
@@ -57,9 +56,12 @@ def test_fixed_universe_emits_pre_ranked_cte() -> None:
     assert "pre_ranked" in fixed_sql
 
 
-def test_sequential_orders_by_primary_then_tiebreakers() -> None:
-    from baskfy_core.screener import _ranked_pipeline
+def test_sequential_orders_by_factor_values_then_instrument_id() -> None:
+    """docs/ranking/PLAN.md G6a: by each factor's *value*, not its unique row number.
 
+    ``r1`` is a ROW_NUMBER and never ties, so ordering by it would leave factor two unable to
+    decide a tie in factor one's value. The behavioural proof is in ``test_ranking_frame_query``.
+    """
     pipeline = _ranked_pipeline(
         _definition(
             ranking_mode="sequential",
@@ -68,5 +70,8 @@ def test_sequential_orders_by_primary_then_tiebreakers() -> None:
         AS_OF,
     )
     rendered = [str(clause) for clause in pipeline.order_by]
-    assert any("r1" in clause for clause in rendered)
-    assert rendered[0].startswith("r1") or "r1" in rendered[0]
+    assert rendered == [
+        "ranked.seq_value_1 DESC NULLS LAST",
+        "ranked.seq_value_2 ASC NULLS LAST",
+        "ranked.instrument_id ASC",
+    ]

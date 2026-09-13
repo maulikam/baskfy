@@ -270,6 +270,337 @@ CASES: Final[tuple[Case, ...]] = (
         valid=False,
         value=_base(sort_direction="sideways"),
     ),
+    # --- docs/ranking/PLAN.md C3 — explicit ranking terms, ranges, regimes ------------------
+    Case(
+        name="ranking-terms-composite",
+        reason="C3: composite of weighted terms, family weights, a missing-data policy and a scope",
+        valid=True,
+        value=_base(
+            ranking_mode="composite",
+            ranking_scope="fixed_universe",
+            ranking_terms=[
+                {"factor": "ret_12m", "preference": "higher", "weight": 2},
+                {"factor": "vol_12m", "preference": "lower"},
+                {
+                    "factor": "ma_dist_20",
+                    "preference": "target_range",
+                    "target_min": 0,
+                    "target_max": 5.5,
+                },
+            ],
+            family_weights={"momentum": 60, "risk_execution": 40},
+            missing_data="neutral",
+        ),
+    ),
+    Case(
+        name="ranking-terms-target-range-one-bound",
+        reason="C3: target_range needs at least one bound, not both",
+        valid=True,
+        value=_base(
+            ranking_terms=[
+                {"factor": "ret_12m", "preference": "target_range", "target_max": 80},
+            ],
+        ),
+    ),
+    Case(
+        name="ranking-terms-sequential",
+        reason="C3: sequential orders by each term's raw value; weights stay at their default",
+        valid=True,
+        value=_base(
+            sort_by="desk_score",
+            ranking_mode="sequential",
+            ranking_terms=[
+                {"factor": "desk_score", "preference": "higher"},
+                {"factor": "ma_dist_20", "preference": "lower"},
+                {"factor": "vol_12m", "preference": "lower"},
+            ],
+            missing_data="exclude",
+        ),
+    ),
+    Case(
+        name="ranking-terms-single",
+        reason="C3: single ranks by exactly one term",
+        valid=True,
+        value=_base(
+            ranking_mode="single",
+            ranking_terms=[{"factor": "ret_12m", "preference": "higher"}],
+        ),
+    ),
+    Case(
+        name="ranking-terms-within-sector",
+        reason="C3: within_sector is allowed once terms rank in composite",
+        valid=True,
+        value=_base(
+            ranking_scope="within_sector",
+            ranking_terms=[
+                {"factor": "ret_12m", "preference": "higher"},
+                {"factor": "pos_days_6m", "preference": "higher", "weight": 0.5},
+            ],
+        ),
+    ),
+    Case(
+        name="factor-ranges-and-regime-on-legacy-path",
+        reason="C3: factor_ranges and regime_in are eligibility filters, valid without terms",
+        valid=True,
+        value=_base(
+            factor_ranges=[
+                {"factor": "ret_6m", "min": 0},
+                {"enabled": False, "factor": "vol_12m", "min": 0.1, "max": 0.6},
+            ],
+            regime_in=["BULL", "NEUTRAL"],
+        ),
+    ),
+    Case(
+        name="desk-score-fixed-universe",
+        reason="C2: desk_score is read from desk_score_daily, so scope cannot change its order",
+        valid=True,
+        value=_base(sort_by="desk_score", ranking_scope="fixed_universe"),
+    ),
+    Case(
+        name="ranking-terms-sort-by-mismatch",
+        reason="C3: sort_by must equal ranking_terms[0].factor",
+        valid=False,
+        value=_base(ranking_terms=[{"factor": "vol_12m", "preference": "lower"}]),
+    ),
+    Case(
+        name="ranking-terms-with-factor-two",
+        reason="C3: explicit terms replace factor_two/factor_three",
+        valid=False,
+        value=_base(
+            ranking_terms=[{"factor": "ret_12m", "preference": "higher"}],
+            factor_two={"enabled": True, "sort_by": "vol_12m", "sort_direction": "asc"},
+        ),
+    ),
+    Case(
+        name="ranking-terms-single-with-two-terms",
+        reason="C3: single ⇒ exactly one term",
+        valid=False,
+        value=_base(
+            ranking_mode="single",
+            ranking_terms=[
+                {"factor": "ret_12m", "preference": "higher"},
+                {"factor": "vol_12m", "preference": "lower"},
+            ],
+        ),
+    ),
+    Case(
+        name="ranking-terms-duplicate-factor",
+        reason="a factor named twice would double its weight silently",
+        valid=False,
+        value=_base(
+            ranking_terms=[
+                {"factor": "ret_12m", "preference": "higher"},
+                {"factor": "ret_12m", "preference": "lower"},
+            ],
+        ),
+    ),
+    Case(
+        name="ranking-terms-nine",
+        reason="C3: at most eight terms",
+        valid=False,
+        value=_base(
+            ranking_terms=[
+                {"factor": key, "preference": "higher"}
+                for key in (
+                    "ret_12m",
+                    "ret_6m",
+                    "sharpe_12m",
+                    "vol_12m",
+                    "ma_dist_20",
+                    "ma_stack_score",
+                    "pos_days_6m",
+                    "avg_sharpe_12_6_3_1",
+                    "vol_expansion_1w_12m",
+                )
+            ],
+        ),
+    ),
+    Case(
+        name="ranking-terms-target-range-without-bounds",
+        reason="C3: target_range needs ≥1 bound",
+        valid=False,
+        value=_base(ranking_terms=[{"factor": "ret_12m", "preference": "target_range"}]),
+    ),
+    Case(
+        name="ranking-terms-target-range-inverted",
+        reason="C3: target_min ≤ target_max",
+        valid=False,
+        value=_base(
+            ranking_terms=[
+                {
+                    "factor": "ret_12m",
+                    "preference": "target_range",
+                    "target_min": 10,
+                    "target_max": 5,
+                }
+            ],
+        ),
+    ),
+    Case(
+        name="ranking-terms-bounds-on-higher",
+        reason="a bound on a monotonic preference would be silently ignored",
+        valid=False,
+        value=_base(
+            ranking_terms=[{"factor": "ret_12m", "preference": "higher", "target_min": 1}],
+        ),
+    ),
+    Case(
+        name="ranking-terms-weight-zero",
+        reason="C3: 0 < weight",
+        valid=False,
+        value=_base(ranking_terms=[{"factor": "ret_12m", "preference": "higher", "weight": 0}]),
+    ),
+    Case(
+        name="ranking-terms-weight-above-100",
+        reason="C3: weight ≤ 100",
+        valid=False,
+        value=_base(
+            ranking_terms=[{"factor": "ret_12m", "preference": "higher", "weight": 100.5}],
+        ),
+    ),
+    Case(
+        name="ranking-terms-unknown-preference",
+        reason="C3: preference ∈ higher | lower | target_range (eligibility is a filter)",
+        valid=False,
+        value=_base(ranking_terms=[{"factor": "ret_12m", "preference": "eligibility"}]),
+    ),
+    Case(
+        name="ranking-terms-unknown-key",
+        reason="extra=forbid applies to ranking terms too",
+        valid=False,
+        value=_base(ranking_terms=[{"factor": "ret_12m", "preference": "higher", "wieght": 2}]),
+    ),
+    Case(
+        name="ranking-terms-weight-in-sequential",
+        reason="C3: weights only meaningful in composite",
+        valid=False,
+        value=_base(
+            ranking_mode="sequential",
+            ranking_terms=[
+                {"factor": "ret_12m", "preference": "higher", "weight": 3},
+                {"factor": "vol_12m", "preference": "lower"},
+            ],
+        ),
+    ),
+    Case(
+        name="family-weights-in-sequential",
+        reason="C3: family_weights are composite only",
+        valid=False,
+        value=_base(
+            ranking_mode="sequential",
+            ranking_terms=[{"factor": "ret_12m", "preference": "higher"}],
+            family_weights={"momentum": 1},
+        ),
+    ),
+    Case(
+        name="family-weights-negative",
+        reason="C3: family weights are ≥ 0",
+        valid=False,
+        value=_base(
+            ranking_terms=[{"factor": "ret_12m", "preference": "higher"}],
+            family_weights={"momentum": -1},
+        ),
+    ),
+    Case(
+        name="family-weights-unknown-family",
+        reason="C3 names exactly five weight families",
+        valid=False,
+        value=_base(
+            ranking_terms=[{"factor": "ret_12m", "preference": "higher"}],
+            family_weights={"value": 1},
+        ),
+    ),
+    Case(
+        name="family-weights-without-terms",
+        reason="family weights mean nothing to the legacy sum-of-ranks path",
+        valid=False,
+        value=_base(family_weights={"momentum": 1}),
+    ),
+    Case(
+        name="missing-data-without-terms",
+        reason="the legacy path always sorts NULLs last; a policy there would be ignored",
+        valid=False,
+        value=_base(missing_data="neutral"),
+    ),
+    Case(
+        name="missing-data-unknown",
+        reason="C3: penalize | neutral | exclude",
+        valid=False,
+        value=_base(
+            ranking_terms=[{"factor": "ret_12m", "preference": "higher"}],
+            missing_data="impute",
+        ),
+    ),
+    Case(
+        name="within-sector-without-terms",
+        reason="the legacy SQL path has no sector; within_sector needs the ranking engine",
+        valid=False,
+        value=_base(ranking_scope="within_sector"),
+    ),
+    Case(
+        name="within-sector-sequential",
+        reason="sequential orders by raw values, so a sector scope would change nothing",
+        valid=False,
+        value=_base(
+            ranking_mode="sequential",
+            ranking_scope="within_sector",
+            ranking_terms=[{"factor": "ret_12m", "preference": "higher"}],
+        ),
+    ),
+    Case(
+        name="factor-range-without-bounds",
+        reason="C3: a range needs min, max or both",
+        valid=False,
+        value=_base(factor_ranges=[{"factor": "ret_6m"}]),
+    ),
+    Case(
+        name="factor-range-inverted",
+        reason="C3: min ≤ max",
+        valid=False,
+        value=_base(factor_ranges=[{"factor": "ret_6m", "min": 5, "max": 1}]),
+    ),
+    Case(
+        name="factor-ranges-eleven",
+        reason="C3: at most ten factor ranges",
+        valid=False,
+        value=_base(factor_ranges=[{"factor": "ret_6m", "min": i} for i in range(11)]),
+    ),
+    Case(
+        name="regime-in-empty",
+        reason="an empty regime list matches no row; null is the 'off' value",
+        valid=False,
+        value=_base(regime_in=[]),
+    ),
+    Case(
+        name="regime-in-unknown-label",
+        reason="C1: regimes are BULL | NEUTRAL | BEAR",
+        valid=False,
+        value=_base(regime_in=["BULL", "SIDEWAYS"]),
+    ),
+    Case(
+        name="regime-in-duplicated",
+        reason="a duplicated regime would double-count in the IN predicate",
+        valid=False,
+        value=_base(regime_in=["BULL", "BULL"]),
+    ),
+    Case(
+        name="desk-score-with-factor-two",
+        reason="PLAN Phase 1.2: desk_score never sums row numbers with another factor",
+        valid=False,
+        value=_base(
+            sort_by="desk_score",
+            factor_two={"enabled": True, "sort_by": "ret_12m", "sort_direction": "desc"},
+        ),
+    ),
+    Case(
+        name="single-with-factor-two",
+        reason="ranking_mode='single' cannot combine an active factor_two",
+        valid=False,
+        value=_base(
+            ranking_mode="single",
+            factor_two={"enabled": True, "sort_by": "vol_12m", "sort_direction": "asc"},
+        ),
+    ),
 )
 
 

@@ -106,6 +106,7 @@ from baskfy_core.models.market import (
     OhlcvDaily,
 )
 from baskfy_core.models.pipeline import CURSOR_KIND_BARS, IngestCursor
+from baskfy_core.models.ranking import DeskScoreDaily
 from baskfy_core.models.reference import Exchange, Instrument, SymbolAlias, TradingDay
 from baskfy_core.models.screens import (
     BasketSnapshot,
@@ -328,6 +329,7 @@ __all__ = [
     "CbWatchlistItem",
     "ConsentRecord",
     "CorporateAction",
+    "DeskScoreDaily",
     "EntitlementOverride",
     "Exchange",
     "FactorDaily",

@@ -152,8 +152,8 @@ Deploying only the API/worker images and holding `web` is possible — `push-ima
 ## 33. `baskfy.desk.daily` is on Beat every weekday and cannot run — a design call, not a bug fix
 
 **Found 12 Sep 2026** by the Kite-sync investigation, **verified independently by the parent.**
-**Status:** open. Nothing was changed, because the fix is a choice between two shapes and both
-have consequences on a live trading box.
+**Status:** decided 13 Sep 2026 — **move the task to the `desk` container.** Another agent
+implements it. This session records the choice and does not start the move.
 
 **What is wrong.** `baskfy_worker.tasks.desk` computes
 `DESK_ROOT = Path(__file__).resolve().parents[6] / "kite-momentum-rebalancer"` and then `chdir`s
@@ -180,11 +180,11 @@ item 32: the box's desk schema has all 20 tables and **0 rows in every one**.
 | **Ship the desk tree in `baskfy-py`** | `Dockerfile.desk` already copies both trees; `Dockerfile.python` copies one. One line, but it puts the live trading code into the image the *web API and every worker* run, which is a blast-radius change on the auto-execute host |
 | **Move the task to the `desk` container** | Correct by shape — the desk service already runs `baskfy-desk`, which has both trees. Costs a task registration on the desk side and a Beat route change |
 
-The second is the better design and the larger change. **Neither was taken**, because a deploy was
-already in flight and rearranging which container runs the trading collection is not something to
-decide in the last ten minutes of one.
+The second is the better design and the larger change. **Taken 13 Sep 2026:** move the task to
+the `desk` container. Another agent owns the implementation and the Beat route change. This
+session does not start that work.
 
-**What was done meanwhile:** nothing that touches it. The defect is recorded here, in
+**What was done meanwhile:** nothing that touches the code. The defect is recorded here, in
 `gates/kite-sync.md` G9, and in `PLAN-SCAN-SYNC.md`'s status log.
 
 ---
@@ -1755,12 +1755,14 @@ standing default in `docs/twt/QUESTIONS.md`, and every module that does not depe
 built anyway. **Three of them need your hands rather than your opinion**, and they are T1, T2 and
 T3 below.
 
-| | What is needed | What it blocks |
-|---|---|---|
-| **T1** | **The daily Kite login**, before 09:00 every live morning | Every order, every GTT, every ratchet. Nothing at all before one |
-| **T2** | **The execution flag**, by your hand only — `BASKFY_TWT_EXECUTION_ENABLED`, in two files on the box | Any real order. No agent ever touches it |
-| **T3** | **The sleeve's capital**, your keystroke — seeded at 0, standing default ₹25,00,000 | Every plan. A sleeve at ₹0 skips every signal `NO_SLEEVE_CAPITAL`, by design |
-| **T4** | Nothing from you — but **expect it**: the plant's missing instrument-days make the live scan look thinner than Chartink's | Nothing. It is not a bug and the page says so |
+| | What is needed | What it blocks | State |
+|---|---|---|---|
+| **T1** | **The daily Kite login**, before 09:00 every live morning | Every order, every GTT, every ratchet | Open — every live morning |
+| **T1-nudge** | On the box: `BASKFY_KITE_LOGIN_NUDGE_ENABLED=true` + `BASKFY_KITE_LOGIN_NUDGE_TO=<your address>` (you authorized 13 Sep; do not commit the address) | The 08:45 / 09:05 login email | **Your hands after deploy.** In-repo default stays false |
+| **T2** | After TW15.1 is **committed and deployed**: `BASKFY_TWT_EXECUTION_ENABLED=true` in **both** box env files **and** confirm `BASKFY_DESK_DRY_RUN=false` | Any real TWT order. Confirm-gated. No auto-execute | **Your hands after deploy.** Agents do not flip box env |
+| **T3** | On the **first live morning**, after the flag flip: `uv run python -m baskfy_api.seed twt --capital 2500000` and verify `tw_config_audit` **before any Confirm** | Plans on a box still at ₹0 | **Your hands after T2.** Do not raw-`UPDATE` |
+| **T4** | Nothing from you — **expect** `/twt` to look thinner than Chartink Mon–Thu | Nothing. It is not a bug | Open, not a blocker |
+| **T4-b** | Chartink 12 Sep 68-name export | Was only the 68×68 reconciliation | **✅ CLOSED 13 Sep 2026** — skip the 68×68; 11 Sep 82.5 % recall is enough |
 
 **The first live morning is written down**: [`docs/twt/FIRST-LIVE-MORNING.md`](docs/twt/FIRST-LIVE-MORNING.md)
 (TW10) is the sequence you will actually follow, with the command for every step, what the plan
@@ -1785,31 +1787,72 @@ measured book and a looser one.
 the login first in the sequence and gives the one command that checks whether the token is alive
 before the plan is built.
 
-### T2 — The execution flag, by your hand and only yours
+#### T1-nudge — the 08:45 login email, authorized 13 Sep 2026
 
-`BASKFY_TWT_EXECUTION_ENABLED=true`. It does not exist yet; TW3 creates it defaulting **false**,
-and no module of this run ever sets it. The five conditions are in `docs/twt/02` §3 and their
-evidence will be in `TW-FINAL-REPORT.md`: TW10 green, both trees green, the backtest on the page,
-the written runbook, and your flip.
+You authorized enabling the morning login link **on the box**. The in-repo default stays
+`BASKFY_KITE_LOGIN_NUDGE_ENABLED=false` (both `.env.example` files) so other environments are
+not surprised. **Do not commit your address.**
 
-**The swing sleeve's delegation does not extend here.** `docs/swing/02` §3.5 (5 Sep 2026) lets an
-agent set the *swing* flag on your written decision; VBT-1's §3 says the same about its own
-(V3, answered 11 Sep). If you want the same for this sleeve, one line here says so and an agent
-records it in `docs/twt/DECISIONS-TW.md` before acting on it. Until then no agent touches it.
+After TW15.1 is deployed, in an SSM shell (same two-file shape as SW-9):
 
-### T3 — The sleeve's capital, which is your keystroke
+1. `/opt/baskfy/.env.staging.compose` (worker + beat interpolation):  
+   `BASKFY_KITE_LOGIN_NUDGE_ENABLED=true` and `BASKFY_KITE_LOGIN_NUDGE_TO=<your address>`.
+2. Confirm `BASKFY_BROKER_OAUTH_STATE_PATH` points at a file on the `baskfy-state` volume that
+   **both** api and worker mount — without it the worker refuses to send.
+3. `up -d worker beat`.
 
-`tw_config.sleeve_capital_inr` is seeded at **0** and the run never writes it. A sleeve at ₹0 plans
-nothing: every signal is skipped `NO_SLEEVE_CAPITAL`, which is the intended behaviour and not a
-fault to debug on the first morning.
+The `/brokers` page still logs in by hand. Sequence: `FIRST-LIVE-MORNING.md` §3.1.
 
-The standing default is **₹25,00,000** (your 11 Sep decision, `QUESTIONS.md` Q1). One consequence
-worth your eye before you type it: **no backtest in this repository was produced at ₹25 lakh.**
-Every number in `docs/twt/01` was measured at ₹10 lakh, where the 1 %-of-turnover cap fires on
-nothing. At ₹25 lakh over ten slots a line is ₹2.5 lakh and that cap binds until a name turns over
-₹2.5 crore a day — which is why this sleeve ships a ₹5 crore liquidity floor rather than the
-research's ₹2 crore (DECISIONS-TW **TW0.3**). The floor is the pack's answer to the size change; it
-is not a measurement at the new size.
+### T2 — The execution flag, by your hand after deploy (go live, 13 Sep 2026)
+
+**Answered 13 Sep 2026.** Mode: flip `BASKFY_TWT_EXECUTION_ENABLED=true` in **both** box env
+files **and** keep/confirm `BASKFY_DESK_DRY_RUN=false` (real CNC/GTT; the weekly book is already
+live with swing). Confirm-gated; **no `BASKFY_TWT_AUTO_*`**.
+
+**When:** after TW15.1 is **committed and deployed**, then **you** flip. Agents do not flip box
+env, do not SSH, do not deploy.
+
+The in-repo default stays **false** (agent/dev safety; both `.env.example` files;
+`os.getenv(..., "false")`).
+
+Exact steps, after the deploy, in an SSM shell on the box, **not** through `box.sh`:
+
+1. `/opt/baskfy/.env.staging.compose` (what the **desk** reads) — set
+   `BASKFY_TWT_EXECUTION_ENABLED=true`.
+2. `/opt/baskfy/.env.staging` (what **api, worker and beat** read) — the same key, the same
+   value.
+3. In the compose file, **confirm** `BASKFY_DESK_DRY_RUN=false`. You already run the weekly book
+   live with swing; this is a keep/confirm, not a new live-up of that book.
+4. Restart:
+
+```
+AWS_PROFILE=baskfy-poc bash tools/deploy/box.sh 'cd /opt/baskfy && sudo docker compose --env-file .env.staging.compose -f compose.prod.yml up -d desk worker beat'
+```
+
+Then `curl -fsS $DESK/status` and confirm `"dry_run": false`. Sequence with checks:
+`docs/twt/FIRST-LIVE-MORNING.md` §3.4.
+
+**Do not set** `BASKFY_TWT_AUTO_EXECUTE` or any `BASKFY_TWT_AUTO_*` — those names must not
+exist. Non-negotiable 1's one named exception is the swing sleeve's.
+
+**Deploy shape (docs only — no agent deploys this):** api / worker / desk images. **Hold web**
+until UI polish is green. DECISIONS-TW **TW15.2**.
+
+### T3 — The sleeve's capital (first live morning, after the flag flip)
+
+**Answered 13 Sep 2026.** On the **first live morning**, after T2, run the audited fund and
+**verify `tw_config_audit` before any Confirm**. Do not raw-`UPDATE`.
+
+```
+cd decile-blueprint && uv run python -m baskfy_api.seed twt --capital 2500000
+```
+
+**TW15.1:** a **new** seed writes `sleeve_capital_inr = 2_500_000`. The column default stays 0.
+A box seeded before TW15.1 is still 0 (`ON CONFLICT DO NOTHING`); this command is that box's
+path. Sequence and read-back: `FIRST-LIVE-MORNING.md` §3.5.
+
+At ₹25 lakh over ten slots a line is ₹2.5 lakh. The live floor is ₹2 crore, so a name at the
+floor is turnover-capped to ₹2 lakh. **No backtest in this repository was produced at ₹25 lakh.**
 
 #### ✅ There is a surface now. Built 12 Sep 2026 (TW11), after you asked for it.
 
@@ -1823,9 +1866,9 @@ cd decile-blueprint && uv run python -m baskfy_api.seed twt --capital 2500000
 
 It goes through the same `apply_patch` the settings form would: the engine's bounds first, the
 server ceilings second, then one `tw_config_audit` row recording the old value, the new value and
-an author. Running it twice with the same number writes nothing the second time. **It sets no
-capital of its own** — without `--capital` a seed still writes ₹0, and a test reads the seeder's
-source to make sure nobody ever wires the funding call in unconditionally.
+an author. Running it twice with the same number writes nothing the second time. After TW15.1
+a **new** seed writes ₹25 lakh; `--capital` funds an existing row. `set_twt_sleeve` still runs
+only when the flag is passed, so a re-seed does not reset a chosen number.
 
 | Surface | State |
 |---|---|
@@ -1905,9 +1948,13 @@ produce byte-identical output (G13).
 close to false on a Friday** — and the weekly rebalance is a Friday job. `docs/twt/05` §1.2's
 caveat should say which days it is about.
 
-#### T4-b — the only thing here that needs your hands: an export of the 12 Sep scan
+#### T4-b — ✅ CLOSED 13 Sep 2026: skip the 68×68
 
-**What is needed:** Chartink's export (or a screenshot listing) of the three-weeks-tight scan as it
+**Closed by you:** skip the 12 Sep 68-name Chartink export and the 68×68 reconciliation. The
+11 Sep measurement (82.5 % recall at 91.2 % precision against the 63-name key) is enough.
+DECISIONS-TW **TW15.2**.
+
+**What had been needed:** Chartink's export (or a screenshot listing) of the three-weeks-tight scan as it
 stood on **12 Sep 2026**, the 68 names you read out.
 
 **Why it is yours:** it is behind your browser session and this repo has no copy. The repo holds

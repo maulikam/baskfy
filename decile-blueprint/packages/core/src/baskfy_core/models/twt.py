@@ -279,11 +279,9 @@ class TwConfig(Base):
     technical: a threshold that can be changed in a form gets changed after a bad week, which is
     the failure mode a rule-based sleeve exists to prevent.
 
-    ``sleeve_capital_inr`` defaults to **0**, and that is this table's safety property. ``04``
-    §9.3: a sleeve at ₹0 plans nothing — every signal is skipped ``NO_SLEEVE_CAPITAL``. So a
-    freshly seeded system detects, ranks, stores and plans **nothing to buy** until Maulik enters
-    the capital himself on the first live morning. No agent sets this number; the root
-    ``CLAUDE.md`` safety rails and ``02`` §3 both say so by name.
+    ``sleeve_capital_inr``'s **column** default is 0 — a raw insert still plans nothing
+    (``04`` §9.3, ``NO_SLEEVE_CAPITAL``). The seeder writes ₹25 lakh (TW15.1). An existing
+    zero row is funded with ``baskfy-seed twt --capital 2500000``, not by re-seeding.
 
     ``trail_pct`` is the odd one and it is odd on purpose: it is bounded **below**, by
     ``BASKFY_TWT_TRAIL_PCT_MIN`` [18.00], not above. The trail is TWT-1's only exit and the
@@ -312,7 +310,7 @@ class TwConfig(Base):
         BigInteger, ForeignKey("app_user.id", ondelete="CASCADE"), primary_key=True
     )
     #: The cash this sleeve may deploy. Its own money, never the whole account (``04`` §9.3).
-    #: **Seeded at 0 and never set by anything in this repository.**
+    #: Column default 0; the seeder writes ₹25 lakh (TW15.1).
     sleeve_capital_inr: Mapped[Decimal] = mapped_column(INR, nullable=False, server_default="0")
     #: ``SizingConfig.max_slots`` [10] is the strategy's own number; the plan takes the smaller
     #: of that and this setting, so a value above ten is a form that lies rather than a wider

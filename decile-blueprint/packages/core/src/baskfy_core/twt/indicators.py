@@ -145,9 +145,9 @@ def with_twt_indicators(
       ``open``, which is its own skip (``NO_BAR``).
 
     ``turnover_inr`` is computed here rather than read from ``ohlcv_daily.turnover``: ``04`` §3.5's
-    ₹5 crore is a rupee number about an exchange print, and the stored turnover column is not
+    ₹2 crore is a rupee number about an exchange print, and the stored turnover column is not
     guaranteed to be present for every instrument-day in the plant's history. One definition, so a
-    page and a test cannot disagree about what "₹5 crore of turnover" means.
+    page and a test cannot disagree about what "₹2 crore of turnover" means.
     """
     require_columns(bars)
     frame = _prepare(densify(bars, calendar))

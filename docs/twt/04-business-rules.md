@@ -139,21 +139,20 @@ the goldens it moves (if any — TW2 measures it).
 
 ### §3.5 The liquidity floor, and the one number that differs from the research
 
-`EntryConfig.min_turnover_inr = 50 000 000` — **₹5 crore**, on the mean of `close_raw × volume`
+`EntryConfig.min_turnover_inr = 20 000 000` — **₹2 crore**, on the mean of `close_raw × volume`
 over `turnover_avg_bars` [20] sessions ending at the signal session (the §2.2 tolerance applies).
 
-**The research's headline used ₹2 crore.** This sleeve ships at ₹5 crore because the research was
-run at ₹10 lakh and this sleeve will run at ₹25 lakh: ten slots at ₹25 lakh is a ₹2.5 lakh line,
-and §6.2's 1 %-of-turnover cap does not stop binding until the name turns over ₹2.5 crore a day. A
-floor below the cap means the plan is routinely sized by the cap rather than by the strategy. ₹5
-crore is the coherent floor at this size, and it is also the better of the two in the research's own
-sensitivity table (22.5 % CAGR at −27 % on 169 trades, against 20.9 % at −24.7 % on 164).
+**TW15.1 (13 Sep 2026) restored the research floor.** TW0.3 had shipped ₹5 crore so a ₹2.5 lakh
+line (₹25 lakh / 10 slots) would not be sized by §6.2's 1 %-of-turnover cap. Maulik overrode that:
+floor 2 cr, capital 25 lac, go live. At this size a name that just clears the floor is
+turnover-capped to ₹2 lakh — that is now the strategy, not a bug. The ₹5 crore sensitivity row in
+`01` §7 (22.5 % CAGR at −27 % on 169 trades) stays as a measured experiment; it is not the live
+floor.
 
-**Both numbers are named**, because TW2's goldens must reproduce the research and the research used
-the other one: `EntryConfig.research_min_turnover_inr = 20 000 000` exists for exactly one caller,
-the golden parameter set. It is never read by the detector, the plan or the page, and
-`test_twt_no_literals.py` asserts that its only reference outside `config.py` is in the goldens.
-DECISIONS-TW **TW0.3**.
+**Both names are kept.** `EntryConfig.research_min_turnover_inr = 20 000 000` exists for TW2's
+golden parameter set so a later floor change cannot silently retarget the goldens. After TW15.1
+the two numbers are equal. Detector, plan and page read `min_turnover_inr`. DECISIONS-TW **TW15.1**
+(TW0.3 is the superseded half).
 
 An entry event below the floor is stored as a `SCAN_ONLY` row (`03` §3), never dropped.
 
@@ -438,6 +437,6 @@ every signal and every trigger moves by exactly one.
 Named so TW2 and TW9 cannot disagree about what they ran:
 `BacktestConfig.initial_capital_inr = 1 000 000`, `BacktestConfig.start = 2017-10-16`,
 `BacktestConfig.is_oos_split = 2023-01-01`. The research's headline used
-`EntryConfig.research_min_turnover_inr` [₹2 crore]; TW9's run from the plant's bars uses the
-shipped `min_turnover_inr` [₹5 crore] and says which on the page. They are different numbers and
-the page shows both (`05` §4).
+`EntryConfig.research_min_turnover_inr` [₹2 crore]. After TW15.1 the shipped
+`min_turnover_inr` is the same ₹2 crore. TW9's first plant run used the then-shipped ₹5 crore
+(TW0.3) and that row stays on the page as the sensitivity experiment (`05` §4, `01` §7).

@@ -109,8 +109,8 @@ class TestTheThreeCeilings:
         assert CEILING_ENV[field].endswith("_MAX")
 
     def test_sleeve_capital_has_no_bound_at_all(self) -> None:
-        """It is the person's own money, not a risk multiplier. It is also seeded at 0 and
-        never set by anything in this repository (`02` §3)."""
+        """It is the person's own money, not a risk multiplier. It is not an env var
+        (`02` §3); the seeder writes ₹25 lakh (TW15.1)."""
         _ceilings().check("sleeve_capital_inr", Decimal("100000000"))
         assert "sleeve_capital_inr" not in CEILING_ENV
         assert "sleeve_capital_inr" not in FLOOR_ENV
@@ -304,9 +304,8 @@ class TestTheEnvironmentExamplesShipThem:
 
     @pytest.mark.parametrize("path", ENV_EXAMPLES, ids=lambda p: str(p.name))
     def test_no_committed_example_assigns_a_capital(self, path: Path) -> None:
-        """``sleeve_capital_inr`` is not an environment variable, is seeded at 0, and is
-        Maulik's to enter on the first live morning. A committed file that carried a number
-        would be an engineering path around that (`02` §3).
+        """``sleeve_capital_inr`` is not an environment variable. A committed file that
+        assigned a number would be an engineering path around the seeder (`02` §3).
 
         The check is on *assignments*, not on the word: the examples mention the field in prose
         precisely so a reader knows why it is absent, and a test that banned the word would push

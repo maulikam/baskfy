@@ -208,17 +208,15 @@ class EntryConfig:
     #: research's implementation seeds its counter at a large number and fires on a listing day;
     #: this sleeve does not (DECISIONS-TW **TW0.6**).
     entry_min_sessions_out: int = 5
-    #: ``04`` §3.5. ₹5 crore on the mean of ``close_raw x volume`` over ``turnover_avg_bars``.
-    #: **The research's headline used ₹2 crore.** This sleeve ships higher because the research ran
-    #: at ₹10 lakh and this sleeve runs at ₹25 lakh: ten slots at ₹25 lakh is a ₹2.5 lakh line, and
-    #: §6.2's 1 %-of-turnover cap does not stop binding until the name turns over ₹2.5 crore a day.
-    #: A floor below the cap means the plan is routinely sized by the cap rather than by the
-    #: strategy. It is also the better of the two in the research's own sensitivity table — 22.5 %
-    #: CAGR at -27 % against 20.9 % at -24.7 %. DECISIONS-TW **TW0.3**.
-    min_turnover_inr: Decimal = Decimal("50000000")
-    #: The research's own floor, kept for **exactly one caller**: TW2's golden parameter set,
-    #: because a golden that cannot reproduce the study is not a golden. It is never read by the
-    #: detector, the plan or a page, and ``test_twt_no_literals.py`` asserts as much.
+    #: ``04`` §3.5. ₹2 crore on the mean of ``close_raw x volume`` over ``turnover_avg_bars``.
+    #: This is the research headline's floor. TW0.3 shipped ₹5 crore so a ₹2.5 lakh line (₹25 lakh
+    #: / 10 slots) would not be sized by the 1 %-of-turnover cap; Maulik overrode that on 13 Sep
+    #: 2026 (DECISIONS-TW **TW15.1**): floor 2 cr, capital 25 lac, go live. At this size a name
+    #: that just clears the floor is turnover-capped to ₹2 lakh — that is now the strategy.
+    min_turnover_inr: Decimal = Decimal("20000000")
+    #: The research's own floor, kept as a named field so TW2's golden parameter set can still
+    #: pass it to ``signal_mask``'s ``floor_inr``. After TW15.1 it equals ``min_turnover_inr``.
+    #: Detector, plan and page read ``min_turnover_inr``; they do not read this name.
     research_min_turnover_inr: Decimal = Decimal("20000000")
     #: The window the liquidity floor and the 1 %-of-turnover cap both read (`04` §2.2 applies).
     turnover_avg_bars: int = 20
@@ -238,8 +236,8 @@ class SizingConfig:
     #: when equity has drifted.
     max_position_pct: Decimal = Decimal("12.5")
     #: A **fraction**, not a percent: 1 % of the name's 20-session average turnover. At ₹25 lakh
-    #: over ten slots it binds until the name turns over ₹2.5 crore a day, which is the whole
-    #: argument for the ₹5 crore floor above.
+    #: over ten slots it binds until the name turns over ₹2.5 crore a day. TW15.1 ships the
+    #: research's ₹2 crore floor, so names between ₹2 cr and ₹2.5 cr are sized by this cap.
     max_position_vs_turnover: Decimal = Decimal("0.01")
     #: Below this the brokerage dominates the edge; a line that cannot clear it is skipped
     #: ``BELOW_MIN_TRADE_VALUE`` (the desk's own ``MIN_TRADE_VALUE``).

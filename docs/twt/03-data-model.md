@@ -38,7 +38,7 @@ records why this sleeve stores its own row rather than reading VBT-1's.
 | Column | Type | Meaning |
 |---|---|---|
 | `user_id` PK | bigint FK | sole user in this run |
-| `sleeve_capital_inr` | INR | the cash this sleeve may deploy. **Default 0** — nothing is planned until Maulik sets it (`02` §3). Track A setting, user-editable, validated > 0 to plan |
+| `sleeve_capital_inr` | INR | the cash this sleeve may deploy. **Column default 0**; the seeder writes **₹25 lakh** (TW15.1). A raw insert still plans nothing (`02` §3). Track A setting, user-editable, validated > 0 to plan |
 | `max_open_positions` | smallint | default **10** (`SizingConfig.max_slots`); ≤ `BASKFY_TWT_MAX_OPEN_POSITIONS_MAX` [15] |
 | `max_position_pct` | numeric(5,2) | default **12.50**; ≤ `BASKFY_TWT_MAX_POSITION_PCT_MAX` [15.00] |
 | `stop_pct` | numeric(5,2) | default **20.00**; ≤ `BASKFY_TWT_STOP_PCT_MAX` [25.00]. A setting because `01` §7 measured 15–30 % and found the band flat |

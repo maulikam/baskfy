@@ -60,7 +60,7 @@ DOCUMENTED: dict[str, tuple[object, str]] = {
     "breadth.pct_decimals": (4, "§4.2, 'four decimal places'"),
     "entry.entry": (EntryTiming.NEXT_OPEN, "§5.1"),
     "entry.entry_min_sessions_out": (5, "§3.4"),
-    "entry.min_turnover_inr": (Decimal("50000000"), "§3.5, the shipped floor"),
+    "entry.min_turnover_inr": (Decimal("20000000"), "§3.5, the shipped floor (TW15.1)"),
     "entry.research_min_turnover_inr": (Decimal("20000000"), "§3.5, TW2's goldens only"),
     "entry.turnover_avg_bars": (20, "§3.5"),
     "entry.rank_key": (RankKey.SIGNAL_TURNOVER, "§6.3, DECISIONS-TW TW0.2"),

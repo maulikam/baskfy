@@ -404,15 +404,10 @@ class TestTheCapsAreWired:
     async def test_the_turnover_cap_binds_on_a_two_crore_name_at_twenty_five_lakh(
         self, session: AsyncSession
     ) -> None:
-        """``04`` §3.5's argument for the ₹5 crore floor, as a test.
+        """TW15.1: a name at the ₹2 crore floor is accepted and sized by the turnover cap.
 
-        Ten slots at ₹25 lakh is a ₹2.5 lakh line, and 1 % of a ₹2 crore day is ₹2 lakh — so on
-        such a name **the cap, not the strategy, decides the size**, and the book would be
-        systematically under-sized in exactly the names the research's ₹2 crore floor admitted.
-
-        Both halves are asserted, because together they are the argument: the cap does bind at
-        ₹2 crore, **and** the shipped sleeve never lines the name at all, because
-        `min_turnover_inr` is ₹5 crore. A floor below the cap is a plan sized by the cap.
+        Ten slots at ₹25 lakh is a ₹2.5 lakh line, and 1 % of a ₹2 crore day is ₹2 lakh — so
+        on such a name **the cap, not the slot, decides the size**. That is the strategy.
         """
         user_id = await _user(session, "cap-binds")
         thin = await make_instrument(session, "TW5THIN")
@@ -434,8 +429,11 @@ class TestTheCapsAreWired:
         lines, skips = await _lines_for(
             session, user_id, [_candidate(thin, "TW5THIN", turnover=TWO_CRORE_TURNOVER)]
         )
-        assert lines == []
-        assert [skip.reason for skip in skips] == [SkipReason.BELOW_LIQUIDITY_FLOOR]
+        assert skips == []
+        assert len(lines) == 1
+        assert lines[0].cap is SizeCap.TURNOVER
+        assert lines[0].value_inr == Decimal("200000.00")
+        assert lines[0].quantity == 2_000
 
     async def test_the_turnover_cap_does_not_bind_on_a_fifty_crore_name(
         self, session: AsyncSession

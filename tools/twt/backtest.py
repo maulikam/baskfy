@@ -8,7 +8,7 @@
 
     uv run python ../tools/twt/backtest.py --help       # the same thing by hand
 
-It runs ``baskfy_core.twt.backtest`` over ``ohlcv_daily`` at the **shipped** ₹5 crore liquidity
+It runs ``baskfy_core.twt.backtest`` over ``ohlcv_daily`` at the **shipped** ₹2 crore liquidity
 floor and the exchange's ₹0.05 tick — every default of ``BacktestParams`` is already the shipped
 sleeve's, so this passes none of them (DECISIONS-TW **TW2.13**) — and appends one
 ``tw_backtest_run`` row with ``source = PLANT``. ``/twt/backtest`` then shows it beside TW2's
@@ -142,16 +142,16 @@ def _print(report: JsonObject, took: float) -> None:
             print(
                 "  A flag is not a verdict. It says the two numbers stopped agreeing, not which "
                 "one is wrong. DECISIONS-TW TW2.13 names four differences that are known in "
-                "advance: the ₹0.05 tick, the ₹5 crore floor, real corporate actions, and the "
-                "plant's own history."
+                "advance: the ₹0.05 tick, real corporate actions, and the plant's own history. "
+                "TW15.1 restored the research's ₹2 crore floor, so a floor gap is no longer one "
+                "of them."
             )
         print(
-            "  The largest of those is the floor. `01` §6's headline is the research's ₹2 crore "
-            f"book; this sleeve ships at ₹5 crore, and `01` §7's own row for it reads "
+            "  `01` §7's ₹5 crore sensitivity row still reads "
             f"{PUBLISHED.shipped_floor_cagr_pct} % at "
             f"{PUBLISHED.shipped_floor_max_drawdown_pct} % on "
-            f"{PUBLISHED.shipped_floor_trades} trades. Compare against that before calling a "
-            "difference a defect."
+            f"{PUBLISHED.shipped_floor_trades} trades — a measured experiment, not the live "
+            "floor. Compare a fresh plant run against `01` §6 (20.92 %) first."
         )
     print(f"\n[{took:.0f}s]")
 

@@ -62,7 +62,7 @@ NOW = dt.datetime(2026, 9, 10, 21, 5, tzinfo=dt.UTC)
 TWENTY_FIVE_LAKH = Decimal("2500000.00")
 #: A name turning over ₹50 crore a day, where the 1 %-of-turnover cap does not bind.
 FIFTY_CRORE = 500_000_000
-#: The shipped floor is ₹5 crore (``04`` §3.5); ₹1 crore is under it.
+#: The shipped floor is ₹2 crore (``04`` §3.5 / TW15.1); ₹1 crore is under it.
 ONE_CRORE = 10_000_000
 
 

@@ -293,7 +293,7 @@ on it.
 
 - `tools/twt/backtest.py` and `make twt-backtest`: run `baskfy_core.twt.backtest` over
   `ohlcv_daily` from `BacktestConfig.start` to the last published session, at the **shipped**
-  `min_turnover_inr` [₹5 crore], sized against `params.sleeve_inr`, **never** against
+  `min_turnover_inr` [₹2 crore after TW15.1; TW9's first plant run used the then-shipped ₹5 crore], sized against `params.sleeve_inr`, **never** against
   `tw_config.sleeve_capital_inr`.
 - Append one `tw_backtest_run` row with `source = PLANT`; TW2's reproduction appends one with
   `source = RESEARCH_EXPORT`. Append-only, both.

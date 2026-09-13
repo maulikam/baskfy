@@ -66,12 +66,10 @@ class PublishedStudy:
     #: figure to sit beside the one a fresh run computes.
     gate_off_cagr_pct: float
     gate_off_max_drawdown_pct: float
-    #: Also **not** from ``final_metrics.json``: ``01`` §7's ``turnover >= ₹5 cr`` row. It matters
-    #: more than any other line of that table, because ``01`` §6's headline was produced at the
-    #: research's ₹2 crore floor and **the sleeve ships at ₹5 crore** (``04`` §3.5, DECISIONS-TW
-    #: **TW0.3**). A run over the plant's bars is therefore measured against a headline it was
-    #: never asked to reproduce, and this is the row that says what it *was* asked to reproduce.
-    #: TW9 measured 22.17 / -26.47 / 169 on the plant against these three (DECISIONS-TW TW9.3).
+    #: Also **not** from ``final_metrics.json``: ``01`` §7's ``turnover >= ₹5 cr`` sensitivity
+    #: row. TW0.3 shipped that floor; TW15.1 restored the research's ₹2 crore. These three
+    #: numbers stay as the measured ₹5 cr experiment (TW9 ran against them). They are not the
+    #: live floor.
     shipped_floor_cagr_pct: float
     shipped_floor_max_drawdown_pct: float
     shipped_floor_trades: int

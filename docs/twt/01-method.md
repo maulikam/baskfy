@@ -188,10 +188,10 @@ From `out/final_sensitivity.csv`, and this is the table `05` puts on the page:
 | no liquidity filter / **turnover ≥ ₹5 cr** | 19.5 / **22.5** | −28 / **−27** | 169 / 169 |
 | 50-SMA exit instead of the trail | 15.6 | −38 | 543 |
 
-The last-but-one row is why this sleeve ships at a **₹5 crore** liquidity floor where the research
-headline used ₹2 crore: at ₹25 lakh over ten slots a line is ₹2.5 lakh, and the 1 %-of-turnover
-cap needs ₹2.5 crore of daily turnover before it stops binding. ₹5 crore is the coherent floor at
-this size and it scores better. See `04` §3.5 and DECISIONS-TW **TW0.3**.
+The last-but-one row is the ₹5 crore **sensitivity experiment** (TW0.3, then TW9's first plant
+run). TW15.1 (13 Sep 2026) restored the live floor to the research's **₹2 crore**: Maulik set
+floor 2 cr, capital 25 lac, go live. At ₹25 lakh a name at that floor is turnover-capped to ₹2
+lakh — that is now the strategy. See `04` §3.5 and DECISIONS-TW **TW15.1**.
 
 ## 8. The caveats, stated plainly and carried to the page
 

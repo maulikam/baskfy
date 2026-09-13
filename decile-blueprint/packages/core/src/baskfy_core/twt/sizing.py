@@ -36,8 +36,8 @@ class SizeCap(StrEnum):
     #: ``max_position_pct`` [12.5 %] of equity, which binds only when equity has drifted.
     POSITION_PCT = "POSITION_PCT"
     #: 1 % of the name's 20-session average turnover. At ₹25 lakh over ten slots it binds until the
-    #: name turns over ₹2.5 crore a day — which is the whole argument for the ₹5 crore floor
-    #: (``04`` §3.5, DECISIONS-TW TW0.3).
+    #: name turns over ₹2.5 crore a day. TW15.1 ships the research's ₹2 crore floor, so a name at
+    #: the floor is sized by this cap (₹2 lakh) rather than by the slot (₹2.5 lakh).
     TURNOVER = "TURNOVER"
     #: The cash the sleeve actually has, after earlier lines of the same plan.
     CASH = "CASH"

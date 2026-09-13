@@ -226,18 +226,19 @@ class TestTheSkipsInOrder:
         assert lines[0].value_inr == Decimal("600000")
         assert "turnover" in lines[0].note
 
-    def test_at_twenty_five_lakh_the_five_crore_floor_puts_the_cap_out_of_reach(self) -> None:
-        """DECISIONS-TW **TW0.3**'s coherence argument, as a test rather than a paragraph.
+    def test_at_twenty_five_lakh_a_name_at_the_two_crore_floor_is_turnover_capped(self) -> None:
+        """TW15.1: Maulik set the floor back to the research's ₹2 crore at ₹25 lakh capital.
 
-        Ten slots at ₹25 lakh is a ₹2.5 lakh line and 1 % of the floor is ₹5 lakh, so **a name that
-        clears the floor can never be capped by its own turnover at this capital**. That is the
-        whole reason the sleeve ships at ₹5 crore where the research used ₹2 crore: a floor below
-        the cap means the plan is routinely sized by the cap rather than by the strategy."""
+        Ten slots at ₹25 lakh is a ₹2.5 lakh line and 1 % of ₹2 crore is ₹2 lakh, so a name that
+        just clears the floor is sized by the cap. That is now the strategy, not a bug.
+        """
         floor = DEFAULT_TWT_CONFIG.entry.min_turnover_inr
         slot = EQUITY / Decimal(DEFAULT_TWT_CONFIG.sizing.max_slots)
-        assert floor * DEFAULT_TWT_CONFIG.sizing.max_position_vs_turnover > slot
+        assert floor == Decimal("20000000")
+        assert floor * DEFAULT_TWT_CONFIG.sizing.max_position_vs_turnover < slot
         lines, _ = build([candidate(turnover=floor)])
-        assert lines[0].cap is SizeCap.SLOT
+        assert lines[0].cap is SizeCap.TURNOVER
+        assert lines[0].value_inr == Decimal("200000")
 
 
 class TestTheOrderAndTheMoney:

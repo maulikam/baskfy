@@ -471,12 +471,15 @@ class TestTheSeam:
             assert name in str(raised.value)
 
     def test_the_golden_set_is_the_studys_floor_and_the_sleeves_everything_else(self) -> None:
-        """``04`` §3.5: the study ran at ₹2 crore and the sleeve ships at ₹5 crore, and the floor
-        is passed as ``signal_mask``'s ``floor_inr`` rather than by editing the config."""
+        """``04`` §3.5 / TW15.1: the study and the shipped sleeve both use ₹2 crore.
+
+        TW2 still passes ``research_min_turnover_inr`` as ``signal_mask``'s ``floor_inr`` rather
+        than by editing the config, so a later floor change cannot silently retarget the goldens.
+        """
         assert GOLDEN_CONFIG is DEFAULT_TWT_CONFIG
         assert DEFAULT_TWT_CONFIG.entry.research_min_turnover_inr == GOLDEN_FLOOR_INR
         assert Decimal("20000000") == GOLDEN_FLOOR_INR
-        assert DEFAULT_TWT_CONFIG.entry.min_turnover_inr == Decimal("50000000")
+        assert DEFAULT_TWT_CONFIG.entry.min_turnover_inr == Decimal("20000000")
 
     def test_the_study_window_is_the_one_final_tc_ran(self) -> None:
         assert dt.date(2017, 10, 16) == GOLDEN_START

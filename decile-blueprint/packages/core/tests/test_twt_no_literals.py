@@ -113,8 +113,9 @@ def test_every_threshold_carries_a_reason() -> None:
 
 
 class TestTheResearchOnlyFields:
-    """``04`` §3.5 and DECISIONS-TW **TW0.3**: ``research_min_turnover_inr`` exists for exactly one
-    caller, TW2's golden parameter set. It is never read by the detector, the plan or a page."""
+    """``04`` §3.5 and DECISIONS-TW **TW15.1**: ``research_min_turnover_inr`` exists for exactly one
+    caller, TW2's golden parameter set. After TW15.1 it equals the shipped floor. It is never
+    read by the detector, the plan or a page."""
 
     #: The directories a production reference would live in. TW2's goldens live under ``tools/twt``
     #: and the tests, which are the two places the research value is allowed to appear.
@@ -141,8 +142,13 @@ class TestTheResearchOnlyFields:
             f"Found in {offenders}"
         )
 
-    def test_the_shipped_floor_and_the_research_floor_are_different_numbers(self) -> None:
+    def test_the_shipped_floor_is_the_research_floor(self) -> None:
+        """TW15.1: Maulik set the live floor back to the research's ₹2 crore.
+
+        ``research_min_turnover_inr`` stays as a named field so TW2's goldens can still pass it
+        to ``signal_mask``; after this decision the two numbers are equal.
+        """
         entry = DEFAULT_TWT_CONFIG.entry
-        assert entry.min_turnover_inr == Decimal("50000000")
+        assert entry.min_turnover_inr == Decimal("20000000")
         assert entry.research_min_turnover_inr == Decimal("20000000")
-        assert entry.min_turnover_inr > entry.research_min_turnover_inr
+        assert entry.min_turnover_inr == entry.research_min_turnover_inr

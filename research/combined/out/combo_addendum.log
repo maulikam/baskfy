@@ -1,0 +1,19 @@
+VBT-1 alone                                                CAGR   18.2% (IS   12.6 / OOS   26.0)  DD  -27.9%  Calmar 0.65  Sh  0.97  n  761  PF 1.55 exp 63.2%  final ₹44.4L 
+TWT-1 alone (@5cr)                                         CAGR   22.5% (IS   13.6 / OOS   35.9)  DD  -26.5%  Calmar 0.85  Sh  1.28  n  169  PF 2.84 exp 78.5%  final ₹60.7L 
+TWT-1 improved (yield 6 + pyramid 10)                      CAGR   24.9% (IS   14.5 / OOS   41.0)  DD  -23.9%  Calmar 1.04  Sh  1.31  n  164  PF 3.14 exp 76.8%  final ₹72.1L 
+VBT-1 + yield 6                                            CAGR   20.8% (IS   15.6 / OOS   27.7)  DD  -21.3%  Calmar 0.98  Sh  1.09  n  761  PF 1.55 exp 63.2%  final ₹53.7L 
+50/50 TWT-1 improved + VBT-1(+yield), daily rebalanced     CAGR   23.3% (IS   15.4 / OOS   34.8)  DD  -20.1%  Calmar 1.16  Sh  1.35  n  925  PF  exp %  final ₹64.5L 
+50/50 TWT-1 + VBT-1, daily rebalanced                      CAGR   20.8% (IS   13.4 / OOS   31.5)  DD  -24.6%  Calmar 0.85  Sh  1.27  n  930  PF  exp %  final ₹53.7L 
+70/30 TWT-1 improved + VBT-1(+yield), daily rebalanced     CAGR   24.0% (IS   15.1 / OOS   37.4)  DD  -21.2%  Calmar 1.13  Sh  1.37  n  925  PF  exp %  final ₹68.0L 
+70/30 TWT-1 + VBT-1, daily rebalanced                      CAGR   21.6% (IS   13.6 / OOS   33.4)  DD  -23.6%  Calmar 0.91  Sh  1.32  n  930  PF  exp %  final ₹56.9L 
+80/19 TWT-1 improved + VBT-1(+yield), daily rebalanced     CAGR   24.4% (IS   14.9 / OOS   38.7)  DD  -22.0%  Calmar 1.11  Sh  1.36  n  925  PF  exp %  final ₹69.6L 
+80/19 TWT-1 + VBT-1, daily rebalanced                      CAGR   21.9% (IS   13.6 / OOS   34.3)  DD  -24.4%  Calmar 0.90  Sh  1.32  n  930  PF  exp %  final ₹58.3L 
+daily return correlation VBT-1 vs TWT-1: 0.55
+weekly return correlation VBT-1 vs TWT-1: 0.53
+monthly return correlation VBT-1 vs TWT-1: 0.52
+Traceback (most recent call last):
+  File "<stdin>", line 14, in <module>
+TypeError: %o format: an integer is required, not numpy.float64
+     2018  2019  2020  2021  2022  2023  2024  2025  2026
+VBT -19.3  -3.8  20.4  45.6  16.1  64.7  35.1   1.2   6.3
+TWT  -2.2   2.8  22.8  62.1  -7.3  65.6  54.9  -2.6  25.5

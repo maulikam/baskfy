@@ -1,0 +1,68 @@
+signals: VBT-1 6293  TWT-1@5cr 17656  TWT-1@2cr 21378  MOM-1 8915
+
+== reference: each sleeve alone, ₹10 L, 10 slots
+VBT-1 alone                                                CAGR   18.2% (IS   12.6 / OOS   26.0)  DD  -27.9%  Calmar 0.65  Sh  0.97  n  761  PF 1.55 exp 63.2%  final ₹44.4L 
+TWT-1 alone (@5cr)                                         CAGR   22.5% (IS   13.6 / OOS   35.9)  DD  -26.5%  Calmar 0.85  Sh  1.28  n  169  PF 2.84 exp 78.5%  final ₹60.7L 
+TWT-1 alone (@2cr)                                         CAGR   20.9% (IS   11.1 / OOS   36.1)  DD  -24.7%  Calmar 0.85  Sh  1.21  n  164  PF 2.71 exp 78.0%  final ₹54.1L 
+MOM-1g alone                                               CAGR   13.9% (IS    9.5 / OOS   19.8)  DD  -31.4%  Calmar 0.44  Sh  0.76  n  509  PF 1.56 exp 70.9%  final ₹31.7L 
+
+== A. split capital (separate books)
+50/50 VBT-1 + TWT-1, buy-and-hold slices                   CAGR   20.5% (IS   13.1 / OOS   31.3)  DD  -24.8%  Calmar 0.83  Sh  1.26  n  930  PF  exp %  final ₹52.6L 
+50/50 VBT-1 + TWT-1, daily rebalanced                      CAGR   20.8% (IS   13.4 / OOS   31.5)  DD  -24.6%  Calmar 0.85  Sh  1.27  n  930  PF  exp %  final ₹53.7L 
+1/3 each VBT-1 + TWT-1 + MOM-1g, buy-and-hold slices       CAGR   18.6% (IS   11.9 / OOS   28.2)  DD  -26.7%  Calmar 0.70  Sh  1.18  n 1439  PF  exp %  final ₹45.6L 
+1/3 each, daily rebalanced                                 CAGR   18.8% (IS   12.3 / OOS   27.9)  DD  -26.5%  Calmar 0.71  Sh  1.17  n 1439  PF  exp %  final ₹46.1L 
+
+== B. one shared book
+book: TWT first, then VBT — 10 slots, 3/day each           CAGR   19.2% (IS    8.4 / OOS   36.1)  DD  -27.4%  Calmar 0.70  Sh  1.06  n  226  PF 2.21 exp 75.4%  final ₹47.6L  | TWT: 177.0 trades, ₹38.6L, VBT: 49.0 trades, ₹-1.0L
+book: VBT first, then TWT — 10 slots                       CAGR   10.7% (IS    8.8 / OOS   13.0)  DD  -28.4%  Calmar 0.38  Sh  0.63  n  538  PF 1.4 exp 71.4%  final ₹24.7L  | TWT: 98.0 trades, ₹4.9L, VBT: 440.0 trades, ₹9.8L
+book: TWT + VBT — 12 slots                                 CAGR   17.9% (IS    7.0 / OOS   35.0)  DD  -28.4%  Calmar 0.63  Sh  1.06  n  260  PF 2.28 exp 75.1%  final ₹43.3L  | TWT: 201.0 trades, ₹34.2L, VBT: 59.0 trades, ₹-0.8L
+book: TWT + VBT — 15 slots, 5/day                          CAGR   14.2% (IS    6.6 / OOS   25.8)  DD  -25.6%  Calmar 0.56  Sh  0.91  n  321  PF 1.94 exp 75.5%  final ₹32.6L  | TWT: 251.0 trades, ₹22.5L, VBT: 70.0 trades, ₹0.1L
+book: TWT + VBT — 20 slots, 5/day                          CAGR   14.4% (IS    6.8 / OOS   25.7)  DD  -27.4%  Calmar 0.52  Sh  0.93  n  444  PF 1.89 exp 74.4%  final ₹33.0L  | TWT: 341.0 trades, ₹21.6L, VBT: 103.0 trades, ₹1.4L
+book: TWT (cap 6) + VBT (cap 6) — 10 slots                 CAGR   17.0% (IS   13.8 / OOS   21.2)  DD  -29.0%  Calmar 0.59  Sh  0.94  n  457  PF 1.68 exp 73.3%  final ₹40.5L  | TWT: 111.0 trades, ₹26.5L, VBT: 346.0 trades, ₹4.0L
+book: TWT (cap 5) + VBT (cap 5) — 10 slots                 CAGR   18.6% (IS   11.5 / OOS   28.8)  DD  -31.0%  Calmar 0.60  Sh  0.98  n  501  PF 1.73 exp 72.4%  final ₹45.4L  | TWT: 92.0 trades, ₹27.4L, VBT: 409.0 trades, ₹8.0L
+book: TWT + VBT + MOM — 10 slots                           CAGR   18.2% (IS    6.8 / OOS   35.8)  DD  -37.7%  Calmar 0.48  Sh  0.99  n  272  PF 1.95 exp 77.7%  final ₹44.1L  | MOM: 81.0 trades, ₹12.6L, TWT: 157.0 trades, ₹22.0L, VBT: 34.0 trades, ₹-0.4L
+book: TWT + VBT + MOM — 15 slots, 5/day                    CAGR   11.9% (IS    3.5 / OOS   24.5)  DD  -38.4%  Calmar 0.31  Sh  0.73  n  415  PF 1.63 exp 76.6%  final ₹27.2L  | MOM: 115.0 trades, ₹6.7L, TWT: 244.0 trades, ₹11.0L, VBT: 56.0 trades, ₹-0.6L
+book: TWT + VBT — 10 slots, +yield 6%                      CAGR   20.9% (IS   10.1 / OOS   37.7)  DD  -25.8%  Calmar 0.81  Sh  1.13  n  226  PF 2.22 exp 75.4%  final ₹54.0L  | TWT: 177.0 trades, ₹42.5L, VBT: 49.0 trades, ₹-1.1L
+book: TWT(+pyramid 10) + VBT — 10 slots, +yield 6%         CAGR   21.6% (IS    7.4 / OOS   45.0)  DD  -29.6%  Calmar 0.73  Sh  1.12  n  214  PF 2.46 exp 71.5%  final ₹57.1L  | TWT: 168.0 trades, ₹46.3L, VBT: 46.0 trades, ₹-1.7L
+book: TWT(+pyramid 10) + VBT — 12 slots, +yield 6%         CAGR   19.7% (IS    6.5 / OOS   40.7)  DD  -25.1%  Calmar 0.78  Sh  1.08  n  256  PF 2.38 exp 73.0%  final ₹49.5L  | TWT: 197.0 trades, ₹37.8L, VBT: 59.0 trades, ₹-0.4L
+book: TWT@2cr + VBT — 10 slots                             CAGR   16.7% (IS    7.9 / OOS   30.2)  DD  -28.7%  Calmar 0.58  Sh  0.95  n  224  PF 2.01 exp 74.1%  final ₹39.5L  | TWT: 181.0 trades, ₹30.8L, VBT: 43.0 trades, ₹-1.3L
+
+== C. confluence and union
+union VBT-1 | TWT-1, TWT exit (20/20)                      CAGR   11.9% (IS    8.7 / OOS   16.7)  DD  -31.7%  Calmar 0.38  Sh  0.73  n  190  PF 1.88 exp 74.5%  final ₹27.4L 
+union VBT-1 | TWT-1, VBT exit (limit, 12 % stop, 21-EMA)   CAGR    7.2% (IS    2.5 / OOS   13.6)  DD  -35.0%  Calmar 0.21  Sh  0.48  n 1066  PF 1.2 exp 65.5%  final ₹18.6L 
+  TWT entry & momentum state (r30|r90): 11549
+TWT-1 & in momentum state, TWT exit                        CAGR   12.7% (IS   -0.4 / OOS   33.5)  DD  -47.5%  Calmar 0.27  Sh  0.72  n  219  PF 1.8 exp 70.6%  final ₹28.9L 
+  TWT entry & VBT-1 signal in last 20: 2127
+TWT-1 & VBT-1 fired in last 20 sessions, TWT exit          CAGR   21.9% (IS   10.4 / OOS   40.4)  DD  -30.6%  Calmar 0.72  Sh  1.23  n  188  PF 2.71 exp 66.6%  final ₹58.3L 
+  VBT signal & tight in last 10: 1342
+VBT-1 & was 3-weeks-tight in last 10, VBT exit             CAGR   10.8% (IS   15.0 / OOS    4.9)  DD  -30.2%  Calmar 0.36  Sh  0.73  n  532  PF 1.35 exp 44.9%  final ₹25.0L 
+  same, TWT exit (20/20)                                   CAGR   12.2% (IS   12.6 / OOS   11.3)  DD  -27.7%  Calmar 0.44  Sh  0.76  n  205  PF 1.58 exp 59.4%  final ₹27.7L 
+  VBT signal & tight in last 25: 2102
+VBT-1 & was 3-weeks-tight in last 25, VBT exit             CAGR   10.8% (IS   13.3 / OOS    7.3)  DD  -35.0%  Calmar 0.31  Sh  0.67  n  626  PF 1.32 exp 52.0%  final ₹25.0L 
+  same, TWT exit (20/20)                                   CAGR    8.9% (IS   12.5 / OOS    3.7)  DD  -31.9%  Calmar 0.28  Sh  0.59  n  198  PF 1.43 exp 63.1%  final ₹21.4L 
+VBT-1 & NOT tight in last 25 (the complement)              CAGR    8.3% (IS    3.2 / OOS   15.6)  DD  -35.9%  Calmar 0.23  Sh  0.54  n  748  PF 1.28 exp 59.4%  final ₹20.4L 
+TWT-1 & momentum & VBT-style close>200-DMA                 CAGR   11.8% (IS    0.2 / OOS   29.9)  DD  -47.3%  Calmar 0.25  Sh  0.68  n  215  PF 1.71 exp 69.7%  final ₹26.9L 
+      return_pct  trades  win_rate    avg_ret
+2017         8.1       8      12.5  -8.401936
+2018       -10.8      24      37.5  -2.550101
+2019         1.1       9      22.2  -7.181078
+2020        13.1      32      28.1  -3.344035
+2021        47.7      10      40.0  28.246416
+2022       -11.2      32      40.6   4.681505
+2023        78.4      22      40.9  19.063569
+2024        60.1      24      62.5  30.777222
+2025         1.5      28      21.4  -5.235336
+2026        36.3      25      44.0  17.945825
+      return_pct  trades  win_rate    avg_ret
+2017         7.8       8      12.5  -8.401936
+2018        -9.5      28      32.1  -1.136586
+2019         0.3       8      25.0  -7.528010
+2020        15.6      30      33.3   0.308206
+2021        41.1      10      40.0  31.121257
+2022        -4.7      34      44.1   6.673694
+2023        72.2      24      41.7  21.616247
+2024        53.8      29      58.6  29.965597
+2025        -3.3      28      14.3  -5.258659
+2026        22.3      27      44.4  19.233743
+benchmark NIFTY MIDCAP 150: CAGR 15.4%  maxDD -44.2%
+benchmark NIFTY 50: CAGR 10.1%  maxDD -38.4%

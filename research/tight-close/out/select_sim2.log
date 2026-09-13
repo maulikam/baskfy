@@ -1,0 +1,37 @@
+IS median close_in_base 0.599
+liquid>=2cr | 10 slots | max 1/day             CAGR   11.0% (IS    3.4 / OOS   22.2)  DD  -36.5%  Sh  0.70  n  185  win 37.3%  PF 1.71 avg 7.49 top10 46%  exp 73.5%
+liquid>=2cr | 10 slots | max 2/day             CAGR   14.2% (IS   11.1 / OOS   18.5)  DD  -34.5%  Sh  0.89  n  161  win 40.4%  PF 2.01 avg 11.08 top10 50%  exp 76.5%
+liquid>=2cr | 10 slots | max 3/day             CAGR   20.9% (IS   11.1 / OOS   36.1)  DD  -24.7%  Sh  1.21  n  164  win 40.9%  PF 2.71 avg 15.4 top10 53%  exp 78.0%
+liquid>=2cr | 8 slots | max 1/day              CAGR   10.2% (IS    4.6 / OOS   18.4)  DD  -34.5%  Sh  0.62  n  155  win 37.4%  PF 1.59 avg 6.38 top10 52%  exp 74.9%
+liquid>=2cr | 8 slots | max 2/day              CAGR   16.2% (IS   11.2 / OOS   23.4)  DD  -32.2%  Sh  0.99  n  127  win 41.7%  PF 2.22 avg 13.05 top10 58%  exp 79.0%
+liquid>=2cr | 8 slots | max 3/day              CAGR   26.3% (IS   15.5 / OOS   42.8)  DD  -26.6%  Sh  1.38  n  133  win 42.9%  PF 3.09 avg 18.97 top10 57%  exp 78.2%
+liquid>=2cr | 5 slots | max 1/day              CAGR   13.7% (IS    8.4 / OOS   21.6)  DD  -32.8%  Sh  0.76  n   89  win 41.6%  PF 1.87 avg 9.72 top10 68%  exp 80.6%
+liquid>=2cr | 5 slots | max 2/day              CAGR   17.6% (IS   10.7 / OOS   28.0)  DD  -31.4%  Sh  0.97  n   81  win 40.7%  PF 2.34 avg 13.75 top10 76%  exp 80.5%
+liquid>=2cr | 5 slots | max 3/day              CAGR   22.0% (IS    8.8 / OOS   43.1)  DD  -30.2%  Sh  1.07  n   91  win 40.7%  PF 2.6 avg 14.84 top10 75%  exp 78.5%
+liquid>=5cr | 10 slots | max 1/day             CAGR   11.9% (IS    4.9 / OOS   22.3)  DD  -30.8%  Sh  0.76  n  180  win 37.2%  PF 1.78 avg 8.18 top10 48%  exp 73.8%
+liquid>=5cr | 10 slots | max 2/day             CAGR   14.2% (IS   11.1 / OOS   18.6)  DD  -33.6%  Sh  0.89  n  161  win 41.0%  PF 2.01 avg 11.08 top10 50%  exp 76.6%
+liquid>=5cr | 10 slots | max 3/day             CAGR   22.5% (IS   13.6 / OOS   35.9)  DD  -26.5%  Sh  1.28  n  169  win 43.2%  PF 2.84 avg 16.06 top10 51%  exp 78.5%
+liquid>=5cr | 8 slots | max 1/day              CAGR   11.3% (IS    5.9 / OOS   19.5)  DD  -30.0%  Sh  0.70  n  149  win 37.6%  PF 1.69 avg 7.45 top10 52%  exp 75.3%
+liquid>=5cr | 8 slots | max 2/day              CAGR   16.4% (IS   11.7 / OOS   23.0)  DD  -29.8%  Sh  0.99  n  128  win 42.2%  PF 2.21 avg 12.93 top10 58%  exp 79.2%
+liquid>=5cr | 8 slots | max 3/day              CAGR   25.0% (IS   15.5 / OOS   39.4)  DD  -29.0%  Sh  1.33  n  131  win 42.7%  PF 2.86 avg 18.84 top10 58%  exp 79.9%
+liquid>=5cr | 5 slots | max 1/day              CAGR   14.2% (IS    9.3 / OOS   21.5)  DD  -32.7%  Sh  0.79  n   88  win 42.0%  PF 1.91 avg 10.05 top10 68%  exp 80.6%
+liquid>=5cr | 5 slots | max 2/day              CAGR   17.2% (IS   10.4 / OOS   27.4)  DD  -31.5%  Sh  0.94  n   83  win 39.8%  PF 2.25 avg 13.23 top10 76%  exp 81.4%
+liquid>=5cr | 5 slots | max 3/day              CAGR   22.9% (IS    9.7 / OOS   44.1)  DD  -32.2%  Sh  1.10  n   92  win 41.3%  PF 2.52 avg 15.4 top10 73%  exp 79.4%
+liquid>=5cr & upper half of base | 10 slots | max 1/day CAGR   14.1% (IS    6.4 / OOS   25.6)  DD  -33.2%  Sh  0.91  n  161  win 42.9%  PF 2.12 avg 10.95 top10 49%  exp 67.6%
+liquid>=5cr & upper half of base | 10 slots | max 2/day CAGR   16.2% (IS    9.2 / OOS   27.0)  DD  -38.3%  Sh  0.98  n  166  win 42.2%  PF 2.36 avg 11.11 top10 51%  exp 71.0%
+liquid>=5cr & upper half of base | 10 slots | max 3/day CAGR   16.7% (IS   15.5 / OOS   18.5)  DD  -27.6%  Sh  1.01  n  165  win 41.2%  PF 2.13 avg 12.85 top10 52%  exp 71.2%
+liquid>=5cr & upper half of base | 8 slots | max 1/day CAGR   16.0% (IS    8.7 / OOS   27.2)  DD  -33.0%  Sh  0.94  n  138  win 44.2%  PF 2.14 avg 11.2 top10 55%  exp 67.8%
+liquid>=5cr & upper half of base | 8 slots | max 2/day CAGR   14.6% (IS    6.3 / OOS   27.4)  DD  -38.8%  Sh  0.88  n  132  win 40.9%  PF 2.21 avg 10.38 top10 60%  exp 70.3%
+liquid>=5cr & upper half of base | 8 slots | max 3/day CAGR   19.9% (IS   18.7 / OOS   21.6)  DD  -29.2%  Sh  1.12  n  126  win 43.7%  PF 2.44 avg 15.34 top10 60%  exp 71.4%
+liquid>=5cr & upper half of base | 5 slots | max 1/day CAGR   16.0% (IS    7.2 / OOS   29.8)  DD  -36.0%  Sh  0.90  n   80  win 43.8%  PF 2.46 avg 10.66 top10 77%  exp 69.0%
+liquid>=5cr & upper half of base | 5 slots | max 2/day CAGR   11.2% (IS    5.2 / OOS   20.3)  DD  -41.5%  Sh  0.69  n   78  win 35.9%  PF 1.92 avg 9.99 top10 82%  exp 72.3%
+liquid>=5cr & upper half of base | 5 slots | max 3/day CAGR   14.5% (IS    9.0 / OOS   22.7)  DD  -33.5%  Sh  0.84  n   80  win 38.8%  PF 2.15 avg 10.63 top10 79%  exp 73.3%
+liquid>=5cr & close>=60% of base | 10 slots | max 1/day CAGR   14.1% (IS    6.4 / OOS   25.6)  DD  -33.2%  Sh  0.91  n  161  win 42.9%  PF 2.12 avg 10.95 top10 49%  exp 67.6%
+liquid>=5cr & close>=60% of base | 10 slots | max 2/day CAGR   15.8% (IS    8.3 / OOS   27.1)  DD  -38.7%  Sh  0.96  n  166  win 41.6%  PF 2.32 avg 10.82 top10 51%  exp 70.9%
+liquid>=5cr & close>=60% of base | 10 slots | max 3/day CAGR   16.0% (IS   14.2 / OOS   18.5)  DD  -28.7%  Sh  0.97  n  166  win 40.4%  PF 2.07 avg 12.36 top10 52%  exp 71.0%
+liquid>=5cr & close>=60% of base | 8 slots | max 1/day CAGR   16.0% (IS    8.7 / OOS   27.2)  DD  -33.0%  Sh  0.94  n  138  win 44.2%  PF 2.14 avg 11.2 top10 55%  exp 67.8%
+liquid>=5cr & close>=60% of base | 8 slots | max 2/day CAGR   14.5% (IS    6.1 / OOS   27.5)  DD  -39.3%  Sh  0.88  n  132  win 40.9%  PF 2.2 avg 10.34 top10 60%  exp 70.3%
+liquid>=5cr & close>=60% of base | 8 slots | max 3/day CAGR   19.1% (IS   17.4 / OOS   21.6)  DD  -30.4%  Sh  1.09  n  127  win 42.5%  PF 2.38 avg 14.74 top10 61%  exp 71.6%
+liquid>=5cr & close>=60% of base | 5 slots | max 1/day CAGR   16.0% (IS    7.2 / OOS   29.8)  DD  -36.0%  Sh  0.90  n   80  win 43.8%  PF 2.46 avg 10.66 top10 77%  exp 69.0%
+liquid>=5cr & close>=60% of base | 5 slots | max 2/day CAGR   11.2% (IS    5.2 / OOS   20.3)  DD  -41.5%  Sh  0.69  n   78  win 35.9%  PF 1.92 avg 9.99 top10 82%  exp 72.3%
+liquid>=5cr & close>=60% of base | 5 slots | max 3/day CAGR   14.5% (IS    9.0 / OOS   22.7)  DD  -33.5%  Sh  0.84  n   80  win 38.8%  PF 2.15 avg 10.63 top10 79%  exp 73.3%

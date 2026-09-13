@@ -30,7 +30,7 @@ describe("grouping", () => {
   it("keeps a family the registry adds later, at the end", () => {
     const groups = groupByFamily([
       ...DEMO_FACTORS,
-      { key: "x", label: "X", family: "brand_new", unit: "ratio", higher_is_better: true },
+      { key: "x", label: "X", family: "brand_new", unit: "ratio", higher_is_better: true, preference: "higher" },
     ]);
     expect(groups[groups.length - 1]?.family).toBe("brand_new");
   });

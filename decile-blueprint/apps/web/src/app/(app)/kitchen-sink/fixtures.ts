@@ -78,15 +78,15 @@ export function makeRows(count: number, seed = 20260818): DemoRow[] {
 
 /** A handful of registry entries, in the families docs/08 §"Screen editor" groups by. */
 export const DEMO_FACTORS: FactorOut[] = [
-  { key: "ret_12m", label: "ABSOLUTE RETURN 1 YEAR", family: "absolute_return", unit: "percent", higher_is_better: true },
-  { key: "ret_3m", label: "ABSOLUTE RETURN 3 MONTHS", family: "absolute_return", unit: "percent", higher_is_better: true },
-  { key: "sharpe_12m", label: "SHARPE RETURN 1 YEAR", family: "sharpe_return", unit: "ratio", higher_is_better: true },
-  { key: "avg_sharpe_12_6_3_1", label: "AVERAGE SHARPE RETURN 12 6 3 1 MONTHS", family: "sharpe_return", unit: "ratio", higher_is_better: true },
-  { key: "rsi_12m", label: "RSI 1 YEAR", family: "rsi", unit: "index", higher_is_better: true },
-  { key: "sharpe_div_beta_12m", label: "SHARPE RETURN 1 YEAR / BETA", family: "risk_adjusted", unit: "ratio", higher_is_better: true },
-  { key: "ret_12m_minus_1m", label: "RETURN 12 MINUS 1 MONTHS", family: "skip_month", unit: "percent", higher_is_better: true },
-  { key: "vol_12m", label: "VOLATILITY 1 YEAR", family: "non_momentum", unit: "fraction", higher_is_better: false },
-  { key: "beta_12m", label: "BETA", family: "non_momentum", unit: "ratio", higher_is_better: false },
+  { key: "ret_12m", label: "ABSOLUTE RETURN 1 YEAR", family: "absolute_return", unit: "percent", higher_is_better: true, preference: "higher" },
+  { key: "ret_3m", label: "ABSOLUTE RETURN 3 MONTHS", family: "absolute_return", unit: "percent", higher_is_better: true, preference: "higher" },
+  { key: "sharpe_12m", label: "SHARPE RETURN 1 YEAR", family: "sharpe_return", unit: "ratio", higher_is_better: true, preference: "higher" },
+  { key: "avg_sharpe_12_6_3_1", label: "AVERAGE SHARPE RETURN 12 6 3 1 MONTHS", family: "sharpe_return", unit: "ratio", higher_is_better: true, preference: "higher" },
+  { key: "rsi_12m", label: "RSI 1 YEAR", family: "rsi", unit: "index", higher_is_better: true, preference: "higher" },
+  { key: "sharpe_div_beta_12m", label: "SHARPE RETURN 1 YEAR / BETA", family: "risk_adjusted", unit: "ratio", higher_is_better: true, preference: "higher" },
+  { key: "ret_12m_minus_1m", label: "RETURN 12 MINUS 1 MONTHS", family: "skip_month", unit: "percent", higher_is_better: true, preference: "higher" },
+  { key: "vol_12m", label: "VOLATILITY 1 YEAR", family: "non_momentum", unit: "fraction", higher_is_better: false, preference: "lower" },
+  { key: "beta_12m", label: "BETA", family: "non_momentum", unit: "ratio", higher_is_better: false, preference: "lower" },
 ];
 
 /** A 30-point series for the sparklines, again seeded. */

@@ -9,6 +9,11 @@ import {
   ReturnChip,
   ScoreBar,
 } from "@/components/screens/cell-encodings";
+import {
+  DeskScoreBreakdown,
+  hasDeskExplainColumns,
+  isDeskExplainKey,
+} from "@/components/screens/desk-score-breakdown";
 import type { ColumnMeta, ResultRow } from "@/components/screens/result-columns";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -19,13 +24,18 @@ import {
   formatFraction,
   formatNumber,
   formatPercent,
+  formatTradeDate,
 } from "@/lib/format";
 import { columnDisplayLabel } from "@/lib/screens/column-display";
+import { useRankHistory } from "@/lib/screens/queries";
 import { cn } from "@/lib/utils";
 
 /**
  * Mini factsheet peek (§2.4): hero + encodings + collapsed "All numbers".
  * Desktop: right sheet. Mobile (<700px): bottom sheet. Motion: 200ms, motion-safe.
+ *
+ * When the result carries desk A–F columns (``sort_by=desk_score``), the peek also shows the
+ * book's breakdown. With a saved ``screenPublicId``, rank history is read from ``screen_run``.
  *
  * No 1-year chart: preview rows have no history series. Fetching
  * GET /instruments/{symbol}/history per peek would N+1 the history endpoint.
@@ -37,6 +47,8 @@ export interface PeekDrawerProps {
   meta: ReadonlyMap<string, ColumnMeta>;
   sortingFactorLabel: string;
   onClose: () => void;
+  /** Saved screen id — enables rank history from ``screen_run``. Absent on unsaved previews. */
+  screenPublicId?: string;
 }
 
 function display(value: unknown, unit: string): string {
@@ -59,12 +71,56 @@ function num(row: ResultRow | null, key: string): number | null {
 /** Already in the title; everything else belongs under All numbers. */
 const TITLE_KEYS = new Set(["symbol", "name"]);
 
+function RankHistoryStrip({
+  symbol,
+  screenPublicId,
+}: {
+  symbol: string;
+  screenPublicId: string;
+}) {
+  const history = useRankHistory(symbol, screenPublicId);
+  const points = history.data?.data ?? [];
+  if (history.isPending) {
+    return (
+      <p className="text-xs text-muted-foreground" data-testid="rank-history-loading">
+        Loading rank history…
+      </p>
+    );
+  }
+  if (points.length === 0) {
+    return (
+      <p className="text-xs text-muted-foreground" data-testid="rank-history-empty">
+        No saved runs yet — rank history appears after this screen is run and recorded.
+      </p>
+    );
+  }
+  const recent = points.slice(-8);
+  return (
+    <div data-testid="rank-history" className="space-y-2">
+      <p className="text-xs font-medium text-muted-foreground">Rank in this screen</p>
+      <ol className="flex flex-wrap gap-2">
+        {recent.map((point) => (
+          <li
+            key={point.as_of}
+            className="rounded-md bg-muted/60 px-2 py-1 text-xs tabular-nums"
+            title={`${formatTradeDate(point.as_of)} · ${point.result_count} names`}
+          >
+            <span className="text-muted-foreground">{formatTradeDate(point.as_of)}</span>
+            <span className="ml-1 font-medium">#{point.rank}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 export function PeekDrawer({
   row,
   columns,
   meta,
   sortingFactorLabel,
   onClose,
+  screenPublicId,
 }: PeekDrawerProps) {
   const symbol = typeof row?.symbol === "string" ? row.symbol : "";
   const name = typeof row?.name === "string" ? row.name : "";
@@ -81,9 +137,13 @@ export function PeekDrawer({
   const vol = num(row, "vol_12m");
   const volLabel = vol !== null ? formatFraction(vol) : null;
   const scoreLabel = sortingFactorLabel || columnDisplayLabel("sorting_factor", "Consistency score");
+  const showDesk = row !== null && hasDeskExplainColumns(columns);
 
   const numberKeys = columns.filter(
-    (key, index) => !TITLE_KEYS.has(key) && columns.indexOf(key) === index,
+    (key, index) =>
+      !TITLE_KEYS.has(key) &&
+      !isDeskExplainKey(key) &&
+      columns.indexOf(key) === index,
   );
 
   return (
@@ -171,6 +231,12 @@ export function PeekDrawer({
                 </div>
               ) : null}
             </div>
+          ) : null}
+
+          {showDesk && row ? <DeskScoreBreakdown row={row} /> : null}
+
+          {symbol && screenPublicId ? (
+            <RankHistoryStrip symbol={symbol} screenPublicId={screenPublicId} />
           ) : null}
 
           {numberKeys.length > 0 ? (

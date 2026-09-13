@@ -47,6 +47,7 @@ interface ExpectedFactor {
   family: string;
   unit: string;
   higher_is_better: boolean;
+  preference: string;
 }
 
 /** docs/07 §"Running a screen", field for field. */

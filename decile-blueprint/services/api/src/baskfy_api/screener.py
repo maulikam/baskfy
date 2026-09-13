@@ -34,6 +34,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from baskfy_api.metrics import observe_cache
 from baskfy_api.telemetry import annotate_current_span
 from baskfy_core.models import FactorDaily, PipelineRun, Screen, ScreenRun, TradingDay
+from baskfy_core.ranking import (
+    DESK_SCORE_EXPLAIN_COLUMNS,
+    is_desk_score_factor,
+    rerank_survivors_by_desk_score,
+)
 from baskfy_core.screen_definition import ScreenDefinition
 from baskfy_core.screener import (
     CACHE_NAMESPACE,
@@ -41,6 +46,7 @@ from baskfy_core.screener import (
     ScreenResult,
     ScreenResultRow,
     build_screen_query,
+    build_survivors_query,
     cache_key,
 )
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
@@ -261,6 +267,121 @@ def _row_to_result(row: Row[tuple[object]], columns: Sequence[str]) -> ScreenRes
     )
 
 
+def _desk_cell(value: object) -> object:
+    """Coerce pandas / numpy cells into JSON-friendly values for ScreenResult."""
+    if value is None:
+        return None
+    if isinstance(value, Decimal):
+        return value
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        if isinstance(value, float) and value != value:  # NaN
+            return None
+        return value
+    if isinstance(value, str):
+        return value
+    # numpy / pandas scalars expose .item()
+    item = getattr(value, "item", None)
+    if callable(item):
+        return _desk_cell(item())
+    return value
+
+
+def _survivors_frame(rows: Sequence[Row[tuple[object]]], row_columns: Sequence[str]):
+    """Build a float-friendly DataFrame for :func:`rerank_survivors_by_desk_score`."""
+    import pandas as pd
+
+    records: list[dict[str, object]] = []
+    for row in rows:
+        mapping = row._mapping
+        record: dict[str, object] = {}
+        for name in row_columns:
+            value = mapping[name]
+            if isinstance(value, Decimal):
+                record[name] = float(value)
+            else:
+                record[name] = value
+        records.append(record)
+    return pd.DataFrame.from_records(records)
+
+
+async def _execute_desk_score_screen(  # noqa: PLR0913 - mirrors execute_screen inputs
+    session: AsyncSession,
+    definition: ScreenDefinition,
+    *,
+    as_of: dt.date,
+    data_version: int,
+    columns: Sequence[str] = (),
+    requested_as_of: dt.date | None = None,
+    limit: int = MAX_RESULT_ROWS,
+) -> ScreenResult:
+    """Filter in SQL, score with the book's ``score()``, attach A–F explain columns."""
+    # Fetch every survivor (capped at MAX) so SCORE percentiles see the full filtered set;
+    # truncate only after ranking.
+    query = build_survivors_query(
+        definition, as_of, columns=columns, limit=MAX_RESULT_ROWS
+    )
+    rows = (await session.execute(query.statement)).all()
+    result_columns = tuple(
+        list(query.columns)
+        + [key for key in DESK_SCORE_EXPLAIN_COLUMNS if key not in query.columns]
+    )
+    if not rows:
+        return ScreenResult(
+            as_of=as_of,
+            data_version=data_version,
+            sorting_factor=query.sorting_factor,
+            ranking_factors=query.ranking_factors,
+            columns=result_columns,
+            rows=(),
+            requested_as_of=requested_as_of,
+            truncated=False,
+        )
+
+    frame = _survivors_frame(rows, query.row_columns)
+    ordered, _breakdowns = rerank_survivors_by_desk_score(
+        frame,
+        direction=definition.sort_direction,
+        limit=limit + 1,
+        as_of=as_of,
+    )
+    truncated = len(ordered) > limit
+    kept = ordered.head(limit)
+
+    result_rows: list[ScreenResultRow] = []
+    for position, (_, row) in enumerate(kept.iterrows(), start=1):
+        values: dict[str, object] = {}
+        for name in result_columns:
+            if name == "sorting_factor":
+                values[name] = _desk_cell(row.get("SCORE"))
+            elif name in row.index:
+                values[name] = _desk_cell(row[name])
+            else:
+                values[name] = None
+        instrument_id = int(row["instrument_id"])
+        result_rows.append(
+            ScreenResultRow(
+                rank=position,
+                instrument_id=instrument_id,
+                combined_rank=position,
+                ranks=(position, 0, 0),
+                values=values,
+            )
+        )
+
+    return ScreenResult(
+        as_of=as_of,
+        data_version=data_version,
+        sorting_factor=query.sorting_factor,
+        ranking_factors=query.ranking_factors,
+        columns=result_columns,
+        rows=tuple(result_rows),
+        requested_as_of=requested_as_of,
+        truncated=truncated,
+    )
+
+
 async def execute_screen(  # noqa: PLR0913 - as_of, data_version and the projection are all inputs
     session: AsyncSession,
     definition: ScreenDefinition,
@@ -271,7 +392,21 @@ async def execute_screen(  # noqa: PLR0913 - as_of, data_version and the project
     requested_as_of: dt.date | None = None,
     limit: int = MAX_RESULT_ROWS,
 ) -> ScreenResult:
-    """One statement, one round trip (docs/03 §"Request path" step 4)."""
+    """One statement, one round trip (docs/03 §"Request path" step 4).
+
+    ``sort_by=desk_score`` is the exception: survivors are filtered in SQL, then scored in-process
+    with the book's ``baskfy_core.score.score`` (docs/ranking/PLAN.md Phase 1.2).
+    """
+    if is_desk_score_factor(definition.sort_by):
+        return await _execute_desk_score_screen(
+            session,
+            definition,
+            as_of=as_of,
+            data_version=data_version,
+            columns=columns,
+            requested_as_of=requested_as_of,
+            limit=limit,
+        )
     query = build_screen_query(definition, as_of, columns=columns, limit=limit + 1)
     rows = (await session.execute(query.statement)).all()
     truncated = len(rows) > limit

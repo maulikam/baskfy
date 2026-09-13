@@ -52,13 +52,18 @@ class _In(BaseModel):
 
 
 class FactorOut(_Out):
-    """docs/07: "factor registry (key, label, family, unit, higher_is_better)"."""
+    """docs/07: "factor registry (key, label, family, unit, higher_is_better)".
+
+    ``preference`` is the ranking-engine addition (docs/ranking/PLAN.md): higher / lower /
+    target_range / eligibility. ``higher_is_better`` stays for the Sort Direction default.
+    """
 
     key: str
     label: str
     family: str
     unit: str
     higher_is_better: bool
+    preference: str
 
 
 class ColumnOut(_Out):

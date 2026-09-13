@@ -391,6 +391,23 @@ describe("human label map (§1.3)", () => {
     expect(columnDisplayLabel("series", "Series")).toBe("Series");
   });
 
+  it("labels desk A–F explain columns", () => {
+    expect(columnDisplayLabel("desk_a_trend", "desk_a_trend")).toBe("Desk A · Trend");
+    expect(columnDisplayTooltip("desk_b_momentum")).toMatch(/blended returns/i);
+  });
+
+  it("excludes desk explain columns from the main results table diet", () => {
+    const columns = [
+      "symbol",
+      "sorting_factor",
+      "ret_12m",
+      "desk_a_trend",
+      "desk_b_momentum",
+      "desk_eligible",
+    ];
+    expect(visibleResultColumns(columns)).toEqual(["symbol", "sorting_factor", "ret_12m"]);
+  });
+
   it("gives every mapped column both a label and a tooltip", () => {
     for (const [key, display] of Object.entries(COLUMN_DISPLAY)) {
       expect(display.label, key).toBeTruthy();

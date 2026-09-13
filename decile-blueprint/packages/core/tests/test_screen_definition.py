@@ -26,6 +26,8 @@ DOCS_04_EXAMPLE: dict[str, object] = {
     "sort_by": "avg_sharpe_12_6_3_1",
     "sort_direction": "desc",
     "apply_filters_on": "all",
+    "ranking_mode": "composite",
+    "ranking_scope": "filtered_results",
     "min_return_1y": None,
     "median_volume_1y": 10000000,
     "moving_average": {

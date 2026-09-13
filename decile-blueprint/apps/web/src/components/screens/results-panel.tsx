@@ -331,6 +331,7 @@ export function ResultsPanel({
         columns={result?.columns ?? []}
         meta={columnMeta}
         sortingFactorLabel={result?.sorting_factor.label ?? ""}
+        screenPublicId={screenPublicId}
         onClose={() => setPeeked(null)}
       />
     </div>

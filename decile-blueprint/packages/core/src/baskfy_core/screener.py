@@ -62,6 +62,7 @@ from sqlalchemy.sql.selectable import CTE
 from baskfy_core import factor_registry
 from baskfy_core.factor_registry import COLUMN_PICKER_KEYS, CUSTOM_FILTER_OPERANDS, Factor
 from baskfy_core.models import FactorDaily, IndexMemberDaily, Instrument, OhlcvDaily
+from baskfy_core.ranking import DESK_SCORE_INPUT_COLUMNS, DESK_SCORE_KEY, is_desk_score_factor
 from baskfy_core.screen_definition import ScreenDefinition
 from baskfy_core.universes import DECILE_RANK_KEY, UNIVERSE_BY_SLUG
 
@@ -477,17 +478,68 @@ def _ranked_pipeline(definition: ScreenDefinition, as_of: dt.date) -> RankedPipe
     )
 
     selected = _bucketed_universe(definition, universe_cte, as_of)
+    ranking = _ranking_factors(definition)
 
-    # --- Step 4: every filter except sort_by / sort_direction ----------------
-    filtered = select(selected).where(*_filter_clauses(definition, selected.c)).cte("filtered")
-    relative = (
-        select(filtered)
-        .where(*_risk_clauses(definition, filtered.c, universe.mask_value))
-        .cte("relative")
+    if definition.ranking_scope == "fixed_universe":
+        # Rank across the selected universe first, then apply filters so a filter change does not
+        # rewrite scores (docs/ranking/PLAN.md). Survivors keep their pre-filter ranks.
+        rank_source = selected
+        rank_columns = _rank_columns(ranking, rank_source)
+        pre_ranked = select(
+            selected,
+            _factor_expression(ranking[0].key).label("sorting_factor"),
+            *rank_columns,
+        ).cte("pre_ranked")
+        filtered = (
+            select(pre_ranked)
+            .where(*_filter_clauses(definition, pre_ranked.c))
+            .cte("filtered")
+        )
+        ranked = (
+            select(filtered)
+            .where(*_risk_clauses(definition, filtered.c, universe.mask_value))
+            .cte("ranked")
+        )
+    else:
+        # docs/06 today: filters, then rank the survivors.
+        filtered = select(selected).where(*_filter_clauses(definition, selected.c)).cte("filtered")
+        relative = (
+            select(filtered)
+            .where(*_risk_clauses(definition, filtered.c, universe.mask_value))
+            .cte("relative")
+        )
+        rank_columns = _rank_columns(ranking, relative)
+        ranked = select(
+            relative,
+            _factor_expression(ranking[0].key).label("sorting_factor"),
+            *rank_columns,
+        ).cte("ranked")
+
+    combined = (ranked.c.r1 + ranked.c.r2 + ranked.c.r3).label("combined_rank")
+    if definition.ranking_mode == "sequential":
+        order_by: list[ColumnElement[object]] = [
+            ranked.c.r1.asc(),
+            ranked.c.r2.asc(),
+            ranked.c.r3.asc(),
+            ranked.c.instrument_id.asc(),
+        ]
+    else:
+        # ``single`` and ``composite`` both finish on combined rank. With one factor the extras
+        # are zero, so combined ≡ r1; with two/three, composite sums ranks (docs/01 §2.12).
+        order_by = [combined.asc(), ranked.c.r1.asc(), ranked.c.instrument_id.asc()]
+    return RankedPipeline(
+        ranked=ranked,
+        combined=combined,
+        order_by=order_by,
+        ranking=ranking,
     )
 
-    # --- Steps 5-6: rank per factor, sum, sort ascending ---------------------
-    ranking = _ranking_factors(definition)
+
+def _rank_columns(
+    ranking: tuple[RankingFactor, ...],
+    source: CTE,
+) -> list[Label[int]]:
+    """Per-factor ``ROW_NUMBER`` columns ``r1``..``r3`` over ``source``."""
     rank_columns: list[Label[int]] = []
     for slot in range(1, 4):
         label = f"r{slot}"
@@ -499,23 +551,10 @@ def _ranked_pipeline(definition: ScreenDefinition, as_of: dt.date) -> RankedPipe
         ordering = expression.desc() if factor.direction == "desc" else expression.asc()
         rank_columns.append(
             func.row_number()
-            .over(order_by=[ordering.nullslast(), relative.c.instrument_id.asc()])
+            .over(order_by=[ordering.nullslast(), source.c.instrument_id.asc()])
             .label(label)
         )
-
-    ranked = select(
-        relative,
-        _factor_expression(ranking[0].key).label("sorting_factor"),
-        *rank_columns,
-    ).cte("ranked")
-
-    combined = (ranked.c.r1 + ranked.c.r2 + ranked.c.r3).label("combined_rank")
-    return RankedPipeline(
-        ranked=ranked,
-        combined=combined,
-        order_by=[combined.asc(), ranked.c.r1.asc()],
-        ranking=ranking,
-    )
+    return rank_columns
 
 
 def build_screen_query(
@@ -531,6 +570,12 @@ def build_screen_query(
     trading days, which runs are published — and therefore lives in ``baskfy_api.screener``).
     """
     validate_definition(definition)
+    if is_desk_score_factor(definition.sort_by):
+        raise ScreenQueryError(
+            "sort_by='desk_score' cannot be ranked in SQL; "
+            "use build_survivors_query + rerank_survivors_by_desk_score "
+            "(baskfy_api.screener.execute_screen handles this)"
+        )
     projection = resolve_columns(columns)
     universe = UNIVERSE_BY_SLUG[definition.index]
     pipeline = _ranked_pipeline(definition, as_of)
@@ -572,6 +617,110 @@ def build_screen_query(
         index_id=universe.index_id,
         universe_slug=universe.slug,
         columns=projection,
+        sorting_factor=ranking[0],
+        ranking_factors=ranking,
+        definition_hash=definition.definition_hash(),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class SurvivorsQuery:
+    """Filtered survivors for in-process desk SCORE re-ranking (no SQL RANK)."""
+
+    statement: Select[tuple[object]]
+    as_of: dt.date
+    index_id: int
+    universe_slug: str
+    columns: tuple[str, ...]
+    #: Columns present on each SQL row that the desk scorer / projection need.
+    row_columns: tuple[str, ...]
+    sorting_factor: RankingFactor
+    ranking_factors: tuple[RankingFactor, ...]
+    definition_hash: str
+
+    def sql(self) -> str:
+        return str(self.statement.compile(dialect=_POSTGRES))
+
+
+def build_survivors_query(
+    definition: ScreenDefinition,
+    as_of: dt.date,
+    *,
+    columns: Sequence[str] = (),
+    limit: int = MAX_RESULT_ROWS,
+) -> SurvivorsQuery:
+    """Filters + risk only — rows for :func:`baskfy_core.ranking.rerank_survivors_by_desk_score`.
+
+    Order is ``instrument_id ASC`` so a later SCORE tie keeps a deterministic input order.
+    """
+    validate_definition(definition)
+    if not is_desk_score_factor(definition.sort_by):
+        raise ScreenQueryError(
+            f"build_survivors_query requires sort_by={DESK_SCORE_KEY!r}; "
+            f"got {definition.sort_by!r}"
+        )
+    projection = resolve_columns(columns)
+    universe = UNIVERSE_BY_SLUG[definition.index]
+
+    universe_cte = (
+        select(IndexMemberDaily.instrument_id)
+        .where(
+            IndexMemberDaily.index_id == universe.index_id,
+            IndexMemberDaily.date == as_of,
+        )
+        .cte("universe")
+    )
+    selected = _bucketed_universe(definition, universe_cte, as_of)
+    # Always filter-then-score for desk SCORE (fixed_universe rejected on ScreenDefinition).
+    filtered = select(selected).where(*_filter_clauses(definition, selected.c)).cte("filtered")
+    survivors = (
+        select(filtered)
+        .where(*_risk_clauses(definition, filtered.c, universe.mask_value))
+        .cte("survivors")
+    )
+
+    ranking = _ranking_factors(definition)
+    # Projection columns that live on the fact row (not identity / computed sorting_factor).
+    fact_projection = [
+        name for name in projection if name not in ("symbol", "name", "sorting_factor")
+    ]
+    needed = list(
+        dict.fromkeys(
+            [
+                "instrument_id",
+                *DESK_SCORE_INPUT_COLUMNS,
+                *fact_projection,
+            ]
+        )
+    )
+    for name in needed:
+        if name not in survivors.c:
+            raise ScreenQueryError(
+                f"survivors CTE is missing column {name!r} required for desk_score"
+            )
+
+    projected = [
+        survivors.c.instrument_id,
+        Instrument.symbol.label("symbol"),
+        Instrument.name.label("name"),
+        *[survivors.c[name].label(name) for name in needed if name != "instrument_id"],
+    ]
+    row_columns = ("instrument_id", "symbol", "name", *[n for n in needed if n != "instrument_id"])
+
+    statement = (
+        select(*projected)
+        .select_from(survivors.join(Instrument, Instrument.id == survivors.c.instrument_id))
+        .order_by(survivors.c.instrument_id.asc())
+        .limit(limit)
+    )
+
+    return SurvivorsQuery(
+        statement=statement,
+        as_of=as_of,
+        index_id=universe.index_id,
+        universe_slug=universe.slug,
+        columns=projection,
+        row_columns=row_columns,
         sorting_factor=ranking[0],
         ranking_factors=ranking,
         definition_hash=definition.definition_hash(),
@@ -756,6 +905,12 @@ def build_export_query(
     no bars. A left join renders those four columns empty rather than dropping every row, which is
     the honest answer: the rest of the export is real.
     """
+    validate_definition(definition)
+    if is_desk_score_factor(definition.sort_by):
+        raise ScreenQueryError(
+            "CSV export does not yet support sort_by='desk_score'; "
+            "export a SQL-ranked screen or re-rank survivors offline"
+        )
     pipeline = _ranked_pipeline(definition, as_of)
     ranked = pipeline.ranked
     bars = OhlcvDaily.__table__

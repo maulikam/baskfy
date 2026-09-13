@@ -646,6 +646,23 @@ FACTORS_ADDED_SINCE_DOCS: Final[dict[str, str]] = {
     # only two that ask what a name has done recently without twelve months dominating the mean.
     "avg_sharpe_3_1": "DECISIONS-MERGE.md M56",
     "avg_sharpe_6_1": "DECISIONS-MERGE.md M56",
+    # Ranking engine Phase 1 — expose stored path/trend/participation as sort keys.
+    "pos_days_1m": "docs/ranking/PLAN.md Phase 1",
+    "pos_days_3m": "docs/ranking/PLAN.md Phase 1",
+    "pos_days_6m": "docs/ranking/PLAN.md Phase 1",
+    "pos_days_9m": "docs/ranking/PLAN.md Phase 1",
+    "pos_days_12m": "docs/ranking/PLAN.md Phase 1",
+    "vol_1m": "docs/ranking/PLAN.md Phase 1",
+    "vol_3m": "docs/ranking/PLAN.md Phase 1",
+    "vol_6m": "docs/ranking/PLAN.md Phase 1",
+    "vol_9m": "docs/ranking/PLAN.md Phase 1",
+    "vol_expansion_1w_12m": "docs/ranking/PLAN.md Phase 1",
+    "ma_dist_20": "docs/ranking/PLAN.md Phase 1",
+    "ma_dist_50": "docs/ranking/PLAN.md Phase 1",
+    "ma_dist_100": "docs/ranking/PLAN.md Phase 1",
+    "ma_dist_200": "docs/ranking/PLAN.md Phase 1",
+    "ma_stack_score": "docs/ranking/PLAN.md Phase 1",
+    "desk_score": "docs/ranking/PLAN.md Phase 1.2",
 }
 
 
@@ -681,6 +698,11 @@ class TestRegistry:
         assert counts["rsi"] == 16
         assert counts["risk_adjusted"] == 5
         assert counts["skip_month"] == 2
+        assert counts["path_quality"] == 5
+        assert counts["trend_structure"] == 5
+        assert counts["participation"] == 1
+        # vol_12m was already non_momentum; Phase 1 adds vol_1m/3m/6m/9m; Phase 1.2 adds desk_score.
+        assert counts["non_momentum"] == 8 + 4 + 1
 
     def test_the_headline_count_disagrees_with_the_enumeration(self) -> None:
         """docs/01 §3 is headed "The 62 ranking factors" but its last family, labelled
@@ -701,7 +723,7 @@ class TestRegistry:
         assert DOCUMENTED_FACTOR_COUNT == 62
         expected_named = 64 + len(FACTORS_ADDED_SINCE_DOCS)
         assert expected_named == NAMED_FACTOR_COUNT
-        assert family_counts()["non_momentum"] == 8
+        assert family_counts()["non_momentum"] == 13
 
     def test_the_column_picker_count_disagrees_the_same_way(self) -> None:
         """docs/01 §4 says "34 available columns" and enumerates 36."""

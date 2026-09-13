@@ -445,6 +445,26 @@
     "price": {
       "$ref": "#/$defs/RangeFilter"
     },
+    "ranking_mode": {
+      "default": "composite",
+      "enum": [
+        "single",
+        "sequential",
+        "composite"
+      ],
+      "title": "Ranking Mode",
+      "type": "string"
+    },
+    "ranking_scope": {
+      "default": "filtered_results",
+      "enum": [
+        "filtered_results",
+        "fixed_universe",
+        "within_sector"
+      ],
+      "title": "Ranking Scope",
+      "type": "string"
+    },
     "series": {
       "items": {
         "type": "string"

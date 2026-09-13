@@ -49,11 +49,15 @@ from baskfy_core.blends import (
     shape_label,
     shape_suffix,
 )
+from baskfy_core.ranking import FactorPreference
 from baskfy_core.windows import WINDOW_MONTHS
 
 
 class FactorFamily(StrEnum):
-    """docs/01 §3's own grouping. docs/08 §"Sort By" wants the dropdown grouped by family."""
+    """docs/01 §3's own grouping, plus Phase-1 ranking families (docs/ranking/PLAN.md).
+
+    docs/08 §"Sort By" wants the dropdown grouped by family.
+    """
 
     ABSOLUTE_RETURN = "absolute_return"
     SHARPE_RETURN = "sharpe_return"
@@ -61,6 +65,9 @@ class FactorFamily(StrEnum):
     RISK_ADJUSTED = "risk_adjusted"
     SKIP_MONTH = "skip_month"
     NON_MOMENTUM = "non_momentum"
+    PATH_QUALITY = "path_quality"
+    TREND_STRUCTURE = "trend_structure"
+    PARTICIPATION = "participation"
 
 
 class FactorUnit(StrEnum):
@@ -110,6 +117,10 @@ class Factor:
     components: tuple[str, ...] = ()
     #: True when the factor is a stored column rather than an expression over stored columns.
     is_stored: bool = False
+    #: True when ranking is computed in-process (e.g. desk SCORE), not by SQL ``ROW_NUMBER``.
+    is_computed: bool = False
+    #: How the ranking engine should treat this key (docs/ranking/PLAN.md).
+    preference: FactorPreference = FactorPreference.HIGHER
 
     @property
     def is_blend(self) -> bool:
@@ -352,8 +363,119 @@ def _build() -> dict[str, Factor]:
                 higher_is_better=higher,
                 null_policy=policy,
                 is_stored=True,
+                preference=(
+                    FactorPreference.HIGHER if higher else FactorPreference.LOWER
+                ),
             )
         )
+
+    # --- Path / trend / participation (ranking engine Phase 1, 13 Sep 2026) ---
+    # Already on factor_daily; previously filter-only. See docs/ranking/PLAN.md.
+    for months in WINDOW_MONTHS:
+        column = f"pos_days_{months}m"
+        add(
+            Factor(
+                key=column,
+                label=f"POSITIVE DAYS {_window_label(months)}",
+                family=FactorFamily.PATH_QUALITY,
+                sql_expr=column,
+                unit=FactorUnit.PERCENT,
+                higher_is_better=True,
+                null_policy=NullPolicy.INSUFFICIENT_HISTORY,
+                is_stored=True,
+                preference=FactorPreference.HIGHER,
+            )
+        )
+    for months in WINDOW_MONTHS:
+        if months == 12:
+            continue  # vol_12m already registered under non_momentum
+        column = f"vol_{months}m"
+        add(
+            Factor(
+                key=column,
+                label=f"VOLATILITY {_window_label(months)}",
+                family=FactorFamily.NON_MOMENTUM,
+                sql_expr=column,
+                unit=FactorUnit.FRACTION,
+                higher_is_better=False,
+                null_policy=NullPolicy.INSUFFICIENT_HISTORY,
+                is_stored=True,
+                preference=FactorPreference.LOWER,
+            )
+        )
+    add(
+        Factor(
+            key="vol_expansion_1w_12m",
+            label="VOLUME EXPANSION 1 WEEK / 1 YEAR",
+            family=FactorFamily.PARTICIPATION,
+            sql_expr=(
+                "CASE WHEN vol_avg_12m > 0 THEN "
+                "CAST(vol_avg_1w AS numeric) / CAST(vol_avg_12m AS numeric) END"
+            ),
+            unit=FactorUnit.RATIO,
+            higher_is_better=True,
+            null_policy=NullPolicy.NULL_ON_UNDEFINED_RATIO,
+            components=("vol_avg_1w", "vol_avg_12m"),
+            preference=FactorPreference.HIGHER,
+        )
+    )
+    for window in (20, 50, 100, 200):
+        add(
+            Factor(
+                key=f"ma_dist_{window}",
+                label=f"DISTANCE FROM MA {window}",
+                family=FactorFamily.TREND_STRUCTURE,
+                sql_expr=(
+                    f"CASE WHEN ma_{window} > 0 THEN "
+                    f"(close / ma_{window} - 1) * 100 END"
+                ),
+                unit=FactorUnit.PERCENT,
+                # Not "higher is better": overextension is a risk. Preference is target_range.
+                higher_is_better=False,
+                null_policy=NullPolicy.NULL_ON_UNDEFINED_RATIO,
+                components=("close", f"ma_{window}"),
+                preference=FactorPreference.TARGET_RANGE,
+            )
+        )
+    add(
+        Factor(
+            key="ma_stack_score",
+            label="MA STACK SCORE",
+            family=FactorFamily.TREND_STRUCTURE,
+            # Mirrors the desk's A_trend structure without the extension bonus (0–21).
+            sql_expr=(
+                "(CASE WHEN close > ma_20 THEN 4 ELSE 0 END)"
+                " + (CASE WHEN close > ma_50 THEN 4 ELSE 0 END)"
+                " + (CASE WHEN close > ma_100 THEN 4 ELSE 0 END)"
+                " + (CASE WHEN close > ma_200 THEN 4 ELSE 0 END)"
+                " + (CASE WHEN close > ma_20 AND ma_20 > ma_50 AND ma_50 > ma_100 "
+                "AND ma_100 > ma_200 THEN 5 ELSE 0 END)"
+            ),
+            unit=FactorUnit.RATIO,
+            higher_is_better=True,
+            null_policy=NullPolicy.INSUFFICIENT_HISTORY,
+            components=("close", "ma_20", "ma_50", "ma_100", "ma_200"),
+            preference=FactorPreference.HIGHER,
+        )
+    )
+
+    # --- Desk SCORE (ranking engine Phase 1.2) — computed via baskfy_core.score, not SQL ---
+    add(
+        Factor(
+            key="desk_score",
+            label="DESK MOMENTUM QUALITY SCORE",
+            family=FactorFamily.NON_MOMENTUM,
+            # Sentinel only: :func:`sql_for` refuses computed keys. The live path is
+            # ``build_survivors_query`` + ``rerank_survivors_by_desk_score``.
+            sql_expr="__computed_not_sql__",
+            unit=FactorUnit.RATIO,
+            higher_is_better=True,
+            null_policy=NullPolicy.INSUFFICIENT_HISTORY,
+            is_stored=False,
+            is_computed=True,
+            preference=FactorPreference.HIGHER,
+        )
+    )
 
     return registry
 
@@ -487,7 +609,13 @@ def get(key: str) -> Factor:
 
 
 def sql_for(key: str) -> str:
-    return get(key).sql_expr
+    factor = get(key)
+    if factor.is_computed:
+        raise ValueError(
+            f"{key!r} is a computed ranking factor and has no SQL expression; "
+            "rank it with baskfy_core.ranking.rerank_survivors_by_desk_score"
+        )
+    return factor.sql_expr
 
 
 def by_family() -> dict[FactorFamily, tuple[Factor, ...]]:

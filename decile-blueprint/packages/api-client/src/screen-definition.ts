@@ -61,6 +61,12 @@ const factorKey = z
   .regex(/^[a-z][a-z0-9_]*$/);
 
 export const SortDirectionSchema = z.enum(["asc", "desc"]);
+export const RankingModeSchema = z.enum(["single", "sequential", "composite"]);
+export const RankingScopeSchema = z.enum([
+  "filtered_results",
+  "fixed_universe",
+  "within_sector",
+]);
 export const ApplyFiltersOnSchema = z.enum([
   "all",
   "decile_1",
@@ -180,6 +186,8 @@ export const ScreenDefinitionSchema = z
     sort_by: factorKey,
     sort_direction: SortDirectionSchema.default("desc"),
     apply_filters_on: ApplyFiltersOnSchema.default("all"),
+    ranking_mode: RankingModeSchema.default("composite"),
+    ranking_scope: RankingScopeSchema.default("filtered_results"),
 
     min_return_1y: decimalLike.nullable().default(null),
     /** Minimum median daily traded value over 1 year, in rupees (docs/13 §2 finding 6). */
@@ -210,6 +218,23 @@ export const ScreenDefinitionSchema = z
       ctx.addIssue({
         code: "custom",
         message: "factor_three cannot be enabled while factor_two is disabled",
+      });
+    }
+    if (
+      value.ranking_mode === "single" &&
+      (value.factor_two.enabled || value.factor_three.enabled)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "ranking_mode='single' cannot combine factor_two or factor_three; use sequential or composite",
+      });
+    }
+    if (value.ranking_scope === "within_sector") {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "ranking_scope='within_sector' is reserved until sector membership is a first-class column",
       });
     }
   });

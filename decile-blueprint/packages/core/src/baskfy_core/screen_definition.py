@@ -52,6 +52,8 @@ SERIES_VALUES: Final[tuple[str, ...]] = ("EQ", "BE", "SM", "ST", "SZ")
 SME_SERIES_VALUES: Final[tuple[str, ...]] = ("SM", "ST", "SZ")
 
 SortDirection = Literal["asc", "desc"]
+RankingModeName = Literal["single", "sequential", "composite"]
+RankingScopeName = Literal["filtered_results", "fixed_universe", "within_sector"]
 ApplyFiltersOn = Literal[
     "all", "decile_1", "decile_2", "decile_3", "decile_4", "decile_5", "top_50", "top_100"
 ]
@@ -334,6 +336,10 @@ class ScreenDefinition(_Model):
     sort_by: FactorKey
     sort_direction: SortDirection = "desc"
     apply_filters_on: ApplyFiltersOn = "all"
+    #: docs/ranking/PLAN.md — default ``composite`` preserves docs/01 §2.12 sum-of-ranks.
+    ranking_mode: RankingModeName = "composite"
+    #: docs/ranking/PLAN.md — default ``filtered_results`` preserves docs/06 today.
+    ranking_scope: RankingScopeName = "filtered_results"
 
     min_return_1y: Decimal | None = None
     #: Minimum median daily traded value over 1 year, in rupees (docs/13 §2 finding 6).
@@ -394,6 +400,31 @@ class ScreenDefinition(_Model):
         """docs/01 §2.12: factor three is revealed by, and ranks after, factor two."""
         if self.factor_three.enabled and not self.factor_two.enabled:
             raise ValueError("factor_three cannot be enabled while factor_two is disabled")
+        if self.ranking_mode == "single" and (
+            self.factor_two.is_active() or self.factor_three.is_active()
+        ):
+            raise ValueError(
+                "ranking_mode='single' cannot combine factor_two or factor_three; "
+                "use sequential or composite"
+            )
+        if self.ranking_scope == "within_sector":
+            raise ValueError(
+                "ranking_scope='within_sector' is reserved until sector membership "
+                "is a first-class column (docs/ranking/PLAN.md)"
+            )
+        # desk_score is a single computed SCORE (A–F). Extra factors and fixed-universe
+        # percentile scopes would invent a second ranking story (docs/ranking/PLAN.md Phase 1.2).
+        if self.sort_by == "desk_score":
+            if self.factor_two.is_active() or self.factor_three.is_active():
+                raise ValueError(
+                    "desk_score cannot combine with factor_two or factor_three; "
+                    "it is a single computed SCORE"
+                )
+            if self.ranking_scope == "fixed_universe":
+                raise ValueError(
+                    "desk_score ranks filtered survivors only; "
+                    "ranking_scope='fixed_universe' is not supported"
+                )
         return self
 
     def ignore_above_beta_is_active(self) -> bool:

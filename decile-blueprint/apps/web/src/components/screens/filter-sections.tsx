@@ -553,19 +553,31 @@ function CombinedRankExplanation() {
 }
 
 export function MultiFactorFilters({ definition, patch, disabled, factors }: MultiFactorProps) {
+  // docs/ranking/PLAN.md C3: explicit ranking terms replace factor two and three, and single mode
+  // ranks by Sort By alone. Either would make the definition invalid, so the switches lock.
+  const replacedBy =
+    definition.ranking_terms.length > 0
+      ? "Ranking terms are set, so Factor Two and Three are off. Remove the terms in Ranking to use them."
+      : definition.ranking_mode === "single"
+        ? "Single mode ranks by Sort By alone. Switch Ranking to Sequential or Composite to add factors."
+        : null;
   return (
     <>
       <CombinedRankExplanation />
+      {replacedBy ? <p className="text-xs text-muted-foreground">{replacedBy}</p> : null}
       {(["factor_two", "factor_three"] as const).map((slot, index) => {
         const extra = definition[slot];
         const ordinal = index === 0 ? "Two" : "Three";
         // docs/01 §2.12: factor three is revealed by, and ranks after, factor two.
-        const blocked = slot === "factor_three" && !definition.factor_two.enabled;
+        const blocked =
+          replacedBy !== null || (slot === "factor_three" && !definition.factor_two.enabled);
         return (
           <div key={slot} className="space-y-2 border-t border-border pt-3 first:border-0 first:pt-0">
             <SwitchRow
               label={`Apply Factor ${ordinal}`}
-              hint={blocked ? "Enable Factor Two first." : undefined}
+              hint={
+                blocked && replacedBy === null ? "Enable Factor Two first." : undefined
+              }
               render={({ id, describedBy }) => (
                 <Switch
                   id={id}

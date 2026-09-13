@@ -33,6 +33,7 @@ import { Select } from "@/components/ui/select";
 import { columnDisplayLabel } from "@/lib/screens/column-display";
 import { defaultDefinition } from "@/lib/screens/defaults";
 import { FILTER_GROUPS } from "@/lib/screens/groups";
+import { withSortBy } from "@/lib/screens/ranking";
 import { universeChipLabel, universeLabelFromName } from "@/lib/screens/universe-label";
 import { cn } from "@/lib/utils";
 
@@ -61,7 +62,10 @@ const CHIP_SHORT: Readonly<Record<string, string>> = {
   series: "Series",
   risk: "Risk caps",
   price: "Price",
+  "factor-ranges": "Factor ranges",
+  regime: "Regime",
   "multi-factor": "Multi-factor",
+  ranking: "Ranking",
   historical: "As-of date",
   custom: "Custom",
 };
@@ -349,7 +353,7 @@ export function FilterChipBar({
             factors={factors}
             value={definition.sort_by}
             onChange={(key) => {
-              patch({ sort_by: key });
+              patch(withSortBy(definition, factors, key));
               setOpenChip(null);
             }}
           />

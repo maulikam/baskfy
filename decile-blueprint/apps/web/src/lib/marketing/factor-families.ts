@@ -60,28 +60,36 @@ export const FACTOR_FAMILIES: readonly FactorFamilySummary[] = [
     key: "non_momentum",
     label: "Non-momentum sort keys",
     description:
-      "Volatility (all five windows), beta, P/E, market capitalisation, both close prices, the two away-from-high measures, and the desk Momentum Quality Score.",
-    count: 13,
+      "Volatility (all five windows), downside volatility and Sortino return, ATR, beta, P/E, market capitalisation, both close prices, the two away-from-high measures, and the desk Momentum Quality Score.",
+    count: 18,
   },
   {
     key: "path_quality",
     label: "Path quality",
     description:
-      "How the move was made — positive-days across five windows. Pair with drawdown before treating alone.",
-    count: 5,
+      "How the move was made — positive days across five windows, maximum drawdown, days spent underwater, efficiency ratio, and the one-year return without its three best days.",
+    count: 10,
   },
   {
     key: "trend_structure",
     label: "Trend structure",
     description:
-      "MA stack score and distance from each moving average. Distance is a target-range preference, not higher-is-better.",
-    count: 5,
+      "MA stack score, distance from each moving average, ATR extension, the 50-day average's slope, and the regime as an explicit order. Distance and extension are target-range preferences, not higher-is-better.",
+    count: 8,
   },
   {
     key: "participation",
     label: "Participation",
-    description: "Volume expansion of the latest week versus the one-year average traded value.",
-    count: 1,
+    description:
+      "Volume expansion of the latest week versus the one-year average, of the latest month versus the half-year before it, and how many recent sessions traded above that baseline.",
+    count: 3,
+  },
+  {
+    key: "momentum_quality",
+    label: "Momentum quality",
+    description:
+      "Momentum beyond a raw window return — excess and beta-residual return, relative-strength and rank persistence, acceleration, and NSE's momentum ratios and score.",
+    count: 12,
   },
 ] as const;
 

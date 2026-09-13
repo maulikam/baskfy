@@ -3686,6 +3686,38 @@
         "title": "DataExportOut",
         "type": "object"
       },
+      "DataQualityOut": {
+        "additionalProperties": false,
+        "properties": {
+          "insufficient_history": {
+            "title": "Insufficient History",
+            "type": "boolean"
+          },
+          "missing_factors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing Factors",
+            "type": "array"
+          },
+          "recent_corporate_action": {
+            "title": "Recent Corporate Action",
+            "type": "boolean"
+          },
+          "stale_price": {
+            "title": "Stale Price",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "missing_factors",
+          "insufficient_history",
+          "stale_price",
+          "recent_corporate_action"
+        ],
+        "title": "DataQualityOut",
+        "type": "object"
+      },
       "DataVersionListOut": {
         "additionalProperties": false,
         "properties": {
@@ -3833,6 +3865,122 @@
           "detail"
         ],
         "title": "DeletionOut",
+        "type": "object"
+      },
+      "DeskBlockOut": {
+        "additionalProperties": false,
+        "description": "The book's stored ``desk_score_daily`` row for the instrument — never re-scored (C2).",
+        "properties": {
+          "a_trend": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "A Trend"
+          },
+          "b_momentum": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "B Momentum"
+          },
+          "c_sharpe": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "C Sharpe"
+          },
+          "d_consistency": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "D Consistency"
+          },
+          "e_liquidity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "E Liquidity"
+          },
+          "eligible": {
+            "title": "Eligible",
+            "type": "boolean"
+          },
+          "f_penalty": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "F Penalty"
+          },
+          "rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank"
+          },
+          "reject": {
+            "title": "Reject",
+            "type": "string"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          }
+        },
+        "required": [
+          "score",
+          "rank",
+          "a_trend",
+          "b_momentum",
+          "c_sharpe",
+          "d_consistency",
+          "e_liquidity",
+          "f_penalty",
+          "reject",
+          "eligible"
+        ],
+        "title": "DeskBlockOut",
         "type": "object"
       },
       "DeskHoldingOut": {
@@ -4490,6 +4638,47 @@
         "title": "DriftScanOut",
         "type": "object"
       },
+      "EligibilityFailureOut": {
+        "additionalProperties": false,
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "filter": {
+            "title": "Filter",
+            "type": "string"
+          }
+        },
+        "required": [
+          "filter",
+          "detail"
+        ],
+        "title": "EligibilityFailureOut",
+        "type": "object"
+      },
+      "EligibilityOut": {
+        "additionalProperties": false,
+        "properties": {
+          "failures": {
+            "items": {
+              "$ref": "#/components/schemas/EligibilityFailureOut"
+            },
+            "title": "Failures",
+            "type": "array"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "passed",
+          "failures"
+        ],
+        "title": "EligibilityOut",
+        "type": "object"
+      },
       "EnabledStubOut": {
         "properties": {
           "enabled": {
@@ -4937,8 +5126,12 @@
       },
       "FactorOut": {
         "additionalProperties": false,
-        "description": "docs/07: \"factor registry (key, label, family, unit, higher_is_better)\".",
+        "description": "docs/07: \"factor registry (key, label, family, unit, higher_is_better)\".\n\n``preference`` is the ranking-engine addition (docs/ranking/PLAN.md): higher / lower /\ntarget_range / eligibility. ``higher_is_better`` stays for the Sort Direction default.\n``rankable``, ``weight_family``, ``validation_status`` and ``definition`` are C1's registry\nfields (docs/ranking/PLAN.md C6 publishes them).",
         "properties": {
+          "definition": {
+            "title": "Definition",
+            "type": "string"
+          },
           "family": {
             "title": "Family",
             "type": "string"
@@ -4955,9 +5148,22 @@
             "title": "Label",
             "type": "string"
           },
+          "preference": {
+            "$ref": "#/components/schemas/FactorPreference"
+          },
+          "rankable": {
+            "title": "Rankable",
+            "type": "boolean"
+          },
           "unit": {
             "title": "Unit",
             "type": "string"
+          },
+          "validation_status": {
+            "$ref": "#/components/schemas/ValidationStatus"
+          },
+          "weight_family": {
+            "$ref": "#/components/schemas/WeightFamily"
           }
         },
         "required": [
@@ -4965,9 +5171,70 @@
           "label",
           "family",
           "unit",
-          "higher_is_better"
+          "higher_is_better",
+          "preference",
+          "rankable",
+          "weight_family",
+          "validation_status",
+          "definition"
         ],
         "title": "FactorOut",
+        "type": "object"
+      },
+      "FactorPreference": {
+        "description": "How a factor should be used when ranking or filtering.\n\n* ``higher`` / ``lower`` — monotonic sort preference (Sort By direction still overrides).\n* ``target_range`` — larger is not better; prefer a band (e.g. ATR-normalised extension).\n* ``eligibility`` — gate only; never a sort key by itself.",
+        "enum": [
+          "higher",
+          "lower",
+          "target_range",
+          "eligibility"
+        ],
+        "title": "FactorPreference",
+        "type": "string"
+      },
+      "FactorRange": {
+        "additionalProperties": false,
+        "description": "An inclusive ``[min, max]`` eligibility filter on one factor (docs/ranking/PLAN.md C3).\n\nThis is where a non-rankable factor belongs: ``excess_ret_12m >= 0`` is a meaningful gate even\nthough a common-index subtraction can never reorder a list (PLAN correction 1). NULL never\nsatisfies a range (docs/06 step 4).",
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "factor": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Factor",
+            "type": "string"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          }
+        },
+        "required": [
+          "factor"
+        ],
+        "title": "FactorRange",
         "type": "object"
       },
       "FactsheetOut": {
@@ -5115,6 +5382,74 @@
           "index_memberships"
         ],
         "title": "FactsheetOut",
+        "type": "object"
+      },
+      "FamilyWeights": {
+        "additionalProperties": false,
+        "description": "Relative weight per weight family for ``composite`` (docs/ranking/PLAN.md C3/C4).\n\n``None`` means \"no opinion\": the ranking engine gives that family the mean of the explicit\nweights of the families present (or 1 when none is explicit), then normalises the shares of the\nfamilies that actually have terms to sum to one. That makes the scale irrelevant — ``60/40`` and\n``0.6/0.4`` mean the same — and three momentum terms cannot triple momentum's share.",
+        "properties": {
+          "momentum": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Momentum"
+          },
+          "participation": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Participation"
+          },
+          "path_quality": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path Quality"
+          },
+          "risk_execution": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Execution"
+          },
+          "trend_structure": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trend Structure"
+          }
+        },
+        "title": "FamilyWeights",
         "type": "object"
       },
       "FeeLedgerOut": {
@@ -10841,6 +11176,115 @@
         "title": "RangeFilter",
         "type": "object"
       },
+      "RankExplanationOut": {
+        "additionalProperties": false,
+        "description": "``ranking_engine.RankExplanation``, field for field, plus docs/07's analytics envelope.\n\n``rank`` is ``null`` for a row that is in the universe but not in the results (it failed a\nfilter, or the book rejected it) — ``eligibility.failures`` says why.",
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "data_quality": {
+            "$ref": "#/components/schemas/DataQualityOut"
+          },
+          "data_version": {
+            "title": "Data Version",
+            "type": "integer"
+          },
+          "deductions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Deductions",
+            "type": "array"
+          },
+          "desk": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DeskBlockOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "eligibility": {
+            "$ref": "#/components/schemas/EligibilityOut"
+          },
+          "instrument_id": {
+            "title": "Instrument Id",
+            "type": "integer"
+          },
+          "positives": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Positives",
+            "type": "array"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/RankProvenanceOut"
+          },
+          "rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank"
+          },
+          "symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symbol"
+          },
+          "terms": {
+            "items": {
+              "$ref": "#/components/schemas/RankTermOut"
+            },
+            "title": "Terms",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "required": [
+          "as_of",
+          "data_version",
+          "instrument_id",
+          "symbol",
+          "rank",
+          "total",
+          "terms",
+          "positives",
+          "deductions",
+          "eligibility",
+          "data_quality",
+          "desk",
+          "provenance"
+        ],
+        "title": "RankExplanationOut",
+        "type": "object"
+      },
       "RankHistoryOut": {
         "additionalProperties": false,
         "description": "docs/07: \"this stock's rank over time in a screen\".",
@@ -10897,6 +11341,259 @@
           "result_count"
         ],
         "title": "RankPointOut",
+        "type": "object"
+      },
+      "RankProvenanceOut": {
+        "additionalProperties": false,
+        "description": "``ranking_engine.Provenance``: what produced the explanation.",
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "data_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Version"
+          },
+          "desk_score_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desk Score Version"
+          },
+          "mode": {
+            "enum": [
+              "single",
+              "sequential",
+              "composite"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "nse_momentum_version": {
+            "title": "Nse Momentum Version",
+            "type": "string"
+          },
+          "ranking_engine_version": {
+            "title": "Ranking Engine Version",
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "filtered_results",
+              "fixed_universe",
+              "within_sector"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "universe": {
+            "title": "Universe",
+            "type": "string"
+          }
+        },
+        "required": [
+          "universe",
+          "as_of",
+          "data_version",
+          "ranking_engine_version",
+          "desk_score_version",
+          "nse_momentum_version",
+          "scope",
+          "mode"
+        ],
+        "title": "RankProvenanceOut",
+        "type": "object"
+      },
+      "RankTermOut": {
+        "additionalProperties": false,
+        "description": "One ranking term's part in a row's rank — ``ranking_engine.TermExplanation``.",
+        "properties": {
+          "contribution": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contribution"
+          },
+          "effective_weight": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Weight"
+          },
+          "factor": {
+            "title": "Factor",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "missing": {
+            "title": "Missing",
+            "type": "boolean"
+          },
+          "preference": {
+            "title": "Preference",
+            "type": "string"
+          },
+          "raw": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw"
+          },
+          "transformed": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transformed"
+          },
+          "weight_family": {
+            "title": "Weight Family",
+            "type": "string"
+          }
+        },
+        "required": [
+          "factor",
+          "label",
+          "weight_family",
+          "preference",
+          "raw",
+          "transformed",
+          "effective_weight",
+          "contribution",
+          "missing"
+        ],
+        "title": "RankTermOut",
+        "type": "object"
+      },
+      "RankingPresetOut": {
+        "additionalProperties": false,
+        "description": "One named ranking preset — ``baskfy_core.ranking_presets`` (docs/ranking/PLAN.md §1.5).\n\n``patch`` is merged into a ``ScreenDefinition`` payload to apply the preset; ``status`` is\n``ready`` (safe as Sort By today) or ``research`` (a starting point, not a product default).",
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "patch": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "title": "Patch",
+            "type": "object"
+          },
+          "sort_by": {
+            "title": "Sort By",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "description",
+          "status",
+          "sort_by",
+          "patch"
+        ],
+        "title": "RankingPresetOut",
+        "type": "object"
+      },
+      "RankingTerm": {
+        "additionalProperties": false,
+        "description": "One explicit ranking term (docs/ranking/PLAN.md C3).\n\n``preference`` says how a raw value becomes a score in ``[0, 1]`` (C4 step 3): ``higher`` and\n``lower`` are percentiles, ``target_range`` scores distance from ``[target_min, target_max]``.\n``weight`` is only meaningful in ``composite`` mode, so any other mode refuses a non-default\nweight rather than silently ignoring it.",
+        "properties": {
+          "factor": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Factor",
+            "type": "string"
+          },
+          "preference": {
+            "enum": [
+              "higher",
+              "lower",
+              "target_range"
+            ],
+            "title": "Preference",
+            "type": "string"
+          },
+          "target_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Max"
+          },
+          "target_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Min"
+          },
+          "weight": {
+            "default": 1.0,
+            "exclusiveMinimum": 0.0,
+            "maximum": 100.0,
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "factor",
+          "preference"
+        ],
+        "title": "RankingTerm",
         "type": "object"
       },
       "RebalanceDay": {
@@ -12680,11 +13377,28 @@
             "title": "Custom Filters",
             "type": "array"
           },
+          "factor_ranges": {
+            "items": {
+              "$ref": "#/components/schemas/FactorRange"
+            },
+            "title": "Factor Ranges",
+            "type": "array"
+          },
           "factor_three": {
             "$ref": "#/components/schemas/ExtraFactor"
           },
           "factor_two": {
             "$ref": "#/components/schemas/ExtraFactor"
+          },
+          "family_weights": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FamilyWeights"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "historical_date": {
             "anyOf": [
@@ -12759,6 +13473,16 @@
             ],
             "title": "Min Return 1Y"
           },
+          "missing_data": {
+            "default": "penalize",
+            "enum": [
+              "penalize",
+              "neutral",
+              "exclude"
+            ],
+            "title": "Missing Data",
+            "type": "string"
+          },
           "moving_average": {
             "$ref": "#/components/schemas/MovingAverageFilter"
           },
@@ -12770,6 +13494,52 @@
           },
           "price": {
             "$ref": "#/components/schemas/RangeFilter-Input"
+          },
+          "ranking_mode": {
+            "default": "composite",
+            "enum": [
+              "single",
+              "sequential",
+              "composite"
+            ],
+            "title": "Ranking Mode",
+            "type": "string"
+          },
+          "ranking_scope": {
+            "default": "filtered_results",
+            "enum": [
+              "filtered_results",
+              "fixed_universe",
+              "within_sector"
+            ],
+            "title": "Ranking Scope",
+            "type": "string"
+          },
+          "ranking_terms": {
+            "items": {
+              "$ref": "#/components/schemas/RankingTerm"
+            },
+            "title": "Ranking Terms",
+            "type": "array"
+          },
+          "regime_in": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "BULL",
+                    "NEUTRAL",
+                    "BEAR"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regime In"
           },
           "series": {
             "items": {
@@ -12834,11 +13604,28 @@
             "title": "Custom Filters",
             "type": "array"
           },
+          "factor_ranges": {
+            "items": {
+              "$ref": "#/components/schemas/FactorRange"
+            },
+            "title": "Factor Ranges",
+            "type": "array"
+          },
           "factor_three": {
             "$ref": "#/components/schemas/ExtraFactor"
           },
           "factor_two": {
             "$ref": "#/components/schemas/ExtraFactor"
+          },
+          "family_weights": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FamilyWeights"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "historical_date": {
             "anyOf": [
@@ -12910,6 +13697,16 @@
             ],
             "title": "Min Return 1Y"
           },
+          "missing_data": {
+            "default": "penalize",
+            "enum": [
+              "penalize",
+              "neutral",
+              "exclude"
+            ],
+            "title": "Missing Data",
+            "type": "string"
+          },
           "moving_average": {
             "$ref": "#/components/schemas/MovingAverageFilter"
           },
@@ -12921,6 +13718,52 @@
           },
           "price": {
             "$ref": "#/components/schemas/RangeFilter-Output"
+          },
+          "ranking_mode": {
+            "default": "composite",
+            "enum": [
+              "single",
+              "sequential",
+              "composite"
+            ],
+            "title": "Ranking Mode",
+            "type": "string"
+          },
+          "ranking_scope": {
+            "default": "filtered_results",
+            "enum": [
+              "filtered_results",
+              "fixed_universe",
+              "within_sector"
+            ],
+            "title": "Ranking Scope",
+            "type": "string"
+          },
+          "ranking_terms": {
+            "items": {
+              "$ref": "#/components/schemas/RankingTerm"
+            },
+            "title": "Ranking Terms",
+            "type": "array"
+          },
+          "regime_in": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "BULL",
+                    "NEUTRAL",
+                    "BEAR"
+                  ],
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Regime In"
           },
           "series": {
             "items": {
@@ -12971,6 +13814,51 @@
           }
         },
         "title": "ScreenDuplicate",
+        "type": "object"
+      },
+      "ScreenExplainRequest": {
+        "additionalProperties": false,
+        "description": "C6: ``POST /screens/explain {definition, symbol, as_of?, data_version?}``.\n\n``definition`` must carry ``ranking_terms``: an explanation is the ranking engine's account of\na row, and docs/06's SQL ranking has no term scores to explain.",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "data_version": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Version"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/ScreenDefinition-Input"
+          },
+          "symbol": {
+            "maxLength": 30,
+            "minLength": 1,
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "definition",
+          "symbol"
+        ],
+        "title": "ScreenExplainRequest",
         "type": "object"
       },
       "ScreenListOut": {
@@ -13044,6 +13932,74 @@
         "title": "ScreenOut",
         "type": "object"
       },
+      "ScreenProvenanceOut": {
+        "additionalProperties": false,
+        "description": "docs/ranking/PLAN.md C6: what produced a screen payload.\n\n``ranking_engine_version`` is ``baskfy_core.ranking_engine.RANKING_ENGINE_VERSION`` for a\ndefinition with ``ranking_terms`` and ``\"legacy-sql\"`` for docs/06's SQL ranking.\n``desk_score_version`` is the ``desk_score_daily.score_version`` read when the book's SCORE\ndecides the order, and ``null`` when it does not.",
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "data_version": {
+            "title": "Data Version",
+            "type": "integer"
+          },
+          "desk_score_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desk Score Version"
+          },
+          "mode": {
+            "enum": [
+              "single",
+              "sequential",
+              "composite"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "ranking_engine_version": {
+            "title": "Ranking Engine Version",
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "filtered_results",
+              "fixed_universe",
+              "within_sector"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "universe": {
+            "title": "Universe",
+            "type": "string"
+          },
+          "universe_label": {
+            "title": "Universe Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "universe",
+          "universe_label",
+          "as_of",
+          "data_version",
+          "ranking_engine_version",
+          "desk_score_version",
+          "scope",
+          "mode"
+        ],
+        "title": "ScreenProvenanceOut",
+        "type": "object"
+      },
       "ScreenRunPage": {
         "additionalProperties": false,
         "description": "docs/07 §Conventions: `{ \"data\": [...], \"next_cursor\": \"…\" }`.",
@@ -13075,7 +14031,7 @@
       },
       "ScreenRunResponse": {
         "additionalProperties": false,
-        "description": "docs/07 §\"Running a screen\", field for field.",
+        "description": "docs/07 §\"Running a screen\", field for field, plus C6's ``provenance``.",
         "properties": {
           "as_of": {
             "format": "date",
@@ -13092,6 +14048,9 @@
           "data_version": {
             "title": "Data Version",
             "type": "integer"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/ScreenProvenanceOut"
           },
           "result_count": {
             "title": "Result Count",
@@ -13114,7 +14073,8 @@
           "result_count",
           "sorting_factor",
           "columns",
-          "rows"
+          "rows",
+          "provenance"
         ],
         "title": "ScreenRunResponse",
         "type": "object"
@@ -13179,6 +14139,154 @@
         "title": "ScreenRunSummaryOut",
         "type": "object"
       },
+      "ScreenSelectionOut": {
+        "additionalProperties": false,
+        "description": "``ranking_selection.SelectionResult.to_dict()`` plus the run it was computed over.\n\n``informational_only`` is always ``true``: nothing here is a plan, and no route takes it to\nan order (non-negotiable #1). ``holdings_without_quantity`` names portfolio holdings that\nrecord no quantity: C5 needs a positive quantity to call a name held, so they are left out of\nthe book and said so rather than dropped in silence.",
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "constraints": {
+            "$ref": "#/components/schemas/SelectionConstraintsOut"
+          },
+          "data_version": {
+            "title": "Data Version",
+            "type": "integer"
+          },
+          "holdings_without_quantity": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Holdings Without Quantity",
+            "type": "array"
+          },
+          "informational_only": {
+            "const": true,
+            "title": "Informational Only",
+            "type": "boolean"
+          },
+          "notes": {
+            "items": {
+              "$ref": "#/components/schemas/SelectionNoteOut"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portfolio Id"
+          },
+          "provenance": {
+            "$ref": "#/components/schemas/ScreenProvenanceOut"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/SelectionRowOut"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/SelectionSummaryOut"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "informational_only",
+          "as_of",
+          "data_version",
+          "provenance",
+          "portfolio_id",
+          "holdings_without_quantity",
+          "constraints",
+          "summary",
+          "notes",
+          "rows"
+        ],
+        "title": "ScreenSelectionOut",
+        "type": "object"
+      },
+      "ScreenSelectionRequest": {
+        "additionalProperties": false,
+        "description": "C6: ``POST /screens/selection {definition, as_of?, portfolio_id? | holdings?, constraints}``.\n\nExactly one of ``portfolio_id`` (one of the caller's portfolios) and ``holdings`` (an empty\nlist is a book with nothing in it). Informational only: there is no plan id and no order.",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "constraints": {
+            "$ref": "#/components/schemas/SelectionConstraintsIn"
+          },
+          "data_version": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Version"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/ScreenDefinition-Input"
+          },
+          "holdings": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SelectionHoldingIn"
+                },
+                "maxItems": 500,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holdings"
+          },
+          "portfolio_id": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Portfolio Id"
+          }
+        },
+        "required": [
+          "definition"
+        ],
+        "title": "ScreenSelectionRequest",
+        "type": "object"
+      },
       "ScreenUpdate": {
         "additionalProperties": false,
         "properties": {
@@ -13223,6 +14331,408 @@
         "title": "ScreenUpdate",
         "type": "object"
       },
+      "SelectionConstraintsIn": {
+        "additionalProperties": false,
+        "description": "C5's knobs, with C5's defaults. Decimals travel as strings or numbers, never floats.",
+        "properties": {
+          "capital_inr": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capital Inr"
+          },
+          "correlation_window": {
+            "default": 126,
+            "maximum": 756.0,
+            "minimum": 60.0,
+            "title": "Correlation Window",
+            "type": "integer"
+          },
+          "entry_rank": {
+            "default": 15,
+            "minimum": 1.0,
+            "title": "Entry Rank",
+            "type": "integer"
+          },
+          "max_adv_participation_pct": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": "1.0",
+            "title": "Max Adv Participation Pct"
+          },
+          "max_correlation": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": -1.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Correlation"
+          },
+          "max_names": {
+            "default": 15,
+            "minimum": 1.0,
+            "title": "Max Names",
+            "type": "integer"
+          },
+          "max_per_sector": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Per Sector"
+          },
+          "retention_rank": {
+            "default": 30,
+            "minimum": 1.0,
+            "title": "Retention Rank",
+            "type": "integer"
+          },
+          "turnover_budget_names": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turnover Budget Names"
+          }
+        },
+        "title": "SelectionConstraintsIn",
+        "type": "object"
+      },
+      "SelectionConstraintsOut": {
+        "additionalProperties": false,
+        "properties": {
+          "capital_inr": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capital Inr"
+          },
+          "correlation_window": {
+            "title": "Correlation Window",
+            "type": "integer"
+          },
+          "entry_rank": {
+            "title": "Entry Rank",
+            "type": "integer"
+          },
+          "max_adv_participation_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Adv Participation Pct"
+          },
+          "max_correlation": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Correlation"
+          },
+          "max_names": {
+            "title": "Max Names",
+            "type": "integer"
+          },
+          "max_per_sector": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Per Sector"
+          },
+          "retention_rank": {
+            "title": "Retention Rank",
+            "type": "integer"
+          },
+          "turnover_budget_names": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turnover Budget Names"
+          }
+        },
+        "required": [
+          "max_names",
+          "entry_rank",
+          "retention_rank",
+          "max_per_sector",
+          "capital_inr",
+          "max_adv_participation_pct",
+          "turnover_budget_names",
+          "max_correlation",
+          "correlation_window"
+        ],
+        "title": "SelectionConstraintsOut",
+        "type": "object"
+      },
+      "SelectionHoldingIn": {
+        "additionalProperties": false,
+        "description": "One inline holding. ``quantity`` is the full count (quantity + T1 + collateral).",
+        "properties": {
+          "quantity": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "symbol": {
+            "maxLength": 30,
+            "minLength": 1,
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "quantity"
+        ],
+        "title": "SelectionHoldingIn",
+        "type": "object"
+      },
+      "SelectionNoteOut": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "SelectionNoteOut",
+        "type": "object"
+      },
+      "SelectionRowOut": {
+        "additionalProperties": false,
+        "description": "One name's decision — ``ranking_selection.SelectionRow``. Decimals are strings.",
+        "properties": {
+          "action": {
+            "enum": [
+              "hold",
+              "exit",
+              "enter",
+              "skip"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "adv_participation_pct": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adv Participation Pct"
+          },
+          "correlation_peer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation Peer"
+          },
+          "current_quantity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Quantity"
+          },
+          "explanation": {
+            "title": "Explanation",
+            "type": "string"
+          },
+          "flags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Flags",
+            "type": "array"
+          },
+          "instrument_id": {
+            "title": "Instrument Id",
+            "type": "integer"
+          },
+          "max_correlation": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Correlation"
+          },
+          "proposed_qty": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed Qty"
+          },
+          "proposed_value_inr": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed Value Inr"
+          },
+          "quality_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quality Rank"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "sector": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sector"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "instrument_id",
+          "symbol",
+          "action",
+          "reasons",
+          "flags",
+          "explanation",
+          "quality_rank",
+          "score",
+          "sector",
+          "current_quantity",
+          "proposed_value_inr",
+          "proposed_qty",
+          "adv_participation_pct",
+          "max_correlation",
+          "correlation_peer"
+        ],
+        "title": "SelectionRowOut",
+        "type": "object"
+      },
       "SelectionSpec": {
         "additionalProperties": false,
         "description": "docs/10: ``{\"top_n\": 20, \"hold_buffer\": 10}``; \"0 = strict top-N\".",
@@ -13243,6 +14753,65 @@
           }
         },
         "title": "SelectionSpec",
+        "type": "object"
+      },
+      "SelectionSummaryOut": {
+        "additionalProperties": false,
+        "properties": {
+          "entries": {
+            "title": "Entries",
+            "type": "integer"
+          },
+          "exits": {
+            "title": "Exits",
+            "type": "integer"
+          },
+          "kept": {
+            "title": "Kept",
+            "type": "integer"
+          },
+          "sector_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Sector Counts",
+            "type": "object"
+          },
+          "skips": {
+            "title": "Skips",
+            "type": "integer"
+          },
+          "turnover_budget": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Turnover Budget"
+          },
+          "turnover_used": {
+            "title": "Turnover Used",
+            "type": "integer"
+          },
+          "unfilled_slots": {
+            "title": "Unfilled Slots",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kept",
+          "entries",
+          "exits",
+          "skips",
+          "turnover_used",
+          "turnover_budget",
+          "unfilled_slots",
+          "sector_counts"
+        ],
+        "title": "SelectionSummaryOut",
         "type": "object"
       },
       "SessionOut": {
@@ -18494,6 +20063,17 @@
         "title": "UpdatePostOut",
         "type": "object"
       },
+      "ValidationStatus": {
+        "description": "docs/ranking/PLAN.md C1 — what evidence stands behind a factor as a ranking input.\n\nPre-Phase-2 factors are ``legacy``; Phase-2 factors are ``research`` until leaf F's hold-out\nevidence (C8) moves them to ``validated`` or ``rejected``.",
+        "enum": [
+          "legacy",
+          "research",
+          "validated",
+          "rejected"
+        ],
+        "title": "ValidationStatus",
+        "type": "string"
+      },
       "VbtBacktestOut": {
         "properties": {
           "published": {
@@ -20502,6 +22082,18 @@
         ],
         "title": "WebhookEndpointWithSecretOut",
         "type": "object"
+      },
+      "WeightFamily": {
+        "description": "docs/ranking/PLAN.md C1 — the five families a composite ranking weights.\n\nDistinct from :class:`FactorFamily`, which is the display grouping of the Sort By dropdown\n(docs/08) and stays as it was. Every factor carries exactly one of these.",
+        "enum": [
+          "momentum",
+          "path_quality",
+          "trend_structure",
+          "participation",
+          "risk_execution"
+        ],
+        "title": "WeightFamily",
+        "type": "string"
       },
       "WeightMethod": {
         "description": "How the deployed money is split across the chosen names.\n\n``EQUAL`` / ``RANK`` / ``INV_VOL`` are the backtest's ``Weighting`` schemes under names this\nmodule can own (the backtest's values are lowercase and include ``marketcap``, which a\ncreate preview often cannot fill). ``SCORE`` is the screen's ranking factor — the algo path.\n``CUSTOM`` is the investor's own numbers, applied to the screen's names, never instead of them.",
@@ -35877,6 +37469,122 @@
         ]
       }
     },
+    "/api/v1/meta/ranking-presets": {
+      "get": {
+        "description": "docs/ranking/PLAN.md §1.5 / C6: the named presets with their promotion status.\n\nReference data like ``/meta/factors``: served straight from ``baskfy_core.ranking_presets``,\nno database, no principal. ``nse_momentum`` is absent because core refuses it (PLAN\ncorrection #8). ``patch`` is what the editor merges into a definition to apply one.",
+        "operationId": "getRankingPresets",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RankingPresetOut"
+                  },
+                  "title": "Response Getrankingpresets",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Named ranking presets",
+        "tags": [
+          "meta"
+        ]
+      }
+    },
     "/api/v1/meta/status": {
       "get": {
         "description": "docs/07: \"{ as_of, data_version, last_pipeline_run }\".\n\n``degraded`` is the extra member docs/11 §Reliability implies: \"if the pipeline fails, serve\nthe last good `data_version` with a banner\". The banner needs something to read, and this is\nit — the analytics endpoints keep answering from the last published version.\n\n**Why the ordering carries a second key.** A date can hold more than one run: a failure is\nretried, and ``open_run`` only reuses a run still ``running``. Ordering on ``trade_date``\nalone left the tie to the planner, so with four runs for 2026-09-11 on the box — three\nfailed, then one that passed the gate and published ``data_version`` 18 — this endpoint\npicked a *failed* one and served ``degraded: true`` for a day that had published\nsuccessfully. The banner then said the data was stale while ``as_of`` said otherwise, which\nis the one thing a freshness endpoint must never do. ``started_at`` decides, ``id`` breaks\na same-instant tie: the newest attempt is the one that describes today.",
@@ -39832,6 +41540,128 @@
         ]
       }
     },
+    "/api/v1/screens/explain": {
+      "post": {
+        "description": "docs/ranking/PLAN.md C6: ``ranking_engine.explain`` for ``symbol`` in this run.\n\nRanked exactly as ``/screens/preview`` ranks the same definition (one engine path,\n``screener.rank_definition``), so the drawer and the table cannot disagree. A symbol in the\nuniverse that failed a filter is explained with ``rank: null``; one outside it is a 404.",
+        "operationId": "explainScreenRow",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScreenExplainRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RankExplanationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Why one instrument ranks where it does",
+        "tags": [
+          "screens"
+        ]
+      }
+    },
     "/api/v1/screens/preview": {
       "post": {
         "description": "docs/07: \"run an unsaved definition (the edit form's live preview)\".\n\nNothing is persisted — there is no screen to attribute a ``screen_run`` row to, and a preview\nis a keystroke, not an event worth auditing.",
@@ -39949,6 +41779,128 @@
           }
         },
         "summary": "Run an unsaved definition",
+        "tags": [
+          "screens"
+        ]
+      }
+    },
+    "/api/v1/screens/selection": {
+      "post": {
+        "description": "docs/ranking/PLAN.md C5/C6: holds, exits, entries and skips, each with its reasons.\n\n**Informational only.** The response carries no plan id and no route accepts it; ranks and\nscores are the engine's, unmodified. ``portfolio_id`` must be one of the caller's portfolios\n(not-yours is a 404, as on ``/portfolios``); inline ``holdings`` resolve by symbol.",
+        "operationId": "selectOverScreen",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScreenSelectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScreenSelectionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Portfolio fit over a ranked screen (informational)",
         "tags": [
           "screens"
         ]

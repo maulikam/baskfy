@@ -129,6 +129,126 @@
       "title": "ExtraFactor",
       "type": "object"
     },
+    "FactorRange": {
+      "additionalProperties": false,
+      "description": "An inclusive ``[min, max]`` eligibility filter on one factor (docs/ranking/PLAN.md C3).\n\nThis is where a non-rankable factor belongs: ``excess_ret_12m >= 0`` is a meaningful gate even\nthough a common-index subtraction can never reorder a list (PLAN correction 1). NULL never\nsatisfies a range (docs/06 step 4).",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "factor": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Factor",
+          "type": "string"
+        },
+        "max": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max"
+        },
+        "min": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min"
+        }
+      },
+      "required": [
+        "factor"
+      ],
+      "title": "FactorRange",
+      "type": "object"
+    },
+    "FamilyWeights": {
+      "additionalProperties": false,
+      "description": "Relative weight per weight family for ``composite`` (docs/ranking/PLAN.md C3/C4).\n\n``None`` means \"no opinion\": the ranking engine gives that family the mean of the explicit\nweights of the families present (or 1 when none is explicit), then normalises the shares of the\nfamilies that actually have terms to sum to one. That makes the scale irrelevant — ``60/40`` and\n``0.6/0.4`` mean the same — and three momentum terms cannot triple momentum's share.",
+      "properties": {
+        "momentum": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Momentum"
+        },
+        "participation": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Participation"
+        },
+        "path_quality": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path Quality"
+        },
+        "risk_execution": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Risk Execution"
+        },
+        "trend_structure": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trend Structure"
+        }
+      },
+      "title": "FamilyWeights",
+      "type": "object"
+    },
     "MovingAverageFilter": {
       "additionalProperties": false,
       "description": "Eight independent switches, AND-combined (docs/01 §2.3).",
@@ -300,6 +420,65 @@
       "title": "RangeFilter",
       "type": "object"
     },
+    "RankingTerm": {
+      "additionalProperties": false,
+      "description": "One explicit ranking term (docs/ranking/PLAN.md C3).\n\n``preference`` says how a raw value becomes a score in ``[0, 1]`` (C4 step 3): ``higher`` and\n``lower`` are percentiles, ``target_range`` scores distance from ``[target_min, target_max]``.\n``weight`` is only meaningful in ``composite`` mode, so any other mode refuses a non-default\nweight rather than silently ignoring it.",
+      "properties": {
+        "factor": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Factor",
+          "type": "string"
+        },
+        "preference": {
+          "enum": [
+            "higher",
+            "lower",
+            "target_range"
+          ],
+          "title": "Preference",
+          "type": "string"
+        },
+        "target_max": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Max"
+        },
+        "target_min": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Min"
+        },
+        "weight": {
+          "default": 1.0,
+          "exclusiveMinimum": 0,
+          "maximum": 100,
+          "title": "Weight",
+          "type": "number"
+        }
+      },
+      "required": [
+        "factor",
+        "preference"
+      ],
+      "title": "RankingTerm",
+      "type": "object"
+    },
     "TopRiskFilter": {
       "additionalProperties": false,
       "description": "\"Ignore Top Beta / Top Volatility\" — a precomputed per-universe flag (docs/06 step 4).",
@@ -351,11 +530,29 @@
       "title": "Custom Filters",
       "type": "array"
     },
+    "factor_ranges": {
+      "items": {
+        "$ref": "#/$defs/FactorRange"
+      },
+      "title": "Factor Ranges",
+      "type": "array"
+    },
     "factor_three": {
       "$ref": "#/$defs/ExtraFactor"
     },
     "factor_two": {
       "$ref": "#/$defs/ExtraFactor"
+    },
+    "family_weights": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FamilyWeights"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "historical_date": {
       "anyOf": [
@@ -433,6 +630,16 @@
       "default": null,
       "title": "Min Return 1Y"
     },
+    "missing_data": {
+      "default": "penalize",
+      "enum": [
+        "penalize",
+        "neutral",
+        "exclude"
+      ],
+      "title": "Missing Data",
+      "type": "string"
+    },
     "moving_average": {
       "$ref": "#/$defs/MovingAverageFilter"
     },
@@ -464,6 +671,33 @@
       ],
       "title": "Ranking Scope",
       "type": "string"
+    },
+    "ranking_terms": {
+      "items": {
+        "$ref": "#/$defs/RankingTerm"
+      },
+      "title": "Ranking Terms",
+      "type": "array"
+    },
+    "regime_in": {
+      "anyOf": [
+        {
+          "items": {
+            "enum": [
+              "BULL",
+              "NEUTRAL",
+              "BEAR"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Regime In"
     },
     "series": {
       "items": {

@@ -191,9 +191,7 @@ async def test_live_prices_by_instrument_quotes_names_the_book_omitted(
         lambda _b: HoldingsResult(rows=(_row("GOOD", "10"),), source="live"),
     )
     monkeypatch.setattr(live_prices, "quotes_permitted", lambda: True)
-    monkeypatch.setattr(
-        live_prices, "_quote_symbols", lambda symbols: {symbols[0]: Decimal("99")}
-    )
+    monkeypatch.setattr(live_prices, "_quote_symbols", lambda symbols: {symbols[0]: Decimal("99")})
 
     class _Row:
         def __init__(self, instrument_id: int, symbol: str) -> None:
@@ -222,9 +220,7 @@ async def test_live_marks_for_symbols_uses_the_book_then_quotes(
         lambda _b: HoldingsResult(rows=(_row("GOOD", "10"),), source="live"),
     )
     monkeypatch.setattr(live_prices, "quotes_permitted", lambda: True)
-    monkeypatch.setattr(
-        live_prices, "_quote_symbols", lambda symbols: {symbols[0]: Decimal("99")}
-    )
+    monkeypatch.setattr(live_prices, "_quote_symbols", lambda symbols: {symbols[0]: Decimal("99")})
     marks = await live_prices.live_marks_for_symbols(["good", "CASONLY", "good"])
     assert marks == {"GOOD": Decimal("10"), "CASONLY": Decimal("99")}
 

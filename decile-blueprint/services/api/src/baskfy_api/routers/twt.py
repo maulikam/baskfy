@@ -415,7 +415,7 @@ async def get_twt_today(
         execution_enabled=settings.twt_execution_enabled,
     )
     marks = await live_marks_for_symbols(
-        [row.symbol for row in (*view.tight, *view.positions)]
+        [*(row.symbol for row in view.tight), *(row.symbol for row in view.positions)]
     )
     return _json_decimals_as_strings(
         TwtTodayOut(
@@ -452,8 +452,7 @@ async def get_twt_today(
                 for row in view.tight
             ],
             positions=[
-                _position_out(row, marks.get(row.symbol.strip().upper()))
-                for row in view.positions
+                _position_out(row, marks.get(row.symbol.strip().upper())) for row in view.positions
             ],
             half_size=TwtHalfSizeOut(
                 entries_left=view.half_size.entries_left,

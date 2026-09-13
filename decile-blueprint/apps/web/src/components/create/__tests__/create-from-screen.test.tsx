@@ -61,6 +61,16 @@ function runResponse(rowCount: number): ScreenRunResponse {
     data_version: 41,
     result_count: rowCount,
     sorting_factor: { key: "sharpe_12m", label: "Sharpe 12M" },
+    provenance: {
+      universe: "nifty-500",
+      universe_label: "NIFTY 500",
+      as_of: "2026-08-18",
+      data_version: 41,
+      ranking_engine_version: "legacy-sql",
+      desk_score_version: null,
+      scope: "filtered_results",
+      mode: "composite",
+    },
     rows: Array.from({ length: rowCount }, (_, i) => ({
       rank: i + 1,
       symbol: `SYM${i + 1}`,

@@ -119,10 +119,33 @@ export const FILTER_GROUPS: readonly FilterGroup[] = [
     activeCount: (d) => (rangeActive(d.price) ? 1 : 0),
   },
   {
+    id: "factor-ranges",
+    title: "Factor Ranges",
+    fields: ["factor_ranges"],
+    activeCount: (d) => d.factor_ranges.filter((range) => range.enabled).length,
+  },
+  {
+    id: "regime",
+    title: "Market Regime",
+    fields: ["regime_in"],
+    activeCount: (d) => (d.regime_in === null ? 0 : 1),
+  },
+  {
     id: "multi-factor",
     title: "Multi-Factor Combined Ranking",
     fields: ["factor_two", "factor_three"],
     activeCount: (d) => (d.factor_two.enabled ? 1 : 0) + (d.factor_three.enabled ? 1 : 0),
+  },
+  {
+    // docs/ranking/PLAN.md C3. Scope always has a value, so it is not counted as "active".
+    id: "ranking",
+    title: "Ranking",
+    fields: ["ranking_mode", "ranking_scope", "ranking_terms", "family_weights", "missing_data"],
+    activeCount: (d) =>
+      d.ranking_terms.length +
+      (d.ranking_mode === "composite" ? 0 : 1) +
+      (d.family_weights === null ? 0 : 1) +
+      (d.missing_data === "penalize" ? 0 : 1),
   },
   {
     id: "historical",

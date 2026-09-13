@@ -2258,6 +2258,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/meta/ranking-presets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Named ranking presets
+         * @description docs/ranking/PLAN.md §1.5 / C6: the named presets with their promotion status.
+         *
+         *     Reference data like ``/meta/factors``: served straight from ``baskfy_core.ranking_presets``,
+         *     no database, no principal. ``nse_momentum`` is absent because core refuses it (PLAN
+         *     correction #8). ``patch`` is what the editor merges into a definition to apply one.
+         */
+        get: operations["getRankingPresets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/meta/status": {
         parameters: {
             query?: never;
@@ -3008,6 +3032,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/screens/explain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Why one instrument ranks where it does
+         * @description docs/ranking/PLAN.md C6: ``ranking_engine.explain`` for ``symbol`` in this run.
+         *
+         *     Ranked exactly as ``/screens/preview`` ranks the same definition (one engine path,
+         *     ``screener.rank_definition``), so the drawer and the table cannot disagree. A symbol in the
+         *     universe that failed a filter is explained with ``rank: null``; one outside it is a 404.
+         */
+        post: operations["explainScreenRow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/screens/preview": {
         parameters: {
             query?: never;
@@ -3025,6 +3073,30 @@ export interface paths {
          *     is a keystroke, not an event worth auditing.
          */
         post: operations["previewScreen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/screens/selection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Portfolio fit over a ranked screen (informational)
+         * @description docs/ranking/PLAN.md C5/C6: holds, exits, entries and skips, each with its reasons.
+         *
+         *     **Informational only.** The response carries no plan id and no route accepts it; ranks and
+         *     scores are the engine's, unmodified. ``portfolio_id`` must be one of the caller's portfolios
+         *     (not-yours is a 404, as on ``/portfolios``); inline ``holdings`` resolve by symbol.
+         */
+        post: operations["selectOverScreen"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5553,6 +5625,17 @@ export interface components {
             /** Subscriptions */
             subscriptions: components["schemas"]["JsonValue"][];
         };
+        /** DataQualityOut */
+        DataQualityOut: {
+            /** Insufficient History */
+            insufficient_history: boolean;
+            /** Missing Factors */
+            missing_factors: string[];
+            /** Recent Corporate Action */
+            recent_corporate_action: boolean;
+            /** Stale Price */
+            stale_price: boolean;
+        };
         /** DataVersionListOut */
         DataVersionListOut: {
             /** Current */
@@ -5608,6 +5691,32 @@ export interface components {
              * @enum {string}
              */
             status: "scheduled" | "cancelled";
+        };
+        /**
+         * DeskBlockOut
+         * @description The book's stored ``desk_score_daily`` row for the instrument — never re-scored (C2).
+         */
+        DeskBlockOut: {
+            /** A Trend */
+            a_trend: number | null;
+            /** B Momentum */
+            b_momentum: number | null;
+            /** C Sharpe */
+            c_sharpe: number | null;
+            /** D Consistency */
+            d_consistency: number | null;
+            /** E Liquidity */
+            e_liquidity: number | null;
+            /** Eligible */
+            eligible: boolean;
+            /** F Penalty */
+            f_penalty: number | null;
+            /** Rank */
+            rank: number | null;
+            /** Reject */
+            reject: string;
+            /** Score */
+            score: number | null;
         };
         /**
          * DeskHoldingOut
@@ -5847,6 +5956,20 @@ export interface components {
             /** Pending Action Id */
             pending_action_id?: number | null;
         };
+        /** EligibilityFailureOut */
+        EligibilityFailureOut: {
+            /** Detail */
+            detail: string;
+            /** Filter */
+            filter: string;
+        };
+        /** EligibilityOut */
+        EligibilityOut: {
+            /** Failures */
+            failures: components["schemas"]["EligibilityFailureOut"][];
+            /** Passed */
+            passed: boolean;
+        };
         /** EnabledStubOut */
         EnabledStubOut: {
             /**
@@ -6042,8 +6165,15 @@ export interface components {
         /**
          * FactorOut
          * @description docs/07: "factor registry (key, label, family, unit, higher_is_better)".
+         *
+         *     ``preference`` is the ranking-engine addition (docs/ranking/PLAN.md): higher / lower /
+         *     target_range / eligibility. ``higher_is_better`` stays for the Sort Direction default.
+         *     ``rankable``, ``weight_family``, ``validation_status`` and ``definition`` are C1's registry
+         *     fields (docs/ranking/PLAN.md C6 publishes them).
          */
         FactorOut: {
+            /** Definition */
+            definition: string;
             /** Family */
             family: string;
             /** Higher Is Better */
@@ -6052,13 +6182,44 @@ export interface components {
             key: string;
             /** Label */
             label: string;
-            /**
-             * Preference
-             * @description higher | lower | target_range | eligibility (docs/ranking/PLAN.md).
-             */
-            preference: string;
+            preference: components["schemas"]["FactorPreference"];
+            /** Rankable */
+            rankable: boolean;
             /** Unit */
             unit: string;
+            validation_status: components["schemas"]["ValidationStatus"];
+            weight_family: components["schemas"]["WeightFamily"];
+        };
+        /**
+         * FactorPreference
+         * @description How a factor should be used when ranking or filtering.
+         *
+         *     * ``higher`` / ``lower`` — monotonic sort preference (Sort By direction still overrides).
+         *     * ``target_range`` — larger is not better; prefer a band (e.g. ATR-normalised extension).
+         *     * ``eligibility`` — gate only; never a sort key by itself.
+         * @enum {string}
+         */
+        FactorPreference: "higher" | "lower" | "target_range" | "eligibility";
+        /**
+         * FactorRange
+         * @description An inclusive ``[min, max]`` eligibility filter on one factor (docs/ranking/PLAN.md C3).
+         *
+         *     This is where a non-rankable factor belongs: ``excess_ret_12m >= 0`` is a meaningful gate even
+         *     though a common-index subtraction can never reorder a list (PLAN correction 1). NULL never
+         *     satisfies a range (docs/06 step 4).
+         */
+        FactorRange: {
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Factor */
+            factor: string;
+            /** Max */
+            max?: number | null;
+            /** Min */
+            min?: number | null;
         };
         /**
          * FactsheetOut
@@ -6103,6 +6264,27 @@ export interface components {
             undecided: string[];
             /** Volatility */
             volatility: components["schemas"]["CellOut"][];
+        };
+        /**
+         * FamilyWeights
+         * @description Relative weight per weight family for ``composite`` (docs/ranking/PLAN.md C3/C4).
+         *
+         *     ``None`` means "no opinion": the ranking engine gives that family the mean of the explicit
+         *     weights of the families present (or 1 when none is explicit), then normalises the shares of the
+         *     families that actually have terms to sum to one. That makes the scale irrelevant — ``60/40`` and
+         *     ``0.6/0.4`` mean the same — and three momentum terms cannot triple momentum's share.
+         */
+        FamilyWeights: {
+            /** Momentum */
+            momentum?: number | null;
+            /** Participation */
+            participation?: number | null;
+            /** Path Quality */
+            path_quality?: number | null;
+            /** Risk Execution */
+            risk_execution?: number | null;
+            /** Trend Structure */
+            trend_structure?: number | null;
         };
         /** FeeLedgerOut */
         FeeLedgerOut: {
@@ -8205,6 +8387,40 @@ export interface components {
             to?: string | null;
         };
         /**
+         * RankExplanationOut
+         * @description ``ranking_engine.RankExplanation``, field for field, plus docs/07's analytics envelope.
+         *
+         *     ``rank`` is ``null`` for a row that is in the universe but not in the results (it failed a
+         *     filter, or the book rejected it) — ``eligibility.failures`` says why.
+         */
+        RankExplanationOut: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            data_quality: components["schemas"]["DataQualityOut"];
+            /** Data Version */
+            data_version: number;
+            /** Deductions */
+            deductions: string[];
+            desk: components["schemas"]["DeskBlockOut"] | null;
+            eligibility: components["schemas"]["EligibilityOut"];
+            /** Instrument Id */
+            instrument_id: number;
+            /** Positives */
+            positives: string[];
+            provenance: components["schemas"]["RankProvenanceOut"];
+            /** Rank */
+            rank: number | null;
+            /** Symbol */
+            symbol: string | null;
+            /** Terms */
+            terms: components["schemas"]["RankTermOut"][];
+            /** Total */
+            total: number | null;
+        };
+        /**
          * RankHistoryOut
          * @description docs/07: "this stock's rank over time in a screen".
          */
@@ -8229,6 +8445,109 @@ export interface components {
             rank: number;
             /** Result Count */
             result_count: number;
+        };
+        /**
+         * RankProvenanceOut
+         * @description ``ranking_engine.Provenance``: what produced the explanation.
+         */
+        RankProvenanceOut: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Data Version */
+            data_version: number | null;
+            /** Desk Score Version */
+            desk_score_version: string | null;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "single" | "sequential" | "composite";
+            /** Nse Momentum Version */
+            nse_momentum_version: string;
+            /** Ranking Engine Version */
+            ranking_engine_version: string;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "filtered_results" | "fixed_universe" | "within_sector";
+            /** Universe */
+            universe: string;
+        };
+        /**
+         * RankTermOut
+         * @description One ranking term's part in a row's rank — ``ranking_engine.TermExplanation``.
+         */
+        RankTermOut: {
+            /** Contribution */
+            contribution: number | null;
+            /** Effective Weight */
+            effective_weight: number | null;
+            /** Factor */
+            factor: string;
+            /** Label */
+            label: string;
+            /** Missing */
+            missing: boolean;
+            /** Preference */
+            preference: string;
+            /** Raw */
+            raw: number | null;
+            /** Transformed */
+            transformed: number | null;
+            /** Weight Family */
+            weight_family: string;
+        };
+        /**
+         * RankingPresetOut
+         * @description One named ranking preset — ``baskfy_core.ranking_presets`` (docs/ranking/PLAN.md §1.5).
+         *
+         *     ``patch`` is merged into a ``ScreenDefinition`` payload to apply the preset; ``status`` is
+         *     ``ready`` (safe as Sort By today) or ``research`` (a starting point, not a product default).
+         */
+        RankingPresetOut: {
+            /** Description */
+            description: string;
+            /** Key */
+            key: string;
+            /** Patch */
+            patch: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+            /** Sort By */
+            sort_by: string;
+            /** Status */
+            status: string;
+        };
+        /**
+         * RankingTerm
+         * @description One explicit ranking term (docs/ranking/PLAN.md C3).
+         *
+         *     ``preference`` says how a raw value becomes a score in ``[0, 1]`` (C4 step 3): ``higher`` and
+         *     ``lower`` are percentiles, ``target_range`` scores distance from ``[target_min, target_max]``.
+         *     ``weight`` is only meaningful in ``composite`` mode, so any other mode refuses a non-default
+         *     weight rather than silently ignoring it.
+         */
+        RankingTerm: {
+            /** Factor */
+            factor: string;
+            /**
+             * Preference
+             * @enum {string}
+             */
+            preference: "higher" | "lower" | "target_range";
+            /** Target Max */
+            target_max?: number | null;
+            /** Target Min */
+            target_min?: number | null;
+            /**
+             * Weight
+             * @default 1
+             */
+            weight: number;
         };
         /**
          * RebalanceDay
@@ -8902,8 +9221,11 @@ export interface components {
             circuits?: components["schemas"]["CircuitsFilter"];
             /** Custom Filters */
             custom_filters?: components["schemas"]["CustomFilter"][];
+            /** Factor Ranges */
+            factor_ranges?: components["schemas"]["FactorRange"][];
             factor_three?: components["schemas"]["ExtraFactor"];
             factor_two?: components["schemas"]["ExtraFactor"];
+            family_weights?: components["schemas"]["FamilyWeights"] | null;
             /** Historical Date */
             historical_date?: string | null;
             /**
@@ -8923,10 +9245,32 @@ export interface components {
             median_volume_1y?: number | null;
             /** Min Return 1Y */
             min_return_1y?: number | string | null;
+            /**
+             * Missing Data
+             * @default penalize
+             * @enum {string}
+             */
+            missing_data: "penalize" | "neutral" | "exclude";
             moving_average?: components["schemas"]["MovingAverageFilter"];
             pe?: components["schemas"]["PeFilter-Input"];
             positive_days?: components["schemas"]["PositiveDaysFilter"];
             price?: components["schemas"]["RangeFilter-Input"];
+            /**
+             * Ranking Mode
+             * @default composite
+             * @enum {string}
+             */
+            ranking_mode: "single" | "sequential" | "composite";
+            /**
+             * Ranking Scope
+             * @default filtered_results
+             * @enum {string}
+             */
+            ranking_scope: "filtered_results" | "fixed_universe" | "within_sector";
+            /** Ranking Terms */
+            ranking_terms?: components["schemas"]["RankingTerm"][];
+            /** Regime In */
+            regime_in?: ("BULL" | "NEUTRAL" | "BEAR")[] | null;
             /** Series */
             series?: string[];
             /** Sort By */
@@ -8957,8 +9301,11 @@ export interface components {
             circuits?: components["schemas"]["CircuitsFilter"];
             /** Custom Filters */
             custom_filters?: components["schemas"]["CustomFilter"][];
+            /** Factor Ranges */
+            factor_ranges?: components["schemas"]["FactorRange"][];
             factor_three?: components["schemas"]["ExtraFactor"];
             factor_two?: components["schemas"]["ExtraFactor"];
+            family_weights?: components["schemas"]["FamilyWeights"] | null;
             /** Historical Date */
             historical_date?: string | null;
             /**
@@ -8978,10 +9325,32 @@ export interface components {
             median_volume_1y?: number | null;
             /** Min Return 1Y */
             min_return_1y?: string | null;
+            /**
+             * Missing Data
+             * @default penalize
+             * @enum {string}
+             */
+            missing_data: "penalize" | "neutral" | "exclude";
             moving_average?: components["schemas"]["MovingAverageFilter"];
             pe?: components["schemas"]["PeFilter-Output"];
             positive_days?: components["schemas"]["PositiveDaysFilter"];
             price?: components["schemas"]["RangeFilter-Output"];
+            /**
+             * Ranking Mode
+             * @default composite
+             * @enum {string}
+             */
+            ranking_mode: "single" | "sequential" | "composite";
+            /**
+             * Ranking Scope
+             * @default filtered_results
+             * @enum {string}
+             */
+            ranking_scope: "filtered_results" | "fixed_universe" | "within_sector";
+            /** Ranking Terms */
+            ranking_terms?: components["schemas"]["RankingTerm"][];
+            /** Regime In */
+            regime_in?: ("BULL" | "NEUTRAL" | "BEAR")[] | null;
             /** Series */
             series?: string[];
             /** Sort By */
@@ -8997,6 +9366,22 @@ export interface components {
         ScreenDuplicate: {
             /** Name */
             name?: string | null;
+        };
+        /**
+         * ScreenExplainRequest
+         * @description C6: ``POST /screens/explain {definition, symbol, as_of?, data_version?}``.
+         *
+         *     ``definition`` must carry ``ranking_terms``: an explanation is the ranking engine's account of
+         *     a row, and docs/06's SQL ranking has no term scores to explain.
+         */
+        ScreenExplainRequest: {
+            /** As Of */
+            as_of?: string | null;
+            /** Data Version */
+            data_version?: number | null;
+            definition: components["schemas"]["ScreenDefinition-Input"];
+            /** Symbol */
+            symbol: string;
         };
         /**
          * ScreenListOut
@@ -9031,6 +9416,42 @@ export interface components {
             updated_at: string;
         };
         /**
+         * ScreenProvenanceOut
+         * @description docs/ranking/PLAN.md C6: what produced a screen payload.
+         *
+         *     ``ranking_engine_version`` is ``baskfy_core.ranking_engine.RANKING_ENGINE_VERSION`` for a
+         *     definition with ``ranking_terms`` and ``"legacy-sql"`` for docs/06's SQL ranking.
+         *     ``desk_score_version`` is the ``desk_score_daily.score_version`` read when the book's SCORE
+         *     decides the order, and ``null`` when it does not.
+         */
+        ScreenProvenanceOut: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Data Version */
+            data_version: number;
+            /** Desk Score Version */
+            desk_score_version: string | null;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "single" | "sequential" | "composite";
+            /** Ranking Engine Version */
+            ranking_engine_version: string;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "filtered_results" | "fixed_universe" | "within_sector";
+            /** Universe */
+            universe: string;
+            /** Universe Label */
+            universe_label: string;
+        };
+        /**
          * ScreenRunPage
          * @description docs/07 §Conventions: `{ "data": [...], "next_cursor": "…" }`.
          */
@@ -9042,7 +9463,7 @@ export interface components {
         };
         /**
          * ScreenRunResponse
-         * @description docs/07 §"Running a screen", field for field.
+         * @description docs/07 §"Running a screen", field for field, plus C6's ``provenance``.
          */
         ScreenRunResponse: {
             /**
@@ -9054,6 +9475,7 @@ export interface components {
             columns: string[];
             /** Data Version */
             data_version: number;
+            provenance: components["schemas"]["ScreenProvenanceOut"];
             /** Result Count */
             result_count: number;
             /** Rows */
@@ -9099,6 +9521,61 @@ export interface components {
             /** Result Count */
             result_count: number;
         };
+        /**
+         * ScreenSelectionOut
+         * @description ``ranking_selection.SelectionResult.to_dict()`` plus the run it was computed over.
+         *
+         *     ``informational_only`` is always ``true``: nothing here is a plan, and no route takes it to
+         *     an order (non-negotiable #1). ``holdings_without_quantity`` names portfolio holdings that
+         *     record no quantity: C5 needs a positive quantity to call a name held, so they are left out of
+         *     the book and said so rather than dropped in silence.
+         */
+        ScreenSelectionOut: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            constraints: components["schemas"]["SelectionConstraintsOut"];
+            /** Data Version */
+            data_version: number;
+            /** Holdings Without Quantity */
+            holdings_without_quantity: string[];
+            /**
+             * Informational Only
+             * @constant
+             */
+            informational_only: true;
+            /** Notes */
+            notes: components["schemas"]["SelectionNoteOut"][];
+            /** Portfolio Id */
+            portfolio_id: number | null;
+            provenance: components["schemas"]["ScreenProvenanceOut"];
+            /** Rows */
+            rows: components["schemas"]["SelectionRowOut"][];
+            summary: components["schemas"]["SelectionSummaryOut"];
+            /** Version */
+            version: string;
+        };
+        /**
+         * ScreenSelectionRequest
+         * @description C6: ``POST /screens/selection {definition, as_of?, portfolio_id? | holdings?, constraints}``.
+         *
+         *     Exactly one of ``portfolio_id`` (one of the caller's portfolios) and ``holdings`` (an empty
+         *     list is a book with nothing in it). Informational only: there is no plan id and no order.
+         */
+        ScreenSelectionRequest: {
+            /** As Of */
+            as_of?: string | null;
+            constraints?: components["schemas"]["SelectionConstraintsIn"];
+            /** Data Version */
+            data_version?: number | null;
+            definition: components["schemas"]["ScreenDefinition-Input"];
+            /** Holdings */
+            holdings?: components["schemas"]["SelectionHoldingIn"][] | null;
+            /** Portfolio Id */
+            portfolio_id?: number | null;
+        };
         /** ScreenUpdate */
         ScreenUpdate: {
             /** Columns */
@@ -9106,6 +9583,122 @@ export interface components {
             definition?: components["schemas"]["ScreenDefinition-Input"] | null;
             /** Name */
             name?: string | null;
+        };
+        /**
+         * SelectionConstraintsIn
+         * @description C5's knobs, with C5's defaults. Decimals travel as strings or numbers, never floats.
+         */
+        SelectionConstraintsIn: {
+            /** Capital Inr */
+            capital_inr?: number | string | null;
+            /**
+             * Correlation Window
+             * @default 126
+             */
+            correlation_window: number;
+            /**
+             * Entry Rank
+             * @default 15
+             */
+            entry_rank: number;
+            /**
+             * Max Adv Participation Pct
+             * @default 1.0
+             */
+            max_adv_participation_pct: number | string | null;
+            /** Max Correlation */
+            max_correlation?: number | null;
+            /**
+             * Max Names
+             * @default 15
+             */
+            max_names: number;
+            /** Max Per Sector */
+            max_per_sector?: number | null;
+            /**
+             * Retention Rank
+             * @default 30
+             */
+            retention_rank: number;
+            /** Turnover Budget Names */
+            turnover_budget_names?: number | null;
+        };
+        /** SelectionConstraintsOut */
+        SelectionConstraintsOut: {
+            /** Capital Inr */
+            capital_inr: string | null;
+            /** Correlation Window */
+            correlation_window: number;
+            /** Entry Rank */
+            entry_rank: number;
+            /** Max Adv Participation Pct */
+            max_adv_participation_pct: string | null;
+            /** Max Correlation */
+            max_correlation: number | null;
+            /** Max Names */
+            max_names: number;
+            /** Max Per Sector */
+            max_per_sector: number | null;
+            /** Retention Rank */
+            retention_rank: number;
+            /** Turnover Budget Names */
+            turnover_budget_names: number | null;
+        };
+        /**
+         * SelectionHoldingIn
+         * @description One inline holding. ``quantity`` is the full count (quantity + T1 + collateral).
+         */
+        SelectionHoldingIn: {
+            /** Quantity */
+            quantity: number | string;
+            /** Symbol */
+            symbol: string;
+        };
+        /** SelectionNoteOut */
+        SelectionNoteOut: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+        };
+        /**
+         * SelectionRowOut
+         * @description One name's decision — ``ranking_selection.SelectionRow``. Decimals are strings.
+         */
+        SelectionRowOut: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "hold" | "exit" | "enter" | "skip";
+            /** Adv Participation Pct */
+            adv_participation_pct: string | null;
+            /** Correlation Peer */
+            correlation_peer: string | null;
+            /** Current Quantity */
+            current_quantity: string | null;
+            /** Explanation */
+            explanation: string;
+            /** Flags */
+            flags: string[];
+            /** Instrument Id */
+            instrument_id: number;
+            /** Max Correlation */
+            max_correlation: number | null;
+            /** Proposed Qty */
+            proposed_qty: number | null;
+            /** Proposed Value Inr */
+            proposed_value_inr: string | null;
+            /** Quality Rank */
+            quality_rank: number | null;
+            /** Reasons */
+            reasons: string[];
+            /** Score */
+            score: number | null;
+            /** Sector */
+            sector: string | null;
+            /** Symbol */
+            symbol: string;
         };
         /**
          * SelectionSpec
@@ -9122,6 +9715,27 @@ export interface components {
              * @default 20
              */
             top_n: number;
+        };
+        /** SelectionSummaryOut */
+        SelectionSummaryOut: {
+            /** Entries */
+            entries: number;
+            /** Exits */
+            exits: number;
+            /** Kept */
+            kept: number;
+            /** Sector Counts */
+            sector_counts: {
+                [key: string]: number;
+            };
+            /** Skips */
+            skips: number;
+            /** Turnover Budget */
+            turnover_budget: number | null;
+            /** Turnover Used */
+            turnover_used: number;
+            /** Unfilled Slots */
+            unfilled_slots: number;
         };
         /**
          * SessionOut
@@ -11022,6 +11636,15 @@ export interface components {
             /** Title */
             title: string;
         };
+        /**
+         * ValidationStatus
+         * @description docs/ranking/PLAN.md C1 — what evidence stands behind a factor as a ranking input.
+         *
+         *     Pre-Phase-2 factors are ``legacy``; Phase-2 factors are ``research`` until leaf F's hold-out
+         *     evidence (C8) moves them to ``validated`` or ``rejected``.
+         * @enum {string}
+         */
+        ValidationStatus: "legacy" | "research" | "validated" | "rejected";
         /** VbtBacktestOut */
         VbtBacktestOut: {
             published: components["schemas"]["VbtPublishedOut"];
@@ -11692,6 +12315,15 @@ export interface components {
             /** Signing Secret */
             signing_secret: string;
         };
+        /**
+         * WeightFamily
+         * @description docs/ranking/PLAN.md C1 — the five families a composite ranking weights.
+         *
+         *     Distinct from :class:`FactorFamily`, which is the display grouping of the Sort By dropdown
+         *     (docs/08) and stays as it was. Every factor carries exactly one of these.
+         * @enum {string}
+         */
+        WeightFamily: "momentum" | "path_quality" | "trend_structure" | "participation" | "risk_execution";
         /**
          * WeightMethod
          * @description How the deployed money is split across the chosen names.
@@ -23976,6 +24608,107 @@ export interface operations {
             };
         };
     };
+    getRankingPresets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RankingPresetOut"][];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     getStatus: {
         parameters: {
             query?: never;
@@ -27207,6 +27940,111 @@ export interface operations {
             };
         };
     };
+    explainScreenRow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScreenExplainRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RankExplanationOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
     previewScreen: {
         parameters: {
             query?: never;
@@ -27227,6 +28065,111 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScreenRunResponse"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    selectOverScreen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScreenSelectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScreenSelectionOut"];
                 };
             };
             /** @description Bad request */

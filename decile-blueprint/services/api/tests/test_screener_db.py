@@ -23,7 +23,7 @@ from screener_helpers import (
     make_row,
     requires_db,
 )
-from sqlalchemy import select, update
+from sqlalchemy import SmallInteger, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.screener import (
@@ -33,7 +33,7 @@ from baskfy_api.screener import (
     resolve_as_of,
     run_screen,
 )
-from baskfy_core.factor_registry import FACTORS, SORT_FACTOR_KEYS
+from baskfy_core.factor_registry import FACTORS, SORT_FACTOR_KEYS, ValidationStatus
 from baskfy_core.models import FactorDaily, IndexMemberDaily, PipelineRun
 from baskfy_core.screen_definition import (
     ExtraFactor,
@@ -131,7 +131,9 @@ def _row_values(i: int) -> dict[str, object]:
         "high_ath": Decimal(300 + i),
         "median_vol_12m": 10_000_000 * (i + 1),
         "vol_day_val": 1_000_000 * (i + 1),
-        "vol_avg_1w": 1_100_000 * (i + 1),
+        # Quadratic, so VOLUME EXPANSION 1 WEEK / 1 YEAR (vol_avg_1w / vol_avg_12m) rises with
+        # ``i`` too; a linear 1w over a linear 12m is a constant ratio and ranks nothing.
+        "vol_avg_1w": 1_100_000 * (i + 1) ** 2,
         "ret_12m_minus_1m": Decimal(20 + i),
         "ret_12m_minus_2m": Decimal(30 + i),
         "regime": "BULL",
@@ -145,7 +147,15 @@ def _row_values(i: int) -> dict[str, object]:
         values[f"circuits_{months}m"] = i
         values[f"vol_avg_{months}m"] = 1_200_000 * (i + 1)
     for length in (20, 50, 100, 200):
-        values[f"ma_{length}"] = Decimal(100 - length // 10 + i)
+        # Half a point a row, so close (one point a row) pulls away from every average and
+        # DISTANCE FROM MA n = (close / ma_n - 1) x 100 rises with ``i``. The 20 > 50 > 100 > 200
+        # stack still holds on every row.
+        values[f"ma_{length}"] = Decimal(100 - length // 10) + Decimal(i) / 2
+    # docs/ranking/PLAN.md C1: the stored ranking factors (migration 0046), one step a row.
+    for factor in FACTORS.values():
+        if factor.validation_status is ValidationStatus.RESEARCH and factor.is_stored:
+            column_type = FactorDaily.__table__.c[factor.key].type
+            values[factor.key] = i + 1 if isinstance(column_type, SmallInteger) else Decimal(i + 1)
     return values
 
 
@@ -562,10 +572,88 @@ TOTAL_MARKET_BIT = UNIVERSE_BY_SLUG["nifty-total-market"].mask_value
 # ---------------------------------------------------------------------------
 
 
+#: Registry keys the strictly-rising sweep below cannot ask about, each with the rule that decides
+#: its order instead and the test that asserts it. Named rather than derived, so a factor added to
+#: the registry is swept by default and only leaves the sweep by being written down here.
+NOT_SWEPT: dict[str, str] = {
+    # docs/ranking/PLAN.md C2: read from desk_score_daily; a name the book never scanned or
+    # rejected is absent, not NULL-last. test_ranking_screener_db.TestRankingEngineDeskScore.
+    "desk_score": "absent when unscored (C2)",
+    # C1/C4: computed by the ranking engine; the legacy SQL refuses it rather than misrank it.
+    "nse_momentum_score": "ranking_terms only (C4)",
+    # Ordinal: regime has three values and the MA stack six, so neither can rise strictly over
+    # RANKED_ROWS rows. test_ordinal_factors_sort_by_their_order_with_nulls_last.
+    "regime_priority": "ordinal, three values (C1)",
+    "ma_stack_score": "ordinal, six values",
+}
+SWEPT_SORT_KEYS = tuple(key for key in SORT_FACTOR_KEYS if key not in NOT_SWEPT)
+
+
 class TestRanking:
     """docs/06 §step 5-6."""
 
-    @pytest.mark.parametrize("key", SORT_FACTOR_KEYS)
+    def test_every_unswept_key_is_a_registry_factor(self) -> None:
+        assert set(NOT_SWEPT) <= set(SORT_FACTOR_KEYS)
+
+    async def test_a_computed_factor_is_refused_by_the_legacy_ranking(
+        self, screener_session: AsyncSession
+    ) -> None:
+        """PLAN.md C4: nse_momentum_score has no SQL; without ranking_terms it is refused."""
+        await seed_ranked_universe(screener_session)
+        with pytest.raises(ScreenQueryError, match="use ranking_terms"):
+            await run_screen(screener_session, defn(sort_by="nse_momentum_score"))
+
+    async def test_ordinal_factors_sort_by_their_order_with_nulls_last(
+        self, screener_session: AsyncSession
+    ) -> None:
+        """C1: BULL 2 > NEUTRAL 1 > BEAR 0, NULL last. MA stack: 21 > 4 > 0, and NULL — not 0 —
+        when any average is missing (its null policy), so a name with no history sorts last."""
+        closes = {"close": Decimal("100"), "close_raw": Decimal("100")}
+        above_all = {"ma_20": Decimal(90), "ma_50": Decimal(80), "ma_100": Decimal(70)}
+        rows: dict[str, dict[str, object]] = {
+            "ORDBEAR": {"regime": "BEAR", **closes, **above_all, "ma_200": Decimal(60)},
+            "ORDBULL": {
+                "regime": "BULL",
+                **closes,
+                "ma_20": Decimal(90),
+                "ma_50": Decimal(150),
+                "ma_100": Decimal(150),
+                "ma_200": Decimal(150),
+            },
+            "ORDNEUT": {
+                "regime": "NEUTRAL",
+                **closes,
+                "ma_20": Decimal(150),
+                "ma_50": Decimal(150),
+                "ma_100": Decimal(150),
+                "ma_200": Decimal(150),
+            },
+            "ORDYOUNG": {**closes, **above_all},
+        }
+        for symbol, values in rows.items():
+            await make_row(screener_session, symbol, NIFTY_500, on=SYNTHETIC, values=values)
+
+        regime = await run_screen(screener_session, defn(sort_by="regime_priority"))
+        assert regime.result is not None
+        assert [row.symbol for row in regime.result.rows] == [
+            "ORDBULL",
+            "ORDNEUT",
+            "ORDBEAR",
+            "ORDYOUNG",
+        ]
+        assert [row.values["sorting_factor"] for row in regime.result.rows][-1] is None
+
+        stack = await run_screen(screener_session, defn(sort_by="ma_stack_score"))
+        assert stack.result is not None
+        assert [row.symbol for row in stack.result.rows] == [
+            "ORDBEAR",
+            "ORDBULL",
+            "ORDNEUT",
+            "ORDYOUNG",
+        ]
+        assert [row.values["sorting_factor"] for row in stack.result.rows] == [21, 4, 0, None]
+
+    @pytest.mark.parametrize("key", SWEPT_SORT_KEYS)
     async def test_every_factor_sorts_a_non_empty_result_correctly(
         self, screener_session: AsyncSession, key: str
     ) -> None:

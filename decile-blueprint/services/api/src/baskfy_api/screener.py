@@ -10,22 +10,24 @@ The cache contract, from docs/06 §Caching and §"Determinism guarantee"
     Key: `screen:{sha256(definition_canonical_json)}:{as_of}:{data_version}`.
     TTL: until the next `data_version` bump. Invalidate the whole namespace on publish.
 
-The cached value is the response body itself — the exact bytes
-:meth:`baskfy_core.screener.ScreenResult.to_json` produces — so a hit and a miss are
-indistinguishable to the client, which is what makes the determinism guarantee testable: run the
-same screen twice and compare the strings.
+The cached value is the response body itself — the exact bytes :func:`payload_with_provenance`
+produces (``ScreenResult.payload()`` plus C6's ``provenance``, canonically encoded) — so a hit
+and a miss are indistinguishable to the client, which is what makes the determinism guarantee
+testable: run the same screen twice and compare the strings.
 """
 
 from __future__ import annotations
 
 import asyncio
 import datetime as dt
-from collections.abc import Awaitable, Sequence
+import math
+from collections.abc import Awaitable, Mapping, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Final, Protocol, runtime_checkable
 
+import pandas as pd
 from pydantic import ValidationError
 from sqlalchemy import Row, func, select
 from sqlalchemy.dialects.postgresql import insert
@@ -33,23 +35,34 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.metrics import observe_cache
 from baskfy_api.telemetry import annotate_current_span
-from baskfy_core.models import FactorDaily, PipelineRun, Screen, ScreenRun, TradingDay
-from baskfy_core.ranking import (
-    DESK_SCORE_EXPLAIN_COLUMNS,
-    is_desk_score_factor,
-    rerank_survivors_by_desk_score,
+from baskfy_core import factor_registry, ranking_engine
+from baskfy_core.models import (
+    DeskScoreDaily,
+    FactorDaily,
+    PipelineRun,
+    Screen,
+    ScreenRun,
+    TradingDay,
 )
+from baskfy_core.ranking import DESK_SCORE_EXPLAIN_COLUMNS, is_desk_score_factor
 from baskfy_core.screen_definition import ScreenDefinition
 from baskfy_core.screener import (
     CACHE_NAMESPACE,
+    DESK_FRAME_COLUMNS,
     MAX_RESULT_ROWS,
+    RankingFactor,
+    RankingFrameQuery,
+    ScreenQueryError,
     ScreenResult,
     ScreenResultRow,
+    build_ranking_frame_query,
     build_screen_query,
-    build_survivors_query,
     cache_key,
+    canonical_json,
+    resolve_columns,
 )
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
+from baskfy_core.universes import UNIVERSE_BY_SLUG
 
 #: A safety net, not the contract. docs/06 ties the lifetime of a cached result to the next
 #: ``data_version`` bump, and ``publish`` purges the namespace to enforce it. This expiry only
@@ -67,6 +80,10 @@ WARM_CACHE_SCREEN_LIMIT: Final = 200
 #: an observation — and because a scan of the fact table on every request to discover it would be
 #: an odd way to enforce a published policy.
 DATA_START_DATE: Final = dt.date(2024, 11, 1)
+
+#: ``provenance.ranking_engine_version`` for a definition without ``ranking_terms``: docs/06's SQL
+#: row-number ranking, not :data:`baskfy_core.ranking_engine.RANKING_ENGINE_VERSION`.
+LEGACY_RANKING_ENGINE_VERSION: Final = "legacy-sql"
 
 
 class AsOfOutOfRange(ValueError):
@@ -267,46 +284,175 @@ def _row_to_result(row: Row[tuple[object]], columns: Sequence[str]) -> ScreenRes
     )
 
 
-def _desk_cell(value: object) -> object:
-    """Coerce pandas / numpy cells into JSON-friendly values for ScreenResult."""
-    if value is None:
+def _cell(value: object) -> object:
+    """One ranked-frame cell as the payload carries it.
+
+    The frame is built with ``dtype=object`` so a ``numeric`` column keeps its ``Decimal`` and its
+    storage precision (house rules 8 and 9); only the engine's own outputs arrive as numpy/pandas
+    scalars, and a missing one arrives as NaN or ``pd.NA``.
+    """
+    if value is None or value is pd.NA:
         return None
-    if isinstance(value, Decimal):
+    if isinstance(value, (Decimal, bool, int, str, dt.date)):
         return value
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)):
-        if isinstance(value, float) and value != value:  # NaN
-            return None
-        return value
-    if isinstance(value, str):
-        return value
-    # numpy / pandas scalars expose .item()
+    if isinstance(value, float):
+        return None if math.isnan(value) else value
     item = getattr(value, "item", None)
     if callable(item):
-        return _desk_cell(item())
+        return _cell(item())
     return value
 
 
-def _survivors_frame(rows: Sequence[Row[tuple[object]]], row_columns: Sequence[str]):
-    """Build a float-friendly DataFrame for :func:`rerank_survivors_by_desk_score`."""
-    import pandas as pd
+def _composite_cell(value: object) -> Decimal | None:
+    """C4 step 4: ``composite_score`` is a 2 dp number, so it goes out as one."""
+    cell = _cell(value)
+    if cell is None:
+        return None
+    if isinstance(cell, (int, float, Decimal)) and not isinstance(cell, bool):
+        return Decimal(repr(cell) if isinstance(cell, float) else cell).quantize(Decimal("0.01"))
+    raise TypeError(f"composite_score must be numeric, got {type(cell).__name__}")
 
-    records: list[dict[str, object]] = []
+
+def _term_direction(preference: str) -> str:
+    """``RankingFactor.direction`` for a term: best-first is descending only for ``higher``."""
+    return "desc" if preference == "higher" else "asc"
+
+
+def uses_desk_score(definition: ScreenDefinition) -> bool:
+    """True when the book's SCORE decides the order — as ``sort_by`` or as any ranking term."""
+    return is_desk_score_factor(definition.sort_by) or any(
+        is_desk_score_factor(term.factor) for term in definition.ranking_terms
+    )
+
+
+def ranking_spec_for(definition: ScreenDefinition) -> ranking_engine.RankingSpec:
+    """The ranking engine's spec for a definition with ``ranking_terms`` (C3 -> C4).
+
+    Label, weight family and null policy come from the registry, so a term cannot claim a family
+    its factor does not belong to.
+    """
+    if not definition.ranking_terms:
+        raise ScreenQueryError("ranking_spec_for needs a definition with ranking_terms")
+    terms: list[ranking_engine.TermSpec] = []
+    for term in definition.ranking_terms:
+        factor = factor_registry.get(term.factor)
+        terms.append(
+            ranking_engine.TermSpec(
+                key=term.factor,
+                label=factor.label,
+                weight_family=str(factor.weight_family),
+                preference=term.preference,
+                weight=term.weight,
+                target_min=term.target_min,
+                target_max=term.target_max,
+                null_policy=str(factor.null_policy),
+            )
+        )
+    return ranking_engine.RankingSpec(
+        terms=tuple(terms),
+        mode=definition.ranking_mode,
+        scope=definition.ranking_scope,
+        missing_data=definition.missing_data,
+        family_weights=(
+            None if definition.family_weights is None else definition.family_weights.as_mapping()
+        ),
+    )
+
+
+def _desk_explain_values(
+    score: object, reject: object, parts: dict[str, object]
+) -> dict[str, object]:
+    """The A-F explain columns the results table's peek drawer reads, from ``desk_score_daily``."""
+    reject_text = reject if isinstance(reject, str) else ""
+    values = {name: _cell(parts.get(name)) for name in DESK_SCORE_EXPLAIN_COLUMNS}
+    values["desk_reject"] = reject_text
+    values["desk_eligible"] = reject_text == "" and _cell(score) is not None
+    return values
+
+
+async def _attach_desk_columns(
+    session: AsyncSession, as_of: dt.date, rows: Sequence[ScreenResultRow]
+) -> tuple[ScreenResultRow, ...]:
+    """Legacy ``sort_by=desk_score``: add the stored A-F breakdown to each ranked row.
+
+    Read from ``desk_score_daily`` for the rows the SQL already ranked — never re-scored (C2).
+    """
+    if not rows:
+        return ()
+    desk = DeskScoreDaily.__table__
+    stored = (
+        await session.execute(
+            select(desk).where(
+                desk.c.date == as_of,
+                desk.c.instrument_id.in_([row.instrument_id for row in rows]),
+            )
+        )
+    ).all()
+    by_instrument = {int(item._mapping["instrument_id"]): item._mapping for item in stored}
+    attached: list[ScreenResultRow] = []
     for row in rows:
-        mapping = row._mapping
-        record: dict[str, object] = {}
-        for name in row_columns:
-            value = mapping[name]
-            if isinstance(value, Decimal):
-                record[name] = float(value)
-            else:
-                record[name] = value
-        records.append(record)
-    return pd.DataFrame.from_records(records)
+        mapping = by_instrument.get(row.instrument_id)
+        parts: dict[str, object] = {}
+        score: object = None
+        reject: object = None
+        if mapping is not None:
+            parts = {
+                label: mapping[column]
+                for column, label in DESK_FRAME_COLUMNS.items()
+                if label in DESK_SCORE_EXPLAIN_COLUMNS
+            }
+            score = mapping["score"]
+            reject = mapping["reject"]
+        attached.append(
+            ScreenResultRow(
+                rank=row.rank,
+                instrument_id=row.instrument_id,
+                combined_rank=row.combined_rank,
+                ranks=row.ranks,
+                values={**row.values, **_desk_explain_values(score, reject, parts)},
+            )
+        )
+    return tuple(attached)
 
 
-async def _execute_desk_score_screen(  # noqa: PLR0913 - mirrors execute_screen inputs
+@dataclass(frozen=True, slots=True)
+class RankedFrame:
+    """One definition ranked by C4 over its pre-filter frame — shared by run, explain, selection.
+
+    ``result`` is ``None`` when the selected universe has no rows on ``as_of``: there is nothing
+    to rank, and :func:`baskfy_core.ranking_engine.rank_frame` is not asked to rank nothing.
+    """
+
+    query: RankingFrameQuery
+    spec: ranking_engine.RankingSpec
+    result: ranking_engine.RankingResult | None
+
+
+async def rank_definition(
+    session: AsyncSession, definition: ScreenDefinition, as_of: dt.date
+) -> RankedFrame:
+    """``build_ranking_frame_query`` -> one round trip -> ``rank_frame``. The only engine path.
+
+    :func:`execute_screen` serves ``result.ranked``; ``POST /screens/explain`` reads
+    ``result.scored`` (every row, ranked or not) and ``POST /screens/selection`` reads the whole
+    of ``result.ranked`` rather than a page of it, so all three rank one frame the same way.
+    """
+    spec = ranking_spec_for(definition)
+    query = build_ranking_frame_query(definition, as_of)
+    rows = (await session.execute(query.statement)).all()
+    if not rows:
+        return RankedFrame(query=query, spec=spec, result=None)
+    frame = pd.DataFrame([dict(row._mapping) for row in rows], dtype=object)
+    try:
+        result = ranking_engine.rank_frame(frame, spec)
+    except ValueError as exc:
+        # e.g. family_weights that give every family the terms use a zero share: the
+        # definition validated, but nothing can rank, which is the caller's 400 not our 500.
+        raise ScreenQueryError(f"ranking_terms cannot be ranked: {exc}") from exc
+    return RankedFrame(query=query, spec=spec, result=result)
+
+
+async def _execute_ranking_screen(  # noqa: PLR0913 - mirrors execute_screen inputs
     session: AsyncSession,
     definition: ScreenDefinition,
     *,
@@ -316,67 +462,70 @@ async def _execute_desk_score_screen(  # noqa: PLR0913 - mirrors execute_screen 
     requested_as_of: dt.date | None = None,
     limit: int = MAX_RESULT_ROWS,
 ) -> ScreenResult:
-    """Filter in SQL, score with the book's ``score()``, attach A–F explain columns."""
-    # Fetch every survivor (capped at MAX) so SCORE percentiles see the full filtered set;
-    # truncate only after ranking.
-    query = build_survivors_query(
-        definition, as_of, columns=columns, limit=MAX_RESULT_ROWS
-    )
-    rows = (await session.execute(query.statement)).all()
-    result_columns = tuple(
-        list(query.columns)
-        + [key for key in DESK_SCORE_EXPLAIN_COLUMNS if key not in query.columns]
-    )
-    if not rows:
-        return ScreenResult(
-            as_of=as_of,
-            data_version=data_version,
-            sorting_factor=query.sorting_factor,
-            ranking_factors=query.ranking_factors,
-            columns=result_columns,
-            rows=(),
-            requested_as_of=requested_as_of,
-            truncated=False,
-        )
+    """``ranking_terms`` screens: the pre-filter frame in one statement, ranked by C4 in-process.
 
-    frame = _survivors_frame(rows, query.row_columns)
-    ordered, _breakdowns = rerank_survivors_by_desk_score(
-        frame,
-        direction=definition.sort_direction,
-        limit=limit + 1,
-        as_of=as_of,
+    The frame is the whole selected universe (``build_ranking_frame_query``), because
+    ``fixed_universe`` and ``within_sector`` score against rows that are not results; the engine
+    returns only the rows that pass every filter, ranked ``1..n``. ``desk_score`` is the joined
+    ``desk_score_daily`` value, and a row the book rejected or never scored is never ranked.
+    """
+    ranked_frame = await rank_definition(session, definition, as_of)
+    spec = ranked_frame.spec
+    projection = resolve_columns(columns)
+    first = spec.terms[0]
+    extra: list[str] = []
+    if spec.mode == "composite" and ranking_engine.COMPOSITE_SCORE not in projection:
+        extra.append(ranking_engine.COMPOSITE_SCORE)
+    desk_terms = any(is_desk_score_factor(term.key) for term in spec.terms)
+    if desk_terms:
+        extra.extend(name for name in DESK_SCORE_EXPLAIN_COLUMNS if name not in projection)
+    result_columns = (*projection, *extra)
+    ranking_factors = tuple(
+        RankingFactor(position, term.key, term.label, _term_direction(term.preference))
+        for position, term in enumerate(spec.terms, start=1)
     )
-    truncated = len(ordered) > limit
-    kept = ordered.head(limit)
 
-    result_rows: list[ScreenResultRow] = []
-    for position, (_, row) in enumerate(kept.iterrows(), start=1):
-        values: dict[str, object] = {}
-        for name in result_columns:
-            if name == "sorting_factor":
-                values[name] = _desk_cell(row.get("SCORE"))
-            elif name in row.index:
-                values[name] = _desk_cell(row[name])
-            else:
-                values[name] = None
-        instrument_id = int(row["instrument_id"])
-        result_rows.append(
-            ScreenResultRow(
-                rank=position,
-                instrument_id=instrument_id,
-                combined_rank=position,
-                ranks=(position, 0, 0),
-                values=values,
+    kept_rows: list[ScreenResultRow] = []
+    truncated = False
+    if ranked_frame.result is not None:
+        ranked = ranked_frame.result.ranked
+        truncated = len(ranked) > limit
+        for record in ranked.head(limit).to_dict("records"):
+            rank = int(str(record[ranking_engine.RANK]))
+            values: dict[str, object] = {}
+            for name in projection:
+                source = first.key if name == "sorting_factor" else name
+                values[name] = _cell(record.get(source))
+            if ranking_engine.COMPOSITE_SCORE in extra:
+                values[ranking_engine.COMPOSITE_SCORE] = _composite_cell(
+                    record.get(ranking_engine.COMPOSITE_SCORE)
+                )
+            if desk_terms:
+                parts = {name: record.get(name) for name in DESK_SCORE_EXPLAIN_COLUMNS}
+                values.update(
+                    _desk_explain_values(
+                        record.get(ranking_engine.DESK_SCORE_KEY),
+                        record.get(ranking_engine.DESK_REJECT),
+                        parts,
+                    )
+                )
+            kept_rows.append(
+                ScreenResultRow(
+                    rank=rank,
+                    instrument_id=int(str(record[ranking_engine.INSTRUMENT_ID])),
+                    combined_rank=rank,
+                    ranks=(rank, 0, 0),
+                    values=values,
+                )
             )
-        )
 
     return ScreenResult(
         as_of=as_of,
         data_version=data_version,
-        sorting_factor=query.sorting_factor,
-        ranking_factors=query.ranking_factors,
+        sorting_factor=ranking_factors[0],
+        ranking_factors=ranking_factors,
         columns=result_columns,
-        rows=tuple(result_rows),
+        rows=tuple(kept_rows),
         requested_as_of=requested_as_of,
         truncated=truncated,
     )
@@ -394,11 +543,14 @@ async def execute_screen(  # noqa: PLR0913 - as_of, data_version and the project
 ) -> ScreenResult:
     """One statement, one round trip (docs/03 §"Request path" step 4).
 
-    ``sort_by=desk_score`` is the exception: survivors are filtered in SQL, then scored in-process
-    with the book's ``baskfy_core.score.score`` (docs/ranking/PLAN.md Phase 1.2).
+    A definition with ``ranking_terms`` is ranked by :mod:`baskfy_core.ranking_engine` over
+    :func:`~baskfy_core.screener.build_ranking_frame_query` (docs/ranking/PLAN.md C4); every other
+    definition takes the legacy docs/06 statement, unchanged. ``sort_by=desk_score`` on the legacy
+    path ranks the stored ``desk_score_daily.score`` in SQL and attaches the stored A-F breakdown —
+    the Phase 1.2 re-scoring of the filtered survivors is gone (C2: the screener never re-scores).
     """
-    if is_desk_score_factor(definition.sort_by):
-        return await _execute_desk_score_screen(
+    if definition.ranking_terms:
+        return await _execute_ranking_screen(
             session,
             definition,
             as_of=as_of,
@@ -410,17 +562,83 @@ async def execute_screen(  # noqa: PLR0913 - as_of, data_version and the project
     query = build_screen_query(definition, as_of, columns=columns, limit=limit + 1)
     rows = (await session.execute(query.statement)).all()
     truncated = len(rows) > limit
-    kept = rows[:limit]
+    kept = tuple(_row_to_result(row, query.columns) for row in rows[:limit])
+    result_columns = query.columns
+    if is_desk_score_factor(definition.sort_by):
+        kept = await _attach_desk_columns(session, as_of, kept)
+        result_columns = (
+            *query.columns,
+            *(name for name in DESK_SCORE_EXPLAIN_COLUMNS if name not in query.columns),
+        )
     return ScreenResult(
         as_of=as_of,
         data_version=data_version,
         sorting_factor=query.sorting_factor,
         ranking_factors=query.ranking_factors,
-        columns=query.columns,
-        rows=tuple(_row_to_result(row, query.columns) for row in kept),
+        columns=result_columns,
+        rows=kept,
         requested_as_of=requested_as_of,
         truncated=truncated,
     )
+
+
+# ---------------------------------------------------------------------------
+# Provenance (docs/ranking/PLAN.md C6)
+# ---------------------------------------------------------------------------
+
+
+async def desk_score_version(session: AsyncSession, as_of: dt.date) -> str | None:
+    """The ``score_version`` of the ``desk_score_daily`` rows for ``as_of``; ``None`` if absent.
+
+    One nightly writes one version per date. ``max`` only makes the read deterministic should a
+    re-score ever leave two on the same date.
+    """
+    return (
+        await session.execute(
+            select(func.max(DeskScoreDaily.score_version)).where(DeskScoreDaily.date == as_of)
+        )
+    ).scalar_one_or_none()
+
+
+async def screen_provenance(
+    session: AsyncSession, definition: ScreenDefinition, as_of: dt.date, data_version: int
+) -> dict[str, object]:
+    """C6: what produced this payload — universe, date, data, engine, desk formula, scope, mode.
+
+    ``desk_score_version`` is only looked up when the SCORE decides the order; a screen that never
+    reads ``desk_score_daily`` reports ``None`` rather than a version it did not use.
+    """
+    universe = UNIVERSE_BY_SLUG[definition.index]
+    return {
+        "universe": universe.slug,
+        "universe_label": universe.name,
+        "as_of": as_of.isoformat(),
+        "data_version": data_version,
+        "ranking_engine_version": (
+            ranking_engine.RANKING_ENGINE_VERSION
+            if definition.ranking_terms
+            else LEGACY_RANKING_ENGINE_VERSION
+        ),
+        "desk_score_version": (
+            await desk_score_version(session, as_of) if uses_desk_score(definition) else None
+        ),
+        "scope": definition.ranking_scope,
+        "mode": definition.ranking_mode,
+    }
+
+
+def payload_with_provenance(result: ScreenResult, provenance: Mapping[str, object]) -> str:
+    """The response body: ``ScreenResult.payload()`` plus ``provenance``, canonically encoded."""
+    return canonical_json({**result.payload(), "provenance": dict(provenance)})
+
+
+def _predates_provenance(payload: str) -> bool:
+    """A cached run envelope written before C6 — served once, it would lack ``provenance``.
+
+    ``publish`` purges the namespace, but a deploy between publishes would otherwise keep serving
+    the old shape until the next one. Only a real envelope (it has ``rows``) is judged.
+    """
+    return '"rows":' in payload and '"provenance":' not in payload
 
 
 async def record_run(
@@ -574,7 +792,7 @@ async def run_screen(  # noqa: PLR0913 - the request, the projection and the cac
     flight: asyncio.Event | None = None
     if cache is not None:
         cached = _cached_payload(await cache.get(key))
-        if cached is not None:
+        if cached is not None and not _predates_provenance(cached):
             return _observed(
                 ScreenRunResult(
                     payload=cached,
@@ -590,7 +808,7 @@ async def run_screen(  # noqa: PLR0913 - the request, the projection and the cac
             with suppress(TimeoutError):
                 await asyncio.wait_for(flight.wait(), SINGLE_FLIGHT_TIMEOUT_SECONDS)
             cached = _cached_payload(await cache.get(key))
-            if cached is not None:
+            if cached is not None and not _predates_provenance(cached):
                 # A follower that waited for the leader. Counted as a hit: it was served from the
                 # cache and issued no query, which is what the hit-rate metric is measuring.
                 return _observed(
@@ -611,7 +829,8 @@ async def run_screen(  # noqa: PLR0913 - the request, the projection and the cac
             columns=columns,
             requested_as_of=requested,
         )
-        payload = result.to_json()
+        provenance = await screen_provenance(session, definition, resolution.as_of, data_version)
+        payload = payload_with_provenance(result, provenance)
         if cache is not None:
             await cache.set(key, payload, ttl_seconds)
     finally:

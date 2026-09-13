@@ -23,6 +23,7 @@ import type {
   FactorOut,
   ProblemOut,
   ScreenOut,
+  ScreenProvenanceOut,
   ScreenRunResponse,
   ScreenRunRowOut,
   StatusOut,
@@ -40,17 +41,40 @@ type KeysOf<T> = keyof T;
 
 // --- the hand-written fixture ------------------------------------------------
 
-/** docs/07 §Metadata: "factor registry (key, label, family, unit, higher_is_better)". */
+/**
+ * docs/07 §Metadata: "factor registry (key, label, family, unit, higher_is_better)", plus the
+ * ranking engine's `preference` and C1's four registry fields (docs/ranking/PLAN.md C6).
+ */
 interface ExpectedFactor {
   key: string;
   label: string;
   family: string;
   unit: string;
   higher_is_better: boolean;
-  preference: string;
+  preference: "higher" | "lower" | "target_range" | "eligibility";
+  rankable: boolean;
+  weight_family: "momentum" | "path_quality" | "trend_structure" | "participation" | "risk_execution";
+  validation_status: "legacy" | "research" | "validated" | "rejected";
+  definition: string;
 }
 
-/** docs/07 §"Running a screen", field for field. */
+/**
+ * docs/ranking/PLAN.md C6: every screen payload says what produced it. `desk_score_version` is null
+ * when the book's SCORE did not decide the order; `ranking_engine_version` is "legacy-sql" for a
+ * definition without ranking_terms.
+ */
+interface ExpectedProvenance {
+  universe: string;
+  universe_label: string;
+  as_of: string;
+  data_version: number;
+  ranking_engine_version: string;
+  desk_score_version: string | null;
+  scope: "filtered_results" | "fixed_universe" | "within_sector";
+  mode: "single" | "sequential" | "composite";
+}
+
+/** docs/07 §"Running a screen", field for field, plus C6's `provenance`. */
 interface ExpectedRunResponse {
   as_of: string;
   data_version: number;
@@ -58,6 +82,7 @@ interface ExpectedRunResponse {
   sorting_factor: { key: string; label: string };
   columns: string[];
   rows: ScreenRunRowOut[];
+  provenance: ExpectedProvenance;
 }
 
 /**
@@ -79,6 +104,7 @@ type _FactorMatches = Expect<Equal<KeysOf<FactorOut>, KeysOf<ExpectedFactor>>>;
 type _FactorTypesMatch = Expect<Equal<FactorOut, ExpectedFactor>>;
 type _RunMatches = Expect<Equal<KeysOf<ScreenRunResponse>, KeysOf<ExpectedRunResponse>>>;
 type _RunTypesMatch = Expect<Equal<ScreenRunResponse, ExpectedRunResponse>>;
+type _ProvenanceMatches = Expect<Equal<ScreenProvenanceOut, ExpectedProvenance>>;
 // An index signature swallows a `keyof` comparison, so the RFC members are asserted one by one.
 type _ProblemType = Expect<Equal<ProblemOut["type"], ExpectedProblem["type"]>>;
 type _ProblemTitle = Expect<Equal<ProblemOut["title"], ExpectedProblem["title"]>>;
@@ -196,6 +222,24 @@ describe("the emitted OpenAPI document", () => {
 
   it("carries the ProblemOut schema the error responses reference", () => {
     expect(spec.components.schemas).toHaveProperty("ProblemOut");
+  });
+
+  it("requires provenance on every screen run payload (PLAN.md C6)", () => {
+    const run = spec.components.schemas.ScreenRunResponse as { required?: string[] };
+    expect(run.required).toContain("provenance");
+    const provenance = spec.components.schemas.ScreenProvenanceOut as { required?: string[] };
+    expect([...(provenance.required ?? [])].sort()).toEqual(
+      [
+        "as_of",
+        "data_version",
+        "desk_score_version",
+        "mode",
+        "ranking_engine_version",
+        "scope",
+        "universe",
+        "universe_label",
+      ],
+    );
   });
 });
 

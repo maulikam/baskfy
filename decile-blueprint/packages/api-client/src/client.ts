@@ -20,6 +20,7 @@ export type { components, paths } from "./generated/schema.js";
 export type Schemas = components["schemas"];
 
 export type FactorOut = Schemas["FactorOut"];
+export type RankingPresetOut = Schemas["RankingPresetOut"];
 export type ColumnOut = Schemas["ColumnOut"];
 export type UniverseOut = Schemas["UniverseOut"];
 export type StatusOut = Schemas["StatusOut"];
@@ -31,6 +32,8 @@ export type ScreenUpdate = Schemas["ScreenUpdate"];
 export type RunRequest = Schemas["RunRequest"];
 export type PreviewRequest = Schemas["PreviewRequest"];
 export type ScreenRunResponse = Schemas["ScreenRunResponse"];
+/** docs/ranking/PLAN.md C6: what produced a screen payload (engine, desk formula, scope, mode). */
+export type ScreenProvenanceOut = Schemas["ScreenProvenanceOut"];
 export type ScreenRunRowOut = Schemas["ScreenRunRowOut"];
 export type ScreenRunPage = Schemas["ScreenRunPage"];
 export type ProblemOut = Schemas["ProblemOut"];

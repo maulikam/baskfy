@@ -16,7 +16,9 @@ import {
   SeriesFilter,
   type Patch,
 } from "@/components/screens/filter-sections";
+import { FactorRangesFilter, RegimeFilter } from "@/components/screens/factor-ranges";
 import { HistoricalRanks } from "@/components/screens/historical-ranks";
+import { RankingSection } from "@/components/screens/ranking-section";
 
 /** Shared context for rendering one filter accordion / chip popover body. */
 export interface FilterGroupContext {
@@ -72,6 +74,26 @@ export function renderFilterGroup(id: string, ctx: FilterGroupContext): React.Re
           label="Price (CMP) range"
           hint="Inclusive, on the last exchange close."
           unit="₹"
+        />
+      );
+    case "factor-ranges":
+      return (
+        <FactorRangesFilter
+          definition={definition}
+          patch={patch}
+          disabled={disabled}
+          factors={ctx.factors}
+        />
+      );
+    case "regime":
+      return <RegimeFilter definition={definition} patch={patch} disabled={disabled} />;
+    case "ranking":
+      return (
+        <RankingSection
+          definition={definition}
+          patch={patch}
+          disabled={disabled}
+          factors={ctx.factors}
         />
       );
     case "multi-factor":

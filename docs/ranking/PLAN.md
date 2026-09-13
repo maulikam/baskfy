@@ -67,3 +67,231 @@ Decided BEFORE fan-out. Everything a leaf could get wrong about its neighbors:
 - 2026-09-13 Phase 1.5: `baskfy_core.ranking_presets` + desk_quality validation vs `score()`
 - 2026-09-13 Deploy deferred: gates green locally; AWS SSO valid; uncommitted tree so
   `push-images` would ship HEAD without ranking — see NEEDS-MAULIK §34
+
+---
+
+# Phase 2 — complete the ranking engine (13 Sep 2026, Maulik: "complete whatever all the things required")
+
+Depth: tree 4 · Mode: orchestrated · Driver: main session · Leaves run as fresh subagents that
+do **not** commit; the driver re-runs every gate and commits once per verified wave.
+
+## What Phase 1 left (facts found by the Phase-2 survey, not assumptions)
+
+- `ranking_mode`/`ranking_scope` exist in the schema but not the editor; `within_sector` is refused.
+- **Bug:** `sequential` orders by `r1, r2, r3`, but each `rN` is a unique `ROW_NUMBER`, so r2/r3
+  never decide anything. Sequential must order by the factor *values*.
+- **Desk SCORE is not the book's.** The screener scores filtered survivors (percentiles and 1/99
+  clips over a different set), caps rows at 4,000 in `instrument_id` order before scoring, and
+  gives rejected rows ranks that can land inside `top_n + buffer`. The book scores the whole
+  `nse_cash` scan via `momentum_scan.build` → `score.score`.
+- `DeskScoringDefaults` copies `kite-momentum-rebalancer/app/config.py` by hand with no test tying them.
+- No sector column anywhere; the only point-in-time sector source is narrowest NSE sectoral-index
+  membership (`universes.SECTOR_INDEX_SLUGS`, `worker/tasks/swing.py:load_sector_membership`).
+- `ranking_research.py`, `ranking_selection.py`, `ranking_presets.py` are called by nothing.
+- `index_member_daily` starts 2021-08-02; the local export `research/volume-breakout/aws/*.csv.gz`
+  (bars to 2026-09-09, PIT membership, instruments incl. delisted) is the validation dataset.
+- NSE methodology (Method_NIFTY_Equity_Indices.pdf, Sep 2026, §16 Nifty200 Momentum 30), verbatim:
+  eligible = Nifty 200 at review, ≥1 year listing, available in F&O; MR12 = 12M price return / σp,
+  12M return = P(M−1)/P(M−13) − 1 with prices at the last trading day of those months; MR6 likewise
+  with M−7; σp = annualised std of lognormal daily returns for 1 year; Z = (MR − μ)/σ over the
+  eligible universe for each horizon; weighted Z = 0.5·Z12 + 0.5·Z6; normalised score = 1+Z if
+  Z ≥ 0 else (1−Z)^−1; top 30; top 15 compulsorily in, existing beyond rank 45 out; semi-annual
+  June/December; weights = FF mcap × score capped at min(5%, 5× FF weight). No winsorisation is
+  stated, so none is applied.
+
+## Phase-2 contract (every leaf obeys this; changing it is a driver decision, not a leaf's)
+
+### C1. New stored factors — `factor_daily` columns (migration `0046_ranking_factors`, down `0045_instrument_watch_and_prefs`)
+
+All computed per instrument on **adjusted** close/high/low, point-in-time (only bars ≤ the row's
+date), rounded at write time via `precision.COLUMN_PRECISION`, NULL when the window is not full.
+"Window N sessions" = the last N bars ending at and including the row's date. Daily simple return
+`r_t = c_t/c_{t−1} − 1`; daily log return `l_t = ln(c_t/c_{t−1})`. Calendar-month windows reuse
+`windows.py` exactly as `ret_Nm` does.
+
+| key | numeric | definition | preference | weight_family | rankable |
+|---|---|---|---|---|---|
+| `atr_14` | (18,4) | Wilder ATR(14): TR=max(h−l,|h−c₋₁|,|l−c₋₁|); first = mean of first 14 TR; then (prev·13+TR)/14 | eligibility | risk_execution | no |
+| `atr_ext_20` | (10,4) | (close − ma_20) / atr_14 | target_range | trend_structure | yes |
+| `ma50_slope_20` | (14,2) | (ma_50_t / ma_50_{t−20} − 1)·100 | higher | trend_structure | yes |
+| `eff_ratio_63` | (10,4) | |c_t − c_{t−63}| / Σ_{i=t−62..t} |c_i − c_{i−1}|; NULL if denominator 0 | higher | path_quality | yes |
+| `max_dd_6m`, `max_dd_12m` | (14,2) | max over window of (1 − c_i / max_{j≤i in window} c_j)·100, a positive magnitude | lower | path_quality | yes |
+| `downside_vol_6m`, `downside_vol_12m` | (18,10) | sqrt(mean over window of min(r_t,0)²)·√252 (same window/returns as `vol_Nm`, divide by N) | lower | risk_execution | yes |
+| `sortino_6m`, `sortino_12m` | (14,2) | ret_Nm / (downside_vol_Nm·100); NULL if downside_vol < 0.5e−10 (mirrors sharpe) | higher | risk_execution | yes |
+| `underwater_12m` | (7,2) | % of window sessions with c_i < running max of c since window start | lower | path_quality | yes |
+| `ret_ex_top3_12m` | (14,2) | (exp(Σ l_t − sum of the 3 largest l_t in the window) − 1)·100 | higher | path_quality | yes |
+| `accel_21_105` | (18,10) | mean(l over last 21 sessions) − mean(l over the 105 sessions before those) | higher | momentum | yes |
+| `accel_21_105_vs` | (10,4) | accel_21_105 / std(l over the same 126 sessions, ddof=1); NULL if std=0 | higher | momentum | yes |
+| `vol_exp_21_126` | (10,4) | mean(vol_day_val, last 21) / mean(vol_day_val, the 126 sessions before those) | higher | participation | yes |
+| `vol_persist_20` | smallint | count of last 20 sessions with vol_day_val > mean(vol_day_val over the 126 sessions before the 20) | higher | participation | yes |
+| `excess_ret_3m`, `excess_ret_6m`, `excess_ret_12m` | (14,2) | ret_Nm − (NIFTY 500 level_t / level_{window start} − 1)·100 | eligibility | momentum | **no** (filter/column only: a common subtraction cannot reorder) |
+| `resid_ret_12m` | (14,2) | ret_12m − beta_12m · NIFTY 50 12M return (%) — beta-adjusted, CAN reorder | higher | momentum | yes |
+| `rs_persist_126` | (7,2) | over the last 126 sessions, % of days whose 20-session stock return > NIFTY 500 20-session return | higher | momentum | yes |
+| `mom_pctile` | (7,2) | percent rank ×100 of `avg_sharpe_12_6_3_1` among that date's written rows with `universe_mask <> 0` (ties average, NULLs excluded) | eligibility | momentum | no |
+| `rank_persist_20` | (7,2) | % of the last 20 dates (incl. today) with `mom_pctile` ≥ 80; NULL if fewer than 20 such dates have a non-NULL `mom_pctile` | higher | momentum | yes |
+| `nse_mr6`, `nse_mr12` | (18,10) | NSE momentum ratios for "rebalance month" = the row's month: return P(end M−1)/P(end M−7 or M−13) − 1 over σp = std(l, ddof=1, last 252 sessions ending at end M−1)·√252; month ends are the last trading day in `trading_days` | eligibility | momentum | no |
+
+Benchmarks: `compute_factors(..., benchmark=<NIFTY 50 levels>, market_benchmark=<NIFTY 500 levels>)`
+— both frames `(date, level)`; the worker loads `nifty-50` and `nifty-500` from `index_snapshot_daily`.
+`mom_pctile` and `rank_persist_20` are cross-sectional/cross-date: pure functions in core
+(`factors_ranking.cross_sectional_pctile`, `factors_ranking.rank_persistence`), invoked by the
+worker after the day's rows are computed, with prior dates' `mom_pctile` read from the DB.
+
+Registry (`factor_registry.Factor`) gains: `weight_family: WeightFamily` (`momentum | path_quality |
+trend_structure | participation | risk_execution`, every factor mapped), `rankable: bool` (default
+True), `validation_status: "legacy" | "research" | "validated" | "rejected"` (pre-Phase-2 factors
+`legacy`, new ones `research` until leaf F records evidence), `definition: str` (one sentence).
+Display `family` stays as it is (docs/08 dropdown grouping). Also new SQL factor
+`regime_priority` = CASE regime BULL→2 NEUTRAL→1 BEAR→0 (explicit category priority, higher,
+trend_structure, rankable) — the Wasserstein labels get an order, never a distance.
+
+Computed (non-SQL) factors: `desk_score` (read from `desk_score_daily`, C2) and
+`nse_momentum_score` (computed by the ranking engine over the NSE-eligible set, C3).
+
+### C2. Desk SCORE, exactly the book's — table `desk_score_daily` (migration `0047_desk_score_daily`, down `0046_ranking_factors`)
+
+Columns: `instrument_id` int FK, `date` date, PK(instrument_id,date); `score` numeric(6,1) NULL
+(rejected → NULL); `score_rank` int NULL; `a_trend, b_momentum, c_sharpe, d_consistency,
+e_liquidity, f_penalty` numeric(8,4) NULL; `ext_over_20dma` numeric(10,4) NULL; `reject`
+varchar(200) NOT NULL default '' ; `score_version` varchar(32) NOT NULL. Model in
+`models/ranking.py`. Written nightly by the worker by calling **the book's service**:
+`momentum_scan.build(bars, as_of, trading_days, cfg=DESK_CONFIG, carried=…)` → `score.score` over the
+whole scan (universe `nse_cash`), exactly as `kite-momentum-rebalancer/app/scan_source.py` does.
+`DESK_CONFIG` lives in core (`baskfy_core.desk_config`), and a test in the kite tree asserts every
+scoring/scan attribute equals `app/config.py`. `DESK_SCORE_VERSION` constant in core
+(`"desk-score-2026.09.13"`) bumps whenever score.py or DESK_CONFIG changes (a test pins a hash of
+score.py's source + DESK_CONFIG to the constant). The screener reads this table; it never re-scores.
+Rejected rows are never ranked: they appear only when a user explicitly asks to show ineligible rows.
+
+### C3. ScreenDefinition additions (py model is the source; TS zod mirror, JSON schema, corpus regenerate)
+
+```
+ranking_terms: list[RankingTerm] = []          # max 8
+family_weights: FamilyWeights | None = None    # composite only
+missing_data: "penalize" | "neutral" | "exclude" = "penalize"
+factor_ranges: list[FactorRange] = []          # max 10, eligibility filters
+regime_in: list["BULL","NEUTRAL","BEAR"] | None = None
+RankingTerm = {factor: FactorKey (rankable or computed), preference: "higher"|"lower"|"target_range",
+               weight: float = 1.0 (0 < w <= 100), target_min: float|None, target_max: float|None}
+FactorRange = {enabled: bool = True, factor: FactorKey, min: float|None, max: float|None}
+FamilyWeights = {momentum, path_quality, trend_structure, participation, risk_execution: float >= 0 | None}
+```
+Rules: empty `ranking_terms` ⇒ the legacy path (sort_by/factor_two/three, docs/06 parity, untouched
+except the sequential-by-values fix). Non-empty ⇒ `sort_by == ranking_terms[0].factor`, factor_two/three
+inactive, `single` ⇒ exactly one term, `target_range` needs ≥1 bound and min ≤ max, weights only
+meaningful in composite, `rankable=False` factors refused as terms (e.g. `excess_ret_12m` →
+message pointing at factor_ranges). `within_sector` is **allowed**. **Hash stability:** canonical_json
+omits each Phase-2 field when it equals its default, so every pre-Phase-2 definition hashes exactly
+as before (pinned by a test over the corpus with hashes computed at HEAD 999bf37).
+Schema default scope stays `filtered_results` (reference parity + saved screens); the **web editor's
+new-screen default is `fixed_universe`** (⚠ UNREVIEWED decision, record in DECISIONS-MERGE).
+
+### C4. Ranking engine (pure, `baskfy_core.ranking_engine`, pandas)
+
+Input: a frame of the selected universe for `as_of` (post-bucket, **pre-filter**) with a boolean
+`passes_filters` (all filter + risk + factor_ranges + regime clauses), `sector` (narrowest PIT
+sectoral index slug or NULL→"unclassified"), every term's raw value, desk_score_daily columns, NSE
+inputs (`nse_mr6`, `nse_mr12`, nifty-200 PIT membership flag, F&O flag). Steps:
+1. Computed factors: `desk_score` from the joined table; `nse_momentum_score` per C1/NSE text over
+   rows eligible = in Nifty 200 on as_of ∧ F&O ∧ both MR non-NULL (population std ddof=0 — the PDF
+   says "std. deviation" without a sample qualifier; recorded), NULL for everyone else.
+2. Scope set: `fixed_universe` = all rows; `filtered_results` = rows with passes_filters;
+   `within_sector` = all rows grouped by sector.
+3. Transform per term within the scope set (per group for within_sector): higher → percentile
+   (average-tie rank −1)/(n−1) ascending in value (n=1 ⇒ 1.0); lower → same on −value;
+   target_range → distance = 0 inside [min,max] else gap to nearest bound, score = 1 − percentile of
+   distance (all-zero distances ⇒ 1.0). Missing raw: penalize ⇒ 0.0, neutral ⇒ 0.5, exclude ⇒ row
+   dropped from output.
+4. composite: effective weight = family share × (term weight / Σ weights of terms in that family);
+   family share = family_weights[f] (None or missing ⇒ equal share across families present),
+   normalised to sum 1. `composite_score` = 100·Σ eff_w·score, 2 dp. Order: composite desc, then
+   first term's raw value by its preference, then instrument_id.
+   sequential: order by each term's raw value by preference (target_range by distance asc),
+   NULLs last, then instrument_id. single: the one term, same rule.
+5. Output = rows with passes_filters only (and not excluded), ranked 1..n, columns
+   `composite_score` (composite only), `term_score__<key>`, `term_contrib__<key>`, plus the frame.
+6. `explain(frame_row, context) -> RankExplanation` (dataclass, JSON-able): total, per-term
+   {factor,label,weight_family,preference,raw,transformed,effective_weight,contribution,missing},
+   positives (transformed ≥ 0.8 → "Top 20% on <label> within <scope>"; desk A–E at ≥ 80% of their max),
+   deductions (transformed ≤ 0.2, outside target range, desk F < 0, reject tokens), eligibility
+   {passed, failures:[{filter, detail}]} (per-clause booleans come from the frame as
+   `fail__<clause>` columns), data_quality {missing_factors, insufficient_history, stale_price
+   (last bar date < as_of), recent_corporate_action (adj_factor ≠ 1 within 252 sessions)},
+   desk {score, rank, A–F, reject, eligible} | None, provenance {universe, as_of, data_version,
+   ranking_engine_version, desk_score_version, nse_momentum_version, scope, mode}.
+Versions: `RANKING_ENGINE_VERSION = "ranking-2.0.0"`, `NSE_MOMENTUM_VERSION =
+"nifty200-momentum30-2026.09"`.
+
+### C5. Portfolio selection (pure, `baskfy_core.ranking_selection`)
+
+`select_portfolio(candidates, holdings, constraints, returns=None) -> SelectionResult`.
+Candidate {instrument_id, symbol, quality_rank, score, sector, adv_value_inr (median_vol_12m), close_raw}.
+Holding {instrument_id, symbol, quantity, sector}. Constraints {max_names=15, entry_rank=15,
+retention_rank=30, max_per_sector=None, capital_inr=None, max_adv_participation_pct=1.0,
+turnover_budget_names=None, max_correlation=None, correlation_window=126}. Rules in order: holdings
+ranked ≤ retention_rank are kept ("hold"), others "exit" (reason RANK_OUTSIDE_RETENTION /
+NOT_IN_RESULTS); then candidates in quality_rank order with rank ≤ entry_rank are "enter" unless
+a cap refuses them ("skip" with reason SECTOR_CAP | CAPACITY | CORRELATION | TURNOVER_BUDGET |
+FULL); proposed value = capital/max_names (equal weight), qty = floor(value/close_raw),
+adv participation = value/adv·100. Scores and ranks are never modified (asserted). Informational
+only: no order, no plan_id, no route to execution.
+
+### C6. API (services/api)
+
+- Every screen payload gains `provenance` {universe, universe_label, as_of, data_version,
+  ranking_engine_version, desk_score_version, scope, mode}; contract tests updated deliberately.
+- `POST /api/v1/screens/explain` {definition, symbol, as_of?, data_version?} → RankExplanation.
+- `POST /api/v1/screens/selection` {definition, as_of?, portfolio_id? | holdings?, constraints} → SelectionResult (owner-checked portfolio).
+- `GET /api/v1/meta/ranking-presets` → [{key,label,description,status,patch}].
+- `FactorOut` gains `weight_family, rankable, validation_status, definition`.
+- `make client` regenerates openapi + TS; `generate:check` clean.
+
+### C7. Presets (`ranking_presets`), all expressed as ScreenDefinition patches
+`desk_quality` (single desk_score) · `path_quality` (composite: pos_days_6m, max_dd_12m, downside_vol_12m,
+ret_ex_top3_12m) · `trend_structure` (composite: ma_stack_score, ma50_slope_20, atr_ext_20 target
+[0,3]) · `participation` (composite: vol_exp_21_126, vol_persist_20) · `leadership` (composite:
+rank_persist_20, rs_persist_126, avg_sharpe_12_6_3_1) · `nse_momentum` (single nse_momentum_score,
+index nifty-200, label "NIFTY200 Momentum 30 score (NSE methodology)" — score and eligibility only;
+FF-mcap weights, caps and the 15/45 buffer are index construction, stated in the description) ·
+`desk_sequential` (sequential: desk_score → atr_ext_20 lower → median_vol_12m higher). Status per
+preset comes from leaf F's evidence.
+
+### C8. Validation (leaf F)
+Core `baskfy_core.ranking_validation` (pure) + runner `research/ranking-validation/` over the
+local AWS export. Base model vs base + one factor, each candidate; monthly rebalance, signal at
+close, fill at next session open, 25 bps a side, top 20 with entry/retention buffer, PIT universe
+= all EQ names with bars whose trailing 63-session median traded value ≥ ₹5 cr (PIT from bars;
+survivorship-free because delisted instruments are in the export), 2013-01 → 2026-08, halves
+IS < 2020-01-01 ≤ OOS. Metrics: CAGR net, max DD, annual turnover, mean max-sector weight
+(sector = narrowest sectoral index where PIT membership exists, else unclassified), per-year
+returns, IS/OOS. Extra studies: Sortino vs Sharpe, RSI-penalty, regime filter, entry/retention grid.
+Output `docs/ranking/VALIDATION.md` + `validation_status` updates + preset statuses + the selection
+defaults for entry/retention (from the grid's best OOS-stable cell).
+
+## Phase-2 tree and waves
+
+- 2 Ranking engine, complete ................................ `gates/ranking-2.md`
+  - 2.A Stored factors (core factors, registry, model, 0046) . `gates/ranking-2.A-factors.md` — wave 1
+  - 2.B Desk SCORE service + table (0047) ..................... `gates/ranking-2.B-desk-score.md` — wave 1
+  - 2.E Portfolio selection core ............................. `gates/ranking-2.E-selection.md` — wave 1
+  - 2.C Worker: nightly wiring, rank persistence, backfill .... `gates/ranking-2.C-worker.md` — wave 2
+  - 2.D Ranking engine + definition + screener SQL + presets . `gates/ranking-2.D-engine.md` — wave 2
+  - 2.F Validation harness + evidence ....................... `gates/ranking-2.F-validation.md` — wave 3
+  - 2.G API ................................................. `gates/ranking-2.G-api.md` — wave 3
+  - 2.H Web ................................................. `gates/ranking-2.H-web.md` — wave 4
+  - 2.I Integration, docs, deploy, box backfill ............. `gates/ranking-2.md` (root) — wave 5
+
+File ownership: A owns `factors.py`, new `factors_ranking.py`, `precision.py`, `models/facts.py`,
+`factor_registry.py`, `ranking_research.py`, migration 0046, factor tests, docs/04. B owns
+`desk_config.py`, `desk_score_service.py`, `models/ranking.py`, migration 0047, kite-tree config test.
+E owns `ranking_selection.py` + its tests. C owns `services/worker/**`. D owns `screen_definition*.py`,
+`ranking.py`, `ranking_engine.py`, `nse_momentum.py`, `ranking_presets.py`, `screener.py`, api-client
+screen-definition files + corpus. F owns `ranking_validation.py`, `research/ranking-validation/`,
+`docs/ranking/VALIDATION.md` and may edit only `validation_status` values in the registry and preset
+statuses. G owns `services/api/**` + `packages/api-client/openapi.json` + `generated/`. H owns
+`apps/web/**`. Shared doc `docs/DECISIONS-MERGE.md`: leaves append under their own heading only.
+
+## Phase-2 status log
+- 2026-09-13 20:40 survey done (3 explorers + NSE PDF); contract C1–C8 written; wave 1 dispatching
+- 2026-09-13 20:55 wave 1 dispatched (2.A factors, 2.B desk score, 2.E selection); 2.D started early on its independent parts (definition, engine, NSE) — screener/ranking.py/presets held until wave 1 lands
+- 2026-09-13 2.E returned: 59 passed, own-file mypy clean (re-run by driver); G4 whole-repo mypy pending wave-1 WIP. Note: correlation cap is on signed corr (hedges allowed) — contract C5 amended by this line

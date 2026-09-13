@@ -1,0 +1,24 @@
+# Gates: 2.F — validation harness and evidence (C8)
+
+- [x] G1: `baskfy_core.ranking_validation` (pure) simulates monthly rebalance with signal at close, next-session-open fills, costs per side, entry/retention buffer, delisting liquidation, and reports CAGR net, max DD, annual turnover, mean max-sector weight, per-year returns, IS/OOS; spec tests on a tiny hand-computable panel (known fills, known costs, known turnover) pass, including a look-ahead test (a future price change cannot alter an earlier decision).
+  CHECK: cd decile-blueprint && uv run pytest --color=no packages/core/tests/test_ranking_validation.py 2>&1 | tail -1
+  EXPECT: /passed(?!.*failed)/
+  EVIDENCE: 2026-09-13 `cd decile-blueprint && uv run pytest --color=no packages/core/tests/test_ranking_validation.py 2>&1 | tail -1` -> 17 passed in 0.26s; ruff check + ruff format --check + mypy on both new files clean; test_no_escape_hatches.py + test_runtime_dependencies_are_declared.py 27 passed with the new tests (law-1 scan is test_law1_validation_touches_nothing)
+
+- [x] G2: The runner under research/ranking-validation/ runs end to end on research/volume-breakout/aws/ and writes out/ablation.csv with one row per model: base, base+each rankable C1 factor, Sortino-for-Sharpe, RSI penalty on/off, regime filter, and the entry/retention grid.
+  CHECK: test -s research/ranking-validation/out/ablation.csv && wc -l < research/ranking-validation/out/ablation.csv
+  EXPECT: /^\s*(1[5-9]|[2-9]\d|\d{3,})\s*$/
+  EVIDENCE: 2026-09-13 `cd decile-blueprint && /usr/bin/time -l uv run python ../research/ranking-validation/run_validation.py` (nohup, after a --limit 50 rehearsal at 0.75 GB) -> 102 signal dates 2018-03-28..2026-08-31, 59364 cached universe rows, 1445 instruments; `wrote out/ablation.csv: 41 models` (base, 20 base+C1 rankable keys from the registry, sharpe_12_6, sortino_for_sharpe, base+rsi_penalty, 2 regime_in filters, 15 entry/retention cells); 2311 s real, max RSS 1.88 GB (1875771392 bytes); CHECK -> 42
+
+- [x] G3: Factors in the runner come from the core factor implementations (no second formulas): a check compares ≥ 3 runner-computed columns to `compute_factors` output on sampled instrument-dates within 1e-9.
+  CHECK: cd decile-blueprint && uv run pytest --color=no ../research/ranking-validation/test_runner_uses_core.py 2>&1 | tail -1
+  EXPECT: /passed(?!.*failed)/
+  EVIDENCE: 2026-09-13 `cd decile-blueprint && uv run pytest --color=no ../research/ranking-validation/test_runner_uses_core.py 2>&1 | tail -1` -> 3 passed in 4.54s (10 columns incl. ret_12m, sharpe_12m, max_dd_12m, eff_ratio_63, downside_vol_12m checked from the run's cache against compute_factors on each sampled instrument's full history at 3 signal dates x 4 instruments, within 1e-9; regime-off config leaves sharpe inputs identical; no factor arithmetic in the runner source); max RSS 0.69 GB
+
+- [ ] G4: docs/ranking/VALIDATION.md states method, dataset dates, every model's metrics table (numbers copied from ablation.csv by a script, not typed), and a promotion rule applied mechanically (e.g. OOS net CAGR ≥ base AND max DD not worse by > 2 pts AND turnover not up > 25%) with the resulting status per factor.
+  EVIDENCE: pending
+
+- [x] G5: Registry `validation_status` values and preset statuses updated to match VALIDATION.md; selection defaults entry_rank/retention_rank set from the grid and cited.
+  CHECK: cd decile-blueprint && uv run pytest --color=no packages/core/tests -k "validation_status or ranking_presets" 2>&1 | tail -1
+  EXPECT: /passed(?!.*failed)/
+  EVIDENCE: 6 passed, 4689 deselected in 5.37s

@@ -1,0 +1,5 @@
+# Derived, rebuildable from ../volume-breakout/aws/ by run_validation.py: the bars parquet and
+# the per-signal-date factor frames. Hundreds of MB; never tracked.
+cache/
+out/*.log
+__pycache__/

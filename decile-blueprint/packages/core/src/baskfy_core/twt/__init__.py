@@ -8,8 +8,8 @@ desk own every read, write and timestamp.
 
 One sentence of the strategy: a name that has run 30 % above its low of three months ago and whose
 last three weekly closes sit within 3.01 % of each other, bought at the next session's open the
-    first day the state is true after five sessions out, in a name turning over ₹2 crore a day, with no
-new entry unless more than 40 % of the traded universe is above its own 200-session average —
+first day the state is true after five sessions out, in a name turning over ₹2 crore a day, with
+no new entry unless more than 40 % of the traded universe is above its own 200-session average —
 stopped 20 % below the fill and trailed 20 % below the highest high since, and **exited by nothing
 else**.
 

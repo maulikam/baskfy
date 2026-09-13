@@ -41,6 +41,7 @@ from typing import Final
 import numpy as np
 import polars as pl
 
+from baskfy_core import factors_ranking
 from baskfy_core.circuits import (
     DEFAULT_CIRCUIT_CONFIG,
     CircuitConfig,
@@ -157,17 +158,22 @@ class FactorResult:
 # ---------------------------------------------------------------------------
 
 
-def compute_factors(
+def compute_factors(  # noqa: PLR0913 - two benchmarks and a config are genuine inputs
     bars: pl.DataFrame,
     as_of: dt.date,
     trading_days: list[dt.date] | tuple[dt.date, ...],
     benchmark: pl.DataFrame | None = None,
     config: FactorConfig = DEFAULT_FACTOR_CONFIG,
+    *,
+    market_benchmark: pl.DataFrame | None = None,
 ) -> FactorResult:
     """Compute every factor in docs/05 for one as-of date, rounded for storage.
 
     ``bars`` is the long history for every instrument being computed — not just the as-of day.
-    ``benchmark`` is the NIFTY 50 level series (``date``, ``close``) for beta (docs/05 §6).
+    ``benchmark`` is the NIFTY 50 level series (``date``, ``level`` — or ``close``, the spelling
+    beta has always been handed) for beta (docs/05 §6) and ``resid_ret_12m``.
+    ``market_benchmark`` is the NIFTY 500 level series, in the same shape, for ``excess_ret_*``
+    and ``rs_persist_126`` (docs/ranking/PLAN.md C1). Either absent makes its columns NULL.
 
     Rounding happens here because CLAUDE.md house rule 8 requires it at write time: the API, the
     UI and the CSV export all read the stored row, so a value rounded three times independently
@@ -176,18 +182,27 @@ def compute_factors(
     """
     return FactorResult(
         apply_storage_precision(
-            compute_factors_unrounded(bars, as_of, trading_days, benchmark, config).frame
+            compute_factors_unrounded(
+                bars,
+                as_of,
+                trading_days,
+                benchmark,
+                config,
+                market_benchmark=market_benchmark,
+            ).frame
         ),
         resolve_windows(as_of, trading_days, config.window_months),
     )
 
 
-def compute_factors_unrounded(
+def compute_factors_unrounded(  # noqa: PLR0913 - the same inputs as compute_factors
     bars: pl.DataFrame,
     as_of: dt.date,
     trading_days: list[dt.date] | tuple[dt.date, ...],
     benchmark: pl.DataFrame | None = None,
     config: FactorConfig = DEFAULT_FACTOR_CONFIG,
+    *,
+    market_benchmark: pl.DataFrame | None = None,
 ) -> FactorResult:
     """:func:`compute_factors` without docs/13 §4's storage rounding. **Never write this.**
 
@@ -199,6 +214,7 @@ def compute_factors_unrounded(
     """
     _require_columns(bars)
     windows = resolve_windows(as_of, trading_days, config.window_months)
+    ranking_windows = factors_ranking.resolve_ranking_windows(as_of, trading_days)
 
     frame = _prepare(bars, config)
     frame = _with_returns(frame)
@@ -208,10 +224,21 @@ def compute_factors_unrounded(
     frame = _with_liquidity(frame)
     frame = _with_rsi(frame, windows)
     frame = _with_beta(frame, benchmark, config)
+    # docs/ranking/PLAN.md C1 — the stored ranking factors, in baskfy_core.factors_ranking.
+    frame = factors_ranking.with_ranking_series(frame, ranking_windows, market_benchmark)
     frame = classify_regimes(frame, config.regime)
 
     at_as_of = frame.filter(pl.col("date") == as_of)
     at_as_of = _null_short_windows(at_as_of, windows)
+    at_as_of = factors_ranking.with_ranking_at_as_of(
+        at_as_of,
+        frame,
+        as_of=as_of,
+        trading_days=trading_days,
+        windows=ranking_windows,
+        benchmark=benchmark,
+        market_benchmark=market_benchmark,
+    )
     return FactorResult(at_as_of, windows)
 
 
@@ -500,7 +527,9 @@ def _with_rsi(frame: pl.DataFrame, windows: dict[int, FactorWindow]) -> pl.DataF
         )
 
     for addition in additions:
-        frame = frame.join(addition, on=["date", "instrument_id"], how="left")
+        frame = frame.join(
+            addition, on=["date", "instrument_id"], how="left", maintain_order="left"
+        )
     return frame
 
 
@@ -557,18 +586,21 @@ def _with_beta(
     population moments on both sides, whose ``1/n`` factors cancel in the ratio. That keeps it a
     Polars expression over every instrument at once rather than a per-instrument regression.
     """
-    if benchmark is None or benchmark.height == 0:
+    levels = factors_ranking.benchmark_levels(benchmark)
+    if levels is None:
         return frame.with_columns(pl.lit(None, dtype=pl.Float64).alias("beta_12m"))
 
     bench = (
-        benchmark.select(["date", pl.col("close").cast(pl.Float64).alias("bench_close")])
+        levels.select(["date", pl.col("level").alias("bench_close")])
         .sort("date")
         .with_columns(
             (pl.col("bench_close") / pl.col("bench_close").shift(1) - 1).alias("bench_return")
         )
         .select(["date", "bench_return"])
     )
-    frame = frame.join(bench, on="date", how="left")
+    # maintain_order: the rolling moments below read rows in (instrument_id, date) order, and
+    # Polars documents that a join without it promises no order at all.
+    frame = frame.join(bench, on="date", how="left", maintain_order="left")
 
     n = TRADING_DAYS_PER_YEAR
     paired = pl.col("daily_return").is_not_null() & pl.col("bench_return").is_not_null()

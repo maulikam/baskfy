@@ -38,6 +38,18 @@ IGNORE_ABOVE_BETA_IGNORE: Final = 100
 #: docs/01 §2.14 — the screener exposes exactly three custom-filter slots.
 MAX_CUSTOM_FILTERS: Final = 3
 
+#: docs/ranking/PLAN.md C3 — the explicit ranking-term list is capped at eight terms.
+MAX_RANKING_TERMS: Final = 8
+
+#: docs/ranking/PLAN.md C3 — at most ten factor-range eligibility filters.
+MAX_FACTOR_RANGES: Final = 10
+
+#: docs/ranking/PLAN.md C3 — a term weight lies in ``(0, MAX_TERM_WEIGHT]``.
+MAX_TERM_WEIGHT: Final = 100
+
+#: The Wasserstein regime labels ``factor_daily.regime`` carries (C1 ``regime_priority``).
+REGIME_VALUES: Final[tuple[str, ...]] = ("BULL", "NEUTRAL", "BEAR")
+
 #: A percentage filter's upper bound. Positive-days values are a share of the window.
 PERCENT_MAX: Final = 100
 
@@ -58,6 +70,13 @@ ApplyFiltersOn = Literal[
     "all", "decile_1", "decile_2", "decile_3", "decile_4", "decile_5", "top_50", "top_100"
 ]
 CustomFilterOp = Literal[">=", "<=", "="]
+TermPreference = Literal["higher", "lower", "target_range"]
+MissingDataPolicy = Literal["penalize", "neutral", "exclude"]
+RegimeLabel = Literal["BULL", "NEUTRAL", "BEAR"]
+
+#: A finite float. JSON cannot carry NaN or infinity, and a Python caller must not smuggle one in:
+#: a NaN bound would make every comparison false and silently empty a screen.
+FiniteFloat = Annotated[float, Field(allow_inf_nan=False)]
 
 #: A factor / column key. The shape check is the outer gate; the whitelist check is
 #: :func:`_known_factor` / :func:`_known_operand` below, which reject anything the factor registry
@@ -81,6 +100,16 @@ def _known_factor(key: str, field: str) -> str:
             f"{field}: {key!r} is not one of the {len(FACTORS)} factor-registry keys "
             "(docs/01 §3; see GET /meta/factors)"
         )
+    return key
+
+
+def _rankable_factor(key: str, field: str) -> str:
+    """A ranking term must name a registry factor that can reorder a list.
+
+    ``rankable=False`` factors (a return in excess of one common index, a percentile that only
+    gates) are refused with a pointer to ``factor_ranges``, which is where they mean something.
+    """
+    _known_factor(key, field)
     return key
 
 
@@ -324,6 +353,115 @@ class CustomFilter(_Model):
         return self.enabled
 
 
+class RankingTerm(_Model):
+    """One explicit ranking term (docs/ranking/PLAN.md C3).
+
+    ``preference`` says how a raw value becomes a score in ``[0, 1]`` (C4 step 3): ``higher`` and
+    ``lower`` are percentiles, ``target_range`` scores distance from ``[target_min, target_max]``.
+    ``weight`` is only meaningful in ``composite`` mode, so any other mode refuses a non-default
+    weight rather than silently ignoring it.
+    """
+
+    factor: FactorKey
+    preference: TermPreference
+    weight: Annotated[float, Field(gt=0, le=MAX_TERM_WEIGHT, allow_inf_nan=False)] = 1.0
+    target_min: FiniteFloat | None = None
+    target_max: FiniteFloat | None = None
+
+    @field_validator("factor")
+    @classmethod
+    def _in_registry(cls, v: str) -> str:
+        return _rankable_factor(v, "ranking_terms.factor")
+
+    @model_validator(mode="after")
+    def _bounds_match_preference(self) -> RankingTerm:
+        has_bound = self.target_min is not None or self.target_max is not None
+        if self.preference == "target_range":
+            if not has_bound:
+                raise ValueError(
+                    f"ranking_terms[{self.factor}]: target_range needs target_min, target_max "
+                    "or both"
+                )
+            if (
+                self.target_min is not None
+                and self.target_max is not None
+                and self.target_min > self.target_max
+            ):
+                raise ValueError(
+                    f"ranking_terms[{self.factor}]: target range is inverted: "
+                    f"target_min={self.target_min} > target_max={self.target_max}"
+                )
+        elif has_bound:
+            raise ValueError(
+                f"ranking_terms[{self.factor}]: target_min/target_max only apply to "
+                f"preference='target_range', not {self.preference!r}"
+            )
+        return self
+
+
+class FactorRange(_Model):
+    """An inclusive ``[min, max]`` eligibility filter on one factor (docs/ranking/PLAN.md C3).
+
+    This is where a non-rankable factor belongs: ``excess_ret_12m >= 0`` is a meaningful gate even
+    though a common-index subtraction can never reorder a list (PLAN correction 1). NULL never
+    satisfies a range (docs/06 step 4).
+    """
+
+    enabled: bool = True
+    factor: FactorKey
+    min: FiniteFloat | None = None
+    max: FiniteFloat | None = None
+
+    @field_validator("factor")
+    @classmethod
+    def _sql_factor(cls, v: str) -> str:
+        key = _known_factor(v, "factor_ranges.factor")
+        if FACTORS[key].is_computed:
+            raise ValueError(
+                f"factor_ranges.factor: {key!r} is computed in-process, not stored, so it cannot "
+                "be a SQL eligibility filter"
+            )
+        return key
+
+    @model_validator(mode="after")
+    def _bounded_and_ordered(self) -> FactorRange:
+        if self.min is None and self.max is None:
+            raise ValueError(f"factor_ranges[{self.factor}]: set min, max or both")
+        if self.min is not None and self.max is not None and self.min > self.max:
+            raise ValueError(
+                f"factor_ranges[{self.factor}]: range is inverted: min={self.min} > max={self.max}"
+            )
+        return self
+
+    def is_active(self) -> bool:
+        return self.enabled
+
+
+class FamilyWeights(_Model):
+    """Relative weight per weight family for ``composite`` (docs/ranking/PLAN.md C3/C4).
+
+    ``None`` means "no opinion": the ranking engine gives that family the mean of the explicit
+    weights of the families present (or 1 when none is explicit), then normalises the shares of the
+    families that actually have terms to sum to one. That makes the scale irrelevant — ``60/40`` and
+    ``0.6/0.4`` mean the same — and three momentum terms cannot triple momentum's share.
+    """
+
+    momentum: Annotated[float, Field(ge=0, allow_inf_nan=False)] | None = None
+    path_quality: Annotated[float, Field(ge=0, allow_inf_nan=False)] | None = None
+    trend_structure: Annotated[float, Field(ge=0, allow_inf_nan=False)] | None = None
+    participation: Annotated[float, Field(ge=0, allow_inf_nan=False)] | None = None
+    risk_execution: Annotated[float, Field(ge=0, allow_inf_nan=False)] | None = None
+
+    def as_mapping(self) -> dict[str, float | None]:
+        return {
+            "momentum": self.momentum,
+            "path_quality": self.path_quality,
+            "trend_structure": self.trend_structure,
+            "participation": self.participation,
+            "risk_execution": self.risk_execution,
+        }
+
+
 class ScreenDefinition(_Model):
     """The persisted screen configuration.
 
@@ -361,6 +499,20 @@ class ScreenDefinition(_Model):
     historical_date: dt.date | None = None
     custom_filters: list[CustomFilter] = Field(default_factory=list)
 
+    # --- Phase 2 (docs/ranking/PLAN.md C3). Each is omitted from canonical_json at its default,
+    # so every definition saved before these existed keeps its hash. -------------------------
+    #: Non-empty switches the screen from the legacy sort_by/factor_two/factor_three path to the
+    #: ranking engine (C4). ``ranking_terms[0].factor`` must equal ``sort_by``.
+    ranking_terms: list[RankingTerm] = Field(default_factory=list)
+    #: Composite only. ``None`` = equal share across the families the terms use.
+    family_weights: FamilyWeights | None = None
+    #: What a missing raw value scores: 0.0, 0.5, or the row is dropped (C4 step 3).
+    missing_data: MissingDataPolicy = "penalize"
+    #: Eligibility filters on any stored factor, AND-combined with the docs/06 filters.
+    factor_ranges: list[FactorRange] = Field(default_factory=list)
+    #: Keep only rows whose ``factor_daily.regime`` is one of these. ``None`` = no regime filter.
+    regime_in: list[RegimeLabel] | None = None
+
     @field_validator("sort_by")
     @classmethod
     def _sort_by_in_registry(cls, v: str) -> str:
@@ -386,6 +538,44 @@ class ScreenDefinition(_Model):
             )
         return v
 
+    @field_validator("ranking_terms")
+    @classmethod
+    def _term_limit(cls, v: list[RankingTerm]) -> list[RankingTerm]:
+        if len(v) > MAX_RANKING_TERMS:
+            raise ValueError(
+                f"at most {MAX_RANKING_TERMS} ranking terms are supported; got {len(v)}"
+            )
+        factors = [term.factor for term in v]
+        duplicated = sorted({f for f in factors if factors.count(f) > 1})
+        if duplicated:
+            raise ValueError(
+                f"ranking_terms name {duplicated} more than once; use one term with a larger "
+                "weight instead"
+            )
+        return v
+
+    @field_validator("factor_ranges")
+    @classmethod
+    def _range_limit(cls, v: list[FactorRange]) -> list[FactorRange]:
+        if len(v) > MAX_FACTOR_RANGES:
+            raise ValueError(
+                f"at most {MAX_FACTOR_RANGES} factor ranges are supported; got {len(v)}"
+            )
+        return v
+
+    @field_validator("regime_in")
+    @classmethod
+    def _regimes(cls, v: list[str] | None) -> list[str] | None:
+        if v is None:
+            return v
+        if not v:
+            raise ValueError(
+                "regime_in cannot be empty (no row could match); use null for no filter"
+            )
+        if len(set(v)) != len(v):
+            raise ValueError(f"regime_in contains duplicates: {v}")
+        return v
+
     @field_validator("custom_filters")
     @classmethod
     def _slot_limit(cls, v: list[CustomFilter]) -> list[CustomFilter]:
@@ -407,25 +597,61 @@ class ScreenDefinition(_Model):
                 "ranking_mode='single' cannot combine factor_two or factor_three; "
                 "use sequential or composite"
             )
-        if self.ranking_scope == "within_sector":
+        # desk_score is the book's SCORE read from desk_score_daily (C2). Summing its row number
+        # with another factor's would invent a second ranking story (PLAN Phase 1.2); a composite
+        # of explicit ranking_terms is the supported way to blend it.
+        if self.sort_by == "desk_score" and (
+            self.factor_two.is_active() or self.factor_three.is_active()
+        ):
             raise ValueError(
-                "ranking_scope='within_sector' is reserved until sector membership "
-                "is a first-class column (docs/ranking/PLAN.md)"
+                "desk_score cannot combine with factor_two or factor_three; "
+                "it is a single computed SCORE"
             )
-        # desk_score is a single computed SCORE (A–F). Extra factors and fixed-universe
-        # percentile scopes would invent a second ranking story (docs/ranking/PLAN.md Phase 1.2).
-        if self.sort_by == "desk_score":
-            if self.factor_two.is_active() or self.factor_three.is_active():
+        if self.ranking_terms:
+            self._check_ranking_terms()
+        else:
+            if self.ranking_scope == "within_sector":
                 raise ValueError(
-                    "desk_score cannot combine with factor_two or factor_three; "
-                    "it is a single computed SCORE"
+                    "ranking_scope='within_sector' needs explicit ranking_terms; the legacy "
+                    "sort_by/factor_two/factor_three path ranks in SQL without sectors"
                 )
-            if self.ranking_scope == "fixed_universe":
+            if self.family_weights is not None:
+                raise ValueError("family_weights needs ranking_terms in composite mode")
+            if self.missing_data != "penalize":
                 raise ValueError(
-                    "desk_score ranks filtered survivors only; "
-                    "ranking_scope='fixed_universe' is not supported"
+                    "missing_data applies to ranking_terms; the legacy path always sorts "
+                    "missing values last"
                 )
         return self
+
+    def _check_ranking_terms(self) -> None:
+        """C3's rules for a definition that ranks with explicit terms."""
+        first = self.ranking_terms[0]
+        if self.sort_by != first.factor:
+            raise ValueError(
+                f"sort_by must equal ranking_terms[0].factor ({first.factor!r}); "
+                f"got {self.sort_by!r}"
+            )
+        if self.factor_two.is_active() or self.factor_three.is_active():
+            raise ValueError("ranking_terms replace factor_two and factor_three; disable them")
+        if self.ranking_mode == "single" and len(self.ranking_terms) != 1:
+            raise ValueError(
+                f"ranking_mode='single' ranks by exactly one term; got {len(self.ranking_terms)}"
+            )
+        if self.ranking_mode != "composite":
+            weighted = [t.factor for t in self.ranking_terms if t.weight != 1.0]
+            if weighted:
+                raise ValueError(
+                    f"term weights only apply to ranking_mode='composite'; {weighted} carry one "
+                    f"under {self.ranking_mode!r}"
+                )
+            if self.family_weights is not None:
+                raise ValueError("family_weights only apply to ranking_mode='composite'")
+            if self.ranking_scope == "within_sector":
+                raise ValueError(
+                    "ranking_scope='within_sector' only changes a composite score; "
+                    f"{self.ranking_mode!r} orders by raw values, so it would do nothing"
+                )
 
     def ignore_above_beta_is_active(self) -> bool:
         return self.ignore_above_beta != IGNORE_ABOVE_BETA_IGNORE
@@ -445,10 +671,31 @@ class ScreenDefinition(_Model):
         applied (``from_`` -> ``from``), defaults materialised so an omitted key and an explicit
         default hash alike, keys sorted recursively, and no insignificant whitespace. List order
         is preserved because ``custom_filters`` order is semantic.
+
+        One deliberate exception to "defaults materialised": the Phase-2 fields
+        (:data:`PHASE_2_DEFAULTS`) are dropped while they hold their default, so a definition
+        written before they existed hashes exactly as it did (docs/ranking/PLAN.md C3, pinned by
+        ``test_screen_definition.py::test_hash_stability_*``). An explicit default still hashes
+        like an omitted one, because both are dropped.
         """
         payload = self.model_dump(mode="json", by_alias=True)
+        for key, default in PHASE_2_DEFAULTS.items():
+            if payload.get(key) == default:
+                del payload[key]
         return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
     def definition_hash(self) -> str:
         """sha256 of :meth:`canonical_json` — ``screen_run.definition_hash`` and the cache key."""
         return hashlib.sha256(self.canonical_json().encode("utf-8")).hexdigest()
+
+
+#: The JSON value of each Phase-2 field at its default; :meth:`ScreenDefinition.canonical_json`
+#: omits a field that equals it. Adding a field to ``ScreenDefinition`` later means adding it here,
+#: or every saved screen's hash changes.
+PHASE_2_DEFAULTS: Final[dict[str, object]] = {
+    "ranking_terms": [],
+    "family_weights": None,
+    "missing_data": "penalize",
+    "factor_ranges": [],
+    "regime_in": None,
+}

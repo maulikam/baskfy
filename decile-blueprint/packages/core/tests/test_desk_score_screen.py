@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 from collections.abc import Collection
 from dataclasses import dataclass, field
 
@@ -10,7 +11,7 @@ import pytest
 
 from baskfy_core import ranking
 from baskfy_core.factor_registry import FACTORS
-from baskfy_core.ranking import DESK_SCORE_KEY, DESK_SCORE_EXPLAIN_COLUMNS
+from baskfy_core.ranking import DESK_SCORE_EXPLAIN_COLUMNS, DESK_SCORE_KEY
 from baskfy_core.screen_definition import ExtraFactor, ScreenDefinition
 from baskfy_core.screener import ScreenQueryError, build_screen_query, build_survivors_query
 from baskfy_core.universes import UNIVERSE_BY_SLUG
@@ -132,10 +133,25 @@ def test_screen_definition_rejects_desk_score_with_factor_two() -> None:
         )
 
 
-def test_build_screen_query_refuses_desk_score() -> None:
+def test_build_screen_query_reads_desk_score_daily() -> None:
+    """PLAN.md C2 supersedes Phase 1.2's refusal: the screener reads the stored SCORE, and only
+    rows the book scored (``score IS NOT NULL``) can be ranked."""
     definition = ScreenDefinition(index="nifty-500", sort_by=DESK_SCORE_KEY)
-    with pytest.raises(ScreenQueryError, match="desk_score"):
-        build_screen_query(definition, __import__("datetime").date(2026, 8, 18))
+    sql = build_screen_query(definition, dt.date(2026, 8, 18)).sql()
+    assert "JOIN desk_score_daily ON" in sql
+    assert "desk_score_daily.score IS NOT NULL" in sql
+
+
+def test_build_screen_query_refuses_ranking_terms() -> None:
+    definition = ScreenDefinition.model_validate(
+        {
+            "index": "nifty-500",
+            "sort_by": DESK_SCORE_KEY,
+            "ranking_terms": [{"factor": DESK_SCORE_KEY, "preference": "higher"}],
+        }
+    )
+    with pytest.raises(ScreenQueryError, match="ranking_terms"):
+        build_screen_query(definition, dt.date(2026, 8, 18))
 
 
 def test_build_survivors_query_requires_desk_score() -> None:
@@ -145,8 +161,6 @@ def test_build_survivors_query_requires_desk_score() -> None:
 
 
 def test_build_survivors_query_emits_input_columns() -> None:
-    import datetime as dt
-
     definition = ScreenDefinition(index="nifty-500", sort_by=DESK_SCORE_KEY)
     query = build_survivors_query(definition, dt.date(2026, 8, 18))
     assert query.sorting_factor.key == DESK_SCORE_KEY

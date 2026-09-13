@@ -663,6 +663,39 @@ FACTORS_ADDED_SINCE_DOCS: Final[dict[str, str]] = {
     "ma_dist_200": "docs/ranking/PLAN.md Phase 1",
     "ma_stack_score": "docs/ranking/PLAN.md Phase 1",
     "desk_score": "docs/ranking/PLAN.md Phase 1.2",
+    # Ranking Phase 2 (C1) — the stored ranking factors, regime_priority and the NSE score.
+    **{
+        key: "docs/ranking/PLAN.md Phase 2 C1"
+        for key in (
+            "atr_14",
+            "atr_ext_20",
+            "ma50_slope_20",
+            "eff_ratio_63",
+            "max_dd_6m",
+            "max_dd_12m",
+            "downside_vol_6m",
+            "downside_vol_12m",
+            "sortino_6m",
+            "sortino_12m",
+            "underwater_12m",
+            "ret_ex_top3_12m",
+            "accel_21_105",
+            "accel_21_105_vs",
+            "vol_exp_21_126",
+            "vol_persist_20",
+            "excess_ret_3m",
+            "excess_ret_6m",
+            "excess_ret_12m",
+            "resid_ret_12m",
+            "rs_persist_126",
+            "mom_pctile",
+            "rank_persist_20",
+            "nse_mr6",
+            "nse_mr12",
+            "regime_priority",
+            "nse_momentum_score",
+        )
+    },
 }
 
 
@@ -698,11 +731,18 @@ class TestRegistry:
         assert counts["rsi"] == 16
         assert counts["risk_adjusted"] == 5
         assert counts["skip_month"] == 2
-        assert counts["path_quality"] == 5
-        assert counts["trend_structure"] == 5
-        assert counts["participation"] == 1
-        # vol_12m was already non_momentum; Phase 1 adds vol_1m/3m/6m/9m; Phase 1.2 adds desk_score.
-        assert counts["non_momentum"] == 8 + 4 + 1
+        # Phase 1 put five keys in path_quality and trend_structure and one in participation;
+        # Phase 2 (C1) adds eff_ratio_63, max_dd_6m/12m, underwater_12m, ret_ex_top3_12m to the
+        # first, atr_ext_20, ma50_slope_20, regime_priority to the second, and vol_exp_21_126,
+        # vol_persist_20 to the third.
+        assert counts["path_quality"] == 5 + 5
+        assert counts["trend_structure"] == 5 + 3
+        assert counts["participation"] == 1 + 2
+        # vol_12m was already non_momentum; Phase 1 adds vol_1m/3m/6m/9m; Phase 1.2 adds desk_score;
+        # Phase 2 adds the risk/execution columns atr_14, downside_vol_6m/12m, sortino_6m/12m.
+        assert counts["non_momentum"] == 8 + 4 + 1 + 5
+        # Phase 2's momentum-quality display group: 11 stored columns + nse_momentum_score.
+        assert counts["momentum_quality"] == 12
 
     def test_the_headline_count_disagrees_with_the_enumeration(self) -> None:
         """docs/01 §3 is headed "The 62 ranking factors" but its last family, labelled
@@ -723,7 +763,7 @@ class TestRegistry:
         assert DOCUMENTED_FACTOR_COUNT == 62
         expected_named = 64 + len(FACTORS_ADDED_SINCE_DOCS)
         assert expected_named == NAMED_FACTOR_COUNT
-        assert family_counts()["non_momentum"] == 13
+        assert family_counts()["non_momentum"] == 18
 
     def test_the_column_picker_count_disagrees_the_same_way(self) -> None:
         """docs/01 §4 says "34 available columns" and enumerates 36."""

@@ -53,18 +53,43 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Final, Protocol
 
-from sqlalchemy import Select, create_mock_engine, literal, literal_column, select
+from sqlalchemy import (
+    Select,
+    and_,
+    case,
+    create_mock_engine,
+    false,
+    literal,
+    literal_column,
+    not_,
+    or_,
+    select,
+    true,
+)
 from sqlalchemy.engine.interfaces import Dialect
 from sqlalchemy.sql import ColumnElement, func
 from sqlalchemy.sql.elements import KeyedColumnElement, Label
 from sqlalchemy.sql.selectable import CTE
 
-from baskfy_core import factor_registry
+from baskfy_core import factor_registry, ranking_engine
 from baskfy_core.factor_registry import COLUMN_PICKER_KEYS, CUSTOM_FILTER_OPERANDS, Factor
-from baskfy_core.models import FactorDaily, IndexMemberDaily, Instrument, OhlcvDaily
+from baskfy_core.models import (
+    DeskScoreDaily,
+    FactorDaily,
+    IndexDef,
+    IndexMemberDaily,
+    Instrument,
+    OhlcvDaily,
+)
+from baskfy_core.nse_momentum import NSE_MOMENTUM_INDEX
 from baskfy_core.ranking import DESK_SCORE_INPUT_COLUMNS, DESK_SCORE_KEY, is_desk_score_factor
 from baskfy_core.screen_definition import ScreenDefinition
-from baskfy_core.universes import DECILE_RANK_KEY, UNIVERSE_BY_SLUG
+from baskfy_core.universes import (
+    DECILE_RANK_KEY,
+    SECTOR_INDEX_SLUGS,
+    UNIVERSE_BY_SLUG,
+    Universe,
+)
 
 #: docs/06 §step 3 — the bucket table. Baskfys are a fraction of the universe; ``top_50`` and
 #: ``top_100`` are row counts ("or LIMIT n" in the skeleton).
@@ -172,6 +197,11 @@ def validate_definition(definition: ScreenDefinition) -> None:
             continue
         _require_operand(custom.left, where=f"custom_filters[{position}].left")
         _require_operand(custom.right, where=f"custom_filters[{position}].right")
+    for position, term in enumerate(definition.ranking_terms, start=1):
+        _require_factor(term.factor, where=f"ranking_terms[{position}].factor")
+    for position, factor_range in enumerate(definition.factor_ranges, start=1):
+        if factor_range.is_active():
+            _require_factor(factor_range.factor, where=f"factor_ranges[{position}].factor")
     if definition.apply_filters_on not in ("all", *BUCKET_FRACTIONS, *BUCKET_ROW_LIMITS):
         raise ScreenQueryError(f"apply_filters_on: unknown bucket {definition.apply_filters_on!r}")
 
@@ -246,103 +276,270 @@ def _bucket_order(column: KeyedColumnElement[object]) -> ColumnElement[object]:
     return column.desc().nullslast()
 
 
-def _scalar_clauses(definition: ScreenDefinition, cols: ColumnLookup) -> list[ColumnElement[bool]]:
+@dataclass(frozen=True, slots=True)
+class FilterClause:
+    """One AND-combined eligibility predicate, named for its ``fail__<name>`` flag.
+
+    The legacy statement only ever uses ``clause``; the ranking frame (docs/ranking/PLAN.md C4)
+    needs to say *which* predicate a row failed, so every builder names what it emits. ``name``
+    is built from definition field names, positions and registry keys — never from a free-text
+    value — so it is a safe SQL label; ``detail`` is display text and never reaches the SQL.
+    """
+
+    name: str
+    detail: str
+    clause: ColumnElement[bool]
+
+
+def _label(key: str) -> str:
+    return factor_registry.get(key).label if key in factor_registry.FACTORS else key
+
+
+def _scalar_clauses(definition: ScreenDefinition, cols: ColumnLookup) -> list[FilterClause]:
     """The single-threshold and range filters of docs/06 §step 4's table."""
-    clauses: list[ColumnElement[bool]] = []
+    clauses: list[FilterClause] = []
 
     if definition.min_return_1y is not None:
-        clauses.append(cols["ret_12m"] >= definition.min_return_1y)
+        clauses.append(
+            FilterClause(
+                "min_return_1y",
+                f"{_label('ret_12m')} >= {definition.min_return_1y}",
+                cols["ret_12m"] >= definition.min_return_1y,
+            )
+        )
 
     if definition.median_volume_1y is not None:
-        clauses.append(cols["median_vol_12m"] >= definition.median_volume_1y)
+        clauses.append(
+            FilterClause(
+                "median_volume_1y",
+                f"{_label('median_vol_12m')} >= {definition.median_volume_1y}",
+                cols["median_vol_12m"] >= definition.median_volume_1y,
+            )
+        )
 
     if definition.marketcap.from_ is not None:
-        clauses.append(cols["marketcap_cr"] >= definition.marketcap.from_)
+        clauses.append(
+            FilterClause(
+                "marketcap_from",
+                f"{_label('marketcap_cr')} >= {definition.marketcap.from_}",
+                cols["marketcap_cr"] >= definition.marketcap.from_,
+            )
+        )
     if definition.marketcap.to is not None:
-        clauses.append(cols["marketcap_cr"] <= definition.marketcap.to)
+        clauses.append(
+            FilterClause(
+                "marketcap_to",
+                f"{_label('marketcap_cr')} <= {definition.marketcap.to}",
+                cols["marketcap_cr"] <= definition.marketcap.to,
+            )
+        )
 
     if definition.pe.is_active():
         # docs/06: "`pe BETWEEN a AND b AND pe IS NOT NULL`". The IS NOT NULL is redundant under
         # three-valued logic and is kept because docs/01 §2.8 makes it a promise to the user:
         # switching the P/E filter on excludes loss-making companies, whose P/E is undefined.
-        clauses.append(cols["pe"].is_not(None))
+        clauses.append(FilterClause("pe_defined", "P/E is defined", cols["pe"].is_not(None)))
         if definition.pe.from_ is not None:
-            clauses.append(cols["pe"] >= definition.pe.from_)
+            clauses.append(
+                FilterClause(
+                    "pe_from", f"P/E >= {definition.pe.from_}", cols["pe"] >= definition.pe.from_
+                )
+            )
         if definition.pe.to is not None:
-            clauses.append(cols["pe"] <= definition.pe.to)
+            clauses.append(
+                FilterClause("pe_to", f"P/E <= {definition.pe.to}", cols["pe"] <= definition.pe.to)
+            )
 
     if definition.series:
-        clauses.append(cols["series"].in_(list(definition.series)))
+        clauses.append(
+            FilterClause(
+                "series",
+                f"series in {', '.join(definition.series)}",
+                cols["series"].in_(list(definition.series)),
+            )
+        )
 
     if definition.ignore_above_beta_is_active():
-        clauses.append(cols["beta_12m"] <= definition.ignore_above_beta)
+        clauses.append(
+            FilterClause(
+                "ignore_above_beta",
+                f"{_label('beta_12m')} <= {definition.ignore_above_beta}",
+                cols["beta_12m"] <= definition.ignore_above_beta,
+            )
+        )
 
     if definition.price.from_ is not None:
-        clauses.append(cols["close_raw"] >= definition.price.from_)
+        clauses.append(
+            FilterClause(
+                "price_from",
+                f"{_label('close_raw')} >= {definition.price.from_}",
+                cols["close_raw"] >= definition.price.from_,
+            )
+        )
     if definition.price.to is not None:
-        clauses.append(cols["close_raw"] <= definition.price.to)
+        clauses.append(
+            FilterClause(
+                "price_to",
+                f"{_label('close_raw')} <= {definition.price.to}",
+                cols["close_raw"] <= definition.price.to,
+            )
+        )
 
     return clauses
 
 
-def _moving_average_clauses(
-    definition: ScreenDefinition, cols: ColumnLookup
-) -> list[ColumnElement[bool]]:
+def _moving_average_clauses(definition: ScreenDefinition, cols: ColumnLookup) -> list[FilterClause]:
     """docs/01 §2.3's eight independent switches, behind one group switch."""
     moving_average = definition.moving_average
     if not moving_average.is_active():
         return []
-    clauses: list[ColumnElement[bool]] = []
+    clauses: list[FilterClause] = []
     for length in _MA_LENGTHS:
         if getattr(moving_average, f"above_{length}"):
-            clauses.append(cols["close"] > cols[f"ma_{length}"])
+            clauses.append(
+                FilterClause(
+                    f"ma_above_{length}",
+                    f"close above the {length}-day moving average",
+                    cols["close"] > cols[f"ma_{length}"],
+                )
+            )
         if getattr(moving_average, f"below_{length}"):
-            clauses.append(cols["close"] < cols[f"ma_{length}"])
+            clauses.append(
+                FilterClause(
+                    f"ma_below_{length}",
+                    f"close below the {length}-day moving average",
+                    cols["close"] < cols[f"ma_{length}"],
+                )
+            )
     return clauses
 
 
-def _windowed_clauses(
-    definition: ScreenDefinition, cols: ColumnLookup
-) -> list[ColumnElement[bool]]:
+def _windowed_clauses(definition: ScreenDefinition, cols: ColumnLookup) -> list[FilterClause]:
     """The per-window filters: away-from-high, positive days, circuits."""
-    clauses: list[ColumnElement[bool]] = []
+    clauses: list[FilterClause] = []
 
     away = definition.away_from_high
     if away.ath_is_active():
-        clauses.append(func.abs(cols["away_high_ath"]) <= away.ath)
+        clauses.append(
+            FilterClause(
+                "away_from_high_ath",
+                f"within {away.ath}% of the all-time high",
+                func.abs(cols["away_high_ath"]) <= away.ath,
+            )
+        )
     if away.one_year_is_active():
-        clauses.append(func.abs(cols["away_high_1y"]) <= away.one_year)
+        clauses.append(
+            FilterClause(
+                "away_from_high_1y",
+                f"within {away.one_year}% of the 1-year high",
+                func.abs(cols["away_high_1y"]) <= away.one_year,
+            )
+        )
 
     positive_days = definition.positive_days
     for window in positive_days.active_windows():
-        column = cols[f"pos_days_{_WINDOW_FIELDS[window]}m"]
-        clauses.append(column >= getattr(positive_days, window))
+        key = f"pos_days_{_WINDOW_FIELDS[window]}m"
+        threshold = getattr(positive_days, window)
+        clauses.append(
+            FilterClause(
+                f"positive_days_{window}", f"{_label(key)} >= {threshold}", cols[key] >= threshold
+            )
+        )
 
     circuits = definition.circuits
     for window in circuits.active_windows():
-        column = cols[f"circuits_{_WINDOW_FIELDS[window]}m"]
-        clauses.append(column <= getattr(circuits, window))
+        key = f"circuits_{_WINDOW_FIELDS[window]}m"
+        ceiling = getattr(circuits, window)
+        clauses.append(
+            FilterClause(f"circuits_{window}", f"{_label(key)} <= {ceiling}", cols[key] <= ceiling)
+        )
 
     return clauses
 
 
-def _custom_filter_clauses(
-    definition: ScreenDefinition, cols: ColumnLookup
-) -> list[ColumnElement[bool]]:
+def _custom_filter_clauses(definition: ScreenDefinition, cols: ColumnLookup) -> list[FilterClause]:
     """docs/01 §2.14's three field-to-field slots, operands re-checked against the registry."""
-    clauses: list[ColumnElement[bool]] = []
+    clauses: list[FilterClause] = []
     for position, custom in enumerate(definition.custom_filters, start=1):
         if not custom.is_active():
             continue
-        left = cols[_require_operand(custom.left, where=f"custom_filters[{position}].left")]
-        right = cols[_require_operand(custom.right, where=f"custom_filters[{position}].right")]
+        left_key = _require_operand(custom.left, where=f"custom_filters[{position}].left")
+        right_key = _require_operand(custom.right, where=f"custom_filters[{position}].right")
+        left = cols[left_key]
+        right = cols[right_key]
         if custom.op == ">=":
-            clauses.append(left >= right)
+            clause = left >= right
         elif custom.op == "<=":
-            clauses.append(left <= right)
+            clause = left <= right
         else:
-            clauses.append(left == right)
+            clause = left == right
+        clauses.append(
+            FilterClause(
+                f"custom_filter_{position}",
+                f"{_label(left_key)} {custom.op} {_label(right_key)}",
+                clause,
+            )
+        )
     return clauses
+
+
+def _factor_range_clauses(definition: ScreenDefinition) -> list[FilterClause]:
+    """docs/ranking/PLAN.md C3 ``factor_ranges``: an inclusive ``[min, max]`` per stored factor.
+
+    The bound is on the registry's expression, so a blend works as well as a stored column. NULL
+    never satisfies a range (docs/06 §step 4): ``NULL >= x`` is NULL, and ``WHERE`` drops it.
+    """
+    clauses: list[FilterClause] = []
+    for position, factor_range in enumerate(definition.factor_ranges, start=1):
+        if not factor_range.is_active():
+            continue
+        key = _require_factor(factor_range.factor, where=f"factor_ranges[{position}].factor").key
+        expression = _factor_expression(key)
+        bounds: list[ColumnElement[bool]] = []
+        text: list[str] = []
+        if factor_range.min is not None:
+            bounds.append(expression >= factor_range.min)
+            text.append(f">= {factor_range.min}")
+        if factor_range.max is not None:
+            bounds.append(expression <= factor_range.max)
+            text.append(f"<= {factor_range.max}")
+        clauses.append(
+            FilterClause(
+                f"factor_range_{position}_{key}",
+                f"{_label(key)} {' and '.join(text)}",
+                bounds[0] if len(bounds) == 1 else and_(*bounds),
+            )
+        )
+    return clauses
+
+
+def _regime_clauses(definition: ScreenDefinition, cols: ColumnLookup) -> list[FilterClause]:
+    """docs/ranking/PLAN.md C3 ``regime_in``: the regime label is a filter, never a distance."""
+    if definition.regime_in is None:
+        return []
+    return [
+        FilterClause(
+            "regime_in",
+            f"regime in {', '.join(definition.regime_in)}",
+            cols["regime"].in_(list(definition.regime_in)),
+        )
+    ]
+
+
+def _named_filter_clauses(definition: ScreenDefinition, cols: ColumnLookup) -> list[FilterClause]:
+    """docs/06 §step 4's table in the document's own order, then C3's factor ranges and regime.
+
+    The Phase-2 clauses come last so a definition that leaves them at their defaults emits exactly
+    the statement it did at 999bf37 (``test_ranking_frame_query.py`` pins that).
+    """
+    return [
+        *_scalar_clauses(definition, cols),
+        *_moving_average_clauses(definition, cols),
+        *_windowed_clauses(definition, cols),
+        *_custom_filter_clauses(definition, cols),
+        *_factor_range_clauses(definition),
+        *_regime_clauses(definition, cols),
+    ]
 
 
 def _filter_clauses(definition: ScreenDefinition, cols: ColumnLookup) -> list[ColumnElement[bool]]:
@@ -353,31 +550,45 @@ def _filter_clauses(definition: ScreenDefinition, cols: ColumnLookup) -> list[Co
     deliberately no ``COALESCE`` anywhere below: one would silently readmit exactly the young
     listings docs/06 says must be excluded.
     """
-    return [
-        *_scalar_clauses(definition, cols),
-        *_moving_average_clauses(definition, cols),
-        *_windowed_clauses(definition, cols),
-        *_custom_filter_clauses(definition, cols),
-    ]
+    return [named.clause for named in _named_filter_clauses(definition, cols)]
 
 
-def _risk_clauses(
+def _named_risk_clauses(
     definition: ScreenDefinition, cols: ColumnLookup, mask_bit: int
-) -> list[ColumnElement[bool]]:
+) -> list[FilterClause]:
     """docs/06 §step 4 ⚠ and Prompt 6 §2b — the precomputed per-universe flags.
 
     Not a windowed exclusion over the survivors: docs/13 §2 finding 10 proves the cut is taken
     over the whole universe nightly (within every universe the flagged rows' minimum beta strictly
     exceeds the unflagged rows' maximum), so the screener tests one bit. ``mask_bit`` selects the
     bit for the screen's *current* universe out of ``factor_daily.top_beta_mask`` /
-    ``.top_volatility_mask`` (``baskfy_core.universes.Universe.mask_value``).
+    ``.top_volatility_mask`` (``baskfy_core.universes.Universe.mask_value``). Because the bit is
+    fixed per universe, testing it before or after the other filters is the same predicate.
     """
-    clauses: list[ColumnElement[bool]] = []
+    clauses: list[FilterClause] = []
     if definition.ignore_top_beta.is_active():
-        clauses.append(cols["top_beta_mask"].op("&")(mask_bit) == 0)
+        clauses.append(
+            FilterClause(
+                "ignore_top_beta",
+                "not in the universe's top-beta cut",
+                cols["top_beta_mask"].op("&")(mask_bit) == 0,
+            )
+        )
     if definition.ignore_top_volatility.is_active():
-        clauses.append(cols["top_volatility_mask"].op("&")(mask_bit) == 0)
+        clauses.append(
+            FilterClause(
+                "ignore_top_volatility",
+                "not in the universe's top-volatility cut",
+                cols["top_volatility_mask"].op("&")(mask_bit) == 0,
+            )
+        )
     return clauses
+
+
+def _risk_clauses(
+    definition: ScreenDefinition, cols: ColumnLookup, mask_bit: int
+) -> list[ColumnElement[bool]]:
+    return [named.clause for named in _named_risk_clauses(definition, cols, mask_bit)]
 
 
 def _factor_expression(key: str) -> ColumnElement[object]:
@@ -389,6 +600,11 @@ def _factor_expression(key: str) -> ColumnElement[object]:
     (``sharpe_12m``), so it may only be used in a SELECT with exactly one FROM entry — which is
     why ranking happens in its own single-source CTE.
     """
+    if is_desk_score_factor(key):
+        # docs/ranking/PLAN.md C2: the book's SCORE is read from ``desk_score_daily`` and joined
+        # onto the pipeline as a column of this name (:func:`_desk_scored`); it is never scored
+        # here. Every other computed factor has no SQL and ``sql_for`` refuses it.
+        return literal_column(DESK_SCORE_KEY)
     return literal_column(factor_registry.sql_for(key))
 
 
@@ -396,6 +612,41 @@ def _ranking_factors(definition: ScreenDefinition) -> tuple[RankingFactor, ...]:
     return tuple(
         RankingFactor(position, key, factor_registry.get(key).label, direction)
         for position, (key, direction) in enumerate(definition.ranking_factors(), start=1)
+    )
+
+
+def _universe_cte(universe: Universe, as_of: dt.date) -> CTE:
+    """Step 2: the point-in-time universe (``index_member_daily`` on ``as_of``)."""
+    return (
+        select(IndexMemberDaily.instrument_id)
+        .where(
+            IndexMemberDaily.index_id == universe.index_id,
+            IndexMemberDaily.date == as_of,
+        )
+        .cte("universe")
+    )
+
+
+def _desk_scored(selected: CTE, as_of: dt.date) -> CTE:
+    """The selected rows that carry a desk SCORE on ``as_of``, with it as column ``desk_score``.
+
+    docs/ranking/PLAN.md C2: "The screener reads this table; it never re-scores. Rejected rows are
+    never ranked." A rejected row is stored with ``score`` NULL and a row the book never scanned
+    has no ``desk_score_daily`` row at all, so an inner join on a non-NULL score keeps exactly the
+    rows the book ranked. The cut sits *after* the ``apply_filters_on`` bucket, so the bucket is
+    still taken over the whole universe by marketcap, as docs/06 §step 3 says.
+    """
+    desk = DeskScoreDaily.__table__
+    return (
+        select(selected, desk.c.score.label(DESK_SCORE_KEY))
+        .select_from(
+            selected.join(
+                desk,
+                and_(desk.c.instrument_id == selected.c.instrument_id, desk.c.date == as_of),
+            )
+        )
+        .where(desk.c.score.is_not(None))
+        .cte("desk_scored")
     )
 
 
@@ -468,17 +719,16 @@ def _ranked_pipeline(definition: ScreenDefinition, as_of: dt.date) -> RankedPipe
     # `etf` are rule-derived rather than file-derived (docs/06 §step 2), but the nightly
     # `refresh_index_membership` step materialises them as rows with source='derived', so there
     # is one read path for all fourteen.
-    universe_cte = (
-        select(IndexMemberDaily.instrument_id)
-        .where(
-            IndexMemberDaily.index_id == universe.index_id,
-            IndexMemberDaily.date == as_of,
-        )
-        .cte("universe")
-    )
+    universe_cte = _universe_cte(universe, as_of)
 
     selected = _bucketed_universe(definition, universe_cte, as_of)
+    if is_desk_score_factor(definition.sort_by):
+        selected = _desk_scored(selected, as_of)
     ranking = _ranking_factors(definition)
+    # Sequential compares factor *values* (docs/ranking/PLAN.md G6a), so the values ride along.
+    value_columns = (
+        _sequential_value_columns(ranking) if definition.ranking_mode == "sequential" else []
+    )
 
     if definition.ranking_scope == "fixed_universe":
         # Rank across the selected universe first, then apply filters so a filter change does not
@@ -489,11 +739,10 @@ def _ranked_pipeline(definition: ScreenDefinition, as_of: dt.date) -> RankedPipe
             selected,
             _factor_expression(ranking[0].key).label("sorting_factor"),
             *rank_columns,
+            *value_columns,
         ).cte("pre_ranked")
         filtered = (
-            select(pre_ranked)
-            .where(*_filter_clauses(definition, pre_ranked.c))
-            .cte("filtered")
+            select(pre_ranked).where(*_filter_clauses(definition, pre_ranked.c)).cte("filtered")
         )
         ranked = (
             select(filtered)
@@ -513,16 +762,23 @@ def _ranked_pipeline(definition: ScreenDefinition, as_of: dt.date) -> RankedPipe
             relative,
             _factor_expression(ranking[0].key).label("sorting_factor"),
             *rank_columns,
+            *value_columns,
         ).cte("ranked")
 
     combined = (ranked.c.r1 + ranked.c.r2 + ranked.c.r3).label("combined_rank")
     if definition.ranking_mode == "sequential":
+        # By each factor's value in turn, NULLs last, then instrument_id. Ordering by r1 first
+        # would make r2 and r3 dead: r1 is a ROW_NUMBER, unique per row, so it never ties and a
+        # tie in factor one's *value* would be broken by instrument_id instead of by factor two.
         order_by: list[ColumnElement[object]] = [
-            ranked.c.r1.asc(),
-            ranked.c.r2.asc(),
-            ranked.c.r3.asc(),
-            ranked.c.instrument_id.asc(),
+            (
+                ranked.c[_sequential_value_name(factor.position)].desc()
+                if factor.direction == "desc"
+                else ranked.c[_sequential_value_name(factor.position)].asc()
+            ).nullslast()
+            for factor in ranking
         ]
+        order_by.append(ranked.c.instrument_id.asc())
     else:
         # ``single`` and ``composite`` both finish on combined rank. With one factor the extras
         # are zero, so combined ≡ r1; with two/three, composite sums ranks (docs/01 §2.12).
@@ -533,6 +789,42 @@ def _ranked_pipeline(definition: ScreenDefinition, as_of: dt.date) -> RankedPipe
         order_by=order_by,
         ranking=ranking,
     )
+
+
+def _sequential_value_name(position: int) -> str:
+    return f"seq_value_{position}"
+
+
+def _sequential_value_columns(ranking: tuple[RankingFactor, ...]) -> list[Label[object]]:
+    """Each ranking factor's value as ``seq_value_<n>``, for the sequential ORDER BY.
+
+    Labelled inside the single-source ranking CTE because a registry expression names bare
+    columns, and the final SELECT joins ``instrument``, which has a ``series`` of its own.
+    """
+    return [
+        _factor_expression(factor.key).label(_sequential_value_name(factor.position))
+        for factor in ranking
+    ]
+
+
+def _refuse_outside_legacy_sql(definition: ScreenDefinition, what: str) -> None:
+    """The legacy statement ranks docs/06's way; refuse what it cannot rank rather than misrank.
+
+    ``ranking_terms`` needs percentiles, family weights and scopes (C4) — the ranking engine over
+    :func:`build_ranking_frame_query`. A computed factor other than ``desk_score`` (which is read
+    from ``desk_score_daily``) has no SQL at all.
+    """
+    if definition.ranking_terms:
+        raise ScreenQueryError(
+            f"{what}: ranking_terms are ranked by baskfy_core.ranking_engine over "
+            "build_ranking_frame_query, not by the legacy SQL ranking"
+        )
+    for key, _direction in definition.ranking_factors():
+        if factor_registry.get(key).is_computed and not is_desk_score_factor(key):
+            raise ScreenQueryError(
+                f"{what}: {key!r} is computed by the ranking engine and cannot be ranked in SQL; "
+                "use ranking_terms"
+            )
 
 
 def _rank_columns(
@@ -570,12 +862,7 @@ def build_screen_query(
     trading days, which runs are published — and therefore lives in ``baskfy_api.screener``).
     """
     validate_definition(definition)
-    if is_desk_score_factor(definition.sort_by):
-        raise ScreenQueryError(
-            "sort_by='desk_score' cannot be ranked in SQL; "
-            "use build_survivors_query + rerank_survivors_by_desk_score "
-            "(baskfy_api.screener.execute_screen handles this)"
-        )
+    _refuse_outside_legacy_sql(definition, "build_screen_query")
     projection = resolve_columns(columns)
     universe = UNIVERSE_BY_SLUG[definition.index]
     pipeline = _ranked_pipeline(definition, as_of)
@@ -656,20 +943,12 @@ def build_survivors_query(
     validate_definition(definition)
     if not is_desk_score_factor(definition.sort_by):
         raise ScreenQueryError(
-            f"build_survivors_query requires sort_by={DESK_SCORE_KEY!r}; "
-            f"got {definition.sort_by!r}"
+            f"build_survivors_query requires sort_by={DESK_SCORE_KEY!r}; got {definition.sort_by!r}"
         )
     projection = resolve_columns(columns)
     universe = UNIVERSE_BY_SLUG[definition.index]
 
-    universe_cte = (
-        select(IndexMemberDaily.instrument_id)
-        .where(
-            IndexMemberDaily.index_id == universe.index_id,
-            IndexMemberDaily.date == as_of,
-        )
-        .cte("universe")
-    )
+    universe_cte = _universe_cte(universe, as_of)
     selected = _bucketed_universe(definition, universe_cte, as_of)
     # Always filter-then-score for desk SCORE (fixed_universe rejected on ScreenDefinition).
     filtered = select(selected).where(*_filter_clauses(definition, selected.c)).cte("filtered")
@@ -723,6 +1002,237 @@ def build_survivors_query(
         row_columns=row_columns,
         sorting_factor=ranking[0],
         ranking_factors=ranking,
+        definition_hash=definition.definition_hash(),
+    )
+
+
+# ---------------------------------------------------------------------------
+# The ranking frame (docs/ranking/PLAN.md C4 input)
+# ---------------------------------------------------------------------------
+
+#: ``desk_score_daily`` column → the frame column the ranking engine reads (C2, C4 step 1).
+DESK_FRAME_COLUMNS: Final[Mapping[str, str]] = {
+    "score": ranking_engine.DESK_SCORE_KEY,
+    "score_rank": ranking_engine.DESK_SCORE_RANK,
+    "a_trend": "desk_a_trend",
+    "b_momentum": "desk_b_momentum",
+    "c_sharpe": "desk_c_sharpe",
+    "d_consistency": "desk_d_consistency",
+    "e_liquidity": "desk_e_liquidity",
+    "f_penalty": ranking_engine.DESK_F_PENALTY,
+    "ext_over_20dma": "desk_ext_over_20dma",
+    "reject": ranking_engine.DESK_REJECT,
+    "score_version": "desk_score_version",
+}
+
+#: The universe whose point-in-time membership is NSE's "available for trading in F&O" (C4).
+FNO_UNIVERSE_SLUG: Final = "nifty-fno"
+
+
+@dataclass(frozen=True, slots=True)
+class RankingFrameQuery:
+    """The ranking engine's input as one statement (docs/ranking/PLAN.md C4).
+
+    One row per instrument of the selected universe on ``as_of`` — after the ``apply_filters_on``
+    bucket, **before** any filter — so ``fixed_universe`` and ``within_sector`` can rank over rows
+    that are not results.
+    """
+
+    statement: Select[tuple[object]]
+    as_of: dt.date
+    index_id: int
+    universe_slug: str
+    #: ``fail__<name>`` suffix → display text, in clause order (``ExplainContext.clause_details``).
+    clause_details: Mapping[str, str]
+    #: Ranking-factor keys projected as expressions because they are not stored columns.
+    term_columns: tuple[str, ...]
+    definition_hash: str
+
+    def sql(self) -> str:
+        return str(self.statement.compile(dialect=_POSTGRES))
+
+    def params(self) -> Mapping[str, object]:
+        return dict(self.statement.compile(dialect=_POSTGRES).params)
+
+    @property
+    def fail_columns(self) -> tuple[str, ...]:
+        return tuple(f"{ranking_engine.FAIL_PREFIX}{name}" for name in self.clause_details)
+
+
+def _membership_cte(slug: str, as_of: dt.date, name: str) -> CTE:
+    """Point-in-time membership of one universe on ``as_of`` (house rule 5)."""
+    return (
+        select(IndexMemberDaily.instrument_id)
+        .where(
+            IndexMemberDaily.index_id == UNIVERSE_BY_SLUG[slug].index_id,
+            IndexMemberDaily.date == as_of,
+        )
+        .cte(name)
+    )
+
+
+def _sector_cte(as_of: dt.date) -> CTE:
+    """``instrument_id -> sector`` on ``as_of``: the narrowest sectoral index the name is in.
+
+    The same rule as the swing book's ``load_sector_membership``: among the indices of
+    :data:`~baskfy_core.universes.SECTOR_INDEX_SLUGS`, the one with the fewest members that day is
+    the more specific claim about what the stock is (a bank is in NIFTY BANK and NIFTY FINANCIAL
+    SERVICES, and is a bank). Ties go to the slug that sorts first, so the pick is deterministic.
+    A name in no sector index has no row here, and the engine buckets it as ``unclassified``.
+    """
+    members = (
+        select(
+            IndexMemberDaily.instrument_id,
+            IndexDef.slug,
+            func.count().over(partition_by=IndexMemberDaily.index_id).label("members"),
+        )
+        .join(IndexDef, IndexDef.id == IndexMemberDaily.index_id)
+        .where(IndexMemberDaily.date == as_of, IndexDef.slug.in_(list(SECTOR_INDEX_SLUGS)))
+        .cte("sector_members")
+    )
+    ordered = select(
+        members.c.instrument_id,
+        members.c.slug,
+        func.row_number()
+        .over(
+            partition_by=members.c.instrument_id,
+            order_by=[members.c.members.asc(), members.c.slug.asc()],
+        )
+        .label("sector_order"),
+    ).cte("sector_ordered")
+    return (
+        select(ordered.c.instrument_id, ordered.c.slug)
+        .where(ordered.c.sector_order == 1)
+        .cte("sector")
+    )
+
+
+def _nse_population_cte(as_of: dt.date, nifty_200: CTE, fno: CTE) -> CTE:
+    """Mean and population std of ``nse_mr6``/``nse_mr12`` over NSE's eligible set on ``as_of``.
+
+    NSE's Z-score is taken over the eligible universe — NIFTY 200 ∩ F&O with both ratios defined —
+    not over whichever screen universe the user picked, so these are computed over the whole
+    ``factor_daily`` date rather than the frame. ``stddev_pop`` is ddof=0, the reading
+    :mod:`baskfy_core.nse_momentum` records.
+    """
+    facts = FactorDaily.__table__
+    eligible = (
+        select(facts.c.nse_mr6, facts.c.nse_mr12)
+        .select_from(
+            facts.join(nifty_200, nifty_200.c.instrument_id == facts.c.instrument_id).join(
+                fno, fno.c.instrument_id == facts.c.instrument_id
+            )
+        )
+        .where(
+            facts.c.date == as_of,
+            facts.c.nse_mr6.is_not(None),
+            facts.c.nse_mr12.is_not(None),
+        )
+        .cte("nse_eligible")
+    )
+    six_mean, six_std, twelve_mean, twelve_std = ranking_engine.NSE_POPULATION_COLUMNS
+    return select(
+        func.avg(eligible.c.nse_mr6).label(six_mean),
+        func.stddev_pop(eligible.c.nse_mr6).label(six_std),
+        func.avg(eligible.c.nse_mr12).label(twelve_mean),
+        func.stddev_pop(eligible.c.nse_mr12).label(twelve_std),
+    ).cte("nse_population")
+
+
+def _frame_term_keys(definition: ScreenDefinition) -> tuple[str, ...]:
+    if definition.ranking_terms:
+        keys = [term.factor for term in definition.ranking_terms]
+    else:
+        keys = [key for key, _direction in definition.ranking_factors()]
+    return tuple(dict.fromkeys(keys))
+
+
+def build_ranking_frame_query(definition: ScreenDefinition, as_of: dt.date) -> RankingFrameQuery:
+    """The pre-filter frame :func:`baskfy_core.ranking_engine.rank_frame` ranks (C4 "Input").
+
+    Columns: every ``factor_daily`` column; ``symbol``/``name``; each ranking factor that is an
+    expression rather than a stored column, labelled by its key; one ``fail__<clause>`` boolean per
+    active filter, risk, factor-range and regime clause (TRUE = the row fails it, and a NULL
+    comparison fails, docs/06 §step 4); ``passes_filters`` = no clause failed; ``sector``; the
+    ``desk_score_daily`` row as ``desk_*`` (LEFT joined: a rejected or unscanned row is present
+    with a NULL ``desk_score``, and the engine never ranks it); the NSE inputs ``nse_mr6``,
+    ``nse_mr12``, ``in_nifty_200``, ``is_fno`` and the eligible-set statistics; and
+    ``last_bar_date`` for the explain panel's stale-price check.
+
+    No ``LIMIT`` and no ``ORDER BY`` beyond ``instrument_id``: the scope set is the whole frame.
+    """
+    validate_definition(definition)
+    universe = UNIVERSE_BY_SLUG[definition.index]
+    selected = _bucketed_universe(definition, _universe_cte(universe, as_of), as_of)
+
+    clauses = [
+        *_named_filter_clauses(definition, selected.c),
+        *_named_risk_clauses(definition, selected.c, universe.mask_value),
+    ]
+    fail_prefix = ranking_engine.FAIL_PREFIX
+    term_columns = tuple(
+        key
+        for key in _frame_term_keys(definition)
+        if key not in selected.c and not factor_registry.get(key).is_computed
+    )
+    flagged = select(
+        selected,
+        *[_factor_expression(key).label(key) for key in term_columns],
+        *[
+            case((named.clause, false()), else_=true()).label(f"{fail_prefix}{named.name}")
+            for named in clauses
+        ],
+    ).cte("flagged")
+
+    fail_columns = [flagged.c[f"{fail_prefix}{named.name}"] for named in clauses]
+    passes = not_(or_(*fail_columns)) if fail_columns else true()
+
+    sector = _sector_cte(as_of)
+    nifty_200 = _membership_cte(NSE_MOMENTUM_INDEX, as_of, "nse_nifty_200")
+    fno = _membership_cte(FNO_UNIVERSE_SLUG, as_of, "nse_fno")
+    population = _nse_population_cte(as_of, nifty_200, fno)
+    desk = DeskScoreDaily.__table__
+    bars = OhlcvDaily.__table__
+    last_bar = (
+        select(func.max(bars.c.date))
+        .where(bars.c.instrument_id == flagged.c.instrument_id, bars.c.date <= as_of)
+        .scalar_subquery()
+    )
+
+    statement = (
+        select(
+            flagged,
+            Instrument.symbol.label(ranking_engine.SYMBOL),
+            Instrument.name.label("name"),
+            passes.label(ranking_engine.PASSES_FILTERS),
+            sector.c.slug.label(ranking_engine.SECTOR),
+            *[desk.c[column].label(label) for column, label in DESK_FRAME_COLUMNS.items()],
+            nifty_200.c.instrument_id.is_not(None).label(ranking_engine.IN_NIFTY_200),
+            fno.c.instrument_id.is_not(None).label(ranking_engine.IS_FNO),
+            *[population.c[name] for name in ranking_engine.NSE_POPULATION_COLUMNS],
+            last_bar.label(ranking_engine.LAST_BAR_DATE),
+        )
+        .select_from(
+            flagged.join(Instrument, Instrument.id == flagged.c.instrument_id)
+            .outerjoin(sector, sector.c.instrument_id == flagged.c.instrument_id)
+            .outerjoin(
+                desk,
+                and_(desk.c.instrument_id == flagged.c.instrument_id, desk.c.date == as_of),
+            )
+            .outerjoin(nifty_200, nifty_200.c.instrument_id == flagged.c.instrument_id)
+            .outerjoin(fno, fno.c.instrument_id == flagged.c.instrument_id)
+            .join(population, true())
+        )
+        .order_by(flagged.c.instrument_id.asc())
+    )
+
+    return RankingFrameQuery(
+        statement=statement,
+        as_of=as_of,
+        index_id=universe.index_id,
+        universe_slug=universe.slug,
+        clause_details={named.name: named.detail for named in clauses},
+        term_columns=term_columns,
         definition_hash=definition.definition_hash(),
     )
 
@@ -906,11 +1416,7 @@ def build_export_query(
     the honest answer: the rest of the export is real.
     """
     validate_definition(definition)
-    if is_desk_score_factor(definition.sort_by):
-        raise ScreenQueryError(
-            "CSV export does not yet support sort_by='desk_score'; "
-            "export a SQL-ranked screen or re-rank survivors offline"
-        )
+    _refuse_outside_legacy_sql(definition, "build_export_query")
     pipeline = _ranked_pipeline(definition, as_of)
     ranked = pipeline.ranked
     bars = OhlcvDaily.__table__

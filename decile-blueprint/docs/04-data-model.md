@@ -183,6 +183,28 @@ CREATE TABLE factor_daily (
 
   regime       text,               -- Wasserstein regime: 'BULL'|'BEAR'|'NEUTRAL'
 
+  -- Stored ranking factors (docs/ranking/PLAN.md Phase 2, contract C1; migration 0046).
+  -- Adjusted prices, point-in-time, NULL when the window is not full. See the note below.
+  atr_14          numeric(18,4),   -- Wilder ATR(14)
+  atr_ext_20      numeric(10,4),   -- (close - ma_20) / atr_14
+  ma50_slope_20   numeric(14,2),   -- (ma_50 / ma_50 20 sessions ago - 1) x 100
+  eff_ratio_63    numeric(10,4),   -- |c_t - c_{t-63}| / sum of the 63 |daily changes|
+  max_dd_6m       numeric(14,2), max_dd_12m numeric(14,2),        -- % below the window's running high
+  downside_vol_6m numeric(18,10), downside_vol_12m numeric(18,10), -- sqrt(mean min(r,0)^2) x sqrt(252)
+  sortino_6m      numeric(14,2), sortino_12m numeric(14,2),        -- ret_Nm / (downside_vol_Nm x 100)
+  underwater_12m  numeric(7,2),    -- % of window sessions below the running high
+  ret_ex_top3_12m numeric(14,2),   -- 1-year return without its 3 largest daily log returns
+  accel_21_105    numeric(18,10),  -- mean l (last 21) - mean l (the 105 before)
+  accel_21_105_vs numeric(10,4),   -- accel_21_105 / std(l over those 126, ddof=1)
+  vol_exp_21_126  numeric(10,4),   -- mean traded value last 21 / the 126 before
+  vol_persist_20  smallint,        -- of the last 20 sessions, how many traded above the 126 before
+  excess_ret_3m   numeric(14,2), excess_ret_6m numeric(14,2), excess_ret_12m numeric(14,2), -- vs NIFTY 500
+  resid_ret_12m   numeric(14,2),   -- ret_12m - beta_12m x NIFTY 50 1-year return
+  rs_persist_126  numeric(7,2),    -- % of last 126 sessions whose 20-session return beat NIFTY 500's
+  mom_pctile      numeric(7,2),    -- percentile of avg_sharpe_12_6_3_1 in the day's universe rows (worker)
+  rank_persist_20 numeric(7,2),    -- % of the last 20 dates with mom_pctile >= 80 (worker)
+  nse_mr6         numeric(18,10), nse_mr12 numeric(18,10),         -- NSE momentum ratios (§16)
+
   -- Denormalised universe + risk flags, materialised nightly from index_member_daily.
   -- The reference product's CSV export proves it uses exactly this shape (42 booleans).
   -- Stored as a bitmask trio to avoid 42 columns; expand to booleans in the view layer.
@@ -203,6 +225,16 @@ CREATE INDEX ON factor_daily (date, marketcap_cr DESC);
 > 2 dp, RSI at 4 dp, volatility and beta at 10 dp (volatility as a **decimal fraction**, not a
 > percentage), marketcap as an integer in ₹ crore, volumes as `bigint` rupees. Round at write
 > time, so the API, the UI and the CSV export can never disagree.
+
+> **Stored ranking factors (Phase 2, 13 Sep 2026).** The block after `regime` is
+> `docs/ranking/PLAN.md` contract C1, computed by `baskfy_core.factors_ranking` inside the same
+> nightly `compute_factors` pass and rounded at write time to each column's scale. `mom_pctile`
+> and `rank_persist_20` are cross-sectional/cross-date: the engine leaves them NULL and the
+> worker fills them after the day's rows exist (`cross_sectional_pctile`, `rank_persistence`).
+> `excess_ret_*` reads NIFTY 500 levels and `resid_ret_12m` NIFTY 50's; without those series
+> the columns are NULL. A value too large for its `numeric(p,s)` is stored as NULL rather than
+> failing the INSERT. The judgement calls (ATR seed, "N-session return", month ends, benchmark
+> lookups) are `docs/DECISIONS-MERGE.md` "Ranking 2.A".
 
 > **Blend factors are NOT stored.** `avg_sharpe_12_6_3_1` etc. are computed in SQL as the mean
 > of the stored component columns. 44 blend columns would be dead weight and a migration
@@ -370,3 +402,36 @@ CREATE TABLE pipeline_run_step (
 | `factor_daily` | ~8.5M | the hot table; keep uncompressed for 2 years |
 | `index_member_daily` | ~9M | compresses extremely well |
 | `screen_run` | grows with usage | prune runs older than 400 days for free users |
+
+## Desk score (ranking Phase 2, migration `0047_desk_score_daily`)
+
+The weekly book's Momentum Quality Score, stored once per instrument per trading day so the
+screener reads the book's number instead of re-scoring a different population
+(`docs/ranking/PLAN.md` C2). Written nightly from `baskfy_core.desk_score_service.score_day`, which
+runs the desk's own path — `momentum_scan.build(..., cfg=DESK_CONFIG)` over the whole `nse_cash`
+scan, then `score.score` — exactly as `kite-momentum-rebalancer/app/scan_source.py` does.
+
+```sql
+CREATE TABLE desk_score_daily (
+  instrument_id  bigint       NOT NULL REFERENCES instrument(id),
+  date           date         NOT NULL,
+  score          numeric(6,1),              -- NULL when rejected
+  score_rank     integer,                   -- 1..n over unrejected names only; NULL when rejected
+  a_trend        numeric(8,4), b_momentum numeric(8,4), c_sharpe    numeric(8,4),
+  d_consistency  numeric(8,4), e_liquidity numeric(8,4), f_penalty  numeric(8,4),
+  ext_over_20dma numeric(10,4),             -- (close / ma_20 - 1) x 100, as the book rounds it (1 dp)
+  reject         varchar(200) NOT NULL DEFAULT '',  -- score.apply_filters tokens, ';'-joined
+  score_version  varchar(32)  NOT NULL,     -- DESK_SCORE_VERSION that produced the row
+  PRIMARY KEY (instrument_id, date)
+);
+CREATE INDEX ix_desk_score_daily_date_score_rank ON desk_score_daily (date, score_rank);
+```
+
+* Rejected rows are stored (NULL `score`, `score_rank` and A–F) so "why is this name not ranked"
+  is answered from the row; they are never ranked.
+* `score_rank` is the book's rank, including its order among equal SCOREs. An unrejected row whose
+  SCORE is NULL (an input the engine could not compute) keeps the book's rank, as `/analyze` would.
+* Precision is written by the service, half-up: `score` 1 dp (the book's own rounding), A–F and
+  `ext_over_20dma` 4 dp.
+* `score_version` changes whenever `score.py`, `momentum_scan.py` or `DESK_CONFIG` changes;
+  `packages/core/tests/test_desk_score_service.py` pins the fingerprint.

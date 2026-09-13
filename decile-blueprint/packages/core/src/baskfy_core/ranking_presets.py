@@ -14,8 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
-from baskfy_core.ranking import DESK_SCORE_KEY, RANKING_PRESETS
-from baskfy_core.ranking import RankingMode, RankingScope
+from baskfy_core.ranking import DESK_SCORE_KEY, RANKING_PRESETS, RankingMode, RankingScope
 
 #: JSON-shaped patches for ``ScreenDefinition.model_validate({**base, **patch})``.
 PresetPatch = dict[str, object]

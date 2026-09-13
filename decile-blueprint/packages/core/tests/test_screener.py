@@ -151,16 +151,29 @@ class TestTheWhitelistGate:
     def test_every_registry_expression_is_inert_sql(self) -> None:
         """The only strings that reach the SQL text are these, so they carry the whole trust.
 
-        No quotes, no semicolons, no comment markers, no dollar-quoting: nothing that could end an
-        expression and begin a statement.
+        No semicolons, no comment markers, no dollar-quoting, and no quote that is not part of a
+        bare upper-case label literal: nothing that could end an expression and begin a statement.
+
+        The one quoted form admitted is ``'[A-Z]+'`` — ``regime_priority`` (docs/ranking/PLAN.md
+        C1) has to name the Wasserstein labels ``'BULL'``/``'NEUTRAL'``/``'BEAR'`` to order them.
+        A literal of capital letters alone can hold no quote, backslash or separator, so it cannot
+        close itself early; it is removed before the original character whitelist is applied.
         """
         allowed = re.compile(r"^[A-Za-z0-9_ ()+\-*/.>=<]+$")
+        label_literal = re.compile(r"'[A-Z]+'")
         offenders = {
             key: factor.sql_expr
             for key, factor in FACTORS.items()
-            if not allowed.fullmatch(factor.sql_expr)
+            if not allowed.fullmatch(label_literal.sub("LABEL", factor.sql_expr))
         }
         assert offenders == {}
+
+    def test_a_quote_outside_a_label_literal_is_still_an_offender(self) -> None:
+        """The admitted literal form must not widen into a general string."""
+        allowed = re.compile(r"^[A-Za-z0-9_ ()+\-*/.>=<]+$")
+        label_literal = re.compile(r"'[A-Z]+'")
+        for hostile in ("regime = 'BULL' OR '1'='1'", "'a'", "'BULL'; DROP", "'BULL\\''"):
+            assert not allowed.fullmatch(label_literal.sub("LABEL", hostile)), hostile
 
     def test_user_supplied_values_are_bound_not_interpolated(self) -> None:
         """Thresholds are parameters; the rendered text carries placeholders, not numbers."""
@@ -462,10 +475,28 @@ class TestRanking:
         assert query.sorting_factor.key == "avg_sharpe_12_6_3_1"
         assert FACTORS["avg_sharpe_12_6_3_1"].sql_expr + " AS sorting_factor" in query.sql()
 
-    @pytest.mark.parametrize("key", SORT_FACTOR_KEYS)
+    @pytest.mark.parametrize("key", [k for k in SORT_FACTOR_KEYS if not FACTORS[k].is_computed])
     def test_every_registry_factor_builds_a_statement(self, key: str) -> None:
+        """Every SQL factor. A computed one (``is_computed``) has no SQL by the registry's own
+        contract and is asserted to be refused below, rather than expected to build."""
         query = build_screen_query(base(sort_by=key), AS_OF)
         assert FACTORS[key].sql_expr in query.sql()
+
+    @pytest.mark.parametrize(
+        "key", [k for k in SORT_FACTOR_KEYS if FACTORS[k].is_computed and k != "desk_score"]
+    )
+    def test_a_computed_registry_factor_is_refused_rather_than_built(self, key: str) -> None:
+        with pytest.raises((ScreenQueryError, ValueError)):
+            build_screen_query(base(sort_by=key), AS_OF)
+
+    def test_desk_score_is_the_one_computed_factor_read_from_a_table(self) -> None:
+        """docs/ranking/PLAN.md C2: ``desk_score`` is stored in ``desk_score_daily`` and the
+        screener reads it there (never re-scores), so it builds; ``test_ranking_frame_query.py``
+        asserts it never ranks a rejected row."""
+        assert (
+            "desk_score_daily.score AS desk_score"
+            in build_screen_query(base(sort_by="desk_score"), AS_OF).sql()
+        )
 
 
 class TestProjection:

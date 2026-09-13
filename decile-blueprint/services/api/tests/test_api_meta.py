@@ -11,8 +11,9 @@ from screener_helpers import AS_OF, DATA_VERSION, requires_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.screener import DATA_START_DATE
-from baskfy_core.models import PipelineRun
 from baskfy_core.factor_registry import COLUMN_PICKER_KEYS, FACTORS, SORT_FACTOR_KEYS
+from baskfy_core.models import PipelineRun
+from baskfy_core.ranking_presets import PRESET_SPECS
 from baskfy_core.universes import UNIVERSES
 
 pytestmark = [pytest.mark.db, pytest.mark.redis, requires_db]
@@ -26,9 +27,40 @@ class TestFactors:
         assert [row["key"] for row in body] == list(SORT_FACTOR_KEYS)
 
     async def test_each_entry_carries_the_documented_fields(self, api: httpx.AsyncClient) -> None:
-        """docs/07: "(key, label, family, unit, higher_is_better)"."""
+        """docs/07's five, plus ``preference`` and C1's four registry fields (PLAN.md C6)."""
         body = (await api.get(url("/meta/factors"))).json()
-        assert set(body[0]) == {"key", "label", "family", "unit", "higher_is_better"}
+        expected = {
+            "key",
+            "label",
+            "family",
+            "unit",
+            "higher_is_better",
+            "preference",
+            "rankable",
+            "weight_family",
+            "validation_status",
+            "definition",
+        }
+        assert all(set(row) == expected for row in body)
+
+    async def test_the_ranking_fields_come_from_the_registry(self, api: httpx.AsyncClient) -> None:
+        """Every C1 field is the registry's own value — the API keeps no second copy."""
+        body = {row["key"]: row for row in (await api.get(url("/meta/factors"))).json()}
+        for key, row in body.items():
+            factor = FACTORS[key]
+            assert row["preference"] == factor.preference.value
+            assert row["rankable"] is factor.rankable
+            assert row["weight_family"] == factor.weight_family.value
+            assert row["validation_status"] == factor.validation_status.value
+            assert row["definition"] == factor.definition
+        assert any(row["rankable"] is False for row in body.values()), (
+            "C1: filter-only factors exist and must reach the editor as unrankable"
+        )
+
+    async def test_it_needs_no_principal(self, api: httpx.AsyncClient) -> None:
+        """Reference data like the rest of the static catalogue: anonymous callers get it."""
+        response = await api.get(url("/meta/factors"))
+        assert response.status_code == 200
 
     async def test_it_never_exposes_the_sql_expression(self, api: httpx.AsyncClient) -> None:
         """The registry's ``sql_expr`` is a server-side whitelist, not a client-side value.
@@ -39,6 +71,34 @@ class TestFactors:
         text = (await api.get(url("/meta/factors"))).text
         assert "sql_expr" not in text
         assert FACTORS["avg_sharpe_12_6_3_1"].sql_expr not in text
+
+
+class TestRankingPresets:
+    async def test_it_returns_every_core_preset_with_its_status(
+        self, api: httpx.AsyncClient
+    ) -> None:
+        """docs/ranking/PLAN.md §1.5 / C6: served from ``baskfy_core.ranking_presets``."""
+        response = await api.get(url("/meta/ranking-presets"))
+        assert response.status_code == 200
+        body = response.json()
+        assert [row["key"] for row in body] == list(PRESET_SPECS)
+        for row in body:
+            spec = PRESET_SPECS[row["key"]]
+            assert set(row) == {"key", "description", "status", "sort_by", "patch"}
+            assert row["status"] == spec.status
+            assert row["description"] == spec.description
+            assert row["patch"] == spec.patch
+            assert row["sort_by"] == spec.patch["sort_by"]
+
+    async def test_nse_momentum_is_never_offered(self, api: httpx.AsyncClient) -> None:
+        """PLAN correction #8: that label needs the exact NSE methodology first."""
+        text = (await api.get(url("/meta/ranking-presets"))).text
+        assert "nse_momentum" not in text
+
+    async def test_it_needs_no_principal(self, api: httpx.AsyncClient) -> None:
+        """Same posture as ``/meta/factors``: static catalogue, no auth, no database."""
+        response = await api.get(url("/meta/ranking-presets"))
+        assert response.status_code == 200
 
 
 class TestColumns:

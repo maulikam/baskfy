@@ -37,6 +37,18 @@ PREFIX: Final = "/api/v1"
 
 PROBLEM_MEDIA_TYPE: Final = "application/problem+json"
 
+#: Non-negotiable #1 and the second law, as the names a source file must not contain to be on
+#: this side of the order path. First written inline for ``routers/portfolios.py``
+#: (``test_api_portfolios_tree.TestNoOrderPath``); shared so every informational surface that
+#: sits next to money — the rebalance, ranking selection — is held to the same list.
+ORDER_PATH_TOKENS: Final = (
+    "place_order",
+    "OrderGateway",
+    "baskfy_execution",
+    "kiteconnect",
+    "confirm=True",
+)
+
 
 def url(path: str) -> str:
     return f"{PREFIX}{path}"

@@ -27,9 +27,12 @@ from api_helpers import (
 from screener_helpers import AS_OF, DATA_VERSION, export_symbols_in_file_order, requires_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from baskfy_api.screener import LEGACY_RANKING_ENGINE_VERSION
+from baskfy_core.ranking_engine import RANKING_ENGINE_VERSION
 from baskfy_core.reference_export import EXPORT_COLUMNS, FACTOR_COLUMN_MAP
 from baskfy_core.screener import DEFAULT_RESULT_COLUMNS, IDENTITY_COLUMNS
 from baskfy_core.seed_data import EXAMPLE_SCREENS
+from baskfy_core.universes import UNIVERSE_BY_SLUG
 
 pytestmark = [pytest.mark.db, pytest.mark.redis, requires_db]
 
@@ -61,6 +64,7 @@ class TestRunningASavedScreen:
             "sorting_factor",
             "columns",
             "rows",
+            "provenance",
         }
         analytics_envelope(body)
         assert body["as_of"] == AS_OF.isoformat()
@@ -71,6 +75,23 @@ class TestRunningASavedScreen:
         }
         assert body["columns"][:3] == list(IDENTITY_COLUMNS)
         assert set(DEFAULT_RESULT_COLUMNS) <= set(body["columns"])
+
+    async def test_it_carries_provenance(self, api: httpx.AsyncClient) -> None:
+        """docs/ranking/PLAN.md C6: every screen payload says what produced it.
+
+        Investing 001 has no ranking_terms, so docs/06's SQL ranked it and no desk formula was read.
+        """
+        body = (await api.post(url(f"/screens/{EXAMPLE_ID}/run"), json={})).json()
+        assert body["provenance"] == {
+            "universe": "nifty-total-market",
+            "universe_label": UNIVERSE_BY_SLUG["nifty-total-market"].name,
+            "as_of": AS_OF.isoformat(),
+            "data_version": DATA_VERSION,
+            "ranking_engine_version": LEGACY_RANKING_ENGINE_VERSION,
+            "desk_score_version": None,
+            "scope": "filtered_results",
+            "mode": "composite",
+        }
 
     async def test_it_reproduces_the_reference_export(self, api: httpx.AsyncClient) -> None:
         """The docs/13 answer key, delivered over HTTP."""
@@ -222,6 +243,48 @@ class TestPreview:
         )
         body = assert_problem(response, 400, "invalid-screen-definition")
         assert any("index" in str(error["field"]) for error in errors_of(body))
+
+
+#: MINIMAL ranked by the engine with its one sort factor as the single term. ``single`` orders by
+#: the raw value, NULLs last, ties by instrument_id — the same order docs/06's ROW_NUMBER gives it.
+RANKED_MINIMAL = {
+    **MINIMAL,
+    "ranking_mode": "single",
+    "ranking_terms": [{"factor": "avg_sharpe_12_6_3_1", "preference": "higher"}],
+}
+
+
+class TestRankingTermsOverHttp:
+    """Gate 2.G G1: preview and saved run both take the ranking engine when terms are present."""
+
+    async def test_preview_ranks_with_the_ranking_engine(self, api: httpx.AsyncClient) -> None:
+        legacy = (await api.post(url("/screens/preview"), json={"definition": MINIMAL})).json()
+        response = await api.post(url("/screens/preview"), json={"definition": RANKED_MINIMAL})
+        assert response.status_code == 200
+        body = response.json()
+        assert body["provenance"]["ranking_engine_version"] == RANKING_ENGINE_VERSION
+        assert body["provenance"]["mode"] == "single"
+        assert legacy["provenance"]["ranking_engine_version"] == LEGACY_RANKING_ENGINE_VERSION
+        assert body["result_count"] == 271
+        assert [row["symbol"] for row in body["rows"]] == [row["symbol"] for row in legacy["rows"]]
+        assert [row["rank"] for row in body["rows"]] == list(range(1, 272))
+
+    async def test_a_saved_run_ranks_with_the_ranking_engine(self, api: httpx.AsyncClient) -> None:
+        legacy = (await api.post(url(f"/screens/{EXAMPLE_ID}/run"), json={})).json()
+        response = await api.post(
+            url(f"/screens/{EXAMPLE_ID}/run"),
+            json={
+                "override_definition": {
+                    **RANKED_MINIMAL,
+                    "median_volume_1y": 10_000_000,
+                }
+            },
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["provenance"]["ranking_engine_version"] == RANKING_ENGINE_VERSION
+        assert body["sorting_factor"]["key"] == "avg_sharpe_12_6_3_1"
+        assert [row["symbol"] for row in body["rows"]] == [row["symbol"] for row in legacy["rows"]]
 
 
 class TestEntitlements:

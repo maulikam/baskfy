@@ -10,12 +10,13 @@ Visibility rules, stated once here because every route depends on them:
 
 Why the run endpoints return raw bytes
 --------------------------------------
-``ScreenResult.to_json`` is the response body, verbatim. docs/06 §"Determinism guarantee"
-promises byte-identical results for the same definition, ``as_of`` and ``data_version``, and that
-promise is only worth something if the bytes the client sees are the bytes that were hashed and
-cached. Re-serialising through a Pydantic model would also route every ``numeric`` through
-``float`` and turn ``13.00`` into ``13.0``, breaking CLAUDE.md house rule 8. ``response_model``
-still documents the shape in OpenAPI, which is what the generated TypeScript client reads.
+``baskfy_api.screener.payload_with_provenance`` is the response body, verbatim. docs/06
+§"Determinism guarantee" promises byte-identical results for the same definition, ``as_of`` and
+``data_version``, and that promise is only worth something if the bytes the client sees are the
+bytes that were hashed and cached. Re-serialising through a Pydantic model would also route every
+``numeric`` through ``float`` and turn ``13.00`` into ``13.0``, breaking CLAUDE.md house rule 8.
+``response_model`` still documents the shape in OpenAPI, which is what the generated TypeScript
+client reads.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ import datetime as dt
 import logging
 import secrets
 from collections.abc import Sequence
+from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Header, Query, Request, Response, status
@@ -32,7 +34,8 @@ from redis.asyncio import Redis
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from baskfy_api import idempotency
+from baskfy_api import idempotency, screen_ranking
+from baskfy_api import portfolios as portfolio_service
 from baskfy_api.auth import AuthenticatedDep, Principal, PrincipalDep
 from baskfy_api.csv_export import filename_for, stream_screen_csv
 from baskfy_api.db import SessionDep
@@ -40,6 +43,8 @@ from baskfy_api.entitlements import Entitlements, EntitlementsDep, Feature
 from baskfy_api.problems import (
     Problem,
     ProblemType,
+    bad_request,
+    invalid_screen_definition,
     not_found,
     stale_data_version,
 )
@@ -47,25 +52,33 @@ from baskfy_api.schemas import (
     DEFAULT_PAGE_SIZE,
     Limit,
     PreviewRequest,
+    RankExplanationOut,
     RunRequest,
     ScreenCreate,
     ScreenDuplicate,
+    ScreenExplainRequest,
     ScreenListOut,
     ScreenOut,
     ScreenRunPage,
     ScreenRunResponse,
     ScreenRunSummaryOut,
+    ScreenSelectionOut,
+    ScreenSelectionRequest,
     ScreenUpdate,
+    SelectionHoldingIn,
 )
 from baskfy_api.screener import (
     AsOfResolution,
     ScreenRunResult,
     current_data_version,
+    rank_definition,
     record_run,
     resolve_as_of,
     run_screen,
+    screen_provenance,
 )
 from baskfy_core.models import Screen, ScreenRun
+from baskfy_core.ranking_selection import SelectionConstraints, select_portfolio
 from baskfy_core.screen_definition import ScreenDefinition
 from baskfy_core.screener import DEFAULT_RESULT_COLUMNS, resolve_columns
 from baskfy_core.seed_data import DEFAULT_COLUMNS
@@ -397,6 +410,151 @@ async def preview_screen(
     )
     del data_version
     return _json(outcome)
+
+
+@router.post(
+    "/explain",
+    response_model=RankExplanationOut,
+    summary="Why one instrument ranks where it does",
+)
+async def explain_screen_row(
+    body: ScreenExplainRequest,
+    session: SessionDep,
+    principal: AuthenticatedDep,
+    entitlements: EntitlementsDep,
+) -> RankExplanationOut:
+    """docs/ranking/PLAN.md C6: ``ranking_engine.explain`` for ``symbol`` in this run.
+
+    Ranked exactly as ``/screens/preview`` ranks the same definition (one engine path,
+    ``screener.rank_definition``), so the drawer and the table cannot disagree. A symbol in the
+    universe that failed a filter is explained with ``rank: null``; one outside it is a 404.
+    """
+    principal.require_user()
+    data_version = await _check_data_version(session, body.data_version)
+    definition = _ranked_definition(body.definition)
+    _check_universe(definition, entitlements)
+    resolution = await resolve_as_of(session, body.as_of or definition.historical_date)
+    _check_historical(resolution, entitlements)
+    try:
+        explanation = await screen_ranking.explain_symbol(
+            session,
+            definition,
+            body.symbol,
+            as_of=resolution.as_of,
+            data_version=data_version,
+        )
+    except screen_ranking.InstrumentNotInUniverse as exc:
+        raise not_found("instrument in this screen's universe", str(exc)) from exc
+    return RankExplanationOut.model_validate(
+        {"as_of": resolution.as_of, "data_version": data_version, **explanation.to_dict()}
+    )
+
+
+@router.post(
+    "/selection",
+    response_model=ScreenSelectionOut,
+    summary="Portfolio fit over a ranked screen (informational)",
+)
+async def select_over_screen(
+    request: Request,
+    body: ScreenSelectionRequest,
+    session: SessionDep,
+    principal: AuthenticatedDep,
+    entitlements: EntitlementsDep,
+) -> ScreenSelectionOut:
+    """docs/ranking/PLAN.md C5/C6: holds, exits, entries and skips, each with its reasons.
+
+    **Informational only.** The response carries no plan id and no route accepts it; ranks and
+    scores are the engine's, unmodified. ``portfolio_id`` must be one of the caller's portfolios
+    (not-yours is a 404, as on ``/portfolios``); inline ``holdings`` resolve by symbol.
+    """
+    del request
+    user_id = principal.require_user()
+    data_version = await _check_data_version(session, body.data_version)
+    definition = _ranked_definition(body.definition)
+    _check_universe(definition, entitlements)
+    resolution = await resolve_as_of(session, body.as_of or definition.historical_date)
+    _check_historical(resolution, entitlements)
+
+    if body.portfolio_id is not None:
+        try:
+            portfolio = await portfolio_service.load_portfolio(session, body.portfolio_id, user_id)
+        except portfolio_service.PortfolioNotFound as exc:
+            raise not_found("portfolio", str(body.portfolio_id)) from exc
+        book = await screen_ranking.portfolio_holdings(session, portfolio.id)
+    else:
+        book = await _inline_book(session, body.holdings or [])
+
+    as_of = resolution.as_of
+    ranked = await rank_definition(session, definition, as_of)
+    candidates = screen_ranking.candidates_from(ranked)
+    holdings = screen_ranking.with_candidate_sectors(book.holdings, candidates)
+    constraints = SelectionConstraints(**body.constraints.model_dump())
+    returns = None
+    if constraints.max_correlation is not None:
+        peers = {holding.instrument_id for holding in holdings} | {
+            candidate.instrument_id
+            for candidate in candidates
+            if candidate.quality_rank <= constraints.entry_rank
+        }
+        returns = await screen_ranking.daily_returns(
+            session, peers, as_of, constraints.correlation_window
+        )
+    try:
+        selection = select_portfolio(candidates, holdings, constraints, returns)
+    except ValueError as exc:
+        raise bad_request(f"selection refused its inputs: {exc}") from exc
+
+    return ScreenSelectionOut.model_validate(
+        {
+            **selection.to_dict(),
+            "as_of": as_of,
+            "data_version": data_version,
+            "provenance": await screen_provenance(session, definition, as_of, data_version),
+            "portfolio_id": body.portfolio_id,
+            "holdings_without_quantity": list(book.without_quantity),
+        }
+    )
+
+
+def _ranked_definition(definition: ScreenDefinition) -> ScreenDefinition:
+    """Explain and selection read the ranking engine's output, which needs ``ranking_terms``."""
+    if not definition.ranking_terms:
+        raise invalid_screen_definition(
+            [
+                {
+                    "field": "definition.ranking_terms",
+                    "message": "explain and selection need a definition with ranking_terms",
+                }
+            ]
+        )
+    return definition
+
+
+async def _inline_book(
+    session: AsyncSession, items: Sequence[SelectionHoldingIn]
+) -> screen_ranking.BookHoldings:
+    """Inline holdings, resolved as a portfolio import resolves a symbol; unmatched is a 400."""
+    resolved = await portfolio_service.resolve_symbols(
+        session, [item.symbol.strip().upper() for item in items]
+    )
+    unmatched = sorted(symbol for symbol, match in resolved.items() if match.instrument_id is None)
+    if unmatched:
+        raise bad_request(
+            "Some holdings do not resolve to exactly one listed instrument.",
+            errors=[
+                {"field": "holdings", "message": f"{symbol!r} is not a listed symbol"}
+                for symbol in unmatched
+            ],
+        )
+    rows: list[tuple[int, str, Decimal | None]] = []
+    for item in items:
+        match = resolved[item.symbol.strip().upper()]
+        instrument_id = match.instrument_id
+        if instrument_id is None:  # pragma: no cover - refused above
+            continue
+        rows.append((instrument_id, match.candidates[0].symbol, item.quantity))
+    return screen_ranking.aggregate_holdings(rows)
 
 
 @router.post(

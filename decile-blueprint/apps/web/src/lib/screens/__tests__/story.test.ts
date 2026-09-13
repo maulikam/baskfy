@@ -53,6 +53,16 @@ describe("story strip helpers", () => {
         { rank: 2, symbol: "OTHER", name: "Other", sorting_factor: 1.1, ret_12m: 120, vol_12m: 0.6 },
       ],
       data_version: 1,
+      provenance: {
+        universe: "nifty-500",
+        universe_label: "NIFTY 500",
+        as_of: "2026-08-18",
+        data_version: 1,
+        ranking_engine_version: "legacy-sql",
+        desk_score_version: null,
+        scope: "filtered_results",
+        mode: "composite",
+      },
     });
 
     expect(stats.topPickSymbol).toBe("CUPID");

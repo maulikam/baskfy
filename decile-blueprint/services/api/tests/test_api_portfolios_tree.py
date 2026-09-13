@@ -26,7 +26,7 @@ from decimal import Decimal
 
 import httpx
 import pytest
-from api_helpers import assert_problem, bearer, make_user, url
+from api_helpers import ORDER_PATH_TOKENS, assert_problem, bearer, make_user, url
 from screener_helpers import requires_db
 from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1206,13 +1206,7 @@ class TestNoOrderPath:
         either: the roll-up sums what is stored and receives no quote.
         """
         source = inspect.getsource(router)
-        for forbidden in (
-            "place_order",
-            "OrderGateway",
-            "baskfy_execution",
-            "kiteconnect",
-            "confirm=True",
-        ):
+        for forbidden in ORDER_PATH_TOKENS:
             assert forbidden not in source, f"routers/portfolios.py references {forbidden}"
 
     def test_the_router_declares_no_execute_route(self) -> None:

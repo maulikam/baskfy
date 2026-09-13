@@ -92,7 +92,11 @@ describe("the accordion groups", () => {
       "Series",
       "Ignore Top Beta / Volatility",
       "Price (CMP) Range",
+      // docs/ranking/PLAN.md C3 adds eligibility filters and the ranking controls.
+      "Factor Ranges",
+      "Market Regime",
       "Multi-Factor Combined Ranking",
+      "Ranking",
       "Historical Ranks",
       "Custom Filters",
     ]);

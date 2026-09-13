@@ -78,15 +78,15 @@ export function makeRows(count: number, seed = 20260818): DemoRow[] {
 
 /** A handful of registry entries, in the families docs/08 §"Screen editor" groups by. */
 export const DEMO_FACTORS: FactorOut[] = [
-  { key: "ret_12m", label: "ABSOLUTE RETURN 1 YEAR", family: "absolute_return", unit: "percent", higher_is_better: true, preference: "higher" },
-  { key: "ret_3m", label: "ABSOLUTE RETURN 3 MONTHS", family: "absolute_return", unit: "percent", higher_is_better: true, preference: "higher" },
-  { key: "sharpe_12m", label: "SHARPE RETURN 1 YEAR", family: "sharpe_return", unit: "ratio", higher_is_better: true, preference: "higher" },
-  { key: "avg_sharpe_12_6_3_1", label: "AVERAGE SHARPE RETURN 12 6 3 1 MONTHS", family: "sharpe_return", unit: "ratio", higher_is_better: true, preference: "higher" },
-  { key: "rsi_12m", label: "RSI 1 YEAR", family: "rsi", unit: "index", higher_is_better: true, preference: "higher" },
-  { key: "sharpe_div_beta_12m", label: "SHARPE RETURN 1 YEAR / BETA", family: "risk_adjusted", unit: "ratio", higher_is_better: true, preference: "higher" },
-  { key: "ret_12m_minus_1m", label: "RETURN 12 MINUS 1 MONTHS", family: "skip_month", unit: "percent", higher_is_better: true, preference: "higher" },
-  { key: "vol_12m", label: "VOLATILITY 1 YEAR", family: "non_momentum", unit: "fraction", higher_is_better: false, preference: "lower" },
-  { key: "beta_12m", label: "BETA", family: "non_momentum", unit: "ratio", higher_is_better: false, preference: "lower" },
+  { key: "ret_12m", label: "ABSOLUTE RETURN 1 YEAR", family: "absolute_return", unit: "percent", higher_is_better: true, preference: "higher", rankable: true, weight_family: "momentum", validation_status: "legacy", definition: "Percent change of the adjusted close over the 12-month calendar window (docs/05 §1)." },
+  { key: "ret_3m", label: "ABSOLUTE RETURN 3 MONTHS", family: "absolute_return", unit: "percent", higher_is_better: true, preference: "higher", rankable: true, weight_family: "momentum", validation_status: "legacy", definition: "Percent change of the adjusted close over the 3-month calendar window (docs/05 §1)." },
+  { key: "sharpe_12m", label: "SHARPE RETURN 1 YEAR", family: "sharpe_return", unit: "ratio", higher_is_better: true, preference: "higher", rankable: true, weight_family: "momentum", validation_status: "legacy", definition: "The 12-month return divided by 100 x its annualised volatility (docs/05 §3)." },
+  { key: "avg_sharpe_12_6_3_1", label: "AVERAGE SHARPE RETURN 12 6 3 1 MONTHS", family: "sharpe_return", unit: "ratio", higher_is_better: true, preference: "higher", rankable: true, weight_family: "momentum", validation_status: "legacy", definition: "Mean of the 12 6 3 1-month sharpe returns, NULL if any is NULL (docs/05 §4)." },
+  { key: "rsi_12m", label: "RSI 1 YEAR", family: "rsi", unit: "index", higher_is_better: true, preference: "higher", rankable: true, weight_family: "momentum", validation_status: "legacy", definition: "Cutler's RSI with a period of the 12-month window's daily changes (docs/05 §5)." },
+  { key: "sharpe_div_beta_12m", label: "SHARPE RETURN 1 YEAR / BETA", family: "risk_adjusted", unit: "ratio", higher_is_better: true, preference: "higher", rankable: true, weight_family: "momentum", validation_status: "legacy", definition: "The 1-year sharpe return divided by beta, NULL when beta <= 0 (docs/05 §7)." },
+  { key: "ret_12m_minus_1m", label: "RETURN 12 MINUS 1 MONTHS", family: "skip_month", unit: "percent", higher_is_better: true, preference: "higher", rankable: true, weight_family: "momentum", validation_status: "legacy", definition: "Twelve-month return excluding the most recent month (docs/05 §8)." },
+  { key: "vol_12m", label: "VOLATILITY 1 YEAR", family: "non_momentum", unit: "fraction", higher_is_better: false, preference: "lower", rankable: true, weight_family: "risk_execution", validation_status: "legacy", definition: "Annualised population standard deviation of the 1-year window's daily returns, as a fraction (docs/05 §2)." },
+  { key: "beta_12m", label: "BETA", family: "non_momentum", unit: "ratio", higher_is_better: false, preference: "lower", rankable: true, weight_family: "risk_execution", validation_status: "legacy", definition: "Covariance of 252 daily returns with NIFTY 50 over its variance (docs/05 §6)." },
 ];
 
 /** A 30-point series for the sparklines, again seeded. */

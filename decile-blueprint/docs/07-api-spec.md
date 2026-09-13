@@ -19,6 +19,7 @@ GET  /meta/columns              → the 34 selectable result columns
 GET  /meta/universes            → index_def rows where is_universe
 GET  /meta/trading-days?from&to → list of trading dates (for the historical date picker)
 GET  /meta/status               → { as_of, data_version, last_pipeline_run }
+GET  /meta/ranking-presets      → named ranking presets + promotion status (docs/ranking/PLAN.md C6)
 ```
 
 ## Screens
@@ -55,6 +56,20 @@ POST /screens/{public_id}/run
 
 POST /screens/preview          # run an unsaved definition (the edit form's live preview)
      { "definition": {…}, "as_of": null }
+
+POST /screens/explain          # why one row ranks where it does (docs/ranking/PLAN.md C4 step 6, C6)
+     { "definition": {… ranking_terms required …}, "symbol": "CUPID", "as_of": null, "data_version": null }
+     → { as_of, data_version, instrument_id, symbol, rank|null, total|null, terms[], positives[],
+         deductions[], eligibility{passed, failures[]}, data_quality{…}, desk|null, provenance{…} }
+     (signed in; 404 for a symbol outside the universe on as_of)
+
+POST /screens/selection        # portfolio fit over the ranked screen — INFORMATIONAL, no plan, no order (C5, C6)
+     { "definition": {… ranking_terms required …}, "as_of": null,
+       "portfolio_id": 12 | "holdings": [{ "symbol": "CUPID", "quantity": "10" }],
+       "constraints": { "max_names": 15, "entry_rank": 15, "retention_rank": 30, … } }
+     → SelectionResult.to_dict() + { as_of, data_version, provenance, portfolio_id,
+         holdings_without_quantity } — rows[] carry action hold|exit|enter|skip + reasons[]
+     (signed in; a portfolio that is not the caller's is 404)
 
 GET  /screens/{public_id}/csv?as_of=…     → text/csv  (entitlement-gated)
 GET  /screens/{public_id}/runs?limit=…    → historical run summaries

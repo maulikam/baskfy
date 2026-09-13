@@ -96,7 +96,9 @@ class TestTheSeedWritesOperatorCapital:
         run = inspect.getsource(seed_module._run)
         twt_branch = run[run.index('if command in ("all", "twt")') :]
         twt_branch = twt_branch[: twt_branch.index('if command in ("all", "market")')]
-        assert "if capital is not None:" in twt_branch, "the sleeve must only be re-funded on request"
+        assert "if capital is not None:" in twt_branch, (
+            "the sleeve must only be re-funded on request"
+        )
 
 
 @pytest.fixture(scope="module")

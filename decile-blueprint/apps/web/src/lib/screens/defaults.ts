@@ -44,7 +44,9 @@ export function defaultDefinition(): ScreenDefinition {
     sort_by: "avg_sharpe_12_6_3_1",
     sort_direction: "desc",
     ranking_mode: "composite",
-    ranking_scope: "filtered_results",
+    // A new screen ranks against the fixed universe (decision 2D.1); the schema default, which
+    // every saved screen without the field parses to, stays `filtered_results`.
+    ranking_scope: "fixed_universe",
     apply_filters_on: "all",
     min_return_1y: null,
     median_volume_1y: null,
@@ -85,6 +87,11 @@ export function defaultDefinition(): ScreenDefinition {
     factor_three: { enabled: false, sort_by: null, sort_direction: "desc" },
     historical_date: null,
     custom_filters: [],
+    ranking_terms: [],
+    family_weights: null,
+    missing_data: "penalize",
+    factor_ranges: [],
+    regime_in: null,
   };
 }
 

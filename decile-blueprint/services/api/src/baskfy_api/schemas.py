@@ -19,13 +19,15 @@ import datetime as dt
 from decimal import Decimal
 from typing import Annotated, Final, Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, JsonValue, model_validator
 
 from baskfy_api.search import CatalogKind
 from baskfy_core.backtest import BacktestConfig
+from baskfy_core.factor_registry import ValidationStatus, WeightFamily
 from baskfy_core.portfolio_csv import MatchStatus, RowIssue, SkipReason, UnmatchedReason
 from baskfy_core.rank_buffer import Action, ExitReason
-from baskfy_core.screen_definition import ScreenDefinition
+from baskfy_core.ranking import FactorPreference
+from baskfy_core.screen_definition import RankingModeName, RankingScopeName, ScreenDefinition
 
 #: docs/07 §Conventions: "Cursor pagination: `?limit=100&cursor=…`".
 DEFAULT_PAGE_SIZE = 100
@@ -56,6 +58,8 @@ class FactorOut(_Out):
 
     ``preference`` is the ranking-engine addition (docs/ranking/PLAN.md): higher / lower /
     target_range / eligibility. ``higher_is_better`` stays for the Sort Direction default.
+    ``rankable``, ``weight_family``, ``validation_status`` and ``definition`` are C1's registry
+    fields (docs/ranking/PLAN.md C6 publishes them).
     """
 
     key: str
@@ -63,7 +67,29 @@ class FactorOut(_Out):
     family: str
     unit: str
     higher_is_better: bool
-    preference: str
+    preference: FactorPreference
+    #: docs/ranking/PLAN.md C1 — False for a filter/column-only factor a ranking term refuses.
+    rankable: bool
+    #: C1 — the composite weight family this factor contributes to.
+    weight_family: WeightFamily
+    #: C1 — the evidence behind it as a ranking input.
+    validation_status: ValidationStatus
+    #: C1 — one sentence saying what the number is.
+    definition: str
+
+
+class RankingPresetOut(_Out):
+    """One named ranking preset — ``baskfy_core.ranking_presets`` (docs/ranking/PLAN.md §1.5).
+
+    ``patch`` is merged into a ``ScreenDefinition`` payload to apply the preset; ``status`` is
+    ``ready`` (safe as Sort By today) or ``research`` (a starting point, not a product default).
+    """
+
+    key: str
+    description: str
+    status: str
+    sort_by: str
+    patch: dict[str, JsonValue]
 
 
 class ColumnOut(_Out):
@@ -220,8 +246,27 @@ class ScreenRunRowOut(BaseModel):
     sorting_factor: JsonValue = None
 
 
+class ScreenProvenanceOut(_Out):
+    """docs/ranking/PLAN.md C6: what produced a screen payload.
+
+    ``ranking_engine_version`` is ``baskfy_core.ranking_engine.RANKING_ENGINE_VERSION`` for a
+    definition with ``ranking_terms`` and ``"legacy-sql"`` for docs/06's SQL ranking.
+    ``desk_score_version`` is the ``desk_score_daily.score_version`` read when the book's SCORE
+    decides the order, and ``null`` when it does not.
+    """
+
+    universe: str
+    universe_label: str
+    as_of: dt.date
+    data_version: int
+    ranking_engine_version: str
+    desk_score_version: str | None
+    scope: RankingScopeName
+    mode: RankingModeName
+
+
 class ScreenRunResponse(_Out):
-    """docs/07 §"Running a screen", field for field."""
+    """docs/07 §"Running a screen", field for field, plus C6's ``provenance``."""
 
     as_of: dt.date
     data_version: int
@@ -229,6 +274,7 @@ class ScreenRunResponse(_Out):
     sorting_factor: SortingFactorOut
     columns: list[str]
     rows: list[ScreenRunRowOut]
+    provenance: ScreenProvenanceOut
 
 
 class ScreenRunSummaryOut(_Out):
@@ -245,6 +291,231 @@ class ScreenRunPage(_Out):
 
     data: list[ScreenRunSummaryOut]
     next_cursor: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Ranking explain and portfolio selection (docs/ranking/PLAN.md C4 step 6, C5, C6)
+# ---------------------------------------------------------------------------
+
+
+class ScreenExplainRequest(_In):
+    """C6: ``POST /screens/explain {definition, symbol, as_of?, data_version?}``.
+
+    ``definition`` must carry ``ranking_terms``: an explanation is the ranking engine's account of
+    a row, and docs/06's SQL ranking has no term scores to explain.
+    """
+
+    definition: ScreenDefinition
+    symbol: str = Field(min_length=1, max_length=30)
+    as_of: dt.date | None = None
+    data_version: int | None = Field(default=None, ge=0)
+
+
+class RankTermOut(_Out):
+    """One ranking term's part in a row's rank — ``ranking_engine.TermExplanation``."""
+
+    factor: str
+    label: str
+    weight_family: str
+    preference: str
+    raw: float | None
+    transformed: float | None
+    effective_weight: float | None
+    contribution: float | None
+    missing: bool
+
+
+class EligibilityFailureOut(_Out):
+    filter: str
+    detail: str
+
+
+class EligibilityOut(_Out):
+    passed: bool
+    failures: list[EligibilityFailureOut]
+
+
+class DataQualityOut(_Out):
+    missing_factors: list[str]
+    insufficient_history: bool
+    stale_price: bool
+    recent_corporate_action: bool
+
+
+class DeskBlockOut(_Out):
+    """The book's stored ``desk_score_daily`` row for the instrument — never re-scored (C2)."""
+
+    score: float | None
+    rank: int | None
+    a_trend: float | None
+    b_momentum: float | None
+    c_sharpe: float | None
+    d_consistency: float | None
+    e_liquidity: float | None
+    f_penalty: float | None
+    reject: str
+    eligible: bool
+
+
+class RankProvenanceOut(_Out):
+    """``ranking_engine.Provenance``: what produced the explanation."""
+
+    universe: str
+    as_of: dt.date
+    data_version: int | None
+    ranking_engine_version: str
+    desk_score_version: str | None
+    nse_momentum_version: str
+    scope: RankingScopeName
+    mode: RankingModeName
+
+
+class RankExplanationOut(_Out):
+    """``ranking_engine.RankExplanation``, field for field, plus docs/07's analytics envelope.
+
+    ``rank`` is ``null`` for a row that is in the universe but not in the results (it failed a
+    filter, or the book rejected it) — ``eligibility.failures`` says why.
+    """
+
+    as_of: dt.date
+    data_version: int
+    instrument_id: int
+    symbol: str | None
+    rank: int | None
+    total: float | None
+    terms: list[RankTermOut]
+    positives: list[str]
+    deductions: list[str]
+    eligibility: EligibilityOut
+    data_quality: DataQualityOut
+    desk: DeskBlockOut | None
+    provenance: RankProvenanceOut
+
+
+#: The longest correlation window the API will read from ``ohlcv_daily``: three years of sessions.
+MAX_CORRELATION_WINDOW: Final = 756
+
+#: More inline holdings than a book of this product can hold is a mistake, not a portfolio.
+MAX_INLINE_HOLDINGS: Final = 500
+
+
+class SelectionConstraintsIn(_In):
+    """C5's knobs, with C5's defaults. Decimals travel as strings or numbers, never floats."""
+
+    max_names: int = Field(default=15, ge=1)
+    entry_rank: int = Field(default=15, ge=1)
+    retention_rank: int = Field(default=30, ge=1)
+    max_per_sector: int | None = Field(default=None, ge=1)
+    capital_inr: Decimal | None = Field(default=None, gt=0)
+    max_adv_participation_pct: Decimal | None = Field(default=Decimal("1.0"), gt=0)
+    turnover_budget_names: int | None = Field(default=None, ge=0)
+    max_correlation: float | None = Field(default=None, ge=-1.0, le=1.0)
+    correlation_window: int = Field(default=126, ge=60, le=MAX_CORRELATION_WINDOW)
+
+    @model_validator(mode="after")
+    def _retention_is_not_inside_entry(self) -> SelectionConstraintsIn:
+        if self.retention_rank < self.entry_rank:
+            raise ValueError("retention_rank must be >= entry_rank")
+        return self
+
+
+class SelectionHoldingIn(_In):
+    """One inline holding. ``quantity`` is the full count (quantity + T1 + collateral)."""
+
+    symbol: str = Field(min_length=1, max_length=30)
+    quantity: Decimal = Field(gt=0)
+
+
+class ScreenSelectionRequest(_In):
+    """C6: ``POST /screens/selection {definition, as_of?, portfolio_id? | holdings?, constraints}``.
+
+    Exactly one of ``portfolio_id`` (one of the caller's portfolios) and ``holdings`` (an empty
+    list is a book with nothing in it). Informational only: there is no plan id and no order.
+    """
+
+    definition: ScreenDefinition
+    as_of: dt.date | None = None
+    data_version: int | None = Field(default=None, ge=0)
+    portfolio_id: int | None = Field(default=None, ge=1)
+    holdings: list[SelectionHoldingIn] | None = Field(default=None, max_length=MAX_INLINE_HOLDINGS)
+    constraints: SelectionConstraintsIn = Field(default_factory=SelectionConstraintsIn)
+
+    @model_validator(mode="after")
+    def _one_source_of_holdings(self) -> ScreenSelectionRequest:
+        if (self.portfolio_id is None) == (self.holdings is None):
+            raise ValueError("send exactly one of portfolio_id and holdings")
+        return self
+
+
+class SelectionConstraintsOut(_Out):
+    max_names: int
+    entry_rank: int
+    retention_rank: int
+    max_per_sector: int | None
+    #: Decimal, as a string (house rule 8).
+    capital_inr: str | None
+    max_adv_participation_pct: str | None
+    turnover_budget_names: int | None
+    max_correlation: float | None
+    correlation_window: int
+
+
+class SelectionSummaryOut(_Out):
+    kept: int
+    entries: int
+    exits: int
+    skips: int
+    turnover_used: int
+    turnover_budget: int | None
+    unfilled_slots: int
+    sector_counts: dict[str, int]
+
+
+class SelectionNoteOut(_Out):
+    code: str
+    message: str
+
+
+class SelectionRowOut(_Out):
+    """One name's decision — ``ranking_selection.SelectionRow``. Decimals are strings."""
+
+    instrument_id: int
+    symbol: str
+    action: Literal["hold", "exit", "enter", "skip"]
+    reasons: list[str]
+    flags: list[str]
+    explanation: str
+    quality_rank: int | None
+    score: float | None
+    sector: str | None
+    current_quantity: str | None
+    proposed_value_inr: str | None
+    proposed_qty: int | None
+    adv_participation_pct: str | None
+    max_correlation: float | None
+    correlation_peer: str | None
+
+
+class ScreenSelectionOut(_Out):
+    """``ranking_selection.SelectionResult.to_dict()`` plus the run it was computed over.
+
+    ``informational_only`` is always ``true``: nothing here is a plan, and no route takes it to
+    an order (non-negotiable #1). ``holdings_without_quantity`` names portfolio holdings that
+    record no quantity: C5 needs a positive quantity to call a name held, so they are left out of
+    the book and said so rather than dropped in silence.
+    """
+
+    version: str
+    informational_only: Literal[True]
+    as_of: dt.date
+    data_version: int
+    provenance: ScreenProvenanceOut
+    portfolio_id: int | None
+    holdings_without_quantity: list[str]
+    constraints: SelectionConstraintsOut
+    summary: SelectionSummaryOut
+    notes: list[SelectionNoteOut]
+    rows: list[SelectionRowOut]
 
 
 # ---------------------------------------------------------------------------

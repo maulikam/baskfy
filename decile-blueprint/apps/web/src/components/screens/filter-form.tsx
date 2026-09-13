@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { FILTER_GROUPS, totalActiveFilters } from "@/lib/screens/groups";
+import { withSortBy } from "@/lib/screens/ranking";
 import { cn } from "@/lib/utils";
 
 /**
@@ -107,7 +108,7 @@ export function FilterForm({
             value={definition.sort_by}
             labelledBy="sort-by-label"
             disabled={disabled}
-            onChange={(key) => patch({ sort_by: key })}
+            onChange={(key) => patch(withSortBy(definition, factors, key))}
           />
         </div>
 

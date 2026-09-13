@@ -386,14 +386,14 @@ def _candidate_out(
     )
 
 
-def _open_position_out(
-    row: vbt_service.PositionRow, live: Decimal | None
-) -> VbtPositionOut:
+def _open_position_out(row: vbt_service.PositionRow, live: Decimal | None) -> VbtPositionOut:
     return_pct = row.return_pct
     r_multiple = row.r_multiple
     if live is not None:
-        return_pct = None if row.entry_avg == 0 else ((live / row.entry_avg - 1) * 100).quantize(
-            Decimal("0.01")
+        return_pct = (
+            None
+            if row.entry_avg == 0
+            else ((live / row.entry_avg - 1) * 100).quantize(Decimal("0.01"))
         )
         risk = row.entry_avg - row.initial_stop
         r_multiple = (
@@ -441,9 +441,7 @@ async def get_vbt_today(
     user_id = await scoped_sole_user_id(session, principal.user_id)
     view = await vbt_service.today(session, user_id=user_id, day=date)
     newest = await vbt_scan.newest_run(session, user_id=user_id)
-    marks = await live_marks_for_symbols(
-        [row.symbol for row in (*view.candidates, *view.rejects)]
-    )
+    marks = await live_marks_for_symbols([row.symbol for row in (*view.candidates, *view.rejects)])
     return _json(
         VbtTodayOut(
             as_of=view.as_of,

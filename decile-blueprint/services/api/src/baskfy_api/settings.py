@@ -120,9 +120,7 @@ class Settings(BaseSettings):
     #: one-off ``UPDATE app_user SET is_staff``. An address already marked staff stays
     #: staff even if it is not on this list. Extra operators are added the same way as
     #: the login allowlist: comma-separated, case-insensitive, a setting rather than a rebuild.
-    staff_allowlist: str = (
-        "mdave.5191@gmail.com,learnwithalacrity@gmail.com,maulikdave05@gmail.com"
-    )
+    staff_allowlist: str = "mdave.5191@gmail.com,learnwithalacrity@gmail.com,maulikdave05@gmail.com"
 
     @property
     def allowed_staff(self) -> frozenset[str]:

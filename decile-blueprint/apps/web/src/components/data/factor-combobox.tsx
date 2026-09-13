@@ -228,3 +228,59 @@ export function FactorCombobox({
     </Popover>
   );
 }
+
+/**
+ * The factor picker for controls that may render **inside a floating surface** — the Ranking and
+ * Factor Ranges sections open in the chip bar's popovers, where `FactorCombobox`'s own popover
+ * would nest and dismiss itself (see `FactorList`). The list expands in place below the trigger
+ * instead, so there is one floating surface at most.
+ */
+export function InlineFactorPicker({
+  factors,
+  value,
+  onChange,
+  labelledBy,
+  placeholder = "Search factors…",
+  disabled = false,
+  className,
+}: FactorComboboxProps) {
+  const [open, setOpen] = useState(false);
+  const selected = factors.find((factor) => factor.key === value) ?? null;
+
+  return (
+    <div className={cn("space-y-1", className)}>
+      <Button
+        type="button"
+        variant="outline"
+        role="combobox"
+        aria-expanded={open}
+        aria-labelledby={labelledBy}
+        disabled={disabled}
+        className="w-full justify-between font-normal"
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span
+          className={cn("truncate", !selected && value === null && "text-muted-foreground")}
+          title={selected ? (columnDisplayTooltip(selected.key) ?? selected.label) : undefined}
+        >
+          {selected
+            ? columnDisplayLabel(selected.key, selected.label)
+            : (value ?? "Choose a factor")}
+        </span>
+        <ChevronsUpDown aria-hidden="true" className="shrink-0 opacity-50" />
+      </Button>
+      {open ? (
+        <FactorList
+          factors={factors}
+          value={value}
+          placeholder={placeholder}
+          className="rounded-md border border-border"
+          onChange={(key) => {
+            onChange(key);
+            setOpen(false);
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}

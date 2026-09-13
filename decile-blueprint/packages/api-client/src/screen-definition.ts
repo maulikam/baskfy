@@ -20,6 +20,14 @@ export const IGNORE_ABOVE_BETA_IGNORE = 100;
 /** docs/01 §2.14 — the screener exposes exactly three custom-filter slots. */
 export const MAX_CUSTOM_FILTERS = 3;
 
+/** docs/ranking/PLAN.md C3 — term, range and weight limits. Mirrors screen_definition.py. */
+export const MAX_RANKING_TERMS = 8;
+export const MAX_FACTOR_RANGES = 10;
+export const MAX_TERM_WEIGHT = 100;
+
+/** The Wasserstein regime labels `factor_daily.regime` carries. */
+export const REGIME_VALUES = ["BULL", "NEUTRAL", "BEAR"] as const;
+
 /** docs/01 §2.9 */
 // Mirrors `SERIES_VALUES` in packages/core/src/baskfy_core/screen_definition.py.
 // EQ/BE are the main board; SM/ST/SZ the NSE Emerge (SME) platform (M59).
@@ -78,6 +86,9 @@ export const ApplyFiltersOnSchema = z.enum([
   "top_100",
 ]);
 export const CustomFilterOpSchema = z.enum([">=", "<=", "="]);
+export const TermPreferenceSchema = z.enum(["higher", "lower", "target_range"]);
+export const MissingDataPolicySchema = z.enum(["penalize", "neutral", "exclude"]);
+export const RegimeLabelSchema = z.enum(REGIME_VALUES);
 
 const MA_WINDOWS = [200, 100, 50, 20] as const;
 
@@ -180,6 +191,80 @@ export const CustomFilterSchema = z.strictObject({
   right: factorKey,
 });
 
+/**
+ * One explicit ranking term (docs/ranking/PLAN.md C3). Registry rules — the factor exists and is
+ * rankable — are enforced server-side against GET /meta/factors, exactly like sort_by.
+ */
+export const RankingTermSchema = z
+  .strictObject({
+    factor: factorKey,
+    preference: TermPreferenceSchema,
+    weight: z.number().gt(0).max(MAX_TERM_WEIGHT).default(1),
+    target_min: z.number().nullable().default(null),
+    target_max: z.number().nullable().default(null),
+  })
+  .superRefine((value, ctx) => {
+    const hasBound = value.target_min !== null || value.target_max !== null;
+    if (value.preference === "target_range") {
+      if (!hasBound) {
+        ctx.addIssue({
+          code: "custom",
+          message: `ranking_terms[${value.factor}]: target_range needs target_min, target_max or both`,
+        });
+      } else if (
+        value.target_min !== null &&
+        value.target_max !== null &&
+        value.target_min > value.target_max
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          message: `ranking_terms[${value.factor}]: target range is inverted`,
+        });
+      }
+    } else if (hasBound) {
+      ctx.addIssue({
+        code: "custom",
+        message: `ranking_terms[${value.factor}]: target_min/target_max only apply to preference='target_range'`,
+      });
+    }
+  });
+
+/** An inclusive [min, max] eligibility filter on one stored factor (C3). */
+export const FactorRangeSchema = z
+  .strictObject({
+    enabled: z.boolean().default(true),
+    factor: factorKey,
+    min: z.number().nullable().default(null),
+    max: z.number().nullable().default(null),
+  })
+  .superRefine((value, ctx) => {
+    if (value.min === null && value.max === null) {
+      ctx.addIssue({
+        code: "custom",
+        message: `factor_ranges[${value.factor}]: set min, max or both`,
+      });
+    } else if (value.min !== null && value.max !== null && value.min > value.max) {
+      ctx.addIssue({
+        code: "custom",
+        message: `factor_ranges[${value.factor}]: range is inverted`,
+      });
+    }
+  });
+
+const familyWeight = z.number().min(0).nullable().default(null);
+
+/** Relative weight per weight family, composite only (C3/C4). null = no opinion. */
+export const FamilyWeightsSchema = z.strictObject({
+  momentum: familyWeight,
+  path_quality: familyWeight,
+  trend_structure: familyWeight,
+  participation: familyWeight,
+  risk_execution: familyWeight,
+});
+
+const extraIsActive = (extra: { enabled: boolean; sort_by: string | null }): boolean =>
+  extra.enabled && extra.sort_by !== null;
+
 export const ScreenDefinitionSchema = z
   .strictObject({
     index: z.enum(UNIVERSE_SLUGS),
@@ -208,6 +293,13 @@ export const ScreenDefinitionSchema = z
     factor_three: ExtraFactorSchema.prefault({}),
     historical_date: z.iso.date().nullable().default(null),
     custom_filters: z.array(CustomFilterSchema).max(MAX_CUSTOM_FILTERS).default([]),
+
+    // Phase 2 (docs/ranking/PLAN.md C3). canonical_json omits each at its default.
+    ranking_terms: z.array(RankingTermSchema).max(MAX_RANKING_TERMS).default([]),
+    family_weights: FamilyWeightsSchema.nullable().default(null),
+    missing_data: MissingDataPolicySchema.default("penalize"),
+    factor_ranges: z.array(FactorRangeSchema).max(MAX_FACTOR_RANGES).default([]),
+    regime_in: z.array(RegimeLabelSchema).nullable().default(null),
   })
   .superRefine((value, ctx) => {
     if (new Set(value.series).size !== value.series.length) {
@@ -220,22 +312,92 @@ export const ScreenDefinitionSchema = z
         message: "factor_three cannot be enabled while factor_two is disabled",
       });
     }
-    if (
-      value.ranking_mode === "single" &&
-      (value.factor_two.enabled || value.factor_three.enabled)
-    ) {
+    const extrasActive = extraIsActive(value.factor_two) || extraIsActive(value.factor_three);
+    if (value.ranking_mode === "single" && extrasActive) {
       ctx.addIssue({
         code: "custom",
         message:
           "ranking_mode='single' cannot combine factor_two or factor_three; use sequential or composite",
       });
     }
-    if (value.ranking_scope === "within_sector") {
+    // desk_score is the book's SCORE (C2); it never sums row numbers with another factor.
+    if (value.sort_by === "desk_score" && extrasActive) {
       ctx.addIssue({
         code: "custom",
         message:
-          "ranking_scope='within_sector' is reserved until sector membership is a first-class column",
+          "desk_score cannot combine with factor_two or factor_three; it is a single computed SCORE",
       });
+    }
+    if (value.regime_in !== null) {
+      if (value.regime_in.length === 0) {
+        ctx.addIssue({ code: "custom", message: "regime_in cannot be empty; use null for no filter" });
+      } else if (new Set(value.regime_in).size !== value.regime_in.length) {
+        ctx.addIssue({ code: "custom", message: "regime_in contains duplicates" });
+      }
+    }
+    const factors = value.ranking_terms.map((term) => term.factor);
+    if (new Set(factors).size !== factors.length) {
+      ctx.addIssue({
+        code: "custom",
+        message: "ranking_terms name a factor more than once; use one term with a larger weight",
+      });
+    }
+    const first = value.ranking_terms[0];
+    if (first === undefined) {
+      if (value.ranking_scope === "within_sector") {
+        ctx.addIssue({
+          code: "custom",
+          message: "ranking_scope='within_sector' needs explicit ranking_terms",
+        });
+      }
+      if (value.family_weights !== null) {
+        ctx.addIssue({
+          code: "custom",
+          message: "family_weights needs ranking_terms in composite mode",
+        });
+      }
+      if (value.missing_data !== "penalize") {
+        ctx.addIssue({ code: "custom", message: "missing_data applies to ranking_terms" });
+      }
+      return;
+    }
+    if (value.sort_by !== first.factor) {
+      ctx.addIssue({
+        code: "custom",
+        message: `sort_by must equal ranking_terms[0].factor (${first.factor})`,
+      });
+    }
+    if (extrasActive) {
+      ctx.addIssue({
+        code: "custom",
+        message: "ranking_terms replace factor_two and factor_three; disable them",
+      });
+    }
+    if (value.ranking_mode === "single" && value.ranking_terms.length !== 1) {
+      ctx.addIssue({
+        code: "custom",
+        message: "ranking_mode='single' ranks by exactly one term",
+      });
+    }
+    if (value.ranking_mode !== "composite") {
+      if (value.ranking_terms.some((term) => term.weight !== 1)) {
+        ctx.addIssue({
+          code: "custom",
+          message: "term weights only apply to ranking_mode='composite'",
+        });
+      }
+      if (value.family_weights !== null) {
+        ctx.addIssue({
+          code: "custom",
+          message: "family_weights only apply to ranking_mode='composite'",
+        });
+      }
+      if (value.ranking_scope === "within_sector") {
+        ctx.addIssue({
+          code: "custom",
+          message: "ranking_scope='within_sector' only changes a composite score",
+        });
+      }
     }
   });
 

@@ -33,6 +33,9 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     "/meta/universes": {"get"},
     "/meta/trading-days": {"get"},
     "/meta/status": {"get"},
+    # docs/ranking/PLAN.md C6 (gate ranking-2.G G3): the named ranking presets, reference data
+    # like /meta/factors — public, no database, GET only.
+    "/meta/ranking-presets": {"get"},
     # Display marks only. Ranks, factors and sleeve signals stay on the published session.
     "/meta/live-marks": {"get"},
     "/screens": {"get", "post"},
@@ -65,6 +68,10 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     "/screens/{public_id}/duplicate": {"post"},
     "/screens/{public_id}/run": {"post"},
     "/screens/preview": {"post"},
+    # docs/ranking/PLAN.md C6 (gate ranking-2.G G3): the engine's explanation of one row, and C5's
+    # informational portfolio fit. Neither is a plan; neither reaches an order.
+    "/screens/explain": {"post"},
+    "/screens/selection": {"post"},
     "/screens/{public_id}/csv": {"get"},
     "/screens/{public_id}/runs": {"get"},
     "/instruments": {"get"},

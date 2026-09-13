@@ -1020,9 +1020,9 @@ DESK_FRAME_COLUMNS: Final[Mapping[str, str]] = {
     "d_consistency": "desk_d_consistency",
     "e_liquidity": "desk_e_liquidity",
     "f_penalty": ranking_engine.DESK_F_PENALTY,
-    "ext_over_20dma": "desk_ext_over_20dma",
+    "ext_over_20dma": ranking_engine.DESK_EXT_OVER_20DMA,
     "reject": ranking_engine.DESK_REJECT,
-    "score_version": "desk_score_version",
+    "score_version": ranking_engine.DESK_ROW_SCORE_VERSION,
 }
 
 #: The universe whose point-in-time membership is NSE's "available for trading in F&O" (C4).

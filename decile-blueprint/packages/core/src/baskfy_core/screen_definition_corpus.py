@@ -357,6 +357,47 @@ CASES: Final[tuple[Case, ...]] = (
         value=_base(sort_by="desk_score", ranking_scope="fixed_universe"),
     ),
     Case(
+        name="factor-range-on-a-non-rankable-factor",
+        reason="PLAN correction 1: a filter-only factor is a valid eligibility filter",
+        valid=True,
+        value=_base(
+            ranking_terms=[{"factor": "ret_12m", "preference": "higher"}],
+            factor_ranges=[{"factor": "excess_ret_12m", "min": 0}],
+        ),
+    ),
+    Case(
+        name="ranking-terms-non-rankable-first-term",
+        reason="PLAN correction 1: excess return over one common index cannot rank a list",
+        valid=False,
+        value=_base(
+            sort_by="excess_ret_12m",
+            ranking_terms=[{"factor": "excess_ret_12m", "preference": "higher"}],
+        ),
+    ),
+    Case(
+        name="ranking-terms-non-rankable-later-term",
+        reason="C1 rankable=False: a filter-only factor is refused in any term position",
+        valid=False,
+        value=_base(
+            ranking_mode="sequential",
+            ranking_terms=[
+                {"factor": "ret_12m", "preference": "higher"},
+                {"factor": "mom_pctile", "preference": "higher"},
+            ],
+        ),
+    ),
+    Case(
+        name="ranking-terms-non-rankable-atr",
+        reason="C1 rankable=False: raw ATR is an input to atr_ext_20, not a rank key",
+        valid=False,
+        value=_base(
+            ranking_terms=[
+                {"factor": "ret_12m", "preference": "higher"},
+                {"factor": "atr_14", "preference": "target_range", "target_max": 5},
+            ],
+        ),
+    ),
+    Case(
         name="ranking-terms-sort-by-mismatch",
         reason="C3: sort_by must equal ranking_terms[0].factor",
         valid=False,

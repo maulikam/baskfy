@@ -63,6 +63,12 @@ SERIES_VALUES: Final[tuple[str, ...]] = ("EQ", "BE", "SM", "ST", "SZ")
 #: The subset of :data:`SERIES_VALUES` that is the Emerge platform rather than the main board.
 SME_SERIES_VALUES: Final[tuple[str, ...]] = ("SM", "ST", "SZ")
 
+#: The registry factors a ranking term refuses (``rankable=False``), in registry order. Mirrored
+#: as ``NON_RANKABLE_FACTORS`` in `packages/api-client/src/screen-definition.ts`.
+NON_RANKABLE_FACTORS: Final[tuple[str, ...]] = tuple(
+    key for key, factor in FACTORS.items() if not factor.rankable
+)
+
 SortDirection = Literal["asc", "desc"]
 RankingModeName = Literal["single", "sequential", "composite"]
 RankingScopeName = Literal["filtered_results", "fixed_universe", "within_sector"]
@@ -107,9 +113,16 @@ def _rankable_factor(key: str, field: str) -> str:
     """A ranking term must name a registry factor that can reorder a list.
 
     ``rankable=False`` factors (a return in excess of one common index, a percentile that only
-    gates) are refused with a pointer to ``factor_ranges``, which is where they mean something.
+    gates) are refused with a pointer to ``factor_ranges``, which is where they mean something
+    (docs/ranking/PLAN.md correction 1). The Zod mirror carries the same list as
+    ``NON_RANKABLE_FACTORS``; ``test_screen_definition_parity.py`` fails if the two drift.
     """
     _known_factor(key, field)
+    if not FACTORS[key].rankable:
+        raise ValueError(
+            f"{field}: {key!r} cannot rank a list; it is a filter-only factor. "
+            "Use it in factor_ranges as an eligibility filter instead"
+        )
     return key
 
 

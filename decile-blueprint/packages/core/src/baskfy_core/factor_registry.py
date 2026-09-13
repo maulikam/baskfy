@@ -651,6 +651,43 @@ REGIME_PRIORITY_SQL: Final = (
     "(CASE regime WHEN 'BULL' THEN 2 WHEN 'NEUTRAL' THEN 1 WHEN 'BEAR' THEN 0 END)"
 )
 
+#: docs/ranking/VALIDATION.md §5 — the C8 promotion rule's outcome per Phase-2 factor, applied by
+#: ``research/ranking-validation/render_validation.py`` to ``out/ablation.csv``. Only ``validated``
+#: and ``rejected`` are listed; every other Phase-2 key stays ``research`` — the non-rankable C1
+#: columns (never modelled) and the two the run could not measure (``rs_persist_126``: NIFTY 500
+#: levels absent; ``nse_momentum_score``: membership only from 2021-08-02). Key-by-key parity with
+#: the document: ``test_factor_registry_c1.py::test_validation_status_matches_validation_md``.
+C8_VALIDATION_STATUS: Final[dict[str, ValidationStatus]] = {
+    "rank_persist_20": ValidationStatus.VALIDATED,
+    **{
+        key: ValidationStatus.REJECTED
+        for key in (
+            "atr_ext_20",
+            "ma50_slope_20",
+            "eff_ratio_63",
+            "max_dd_6m",
+            "max_dd_12m",
+            "downside_vol_6m",
+            "downside_vol_12m",
+            "sortino_6m",
+            "sortino_12m",
+            "underwater_12m",
+            "ret_ex_top3_12m",
+            "accel_21_105",
+            "accel_21_105_vs",
+            "vol_exp_21_126",
+            "vol_persist_20",
+            "resid_ret_12m",
+            "regime_priority",
+        )
+    },
+}
+
+
+def _c8_status(key: str) -> ValidationStatus:
+    return C8_VALIDATION_STATUS.get(key, ValidationStatus.RESEARCH)
+
+
 #: docs/ranking/PLAN.md C1 — every stored ranking factor, as
 #: ``(key, label, display family, unit, preference, weight family, rankable, null policy,
 #: definition)``. ``higher_is_better`` follows from the preference: False for ``lower`` and
@@ -951,7 +988,8 @@ _PHASE_TWO_STORED: Final[
 
 def _add_phase_two_factors(add: Callable[[Factor], None]) -> None:
     """docs/ranking/PLAN.md C1 — the stored ranking factors, ``regime_priority`` and the
-    NSE momentum score. All ``research`` until leaf F's evidence says otherwise."""
+    NSE momentum score. ``research`` until leaf F's evidence (docs/ranking/VALIDATION.md) moved
+    them: see :data:`C8_VALIDATION_STATUS`."""
     for (
         key,
         label,
@@ -977,7 +1015,7 @@ def _add_phase_two_factors(add: Callable[[Factor], None]) -> None:
                 is_stored=True,
                 preference=preference,
                 weight_family=weight,
-                validation_status=ValidationStatus.RESEARCH,
+                validation_status=_c8_status(key),
                 definition=meaning,
                 rankable=rankable,
             )
@@ -994,7 +1032,7 @@ def _add_phase_two_factors(add: Callable[[Factor], None]) -> None:
             components=("regime",),
             preference=FactorPreference.HIGHER,
             weight_family=WeightFamily.TREND_STRUCTURE,
-            validation_status=ValidationStatus.RESEARCH,
+            validation_status=_c8_status("regime_priority"),
             definition=(
                 "The Wasserstein regime as an explicit order: BULL 2, NEUTRAL 1, BEAR 0 — an "
                 "order, never a distance."
@@ -1016,7 +1054,7 @@ def _add_phase_two_factors(add: Callable[[Factor], None]) -> None:
             is_computed=True,
             preference=FactorPreference.HIGHER,
             weight_family=WeightFamily.MOMENTUM,
-            validation_status=ValidationStatus.RESEARCH,
+            validation_status=_c8_status("nse_momentum_score"),
             definition=(
                 "NSE's normalised momentum score: 1 + Z (or 1/(1 - Z)) of 0.5 Z12 + 0.5 Z6 over "
                 "the Nifty 200 F&O-eligible set."

@@ -394,11 +394,12 @@ class Holding:
 
 @dataclass(frozen=True, slots=True)
 class SelectionConstraints:
-    """The C5 knobs. Defaults are the contract's."""
+    """The C5 knobs. Defaults are the contract's; entry/retention are C8's best OOS-stable grid
+    cell (docs/ranking/VALIDATION.md §6 — retention was 30 before that evidence)."""
 
     max_names: int = 15
     entry_rank: int = 15
-    retention_rank: int = 30
+    retention_rank: int = 60
     max_per_sector: int | None = None
     capital_inr: Decimal | None = None
     max_adv_participation_pct: Decimal | None = Decimal("1.0")

@@ -2,10 +2,15 @@
 
 Every expectation below is copied from C1's table and its "Registry gains" paragraph, not read
 back from ``factor_registry``: the key list, each key's preference, weight family and rankable
-flag, ``regime_priority``'s SQL order, and the legacy/research split.
+flag, ``regime_priority``'s SQL order, and the legacy/research split. The Phase-2 statuses are
+read from docs/ranking/VALIDATION.md's generated status table (C8), not from the registry.
 """
 
 from __future__ import annotations
+
+import re
+from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -86,7 +91,6 @@ def test_regime_priority_is_an_explicit_higher_trend_order() -> None:
     assert factor.preference is H
     assert factor.weight_family is TREND
     assert factor.rankable is True
-    assert factor.validation_status is ValidationStatus.RESEARCH
     assert sql_for("regime_priority") == REGIME_PRIORITY_SQL
     # BULL -> 2, NEUTRAL -> 1, BEAR -> 0: an order, never a distance.
     assert "'BULL' THEN 2" in REGIME_PRIORITY_SQL
@@ -101,9 +105,46 @@ def test_every_factor_has_a_weight_family_and_a_one_sentence_definition(key: str
     assert factor.definition.strip(), f"{key} has an empty definition"
 
 
+def _validation_md() -> str:
+    """docs/ranking/VALIDATION.md, found by walking up rather than a fixed number of hops."""
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / "docs" / "ranking" / "VALIDATION.md"
+        if candidate.is_file():
+            return candidate.read_text(encoding="utf-8")
+    raise AssertionError("docs/ranking/VALIDATION.md was not found above this file")
+
+
+def _generated(text: str, name: str) -> str:
+    match = re.search(
+        rf"<!-- generated:{name}:begin[^>]*-->(.*?)<!-- generated:{name}:end -->", text, re.S
+    )
+    assert match, f"VALIDATION.md has no generated {name!r} section"
+    return match.group(1)
+
+
+#: VALIDATION.md §5: ``| `key` | ... | **status** | registry value |`` — the rule's output.
+C8_REGISTRY_STATUS: Final[dict[str, ValidationStatus]] = {
+    m.group(1): ValidationStatus(m.group(2))
+    for m in re.finditer(
+        r"^\| `([a-z0-9_]+)` \|.*\| (legacy|research|validated|rejected) \|$",
+        _generated(_validation_md(), "promotion"),
+        re.M,
+    )
+}
+
+
+def test_validation_md_judged_every_rankable_phase_two_factor() -> None:
+    rankable = {key for key in PHASE_TWO_KEYS if FACTORS[key].rankable}
+    assert set(C8_REGISTRY_STATUS) == rankable
+
+
 @pytest.mark.parametrize("key", sorted(FACTORS))
-def test_pre_phase_two_factors_are_legacy_and_new_ones_research(key: str) -> None:
-    expected = ValidationStatus.RESEARCH if key in PHASE_TWO_KEYS else ValidationStatus.LEGACY
+def test_validation_status_matches_validation_md(key: str) -> None:
+    """Pre-Phase-2 keys are legacy; Phase-2 keys carry VALIDATION.md's status, else research."""
+    if key not in PHASE_TWO_KEYS:
+        expected = ValidationStatus.LEGACY
+    else:
+        expected = C8_REGISTRY_STATUS.get(key, ValidationStatus.RESEARCH)
     assert FACTORS[key].validation_status is expected
 
 

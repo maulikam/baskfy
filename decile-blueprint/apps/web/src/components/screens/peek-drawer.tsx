@@ -48,7 +48,7 @@ export interface PeekDrawerProps {
   sortingFactorLabel: string;
   onClose: () => void;
   /** Saved screen id — enables rank history from ``screen_run``. Absent on unsaved previews. */
-  screenPublicId?: string;
+  screenPublicId?: string | undefined;
 }
 
 function display(value: unknown, unit: string): string {

@@ -23,9 +23,9 @@
   EXPECT: /^\s*0\s*$/
   EVIDENCE: 0
 
-- [ ] G5: `make client` regenerated openapi.json + generated/schema.ts; `generate:check` clean; api-client tests + lint green; full API suite, ruff, format, mypy clean.
+- [x] G5: `make client` regenerated openapi.json + generated/schema.ts; `generate:check` clean; api-client tests + lint green; full API suite, ruff, format, mypy clean.
   CHECK: cd decile-blueprint && pnpm --filter @baskfy/api-client run generate:check 2>&1 | tail -1 && pnpm --filter @baskfy/api-client test 2>&1 | grep -E "Tests" | tail -1 && BASKFY_TEST_DATABASE_URL=postgresql+asyncpg://baskfy:baskfy@localhost:5433/baskfy_test uv run pytest --color=no services/api 2>&1 | tail -1 && uv run mypy 2>&1 | tail -1
   EXPECT: /passed[\s\S]*Success: no issues found/
-  EVIDENCE: pending
+  EVIDENCE: 2026-09-14 at b87521d: generate:check clean (openapi-typescript regenerates, git diff --exit-code src/generated empty); api-client 182 passed; full API suite inside root G2 run (8990 passed, 0 failed); make lint clean (ruff+mypy 725 files).
   PROGRESS (13 Sep 2026): `make client` run for the FactorOut/presets change (regeneration byte-stable; `openapi --check` clean); api-client tests 176 passed, lint clean after client-contract ExpectedFactor update. `generate:check` exits 1 only because src/generated is uncommitted (it is a git diff). Full API suite owes a DB run; remaining ruff format drift in twt.py, vbt.py, settings.py, test_live_prices.py.
   PROGRESS (13 Sep 2026, DB run): full `pytest services/api` single process -> 2108 passed, 5 failed, 1 skipped, 1 xfailed (9m27s). Ranking-caused failures fixed: test_screener_db sweep (fixture lacked C1 stored factors / monotone ma_dist + vol_expansion; ordinal + computed keys moved to dedicated tests; ma_stack_score SQL now NULL when an MA is missing) and test_api_artifacts (/meta/ranking-presets added to EXPECTED_PATHS + docs/07). Remaining 4 failures are outside ranking: test_bonds_portfolio x3 (gateway guard did not raise; sole-tenant account missing) and test_curated_costs (live_prices mock returns a coroutine).

@@ -7,6 +7,60 @@ that does not depend on them (rule 11) and returns the moment a dependency clear
 Nothing here is urgent unless marked so. Each entry says what is needed, why, what it blocks, and
 what was done meanwhile.
 
+## 35. Ranking Phase 2 — deploy, a box-down incident, and what's left to review
+
+**Raised 14 Sep 2026.** · **Status:** ✅ **Deployed 14 Sep 2026 (a market holiday), in three
+releases:**
+
+- `403e6fa` — ranking-2 core/worker/api/web, migrations 0046+0047
+- `f52df2c` — memory fix
+- `b87521d` — round 2: C7 presets, rankable guard, explain rank history, provenance header,
+  presets menu, portfolio fit, the swing login-race fix, and seven pre-existing reds repaired
+
+Every ship reported `SWING OK`, `pins=3 running=11 twt_execution_true=0`; no execution flag moved.
+
+**Incident.** The first `backfill-ranking` run (uncapped, on `403e6fa`) loaded every bar since
+2011 for the whole universe — ~20–30 GB. At 01:09 IST the box stopped answering (SSM lost, site
+timeouts). Maulik approved an EC2 reboot at 01:37; it was back at 01:41, `verify-swing` OK, nothing
+written. Fixed in `f52df2c`: loads are now bounded per name (`DECISIONS-MERGE.md` 2C.5). The
+nightly shared the same bug, so tonight's 18:40 nightly would otherwise have taken the box down
+too. **New rule:** backfills on the box always run under `docker update --memory 3500m`
+(`RUN-AND-TEST.md` §3e).
+
+**Backfill.** Measured 682 s/day. Round 1 was stopped after 8 dates (a `--force` rerun supersedes
+it). Round 2 — `backfill-ranking --force 2026-07-27..2026-09-11` — started 03:54 IST under the
+3.5 GB cap, est. finish ~09:30. Duplicate checks before it ran: `factor_daily` 92,515 rows in
+range, `desk_score_daily` 20,277, 0 duplicate `(instrument_id, date)` in both. (result appended
+when it finishes)
+
+**Yours to decide/review (all ⚠ UNREVIEWED in `docs/DECISIONS-MERGE.md`):**
+
+- 2F.2: 17 C1 factors marked rejected by the mechanical promotion rule; `retention_rank` default
+  30→60 from the grid.
+- AF C.1: swing `request_login_scan` writes its task id before commit (closes a double-scan
+  window from `c944a22`).
+- The C7 presets: only `desk_quality` "ready".
+- 2D.8: `desk_sequential` has no third tie-break.
+
+**Data gap found.** `factor_daily` has no rows for 2026-07-28, 07-30, 08-04, 08-06, 08-07,
+although `ohlcv_daily` has ~2,620–2,680 bars each of those days. The nightly never published
+factors for those sessions, so ranking columns can't exist for them. A factor recompute for those
+five days is needed — operator-led, capped, outside nightly/market hours.
+
+**Known limits:**
+
+- `desk_score_daily` stores only `ext_over_20dma`, so the peek shows raw inputs for A/F only.
+- Validation couldn't test `rs_persist_126` (no NIFTY 500 levels in the export) or
+  `nse_momentum` (membership only from 2021-08), and sector weights were empty.
+- A legacy screen can still sort by a filter-only factor.
+- Backfill speed is ~11 min/day; the per-day 3-year factor recompute is the optimisation target.
+
+**Still yours to eyeball:** Screens → Presets; a composite screen's provenance header; peek →
+"Rank over time" and desk A–F; Portfolio fit (informational). Screenshots in
+`docs/ranking/screens/`.
+
+---
+
 ## 34. Commit + deploy ranking engine phases 1.2–1.5
 
 **Raised 13 Sep 2026.** · **Status:** ✅ **Deployed 13 Sep 2026 (Sunday, market shut)** as `b29823d`,
@@ -39,6 +93,7 @@ blocker in the project.
 
 | | |
 |---|---|
+| **35** | ✅ **Deployed 14 Sep 2026 (market holiday)** as `403e6fa` → `f52df2c` → `b87521d` — ranking Phase 2, a box-down memory incident (fixed), backfill running. See §35. |
 | **34** | ✅ **Deployed 13 Sep 2026** as `b29823d` — ranking + desk-daily container; verify green. Smoke the ranking UI by eye. See §34. |
 | **32** | **A Zerodha Console tradebook export.** You asked to "sync transactions from the kite account" — Kite's API cannot supply them, and nothing in Baskfy imports them. One CSV you download is the only path. See §32. |
 | **31** | ✅ **Done 12 Sep 2026.** You logged in; the box went `dd9cc73` → `8b074c7` and `verify-swing.sh` says `SWING OK`. |

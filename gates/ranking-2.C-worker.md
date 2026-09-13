@@ -22,10 +22,10 @@ Scope: the nightly pipeline writes every C1 column, mom_pctile + rank_persist_20
   EXPECT: /passed(?!.*failed)/
   EVIDENCE: 2026-09-13 pytest -k "backfill_ranking" on baskfy_test_c: 6 passed (ranking_backfill.py; legacy-column row hashes identical incl. a tampered ret_1m; resume, --force, 20-day order).
 
-- [ ] G5: Worker suite green (DB tests included) and ruff/format/mypy clean.
+- [x] G5: Worker suite green (DB tests included) and ruff/format/mypy clean.
   CHECK: cd decile-blueprint && BASKFY_TEST_DATABASE_URL=postgresql+asyncpg://baskfy:baskfy@localhost:5433/baskfy_test uv run pytest --color=no services/worker 2>&1 | tail -1 && uv run ruff check services/worker && uv run ruff format --check services/worker && uv run mypy 2>&1 | tail -1
   EXPECT: /passed[\s\S]*Success: no issues found/
-  EVIDENCE: pending
+  EVIDENCE: 2026-09-14 at b87521d: worker suite green inside root G2 whole-suite run (8990 passed, 0 failed) after the swing login-race fix f865654 (AF C.1); ruff/format/mypy clean via make lint.
 
 - [x] G6: Measured backfill speed on a realistic local run recorded (seconds per trading day) and written into RUN-AND-TEST.md with the exact box command.
   EVIDENCE: 2026-09-14, 682.5 s/day, f52df2c.

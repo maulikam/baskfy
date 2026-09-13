@@ -1275,6 +1275,13 @@ async def request_login_scan(
         )
     except Problem as exc:
         return {"skipped": exc.type.value, **exc.extra}
+    # Stamp this task's id BEFORE the commit (DECISIONS-MERGE AF C.1). `request_scan` defers its
+    # publish to after commit (c944a22), which for this path is only the marker handing back
+    # `task_id` and a follow-up UPDATE — so the committed row was briefly QUEUED with a null
+    # `task_id`, exactly what the minute sweep publishes, and the scan could run twice. Nothing
+    # is published here: this task is the one that runs the row, and it already exists.
+    row.task_id = task_id
+    await session.flush()
     return {"run_id": int(row.id)}
 
 

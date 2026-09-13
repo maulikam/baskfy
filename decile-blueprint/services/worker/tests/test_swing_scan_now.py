@@ -783,6 +783,35 @@ class TestTheLoginTrigger:
         assert duplicate["skipped"] == "scan-in-flight"
         assert duplicate["run_id"] == run.id
 
+    async def test_the_sweep_cannot_queue_a_second_scan_for_a_login_scan_row(
+        self, session: AsyncSession
+    ) -> None:
+        """The login task runs its own row. A row the sweep can see with a null ``task_id`` would
+        be published again and scanned twice, so the id must be on it before anyone can see it
+        (DECISIONS-MERGE AF C.1). The request's session never commits here, so what the sweep
+        reads is exactly what the login wrote inside its own transaction."""
+        dates = await _sessions_before(session, TODAY, 140)
+        user_id = await _user(session)
+        await _write_flag_but_the_last_bar(session, "LOGINSWEEP", dates)
+
+        result = await request_login_scan(
+            session,
+            user_id=user_id,
+            market_now=THIRTEEN_FORTY_TWO,
+            requested_at=UTC_NOON,
+            task_id="login-task-sweep",
+        )
+        assert isinstance(result["run_id"], int)
+        sent: list[int] = []
+
+        def publish(run_id: int) -> str:
+            sent.append(run_id)
+            return f"task-{run_id}"
+
+        assert await sweep_queued(session, user_id=user_id, publish=publish) == []
+        assert sent == []
+        assert (await _run(session, result["run_id"])).task_id == "login-task-sweep"
+
     async def test_after_close_login_still_scans_today(self, session: AsyncSession) -> None:
         """M85 wrote the opposite of this — an after-close login "defers to the published data
         path". Maulik asked for the reverse on 8 Sep: a login at any hour after the open should

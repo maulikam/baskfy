@@ -83,8 +83,7 @@ SC5 must merge-or-redirect these with the curated-basket catalog (`DECISIONS-SC`
 
 | Key | Task | When (IST) |
 |---|---|---|
-| desk-daily-collection | `baskfy.desk.daily` | Mon–Fri 18:30 |
-| desk-autorun-safety-net | `baskfy.desk.autorun` | Mon–Fri 18:50 |
+| desk-daily (compose) | `scripts.daily` / `scripts.autorun` | Mon–Fri 18:30 / 18:50 — **not Beat** (NEEDS-MAULIK §33) |
 | refresh-reference-data | `baskfy.pipeline.nightly` | Mon–Fri 18:45 |
 | purge-deleted-accounts | `baskfy.accounts.purge` | Daily 03:00 |
 | weekly-integrity-audit | `baskfy.pipeline.integrity_audit` | Sat 02:00 |

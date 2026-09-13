@@ -58,8 +58,10 @@ TASK_ROUTES: Final[dict[str, dict[str, str]]] = {
     # Prompt 20's screen alerts and webhook deliveries. Short, latency-sensitive and idempotent;
     # the same queue the publish step runs on, and for the same reason.
     "baskfy.alerts.*": {"queue": QUEUE_DEFAULT},
-    # M19 §1. The desk's collection jobs: short, idempotent, and blocked on a Kite token rather
-    # than on CPU. They must not queue behind a backfill chunk, so they take the default queue.
+    # M19 §1 registered the desk's collection jobs here. They are no longer on Beat
+    # (NEEDS-MAULIK §33, Maulik 13 Sep 2026): the desk-daily container runs them. The
+    # pattern stays so a leftover message already on the default queue is consumed by
+    # the refusal stub in `tasks.desk` rather than sitting unregistered forever.
     "baskfy.desk.*": {"queue": QUEUE_DEFAULT},
     # SW11: the swing book's four alert checks are ops-shaped — one query, a possible alert —
     # and take the default queue for the same reason `baskfy.ops.*` does. The swing *jobs*
@@ -104,23 +106,13 @@ TASK_ROUTES: Final[dict[str, dict[str, str]]] = {
 
 #: docs/09 §Schedule (IST), weekdays. Times are the doc's; the task names are docs/03's.
 BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
-    # --- M19 §1: the desk's own schedule, mirroring deploy/systemd/momentum-daily.timer ---
-    # The systemd timers stay running until five green Beat runs are recorded (M19 §2). Both
-    # firing is safe because every step of scripts/daily.py is independently idempotent, which
-    # `tests/test_desk_tasks.py` asserts rather than assumes.
-    "desk-daily-collection": {
-        "task": "baskfy.desk.daily",
-        "schedule": crontab(hour=18, minute=30, day_of_week="mon-fri"),
-        "options": {"queue": QUEUE_DEFAULT},
-    },
-    # Twenty minutes later, and only useful when the 18:30 run found no token. Idempotent, so on
-    # an ordinary day it collects nothing and says so.
-    "desk-autorun-safety-net": {
-        "task": "baskfy.desk.autorun",
-        "schedule": crontab(hour=18, minute=50, day_of_week="mon-fri"),
-        "options": {"queue": QUEUE_DEFAULT},
-    },
-    # M84: NSE's own end-of-day file, half an hour before the chain that would otherwise be the
+    # --- M19 §1 used to schedule baskfy.desk.daily / .autorun here. Removed 13 Sep 2026 ---
+    # The baskfy-py image does not contain the desk tree, so both entries failed every
+    # weekday (NEEDS-MAULIK §33). Maulik: collection runs in the desk-daily container, not
+    # on Beat. Do not put these keys back. The tasks remain registered as refusal stubs
+    # so a leftover Redis message logs the move instead of looking unregistered.
+    #
+    # --- M84: NSE's own end-of-day file, half an hour before the chain that would otherwise be the
     # only thing landing the day. 18:15 because NSE publishes the bhavcopy after the 15:30 close
     # and `SESSION_DATA_READY_IST` puts the earliest it can exist at 18:00; the chain at 18:45
     # then finds the session already landed and its Kite pass is a top-up rather than the single
@@ -593,10 +585,14 @@ def build_celery(settings: WorkerSettings | None = None) -> Celery:
         result_expires=dt.timedelta(days=7),
         task_default_retry_delay=resolved.task_retry_backoff_seconds,
     )
-    # `include` rather than `autodiscover_tasks`: the bindings live in one module, and naming it
-    # here keeps `baskfy_worker.tasks.__init__` free of an import cycle back through the
-    # orchestrator.
-    app.conf.include = ["baskfy_worker.tasks.celery_tasks"]
+    # `include` rather than `autodiscover_tasks`: naming the modules here keeps
+    # `baskfy_worker.tasks.__init__` free of an import cycle back through the orchestrator.
+    # `tasks.desk` is the leftover-message stub; Beat no longer schedules it.
+    app.conf.include = [
+        "baskfy_worker.tasks.celery_tasks",
+        # Refusal stubs for leftover `baskfy.desk.*` messages; Beat no longer fires them.
+        "baskfy_worker.tasks.desk",
+    ]
     app.autodiscover_tasks(["baskfy_worker.tasks"], related_name="celery_tasks", force=True)
     _install_observability_signals()
     _install_redelivery_bound(app, resolved.task_max_redeliveries)

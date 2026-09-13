@@ -24,7 +24,7 @@
 #      (both generated on the box, never sent over the wire), validates;
 #   3. compose pull; run --rm migrate (waits, exit 0 or the deploy stops);
 #   4. run --rm seed reference; seed swing --capital ₹25,00,000 --risk 0.5 (MD1/MD2, audited);
-#   5. up -d api worker ingest-worker beat desk swing-monitor web caddy (caddy recreated, since a
+#   5. up -d api worker ingest-worker beat desk desk-daily swing-monitor web caddy (caddy recreated, since a
 #      bind-mounted Caddyfile is pinned by inode); prints `docker compose ps`.
 #      KEEP_MONITOR=1 leaves `swing-monitor` alone — see "sparing the monitor" below.
 # Flags: DRY_RUN=true and every BASKFY_SWING_* stay false — they are compose defaults, and this
@@ -55,9 +55,9 @@ export AWS_PROFILE="$PROFILE"
 # running, keeps its state, and picks up the new image whenever it is next restarted. Safe
 # whenever the deploy does not change swing code — and when it does, this flag is the wrong tool
 # and the guard's wait is the right one.
-RESTART_SERVICES="api worker ingest-worker beat desk swing-monitor web"
+RESTART_SERVICES="api worker ingest-worker beat desk desk-daily swing-monitor web"
 if [ "${KEEP_MONITOR:-0}" = "1" ]; then
-  RESTART_SERVICES="api worker ingest-worker beat desk web"
+  RESTART_SERVICES="api worker ingest-worker beat desk desk-daily web"
 fi
 
 say() { printf '\n── %s\n' "$*"; }

@@ -1,32 +1,19 @@
-"""The desk's two scheduled jobs, as Celery tasks — M19 §1.
+"""The desk's collection jobs, as they used to run on Beat — M19 §1, retired 13 Sep 2026.
 
-`scripts/daily.py` and `scripts/autorun.py` run on the Mumbai box under systemd timers
-(`momentum-daily.timer`, Mon-Fri 18:30 IST). This puts the same work on Beat, so the merged
-product has one scheduler instead of two.
+Beat used to fire ``baskfy.desk.daily`` and ``baskfy.desk.autorun`` on this worker. The
+``baskfy-py`` image does not contain the desk tree, so both entries failed every weekday
+(NEEDS-MAULIK §33). Maulik: collection runs in the ``desk-daily`` container. Beat no
+longer schedules these names.
 
-**The timers stay running.** M19 §2: they are retired only after five green Beat runs are recorded,
-and that retirement is a box operation performed by hand — not by this file, and not today. Until
-then both schedulers can fire, which is safe for exactly one reason, stated next.
+This module stays for two reasons, and neither is "run the collection from here":
 
-IDEMPOTENCE IS THE WHOLE DESIGN
---------------------------------
-`scripts/daily.py`'s own docstring: *"Every step is independently idempotent, so re-running changes
-nothing. A step that fails never stops the rest."* That is what makes a duplicate run harmless and
-what makes the overlap period safe. It is asserted by test rather than assumed, because the entire
-retirement protocol rests on it.
+1. ``check_desk_daily`` / ``_run`` still exercise ``scripts.daily --check`` in the
+   monorepo, where ``DESK_ROOT`` exists, so the idempotence tests keep a real subject.
+2. The Celery task names stay registered as refusal stubs so a leftover Redis message
+   from the old Beat entries logs the move instead of looking unregistered.
 
-WHY IT IMPORTS THE DESK RATHER THAN SHELLING OUT
---------------------------------------------------
-The desk's `app.analytics` imports cleanly inside this workspace's environment, so these are real
-calls with real return codes rather than a subprocess whose failure mode is a number. The desk's
-working directory matters to it (relative `data/` paths), so it is set and restored around the call
-rather than assumed.
-
-NOTHING HERE PLACES AN ORDER
------------------------------
-Both jobs are collection: reads from Kite and writes to the desk's own database. The order path is
-`packages/execution`, and nothing in this module touches it. `scripts/autorun.py` says the same
-thing in its own docstring, and a test asserts it of this file.
+NOTHING HERE PLACES AN ORDER. Collection is reads from Kite and writes to the desk's
+own database. The order path is ``packages/execution``.
 """
 
 from __future__ import annotations
@@ -47,6 +34,13 @@ log = logging.getLogger(__name__)
 #: The desk lives beside this workspace in the monorepo. Resolved rather than configured: a wrong
 #: path here would fail at import time in an obvious way, which is better than a silent no-op.
 DESK_ROOT = Path(__file__).resolve().parents[6] / "kite-momentum-rebalancer"
+
+#: What the Celery stubs return and log. A leftover Beat message hitting this worker must not
+#: look like a successful collection — exit 2 is the desk's "did not collect" code (no token).
+_MOVED = (
+    "retired from Beat; collection runs in the desk-daily container "
+    "(NEEDS-MAULIK §33, Maulik 13 Sep 2026)"
+)
 
 
 @contextlib.contextmanager
@@ -86,8 +80,20 @@ class DeskRunResult(TypedDict):
     seconds: float
 
 
+def _missing_tree_result(argv: list[str], entry: str) -> DeskRunResult:
+    log.error(
+        "desk tree missing at %s; collection runs in the desk-daily container "
+        "(NEEDS-MAULIK §33, Maulik 13 Sep 2026)",
+        DESK_ROOT,
+    )
+    return {"entry": entry, "argv": argv, "exit_code": 2, "seconds": 0.0}
+
+
 def _run(argv: list[str], entry: str) -> DeskRunResult:
     """Invoke one of the desk's `main()` functions with a constructed argv."""
+    if not DESK_ROOT.is_dir():
+        return _missing_tree_result(argv, entry)
+
     started = dt.datetime.now(dt.UTC)
     with desk_context():
         module = __import__(f"scripts.{entry}", fromlist=["main"])
@@ -114,21 +120,21 @@ def _run(argv: list[str], entry: str) -> DeskRunResult:
     return result
 
 
+def _refused(entry: str, argv: list[str]) -> DeskRunResult:
+    log.error("baskfy.desk.%s: %s", entry, _MOVED)
+    return {"entry": entry, "argv": argv, "exit_code": 2, "seconds": 0.0}
+
+
 @app.task(name="baskfy.desk.daily", bind=False)
 def run_desk_daily(source: str = "schedule") -> DeskRunResult:
-    """`python -m scripts.daily --quiet --source schedule` — the 18:30 IST collection."""
-    return _run(["--quiet", "--source", source], "daily")
+    """Was Beat's 18:30 collection. Now a refusal: the desk-daily container runs it."""
+    return _refused("daily", ["--quiet", "--source", source])
 
 
 @app.task(name="baskfy.desk.autorun", bind=False)
 def run_desk_autorun() -> DeskRunResult:
-    """`python -m scripts.autorun` — whatever today still needs collected.
-
-    Its trigger has always been a human logging in, because both jobs are blocked on a Kite token
-    that expires overnight with no refresh. On Beat it becomes a safety net rather than the primary
-    path: if the token arrived late, this picks up what the 18:30 run could not do.
-    """
-    return _run([], "autorun")
+    """Was Beat's 18:50 safety net. Now a refusal: the desk-daily container runs it."""
+    return _refused("autorun", [])
 
 
 @app.task(name="baskfy.desk.daily_check", bind=False)

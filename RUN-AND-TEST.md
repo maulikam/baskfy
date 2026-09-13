@@ -620,8 +620,10 @@ exactly (68.6347% both sides, same 271 symbols). But `FULLY_INVESTED` is on, so 
 returns 0% before it ever looks at the bands. The wiring is correct, reconciled, and inert until
 somebody turns that off.
 
-**The systemd timers on the Mumbai box, retired.** They still run. Beat has the same jobs at the
-same hour; five green Beat runs retire the timers, by hand (`docs/TIMER-RETIREMENT.md`).
+**The systemd timers on the Mumbai box, retired.** Collection is the `desk-daily` container
+(`scripts.desk_daily_loop`, 18:30 / 18:50 IST weekdays), not Beat — Beat's two desk entries were
+the weekday failure NEEDS-MAULIK §33 named, and they are gone (13 Sep 2026, Maulik). The old
+timer-retirement protocol is historical (`kite-momentum-rebalancer/docs/TIMER-RETIREMENT.md`).
 
 **The public API, billing, and everything in Phase 4+.** Not built, not merged, not in scope.
 

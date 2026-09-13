@@ -8,7 +8,8 @@
 #     basic auth — never 5xx, never 421 which would mean DESK_ALLOWED_HOSTS lacks the vhost);
 #     noindex on both.
 #   over SSM (box.sh):
-#     beat's schedule lists every swing entry; the desk and swing-monitor containers agree with
+#     beat's schedule lists every swing entry and does not list desk collection (that is the
+#     desk-daily container); the desk and swing-monitor containers agree with
 #     POSTURE and with EACH OTHER; the trigger window is the one the repo decided; the token volume
 #     is mounted read-only in the desk; alembic is at head; every service is Up.
 #
@@ -96,10 +97,11 @@ if [ "${SKIP_BOX:-0}" != "1" ]; then
   C='cd /opt/baskfy && docker compose --env-file .env.staging.compose -f compose.prod.yml'
   OUT="$(bash "$HERE/box.sh" \
     "echo '## ps'; $C ps --format '{{.Service}} {{.Status}}'" \
-    "echo '## beat'; $C exec -T beat python -c 'from baskfy_worker.celery_app import app; print(chr(10).join(sorted(k for k in app.conf.beat_schedule if k.startswith(\"swing\"))))'" \
+    "echo '## beat'; $C exec -T beat python -c 'from baskfy_worker.celery_app import app; print(chr(10).join(sorted(app.conf.beat_schedule)))'" \
     "echo '## desk-env'; $C exec -T desk env | grep -E '^(DRY_RUN|BASKFY_REDIS_URL|BASKFY_SWING_[A-Z_]+)=' | sort" \
     "echo '## monitor-env'; $C exec -T swing-monitor env | grep -E '^(DRY_RUN|BASKFY_REDIS_URL|BASKFY_SWING_[A-Z_]+)=' | sort" \
     "echo '## window'; $C exec -T swing-monitor python -c \"from baskfy_core.swing.config import DEFAULT_SWING_CONFIG as c; w=c.opening_range; print('%02d:%02d %02d:%02d %02d:%02d %02d:%02d' % (*w.session_open, *w.pending_cutoff_at, *w.gtt_sweep_at, *w.monitor_close))\"" \
+    "echo '## desk-daily'; $C logs --no-log-prefix --tail 5 desk-daily" \
     "echo '## desk-mounts'; docker inspect --format '{{range .Mounts}}{{.Destination}} rw={{.RW}}{{\"\\n\"}}{{end}}' \$($C ps -q desk)" \
     "echo '## alembic'; $C exec -T postgres psql -U baskfy -d baskfy -tAc 'select version_num from alembic_version'; $C run --rm --no-deps migrate alembic heads 2>/dev/null | tail -1" \
     "echo '## desk-schema'; $C exec -T postgres psql -U baskfy -d baskfy -tAc \"select count(*) from information_schema.tables where table_schema='desk'\"" \
@@ -107,12 +109,21 @@ if [ "${SKIP_BOX:-0}" != "1" ]; then
 $OUT"
   section() { sed -n "/^## $1\$/,/^## /p" <<<"$OUT" | grep -v '^## '; }
 
-  for svc in caddy web api worker ingest-worker beat desk swing-monitor postgres redis; do
+  for svc in caddy web api worker ingest-worker beat desk desk-daily swing-monitor postgres redis; do
     section ps | grep -qE "^${svc} Up" && ok "$svc Up" || bad "$svc is not Up"
   done
   for entry in swing-eod swing-eod-plan swing-weekend swing-premarket-levels swing-premarket-gaps; do
     section beat | grep -qx "$entry" && ok "beat schedules $entry" || bad "beat schedule lacks $entry"
   done
+  # NEEDS-MAULIK §33: collection is the desk-daily container, not Beat.
+  for retired in desk-daily-collection desk-autorun-safety-net; do
+    section beat | grep -qx "$retired" \
+      && bad "beat still schedules $retired (must be desk-daily container)" \
+      || ok "beat does not schedule $retired"
+  done
+  section desk-daily | grep -q 'desk-daily: next' \
+    && ok "desk-daily loop is waiting for a slot" \
+    || bad "desk-daily is not logging its next slot"
   for svc in desk monitor; do
     ENV="$(section "$svc-env")"
     grep -qx "DRY_RUN=$WANT_DRY_RUN" <<<"$ENV" && ok "$svc: DRY_RUN=$WANT_DRY_RUN" \

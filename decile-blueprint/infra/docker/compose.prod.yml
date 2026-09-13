@@ -425,6 +425,19 @@ services:
     healthcheck:
       disable: true
 
+  # Same-day fill capture (NEEDS-MAULIK §33, Maulik 13 Sep 2026). Beat used to fire
+  # `baskfy.desk.daily` / `baskfy.desk.autorun` on the baskfy-py worker, whose image does
+  # not contain the desk tree, so both entries failed every weekday. This service is the
+  # same image as `desk`, no port, collection-only: `scripts.daily` at 18:30 IST Mon–Fri
+  # and `scripts.autorun` at 18:50. A sibling of `swing-monitor` rather than a lifespan
+  # task on the console, so a hung collection cannot take `/analyze` with it.
+  desk-daily:
+    <<: *desk
+    command: [desk-daily-loop]
+    expose: []
+    healthcheck:
+      disable: true
+
   # One-shot. Not started by `up`; run explicitly before a deploy switches traffic:
   #     docker compose -f infra/docker/compose.prod.yml run --rm migrate
   # A profile rather than a `depends_on`, because a migration that runs on every container restart

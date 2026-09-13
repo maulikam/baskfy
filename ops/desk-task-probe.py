@@ -1,16 +1,13 @@
-"""READ-ONLY probe: can this worker actually run the desk's scheduled collection?
+"""READ-ONLY probe: did Beat stop scheduling desk collection?
 
 Run with ``tools/deploy/box-python.sh worker ops/desk-task-probe.py``.
 
-`baskfy.desk.daily` is on Beat at 18:30 IST Mon-Fri and it is the only scheduled job in the
-product that captures the day's Kite fills (`app/analytics/tradebook.capture_live_trades`). It
-locates the desk by walking up six parents from its own file and then `os.chdir`s there, so a
-deployed image without the desk tree makes the entry unrunnable — silently, because a failed task
-is logged and not retried.
+Until 13 Sep 2026 ``baskfy.desk.daily`` was on Beat at 18:30 IST Mon-Fri and could not
+run: the worker image has no desk tree (NEEDS-MAULIK §33). Collection now runs in the
+``desk-daily`` container. This probe asserts the worker half of that move: the Celery
+names may still be registered as refusal stubs; Beat must not fire them.
 
 This imports and inspects; it runs no task, so nothing is collected and nothing is written.
-
-`gates/kite-sync.md` G9 is this script's output.
 """
 
 from __future__ import annotations
@@ -36,3 +33,8 @@ print(
     [k for k in app.conf.beat_schedule if "desk" in k or "hold" in k or "trade" in k],
 )
 print("total beat entries:", len(app.conf.beat_schedule))
+print(
+    "retired Beat keys absent:",
+    "desk-daily-collection" not in app.conf.beat_schedule
+    and "desk-autorun-safety-net" not in app.conf.beat_schedule,
+)

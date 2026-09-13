@@ -58,6 +58,7 @@ PRODUCER_TASK_ROUTES: dict[str, dict[str, str]] = {
     "baskfy.pipeline.*": {"queue": "default"},
     "baskfy.ops.*": {"queue": "default"},
     "baskfy.alerts.*": {"queue": "default"},
+    # Leftover-message stubs. Collection is the desk-daily container (NEEDS-MAULIK §33).
     "baskfy.desk.*": {"queue": "default"},
     "baskfy.cb.*": {"queue": "compute"},
     # PORTFOLIO_REDESIGN.md §5.1's nightly EOD NAV job. Compute-bound over price history, like the

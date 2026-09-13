@@ -33,7 +33,7 @@
 - [x] G7: Presets C7 all validate as ScreenDefinition patches over the default definition; `nse_momentum` no longer refused; statuses present.
   CHECK: cd decile-blueprint && uv run pytest packages/core/tests/test_ranking_presets.py 2>&1 | tail -1
   EXPECT: /passed(?!.*failed)/
-  EVIDENCE: [32m[32m[1m5 passed[0m[32m in 0.87s[0m[0m
+  EVIDENCE: 2026-09-14 `cd decile-blueprint && uv run pytest --color=no packages/core/tests/test_ranking_presets.py 2>&1 | tail -1` -> 38 passed in 0.26s (seven C7 presets built in ranking_presets.py, each validated over the default definition; nse_momentum served with C7's label on nifty-200; statuses match VALIDATION.md section 7: desk_quality ready, the other six research; desk_sequential omits median_vol_12m, which is not a registry factor, decision 2D.8)
 
 - [x] G8: Full core suite, ruff, format, mypy, namespace check clean.
   CHECK: cd decile-blueprint && uv run pytest packages/core -x -p no:cacheprovider 2>&1 | tail -1 && uv run ruff check packages && uv run ruff format --check packages && uv run mypy 2>&1 | tail -1 && bash ../tools/check-namespace.sh 2>&1 | tail -1

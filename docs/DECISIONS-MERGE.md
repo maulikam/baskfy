@@ -7832,6 +7832,26 @@ list** (fixture: `legacy-screen-sql-999bf37.json`). Reverse (2): delete the refu
 own files so a sibling agent's in-flight file could not turn another gate red; repo-wide lint stays
 enforced by 2.A G7, 2.G G5 and root G2. Reverse: restore `packages` in those two CHECKs.
 
+**2D.8 C7 presets and the rankable guard (2026-09-14).** The audit found 2.D G7 falsely ticked, so
+the seven C7 presets were built in `ranking_presets.py`. (a) Ids: C7 keeps the four Phase-1 ids
+(`desk_quality`, `path_quality`, `trend_structure`, `participation`) and adds `leadership`,
+`nse_momentum` and `desk_sequential`. No saved screen or API field stores a preset id (saved screens
+store definitions), so nothing needed a compatibility path. (b) **`desk_sequential` drops C7's
+third tie-break `median_vol_12m`.** It is a result column, not a factor-registry key, so no ranking
+term can name it. Rejected: adding it to the registry here (that is 2.A's file, and it moves the
+registry counts, docs/01 parity and the backtest signal list). Reverse: register the factor, then
+append `_term("median_vol_12m", "higher")`. (c) Statuses stay two-valued (`ready`/`research`), the
+same mapping `render_validation.py` already used. A preset is `ready` only when every factor it
+ranks by was C8-validated. `desk_quality` keeps `ready` on its `score()` parity, and the other six
+are `research`. (d) Every term patch sets `ranking_scope=filtered_results` (as the Phase-1 presets
+did), `family_weights=null`, `missing_data=penalize` and turns the extras off, so a preset never
+inherits stale ranking settings. C7 gives no weights, so the terms use weight 1 and engine family
+shares. (e) `GET /meta/ranking-presets` gains C6's `label`, and the web menu shows it, so
+`nse_momentum` carries C7's exact label. (f) A `rankable=False` factor is now refused as a ranking
+term in Pydantic and in Zod (`NON_RANKABLE_FACTORS`, pinned to the registry by
+`test_screen_definition_parity.py`). Legacy `sort_by` is not guarded. Reverse (f): drop the check
+in `_rankable_factor` and the Zod refine.
+
 ## Ranking 2.F — validation simulator (`ranking_validation`, C8) · Phase 2 wave 3 · ⚠ UNREVIEWED
 
 Contract C8 in `docs/ranking/PLAN.md`. File: `baskfy_core/ranking_validation.py` (pure) and
@@ -7940,3 +7960,36 @@ the API. Reverse: patch directly.
 moves the first ranking term with it, since C3 requires `sort_by == ranking_terms[0].factor`.
 **2H.5** New screens start at `fixed_universe` via `defaultDefinition()` (decision 2D.1); Reset
 and clearing the Ranking chip therefore also return to `fixed_universe`.
+
+## AF C.1 — The login scan's `task_id` is written before the commit, not after it · ⚠ UNREVIEWED
+
+**What happened.** `services/worker/tests/test_swing_scan_now.py::TestTheLoginTrigger::test_an_afternoon_login_creates_a_provisional_scan_once`
+failed with `task_id` None, already on HEAD before round 2. The test was right. `c944a22` (AFC,
+12 Sep) moved the scan publish in `baskfy_api.swing_scan.request_scan` to an `after_commit` hook so
+a Celery worker is never handed the id of a row that is not committed yet. The worker's
+`request_login_scan` goes through the same function with `_CurrentTaskMarker`, which publishes
+nothing — the login task is the one that runs the row — but after `c944a22` its `task_id` also
+arrived only in a follow-up UPDATE after the commit. For that window the committed `sw_scan_run`
+row was `QUEUED` with a null `task_id`, which is exactly what the once-a-minute `sweep_queued`
+publishes, and nothing would have stopped the second `baskfy.swing.scan_now` from running the same
+scan again (a second Kite quote pull and a second plan rebuild off the same login).
+
+**Choice.** `request_login_scan` stamps `row.task_id = task_id` (the login task's own Celery id,
+known before the row exists) and flushes inside the same transaction, so the row is never visible
+without it. The guarantee `c944a22` added is untouched: the API's `request_scan` still publishes
+only after commit, and the login path hands no id to any other worker. The deferred marker still
+fires after commit and writes the same value again — idempotent. New test
+`test_the_sweep_cannot_queue_a_second_scan_for_a_login_scan_row` asserts the sweep publishes nothing
+for a login row.
+
+This **narrows** what can run, never widens it: one scan per login instead of a possible two. No
+timing window, auto-execute flag (SW25/SW26), entry cap or gateway call is touched, and a scan has
+no order path in any case.
+
+**Rejected.** Leaving it as a known red — a test catching a real double-run is not noise. A partial
+unique index on `sw_scan_run` (one in-flight row per task id) — a schema change and a migration for
+a problem one assignment closes. Passing `queue=None` to `request_scan` — would log "queued with no
+broker; the worker's sweep will publish it" on every login, which is false.
+
+**Reverse.** Delete the two lines (`row.task_id = task_id`, `await session.flush()`) and their
+comment in `request_login_scan`, and the one new test.

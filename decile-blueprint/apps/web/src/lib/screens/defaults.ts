@@ -43,6 +43,8 @@ export function defaultDefinition(): ScreenDefinition {
     index: "nifty-500",
     sort_by: "avg_sharpe_12_6_3_1",
     sort_direction: "desc",
+    ranking_mode: "composite",
+    ranking_scope: "filtered_results",
     apply_filters_on: "all",
     min_return_1y: null,
     median_volume_1y: null,

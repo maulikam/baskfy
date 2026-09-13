@@ -1,0 +1,44 @@
+== base (turnover >= 5 cr, the live setting)
+TWT-1 @5cr                                   CAGR   22.5% (IS   13.6 / OOS   35.9)  DD  -26.5%  Calmar 0.85  Sh  1.28  n  169  win 43.2%  PF 2.84 avg 16.06 hold 102.2 top10 51%  final ₹60.7L
+== lever 1: idle cash in a liquid fund
+  idle cash yield 6.0%                       CAGR   24.1% (IS   15.5 / OOS   37.1)  DD  -24.9%  Calmar 0.97  Sh  1.36  n  169  win 43.2%  PF 2.85 avg 16.06 hold 102.2 top10 52%  final ₹68.3L
+  idle cash yield 7.0%                       CAGR   24.4% (IS   15.8 / OOS   37.3)  DD  -24.7%  Calmar 0.99  Sh  1.38  n  169  win 43.2%  PF 2.86 avg 16.06 hold 102.2 top10 52%  final ₹69.8L
+== lever 2: dead-money exit (below entry after N sessions -> out)
+  dead money after 40 sessions               CAGR   18.3% (IS    6.8 / OOS   35.9)  DD  -32.9%  Calmar 0.56  Sh  0.99  n  248  win 34.3%  PF 2.2 avg 8.73 hold 64.6 top10 49%  final ₹44.4L
+  dead money after 60 sessions               CAGR   21.4% (IS   10.7 / OOS   38.1)  DD  -27.3%  Calmar 0.78  Sh  1.20  n  194  win 38.1%  PF 2.66 avg 12.87 hold 83.8 top10 49%  final ₹56.1L
+  dead money after 90 sessions               CAGR   24.0% (IS   11.2 / OOS   43.7)  DD  -32.1%  Calmar 0.75  Sh  1.25  n  188  win 40.4%  PF 2.87 avg 16.05 hold 87.7 top10 53%  final ₹67.5L
+  dead money after 120 sessions              CAGR   22.9% (IS   13.1 / OOS   37.8)  DD  -26.9%  Calmar 0.85  Sh  1.25  n  186  win 41.4%  PF 2.65 avg 14.54 hold 88.8 top10 48%  final ₹62.6L
+== lever 3: pyramid once when up X%, adding 50% of the original
+  pyramid at +10%                            CAGR   24.2% (IS   14.6 / OOS   39.1)  DD  -27.5%  Calmar 0.88  Sh  1.29  n  161  win 42.2%  PF 3.08 avg 14.35 hold 104.5 top10 59%  final ₹68.8L
+  pyramid at +15%                            CAGR   25.2% (IS   11.5 / OOS   47.2)  DD  -26.6%  Calmar 0.95  Sh  1.30  n  166  win 37.3%  PF 3.28 avg 15.06 hold 101.2 top10 57%  final ₹73.7L
+  pyramid at +25%                            CAGR   23.9% (IS   14.4 / OOS   38.4)  DD  -25.4%  Calmar 0.94  Sh  1.28  n  159  win 40.9%  PF 3.09 avg 13.55 hold 106.7 top10 57%  final ₹67.1L
+  pyramid at +15%, add 100%                  CAGR   23.0% (IS    8.2 / OOS   47.4)  DD  -30.4%  Calmar 0.76  Sh  1.18  n  150  win 34.7%  PF 3.26 avg 8.94 hold 98.6 top10 65%  final ₹63.1L
+== lever 4: size by volatility (calm names bigger, cap 15%)
+  vol sizing cap 15%                         CAGR   21.7% (IS   13.8 / OOS   33.3)  DD  -25.1%  Calmar 0.86  Sh  1.27  n  171  win 43.9%  PF 2.71 avg 16.76 hold 99.1 top10 44%  final ₹57.2L
+  vol sizing cap 20%                         CAGR   21.7% (IS   13.8 / OOS   33.3)  DD  -25.1%  Calmar 0.86  Sh  1.27  n  171  win 43.9%  PF 2.71 avg 16.76 hold 99.1 top10 44%  final ₹57.2L
+== lever 5: fewer slots (concentration)
+  8 slots                                    CAGR   25.0% (IS   15.5 / OOS   39.4)  DD  -29.0%  Calmar 0.86  Sh  1.33  n  131  win 42.7%  PF 2.86 avg 18.84 hold 107.3 top10 58%  final ₹72.6L
+== combinations
+base @5cr                                    CAGR   22.5% (IS   13.6 / OOS   35.9)  DD  -26.5%  Calmar 0.85  Sh  1.28  n  169  win 43.2%  PF 2.84 avg 16.06 hold 102.2 top10 51%  final ₹60.7L
+yield 6%                                     CAGR   24.1% (IS   15.5 / OOS   37.1)  DD  -24.9%  Calmar 0.97  Sh  1.36  n  169  win 43.2%  PF 2.85 avg 16.06 hold 102.2 top10 52%  final ₹68.3L
+yield 6% + pyramid +10%/50%                  CAGR   24.9% (IS   14.5 / OOS   41.0)  DD  -23.9%  Calmar 1.04  Sh  1.31  n  164  win 42.1%  PF 3.14 avg 13.84 hold 103.0 top10 53%  final ₹72.1L
+yield 6% + pyramid +25%/50%                  CAGR   24.2% (IS   14.9 / OOS   38.2)  DD  -25.9%  Calmar 0.94  Sh  1.32  n  161  win 40.4%  PF 2.99 avg 12.76 hold 106.2 top10 58%  final ₹68.8L
+yield 6% + dead money 60                     CAGR   23.3% (IS   12.8 / OOS   39.6)  DD  -20.9%  Calmar 1.12  Sh  1.29  n  194  win 38.1%  PF 2.67 avg 12.87 hold 83.8 top10 49%  final ₹64.5L
+yield 6% + pyramid +10%/50% + 8 slots        CAGR   25.9% (IS   15.1 / OOS   42.6)  DD  -33.4%  Calmar 0.77  Sh  1.29  n  133  win 41.4%  PF 2.84 avg 14.53 hold 100.9 top10 65%  final ₹77.3L
+yield 6% + 8 slots                           CAGR   26.6% (IS   17.2 / OOS   41.0)  DD  -27.6%  Calmar 0.97  Sh  1.41  n  131  win 42.7%  PF 2.87 avg 18.84 hold 107.3 top10 58%  final ₹81.6L
+yield 6% + pyramid 10 + stop 15              CAGR   23.2% (IS   12.0 / OOS   40.4)  DD  -29.4%  Calmar 0.79  Sh  1.18  n  188  win 38.3%  PF 2.62 avg 10.62 hold 84.8 top10 57%  final ₹63.9L
+yield 6% + pyramid 10 + stop 25              CAGR   23.6% (IS   14.5 / OOS   37.6)  DD  -23.9%  Calmar 0.99  Sh  1.28  n  163  win 40.5%  PF 3.11 avg 13.04 hold 104.1 top10 56%  final ₹65.8L
+yield 6% + pyramid 10 + trail 18             CAGR   23.5% (IS   11.8 / OOS   41.7)  DD  -29.5%  Calmar 0.80  Sh  1.24  n  200  win 34.5%  PF 2.77 avg 9.56 hold 78.2 top10 60%  final ₹65.3L
+yield 6% + pyramid 10 + trail 22             CAGR   22.2% (IS   15.0 / OOS   32.9)  DD  -27.1%  Calmar 0.82  Sh  1.09  n  158  win 39.2%  PF 2.25 avg 13.36 hold 104.5 top10 57%  final ₹59.3L
+yield 6% + pyramid 10 + trail 25             CAGR   20.3% (IS   13.9 / OOS   30.0)  DD  -26.4%  Calmar 0.77  Sh  1.05  n  105  win 40.0%  PF 3.17 avg 18.68 hold 162.8 top10 68%  final ₹51.9L
+      return_pct  trades  win_rate    avg_ret
+2017         4.2       3       0.0 -14.462104
+2018        -0.1      24      37.5  -0.976505
+2019         6.7       4      25.0  -8.429046
+2020        23.6      25      28.0   2.152574
+2021        56.3      10      70.0  69.763400
+2022        -5.8      29      34.5   2.690275
+2023        68.7      16      50.0  23.786197
+2024        71.4      15      66.7  37.575670
+2025        -2.2      16      25.0   0.855435
+2026        26.3      22      59.1  26.503723

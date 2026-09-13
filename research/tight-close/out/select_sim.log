@@ -1,0 +1,25 @@
+IS outcome by score decile (0 = worst score):
+score         0        1        2        3        4        5        6        7        8        9
+mean       4.98    11.07     9.69    11.02    11.41    10.98    11.86    12.37    10.44     8.87
+median    -6.40    -5.31    -3.71    -4.10    -2.06    -3.61    -2.41    -3.43    -2.60    -3.77
+count   1036.00  1035.00  1035.00  1036.00  1035.00  1035.00  1036.00  1035.00  1035.00  1036.00
+OOS outcome by score decile (0 = worst score):
+score         0        1        2        3        4        5        6        7        8        9
+mean       0.53     3.09     2.90     2.95     4.52     5.83     6.62     8.91     8.47    11.46
+median    -6.72    -5.56    -5.34    -5.22    -4.68    -2.91    -3.66    -2.14    -1.60    -1.75
+count   1101.00  1100.00  1101.00  1100.00  1101.00  1100.00  1100.00  1101.00  1100.00  1101.00
+in-sample score thresholds: {30: np.float64(-0.248), 50: np.float64(0.012), 70: np.float64(0.264), 85: np.float64(0.486)}
+TWT-1 (rank by turnover)                             CAGR   20.9% (IS   11.1 / OOS   36.1)  DD  -24.7%  Sh  1.21  n  164  win 40.9%  PF 2.71 avg 15.4 exp 78.0%
+rank by score                                        CAGR    6.8% (IS    5.0 / OOS    9.1)  DD  -35.1%  Sh  0.48  n  192  win 36.5%  PF 1.42 avg 4.44 exp 75.8%
+min score: top 70% only, rank by turnover (n=15317)  CAGR   15.8% (IS   10.3 / OOS   23.9)  DD  -22.2%  Sh  0.99  n  164  win 43.9%  PF 2.17 avg 11.72 exp 77.1%
+min score: top 70% only, rank by score               CAGR    5.9% (IS    5.7 / OOS    6.0)  DD  -33.2%  Sh  0.43  n  193  win 36.8%  PF 1.32 avg 3.82 exp 75.2%
+min score: top 50% only, rank by turnover (n=11130)  CAGR   11.0% (IS    8.1 / OOS   14.9)  DD  -25.5%  Sh  0.71  n  168  win 43.5%  PF 1.78 avg 8.27 exp 74.1%
+min score: top 50% only, rank by score               CAGR    6.2% (IS    3.2 / OOS   10.3)  DD  -29.0%  Sh  0.45  n  188  win 39.4%  PF 1.37 avg 4.1 exp 75.8%
+min score: top 30% only, rank by turnover (n=6688)   CAGR   15.0% (IS   10.5 / OOS   20.9)  DD  -35.5%  Sh  0.95  n  157  win 43.9%  PF 2.21 avg 12.77 exp 74.3%
+min score: top 30% only, rank by score               CAGR   10.3% (IS    9.1 / OOS   11.4)  DD  -27.2%  Sh  0.70  n  171  win 42.1%  PF 1.69 avg 7.03 exp 74.3%
+min score: top 15% only, rank by turnover (n=3339)   CAGR   14.5% (IS   11.2 / OOS   18.9)  DD  -28.6%  Sh  0.93  n  153  win 45.1%  PF 2.27 avg 11.3 exp 72.6%
+min score: top 15% only, rank by score               CAGR   15.0% (IS   12.9 / OOS   17.5)  DD  -25.4%  Sh  0.95  n  179  win 43.6%  PF 2.01 avg 10.51 exp 70.6%
+  only better-than-median adr (n=11639)              CAGR   11.2% (IS    5.9 / OOS   19.0)  DD  -29.6%  Sh  0.77  n  143  win 44.8%  PF 2.08 avg 9.79 exp 75.9%
+  only better-than-median base_depth (n=11416)       CAGR   12.5% (IS    6.9 / OOS   20.5)  DD  -31.8%  Sh  0.80  n  170  win 44.1%  PF 1.91 avg 8.94 exp 77.2%
+  only better-than-median close_in_base (n=10936)    CAGR   18.3% (IS   17.1 / OOS   20.0)  DD  -25.9%  Sh  1.10  n  162  win 43.2%  PF 2.33 avg 13.66 exp 70.7%
+  only better-than-median vol_dryup (n=10197)        CAGR   17.4% (IS    7.4 / OOS   32.9)  DD  -29.0%  Sh  1.05  n  168  win 41.7%  PF 2.46 avg 12.25 exp 75.3%

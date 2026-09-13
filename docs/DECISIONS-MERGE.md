@@ -7541,3 +7541,339 @@ exists (PLAN correction #8). Validation test: rerank order == `score()` order.
 **Rejected.** Shipping an "NSE Momentum" preset. Treating research presets as product defaults.
 
 **Reverse.** Delete `ranking_presets.py` and its tests; leave `RANKING_PRESETS` as blurbs only.
+
+## Ranking 2.A — stored ranking factors (`factor_daily`, 0046) · Phase 2 wave 1 · ⚠ UNREVIEWED
+
+Contract C1 in `docs/ranking/PLAN.md`. Files: `baskfy_core/factors_ranking.py` (called from
+`factors.compute_factors_unrounded`), the C1 columns on `models/facts.py` and in
+`precision.COLUMN_PRECISION`, migration `0046_ranking_factors` (down `0045_instrument_watch_and_prefs`),
+`factor_registry.py` (`weight_family`, `validation_status`, `definition`, `rankable`,
+`regime_priority`, `nse_momentum_score`), `packages/core/tests/{test_factors_ranking,
+test_factor_registry_c1}.py`, docs/04. `factors_ranking.py` cites this entry by name.
+
+**2A.1 Benchmark choice: NIFTY 500 for "the market", NIFTY 50 for the beta residual.**
+`excess_ret_3m/6m/12m` and `rs_persist_126` read `market_benchmark` (NIFTY 500 levels);
+`resid_ret_12m = ret_12m - beta_12m x NIFTY 50 12M return` reads `benchmark` (NIFTY 50), because
+`beta_12m` is already measured against NIFTY 50 (docs/05) and a residual must subtract the return
+of the index its beta was estimated on. A level is taken on **exactly** the window's base date and
+the as-of date; a missing level is NULL, never a neighbouring day's. This is separate from the swing
+gate's NIFTY MidSmallcap 400 decision (SW17), which answers a different question. Rejected: one
+benchmark for both (beta vs NIFTY 50 minus a NIFTY 500 return is not a residual); MidSmall 400 (the
+screener's universes span large caps). Reverse: swap the level series the worker passes.
+
+**2A.2 ddof, per column.** `downside_vol_Nm` is a population moment — sqrt(mean over **all** N
+returns of min(r,0)^2) x sqrt(252) — because `vol_Nm` is population (docs/05 §2) and `sortino_Nm`
+must be comparable with `sharpe_Nm`. `accel_21_105_vs` divides by the **sample** std (ddof=1) of the
+same 126 log returns, as C1 states. `nse_mr6/12` use ddof=1 on 252 daily log returns, as NSE's
+methodology states. Rejected: one ddof everywhere (breaks either the Sharpe/Sortino pairing or NSE's
+text). Reverse: the `ddof` argument at each call site; values move in the 3rd-4th significant digit.
+
+**2A.3 Month-end anchoring for `nse_mr*`.** The "rebalance month" is the row's calendar month, so
+every row in a month carries the same ratios. End M-1, M-7 and M-13 are the **last trading day in
+`trading_days`** of those calendar months (`month_end_trading_day`); each price is the instrument's
+own bar on that exact date (no bar -> NULL), and sigma is the 252-return window ending at end M-1,
+read from that row. Rejected: the last bar the instrument happens to have in the month (a halted name
+would get a stale anchor that no other name shares); anchoring on the as-of date (NSE rebalances on
+month ends, and a daily-moving ratio would not be NSE's number). Reverse: `month_end_trading_day`.
+
+**2A.4 Smaller readings.** (a) ATR: a TR needs the previous close (TA-Lib's reading), so the first
+TR is on bar 2 and the first ATR, the mean of the first 14 TRs, on bar 15; Wilder's paper seeds bar 1
+with high - low instead. (b) An "N-session return" is `c_t / c_{t-N} - 1`, the same count
+`accel_21_105` means by "the last 21 sessions". (c) `mom_pctile` is SQL `PERCENT_RANK` x 100 —
+`(average-tie rank - 1) / (n - 1)`, worst 0, best 100, a population of one is 100 — over the rows
+**as written** (rounded), so ties agree with the screen. On 13 Sep the source had drifted to
+`rank / n` (tests red, docstring still `(r-1)/(n-1)`); it was restored to the tested reading.
+(d) `rank_persist_20`'s window is the last 20 distinct dates present in the history frame, and
+it is NULL unless all 20 carry a `mom_pctile` for the name. (e) A value that `numeric(p,s)` cannot
+hold, NaN or infinite, is stored NULL (`null_unrepresentable`) rather than failing the nightly insert.
+
+## Ranking 2.B — desk SCORE service + `desk_score_daily` (0047) · Phase 2 wave 1 · ⚠ UNREVIEWED
+
+Contract C2 in `docs/ranking/PLAN.md`. Files: `baskfy_core/desk_config.py`,
+`baskfy_core/desk_score_service.py`, `baskfy_core/models/ranking.py`, migration
+`0047_desk_score_daily`, `packages/core/tests/{_desk_score_fixture,test_desk_score_service}.py`,
+`kite-momentum-rebalancer/tests/{test_desk_config_parity,test_desk_score_parity}.py`, a
+one-block swap in `ranking.py`, docs/04 "Desk score" section.
+
+**2B.1 The universe is `nse_cash`, and it means "the bars you pass".** `score_day(bars, as_of,
+trading_days, carried)` runs `momentum_scan.build(..., cfg=DESK_CONFIG, carried=carried,
+universe="nse_cash")` then `score.score` over the whole scan — the desk's `scan_source.generate` →
+`as_desk_frame` → `scoring.score`, step for step (including `to_dicts()` rather than `to_pandas()`,
+which infers different dtypes). Percentiles and the 1/99 clips therefore run over every scanned
+name, not the screener's survivors. The worker must pass NSE cash instruments only: the book keys
+by symbol, and a symbol naming two instruments on `as_of` is **refused** (`ValueError`) rather than
+resolved by whichever row `drop_duplicates` meets first. Bars: pass **all history ≤ as_of**, as the
+desk's `_BARS_SQL` does — on the fixture a 270-session history reproduced the full result and 260
+did not, so any truncation must be proven identical first. Rejected: re-implementing the scan in
+SQL (a second book); scoring index universes (the book never has).
+
+**2B.2 The `carried` contract, and where the worker (2.C) takes it from.** `carried` must hold
+`symbol` + `CARRIED_INPUT_COLUMNS` = `series`, `marketcap`, `beta`, `circuits_three_months`,
+`circuits_one_year`, `is_nifty_fno`. The desk takes all six from its newest uploaded scan CSV
+(`app/main.py:_carried_columns`, `scripts/shadow_mode.py`). `series` is outside
+`momentum_scan.CARRIED_COLUMNS` but is required here, because the bars carry none, a NULL series is
+never in `REJECT_SERIES`, and BE/BZ names would be ranked. The worker has no upload; it loads the
+as-of day's `factor_daily` row (same date, point-in-time):
+
+| carried column | source | note |
+|---|---|---|
+| `series` | `factor_daily.series` | bhavcopy series |
+| `marketcap` | `factor_daily.marketcap_cr` | ₹ crore, the export's unit (`FACTOR_COLUMN_MAP`) |
+| `beta` | `factor_daily.beta_12m` | |
+| `circuits_three_months` | `factor_daily.circuits_3m` | inferred circuits (docs/05 §12) |
+| `circuits_one_year` | `factor_daily.circuits_12m` | |
+| `is_nifty_fno` | `1 if universe_mask & UNIVERSE_BY_SLUG["nifty-fno"].mask_value else 0` | `ranking.ensure_nifty_fno_flag`'s rule |
+
+NULLs pass through as NULL (never zero-filled): the book's comparisons then treat them exactly as
+`/analyze` would. Honest limit: the formula is the book's, but these carried inputs are the plant's
+own, not the upload's, so a stored score equals `/analyze`'s only when the desk's carried columns
+equal these. A name with bars but no `factor_daily` row on `as_of` is dropped by the scan's inner
+join and gets no row. Reverse: a different carried source is a worker change only.
+
+**2B.3 Version policy.** `DESK_SCORE_VERSION = "desk-score-2026.09.13"` in
+`desk_score_service.py`; every row stores it. `test_desk_score_service.py::PINNED_FINGERPRINTS`
+maps it to sha256 over `score.py` + `momentum_scan.py` + `desk_config.canonical(DESK_CONFIG)`
+(sets sorted; dict item order kept — blend order changes both `required()` and the float sum; `5`
+vs `5.0` distinct). Widened from the contract's "score.py + DESK_CONFIG" to include
+`momentum_scan.py`, because the scan decides which rows exist and what they carry, and the goal is
+"cannot drift silently". `factors.py` is deliberately **not** in the hash: 2.A adds columns there
+that the book never reads, and a bump per factor would teach people to bump blindly; a factor
+change that alters existing columns is caught by the factor goldens instead. Procedure on failure:
+new version string (date, or `.N` suffix same day), pin the new hash under it, never re-pin an old
+version. Reverse: edit the hashed file list.
+
+**2B.4 DESK_CONFIG and the parity test.** `DeskConfig` is a *non-frozen* slotted dataclass:
+`score.ScoringConfig` declares settable attributes and mypy rejects read-only ones (the same reason
+`test_momentum_scan._Cfg` gives). Types mirror `app/config.py` exactly (`MAX_CIRCUITS_3M = 5`, an
+int). `kite-momentum-rebalancer/tests/test_desk_config_parity.py` compares all eleven
+`ScoringConfig` attributes (values, types, blend order), proves the comparison bites by
+monkeypatching each kind of change, and records the attributes `build`/`required`/`score` actually
+read through a proxy so a new knob cannot bypass it. `ranking.DeskScoringDefaults` is now an alias
+of `DeskConfig` and `DEFAULT_DESK_SCORING_CONFIG is DESK_CONFIG` — the Phase-1 hand copy is gone.
+
+**2B.5 Rows, ranks, precision.** Rejected rows are stored with NULL `score`, `score_rank` and A–F
+and their tokens in `reject` (varchar(200); all seven tokens concatenated are 87 chars).
+`score_rank` is the book's `rank` verbatim: 1..n over unrejected rows, including the book's order
+among equal SCOREs (pandas' default sort, reproduced because the same function runs on the same
+frame; the twins in the fixture pin it in both trees). An unrejected row whose SCORE is NaN keeps
+the book's rank with a NULL score — unreachable from engine bars today (the engine nulls the
+one-year turnover/away-from-high with the return, so such names are rejected), handled anyway.
+Precision is written by the service, half-up (precision.py's rule): `score` 1 dp, A–F and
+`ext_over_20dma` 4 dp; not `precision.quantise`, which knows only 0/2/4/10 places.
+
+**2B.6 Schema details.** `instrument_id` is `bigint` (contract said int) because `instrument.id` is
+bigint and an FK must match. Plain table, not a hypertable (~2–3k rows a day); one extra index
+`(date, score_rank)` for the screener's one read. Registered in `models/__init__.py` and
+`test_schema_matches_docs.DOCUMENTED_TABLES`.
+
+**2B.7 Gate mechanics.** The decile tree's `addopts` already carries `-q`, so the gate file's
+`pytest -q` ran at `-qq`, which prints no "N passed" line on success and could never match its
+EXPECT; the three decile CHECK lines were changed to plain `pytest` (still `-q` via addopts, same
+strict flags). `ruff check packages/core` and `ruff format --check` fail at HEAD `999bf37` on files
+outside this leaf (twt, ranking_research, ranking_presets, ranking_selection, screen_definition,
+older tests, `ranking.py`'s pre-existing formatting); this leaf's files are clean and nothing
+outside them was reformatted.
+
+## Ranking 2.C — worker: desk score in the nightly, ranking backfill · Phase 2 wave 2 · ⚠ UNREVIEWED
+
+Gate: `gates/ranking-2.C-worker.md`. Files: `baskfy_worker/tasks/{desk_score,ranking,factors}.py`,
+`baskfy_worker/{ranking_backfill,orchestrator,engine,factors_cli}.py`,
+`services/worker/tests/test_ranking_worker.py`.
+
+**2C.1 Where it runs.** Desk scoring runs **inside the `compute_factors` step, under a savepoint**,
+not as a new pipeline step, so the step list, the run ledger and the catch-up chain are unchanged,
+and a desk failure rolls back only its own rows. Rejected: a separate `desk_score` step (touches the
+orchestrator's step contract and every run-ledger test). Reverse: lift the call into its own step.
+
+**2C.2 Inputs copy the desk.** Bars and trading days are read with the desk's own queries,
+**NSE only**, so the stored score is the desk's number and not a near-copy.
+
+**2C.3 Backfill.** Commits per day (resumable; a crash loses one day). A day is **complete** when
+it has `desk_score_daily` rows at the current score version **and** every rankable `factor_daily`
+row has `mom_pctile`. When desk scoring fails the factor columns are **kept** and the day is
+reported failed, not rolled back whole. Rejected: one transaction per range (an evening's work lost
+to one bad day); all-or-nothing per day (loses good factor rows to a desk-side bug).
+
+**2C.4 Known limit.** The desk's `score.apply_filters` crashes when a whole column is empty, so days
+with under a year of universe history (the early backfill) fail desk scoring and are reported
+failed. The desk's code is not patched from this tree. Reverse: fix in the desk, re-run the backfill
+for failed days.
+
+## Ranking 2.E — portfolio-aware selection (`select_portfolio`, contract C5) · ⚠ UNREVIEWED
+
+**Context.** C5 names the rules and reason codes but leaves the semantics a portfolio manager
+would ask about unsettled. Every call below is stated in `baskfy_core/ranking_selection.py`'s
+module docstring and pinned by a spec test in `packages/core/tests/test_ranking_selection.py`.
+Phase 1.4's `select_from_ranks` is untouched.
+
+**Choices.**
+1. *One hold-band rule.* Retention calls `rank_buffer.inside_hold_band(rank, entry_rank,
+   retention_rank - entry_rank)`; `retention_rank < entry_rank` is refused (a negative band churns
+   a name out the run after it enters). A test checks exits agree with `plan_rebalance` over 200
+   random books.
+2. *Every refusal is reported*, in the fixed order SECTOR_CAP, CAPACITY, CORRELATION,
+   TURNOVER_BUDGET, FULL; a skipped name uses no slot, no sector count, no budget, and is not a
+   correlation peer. Names ranked worse than `entry_rank` are never used to fill skipped slots
+   (`unfilled_slots` reports the gap instead).
+3. *Turnover budget.* Exits have first call on it. When would-exits exceed it, the worst go first:
+   NOT_IN_RESULTS, then rank descending, then `instrument_id` descending (the engine breaks rank
+   ties by ascending id). The rest are held with `RETAINED_BY_TURNOVER_BUDGET` plus their
+   underlying reason, and count toward FULL, sector cap and correlation peers.
+4. *Sector.* Counts kept (and retained) holdings plus accepted entrants. `None`, `""` and
+   `"unclassified"` never count and are never refused, but they are flagged `SECTOR_UNCLASSIFIED`
+   when a cap is on. A holding's own sector wins, and its candidate row's fills in when the
+   holding's is unclassified. Holdings are never exited for a cap (note
+   `SECTOR_OVER_CAP_FROM_HOLDINGS`).
+5. *Capacity.* The slot is `capital_inr / max_names`, rounded **down** to the paisa.
+   Participation is rounded half-up to 4 dp, and the rounded figure decides: `>` cap refuses,
+   exactly at the cap is allowed (as in `basket.py`). **Missing `adv_value_inr` does not refuse.**
+   It flags `CAPACITY_UNKNOWN`. That matches the desk (`np.inf` when day value is missing).
+   A NULL 12-month median usually means under a year listed, not illiquid, and refusing on
+   absent data would be a verdict the data cannot support. ADV of zero *is* refused. Without
+   `capital_inr` nothing is sized and the result says `CAPACITY_NOT_CHECKED`. Holds are never
+   refused, only flagged `HOLD_ABOVE_CAPACITY`.
+6. *Correlation.* Pearson on daily simple returns over the last `correlation_window` dates
+   (sorted), pairwise-complete, ≥ 60 shared finite observations, else `CORRELATION_HISTORY_SHORT`
+   (no refusal). A constant series gives `CORRELATION_UNDEFINED`. Peers are kept holdings and
+   accepted entrants, never exiting ones. The rounded 4-dp coefficient decides. **The limit is on
+   the signed coefficient, not |corr|** (the gate text says |corr|). In a long-only book a
+   strongly negatively correlated name is a hedge, and refusing it adds risk. `max_correlation`
+   without a `returns` frame raises (a check that was asked for but has no data is a caller bug,
+   not a pass). `correlation_window < 60` is refused.
+7. *Holdings above `max_names`* are not trimmed. C5 says holdings inside retention are kept.
+   Result note `HOLDINGS_EXCEED_MAX_NAMES`, and FULL refuses every entrant.
+8. *Output.* `to_dict()` gives Decimals as strings, enums as values, and `informational_only:
+   true`. It has no plan id and no order field. `SELECTION_VERSION = "selection-2.0.0"`.
+
+**Rejected.** A |corr| limit (refuses hedges). Refusing on missing ADV (desk precedent says no,
+and it would punish recent listings). Filling skipped slots from beyond `entry_rank` (that enters
+names the entry rule refused). Trimming holdings to `max_names` or to a sector cap (C5 keeps
+holdings inside retention).
+
+**Reverse.** Each item is one branch in `ranking_selection.py` plus its named test: for |corr|,
+compare `abs(value)`; for refusing missing ADV, set `over_cap` when `adv_value_inr is None`.
+Removing `select_portfolio` and the C5 types reverts to Phase 1.4.
+
+## Ranking 2.D — definition, ranking engine, NSE momentum, screener SQL, presets (C3, C4, C7) · Phase 2 wave 2 · ⚠ UNREVIEWED
+
+Contracts C3/C4/C7 in `docs/ranking/PLAN.md`. Files: `baskfy_core/{screen_definition,
+ranking_engine,nse_momentum,screener,ranking_presets}.py`, the TS zod mirror, JSON schema and
+corpus, `packages/core/tests/{test_ranking_engine,test_nse_momentum,test_ranking_frame_query}.py`,
+`tests/fixtures/legacy-screen-sql-999bf37.json`. Gate: `gates/ranking-2.D-engine.md`.
+`ranking_engine.py` and `nse_momentum.py` cite this entry by name.
+
+**2D.1 Scope default split.** `ScreenDefinition.ranking_scope` defaults to `filtered_results`
+(docs/06 behaviour, reference parity, every saved screen hashes as before); the web editor's
+*new-screen* default is `fixed_universe` (C3). Rejected: one default everywhere (flipping the
+schema moves every saved screen's percentiles; keeping the editor on `filtered_results` makes a
+new screen's scores shift whenever a filter changes). Reverse: the editor's initial value.
+
+**2D.2 Missing-data default `penalize`** (term score 0.0; `neutral` = 0.5; `exclude` drops the row
+from the results, and under `filtered_results` also from the scope set, while under
+`fixed_universe`/`within_sector` it still counts toward other terms' percentiles). In
+`sequential`/`single`, NULL raw values sort last under both `penalize` and `neutral`. The legacy
+path refuses any non-default `missing_data`. Rejected: `neutral` default (rewards absent data with
+a median score). Reverse: `MISSING_SCORE` and the field default.
+
+**2D.3 NSE ddof.** `sigma_p` (per-stock annualised vol) uses ddof=1 on 252 log returns, as C1
+stores `nse_mr6/12`; the cross-sectional Z uses **ddof=0** (`stddev_pop` in SQL, `std(ddof=0)` in
+pandas), because NSE's "standard deviation" is of the whole eligible universe, a population. No
+winsorisation, since the text states none. Rejected: sample std for Z. Reverse: `horizon_stats`
+and `stddev_pop` -> `stddev_samp`; scores move slightly, ranks rarely.
+
+**2D.4 `within_sector` groups over the selected universe**: every row after the
+`apply_filters_on` bucket and before any filter, grouped by sector (C4 step 2). It is refused on
+the legacy path and outside `composite` (raw-value orders ignore it). Rejected: grouping only the
+filtered results (tiny groups where n=1 always scores 1.0). Reverse: `in_scope` in `rank_frame`.
+
+**2D.5 Unclassified sector bucket.** A name in no sector index has NULL sector and is ranked in one
+`"unclassified"` group (`UNCLASSIFIED_SECTOR`). Sector is the narrowest point-in-time sectoral index
+(fewest members that day). **Ties go to the alphabetically first slug**, so the pick is
+deterministic. Rejected: dropping unclassified names (removes tradeable stocks) or ranking them
+against the whole universe (mixes two scopes in one run). Reverse: `_groups` / the `sector` CTE.
+
+**2D.6 Screener calls.** (1) Three Phase-1.2 tests pinned behaviour C2/C4 deliberately changed and
+were rewritten to the spec, not weakened: `refuses_desk_score` -> `reads_desk_score_daily` (only
+`score IS NOT NULL` rows rank); `sequential_orders_by_primary_then_tiebreakers` -> by factor
+*values* then `instrument_id`; "every sort factor builds" -> SQL factors build, computed ones are
+refused, `desk_score` reads its table. (2) `build_screen_query` (legacy) refuses `ranking_terms`
+and `nse_momentum_score` (`_refuse_outside_legacy_sql`); both go through `ranking_engine`. (3) Sector ties: first slug (2D.5).
+(4) NSE population mean/std use **all** eligible names on `as_of` (NIFTY 200 ∩ F&O, both ratios
+present), not only the screen's universe, since NSE's Z is over its own eligible set. (5) The
+frame query's behaviour tests run on in-memory SQLite; a PostgreSQL run is owed under 2.G G1.
+(6) Legacy SQL equals the 999bf37 fixture **modulo the new C1 factor columns added to the select
+list** (fixture: `legacy-screen-sql-999bf37.json`). Reverse (2): delete the refusal branch;
+(4): filter the `nse_eligible` CTE by the screen universe.
+
+**2D.7 Wave-1 lint scoping.** The lint CHECK lines in 2.B G6 and 2.E G4 were scoped to each gate's
+own files so a sibling agent's in-flight file could not turn another gate red; repo-wide lint stays
+enforced by 2.A G7, 2.G G5 and root G2. Reverse: restore `packages` in those two CHECKs.
+
+## Ranking 2.F — validation simulator (`ranking_validation`, C8) · Phase 2 wave 3 · ⚠ UNREVIEWED
+
+Contract C8 in `docs/ranking/PLAN.md`. File: `baskfy_core/ranking_validation.py` (pure) and
+`packages/core/tests/test_ranking_validation.py`. Gate: `gates/ranking-2.F-validation.md`.
+
+**2F.1 Choices.** (a) NAV is a unitless float index from 1.0 with fractional shares. It compares
+rankings, not rupees, so house rule 9 does not apply. (b) Holds, exits and entries come from
+`ranking_selection.select_portfolio` (C5), so the backtest and the product share one rule.
+(c) Equal weight: at each rebalance every target resets to `1/max_names` of equity, and empty
+slots are held as cash earning nothing. (d) Costs (`cost_bps_per_side` on traded notional) are
+deducted from the whole book pro rata, which avoids a circular solve (second-order difference).
+(e) A delisted name with no bar for `missing_bar_tolerance_sessions = 5` sessions liquidates at its
+last close, less cost. (f) Unclassified names are excluded from sector weight. (g) Default buffer
+`entry_rank=20` / `retention_rank=40`, pending the 2.F grid. (h) IS/OOS is a split of one run at
+`split_date` (2020-01-01), with OOS starting from IS's ending NAV.
+**Rejected.** Integer rupee shares (adds lot noise to a ranking comparison); a simulator-only
+selection rule (lets the two drift); drift-weighted holds (turnover then depends on path);
+separate IS and OOS runs (OOS would start without the holdings IS left it). **Reverse.** Each is
+one `ValidationConfig` field or one step in `_Simulator`; the buffer default moves when the grid
+result is recorded.
+
+## Ranking 2.G — API: ranking engine route-through, provenance, explain, selection (C6) · Phase 2 wave 3 · ⚠ UNREVIEWED
+
+Gate: `gates/ranking-2.G-api.md`. Files: `baskfy_api/{screen_ranking,screener,schemas}.py`,
+`routers/{screens,meta}.py`, `services/api/tests/{test_api_meta_ranking,
+test_api_screens_explain_selection,test_ranking_screener_db}.py`.
+
+**2G.1 Provenance.** Legacy screens report `ranking_engine_version="legacy-sql"`;
+`desk_score_version` is present **only when the desk score decides the order**. Provenance is added
+in the API, not in core (core stays pure and its outputs unchanged). A cache entry written before
+this change carries no provenance and is treated as a **cache miss**, never served without it.
+Rejected: backfilling provenance into old cache entries (a guess stamped as fact).
+
+**2G.2 Engine rows.** The engine runs sort by `sorting_factor` = the **first term's raw value**, plus
+a 2dp `composite_score` column (house rule 8). Desk grades A–F are read from `desk_score_daily`,
+not recomputed. Engine refusals (bad definition) answer **400, not 500**. Core's survivors functions
+are kept for the legacy path. CSV export of a `ranking_terms` screen is **still refused**.
+
+**2G.3 Explain and selection.** Both require sign-in and a `ranking_terms` definition. The
+corporate-action flag = `adj_factor` changed **within the window** (no look-ahead, house rule 5).
+Holdings with no quantity are listed, not treated as held. Selection returns
+`informational_only: true` and **no plan id** — nothing it answers can reach `/execute`
+(non-negotiable #1; the web app never gains an execute route).
+Reverse: each is one branch in `screen_ranking.py` with its named test.
+
+## Ranking 2.H — web: Ranking, Factor Ranges and Market Regime sections (C3) · Phase 2 wave 4 · ⚠ UNREVIEWED
+
+Gate: `gates/ranking-2.H-web.md` G1–G2. Files: `apps/web/src/components/screens/{ranking-section,factor-ranges,draft-number-input}.tsx`, `apps/web/src/lib/screens/ranking.ts`.
+
+**2H.1 Validate before patching.** The editor's URL state (`decodeState`) silently discards a
+definition the schema refuses, so each new control runs `ScreenDefinitionSchema` first
+(`checkPatch`) and shows a plain "Not applied: …" reason instead. Mode/term changes carry the C3
+rules with them (Single keeps the first term; non-composite resets weights and family weights;
+removing the last term resets missing data and leaves `within_sector`). A target range or a new
+factor range waits locally until it has a bound. Rejected: letting invalid edits through to fail at
+the API. Reverse: patch directly.
+
+**2H.2 Rankable fallback.** `FactorOut` in the generated client does not yet carry `rankable`,
+`weight_family`, `validation_status` (C6, leaf 2.G) — nor, in the current working-tree regen,
+`preference`. The term combobox uses `rankable` when present, else excludes `preference ===
+"eligibility"`. Reverse: drop the fallback once 2.G regenerates.
+
+**2H.3 Inline factor picker.** The sections open inside chip-bar popovers, where
+`FactorCombobox`'s own popover would nest and dismiss itself (27 Aug bug), so they use
+`InlineFactorPicker` (the list expands in place). **2H.4** Sort By changed from the chip or rail
+moves the first ranking term with it, since C3 requires `sort_by == ranking_terms[0].factor`.
+**2H.5** New screens start at `fixed_universe` via `defaultDefinition()` (decision 2D.1); Reset
+and clearing the Ranking chip therefore also return to `fixed_universe`.

@@ -87,6 +87,13 @@ DESK_COMPONENTS: Final[dict[str, tuple[str, float]]] = {
     "desk_e_liquidity": ("E liquidity", 10.0),
 }
 DESK_F_PENALTY: Final = "desk_f_penalty"
+#: ``desk_score_daily.ext_over_20dma``: ``(close / 20-DMA - 1) x 100``, the one raw input the book
+#: stores beside its grades (A adds points for it, F deducts for it — ``score.score``).
+DESK_EXT_OVER_20DMA: Final = "desk_ext_over_20dma"
+#: ``desk_score_daily.score_version`` on the row itself.
+DESK_ROW_SCORE_VERSION: Final = "desk_score_version"
+#: F's floor in ``score.score`` (``np.maximum(f, -10)``).
+DESK_F_FLOOR: Final = -10.0
 
 NSE_MOMENTUM_KEY: Final = "nse_momentum_score"
 NSE_MR6: Final = "nse_mr6"
@@ -495,6 +502,34 @@ class DataQuality:
 
 
 @dataclass(frozen=True, slots=True)
+class DeskInput:
+    """One stored raw value a desk grade was computed from."""
+
+    name: str
+    label: str
+    value: float | None
+
+
+@dataclass(frozen=True, slots=True)
+class DeskComponent:
+    """One A-F grade: its points, the range ``score.score`` clips it to, and its stored inputs.
+
+    ``inputs`` holds only what ``desk_score_daily`` stores. The book keeps one raw input,
+    ``ext_over_20dma``, which A and F both read; B-E's inputs (returns, Sharpe, positive days,
+    median value) are not stored with the row, so their ``inputs`` are empty rather than
+    re-derived from another table on another basis.
+    """
+
+    grade: str
+    key: str
+    label: str
+    points: float | None
+    min_points: float
+    max_points: float
+    inputs: tuple[DeskInput, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class DeskBlock:
     score: float | None
     rank: int | None
@@ -506,6 +541,25 @@ class DeskBlock:
     f_penalty: float | None
     reject: str
     eligible: bool
+    ext_over_20dma: float | None
+    score_version: str | None
+    components: tuple[DeskComponent, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class RankHistory:
+    """Today's rank beside the previous session's rank for the same definition.
+
+    ``previous_as_of`` is the trading day before ``as_of`` (``None`` when there is none);
+    ``previous`` is the row's rank in that day's run, ``None`` when it was not ranked then.
+    ``change`` is ``previous - today``: rank 1 is best, so a positive change is places gained.
+    It is ``None`` unless both ranks exist.
+    """
+
+    today: int | None
+    previous: int | None
+    previous_as_of: str | None
+    change: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -535,6 +589,7 @@ class RankExplanation:
     data_quality: DataQuality
     desk: DeskBlock | None
     provenance: Provenance
+    rank_history: RankHistory
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -551,6 +606,10 @@ class ExplainContext:
     desk_score_version: str | None = None
     #: ``fail__<clause>`` suffix → human-readable filter text from the query builder.
     clause_details: Mapping[str, str] = field(default_factory=dict)
+    #: The trading day before ``as_of``, and the row's rank in the same definition's run on it —
+    #: the caller ranks that day's point-in-time frame; core only reports it.
+    previous_as_of: dt.date | None = None
+    previous_rank: int | None = None
 
 
 def _opt_float(value: object) -> float | None:
@@ -639,6 +698,58 @@ def _term_notes(
     return positives, deductions
 
 
+#: Grade letter, frame column and display label, in A-F order.
+_DESK_GRADES: Final[tuple[tuple[str, str, str], ...]] = (
+    ("A", "desk_a_trend", "Trend"),
+    ("B", "desk_b_momentum", "Momentum"),
+    ("C", "desk_c_sharpe", "Sharpe"),
+    ("D", "desk_d_consistency", "Consistency"),
+    ("E", "desk_e_liquidity", "Liquidity"),
+    ("F", DESK_F_PENALTY, "Penalty"),
+)
+#: The grades whose formula reads ``ext_over_20dma``.
+_EXT_GRADES: Final = frozenset({"A", "F"})
+
+
+def _desk_components(row: pd.Series) -> tuple[DeskComponent, ...]:
+    extension = DeskInput(
+        name="ext_over_20dma",
+        label="Extension over the 20-day moving average, %",
+        value=_opt_float(row.get(DESK_EXT_OVER_20DMA)),
+    )
+    out: list[DeskComponent] = []
+    for grade, column, label in _DESK_GRADES:
+        if column == DESK_F_PENALTY:
+            low, high = DESK_F_FLOOR, 0.0
+        else:
+            low, high = 0.0, DESK_COMPONENTS[column][1]
+        out.append(
+            DeskComponent(
+                grade=grade,
+                key=column.removeprefix("desk_"),
+                label=label,
+                points=_opt_float(row.get(column)),
+                min_points=low,
+                max_points=high,
+                inputs=(extension,) if grade in _EXT_GRADES else (),
+            )
+        )
+    return tuple(out)
+
+
+def rank_history(
+    today: int | None, previous: int | None, previous_as_of: dt.date | None
+) -> RankHistory:
+    """``RankHistory`` from two ranks; ``change`` only when both exist."""
+    change = None if today is None or previous is None else previous - today
+    return RankHistory(
+        today=today,
+        previous=previous,
+        previous_as_of=None if previous_as_of is None else previous_as_of.isoformat(),
+        change=change,
+    )
+
+
 def _desk(row: pd.Series) -> DeskBlock | None:
     if DESK_REJECT not in row.index:
         return None
@@ -659,6 +770,11 @@ def _desk(row: pd.Series) -> DeskBlock | None:
         f_penalty=_opt_float(row.get(DESK_F_PENALTY)),
         reject=reject,
         eligible=reject == "" and score is not None,
+        ext_over_20dma=_opt_float(row.get(DESK_EXT_OVER_20DMA)),
+        score_version=(
+            version if isinstance(version := row.get(DESK_ROW_SCORE_VERSION), str) else None
+        ),
+        components=_desk_components(row),
     )
 
 
@@ -738,10 +854,11 @@ def explain(row: pd.Series, context: ExplainContext) -> RankExplanation:
     desk = _desk(row)
     desk_positives, desk_deductions = _desk_notes(row, desk)
     symbol = row.get(SYMBOL)
+    rank = _opt_int(row.get(RANK))
     return RankExplanation(
         instrument_id=int(row[INSTRUMENT_ID]),
         symbol=symbol if isinstance(symbol, str) else None,
-        rank=_opt_int(row.get(RANK)),
+        rank=rank,
         total=_opt_float(row.get(COMPOSITE_SCORE)) if spec.mode == "composite" else None,
         terms=terms,
         positives=tuple([*positives, *desk_positives]),
@@ -759,6 +876,7 @@ def explain(row: pd.Series, context: ExplainContext) -> RankExplanation:
             scope=spec.scope,
             mode=spec.mode,
         ),
+        rank_history=rank_history(rank, context.previous_rank, context.previous_as_of),
     )
 
 

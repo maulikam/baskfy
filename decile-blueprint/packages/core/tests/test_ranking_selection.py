@@ -13,6 +13,7 @@ import random
 import struct
 from collections.abc import Callable, Sequence
 from decimal import Decimal
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -787,8 +788,15 @@ def test_constraints_refuse_meaningless_values(build: Callable[[], SelectionCons
 
 
 def test_constraint_defaults_are_the_contracts() -> None:
+    # entry/retention: C8's best OOS-stable grid cell, docs/ranking/VALIDATION.md §6 (was 15/30).
     c = SelectionConstraints()
-    assert (c.max_names, c.entry_rank, c.retention_rank) == (15, 15, 30)
+    assert (c.max_names, c.entry_rank, c.retention_rank) == (15, 15, 60)
+    doc = next(
+        parent / "docs" / "ranking" / "VALIDATION.md"
+        for parent in Path(__file__).resolve().parents
+        if (parent / "docs" / "ranking" / "VALIDATION.md").is_file()
+    ).read_text(encoding="utf-8")
+    assert f"`entry_rank={c.entry_rank}, retention_rank={c.retention_rank}`" in doc
     assert (c.max_per_sector, c.capital_inr, c.turnover_budget_names, c.max_correlation) == (
         None,
         None,

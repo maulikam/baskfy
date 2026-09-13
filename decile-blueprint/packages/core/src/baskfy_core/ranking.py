@@ -288,10 +288,35 @@ def rerank_survivors_by_desk_score(
     return ordered, breakdowns(ordered)
 
 
-#: Named presets — Phase 1 ships the list; weighted composites land with validation.
+#: Named presets, docs/ranking/PLAN.md C7: key -> one-line description. The patches, labels and
+#: statuses live in :mod:`baskfy_core.ranking_presets`; every key here has exactly one spec there.
 RANKING_PRESETS: Final[dict[str, str]] = {
     "desk_quality": "Weekly book's Momentum Quality Score (A-F) via baskfy_core.score",
-    "path_quality": "Positive-days and path measures (promote only with drawdown pairing)",
-    "trend_structure": "MA stack and MA distance (distance is target-range, not higher-is-better)",
-    "participation": "Volume expansion versus a preceding baseline",
+    "path_quality": (
+        "Composite of positive days (6M) paired with max drawdown (1Y), downside volatility (1Y) "
+        "and the 1Y return without its three best days"
+    ),
+    "trend_structure": (
+        "Composite of the MA stack and the MA 50 slope, with ATR extension from the 20-day MA "
+        "scored as a 0-3 ATR target range rather than higher-is-better"
+    ),
+    "participation": (
+        "Composite of 21-session traded value over its 126-session baseline and how many of the "
+        "last 20 sessions traded above that baseline"
+    ),
+    "leadership": (
+        "Composite of momentum-rank persistence (20 days), relative-strength persistence against "
+        "NIFTY 500 (126 sessions) and average Sharpe 12/6/3/1M"
+    ),
+    "nse_momentum": (
+        "NSE's NIFTY200 Momentum 30 score and eligibility on NIFTY 200: 0.5 Z12 + 0.5 Z6 of the "
+        "6M and 12M momentum ratios, F&O names with a year of history. Score and eligibility "
+        "only: free-float market-cap weights, the 5% stock cap and the 15/45 rank buffer are "
+        "index construction and are not applied, so this is not the index"
+    ),
+    "desk_sequential": (
+        "Sequential: desk score, then the lower ATR extension from the 20-day MA. C7's third "
+        "tie-break, median traded value (median_vol_12m), is not a registry factor, so it is "
+        "not applied"
+    ),
 }

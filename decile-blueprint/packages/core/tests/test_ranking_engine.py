@@ -30,6 +30,7 @@ from baskfy_core.ranking_engine import (
     family_shares,
     percentile,
     rank_frame,
+    rank_history,
     target_distance,
     target_score,
     transform,
@@ -720,6 +721,8 @@ def _explain_frame() -> pd.DataFrame:
             "desk_score": 68.0,
             "desk_score_rank": 3,
             "desk_reject": "",
+            "desk_ext_over_20dma": 8.2,
+            "desk_score_version": "desk-score-2026.09.13",
         },
         {
             **base,
@@ -929,6 +932,74 @@ class TestExplain:
         context = ExplainContext(result=rank_frame(frame, spec), universe="nifty-500", as_of=AS_OF)
         explanation = explain(context.result.scored.iloc[0], context)
         assert "Top 20% on 1Y RETURN within sector nifty-it" in explanation.positives
+
+    def test_explain_desk_block_carries_each_grade_with_its_stored_inputs(self) -> None:
+        """C2: the desk block is the stored ``desk_score_daily`` row, grade by grade.
+
+        Ranges are ``score.score``'s clips: A 0-25, B 0-25, C 0-20, D 0-10, E 0-10, F -10..0.
+        The row stores one raw input, ``ext_over_20dma``, and the formula reads it in A (points
+        for 0-20% above the 20-DMA) and F (deduction above 18%) — so exactly those two grades
+        carry it; B-E store no inputs and claim none.
+        """
+        desk = explain_instrument(1, _explain_context()).desk
+        assert desk is not None
+        assert desk.ext_over_20dma == 8.2
+        assert desk.score_version == "desk-score-2026.09.13"
+        assert [
+            (c.grade, c.key, c.points, c.min_points, c.max_points) for c in desk.components
+        ] == [
+            ("A", "a_trend", 25.0, 0.0, 25.0),
+            ("B", "b_momentum", 12.0, 0.0, 25.0),
+            ("C", "c_sharpe", 18.0, 0.0, 20.0),
+            ("D", "d_consistency", 5.0, 0.0, 10.0),
+            ("E", "e_liquidity", 8.0, 0.0, 10.0),
+            ("F", "f_penalty", 0.0, -10.0, 0.0),
+        ]
+        inputs = {c.grade: [(i.name, i.value) for i in c.inputs] for c in desk.components}
+        assert inputs == {
+            "A": [("ext_over_20dma", 8.2)],
+            "B": [],
+            "C": [],
+            "D": [],
+            "E": [],
+            "F": [("ext_over_20dma", 8.2)],
+        }
+        json.dumps(explain_instrument(1, _explain_context()).to_dict())
+
+    def test_explain_desk_block_without_stored_inputs_reports_none(self) -> None:
+        desk = explain_instrument(4, _explain_context()).desk
+        assert desk is not None
+        assert desk.ext_over_20dma is None
+        assert desk.score_version is None
+        assert desk.components[0].points is None
+        assert desk.components[0].inputs[0].value is None
+
+    def test_explain_rank_history_from_the_previous_session(self) -> None:
+        """Previous 4, today 1: three places gained (rank 1 is best, change = previous - today)."""
+        base = _explain_context()
+        context = ExplainContext(
+            result=base.result,
+            universe=base.universe,
+            as_of=AS_OF,
+            previous_as_of=AS_OF - dt.timedelta(days=1),
+            previous_rank=4,
+        )
+        history = explain_instrument(1, context).rank_history
+        assert (history.today, history.previous, history.change) == (1, 4, 3)
+        assert history.previous_as_of == "2026-09-10"
+
+    def test_explain_rank_history_without_a_previous_rank(self) -> None:
+        history = explain_instrument(1, _explain_context()).rank_history
+        assert (history.today, history.previous, history.previous_as_of, history.change) == (
+            1,
+            None,
+            None,
+            None,
+        )
+        # Ranked yesterday but not today: no change is claimed either.
+        unranked = rank_history(None, 7, AS_OF)
+        assert (unranked.previous, unranked.change) == (7, None)
+        assert rank_history(5, 2, AS_OF).change == -3
 
     def test_explain_an_unknown_instrument(self) -> None:
         with pytest.raises(KeyError):

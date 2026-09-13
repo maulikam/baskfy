@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from baskfy_api.seed import seed_reference, seed_trading_days
+from baskfy_worker.tasks.purge_accounts import TOMBSTONE_DOMAIN
 
 API_DIR = Path(__file__).resolve().parents[2] / "api"
 
@@ -109,10 +110,20 @@ async def clean_db(engine: AsyncEngine) -> AsyncIterator[None]:
         # dependent tables go first: Prompt 15's backtest suite leaves a `screen` and a
         # `backtest` row behind, and both carry a NOT NULL `user_id` that would make the account
         # delete a foreign-key violation.
-        owned = "SELECT id FROM app_user WHERE email LIKE '%@example.com'"
+        #
+        # A purged account that had paid is *anonymised*, not deleted: its address becomes
+        # ``<public_id>@deleted.invalid`` and its invoice row is kept (Prompt 12 §5). Matching
+        # only ``@example.com`` therefore left that tombstone and its `payment` behind, and the
+        # next run's `test_it_keeps_the_invoice_trail_but_unlinks_it` collided on the public id.
+        # The invoice goes first because `payment.user_id` does not cascade.
+        owned = (
+            "SELECT id FROM app_user WHERE email LIKE '%@example.com' "
+            f"OR email LIKE '%@{TOMBSTONE_DOMAIN}'"
+        )
+        await connection.execute(text(f"DELETE FROM payment WHERE user_id IN ({owned})"))
         await connection.execute(text(f"DELETE FROM backtest WHERE user_id IN ({owned})"))
         await connection.execute(text(f"DELETE FROM screen WHERE user_id IN ({owned})"))
-        await connection.execute(text("DELETE FROM app_user WHERE email LIKE '%@example.com'"))
+        await connection.execute(text(f"DELETE FROM app_user WHERE id IN ({owned})"))
     maker = async_sessionmaker(engine)
     async with maker() as seeding, seeding.begin():
         await seed_reference(seeding)

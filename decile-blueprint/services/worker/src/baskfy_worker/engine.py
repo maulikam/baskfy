@@ -19,11 +19,13 @@ an ATH lower than the real one on any instrument whose peak predates the lookbac
 from __future__ import annotations
 
 import datetime as dt
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Final
 
 import polars as pl
 from sqlalchemy import func, select
+from sqlalchemy.engine import Row
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_core.factors import DEFAULT_FACTOR_CONFIG, FactorConfig, FactorResult
@@ -37,6 +39,9 @@ from baskfy_core.models import (
     TradingDay,
 )
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
+
+#: Rows fetched per round trip when the bar history is streamed.
+STREAM_PARTITION: Final = 50_000
 
 #: The longest lookback any factor needs, in bars: a 1-year window (247 + 1) plus enough history
 #: to seed a 247-period Wilder RSI (docs/05 §5) and settle its smoothing.
@@ -72,7 +77,10 @@ async def load_history(
     """Read everything ``baskfy_core.factors`` needs for one as-of date."""
     start = as_of - dt.timedelta(days=lookback_days)
 
-    rows = await session.execute(
+    # Streamed, STREAM_PARTITION rows at a time, and typed column by column. Materialising the
+    # ~2-3 M bars of a 3-year window as driver rows (Decimals, ~1 KB each) plus a dict per row held
+    # several GB at once on the production box; only the typed columns need to accumulate.
+    result = await session.stream(
         select(
             OhlcvDaily.instrument_id,
             OhlcvDaily.date,
@@ -89,32 +97,10 @@ async def load_history(
         .join(Instrument, Instrument.id == OhlcvDaily.instrument_id)
         .where(OhlcvDaily.date >= start, OhlcvDaily.date <= as_of)
         .order_by(OhlcvDaily.instrument_id, OhlcvDaily.date)
+        .execution_options(yield_per=STREAM_PARTITION)
     )
-    records = rows.all()
-    bars = (
-        pl.DataFrame(
-            [
-                {
-                    "instrument_id": r[0],
-                    "date": r[1],
-                    "close": float(r[2]) if r[2] is not None else None,
-                    "close_raw": float(r[3]) if r[3] is not None else None,
-                    "high": float(r[4]) if r[4] is not None else None,
-                    "low": float(r[5]) if r[5] is not None else None,
-                    "volume_raw": float(r[6]) if r[6] is not None else None,
-                    "turnover": float(r[7]) if r[7] is not None else None,
-                    "upper_circuit": float(r[8]) if r[8] is not None else None,
-                    "lower_circuit": float(r[9]) if r[9] is not None else None,
-                    "series": r[10],
-                }
-                for r in records
-            ],
-            schema=BAR_SCHEMA,
-            strict=False,
-        )
-        if records
-        else _empty_bars()
-    )
+    frames = [_bar_frame(rows) async for rows in result.partitions(STREAM_PARTITION)]
+    bars = pl.concat(frames) if frames else _empty_bars()
 
     calendar = await session.execute(
         select(TradingDay.date)
@@ -205,6 +191,39 @@ BAR_SCHEMA: Final[dict[str, pl.DataType]] = {
 
 def _empty_bars() -> pl.DataFrame:
     return pl.DataFrame(schema=BAR_SCHEMA)
+
+
+def _optional_float(value: object) -> float | None:
+    return float(str(value)) if value is not None else None
+
+
+def _bar_frame(rows: Sequence[Row[tuple[object, ...]]]) -> pl.DataFrame:
+    """One streamed partition of ``load_history``'s query as typed columns (``BAR_SCHEMA``)."""
+    return pl.DataFrame(
+        {
+            "instrument_id": [r[0] for r in rows],
+            "date": [r[1] for r in rows],
+            **{
+                name: [_optional_float(r[index]) for r in rows]
+                for index, name in enumerate(
+                    (
+                        "close",
+                        "close_raw",
+                        "high",
+                        "low",
+                        "volume_raw",
+                        "turnover",
+                        "upper_circuit",
+                        "lower_circuit",
+                    ),
+                    start=2,
+                )
+            },
+            "series": [r[10] for r in rows],
+        },
+        schema=BAR_SCHEMA,
+        strict=False,
+    )
 
 
 class PolarsFactorEngine:

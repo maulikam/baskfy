@@ -36,7 +36,7 @@ export function hasDeskExplainColumns(columns: readonly string[]): boolean {
   return columns.includes("desk_a_trend") || columns.includes("desk_eligible");
 }
 
-export function isDeskExplainKey(key: string): boolean {
+export function isDeskExplainKey(key: string): key is DeskExplainKey {
   return (DESK_EXPLAIN_KEYS as readonly string[]).includes(key);
 }
 
@@ -47,10 +47,12 @@ function num(row: Record<string, unknown>, key: string): number | null {
 
 export interface DeskScoreBreakdownProps {
   row: Record<string, unknown>;
+  /** Optional line under a grade — the explanation's stored inputs and range for that grade. */
+  details?: Partial<Record<DeskExplainKey, string>> | undefined;
   className?: string;
 }
 
-export function DeskScoreBreakdown({ row, className }: DeskScoreBreakdownProps) {
+export function DeskScoreBreakdown({ row, details, className }: DeskScoreBreakdownProps) {
   const reject = typeof row.desk_reject === "string" ? row.desk_reject : "";
   const eligible = row.desk_eligible === true || (row.desk_eligible !== false && reject === "");
 
@@ -74,12 +76,21 @@ export function DeskScoreBreakdown({ row, className }: DeskScoreBreakdownProps) 
       <dl className="grid grid-cols-2 gap-x-3 gap-y-2">
         {PARTS.map(({ key, label }) => {
           const value = num(row, key);
+          const detail = details?.[key];
           return (
-            <div key={key} className="flex items-baseline justify-between gap-2">
+            <div key={key} className="flex flex-wrap items-baseline justify-between gap-x-2">
               <dt className="text-xs text-muted-foreground">{label}</dt>
               <dd className="text-sm tabular-nums" data-testid={key}>
                 {value === null ? "—" : formatNumber(value, { decimals: 1 })}
               </dd>
+              {detail ? (
+                <dd
+                  className="basis-full text-xs text-muted-foreground"
+                  data-testid={`${key}-inputs`}
+                >
+                  {detail}
+                </dd>
+              ) : null}
             </div>
           );
         })}

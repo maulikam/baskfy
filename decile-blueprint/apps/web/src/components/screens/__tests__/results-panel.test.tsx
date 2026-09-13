@@ -6,9 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ColumnMeta } from "@/components/screens/result-columns";
 import { ResultsPanel } from "@/components/screens/results-panel";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import type * as LiveMarks from "@/lib/screens/live-marks";
 
 vi.mock("@/lib/screens/live-marks", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/screens/live-marks")>();
+  const actual = await importOriginal<typeof LiveMarks>();
   return {
     ...actual,
     useLiveMarks: () => ({ liveOverlay: false, marks: {} }),

@@ -3904,6 +3904,13 @@
             ],
             "title": "C Sharpe"
           },
+          "components": {
+            "items": {
+              "$ref": "#/components/schemas/DeskComponentOut"
+            },
+            "title": "Components",
+            "type": "array"
+          },
           "d_consistency": {
             "anyOf": [
               {
@@ -3929,6 +3936,17 @@
           "eligible": {
             "title": "Eligible",
             "type": "boolean"
+          },
+          "ext_over_20dma": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ext Over 20Dma"
           },
           "f_penalty": {
             "anyOf": [
@@ -3966,6 +3984,17 @@
               }
             ],
             "title": "Score"
+          },
+          "score_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score Version"
           }
         },
         "required": [
@@ -3978,9 +4007,67 @@
           "e_liquidity",
           "f_penalty",
           "reject",
-          "eligible"
+          "eligible",
+          "ext_over_20dma",
+          "score_version",
+          "components"
         ],
         "title": "DeskBlockOut",
+        "type": "object"
+      },
+      "DeskComponentOut": {
+        "additionalProperties": false,
+        "description": "``ranking_engine.DeskComponent``: one A-F grade, its clip range and its stored inputs.",
+        "properties": {
+          "grade": {
+            "title": "Grade",
+            "type": "string"
+          },
+          "inputs": {
+            "items": {
+              "$ref": "#/components/schemas/DeskInputOut"
+            },
+            "title": "Inputs",
+            "type": "array"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "max_points": {
+            "title": "Max Points",
+            "type": "number"
+          },
+          "min_points": {
+            "title": "Min Points",
+            "type": "number"
+          },
+          "points": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Points"
+          }
+        },
+        "required": [
+          "grade",
+          "key",
+          "label",
+          "points",
+          "min_points",
+          "max_points",
+          "inputs"
+        ],
+        "title": "DeskComponentOut",
         "type": "object"
       },
       "DeskHoldingOut": {
@@ -4065,6 +4152,38 @@
           "quantity"
         ],
         "title": "DeskHoldingOut",
+        "type": "object"
+      },
+      "DeskInputOut": {
+        "additionalProperties": false,
+        "description": "``ranking_engine.DeskInput``: one stored raw value a grade was computed from.",
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "name",
+          "label",
+          "value"
+        ],
+        "title": "DeskInputOut",
         "type": "object"
       },
       "DeskTradeOut": {
@@ -5050,6 +5169,65 @@
         ],
         "title": "ExitReason",
         "type": "string"
+      },
+      "ExplainRankHistoryOut": {
+        "additionalProperties": false,
+        "description": "``ranking_engine.RankHistory``: today's rank beside the previous session's run.\n\n``previous`` is ``null`` when the name was not ranked on ``previous_as_of``; ``change`` is\n``previous - today`` (positive = places gained) and ``null`` unless both ranks exist.",
+        "properties": {
+          "change": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change"
+          },
+          "previous": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous"
+          },
+          "previous_as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous As Of"
+          },
+          "today": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Today"
+          }
+        },
+        "required": [
+          "today",
+          "previous",
+          "previous_as_of",
+          "change"
+        ],
+        "title": "ExplainRankHistoryOut",
+        "type": "object"
       },
       "ExportLinkOut": {
         "additionalProperties": false,
@@ -11237,6 +11415,9 @@
             ],
             "title": "Rank"
           },
+          "rank_history": {
+            "$ref": "#/components/schemas/ExplainRankHistoryOut"
+          },
           "symbol": {
             "anyOf": [
               {
@@ -11280,7 +11461,8 @@
           "eligibility",
           "data_quality",
           "desk",
-          "provenance"
+          "provenance",
+          "rank_history"
         ],
         "title": "RankExplanationOut",
         "type": "object"
@@ -11503,7 +11685,7 @@
       },
       "RankingPresetOut": {
         "additionalProperties": false,
-        "description": "One named ranking preset — ``baskfy_core.ranking_presets`` (docs/ranking/PLAN.md §1.5).\n\n``patch`` is merged into a ``ScreenDefinition`` payload to apply the preset; ``status`` is\n``ready`` (safe as Sort By today) or ``research`` (a starting point, not a product default).",
+        "description": "One named ranking preset — ``baskfy_core.ranking_presets`` (docs/ranking/PLAN.md C6/C7).\n\n``patch`` is merged into a ``ScreenDefinition`` payload to apply the preset; ``status`` is\n``ready`` (every factor it ranks by passed validation) or ``research`` (a starting point, not\na product default). ``label`` is the display name; ``nse_momentum``'s is C7's exact wording.",
         "properties": {
           "description": {
             "title": "Description",
@@ -11511,6 +11693,10 @@
           },
           "key": {
             "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
             "type": "string"
           },
           "patch": {
@@ -11531,6 +11717,7 @@
         },
         "required": [
           "key",
+          "label",
           "description",
           "status",
           "sort_by",
@@ -14413,7 +14600,7 @@
             "title": "Max Per Sector"
           },
           "retention_rank": {
-            "default": 30,
+            "default": 60,
             "minimum": 1.0,
             "title": "Retention Rank",
             "type": "integer"
@@ -37471,7 +37658,7 @@
     },
     "/api/v1/meta/ranking-presets": {
       "get": {
-        "description": "docs/ranking/PLAN.md §1.5 / C6: the named presets with their promotion status.\n\nReference data like ``/meta/factors``: served straight from ``baskfy_core.ranking_presets``,\nno database, no principal. ``nse_momentum`` is absent because core refuses it (PLAN\ncorrection #8). ``patch`` is what the editor merges into a definition to apply one.",
+        "description": "docs/ranking/PLAN.md C6 / C7: the named presets with their promotion status.\n\nReference data like ``/meta/factors``: served straight from ``baskfy_core.ranking_presets``,\nno database, no principal. ``patch`` is what the editor merges into a definition to apply one.",
         "operationId": "getRankingPresets",
         "responses": {
           "200": {

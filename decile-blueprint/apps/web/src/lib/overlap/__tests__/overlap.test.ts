@@ -198,7 +198,7 @@ describe("membership across strategies and a screen", () => {
     expect(filterMembershipRows(result.rows, "three", ["exmpl0000001"])).toEqual([]);
   });
 
-  it("treats 'on a screen' as any of the selected screens", () => {
+  it("treats 'on a screen' as membership in at least one selected screen", () => {
     const result = membershipOf([
       set("vbt", ["TCS"]),
       { key: "exmpl0000001", label: "Investing 001", symbols: ["TCS"] },

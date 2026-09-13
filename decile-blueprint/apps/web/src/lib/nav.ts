@@ -305,9 +305,9 @@ export type SectionTab = { readonly href: Route; readonly label: string };
 
 /** Vocabulary titles for VBT / TWT are too long for the tab row; keep these short. */
 const STAFF_BUILD_TABS: readonly SectionTab[] = [
-  { href: "/swing" as Route, label: "Swing" },
-  { href: "/vbt" as Route, label: "Volume" },
-  { href: "/twt" as Route, label: "Tight" },
+  { href: "/swing", label: "Swing" },
+  { href: "/vbt", label: "Volume" },
+  { href: "/twt", label: "Tight" },
 ];
 
 /** The three operator sleeves that live under Build for staff. */

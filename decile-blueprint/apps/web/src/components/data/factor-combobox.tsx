@@ -4,6 +4,7 @@ import type { FactorOut } from "@baskfy/api-client";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -15,6 +16,7 @@ import {
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { columnDisplayLabel, columnDisplayTooltip } from "@/lib/screens/column-display";
+import { validationStatusBadge } from "@/lib/screens/presets";
 import { cn } from "@/lib/utils";
 
 /**
@@ -109,12 +111,33 @@ export function FactorList({
                   {columnDisplayLabel(factor.key, factor.label)}
                   <span className="sr-only"> {factor.label}</span>
                 </span>
+                <ValidationBadge factorKey={factor.key} status={factor.validation_status} />
               </CommandItem>
             ))}
           </CommandGroup>
         ))}
       </CommandList>
     </Command>
+  );
+}
+
+/**
+ * The registry's `validation_status` for one factor (docs/ranking/PLAN.md C1, gates G5): whether
+ * it has passed out-of-sample testing, is still being tested, failed, or predates the tests.
+ * Nothing is drawn when the registry sends no status.
+ */
+function ValidationBadge({ factorKey, status }: { factorKey: string; status: string | undefined }) {
+  const badge = validationStatusBadge(status);
+  if (!badge) return null;
+  return (
+    <Badge
+      variant={badge.tone}
+      title={badge.note}
+      className="ml-auto shrink-0"
+      data-testid={`factor-validation-${factorKey}`}
+    >
+      {badge.label}
+    </Badge>
   );
 }
 

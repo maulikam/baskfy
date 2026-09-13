@@ -33,6 +33,24 @@ export const REGIME_VALUES = ["BULL", "NEUTRAL", "BEAR"] as const;
 // EQ/BE are the main board; SM/ST/SZ the NSE Emerge (SME) platform (M59).
 export const SERIES_VALUES = ["EQ", "BE", "SM", "ST", "SZ"] as const;
 
+/**
+ * docs/ranking/PLAN.md correction 1 — registry factors with `rankable=False`. A ranking term
+ * refuses them; they belong in `factor_ranges`. Mirrors `NON_RANKABLE_FACTORS` in
+ * packages/core/src/baskfy_core/screen_definition.py (registry order), and
+ * packages/core/tests/test_screen_definition_parity.py fails if the two drift.
+ */
+export const NON_RANKABLE_FACTORS = [
+  "atr_14",
+  "excess_ret_3m",
+  "excess_ret_6m",
+  "excess_ret_12m",
+  "mom_pctile",
+  "nse_mr6",
+  "nse_mr12",
+] as const;
+
+const NON_RANKABLE: ReadonlySet<string> = new Set(NON_RANKABLE_FACTORS);
+
 /** docs/01 §2.1 — the 15 selectable universes. Mirrors baskfy_core.universes.UNIVERSE_SLUGS. */
 export const UNIVERSE_SLUGS = [
   "nifty-50",
@@ -192,8 +210,9 @@ export const CustomFilterSchema = z.strictObject({
 });
 
 /**
- * One explicit ranking term (docs/ranking/PLAN.md C3). Registry rules — the factor exists and is
- * rankable — are enforced server-side against GET /meta/factors, exactly like sort_by.
+ * One explicit ranking term (docs/ranking/PLAN.md C3). Whether the factor exists is enforced
+ * server-side against GET /meta/factors, exactly like sort_by; a filter-only factor
+ * (`NON_RANKABLE_FACTORS`) is refused here too, as the server refuses it.
  */
 export const RankingTermSchema = z
   .strictObject({
@@ -204,6 +223,14 @@ export const RankingTermSchema = z
     target_max: z.number().nullable().default(null),
   })
   .superRefine((value, ctx) => {
+    if (NON_RANKABLE.has(value.factor)) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          `ranking_terms.factor: '${value.factor}' cannot rank a list; it is a filter-only factor. ` +
+          "Use it in factor_ranges as an eligibility filter instead",
+      });
+    }
     const hasBound = value.target_min !== null || value.target_max !== null;
     if (value.preference === "target_range") {
       if (!hasBound) {

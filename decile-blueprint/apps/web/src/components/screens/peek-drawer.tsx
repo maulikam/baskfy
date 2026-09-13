@@ -1,5 +1,6 @@
 "use client";
 
+import type { ScreenDefinition } from "@baskfy/api-client";
 import Link from "next/link";
 import { ArrowUpRight, ChevronDown, X } from "lucide-react";
 import { useState } from "react";
@@ -14,6 +15,7 @@ import {
   hasDeskExplainColumns,
   isDeskExplainKey,
 } from "@/components/screens/desk-score-breakdown";
+import { RankExplanation } from "@/components/screens/rank-explanation";
 import type { ColumnMeta, ResultRow } from "@/components/screens/result-columns";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogDescription, DialogTitle } from "@/components/ui/dialog";
@@ -27,7 +29,7 @@ import {
   formatTradeDate,
 } from "@/lib/format";
 import { columnDisplayLabel } from "@/lib/screens/column-display";
-import { useRankHistory } from "@/lib/screens/queries";
+import { hasRankingTerms, useRankHistory } from "@/lib/screens/queries";
 import { cn } from "@/lib/utils";
 
 /**
@@ -36,6 +38,10 @@ import { cn } from "@/lib/utils";
  *
  * When the result carries desk A–F columns (``sort_by=desk_score``), the peek also shows the
  * book's breakdown. With a saved ``screenPublicId``, rank history is read from ``screen_run``.
+ *
+ * A screen with ``ranking_terms`` shows the ranking engine's own account of the row instead —
+ * ``POST /screens/explain`` (gates/ranking-2.H-web.md G4). Every other screen keeps the peek above;
+ * the API refuses to explain a definition without terms.
  *
  * No 1-year chart: preview rows have no history series. Fetching
  * GET /instruments/{symbol}/history per peek would N+1 the history endpoint.
@@ -49,6 +55,11 @@ export interface PeekDrawerProps {
   onClose: () => void;
   /** Saved screen id — enables rank history from ``screen_run``. Absent on unsaved previews. */
   screenPublicId?: string | undefined;
+  /** The definition that produced the rows. With ``ranking_terms`` the peek explains the rank. */
+  definition?: ScreenDefinition | undefined;
+  /** The run's date and data version, so the explanation describes the rows on screen. */
+  asOf?: string | undefined;
+  dataVersion?: number | undefined;
 }
 
 function display(value: unknown, unit: string): string {
@@ -121,6 +132,9 @@ export function PeekDrawer({
   sortingFactorLabel,
   onClose,
   screenPublicId,
+  definition,
+  asOf,
+  dataVersion,
 }: PeekDrawerProps) {
   const symbol = typeof row?.symbol === "string" ? row.symbol : "";
   const name = typeof row?.name === "string" ? row.name : "";
@@ -137,7 +151,9 @@ export function PeekDrawer({
   const vol = num(row, "vol_12m");
   const volLabel = vol !== null ? formatFraction(vol) : null;
   const scoreLabel = sortingFactorLabel || columnDisplayLabel("sorting_factor", "Consistency score");
-  const showDesk = row !== null && hasDeskExplainColumns(columns);
+  const ranked = definition !== undefined && hasRankingTerms(definition);
+  // A ranked screen's explanation carries the stored desk block itself; one breakdown, not two.
+  const showDesk = !ranked && row !== null && hasDeskExplainColumns(columns);
 
   const numberKeys = columns.filter(
     (key, index) =>
@@ -235,7 +251,15 @@ export function PeekDrawer({
 
           {showDesk && row ? <DeskScoreBreakdown row={row} /> : null}
 
-          {symbol && screenPublicId ? (
+          {ranked && definition && symbol ? (
+            <RankExplanation
+              definition={definition}
+              symbol={symbol}
+              asOf={asOf}
+              dataVersion={dataVersion}
+              screenPublicId={screenPublicId}
+            />
+          ) : symbol && screenPublicId ? (
             <RankHistoryStrip symbol={symbol} screenPublicId={screenPublicId} />
           ) : null}
 

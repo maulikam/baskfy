@@ -35,6 +35,35 @@ export type ScreenRunResponse = Schemas["ScreenRunResponse"];
 /** docs/ranking/PLAN.md C6: what produced a screen payload (engine, desk formula, scope, mode). */
 export type ScreenProvenanceOut = Schemas["ScreenProvenanceOut"];
 export type ScreenRunRowOut = Schemas["ScreenRunRowOut"];
+/**
+ * docs/ranking/PLAN.md C6: `POST /screens/explain` — why one row ranks where it does. Core's
+ * `ranking_engine.RankExplanation` field for field, plus `as_of` / `data_version`.
+ */
+export type ScreenExplainRequest = Schemas["ScreenExplainRequest"];
+export type RankExplanationOut = Schemas["RankExplanationOut"];
+export type RankTermOut = Schemas["RankTermOut"];
+export type EligibilityOut = Schemas["EligibilityOut"];
+export type EligibilityFailureOut = Schemas["EligibilityFailureOut"];
+export type DataQualityOut = Schemas["DataQualityOut"];
+export type DeskBlockOut = Schemas["DeskBlockOut"];
+export type DeskComponentOut = Schemas["DeskComponentOut"];
+export type DeskInputOut = Schemas["DeskInputOut"];
+export type ExplainRankHistoryOut = Schemas["ExplainRankHistoryOut"];
+export type RankProvenanceOut = Schemas["RankProvenanceOut"];
+/**
+ * docs/ranking/PLAN.md C5/C6: `POST /screens/selection` — portfolio fit over a ranked screen.
+ * Informational only: the response carries no plan id and no route takes it to an order.
+ */
+export type ScreenSelectionRequest = Schemas["ScreenSelectionRequest"];
+export type ScreenSelectionOut = Schemas["ScreenSelectionOut"];
+export type SelectionConstraintsIn = Schemas["SelectionConstraintsIn"];
+export type SelectionConstraintsOut = Schemas["SelectionConstraintsOut"];
+export type SelectionHoldingIn = Schemas["SelectionHoldingIn"];
+export type SelectionNoteOut = Schemas["SelectionNoteOut"];
+export type SelectionRowOut = Schemas["SelectionRowOut"];
+export type SelectionSummaryOut = Schemas["SelectionSummaryOut"];
+/** C1's promotion state of a registry factor: legacy / research / validated / rejected. */
+export type ValidationStatus = Schemas["ValidationStatus"];
 export type ScreenRunPage = Schemas["ScreenRunPage"];
 export type ProblemOut = Schemas["ProblemOut"];
 

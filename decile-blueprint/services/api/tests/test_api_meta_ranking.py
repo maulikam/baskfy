@@ -14,6 +14,7 @@ from baskfy_api.routers.meta import get_factors, get_ranking_presets
 from baskfy_core.factor_registry import FACTORS, SORT_FACTOR_KEYS, ValidationStatus, WeightFamily
 from baskfy_core.ranking import FactorPreference
 from baskfy_core.ranking_presets import PRESET_SPECS
+from baskfy_core.screen_definition import ScreenDefinition
 
 RANKING_FIELDS = ("preference", "rankable", "weight_family", "validation_status", "definition")
 
@@ -57,14 +58,42 @@ class TestRankingPresets:
         assert [row.key for row in rows] == list(PRESET_SPECS)
         for row in rows:
             spec = PRESET_SPECS[row.key]
+            assert row.label == spec.label
             assert row.status == spec.status
             assert row.description == spec.description
             assert row.patch == spec.patch
             assert row.sort_by == spec.patch["sort_by"]
 
-    async def test_nse_momentum_is_never_offered(self) -> None:
-        """PLAN correction #8."""
-        assert "nse_momentum" not in {row.key for row in await get_ranking_presets()}
+    async def test_it_serves_c7s_seven_presets(self) -> None:
+        """PLAN C7, including ``nse_momentum`` now that its score and eligibility exist."""
+        assert [row.key for row in await get_ranking_presets()] == [
+            "desk_quality",
+            "path_quality",
+            "trend_structure",
+            "participation",
+            "leadership",
+            "nse_momentum",
+            "desk_sequential",
+        ]
+
+    async def test_nse_momentum_carries_c7s_label_and_universe(self) -> None:
+        """PLAN correction 8: the NSE label only with NSE's universe."""
+        row = next(r for r in await get_ranking_presets() if r.key == "nse_momentum")
+        assert row.label == "NIFTY200 Momentum 30 score (NSE methodology)"
+        assert row.patch["index"] == "nifty-200"
+        assert row.sort_by == "nse_momentum_score"
+
+    async def test_every_served_patch_is_a_valid_definition_over_the_default(self) -> None:
+        for row in await get_ranking_presets():
+            ScreenDefinition.model_validate(
+                {"index": "nifty-500", "sort_by": "ret_12m", **row.patch}
+            )
+
+    def test_the_contract_requires_label(self) -> None:
+        """C6: ``[{key, label, description, status, patch}]``."""
+        required = _schema("RankingPresetOut")["required"]
+        assert isinstance(required, list)
+        assert {"key", "label", "description", "status", "patch"} <= set(required)
 
     def test_the_route_is_documented_without_a_security_requirement(self) -> None:
         """Static reference data, like ``/meta/factors``: no principal, so no auth refusal."""

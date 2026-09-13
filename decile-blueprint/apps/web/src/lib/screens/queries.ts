@@ -3,10 +3,14 @@
 import type {
   ColumnOut,
   FactorOut,
+  RankExplanationOut,
   RankHistoryOut,
+  RankingPresetOut,
   ScreenDefinition,
   ScreenOut,
   ScreenRunResponse,
+  ScreenSelectionOut,
+  ScreenSelectionRequest,
   TradingDaysOut,
   UniverseOut,
 } from "@baskfy/api-client";
@@ -257,6 +261,80 @@ export function useRankHistory(symbol: string | null, screenPublicId: string | u
         },
       );
       if (!data) throw ApiError.from(error, "Rank history could not be loaded.");
+      return data;
+    },
+  });
+}
+
+export interface RankExplanationInput {
+  definition: ScreenDefinition;
+  symbol: string | null;
+  /** The run's own date and data version, so the explanation describes the rows on screen. */
+  asOf?: string | undefined;
+  dataVersion?: number | undefined;
+}
+
+/** A ranked screen is one with ranking terms; `/screens/explain` refuses any other definition. */
+export function hasRankingTerms(definition: ScreenDefinition | undefined): boolean {
+  return (definition?.ranking_terms.length ?? 0) > 0;
+}
+
+/**
+ * docs/ranking/PLAN.md C6: `POST /screens/explain` — why one stock ranks where it does.
+ *
+ * Only enabled for a definition with `ranking_terms` and an open peek symbol: the API refuses a
+ * definition without terms, because docs/06's SQL ranking has no term scores to explain. The
+ * run's `as_of` and `data_version` are passed through so the drawer and the table read the same
+ * run (a newer data version is a 409, not a silently different answer).
+ */
+export function useRankExplanation({ definition, symbol, asOf, dataVersion }: RankExplanationInput) {
+  return useQuery({
+    queryKey: ["screens", "explain", definition, symbol, asOf, dataVersion] as const,
+    enabled: Boolean(symbol) && hasRankingTerms(definition),
+    staleTime: 60_000,
+    queryFn: async (): Promise<RankExplanationOut> => {
+      const { data, error } = await browserApi().POST("/api/v1/screens/explain", {
+        body: {
+          definition,
+          symbol: symbol as string,
+          ...(asOf === undefined ? {} : { as_of: asOf }),
+          ...(dataVersion === undefined ? {} : { data_version: dataVersion }),
+        },
+      });
+      if (!data) throw ApiError.from(error, "The ranking explanation could not be loaded.");
+      return data;
+    },
+  });
+}
+
+/**
+ * docs/ranking/PLAN.md §1.5 / C6: `GET /meta/ranking-presets` — the named presets with their
+ * promotion status. Reference data served straight from core, so it is cached like the registry.
+ */
+export function useRankingPresets() {
+  return useQuery({
+    queryKey: ["meta", "ranking-presets"],
+    ...IMMUTABLE,
+    queryFn: async (): Promise<RankingPresetOut[]> => {
+      const { data, error } = await browserApi().GET("/api/v1/meta/ranking-presets");
+      if (!data) throw ApiError.from(error, "Could not load the ranking presets.");
+      return data;
+    },
+  });
+}
+
+/**
+ * docs/ranking/PLAN.md C5/C6: `POST /screens/selection` — how a portfolio fits a ranked screen.
+ *
+ * **Informational only.** A mutation only because it is a POST the user asks for with a button;
+ * it writes nothing, returns no plan id, and no route accepts its answer. It never touches the
+ * screen's own results, so the quality ranking on the page is not reordered by it.
+ */
+export function usePortfolioFit() {
+  return useMutation({
+    mutationFn: async (body: ScreenSelectionRequest): Promise<ScreenSelectionOut> => {
+      const { data, error } = await browserApi().POST("/api/v1/screens/selection", { body });
+      if (!data) throw ApiError.from(error, "Portfolio fit could not be checked.");
       return data;
     },
   });

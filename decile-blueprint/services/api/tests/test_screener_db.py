@@ -153,7 +153,8 @@ def _row_values(i: int) -> dict[str, object]:
         values[f"ma_{length}"] = Decimal(100 - length // 10) + Decimal(i) / 2
     # docs/ranking/PLAN.md C1: the stored ranking factors (migration 0046), one step a row.
     for factor in FACTORS.values():
-        if factor.validation_status is ValidationStatus.RESEARCH and factor.is_stored:
+        # Phase-2 = not legacy: C8 moved some to validated/rejected (docs/ranking/VALIDATION.md).
+        if factor.validation_status is not ValidationStatus.LEGACY and factor.is_stored:
             column_type = FactorDaily.__table__.c[factor.key].type
             values[factor.key] = i + 1 if isinstance(column_type, SmallInteger) else Decimal(i + 1)
     return values

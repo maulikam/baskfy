@@ -43,18 +43,27 @@ from baskfy_core.seed_data import NSE_EXCHANGE_ID
 #: 3 calendar years is comfortably above that and keeps a backfill's per-date read bounded.
 DEFAULT_LOOKBACK_DAYS: Final = 365 * 3
 
-#: docs/05 §6 — beta is measured against NIFTY 50.
+#: docs/05 §6 — beta is measured against NIFTY 50. docs/ranking/PLAN.md C1 reuses it for
+#: ``resid_ret_12m``, because a residual must subtract the return of the index its beta was
+#: estimated on (DECISIONS-MERGE "Ranking 2.A" 2A.1).
 BENCHMARK_SLUG: Final = "nifty-50"
+
+#: docs/ranking/PLAN.md C1 — "the market" for ``excess_ret_3m/6m/12m`` and ``rs_persist_126``.
+MARKET_BENCHMARK_SLUG: Final = "nifty-500"
 
 
 @dataclass(frozen=True, slots=True)
 class LoadedHistory:
     bars: pl.DataFrame
+    #: NIFTY 50 as ``(date, close)``: beta's series, and ``resid_ret_12m``'s.
     benchmark: pl.DataFrame
     trading_days: list[dt.date]
     #: Running all-time high per instrument as at ``as_of``, from the full history rather than
     #: the truncated lookback.
     all_time_highs: dict[int, float]
+    #: NIFTY 500 as ``(date, level)``, for the C1 benchmark-relative columns. Empty when
+    #: ``index_snapshot_daily`` holds no NIFTY 500 levels, and then those columns are NULL.
+    market_benchmark: pl.DataFrame
 
 
 async def load_history(
@@ -119,25 +128,13 @@ async def load_history(
     )
     trading_days = [row[0] for row in calendar]
 
-    benchmark_rows = await session.execute(
-        select(IndexSnapshotDaily.date, IndexSnapshotDaily.level)
-        .join(IndexDef, IndexDef.id == IndexSnapshotDaily.index_id)
-        .where(
-            IndexDef.slug == BENCHMARK_SLUG,
-            IndexSnapshotDaily.date >= start,
-            IndexSnapshotDaily.date <= as_of,
-            IndexSnapshotDaily.level.is_not(None),
-        )
-        .order_by(IndexSnapshotDaily.date)
-    )
-    benchmark_records = benchmark_rows.all()
-    benchmark = (
-        pl.DataFrame(
-            [{"date": r[0], "close": float(r[1])} for r in benchmark_records], strict=False
-        )
-        if benchmark_records
-        else pl.DataFrame(schema={"date": pl.Date(), "close": pl.Float64()})
-    )
+    # Beta has always been handed NIFTY 50 without its NULL-level days, and is left exactly so:
+    # changing what beta reads would move a pre-Phase-2 column.
+    nifty_50 = await load_index_levels(session, BENCHMARK_SLUG, start, as_of)
+    benchmark = nifty_50.filter(pl.col("level").is_not_null()).rename({"level": "close"})
+    # C1 keeps NULL levels: `benchmark_levels` needs a missing day to make that day's return NULL
+    # rather than stretch the next return across two sessions.
+    market_benchmark = await load_index_levels(session, MARKET_BENCHMARK_SLUG, start, as_of)
 
     # The true all-time high, from the whole table rather than the lookback.
     ath_rows = await session.execute(
@@ -147,7 +144,36 @@ async def load_history(
     )
     all_time_highs = {row[0]: float(row[1]) for row in ath_rows.tuples() if row[1] is not None}
 
-    return LoadedHistory(bars, benchmark, trading_days, all_time_highs)
+    return LoadedHistory(
+        bars=bars,
+        benchmark=benchmark,
+        trading_days=trading_days,
+        all_time_highs=all_time_highs,
+        market_benchmark=market_benchmark,
+    )
+
+
+async def load_index_levels(
+    session: AsyncSession, slug: str, start: dt.date, as_of: dt.date
+) -> pl.DataFrame:
+    """One index's ``index_snapshot_daily`` levels as ``(date, level)``, ascending.
+
+    Point-in-time: nothing dated after ``as_of`` is read (house rule 5).
+    """
+    rows = await session.execute(
+        select(IndexSnapshotDaily.date, IndexSnapshotDaily.level)
+        .join(IndexDef, IndexDef.id == IndexSnapshotDaily.index_id)
+        .where(
+            IndexDef.slug == slug,
+            IndexSnapshotDaily.date >= start,
+            IndexSnapshotDaily.date <= as_of,
+        )
+        .order_by(IndexSnapshotDaily.date)
+    )
+    return pl.DataFrame(
+        [{"date": r[0], "level": float(r[1]) if r[1] is not None else None} for r in rows.all()],
+        schema={"date": pl.Date(), "level": pl.Float64()},
+    )
 
 
 #: The bar frame's schema, declared once and passed explicitly.
@@ -208,6 +234,7 @@ class PolarsFactorEngine:
             history.trading_days,
             history.benchmark,
             self._config,
+            market_benchmark=history.market_benchmark,
         )
         return _apply_true_ath(result, history.all_time_highs)
 

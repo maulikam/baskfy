@@ -19,6 +19,12 @@ Usage:
     python -m baskfy_worker.factors_cli explain --symbol CUPID --date 2026-08-18 \\
         --factor sharpe_12m
     python -m baskfy_worker.factors_cli explain --symbol CUPID --date 2026-08-18 --factor all
+    python -m baskfy_worker.factors_cli backfill-ranking --from 2025-01-01 --to 2026-09-11 \\
+        [--resume] [--force]
+
+``backfill-ranking`` fills docs/ranking/PLAN.md's Phase-2 columns and ``desk_score_daily`` for
+past trading days and leaves every other ``factor_daily`` column untouched; see
+``baskfy_worker.ranking_backfill``.
 """
 
 from __future__ import annotations
@@ -26,6 +32,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import logging
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -38,8 +45,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from baskfy_core.blends import blend_sql
 from baskfy_core.factor_registry import FACTORS, Factor
 from baskfy_core.models import Instrument
-from baskfy_worker.db import run_in_session
+from baskfy_worker.db import run_checkpointed, run_in_session
 from baskfy_worker.engine import PolarsFactorEngine, load_history
+from baskfy_worker.ranking_backfill import RankingBackfillReport, render, run_backfill_ranking
 from baskfy_worker.steps import StepOutcome
 from baskfy_worker.tasks.factors import run_compute_factors
 
@@ -227,6 +235,13 @@ async def _recompute(session: AsyncSession, on: dt.date) -> int:
     return await run_compute_factors(session, outcome, on, PolarsFactorEngine())
 
 
+async def _backfill_ranking(
+    session: AsyncSession, start: dt.date, end: dt.date, *, force: bool
+) -> RankingBackfillReport:
+    """One committed transaction per trading day, so an interrupted run keeps its finished days."""
+    return await run_backfill_ranking(session, start, end, force=force, checkpoint=session.commit)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m baskfy_worker.factors_cli", description=__doc__
@@ -244,7 +259,39 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     recompute_cmd.add_argument("--date", required=True, help="ISO trade date")
 
+    backfill_cmd = subcommands.add_parser(
+        "backfill-ranking",
+        help="fill the Phase-2 factor_daily columns and desk_score_daily for past trading days",
+    )
+    backfill_cmd.add_argument("--from", dest="start", required=True, help="ISO first day")
+    backfill_cmd.add_argument("--to", dest="end", required=True, help="ISO last day, inclusive")
+    backfill_cmd.add_argument(
+        "--resume",
+        action="store_true",
+        help="skip days already complete (the default; stated for a restarted run)",
+    )
+    backfill_cmd.add_argument(
+        "--force", action="store_true", help="recompute days that are already complete"
+    )
+    backfill_cmd.add_argument("--database-url", default=None)
+
     args = parser.parse_args(argv)
+
+    if args.command == "backfill-ranking":
+        if args.resume and args.force:
+            parser.error("--resume skips complete days and --force recomputes them; pick one")
+        logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+        start = dt.date.fromisoformat(args.start)
+        end = dt.date.fromisoformat(args.end)
+        if end < start:
+            parser.error("--to is before --from")
+        report = run_checkpointed(
+            lambda session: _backfill_ranking(session, start, end, force=args.force),
+            args.database_url,
+        )
+        print(render(report))
+        return 1 if report.errors else 0
+
     on = dt.date.fromisoformat(args.date)
 
     if args.command == "recompute":

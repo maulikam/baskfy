@@ -5,7 +5,7 @@ import { CalendarClock, Columns3, Copy, Loader2, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { parseAsString, useQueryState } from "nuqs";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ErrorState } from "@/components/data/error-state";
 import { ApplyFiltersPill } from "@/components/screens/apply-filters-pill";
@@ -13,15 +13,23 @@ import { ExportButton } from "@/components/screens/export-button";
 import { FilterChipBar } from "@/components/screens/filter-chip-bar";
 import { ResultsPanel } from "@/components/screens/results-panel";
 import type { ColumnMeta } from "@/components/screens/result-columns";
+import { ScreenIdentity } from "@/components/screens/screen-identity";
 import { ShareButton } from "@/components/screens/share-button";
 import { StoryStrip } from "@/components/screens/story-strip";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { formatTradeDate } from "@/lib/format";
 import { countDefinitionChanges } from "@/lib/screens/change-count";
 import { defaultDefinition } from "@/lib/screens/defaults";
 import {
   useColumns,
   useDuplicateScreen,
+  useDeleteScreen,
   useFactors,
   usePreview,
   useSaveScreen,
@@ -50,12 +58,17 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
   const working = useMemo(() => decodeState(saved, raw), [saved, raw]);
   const settled = useDebounced(working);
 
-  const savedName = screen.name;
+  const [draftName, setDraftName] = useState(screen.name);
+  const [pendingDelete, setPendingDelete] = useState(false);
+  useEffect(() => {
+    setDraftName(screen.name);
+  }, [screen.name, screen.public_id]);
   const factors = useFactors();
   const columns = useColumns();
   const universes = useUniverses();
   const save = useSaveScreen();
   const duplicate = useDuplicateScreen();
+  const remove = useDeleteScreen();
   const [demoDismissed, setDemoDismissed] = useState(false);
 
   const tradingDays = useTradingDays(status?.data_start_date ?? null, status?.as_of ?? null);
@@ -71,6 +84,8 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
     () => (dirty ? countDefinitionChanges(saved, working) : 0),
     [dirty, saved, working],
   );
+  const nameDirty = draftName.trim() !== screen.name && draftName.trim().length > 0;
+  const persistCount = changeCount + (nameDirty ? 1 : 0);
 
   const previousWorking = useRef(working);
   const patch = useCallback(
@@ -85,20 +100,42 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
   }, [saved, setRaw]);
 
   const reset = useCallback(() => {
+    setDraftName(screen.name);
     void setRaw(encodeState(saved, { ...defaultDefinition(), index: working.index, sort_by: working.sort_by }));
-  }, [saved, working.index, working.sort_by, setRaw]);
+  }, [saved, working.index, working.sort_by, setRaw, screen.name]);
 
   const apply = useCallback(() => {
-    save.mutate(
-      { publicId: screen.public_id, definition: working },
-      {
-        onSuccess: () => {
-          void setRaw(null);
-          router.refresh();
-        },
+    const name = draftName.trim() || screen.name;
+    const afterSave = (publicId: string) => {
+      void setRaw(null);
+      setDraftName(name);
+      if (publicId !== screen.public_id) {
+        router.push(`/build/${publicId}` as never);
+        return;
+      }
+      router.refresh();
+    };
+    if (screen.editable) {
+      save.mutate(
+        { publicId: screen.public_id, name: draftName.trim() || screen.name, definition: working },
+        { onSuccess: (savedScreen) => afterSave(savedScreen.public_id) },
+      );
+      return;
+    }
+    if (!screen.is_example) return;
+    duplicate.mutate(screen.public_id, {
+      onSuccess: (copy) => {
+        save.mutate(
+          {
+            publicId: copy.public_id,
+            name: draftName.trim() || copy.name,
+            definition: working,
+          },
+          { onSuccess: (savedScreen) => afterSave(savedScreen.public_id) },
+        );
       },
-    );
-  }, [save, screen.public_id, working, setRaw, router]);
+    });
+  }, [save, duplicate, screen, working, draftName, setRaw, router]);
 
   const columnMeta = useMemo<ReadonlyMap<string, ColumnMeta>>(
     () => new Map((columns.data ?? []).map((column) => [column.key, column])),
@@ -153,11 +190,16 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
     <div className="vaaya-surface vaaya-shell flex min-h-0 flex-col gap-6 rounded-[28px] px-1 py-2 sm:px-2">
       <header className="flex flex-wrap items-start gap-4 pt-1">
         <div className="min-w-0 space-y-2">
-          <p className="vaaya-eyebrow">Your screen</p>
-          <h1 className="vaaya-display truncate text-3xl sm:text-4xl">{savedName}</h1>
+          <ScreenIdentity
+            name={draftName}
+            onNameChange={setDraftName}
+            canEdit={screen.editable || screen.is_example}
+            canDelete={screen.editable}
+            onDelete={() => setPendingDelete(true)}
+          />
           <p className="max-w-2xl text-sm font-light text-muted-foreground">
             {screen.is_example
-              ? "A read-only template. Duplicate it to make changes you can save."
+              ? "A template. Change the name or filters and Apply — that saves a copy you own, because the original is shared."
               : `Last updated ${formatTradeDate(screen.updated_at.slice(0, 10))}`}
           </p>
         </div>
@@ -248,7 +290,7 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
         </div>
       ) : null}
 
-      {readOnly && !screen.is_example ? (
+      {!screen.editable && !screen.is_example ? (
         <p className="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
           This screen is read-only. Your edits preview live but cannot be saved — duplicate it to
           keep them.
@@ -282,14 +324,42 @@ export function ScreenEditor({ screen: initial, status }: ScreenEditorProps) {
         />
       </div>
 
-      {!readOnly && dirty ? (
+      {(screen.editable || screen.is_example) && persistCount > 0 ? (
         <ApplyFiltersPill
-          changeCount={changeCount}
-          saving={save.isPending}
+          changeCount={persistCount}
+          saving={save.isPending || duplicate.isPending}
           onApply={apply}
           onReset={reset}
         />
       ) : null}
+
+      <Dialog open={pendingDelete} onOpenChange={setPendingDelete}>
+        <DialogContent className="max-w-md">
+          <DialogTitle className="text-base font-semibold">Delete “{screen.name}”?</DialogTitle>
+          <DialogDescription className="mt-2 text-sm text-muted-foreground">
+            This removes the screen and its run history. It cannot be undone.
+          </DialogDescription>
+          <div className="mt-4 flex gap-2">
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={remove.isPending}
+              data-testid="confirm-delete"
+              onClick={() => {
+                void remove.mutateAsync(screen.public_id).then(() => {
+                  setPendingDelete(false);
+                  router.push("/build" as never);
+                });
+              }}
+            >
+              Delete screen
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setPendingDelete(false)}>
+              Keep it
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

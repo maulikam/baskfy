@@ -96,6 +96,32 @@ export interface Membership {
 
 export type MembershipView = "shared" | "three" | "screen" | "all";
 
+/** The three strategy columns. They stay first in the overlap table, always, in this order. */
+export const SLEEVE_COLUMN_KEYS = ["vbt", "twt", "swing"] as const;
+export type SleeveColumnKey = (typeof SLEEVE_COLUMN_KEYS)[number];
+
+export function isSleeveColumnKey(key: string): key is SleeveColumnKey {
+  return (SLEEVE_COLUMN_KEYS as readonly string[]).includes(key);
+}
+
+/**
+ * Volume, Tight, Swing first — even when a sleeve could not be read, and even when the caller
+ * passed screen columns ahead of them. Unread screens still follow, so a failed sleeve cannot
+ * let a screen steal the first slot.
+ */
+export function overlapTableColumns(
+  columns: readonly MembershipColumn[],
+): MembershipColumn[] {
+  const byKey = new Map(columns.map((column) => [column.key, column]));
+  const sleeves: MembershipColumn[] = [];
+  for (const key of SLEEVE_COLUMN_KEYS) {
+    const column = byKey.get(key);
+    if (column) sleeves.push(column);
+  }
+  const rest = columns.filter((column) => !isSleeveColumnKey(column.key));
+  return [...sleeves, ...rest];
+}
+
 function unique(symbols: readonly string[]): string[] {
   return [...new Set(symbols.map((symbol) => symbol.trim().toUpperCase()).filter(Boolean))].sort();
 }

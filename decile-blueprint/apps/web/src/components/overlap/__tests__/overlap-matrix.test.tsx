@@ -42,16 +42,24 @@ describe("OverlapMatrix", () => {
     expect(symbols).toEqual(["TCS", "WIPRO"]);
   });
 
-  it("omits an unread source from the columns rather than marking every row empty", () => {
+  it("sleeves stay first, including an unread Tight column", () => {
     const unread = membershipOf([
+      { key: "exmpl0000001", label: "Investing 001", symbols: ["WIPRO"] },
       { key: "vbt", label: "Volume breakout", symbols: ["TCS"] },
       { key: "twt", label: "Three weeks tight", symbols: null },
       { key: "swing", label: "Swing", symbols: ["TCS"] },
     ]);
-    render(<OverlapMatrix membership={unread} screenKeys={[]} />);
+    render(<OverlapMatrix membership={unread} screenKeys={["exmpl0000001"]} />);
 
+    const table = screen.getByTestId("overlap-matrix-table");
+    const headers = within(table)
+      .getAllByRole("columnheader")
+      .map((header) => header.textContent ?? "");
+    expect(headers[1]).toMatch(/Volume/);
+    expect(headers[2]).toMatch(/Tight/);
+    expect(headers[2]).toMatch(/unread/);
+    expect(headers[3]).toMatch(/Swing/);
+    expect(headers[4]).toMatch(/Investing 001/);
     expect(screen.getByTestId("overlap-matrix-summary").textContent).toMatch(/could not be read/);
-    expect(screen.queryByRole("columnheader", { name: /Tight/ })).toBeNull();
-    expect(screen.getByTestId("overlap-matrix-row")).toHaveAttribute("data-symbol", "TCS");
   });
 });

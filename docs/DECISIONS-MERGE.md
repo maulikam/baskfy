@@ -7384,3 +7384,160 @@ first, then PATCHes the copy.
 **Reverse.** Restore the static `h1`, drop `ScreenIdentity` / list Rename, omit unread sleeve
 columns again.
 
+## Desk.daily — collection runs in the desk container, not on Beat (13 Sep 2026)
+
+**Context.** `baskfy.desk.daily` and `baskfy.desk.autorun` were Beat jobs on `baskfy-py`. That
+image does not contain the desk tree, so both failed every weekday. Same-day fill capture was
+dead (NEEDS-MAULIK §33; box `desk` schema 0 rows). Maulik, 13 Sep 2026: move the task to the
+desk container. Shipping the desk tree inside `baskfy-py` was rejected (Dockerfile blast-radius
+on the auto-execute host).
+
+**Taken (destination is Maulik's, not a guess).** A `desk-daily` compose service on the
+`baskfy-desk` image, sibling of `swing-monitor`: `python -m scripts.desk_daily_loop` sleeps
+until 18:30 IST Mon–Fri, runs `scripts.daily --quiet --source schedule`, then 18:50
+`scripts.autorun`. Beat's two keys are removed. The Celery names stay registered as refusal
+stubs so a leftover Redis message logs the move.
+
+**Guessed internals, tagged.** ⚠ UNREVIEWED
+
+1. **Separate compose service**, not a FastAPI lifespan task on the console and not a Celery
+   worker inside the desk image. A hung collection must not take `/analyze` with it; the desk
+   image has no Celery; this matches `swing-monitor`.
+2. **Autorun moved with daily.** The 18:50 Beat entry had the same missing-tree failure. Leaving
+   it on Beat would keep a weekday error. The user named `baskfy.desk.daily`; both entries were
+   the defect.
+3. **Weekday catch-up after 18:30** (the systemd timer's `Persistent=true`). A weekend does not
+   catch up Friday: Kite has flushed `/trades`.
+4. **Celery stubs stay.** Unregistered leftover messages look like a broker bug. A refusal is a
+   log line. They do not collect.
+
+**Rejected.** Copying `kite-momentum-rebalancer/` into `Dockerfile.python`. Putting a Celery
+worker in the desk image (Celery is not a desk dependency). Leaving autorun on Beat.
+
+**Reverse.** Restore the two `BEAT_SCHEDULE` entries, delete the `desk-daily` service and
+`scripts/desk_daily_loop.py`. That returns the weekday failure.
+
+**Not done here, still Maulik's hands:** redeploy `baskfy-desk` + `baskfy-py` + `compose.prod.yml`
+(`deploy-swing.sh`). Desk-only leaves Beat firing; py-only leaves nobody collecting. D8's
+SQLite → Postgres migration of the laptop book is a separate item (NEEDS-MAULIK §32).
+
+## Ranking engine — explainable presets · Phase 1 · ⚠ UNREVIEWED
+
+**Context.** Sort By today is the reference screener's return/Sharpe/RSI families. Useful
+momentum measurements already sit on `factor_daily` (positive-days, short vol, MAs, volume) but
+were filter-only. Expanding the dropdown alone would not fix ranking scope, preference types,
+desk-score parity, or portfolio selection. Maulik's brief (13 Sep 2026): build a ranking engine
+with explainable presets; correct excess-return / MA-distance / acceleration assumptions first.
+
+**Choice (Phase 1 landed).**
+
+1. Architecture in `docs/ranking/PLAN.md`. Stock quality rank stays separate from portfolio
+   selection. Desk SCORE/A–F only via `baskfy_core.score.score` (`baskfy_core.ranking` adapter).
+2. New Sort By keys from stored data: `pos_days_*`, `vol_{1,3,6,9}m`, `vol_expansion_1w_12m`,
+   `ma_dist_{20,50,100,200}` (preference `target_range`), `ma_stack_score`.
+3. `ScreenDefinition.ranking_mode` ∈ {single, sequential, composite} default **composite**;
+   `ranking_scope` ∈ {filtered_results, fixed_universe, within_sector} default **filtered_results**.
+   `within_sector` is schema-reserved and rejected until sector membership exists.
+4. Fixed-universe scope ranks the selected universe before filters so a filter change does not
+   silently rewrite scores.
+5. Corrections locked: common-index excess return is filter/column not rank; MA distance is not
+   higher-is-better; acceleration must use non-overlapping log rates; "NSE Momentum" label requires
+   exact NSE methodology.
+
+**Rejected.** Dumping every research candidate into Sort By now. Reimplementing desk SCORE in SQL.
+Silently treating excess-vs-Nifty as a rank key.
+
+**Hash note.** Adding `ranking_mode` / `ranking_scope` defaults changes `definition_hash` for every
+existing screen on first re-serialise (one-time cache miss). Semantics unchanged at defaults.
+
+**Not done (later leaves):** CSV export for desk_score. Leaves 1.2 UI–1.5 landed 13 Sep 2026.
+`sort_by=desk_score` wiring landed in Phase 1.2.
+
+**Reverse.** Drop the new registry keys from `FACTORS_ADDED_SINCE_DOCS`, restore the six-family
+marketing table, remove ranking fields from `ScreenDefinition`, restore docs/06-only pipeline.
+
+## Ranking engine — desk_score Sort By · Phase 1.2 · ⚠ UNREVIEWED
+
+**Context.** Phase 1 exposed path/trend keys and a desk SCORE *adapter*, but `run_screen` still
+could not Sort By the book's Momentum Quality Score. A second SQL formula would drift from the
+book; the book already owns `baskfy_core.score.score`.
+
+**Choice.**
+
+1. Register `desk_score` as a **computed** factor (`is_computed=True`; `sql_for` refuses it).
+2. `build_survivors_query` applies docs/06 filters only; `rerank_survivors_by_desk_score` calls
+   `score()` with `DEFAULT_DESK_SCORING_CONFIG` (desk blends / hygiene copied into core — Law 1
+   forbids importing the desk).
+3. `baskfy_api.screener.execute_screen` branches: desk path attaches `desk_a_trend`…`desk_eligible`
+   on each row for explainability.
+4. `ScreenDefinition` rejects `desk_score` with factor_two/three or `ranking_scope=fixed_universe`
+   (percentiles are over filtered survivors, matching a desk scan).
+
+**Rejected.** Encoding A–F in SQL. Importing `kite-momentum-rebalancer.app.config` into core.
+Treating rejected (filter-failed) names as scored equals.
+
+**Not done.** CSV export for desk_score (separate leaf).
+
+**Reverse.** Remove `desk_score` from the registry, drop the survivors/re-rank path, restore
+`execute_screen` to SQL-only.
+
+## Ranking engine — Explainability UI · Phase 1.2 UI · ⚠ UNREVIEWED
+
+**Context.** Phase 1.2 backend attached `desk_a_*`…`desk_eligible` on screen rows, but the web
+table would drown in eight explain columns, and rank history already existed as
+`GET /instruments/{symbol}/rank-history` over `screen_run` with no peek wiring.
+
+**Choice.**
+
+1. Peek drawer shows a dedicated A–F breakdown when explain columns are present.
+2. Desk explain columns are excluded from the main table column diet (labels still exist).
+3. Rank history strip in the peek when `screenPublicId` is set — reads the existing audit API;
+   preview-only runs show nothing (no `screen_run` row). Historical *re-score* of past dates
+   remains the separate Historical Ranks control on the definition.
+
+**Rejected.** Showing A–F as eight table columns by default. Recomputing ranks in the browser.
+
+**Reverse.** Remove `DeskScoreBreakdown`, `useRankHistory`, and desk entries from column-display.
+
+## Ranking engine — research candidates · Phase 1.3 · ⚠ UNREVIEWED
+
+**Context.** PLAN leaves ATR extension, MA slope, efficiency, acceleration, etc. as research —
+dumping them into Sort By without hold-out would invent unvalidated rank keys and violate the
+locked corrections (excess return, overlapping acceleration, MA distance preference).
+
+**Choice.** New `baskfy_core.ranking_research` module with pure helpers and
+`RESEARCH_CANDIDATE_KEYS` that **must not** appear in `FACTORS`. Excess vs common index is
+`FactorPreference.ELIGIBILITY` (filter/column, not rank). Acceleration is non-overlapping log
+rates. ATR extension is `target_range`.
+
+**Rejected.** Registering research keys in the Sort By dropdown. Using `3m − 12m` overlapping
+acceleration. Promoting "NSE Momentum" label.
+
+**Reverse.** Delete `ranking_research.py` and its tests.
+
+## Ranking engine — portfolio-aware selection · Phase 1.4 · ⚠ UNREVIEWED
+
+**Context.** Selection must stay separate from stock quality rank; mutating SCORE would mix
+portfolio constraints into the book's quality measure.
+
+**Choice.** `baskfy_core.ranking_selection.select_from_ranks` wraps
+`rank_buffer.plan_rebalance` and never writes SCORE. `assert_score_unchanged` pins the contract.
+No order path; desk non-negotiable #1 untouched.
+
+**Rejected.** A second hold-band formula. Folding holdings into `score()`.
+
+**Reverse.** Delete `ranking_selection.py` and its tests.
+
+## Ranking engine — presets + validation · Phase 1.5 · ⚠ UNREVIEWED
+
+**Context.** `RANKING_PRESETS` was a blurb map. Callers needed structured ScreenDefinition
+patches and a harness that `desk_quality` matches `score()`.
+
+**Choice.** `baskfy_core.ranking_presets` with `PRESET_SPECS` covering every `RANKING_PRESETS`
+key. `desk_quality` → `sort_by=desk_score` + `ranking_mode=single`. Path/trend/participation
+presets are `status=research` starting points. `nse_momentum` raises KeyError until methodology
+exists (PLAN correction #8). Validation test: rerank order == `score()` order.
+
+**Rejected.** Shipping an "NSE Momentum" preset. Treating research presets as product defaults.
+
+**Reverse.** Delete `ranking_presets.py` and its tests; leave `RANKING_PRESETS` as blurbs only.

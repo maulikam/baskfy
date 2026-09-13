@@ -6052,6 +6052,11 @@ export interface components {
             key: string;
             /** Label */
             label: string;
+            /**
+             * Preference
+             * @description higher | lower | target_range | eligibility (docs/ranking/PLAN.md).
+             */
+            preference: string;
             /** Unit */
             unit: string;
         };

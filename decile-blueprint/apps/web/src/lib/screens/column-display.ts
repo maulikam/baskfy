@@ -50,7 +50,54 @@ export const COLUMN_DISPLAY: Readonly<Record<string, ColumnDisplay>> = {
     label: "Series",
     tooltip: "Exchange series (EQ, BE, …)",
   },
+  desk_a_trend: {
+    label: "Desk A · Trend",
+    tooltip: "Book SCORE component A (trend / MA stack)",
+  },
+  desk_b_momentum: {
+    label: "Desk B · Momentum",
+    tooltip: "Book SCORE component B (blended returns)",
+  },
+  desk_c_sharpe: {
+    label: "Desk C · Sharpe",
+    tooltip: "Book SCORE component C (blended Sharpe)",
+  },
+  desk_d_consistency: {
+    label: "Desk D · Consistency",
+    tooltip: "Book SCORE component D (positive-days path)",
+  },
+  desk_e_liquidity: {
+    label: "Desk E · Liquidity",
+    tooltip: "Book SCORE component E (liquidity)",
+  },
+  desk_f_penalty: {
+    label: "Desk F · Penalty",
+    tooltip: "Book SCORE component F (circuits / hygiene penalty)",
+  },
+  desk_reject: {
+    label: "Desk reject",
+    tooltip: "Why the book rejected this name (empty when eligible)",
+  },
+  desk_eligible: {
+    label: "Desk eligible",
+    tooltip: "True when the book SCORE has no reject reason",
+  },
 };
+
+/**
+ * A–F explain columns from ``sort_by=desk_score``. Shown in the peek drawer, not the table diet —
+ * eight extra numeric columns drown the ranked feed (docs/ranking/PLAN.md Phase 1.2 UI).
+ */
+export const DESK_EXPLAIN_COLUMNS: ReadonlySet<string> = new Set([
+  "desk_a_trend",
+  "desk_b_momentum",
+  "desk_c_sharpe",
+  "desk_d_consistency",
+  "desk_e_liquidity",
+  "desk_f_penalty",
+  "desk_reject",
+  "desk_eligible",
+]);
 
 /** Default saved columns for new screens — §2.2 column diet. */
 export const DEFAULT_VISIBLE_FACTOR_COLUMNS: readonly string[] = ["ret_12m", "vol_12m", "close_raw"];
@@ -98,6 +145,7 @@ export function columnDisplayTooltip(key: string): string | undefined {
 }
 
 function shouldShowFactorColumn(key: string): boolean {
+  if (DESK_EXPLAIN_COLUMNS.has(key)) return false;
   if (DEFAULT_VISIBLE_FACTOR_COLUMNS.includes(key)) return true;
   if (LEGACY_HIDDEN_FACTOR_COLUMNS.has(key)) return false;
   if (!LEGACY_DEFAULT_FACTOR_COLUMNS.has(key)) return true;

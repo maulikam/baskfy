@@ -3,6 +3,7 @@
 import type {
   ColumnOut,
   FactorOut,
+  RankHistoryOut,
   ScreenDefinition,
   ScreenOut,
   ScreenRunResponse,
@@ -231,5 +232,32 @@ export function useCreateScreen() {
       return data;
     },
     onSuccess: () => client.invalidateQueries({ queryKey: screenKeys.list }),
+  });
+}
+
+/**
+ * docs/07: this stock's rank over time in a screen — read from ``screen_run``, not recomputed.
+ *
+ * Only enabled for a saved screen (``screenPublicId``) and an open peek symbol. Preview-only
+ * runs have no audit trail to chart.
+ */
+export function useRankHistory(symbol: string | null, screenPublicId: string | undefined) {
+  return useQuery({
+    queryKey: ["instruments", symbol, "rank-history", screenPublicId] as const,
+    enabled: Boolean(symbol && screenPublicId),
+    staleTime: 60_000,
+    queryFn: async (): Promise<RankHistoryOut> => {
+      const { data, error } = await browserApi().GET(
+        "/api/v1/instruments/{symbol}/rank-history",
+        {
+          params: {
+            path: { symbol: symbol as string },
+            query: { screen: screenPublicId as string, limit: 60 },
+          },
+        },
+      );
+      if (!data) throw ApiError.from(error, "Rank history could not be loaded.");
+      return data;
+    },
   });
 }

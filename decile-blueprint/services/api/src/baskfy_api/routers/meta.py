@@ -64,6 +64,7 @@ async def get_factors() -> list[FactorOut]:
             family=factor.family.value,
             unit=factor.unit.value,
             higher_is_better=factor.higher_is_better,
+            preference=factor.preference.value,
         )
         for factor in FACTORS.values()
     ]

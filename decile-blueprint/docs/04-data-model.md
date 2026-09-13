@@ -244,6 +244,8 @@ CREATE TABLE screen_run (            -- audit + "historical ranks" cache
   "sort_by": "avg_sharpe_12_6_3_1",
   "sort_direction": "desc",
   "apply_filters_on": "all",           // all | decile_1..decile_5 | top_50 | top_100
+  "ranking_mode": "composite",         // single | sequential | composite (docs/ranking/PLAN.md)
+  "ranking_scope": "filtered_results", // filtered_results | fixed_universe | within_sector
   "min_return_1y": null,
   "median_volume_1y": 10000000,
   "moving_average": { "enabled": false,

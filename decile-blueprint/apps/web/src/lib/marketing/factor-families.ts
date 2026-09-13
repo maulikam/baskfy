@@ -60,8 +60,28 @@ export const FACTOR_FAMILIES: readonly FactorFamilySummary[] = [
     key: "non_momentum",
     label: "Non-momentum sort keys",
     description:
-      "Volatility, beta, P/E, market capitalisation, both close prices and the two away-from-high measures.",
-    count: 8,
+      "Volatility (all five windows), beta, P/E, market capitalisation, both close prices, the two away-from-high measures, and the desk Momentum Quality Score.",
+    count: 13,
+  },
+  {
+    key: "path_quality",
+    label: "Path quality",
+    description:
+      "How the move was made — positive-days across five windows. Pair with drawdown before treating alone.",
+    count: 5,
+  },
+  {
+    key: "trend_structure",
+    label: "Trend structure",
+    description:
+      "MA stack score and distance from each moving average. Distance is a target-range preference, not higher-is-better.",
+    count: 5,
+  },
+  {
+    key: "participation",
+    label: "Participation",
+    description: "Volume expansion of the latest week versus the one-year average traded value.",
+    count: 1,
   },
 ] as const;
 

@@ -106,4 +106,43 @@ describe("PeekDrawer", () => {
     await user.keyboard("{Escape}");
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it("renders desk A–F breakdown when explain columns are present", () => {
+    const deskRow: ResultRow = {
+      ...CUPID,
+      sorting_factor: 72.5,
+      desk_a_trend: 18,
+      desk_b_momentum: 20,
+      desk_c_sharpe: 15,
+      desk_d_consistency: 12,
+      desk_e_liquidity: 8,
+      desk_f_penalty: 0,
+      desk_reject: "",
+      desk_eligible: true,
+    };
+    const deskColumns = [
+      ...COLUMNS,
+      "desk_a_trend",
+      "desk_b_momentum",
+      "desk_c_sharpe",
+      "desk_d_consistency",
+      "desk_e_liquidity",
+      "desk_f_penalty",
+      "desk_reject",
+      "desk_eligible",
+    ];
+    render(
+      <PeekDrawer
+        row={deskRow}
+        columns={deskColumns}
+        meta={META}
+        sortingFactorLabel="Desk Momentum Quality Score"
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("desk-score-breakdown")).toBeInTheDocument();
+    expect(screen.getByTestId("desk_a_trend")).toHaveTextContent("18.0");
+    expect(screen.getByTestId("desk-eligible")).toHaveTextContent("Eligible");
+  });
 });

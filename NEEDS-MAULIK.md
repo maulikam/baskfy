@@ -7,6 +7,24 @@ that does not depend on them (rule 11) and returns the moment a dependency clear
 Nothing here is urgent unless marked so. Each entry says what is needed, why, what it blocks, and
 what was done meanwhile.
 
+## 34. Commit + deploy ranking engine phases 1.2–1.5
+
+**Raised 13 Sep 2026.** · **Status:** ranking slice committed this session; deploy + verify next
+(user asked agent to finish commit and deploy — Track B / TWT / auto-execute untouched).
+
+**What is in HEAD (laptop):**
+
+* Gates ALL MET: `gates/ranking-1.2.md` … `1.5.md` plus root `GATES.md` Phase 1.2 backend (27/27).
+* Explainability UI (peek A–F + rank history via existing API), research module, selection wrapper,
+  presets + `desk_quality` validation harness.
+* Decisions tagged ⚠ UNREVIEWED in `docs/DECISIONS-MERGE.md`; status in `docs/ranking/PLAN.md`.
+
+**What remains:** image push + `KEEP_MONITOR=1` deploy + `verify-swing.sh` on `baskfy-poc`. Smoke:
+Sort By → Desk Momentum Quality Score; peek → A–F; saved screen rank history once `screen_run`
+rows exist. Clear this entry when verify is green.
+
+---
+
 **Four items closed during the run of 22 Aug 2026** — and one of them was the project's biggest
 blocker:
 
@@ -24,6 +42,7 @@ blocker in the project.
 
 | | |
 |---|---|
+| **34** | **Deploy ranking engine (1.2–1.5).** Ranking slice is committed; image push + verify still open. See §34. |
 | **32** | **A Zerodha Console tradebook export.** You asked to "sync transactions from the kite account" — Kite's API cannot supply them, and nothing in Baskfy imports them. One CSV you download is the only path. See §32. |
 | **31** | ✅ **Done 12 Sep 2026.** You logged in; the box went `dd9cc73` → `8b074c7` and `verify-swing.sh` says `SWING OK`. |
 | **1** | ✅ **Shipped 12 Sep 2026** with the rest of the 25 commits, on a Saturday with the market shut. |
@@ -79,11 +98,9 @@ cannot answer the question.
 1. **Holdings sync works and is live.** `POST /brokers/{id}/sync-holdings` did a real Kite fetch
    today and wrote PWL (1,575) and WABAG (92) into your broker pile. It is a **button**, not a
    schedule — there is no Beat entry for holdings anywhere.
-2. ⚠ **The desk's daily collection is scheduled on the box and cannot run.** `baskfy.desk.daily`
-   fires at 18:30 Mon–Fri and looks for the desk at `/kite-momentum-rebalancer`, which **does not
-   exist in the deployed worker image**. That job is the only scheduled thing in the product that
-   would capture the day's fills — so even same-day trades are not being recorded on the box. It
-   needs a deploy to fix, which no leaf may do.
+2. ⚠ **The desk's daily collection was scheduled on Beat and could not run** — **code moved
+   13 Sep 2026** (item 33) onto the `desk-daily` container. The box still needs that deploy. Until
+   then same-day fills are not recorded there.
 3. ⚠ **Your 9,262-fill book is still only on the laptop.** `kite-momentum-rebalancer/data/
    portfolio.db` holds 9,045 fills from a Console CSV plus 217 captured live, and 8,198
    reconstructed lot-trades. The box's `desk` schema has the 20 tables and **0 rows in every one**
@@ -149,43 +166,50 @@ Deploying only the API/worker images and holding `web` is possible — `push-ima
 
 ---
 
-## 33. `baskfy.desk.daily` is on Beat every weekday and cannot run — a design call, not a bug fix
+## 33. `baskfy.desk.daily` — moved to the desk container (13 Sep 2026, Maulik)
 
-**Found 12 Sep 2026** by the Kite-sync investigation, **verified independently by the parent.**
-**Status:** decided 13 Sep 2026 — **move the task to the `desk` container.** Another agent
-implements it. This session records the choice and does not start the move.
+**Found 12 Sep 2026** by the Kite-sync investigation. **Decided 13 Sep 2026 by Maulik:**
+move the task to the `desk` container; do **not** ship the desk tree inside `baskfy-py`.
+**Implemented 13 Sep 2026** in this repo. **Status:** code is in; the box still runs the
+old Beat route until you redeploy.
 
-**What is wrong.** `baskfy_worker.tasks.desk` computes
-`DESK_ROOT = Path(__file__).resolve().parents[6] / "kite-momentum-rebalancer"` and then `chdir`s
-into it. In the `baskfy-py` image the module sits under `/repo`, so that resolves to
-`/kite-momentum-rebalancer`, and **the desk tree is not in that image at all** — only
-`decile-blueprint` is. Measured on the box, inside the running `worker` container:
+**What was wrong.** `baskfy_worker.tasks.desk` computed
+`DESK_ROOT = Path(__file__).resolve().parents[6] / "kite-momentum-rebalancer"` and `chdir`d
+into it. In the `baskfy-py` image that is `/kite-momentum-rebalancer`, and the desk tree is
+not there. Two Beat entries — `desk-daily-collection` (18:30 Mon–Fri) and
+`desk-autorun-safety-net` (18:50) — fired into a path that does not exist. Same-day fill
+capture was dead (item 32: box desk schema has 20 tables and 0 rows).
 
-```
-kmr_at_root=no  repo_kmr=no
-```
+**What the code does now.**
 
-Two Beat entries point at it: `desk-daily-collection` (18:30 Mon–Fri) and
-`desk-autorun-safety-net` (18:50). Both have been firing into a path that does not exist.
-
-**What it costs.** Same-day fill capture. `capture_live_trades()` reads Kite's `trades()` for the
-session, and Kite flushes that endpoint nightly — so a fill not captured on the day is not
-recoverable from the API at all, only from a Console export. This is the mechanism behind
-item 32: the box's desk schema has all 20 tables and **0 rows in every one**.
-
-**The two fixes, and why the choice is yours:**
-
-| | What it means |
+| | |
 |---|---|
-| **Ship the desk tree in `baskfy-py`** | `Dockerfile.desk` already copies both trees; `Dockerfile.python` copies one. One line, but it puts the live trading code into the image the *web API and every worker* run, which is a blast-radius change on the auto-execute host |
-| **Move the task to the `desk` container** | Correct by shape — the desk service already runs `baskfy-desk`, which has both trees. Costs a task registration on the desk side and a Beat route change |
+| Scheduler | `desk-daily` compose service, `baskfy-desk` image, `python -m scripts.desk_daily_loop` |
+| 18:30 IST Mon–Fri | `python -m scripts.daily --quiet --source schedule` |
+| 18:50 IST Mon–Fri | `python -m scripts.autorun` |
+| Catch-up | weekday restart after 18:30 still owes today (the old timer's `Persistent=true`) |
+| Beat | those two keys are **gone**. The Celery names stay as refusal stubs for leftover Redis messages |
 
-The second is the better design and the larger change. **Taken 13 Sep 2026:** move the task to
-the `desk` container. Another agent owns the implementation and the Beat route change. This
-session does not start that work.
+Rejected alternative — copying the desk tree into `Dockerfile.python` — is unchanged: it
+puts live trading code into the image the web API and every worker run.
 
-**What was done meanwhile:** nothing that touches the code. The defect is recorded here, in
-`gates/kite-sync.md` G9, and in `PLAN-SCAN-SYNC.md`'s status log.
+**What you must deploy, and it is both images plus compose:**
+
+1. `baskfy-desk` — the loop and the `desk-daily` service.
+2. `baskfy-py` — Beat without the two entries. A desk-only deploy leaves Beat still firing
+   at 18:30 into a missing tree.
+3. `compose.prod.yml` — the new service. `deploy-swing.sh` ships all three.
+
+Do not SSH. Do not flip TWT flags. The ordinary deploy is the whole move.
+
+**What is still true after deploy, and is not this job:** D8's SQLite → Postgres migration
+of the 9,262-fill laptop book has never been run against the box (item 32). The new
+scheduler captures *from today onward* once a Kite session exists that evening. It does
+not invent history.
+
+**Tests:** `kite-momentum-rebalancer/tests/test_desk_daily_loop.py` (schedule + wiring);
+`decile-blueprint/services/worker/tests/test_desk_tasks.py` (Beat gone, stubs refuse).
+
 
 ---
 

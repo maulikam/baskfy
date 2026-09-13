@@ -68,6 +68,8 @@
         "from": null,
         "to": null
       },
+      "ranking_mode": "composite",
+      "ranking_scope": "filtered_results",
       "series": [
         "EQ"
       ],
@@ -158,6 +160,8 @@
         "from": null,
         "to": null
       },
+      "ranking_mode": "composite",
+      "ranking_scope": "filtered_results",
       "series": [
         "EQ"
       ],
@@ -242,6 +246,8 @@
         "from": null,
         "to": null
       },
+      "ranking_mode": "composite",
+      "ranking_scope": "filtered_results",
       "series": [
         "EQ"
       ],
@@ -354,6 +360,8 @@
         "from": null,
         "to": null
       },
+      "ranking_mode": "composite",
+      "ranking_scope": "filtered_results",
       "series": [
         "EQ"
       ],
@@ -467,6 +475,8 @@
         "from": null,
         "to": null
       },
+      "ranking_mode": "composite",
+      "ranking_scope": "filtered_results",
       "series": [
         "EQ"
       ],
@@ -567,6 +577,8 @@
         "from": null,
         "to": null
       },
+      "ranking_mode": "composite",
+      "ranking_scope": "filtered_results",
       "series": [
         "EQ"
       ],
@@ -667,6 +679,8 @@
         "from": null,
         "to": null
       },
+      "ranking_mode": "composite",
+      "ranking_scope": "filtered_results",
       "series": [
         "EQ"
       ],
@@ -776,6 +790,8 @@
         "from": null,
         "to": null
       },
+      "ranking_mode": "composite",
+      "ranking_scope": "filtered_results",
       "series": [
         "SM",
         "ST"
@@ -864,6 +880,8 @@
         "from": null,
         "to": null
       },
+      "ranking_mode": "composite",
+      "ranking_scope": "filtered_results",
       "series": [
         "EQ",
         "SM"
@@ -1050,6 +1068,8 @@
         "from": null,
         "to": null
       },
+      "ranking_mode": "composite",
+      "ranking_scope": "filtered_results",
       "series": [
         "EQ"
       ],
@@ -1168,6 +1188,8 @@
         "from": null,
         "to": null
       },
+      "ranking_mode": "composite",
+      "ranking_scope": "filtered_results",
       "series": [
         "EQ"
       ],
@@ -1263,6 +1285,8 @@
         "from": null,
         "to": null
       },
+      "ranking_mode": "composite",
+      "ranking_scope": "filtered_results",
       "series": [
         "EQ"
       ],

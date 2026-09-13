@@ -4,7 +4,7 @@ import { serverApi } from "@/lib/api/server";
 import {
   type ScreenOption,
   type SymbolSet,
-  pickScreenId,
+  pickScreenIds,
 } from "@/lib/overlap/overlap";
 import { fetchSetups } from "@/lib/swing/fetch";
 import { fetchToday as fetchTwtToday } from "@/lib/twt/fetch";
@@ -16,23 +16,23 @@ import { fetchToday as fetchVbtToday } from "@/lib/vbt/fetch";
  * Volume breakout and Three weeks tight are today's published candidates / tight names.
  * Swing is today's setups, every status — the question is which names appear on both scans,
  * not which names cleared a given status filter.
- * Screens is whichever screen the URL names (default: the seeded example), run fresh so the
- * table's screen column is against the same session the sleeves are showing — not a stale prior
- * run. The page intersects all four, not only the Volume ∩ Tight triple.
+ * Screens are whichever screens the URL names (default: three, Investing 001 first). Each is
+ * run fresh so those columns are against the same session the sleeves are showing — not a
+ * stale prior run.
  */
 
 export interface OverlapSources {
   vbt: SymbolSet;
   twt: SymbolSet;
   swing: SymbolSet;
-  screen: SymbolSet;
+  selectedScreens: readonly SymbolSet[];
   screens: readonly ScreenOption[];
   /** Session dates the sleeves reported, for the page header. */
   asOf: {
     vbt: string | null;
     twt: string | null;
     swing: string | null;
-    screen: string | null;
+    screens: readonly (string | null)[];
   };
 }
 
@@ -48,6 +48,7 @@ async function listScreens(): Promise<readonly ScreenOption[]> {
   return data.data.map((screen) => ({
     publicId: screen.public_id,
     name: screen.name,
+    isExample: screen.is_example,
   }));
 }
 
@@ -78,15 +79,22 @@ async function runScreen(publicId: string): Promise<{
   };
 }
 
-export async function fetchOverlapSources(screenId: string): Promise<OverlapSources> {
+export async function fetchOverlapSources(
+  screenIds: readonly string[],
+): Promise<OverlapSources> {
   const [vbtToday, twtToday, swingSetups, screens] = await Promise.all([
     fetchVbtToday(),
     fetchTwtToday(),
     fetchSetups({}),
     listScreens(),
   ]);
-  const resolvedId = pickScreenId(screenId, screens);
-  const screenRun = await runScreen(resolvedId);
+  const resolvedIds = pickScreenIds(screenIds, screens);
+  const screenRuns = await Promise.all(
+    resolvedIds.map(async (id) => {
+      const run = await runScreen(id);
+      return { id, run };
+    }),
+  );
 
   return {
     vbt: {
@@ -108,17 +116,17 @@ export async function fetchOverlapSources(screenId: string): Promise<OverlapSour
          "which names appear on both scans", not "which names cleared a status filter". */
       symbols: swingSetups ? symbolsFrom(swingSetups.data) : null,
     },
-    screen: {
-      key: resolvedId,
-      label: screenRun.name,
-      symbols: screenRun.symbols,
-    },
+    selectedScreens: screenRuns.map(({ id, run }) => ({
+      key: id,
+      label: run.name,
+      symbols: run.symbols,
+    })),
     screens,
     asOf: {
       vbt: vbtToday?.as_of ?? null,
       twt: twtToday?.as_of ?? null,
       swing: swingSetups?.as_of ?? null,
-      screen: screenRun.asOf,
+      screens: screenRuns.map(({ run }) => run.asOf),
     },
   };
 }

@@ -1649,10 +1649,12 @@ row. Switching sleeves meant clicking **Build** (Screens) and picking again. `Se
 keeps the staff Build row on sleeve pages, above the sleeve's own tabs. AFH 5.5 is unchanged for
 civilians.
 
-`/build/overlap` now leads with a membership table across Volume, Tight, Swing, **and** the
-selected screen (default: names on 2+ sources; "On the screen" for every screen name). The named
-pairwise lists remain, plus Swing ∩ Volume. Decision: `docs/DECISIONS-MERGE.md` (the two 13 Sep
-entries).
+`/build/overlap` now leads with a membership table across Volume, Tight, Swing, **and** up to
+three selected screens (default: names on 2+ sources; "On a screen" for every name those screens
+hit). The named pairwise lists remain, plus Swing ∩ Volume. Decision: `docs/DECISIONS-MERGE.md`
+(the 13 Sep overlap entries).
 
 **Not done.** Not verified in a browser against a live session — the matrix is unit-tested over
-fixtures. A screen with hundreds of rows will scroll; it is not virtualised.
+fixtures. Running three screens on every load can time out the 2.5s RSC hop; unread columns say
+so rather than inventing a zero. A screen with hundreds of rows will scroll; it is not
+virtualised.

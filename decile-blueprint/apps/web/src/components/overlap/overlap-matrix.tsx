@@ -13,27 +13,28 @@ import {
 import { cn } from "@/lib/utils";
 
 /**
- * Every name on Volume, Tight, Swing, and the selected screen, in one table.
+ * Every name on Volume, Tight, Swing, and the selected screens, in one table.
  *
  * The named intersection panels still answer "who is on both of these two". This table answers
- * the other question: which names appear across the strategies, and whether the screen named
+ * the other question: which names appear across the strategies, and whether the screens named
  * them too.
  */
 export function OverlapMatrix({
   membership,
-  screenKey,
+  screenKeys,
 }: {
   membership: Membership;
-  screenKey: string | null;
+  screenKeys: readonly string[];
 }) {
   const [view, setView] = useState<MembershipView>("shared");
   const readable = membership.columns.filter((column) => column.available);
   const rows = useMemo(
-    () => filterMembershipRows(membership.rows, view, screenKey),
-    [membership.rows, view, screenKey],
+    () => filterMembershipRows(membership.rows, view, screenKeys),
+    [membership.rows, view, screenKeys],
   );
-  const screenAvailable =
-    screenKey !== null && membership.columns.some((column) => column.key === screenKey && column.available);
+  const screenAvailable = screenKeys.some((key) =>
+    membership.columns.some((column) => column.key === key && column.available),
+  );
   const canThree = readable.length >= 3;
 
   return (
@@ -47,11 +48,11 @@ export function OverlapMatrix({
           id="overlap-matrix-heading"
           className="text-sm font-medium uppercase tracking-wide text-muted-foreground"
         >
-          Across strategies and the screen
+          Across strategies and screens
         </h2>
         <p className="max-w-[72ch] text-sm leading-relaxed text-muted-foreground">
           One row per name. A mark means that scan named it today — Volume, Tight, Swing, and
-          the selected screen together, not as three separate lists.
+          the screens you pick together, not as three separate lists.
         </p>
       </div>
 
@@ -72,7 +73,7 @@ export function OverlapMatrix({
             ) : null}
             {screenAvailable ? (
               <ViewChip current={view} value="screen" onSelect={setView}>
-                On the screen
+                On a screen
               </ViewChip>
             ) : null}
             <ViewChip current={view} value="all" onSelect={setView}>
@@ -168,7 +169,7 @@ function columnHeading(column: MembershipColumn): string {
 
 function emptyCopy(view: MembershipView, screenAvailable: boolean): string {
   if (view === "screen" && screenAvailable) {
-    return "The selected screen named no stocks on this session.";
+    return "The selected screens named no stocks on this session.";
   }
   if (view === "three") {
     return "No names sit on three or more of these scans on this session.";

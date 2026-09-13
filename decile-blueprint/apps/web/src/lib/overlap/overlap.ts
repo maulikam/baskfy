@@ -11,26 +11,44 @@
 /** The seeded example screen — same id the marketing sample and `/build/exmpl0000001` use. */
 export const DEFAULT_SCREEN_ID = "exmpl0000001";
 
+/** How many screen columns the overlap matrix shows. Three is the floor the page promises. */
+export const MAX_SCREEN_COLUMNS = 3;
+
 export interface ScreenOption {
   publicId: string;
   name: string;
+  isExample: boolean;
 }
 
 /**
- * Resolve the screen id from the URL, falling back to the seeded example when the query is
- * absent or names a screen that is not on the list.
+ * Resolve screen ids from the URL, filling up to {@link MAX_SCREEN_COLUMNS} from the list so
+ * the dropdowns always have three columns when three screens exist.
+ *
+ * Unknown ids are ignored. Investing 001 stays first when it is available and the URL did not
+ * name something else in that slot.
  */
-export function pickScreenId(
-  requested: string | undefined,
+export function pickScreenIds(
+  requested: readonly string[] | undefined,
   screens: readonly ScreenOption[],
-): string {
-  if (requested && screens.some((screen) => screen.publicId === requested)) {
-    return requested;
+  max: number = MAX_SCREEN_COLUMNS,
+): string[] {
+  const available = screens.map((screen) => screen.publicId);
+  const chosen: string[] = [];
+  for (const id of requested ?? []) {
+    if (available.includes(id) && !chosen.includes(id)) {
+      chosen.push(id);
+    }
+    if (chosen.length >= max) return chosen;
   }
-  if (screens.some((screen) => screen.publicId === DEFAULT_SCREEN_ID)) {
-    return DEFAULT_SCREEN_ID;
+  const preferred = [
+    ...available.filter((id) => id === DEFAULT_SCREEN_ID),
+    ...available.filter((id) => id !== DEFAULT_SCREEN_ID),
+  ];
+  for (const id of preferred) {
+    if (!chosen.includes(id)) chosen.push(id);
+    if (chosen.length >= max) break;
   }
-  return screens[0]?.publicId ?? DEFAULT_SCREEN_ID;
+  return chosen;
 }
 
 export interface SymbolSet {
@@ -206,7 +224,7 @@ export function membershipOf(sources: readonly SymbolSet[]): Membership {
 export function filterMembershipRows(
   rows: readonly MembershipRow[],
   view: MembershipView,
-  screenKey: string | null,
+  screenKeys: readonly string[],
 ): MembershipRow[] {
   switch (view) {
     case "all":
@@ -216,8 +234,8 @@ export function filterMembershipRows(
     case "three":
       return rows.filter((row) => row.count >= 3);
     case "screen":
-      if (!screenKey) return [];
-      return rows.filter((row) => row.sourceKeys.includes(screenKey));
+      if (screenKeys.length === 0) return [];
+      return rows.filter((row) => screenKeys.some((key) => row.sourceKeys.includes(key)));
   }
 }
 

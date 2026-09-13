@@ -171,7 +171,7 @@ export const PAGES = {
   "/build/overlap": {
     title: "Overlap · Build",
     blurb:
-      "Which names sit across Volume, Tight, Swing, and a screen — and the named pairs underneath.",
+      "Which names sit across Volume, Tight, Swing, and up to three screens — and the named pairs underneath.",
   },
   /* —— The Portfolio hub (PORTFOLIO_REDESIGN.md §2) ——
      Five tabs, one section. `Overview` is the landing tab; `Portfolios` absorbed the tab that

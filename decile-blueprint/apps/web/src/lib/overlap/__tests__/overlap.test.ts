@@ -2,12 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_SCREEN_ID,
+  MAX_SCREEN_COLUMNS,
   type SymbolSet,
   filterMembershipRows,
   intersectionOf,
   intersectionSummary,
   membershipOf,
-  pickScreenId,
+  pickScreenIds,
 } from "@/lib/overlap/overlap";
 
 function set(key: string, symbols: readonly string[] | null): SymbolSet {
@@ -90,19 +91,47 @@ describe("intersection summary wording", () => {
   });
 });
 
-describe("which screen the page runs", () => {
+describe("which screens the page runs", () => {
   const screens = [
-    { publicId: "exmpl0000001", name: "Investing 001" },
-    { publicId: "user00000001", name: "My screen" },
+    { publicId: "exmpl0000001", name: "Investing 001", isExample: true },
+    { publicId: "exmpl0000002", name: "Trend Stack", isExample: true },
+    { publicId: "exmpl0000003", name: "Top Baskfy Liquid Momentum", isExample: true },
+    { publicId: "user00000001", name: "My screen", isExample: false },
   ];
 
-  it("uses the query when it names a real screen", () => {
-    expect(pickScreenId("user00000001", screens)).toBe("user00000001");
+  it("fills three columns from the list when the query is empty", () => {
+    const ids = pickScreenIds(undefined, screens);
+    expect(ids).toHaveLength(MAX_SCREEN_COLUMNS);
+    expect(ids[0]).toBe(DEFAULT_SCREEN_ID);
+    expect(ids).toEqual(["exmpl0000001", "exmpl0000002", "exmpl0000003"]);
   });
 
-  it("falls back to the seeded example when the query is missing or unknown", () => {
-    expect(pickScreenId(undefined, screens)).toBe(DEFAULT_SCREEN_ID);
-    expect(pickScreenId("nope", screens)).toBe(DEFAULT_SCREEN_ID);
+  it("keeps named screens first and fills the rest so there are still three", () => {
+    expect(pickScreenIds(["user00000001"], screens)).toEqual([
+      "user00000001",
+      "exmpl0000001",
+      "exmpl0000002",
+    ]);
+  });
+
+  it("ignores unknown ids and still fills three", () => {
+    expect(pickScreenIds(["nope", "exmpl0000003"], screens)).toEqual([
+      "exmpl0000003",
+      "exmpl0000001",
+      "exmpl0000002",
+    ]);
+  });
+
+  it("caps at three even when the query names more", () => {
+    expect(pickScreenIds(screens.map((screen) => screen.publicId), screens)).toEqual([
+      "exmpl0000001",
+      "exmpl0000002",
+      "exmpl0000003",
+    ]);
+  });
+
+  it("returns every screen when fewer than three exist", () => {
+    expect(pickScreenIds([], screens.slice(0, 2))).toEqual(["exmpl0000001", "exmpl0000002"]);
   });
 });
 
@@ -155,16 +184,29 @@ describe("membership across strategies and a screen", () => {
       set("vbt", ["TCS"]),
       { key: "exmpl0000001", label: "Investing 001", symbols: ["TCS", "WIPRO"] },
     ]);
-    expect(filterMembershipRows(result.rows, "shared", "exmpl0000001").map((row) => row.symbol)).toEqual(
+    expect(filterMembershipRows(result.rows, "shared", ["exmpl0000001"]).map((row) => row.symbol)).toEqual(
       ["TCS"],
     );
-    expect(filterMembershipRows(result.rows, "screen", "exmpl0000001").map((row) => row.symbol)).toEqual(
+    expect(filterMembershipRows(result.rows, "screen", ["exmpl0000001"]).map((row) => row.symbol)).toEqual(
       ["TCS", "WIPRO"],
     );
-    expect(filterMembershipRows(result.rows, "all", "exmpl0000001").map((row) => row.symbol)).toEqual([
+    expect(filterMembershipRows(result.rows, "all", ["exmpl0000001"]).map((row) => row.symbol)).toEqual([
       "TCS",
       "WIPRO",
     ]);
-    expect(filterMembershipRows(result.rows, "three", "exmpl0000001")).toEqual([]);
+    expect(filterMembershipRows(result.rows, "three", ["exmpl0000001"])).toEqual([]);
+  });
+
+  it("treats 'on a screen' as any of the selected screens", () => {
+    const result = membershipOf([
+      set("vbt", ["TCS"]),
+      { key: "exmpl0000001", label: "Investing 001", symbols: ["TCS"] },
+      { key: "exmpl0000002", label: "Trend Stack", symbols: ["WIPRO"] },
+    ]);
+    expect(
+      filterMembershipRows(result.rows, "screen", ["exmpl0000001", "exmpl0000002"]).map(
+        (row) => row.symbol,
+      ),
+    ).toEqual(["TCS", "WIPRO"]);
   });
 });

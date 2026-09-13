@@ -23,19 +23,27 @@ import signal
 import subprocess
 import sys
 import textwrap
+from collections.abc import AsyncIterator, Awaitable, Callable
 from pathlib import Path
 from typing import Final
 
 import pytest
+import pytest_asyncio
 from celery.schedules import crontab
+from cryptography.fernet import Fernet
 from helpers import TRADE_DATE, requires_db
+from redis.asyncio import Redis
+from redis.exceptions import RedisError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from baskfy_api.email import Mailer, Message
 from baskfy_api.metrics import ALERTS, REGISTRY
 from baskfy_api.settings import Settings
-from baskfy_core.models import PipelineRun
+from baskfy_api.swing_health import is_session_day
+from baskfy_core.models import PipelineRun, TradingDay
+from baskfy_core.seed_data import NSE_EXCHANGE_ID
+from baskfy_providers.tokens import AccessTokenStore
 from baskfy_worker import ops
 from baskfy_worker.alerts import Alert, AlertName, Severity, dispatch, webhook_payload
 from baskfy_worker.celery_app import BEAT_SCHEDULE, QUEUES, TASK_ROUTES
@@ -320,6 +328,276 @@ class TestKiteTokenCheck:
         warning = ops.check_kite_token(settings, now=dt.datetime(2026, 8, 18, 18, 45, tzinfo=ist))
         assert warning is not None
         assert warning.severity is Severity.WARNING
+
+
+# The delivery rule over the check: trading days only, once per token per IST day.
+# DECISIONS-MERGE "Ops: token-expiry alert on trading days, once per day" (14 Sep 2026).
+
+_IST: Final = dt.timezone(dt.timedelta(hours=5, minutes=30))
+
+#: 14 Sep 2026 was an NSE holiday (a Monday) and the box emailed an expired token every hour.
+HOLIDAY: Final = dt.date(2026, 9, 14)
+SATURDAY: Final = dt.date(2026, 9, 12)
+SESSION: Final = dt.date(2026, 9, 15)
+NEXT_SESSION: Final = dt.date(2026, 9, 16)
+
+TEST_REDIS_URL: Final = os.environ.get("BASKFY_TEST_REDIS_URL", "redis://localhost:6380/3")
+#: Nothing listens on port 1: a client pointed here is Redis being down.
+UNREACHABLE_REDIS_URL: Final = "redis://127.0.0.1:1/0"
+
+
+def _at(day: dt.date, hhmm: str) -> dt.datetime:
+    hour, minute = (int(part) for part in hhmm.split(":"))
+    return dt.datetime.combine(day, dt.time(hour, minute), tzinfo=_IST)
+
+
+class _Inbox:
+    """A mail transport that keeps what it is handed."""
+
+    def __init__(self) -> None:
+        self.sent: list[Message] = []
+
+    async def send(self, message: Message) -> None:
+        self.sent.append(message)
+
+
+@pytest_asyncio.fixture
+async def alert_cache() -> AsyncIterator[Redis]:
+    """A live Redis (DB 3 by default) with the token-alert markers emptied around the test."""
+    client: Redis = Redis.from_url(TEST_REDIS_URL)
+    try:
+        await client.ping()
+    except RedisError:  # pragma: no cover - guarded by the redis marker
+        await client.aclose()
+        pytest.skip("no Redis; run `make up` or set BASKFY_TEST_REDIS_URL")
+
+    async def flush() -> None:
+        async for key in client.scan_iter(match=f"{ops.KITE_TOKEN_ALERT_MARKER_PREFIX}*"):
+            await client.delete(key)
+
+    await flush()
+    try:
+        yield client
+    finally:
+        await flush()
+        await client.aclose()
+
+
+@pytest.mark.db
+@pytest.mark.redis
+@requires_db
+class TestKiteTokenAlertDelivery:
+    """Hourly evaluation, not hourly email: sessions only, once per stored token per IST day."""
+
+    @pytest.fixture
+    def token_store(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AccessTokenStore:
+        from baskfy_providers import settings as provider_settings  # noqa: PLC0415
+
+        key = Fernet.generate_key().decode()
+        path = tmp_path / "kite-token.enc"
+        monkeypatch.setattr(
+            provider_settings,
+            "get_provider_settings",
+            lambda: provider_settings.ProviderSettings(
+                kite_token_path=str(path), kite_token_encryption_key=key
+            ),
+        )
+        store = AccessTokenStore(path, key)
+        # Friday's login: expired from Saturday on, and still stored the next Tuesday.
+        store.save("live-token", issued_at=_at(dt.date(2026, 9, 11), "09:00"))
+        return store
+
+    @staticmethod
+    async def _calendar(session: AsyncSession) -> Callable[[dt.date], Awaitable[bool]]:
+        """The real `trading_day` table, with the lunar holiday the seed list cannot carry."""
+        await session.merge(
+            TradingDay(
+                exchange_id=NSE_EXCHANGE_ID,
+                date=HOLIDAY,
+                is_trading_day=False,
+                holiday_name="Ganesh Chaturthi",
+                source="holiday",
+            )
+        )
+        await session.flush()
+
+        async def is_session(day: dt.date) -> bool:
+            return await is_session_day(session, day)
+
+        return is_session
+
+    @staticmethod
+    async def _run(
+        calendar: Callable[[dt.date], Awaitable[bool]],
+        cache: Redis | None,
+        inbox: _Inbox,
+        now: dt.datetime,
+    ) -> dict[str, object]:
+        result = await ops.run_kite_token_check(
+            calendar,
+            cache,
+            _settings(ops_alert_email="ops@example.com", kite_token_warning_hours=6),
+            now=now,
+            mailer=Mailer(inbox),
+        )
+        payload = result["alert"]
+        return payload if isinstance(payload, dict) else {}
+
+    async def test_a_holiday_raises_no_alert(
+        self, session: AsyncSession, alert_cache: Redis, token_store: AccessTokenStore
+    ) -> None:
+        """14 Sep 2026: the market was shut, nothing needed a login, and 24 emails went out."""
+        del token_store
+        calendar = await self._calendar(session)
+        inbox = _Inbox()
+        before = REGISTRY.get_sample_value(
+            "baskfy_alerts_total", {"alert": "kite_token_expiring", "severity": "critical"}
+        )
+
+        for hour in ("00:05", "09:05", "18:05", "23:05"):
+            result = await ops.run_kite_token_check(
+                calendar,
+                alert_cache,
+                _settings(ops_alert_email="ops@example.com"),
+                now=_at(HOLIDAY, hour),
+                mailer=Mailer(inbox),
+            )
+            assert result["alert"] is None
+
+        after = REGISTRY.get_sample_value(
+            "baskfy_alerts_total", {"alert": "kite_token_expiring", "severity": "critical"}
+        )
+        assert inbox.sent == []
+        assert (after or 0) == (before or 0)
+
+    async def test_a_weekend_raises_no_alert(
+        self, session: AsyncSession, alert_cache: Redis, token_store: AccessTokenStore
+    ) -> None:
+        del token_store
+        calendar = await self._calendar(session)
+        inbox = _Inbox()
+
+        result = await ops.run_kite_token_check(
+            calendar,
+            alert_cache,
+            _settings(ops_alert_email="ops@example.com"),
+            now=_at(SATURDAY, "10:05"),
+            mailer=Mailer(inbox),
+        )
+
+        assert result["alert"] is None
+        assert inbox.sent == []
+
+    async def test_an_expired_token_sends_once_on_a_session_and_then_is_suppressed(
+        self, session: AsyncSession, alert_cache: Redis, token_store: AccessTokenStore
+    ) -> None:
+        """The first run tells someone; later runs that day log and count but send nothing."""
+        del token_store
+        calendar = await self._calendar(session)
+        inbox = _Inbox()
+
+        first = await self._run(calendar, alert_cache, inbox, _at(SESSION, "00:05"))
+        second = await self._run(calendar, alert_cache, inbox, _at(SESSION, "01:05"))
+        third = await self._run(calendar, alert_cache, inbox, _at(SESSION, "23:05"))
+
+        assert "email" in _delivered(first)
+        assert len(inbox.sent) == 1
+        for later in (second, third):
+            assert later["alert"] == "kite_token_expiring"
+            assert _delivered(later) == ["log"]
+            assert "already delivered" in str(later["suppressed"])
+
+    async def test_the_next_session_sends_again(
+        self, session: AsyncSession, alert_cache: Redis, token_store: AccessTokenStore
+    ) -> None:
+        del token_store
+        calendar = await self._calendar(session)
+        inbox = _Inbox()
+
+        await self._run(calendar, alert_cache, inbox, _at(SESSION, "10:05"))
+        await self._run(calendar, alert_cache, inbox, _at(SESSION, "11:05"))
+        tomorrow = await self._run(calendar, alert_cache, inbox, _at(NEXT_SESSION, "00:05"))
+
+        assert "email" in _delivered(tomorrow)
+        assert len(inbox.sent) == 2
+
+    async def test_a_new_token_sends_its_own_first_warning(
+        self, session: AsyncSession, alert_cache: Redis, token_store: AccessTokenStore
+    ) -> None:
+        """A fresh login is a new issue time and so a new marker: today's earlier send is not it."""
+        calendar = await self._calendar(session)
+        inbox = _Inbox()
+
+        await self._run(calendar, alert_cache, inbox, _at(SESSION, "09:05"))
+        token_store.save("new-live-token", issued_at=_at(SESSION, "09:30"))
+        # Midday: the new token is good and there is nothing to say.
+        assert await self._run(calendar, alert_cache, inbox, _at(SESSION, "12:05")) == {}
+        # 18:05: it dies at midnight, inside the six-hour warning window.
+        warning = await self._run(calendar, alert_cache, inbox, _at(SESSION, "18:05"))
+
+        assert warning["severity"] == "warning"
+        assert "email" in _delivered(warning)
+        assert len(inbox.sent) == 2
+
+    async def test_redis_being_down_still_sends(
+        self, session: AsyncSession, token_store: AccessTokenStore
+    ) -> None:
+        """Fail open: a repeated warning is noise, a swallowed one is a missed night."""
+        del token_store
+        calendar = await self._calendar(session)
+        inbox = _Inbox()
+        down: Redis = Redis.from_url(UNREACHABLE_REDIS_URL, socket_connect_timeout=1)
+        try:
+            first = await self._run(calendar, down, inbox, _at(SESSION, "10:05"))
+            second = await self._run(calendar, down, inbox, _at(SESSION, "11:05"))
+        finally:
+            await down.aclose()
+
+        assert "email" in _delivered(first)
+        assert "email" in _delivered(second)
+        assert len(inbox.sent) == 2
+
+    async def test_an_unreadable_calendar_still_sends(
+        self, alert_cache: Redis, token_store: AccessTokenStore
+    ) -> None:
+        """The calendar deciding silence must not also decide it when the database is down."""
+        del token_store
+
+        async def broken(day: dt.date) -> bool:
+            raise ConnectionError(f"the database is down on {day.isoformat()}")
+
+        inbox = _Inbox()
+        payload = await self._run(broken, alert_cache, inbox, _at(SESSION, "10:05"))
+
+        assert "email" in _delivered(payload)
+        assert len(inbox.sent) == 1
+
+    async def test_an_undelivered_alert_does_not_burn_the_day(
+        self, session: AsyncSession, alert_cache: Redis, token_store: AccessTokenStore
+    ) -> None:
+        """If no sink took it, the marker is released and the next run tries again."""
+        del token_store
+        calendar = await self._calendar(session)
+
+        class Refusing:
+            async def send(self, message: Message) -> None:
+                raise RuntimeError("smtp is on fire")
+
+        failed = await ops.run_kite_token_check(
+            calendar,
+            alert_cache,
+            _settings(ops_alert_email="ops@example.com"),
+            now=_at(SESSION, "10:05"),
+            mailer=Mailer(Refusing()),
+        )
+        inbox = _Inbox()
+        retried = await self._run(calendar, alert_cache, inbox, _at(SESSION, "11:05"))
+
+        failed_payload = failed["alert"]
+        assert isinstance(failed_payload, dict)
+        assert _delivered(failed_payload) == ["log"]
+        assert "email" in _delivered(retried)
+        assert len(inbox.sent) == 1
 
 
 class TestQueueBacklog:

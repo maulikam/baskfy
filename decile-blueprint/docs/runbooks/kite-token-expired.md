@@ -3,6 +3,7 @@
 **Alert:** `kite_token_expiring` (critical, or warning when it is only *about* to expire)
 **Raised by:** `decile.ops.check_kite_token`, hourly at :05 IST, and by the Prometheus rule on
 `decile:provider_error_rate:ratio15m{provider="kite"} > 0.5`
+**Repeats:** evaluated hourly, but raised only on NSE trading days and delivered (email/webhook/Sentry) at most once per stored token per IST day; later runs that day are logged as suppressed (DECISIONS-MERGE "Ops: token-expiry alert on trading days, once per day").
 **Verified against:** NOT YET — written from `decile_providers.tokens` and the Kite Connect
 documentation, not from a real expiry. See `docs/runbooks/README.md`.
 

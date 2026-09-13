@@ -7326,3 +7326,34 @@ make both tests permanently useless.
 
 **Reverse.** Remove the five `EXPECTED_PATHS` entries, the two `DOCUMENTED_TABLES` entries and the
 addendum; both gates go red again and say exactly why.
+
+## Build sleeves — keep the strategy switcher on the sleeve pages · ⚠ UNREVIEWED
+
+**Context.** Staff reach Swing / Volume / Tight as tabs on the Build row (`STAFF_BUILD_TABS`).
+Each sleeve page then rendered `SectionTabs section="swing|vbt|twt"`, which **replaced** that row
+with the sleeve's own tabs. Switching Volume → Swing meant clicking primary Build (→ Screens)
+and picking again.
+
+**Choice.** Staff on a sleeve still get the sleeve's own row, and they also get the Build hub row
+above it (`SectionTabs` + `isSleeveSection`). Civilians are unchanged (AFH 5.5).
+
+**Rejected.** Folding sleeve tabs into one long Build row (Screens and Setups in the same strip);
+a dropdown; putting sleeves back on the consumer Build row.
+
+**Reverse.** Drop the hub-row branch in `section-tabs.tsx` and `isSleeveSection`.
+
+## Overlap — stocks across strategies, including the screen · ⚠ UNREVIEWED
+
+**Context.** `/build/overlap` had three fixed lists (VBT ∩ TWT, Swing ∩ TWT, Screens ∩ VBT ∩ TWT).
+Screen names only appeared in that last triple, so a stock on the screen and on Swing was
+invisible unless it also cleared Volume and Tight.
+
+**Choice.** Lead with a membership table of Volume, Tight, Swing, and the selected screen. Default
+view is names on 2+ sources; "On the screen" lists every screen name with marks for the sleeves
+it also hits. Keep the named pairwise cuts, and add Swing ∩ Volume.
+
+**Rejected.** A free-form source picker; dropping the named lists; intersecting only the original
+two panels.
+
+**Reverse.** Remove `membershipOf` / `OverlapMatrix` and the Swing ∩ Volume panel; restore the
+three-list page.

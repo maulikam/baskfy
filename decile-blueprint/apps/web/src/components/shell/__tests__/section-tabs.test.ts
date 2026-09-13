@@ -37,4 +37,20 @@ describe("sectionTabIsActive", () => {
     expect(sectionTabIsActive("/discover/all", "/discover", discoverHrefs)).toBe(false);
     expect(sectionTabIsActive("/discover/all", "/discover/all", discoverHrefs)).toBe(true);
   });
+
+  it("lights the sleeve hub tab on a nested sleeve page, not Screens", () => {
+    const staffBuildHrefs = [
+      "/build",
+      "/build/backtests",
+      "/create",
+      "/build/overlap",
+      "/swing",
+      "/vbt",
+      "/twt",
+    ];
+    expect(sectionTabIsActive("/vbt/book", "/vbt", staffBuildHrefs)).toBe(true);
+    expect(sectionTabIsActive("/vbt/book", "/build", staffBuildHrefs)).toBe(false);
+    expect(sectionTabIsActive("/swing/watchlist", "/swing", staffBuildHrefs)).toBe(true);
+    expect(sectionTabIsActive("/swing", "/swing", staffBuildHrefs)).toBe(true);
+  });
 });

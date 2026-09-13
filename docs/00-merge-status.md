@@ -1639,3 +1639,20 @@ with the conversion moved into the pure layer.
 * **Eleven metrics the brief asks for still have no source**, now listed with what each would take:
   `docs/PORTFOLIO-COMMAND-CENTER.md` §7.4. Six regime figures are one route change away; an
   objective has no column at all; there is no route that returns a holding to Unallocated.
+
+---
+
+## Build sleeves and Overlap (13 Sep 2026)
+
+Staff on Swing / Volume / Tight lost the strategy tabs, because those only existed on the Build
+row. Switching sleeves meant clicking **Build** (Screens) and picking again. `SectionTabs` now
+keeps the staff Build row on sleeve pages, above the sleeve's own tabs. AFH 5.5 is unchanged for
+civilians.
+
+`/build/overlap` now leads with a membership table across Volume, Tight, Swing, **and** the
+selected screen (default: names on 2+ sources; "On the screen" for every screen name). The named
+pairwise lists remain, plus Swing ∩ Volume. Decision: `docs/DECISIONS-MERGE.md` (the two 13 Sep
+entries).
+
+**Not done.** Not verified in a browser against a live session — the matrix is unit-tested over
+fixtures. A screen with hundreds of rows will scroll; it is not virtualised.

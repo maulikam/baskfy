@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { InstrumentLink } from "@/components/instrument/instrument-link";
 import {
   filterMembershipRows,
+  overlapTableColumns,
   type Membership,
   type MembershipColumn,
   type MembershipView,
@@ -27,7 +28,7 @@ export function OverlapMatrix({
   screenKeys: readonly string[];
 }) {
   const [view, setView] = useState<MembershipView>("shared");
-  const readable = membership.columns.filter((column) => column.available);
+  const tableColumns = overlapTableColumns(membership.columns);
   const rows = useMemo(
     () => filterMembershipRows(membership.rows, view, screenKeys),
     [membership.rows, view, screenKeys],
@@ -35,7 +36,7 @@ export function OverlapMatrix({
   const screenAvailable = screenKeys.some((key) =>
     membership.columns.some((column) => column.key === key && column.available),
   );
-  const canThree = readable.length >= 3;
+  const canThree = tableColumns.filter((column) => column.available).length >= 3;
 
   return (
     <section
@@ -91,7 +92,7 @@ export function OverlapMatrix({
                 <thead>
                   <tr className="border-b border-border/70 text-left text-xs uppercase tracking-wide text-muted-foreground">
                     <th className="py-2 pr-3 font-medium">Symbol</th>
-                    {readable.map((column) => (
+                    {tableColumns.map((column) => (
                       <th
                         key={column.key}
                         className={cn(
@@ -100,11 +101,15 @@ export function OverlapMatrix({
                             ? null
                             : "max-w-[9rem] truncate",
                         )}
-                        title={`${column.label} · ${column.size} names`}
+                        title={
+                          column.available
+                            ? `${column.label} · ${column.size} names`
+                            : `${column.label} could not be read`
+                        }
                       >
                         {columnHeading(column)}
                         <span className="mt-0.5 block font-normal normal-case tracking-normal text-muted-foreground/80">
-                          {column.size}
+                          {column.available ? column.size : "unread"}
                         </span>
                       </th>
                     ))}
@@ -123,7 +128,7 @@ export function OverlapMatrix({
                       <td className="py-1.5 pr-3">
                         <InstrumentLink symbol={row.symbol} className="tabular-nums" />
                       </td>
-                      {readable.map((column) => {
+                      {tableColumns.map((column) => {
                         const on = row.sourceKeys.includes(column.key);
                         return (
                           <td key={column.key} className="px-2 py-1.5 text-center">

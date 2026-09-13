@@ -7369,3 +7369,18 @@ every visible screen; `?screen=` repeats. The named triple still uses the first 
 **Rejected.** Keeping a single screen column (the previous page); a native multi-select.
 
 **Reverse.** Restore `pickScreenId` and one `ScreenPicker` select.
+
+## Screens — rename, save, delete on owned rows · ⚠ UNREVIEWED
+
+**Context.** Overlap and Build listed screens whose names were a static heading. Example
+templates cannot be PATCHed (docs/01). Maulik asked to edit names and details, and to delete.
+
+**Choice.** Volume / Tight / Swing stay the first overlap columns even when unread. Owned
+screens get an inline name field, list Rename, editor Delete. Saving a template duplicates it
+first, then PATCHes the copy.
+
+**Rejected.** Making example screens writable in place (they are shared).
+
+**Reverse.** Restore the static `h1`, drop `ScreenIdentity` / list Rename, omit unread sleeve
+columns again.
+

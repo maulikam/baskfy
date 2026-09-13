@@ -1,7 +1,7 @@
 "use client";
 
 import type { ScreenDefinition, ScreenOut } from "@baskfy/api-client";
-import { Copy, Play, Plus, Trash2 } from "lucide-react";
+import { Copy, Pencil, Play, Plus, Trash2 } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -23,6 +23,7 @@ import {
   useDeleteScreen,
   useDuplicateScreen,
   useFactors,
+  useSaveScreen,
   useUniverses,
 } from "@/lib/screens/queries";
 import { defaultDefinition } from "@/lib/screens/defaults";
@@ -53,12 +54,16 @@ export function ScreensList({ initial, error }: ScreensListProps) {
   const universes = useUniverses();
   const duplicate = useDuplicateScreen();
   const remove = useDeleteScreen();
+  const save = useSaveScreen();
   const create = useCreateScreen();
   const [pendingDelete, setPendingDelete] = useState<ScreenOut | null>(null);
+  const [pendingRename, setPendingRename] = useState<ScreenOut | null>(null);
+  const [renameValue, setRenameValue] = useState("");
   const [screens, setScreens] = useState<ScreenOut[]>(initial ?? []);
   const [namePromptOpen, setNamePromptOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const nameInputRef = useRef<HTMLInputElement>(null);
+  const renameInputRef = useRef<HTMLInputElement>(null);
 
   const factorLabel = useMemo(() => {
     const byKey = new Map((factors.data ?? []).map((factor) => [factor.key, factor.label]));
@@ -101,6 +106,16 @@ export function ScreensList({ initial, error }: ScreensListProps) {
     setPendingDelete(null);
   }
 
+  async function confirmRename(screen: ScreenOut) {
+    const name = renameValue.trim();
+    if (name.length === 0) return;
+    const updated = await save.mutateAsync({ publicId: screen.public_id, name });
+    setScreens((current) =>
+      current.map((entry) => (entry.public_id === updated.public_id ? updated : entry)),
+    );
+    setPendingRename(null);
+  }
+
   return (
     <div className="space-y-10">
       <SectionTabs section="build" />
@@ -128,6 +143,7 @@ export function ScreensList({ initial, error }: ScreensListProps) {
       {create.error ? <ErrorState error={create.error} /> : null}
       {duplicate.error ? <ErrorState error={duplicate.error} /> : null}
       {remove.error ? <ErrorState error={remove.error} /> : null}
+      {save.error ? <ErrorState error={save.error} /> : null}
 
       <Section
         title="Your screens"
@@ -142,6 +158,10 @@ export function ScreensList({ initial, error }: ScreensListProps) {
         factorLabel={factorLabel}
         universeName={universeName}
         onDuplicate={(screen) => void duplicateScreen(screen)}
+        onRename={(screen) => {
+          setRenameValue(screen.name);
+          setPendingRename(screen);
+        }}
         onDelete={setPendingDelete}
         loading={initial === null}
       />
@@ -153,6 +173,10 @@ export function ScreensList({ initial, error }: ScreensListProps) {
         factorLabel={factorLabel}
         universeName={universeName}
         onDuplicate={(screen) => void duplicateScreen(screen)}
+        onRename={(screen) => {
+          setRenameValue(screen.name);
+          setPendingRename(screen);
+        }}
         onDelete={setPendingDelete}
         loading={initial === null}
       />
@@ -226,6 +250,47 @@ export function ScreensList({ initial, error }: ScreensListProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog
+        open={pendingRename !== null}
+        onOpenChange={(open) => (open ? undefined : setPendingRename(null))}
+      >
+        <DialogContent
+          className="max-w-md"
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            renameInputRef.current?.focus();
+          }}
+        >
+          <DialogTitle className="text-base font-semibold">Rename screen</DialogTitle>
+          <DialogDescription className="mt-2 text-sm text-muted-foreground">
+            This name shows on Build, Overlap, and anywhere the screen is listed.
+          </DialogDescription>
+          <form
+            className="mt-4 space-y-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (pendingRename) void confirmRename(pendingRename);
+            }}
+          >
+            <input
+              ref={renameInputRef}
+              data-testid="rename-screen-input"
+              value={renameValue}
+              onChange={(event) => setRenameValue(event.target.value)}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+            />
+            <div className="flex gap-2">
+              <Button type="submit" variant="primary" size="sm" disabled={save.isPending}>
+                Save name
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setPendingRename(null)}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -239,6 +304,7 @@ interface SectionProps {
   factorLabel: (key: string) => string;
   universeName: (slug: string) => string;
   onDuplicate: (screen: ScreenOut) => void;
+  onRename: (screen: ScreenOut) => void;
   onDelete: (screen: ScreenOut) => void;
 }
 
@@ -251,6 +317,7 @@ function Section({
   factorLabel,
   universeName,
   onDuplicate,
+  onRename,
   onDelete,
 }: SectionProps) {
   return (
@@ -275,6 +342,7 @@ function Section({
                 factorLabel={factorLabel}
                 universeName={universeName}
                 onDuplicate={onDuplicate}
+                onRename={onRename}
                 onDelete={onDelete}
               />
             </li>
@@ -290,6 +358,7 @@ interface ScreenCardProps {
   factorLabel: (key: string) => string;
   universeName: (slug: string) => string;
   onDuplicate: (screen: ScreenOut) => void;
+  onRename: (screen: ScreenOut) => void;
   onDelete: (screen: ScreenOut) => void;
 }
 
@@ -303,6 +372,7 @@ function ScreenCard({
   factorLabel,
   universeName,
   onDuplicate,
+  onRename,
   onDelete,
 }: ScreenCardProps) {
   const definition = parseDefinition(screen.definition);
@@ -336,6 +406,17 @@ function ScreenCard({
               <Copy aria-hidden="true" />
               Duplicate
             </Button>
+            {screen.editable ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                data-testid="rename-screen"
+                onClick={() => onRename(screen)}
+              >
+                <Pencil aria-hidden="true" />
+                Rename
+              </Button>
+            ) : null}
             {screen.editable ? (
               <Button
                 variant="ghost"

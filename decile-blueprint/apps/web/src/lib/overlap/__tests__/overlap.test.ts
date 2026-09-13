@@ -8,6 +8,7 @@ import {
   intersectionOf,
   intersectionSummary,
   membershipOf,
+  overlapTableColumns,
   pickScreenIds,
 } from "@/lib/overlap/overlap";
 
@@ -208,5 +209,34 @@ describe("membership across strategies and a screen", () => {
         (row) => row.symbol,
       ),
     ).toEqual(["TCS", "WIPRO"]);
+  });
+});
+
+describe("sleeves stay first", () => {
+  it("puts Volume, Tight, and Swing ahead of screens even when screens were passed first", () => {
+    const result = membershipOf([
+      { key: "exmpl0000001", label: "Investing 001", symbols: ["TCS"] },
+      set("swing", ["INFY"]),
+      set("twt", ["TCS"]),
+      set("vbt", ["TCS"]),
+    ]);
+    expect(overlapTableColumns(result.columns).map((column) => column.key)).toEqual([
+      "vbt",
+      "twt",
+      "swing",
+      "exmpl0000001",
+    ]);
+  });
+
+  it("keeps an unread sleeve in that first block instead of dropping it", () => {
+    const result = membershipOf([
+      set("vbt", ["TCS"]),
+      set("twt", null),
+      set("swing", ["TCS"]),
+      { key: "exmpl0000001", label: "Investing 001", symbols: ["WIPRO"] },
+    ]);
+    const columns = overlapTableColumns(result.columns);
+    expect(columns.map((column) => column.key)).toEqual(["vbt", "twt", "swing", "exmpl0000001"]);
+    expect(columns[1]?.available).toBe(false);
   });
 });

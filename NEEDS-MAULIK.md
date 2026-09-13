@@ -9,18 +9,16 @@ what was done meanwhile.
 
 ## 34. Commit + deploy ranking engine phases 1.2–1.5
 
-**Raised 13 Sep 2026.** · **Status:** ranking committed (`dd09526`); deploy in progress after
-Docker Desktop recovered.
+**Raised 13 Sep 2026.** · **Status:** ✅ **Deployed 13 Sep 2026 (Sunday, market shut)** as `b29823d`,
+which also carries the desk-daily container (§33) and a one-line web build fix
+(`defaultDefinition` lacked `ranking_mode`/`ranking_scope`, so `next build` failed on `6da7205`).
 
-**What is in HEAD (laptop):**
+`ship.sh`: `SWING OK`; `pins=3 running=11 release=b29823d twt_execution_true=0`; `desk-daily Up`
+and waiting for its slot; Beat no longer schedules desk collection. No execution flag was moved —
+the swing monitor/auto-execute flags read as the operator had them.
 
-* Commit `dd09526` — Ranking: phases 1.2–1.5 (desk_score Sort By, explainability UI,
-  research/selection/presets). Gates were ALL MET before commit.
-* AWS SSO for `baskfy-poc` is valid. No remote push required for image build.
-
-**What remains:** image push + `KEEP_MONITOR=1` deploy + `verify-swing.sh` from a clean
-`dd09526` worktree (dirty tree still has uncommitted `desk-daily` compose/scripts — do not
-ship those). Smoke: Sort By → Desk Momentum Quality Score; peek → A–F. Clear when verify is green.
+**Still yours to eyeball:** Sort By → Desk Momentum Quality Score; peek → A–F. The first real
+desk-daily run is Mon 14 Sep 18:30 IST — `docker compose logs desk-daily` should show `daily exited 0`.
 
 ---
 
@@ -41,7 +39,7 @@ blocker in the project.
 
 | | |
 |---|---|
-| **34** | **Deploy ranking (`dd09526`).** Commit done; Docker Desktop on the laptop will not start (`docker ps` → unable to start). See §34. |
+| **34** | ✅ **Deployed 13 Sep 2026** as `b29823d` — ranking + desk-daily container; verify green. Smoke the ranking UI by eye. See §34. |
 | **32** | **A Zerodha Console tradebook export.** You asked to "sync transactions from the kite account" — Kite's API cannot supply them, and nothing in Baskfy imports them. One CSV you download is the only path. See §32. |
 | **31** | ✅ **Done 12 Sep 2026.** You logged in; the box went `dd9cc73` → `8b074c7` and `verify-swing.sh` says `SWING OK`. |
 | **1** | ✅ **Shipped 12 Sep 2026** with the rest of the 25 commits, on a Saturday with the market shut. |

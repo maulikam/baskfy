@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { ScreenOption } from "@/lib/overlap/overlap";
 
 /**
- * Which screen feeds the three-way overlap. The choice lives in `?screen=` so the page stays a
+ * Which screen feeds the matrix's screen column. The choice lives in `?screen=` so the page stays a
  * link — shareable, bookmarkable, and checkable against a bug report.
  */
 export function ScreenPicker({

@@ -174,7 +174,8 @@ export const SECTION_TABS = {
     { href: "/create" as Route, label: "Create" },
     /* AFH 5.5: Swing / Volume breakout / Three weeks tight stay off this consumer row.
        Staff see them appended after Overlap via `buildSectionTabs("build", { isStaff })`.
-       SectionTabs reads isStaff from StaffProvider when the prop is omitted. Overlap stays:
+       On sleeve pages staff also keep that same Build row (`SectionTabs` + `isSleeveSection`),
+       so switching Volume → Swing does not require a hop through Screens. Overlap stays:
        it is a Build tool, not a sleeve. */
     { href: "/build/overlap" as Route, label: "Overlap" },
   ],
@@ -309,9 +310,18 @@ const STAFF_BUILD_TABS: readonly SectionTab[] = [
   { href: "/twt" as Route, label: "Tight" },
 ];
 
+/** The three operator sleeves that live under Build for staff. */
+export function isSleeveSection(section: SectionKey): boolean {
+  return section === "swing" || section === "vbt" || section === "twt";
+}
+
 /**
  * Section tabs for a hub. `SECTION_TABS.build` is the consumer default and stays unchanged.
  * Staff get Swing / Volume / Tight appended after Overlap.
+ *
+ * Sleeve pages (`swing` / `vbt` / `twt`) keep their own local row. Staff also get this Build
+ * row rendered above it (`SectionTabs`), so switching Volume → Swing does not require a hop
+ * through `/build`.
  */
 export function buildSectionTabs(
   section: SectionKey,

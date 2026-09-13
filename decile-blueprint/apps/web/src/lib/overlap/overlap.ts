@@ -55,8 +55,38 @@ export interface Intersection {
   summary: string;
 }
 
+export interface MembershipColumn {
+  key: string;
+  label: string;
+  available: boolean;
+  size: number;
+}
+
+export interface MembershipRow {
+  symbol: string;
+  sourceKeys: readonly string[];
+  count: number;
+}
+
+export interface Membership {
+  columns: readonly MembershipColumn[];
+  rows: MembershipRow[];
+  /** At least one source answered. An unread source is omitted from the columns that count. */
+  available: boolean;
+  summary: string;
+}
+
+export type MembershipView = "shared" | "three" | "screen" | "all";
+
 function unique(symbols: readonly string[]): string[] {
   return [...new Set(symbols.map((symbol) => symbol.trim().toUpperCase()).filter(Boolean))].sort();
+}
+
+function joinLabels(labels: readonly string[]): string {
+  if (labels.length === 0) return "";
+  if (labels.length === 1) return labels[0]!;
+  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+  return `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
 }
 
 /**
@@ -125,6 +155,99 @@ export function intersectionOf(sources: readonly SymbolSet[]): Intersection {
 }
 
 /**
+ * Every name on any readable source, tagged with which sources named it.
+ *
+ * An unread source is not a zero: it is omitted from the columns, and the summary says so.
+ * That is the table the overlap page needs so a screen stock can sit next to Swing / Volume /
+ * Tight instead of only appearing in one hard-coded triple.
+ */
+export function membershipOf(sources: readonly SymbolSet[]): Membership {
+  const columns: MembershipColumn[] = sources.map((set) => ({
+    key: set.key,
+    label: set.label,
+    available: set.symbols !== null,
+    size: set.symbols === null ? 0 : unique(set.symbols).length,
+  }));
+
+  const readable = sources.filter((set) => set.symbols !== null);
+  if (readable.length === 0) {
+    return {
+      columns,
+      rows: [],
+      available: false,
+      summary: membershipSummary(columns, []),
+    };
+  }
+
+  const bySymbol = new Map<string, Set<string>>();
+  for (const set of readable) {
+    for (const symbol of unique(set.symbols ?? [])) {
+      const keys = bySymbol.get(symbol) ?? new Set<string>();
+      keys.add(set.key);
+      bySymbol.set(symbol, keys);
+    }
+  }
+
+  const rows: MembershipRow[] = [...bySymbol.entries()]
+    .map(([symbol, keys]) => {
+      const sourceKeys = [...keys].sort();
+      return { symbol, sourceKeys, count: sourceKeys.length };
+    })
+    .sort((a, b) => b.count - a.count || a.symbol.localeCompare(b.symbol));
+
+  return {
+    columns,
+    rows,
+    available: true,
+    summary: membershipSummary(columns, rows),
+  };
+}
+
+export function filterMembershipRows(
+  rows: readonly MembershipRow[],
+  view: MembershipView,
+  screenKey: string | null,
+): MembershipRow[] {
+  switch (view) {
+    case "all":
+      return [...rows];
+    case "shared":
+      return rows.filter((row) => row.count >= 2);
+    case "three":
+      return rows.filter((row) => row.count >= 3);
+    case "screen":
+      if (!screenKey) return [];
+      return rows.filter((row) => row.sourceKeys.includes(screenKey));
+  }
+}
+
+export function membershipSummary(
+  columns: readonly MembershipColumn[],
+  rows: readonly MembershipRow[],
+): string {
+  const unread = columns.filter((column) => !column.available);
+  const readable = columns.filter((column) => column.available);
+  const unreadNote =
+    unread.length === 0
+      ? ""
+      : ` ${joinLabels(unread.map((column) => column.label))} could not be read, so those columns are omitted.`;
+
+  if (readable.length === 0) {
+    return `${joinLabels(unread.map((column) => column.label))} could not be read, so overlap cannot be computed. This is not the same as "no overlap".`;
+  }
+  if (rows.length === 0) {
+    return `The readable scans named no stocks on this session.${unreadNote}`;
+  }
+
+  const shared = rows.filter((row) => row.count >= 2).length;
+  const named = joinLabels(readable.map((column) => column.label));
+  if (shared === 0) {
+    return `${rows.length} ${rows.length === 1 ? "name" : "names"} across ${named}, none on more than one.${unreadNote}`;
+  }
+  return `${shared} ${shared === 1 ? "name sits" : "names sit"} on at least two of ${named} (${rows.length} named in all).${unreadNote}`;
+}
+
+/**
  * The sentence, worded so a zero cannot be misread as a failed read.
  */
 export function intersectionSummary(
@@ -132,12 +255,7 @@ export function intersectionSummary(
   shared: number,
   sizes: readonly number[],
 ): string {
-  const joined =
-    labels.length === 1
-      ? labels[0]!
-      : labels.length === 2
-        ? `${labels[0]} and ${labels[1]}`
-        : `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
+  const joined = joinLabels(labels);
 
   if (sizes.some((size) => size === 0)) {
     const empty = labels.filter((_, index) => sizes[index] === 0);

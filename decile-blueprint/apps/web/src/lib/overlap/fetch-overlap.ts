@@ -17,7 +17,8 @@ import { fetchToday as fetchVbtToday } from "@/lib/vbt/fetch";
  * Swing is today's setups, every status — the question is which names appear on both scans,
  * not which names cleared a given status filter.
  * Screens is whichever screen the URL names (default: the seeded example), run fresh so the
- * intersection is against the same session the sleeves are showing — not a stale prior run.
+ * table's screen column is against the same session the sleeves are showing — not a stale prior
+ * run. The page intersects all four, not only the Volume ∩ Tight triple.
  */
 
 export interface OverlapSources {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildSectionTabs,
+  isSleeveSection,
   LEGACY_REDIRECTS,
   NAV_GROUPS,
   NAV_ITEMS,
@@ -264,6 +265,17 @@ describe("the primary consumer IA", () => {
     ]);
     expect(buildSectionTabs("market", { isStaff: true }).map((t) => t.href)).toEqual(
       SECTION_TABS.market.map((t) => t.href),
+    );
+  });
+
+  it("names the three operator sleeves so the hub row can stay on their pages", () => {
+    expect(isSleeveSection("swing")).toBe(true);
+    expect(isSleeveSection("vbt")).toBe(true);
+    expect(isSleeveSection("twt")).toBe(true);
+    expect(isSleeveSection("build")).toBe(false);
+    expect(isSleeveSection("discover")).toBe(false);
+    expect(buildSectionTabs("swing", { isStaff: true }).map((t) => t.href)).toEqual(
+      SECTION_TABS.swing.map((t) => t.href),
     );
   });
 

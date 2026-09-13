@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SCREEN_ID,
   type SymbolSet,
+  filterMembershipRows,
   intersectionOf,
   intersectionSummary,
+  membershipOf,
   pickScreenId,
 } from "@/lib/overlap/overlap";
 
@@ -101,5 +103,68 @@ describe("which screen the page runs", () => {
   it("falls back to the seeded example when the query is missing or unknown", () => {
     expect(pickScreenId(undefined, screens)).toBe(DEFAULT_SCREEN_ID);
     expect(pickScreenId("nope", screens)).toBe(DEFAULT_SCREEN_ID);
+  });
+});
+
+describe("membership across strategies and a screen", () => {
+  it("tags each name with every source that named it, including the screen", () => {
+    const result = membershipOf([
+      set("vbt", ["RELIANCE", "TCS"]),
+      set("twt", ["TCS", "INFY"]),
+      set("swing", ["INFY", "HDFCBANK"]),
+      { key: "exmpl0000001", label: "Investing 001", symbols: ["TCS", "WIPRO"] },
+    ]);
+    expect(result.available).toBe(true);
+    expect(result.rows.map((row) => row.symbol)).toEqual([
+      "TCS",
+      "INFY",
+      "HDFCBANK",
+      "RELIANCE",
+      "WIPRO",
+    ]);
+    const tcs = result.rows.find((row) => row.symbol === "TCS");
+    expect(tcs?.sourceKeys).toEqual(["exmpl0000001", "twt", "vbt"]);
+    expect(tcs?.count).toBe(3);
+    const wipro = result.rows.find((row) => row.symbol === "WIPRO");
+    expect(wipro?.sourceKeys).toEqual(["exmpl0000001"]);
+    expect(result.summary).toMatch(/at least two/);
+  });
+
+  it("does not invent empty membership when a source could not be read", () => {
+    const result = membershipOf([
+      set("vbt", ["TCS"]),
+      set("twt", null),
+      set("swing", ["TCS", "INFY"]),
+    ]);
+    expect(result.available).toBe(true);
+    expect(result.columns.find((column) => column.key === "twt")?.available).toBe(false);
+    expect(result.rows).toHaveLength(2);
+    expect(result.summary).toMatch(/could not be read/);
+    expect(result.summary).toMatch(/omitted/);
+  });
+
+  it("says overlap cannot be computed when nothing could be read", () => {
+    const result = membershipOf([set("vbt", null), set("twt", null)]);
+    expect(result.available).toBe(false);
+    expect(result.rows).toEqual([]);
+    expect(result.summary).toMatch(/not the same as "no overlap"/);
+  });
+
+  it("lets the page keep screen-only names when asked, and hide them from the shared view", () => {
+    const result = membershipOf([
+      set("vbt", ["TCS"]),
+      { key: "exmpl0000001", label: "Investing 001", symbols: ["TCS", "WIPRO"] },
+    ]);
+    expect(filterMembershipRows(result.rows, "shared", "exmpl0000001").map((row) => row.symbol)).toEqual(
+      ["TCS"],
+    );
+    expect(filterMembershipRows(result.rows, "screen", "exmpl0000001").map((row) => row.symbol)).toEqual(
+      ["TCS", "WIPRO"],
+    );
+    expect(filterMembershipRows(result.rows, "all", "exmpl0000001").map((row) => row.symbol)).toEqual([
+      "TCS",
+      "WIPRO",
+    ]);
+    expect(filterMembershipRows(result.rows, "three", "exmpl0000001")).toEqual([]);
   });
 });

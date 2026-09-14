@@ -102,14 +102,15 @@ describe("allocationAnalytics", () => {
       [
         row(1, "Swing", "30000", {
           week_pnl: { amount: "-1200.00", label: "Change since last week's close" },
+          month_pnl: { amount: "4800.00", label: "Change over the last 30 days" },
         }),
         row(2, "Bonds", "20000"),
       ],
       null,
     );
-    expect(analytics.slices.map((slice) => [slice.name, slice.weekPnl])).toEqual([
-      ["Swing", "-1200.00"],
-      ["Bonds", null],
+    expect(analytics.slices.map((slice) => [slice.name, slice.weekPnl, slice.monthPnl])).toEqual([
+      ["Swing", "-1200.00", "4800.00"],
+      ["Bonds", null, null],
     ]);
   });
 

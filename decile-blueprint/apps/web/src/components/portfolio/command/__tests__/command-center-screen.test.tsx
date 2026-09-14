@@ -422,6 +422,39 @@ describe("the comparison table", () => {
     );
   });
 
+  it("table: carries Last 30 days beside This week, sortable, on the phone list too (Maulik, 14 Sep 2026)", async () => {
+    const user = userEvent.setup();
+    renderScreen({
+      portfolios: [
+        row(1, "Long term", "2000000", {
+          month_pnl: { amount: "-12000.00", label: "Change over the last 30 days" },
+        }),
+        row(2, "Swing Manual", "1500000", {
+          month_pnl: { amount: "58000.00", label: "Change over the last 30 days" },
+        }),
+      ],
+    });
+    const table = screen.getByTestId("comparison-table");
+    const header = within(table).getByRole("columnheader", { name: /Last 30 days/ });
+    expect(header).toBeInTheDocument();
+
+    const first = () =>
+      within(table)
+        .getAllByRole("link")
+        .map((a) => a.textContent)
+        .find((t) => t === "Long term" || t === "Swing Manual");
+    // By value, Long term (20L) leads; the biggest 30-day gain leads once sorted by that column.
+    expect(first()).toBe("Long term");
+    await user.click(within(table).getByRole("button", { name: /Last 30 days/ }));
+    expect(first()).toBe("Swing Manual");
+    expect(header).toHaveAttribute("aria-sort", "descending");
+    await user.click(within(table).getByRole("button", { name: /Last 30 days/ }));
+    expect(first()).toBe("Long term");
+    expect(screen.getByTestId("portfolio-row-2")).toHaveTextContent("58,000");
+
+    expect(screen.getByTestId("portfolio-cards")).toHaveTextContent("Last 30 days");
+  });
+
   it("table: a row expands to show the detail behind it", async () => {
     const user = userEvent.setup();
     renderScreen();

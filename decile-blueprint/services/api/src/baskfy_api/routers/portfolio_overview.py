@@ -81,7 +81,7 @@ from __future__ import annotations
 
 import datetime as dt
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Final
@@ -94,7 +94,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.auth import AuthenticatedDep, Principal
 from baskfy_api.db import SessionDep
-from baskfy_api.invoices import today_ist
+from baskfy_api.invoices import IST, today_ist
 from baskfy_api.live_prices import live_prices_by_instrument
 from baskfy_api.problems import Problem, ProblemType, not_found
 from baskfy_core.allocation_ledger import (
@@ -155,6 +155,7 @@ from baskfy_core.models import (
     PortfolioHolding,
     PortfolioSleeve,
     Screen,
+    TradingDay,
 )
 from baskfy_core.models.accounts import (
     BrokerCash,
@@ -189,6 +190,7 @@ from baskfy_core.reconciliation import (
     freeze_report,
     resolve,
 )
+from baskfy_core.seed_data import NSE_EXCHANGE_ID
 
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 
@@ -229,6 +231,9 @@ _STATUS_SYNCED: Final = "Synced"
 #: valuation into a zero, and every place that decides whether to ask it should say why, not 2.
 _MIN_MARKS_FOR_A_RETURN: Final = 2
 
+#: The weekly move's label. "Since last week's close", on what is held now — see `_week_move`.
+WEEK_LABEL: Final = "Change since last week's close"
+
 #: A stored mark of one rupee or less is not a portfolio — it is a placeholder (audit 0.4) that
 #: turns TWR and drawdown into -100 % and the peak tile into ₹1.00. Derived returns use only
 #: marks strictly above this; the chart still shows every stored row.
@@ -236,6 +241,15 @@ _MIN_REAL_VALUATION: Final = ONE
 
 #: The two closes §6.2's "vs previous close" needs, per instrument.
 _CLOSES_PER_INSTRUMENT: Final = 2
+
+#: When the NSE cash session opens, IST. Before it, a quote is the previous session's last trade.
+_SESSION_OPEN: Final = dt.time(9, 15)
+
+#: How far back the calendar is read to find a session. Longer than any NSE closure on record.
+_CALENDAR_LOOKBACK: Final = dt.timedelta(days=21)
+
+#: ``date.weekday()`` values from Saturday onward.
+_SATURDAY: Final = 5
 
 #: How many activity rows one page returns by default. An activity feed is read from the top; a
 #: user who wants a year of it is exporting, not scrolling.
@@ -462,6 +476,7 @@ class PortfolioRowOut(BaseModel):
     counts_toward_total: bool
     excluded_note: str | None = None
     todays_pnl: MoneyMoveOut
+    week_pnl: MoneyMoveOut | None = None
     headline_return: ReturnFigureOut
     #: The publisher's own record. ``None`` for everything the user built themselves — there is
     #: no publisher whose record it could be, and an empty labelled figure would imply one.
@@ -556,6 +571,7 @@ class HeroOut(BaseModel):
 
     current_value: Decimal
     todays_pnl: MoneyMoveOut
+    week_pnl: MoneyMoveOut | None = None
     total_pnl: MoneyMoveOut
     xirr: LabelledRateOut
     twr: LabelledRateOut
@@ -878,6 +894,7 @@ class PortfolioSummaryOut(BaseModel):
     invested: Decimal | None = None
     invested_unavailable_reason: str | None = None
     todays_pnl: MoneyMoveOut
+    week_pnl: MoneyMoveOut | None = None
     total_pnl: MoneyMoveOut
     headline_return: ReturnFigureOut
     model_return: ReturnFigureOut | None = None
@@ -1206,6 +1223,10 @@ class _Prices:
     dated: Mapping[int, dt.date]
     unpriced: tuple[int, ...]
     live_overlay: bool = False
+    #: The close each instrument ended last week on — the base "this week" is measured from.
+    week_base: Mapping[int, Decimal] = field(default_factory=dict)
+    #: The session ``week_base`` is dated: the last session before the current week began.
+    week_since: dt.date | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1367,6 +1388,27 @@ def _label_for_sync(on: dt.date | None) -> str:
     if on is None:
         return "Holdings not synced yet"
     return f"Holdings synced: {on.isoformat()}"
+
+
+def _synced_on_by_account(ledger: _Ledger) -> dict[int, dt.date]:
+    """The IST day each account last synced: its holdings stamp, or a cash row if newer.
+
+    ``broker_account.holdings_synced_at`` is what a live sync writes (0048). ``broker_cash`` is kept
+    as a second source because it is the schema's other dated truth about an account, but nothing
+    writes it today, and reading it alone reported every synced account as "never synced".
+    """
+    dated: dict[int, dt.date] = {}
+    for account_id, account in ledger.brokers.items():
+        if account.holdings_synced_at is not None:
+            dated[int(account_id)] = account.holdings_synced_at.astimezone(IST).date()
+    for row in ledger.broker_cash:
+        key = int(row.broker_account_id)
+        dated[key] = max(dated.get(key, row.as_of), row.as_of)
+    return dated
+
+
+def _latest_sync(ledger: _Ledger) -> dt.date | None:
+    return max(_synced_on_by_account(ledger).values(), default=None)
 
 
 def _sync_summary(statuses: Sequence[SyncStatusOut]) -> str:
@@ -1687,12 +1729,36 @@ async def _load_prices(session: AsyncSession, instrument_ids: Sequence[int]) -> 
     #
     # `dated` is left alone: it records which session the stored close came from, and a live mark
     # has no session.
+    #
+    # ...BUT ONLY WHEN THE QUOTE IS NEWER THAN THE STORED CLOSE (14 Sep 2026). A Kite quote on a
+    # holiday, a weekend, before 09:15, or after the nightly has stored the day, is the last trade
+    # of a session whose official close is already `latest`. Overlaying it made "Today" the gap
+    # between that session's last trade and its own official close — minus ₹2,226 on a ₹99.8 L
+    # book on an NSE holiday, a number about nothing. When the stored close already covers the
+    # quote's session, the close stays and "Today" is that session's move against the one before.
+    now = _now_ist()
+    today = now.date()
+    closed, open_days = await _calendar_near(session, today)
+    quote_bound = today if now.time() >= _SESSION_OPEN else today - dt.timedelta(days=1)
+    quote_session = _last_session_on_or_before(quote_bound, closed=closed, open_days=open_days)
     live = await live_prices_by_instrument(session, list(instrument_ids))
+    overlaid = False
     for instrument_id, price in live.items():
+        stored_on = dated.get(instrument_id)
+        if stored_on is not None and stored_on >= quote_session:
+            continue
         stored_close = latest.get(instrument_id)
         if stored_close is not None:
             previous[instrument_id] = stored_close
         latest[instrument_id] = price
+        overlaid = True
+
+    week_since = _last_session_on_or_before(
+        quote_session - dt.timedelta(days=quote_session.weekday() + 1),
+        closed=closed,
+        open_days=open_days,
+    )
+    week_base = await _closes_on_or_before(session, instrument_ids, week_since)
 
     unpriced = tuple(sorted(set(instrument_ids) - set(latest)))
     as_of = max(dated.values()) if dated else None
@@ -1702,8 +1768,80 @@ async def _load_prices(session: AsyncSession, instrument_ids: Sequence[int]) -> 
         previous=previous,
         dated=dated,
         unpriced=unpriced,
-        live_overlay=bool(live),
+        live_overlay=overlaid,
+        week_base=week_base,
+        week_since=week_since,
     )
+
+
+def _now_ist() -> dt.datetime:
+    """Seam for tests — production reads the wall clock, in IST."""
+    return dt.datetime.now(tz=IST)
+
+
+async def _calendar_near(
+    session: AsyncSession, today: dt.date
+) -> tuple[frozenset[dt.date], frozenset[dt.date]]:
+    """``(named closures, named sessions)`` from the NSE calendar, over the last few weeks."""
+    rows = (
+        await session.execute(
+            select(TradingDay.date, TradingDay.is_trading_day).where(
+                TradingDay.exchange_id == NSE_EXCHANGE_ID,
+                TradingDay.date >= today - _CALENDAR_LOOKBACK - dt.timedelta(days=7),
+                TradingDay.date <= today,
+            )
+        )
+    ).all()
+    closed = frozenset(row.date for row in rows if not row.is_trading_day)
+    open_days = frozenset(row.date for row in rows if row.is_trading_day)
+    return closed, open_days
+
+
+def _last_session_on_or_before(
+    day: dt.date, *, closed: frozenset[dt.date], open_days: frozenset[dt.date]
+) -> dt.date:
+    """The newest NSE session on or before ``day``.
+
+    The calendar is the authority where it has a row. A day it does not carry is a session on a
+    weekday and not on a weekend — ``is_session_day``'s rule, so a calendar not loaded that far
+    degrades to weekdays rather than to nothing.
+    """
+    candidate = day
+    for _ in range(_CALENDAR_LOOKBACK.days):
+        if candidate in open_days:
+            return candidate
+        if candidate not in closed and candidate.weekday() < _SATURDAY:
+            return candidate
+        candidate -= dt.timedelta(days=1)
+    return candidate
+
+
+async def _closes_on_or_before(
+    session: AsyncSession, instrument_ids: Sequence[int], day: dt.date
+) -> dict[int, Decimal]:
+    """Each instrument's newest ``close_raw`` dated on or before ``day``. Bounded below so the
+    hypertable scan stays small; a name with no print in that window has no weekly base."""
+    ranked = (
+        select(
+            OhlcvDaily.instrument_id.label("instrument_id"),
+            OhlcvDaily.close_raw.label("close_raw"),
+            func.row_number()
+            .over(partition_by=OhlcvDaily.instrument_id, order_by=OhlcvDaily.date.desc())
+            .label("recency"),
+        )
+        .where(
+            OhlcvDaily.instrument_id.in_(list(instrument_ids)),
+            OhlcvDaily.date <= day,
+            OhlcvDaily.date >= day - _CALENDAR_LOOKBACK,
+        )
+        .subquery()
+    )
+    rows = (
+        await session.execute(
+            select(ranked.c.instrument_id, ranked.c.close_raw).where(ranked.c.recency == 1)
+        )
+    ).all()
+    return {int(row.instrument_id): row.close_raw for row in rows}
 
 
 def _flow_from(row: PortfolioCashFlow) -> LedgerCashFlow:
@@ -1994,6 +2132,43 @@ def _todays_move(ledger: _Ledger, positions: Sequence[_Position], *, label: str)
         pct=None if base == ZERO else (money(move) / base).quantize(RETURN_PRECISION),
         label=label,
         since=None,
+    )
+
+
+def _week_move(ledger: _Ledger, positions: Sequence[_Position]) -> MoneyMoveOut:
+    """What the positions handed in have moved since the close of last week's final session.
+
+    Measured on the quantities held *now*, like "Today": a name bought on Wednesday is counted
+    from last week's close. There is no trade history to do better with yet, and the label says
+    what the figure is rather than calling it a return.
+    """
+    since = ledger.prices.week_since
+    move = ZERO
+    base = ZERO
+    measured = False
+    for position in positions:
+        instrument_id = position.key.instrument_id
+        latest = ledger.prices.latest.get(instrument_id)
+        start = ledger.prices.week_base.get(instrument_id)
+        if latest is None or start is None:
+            continue
+        measured = True
+        quantity = position.holding.quantity
+        move += quantity * (latest - start)
+        base += quantity * start
+    if not measured:
+        return _money_move(
+            amount=None,
+            pct=None,
+            label=WEEK_LABEL,
+            since=since,
+            unavailable_reason="No close from last week to compare against yet",
+        )
+    return _money_move(
+        amount=money(move),
+        pct=None if base == ZERO else (money(move) / base).quantize(RETURN_PRECISION),
+        label=WEEK_LABEL,
+        since=since,
     )
 
 
@@ -2427,6 +2602,7 @@ async def portfolio_overview(
     hero = HeroOut(
         current_value=current_value,
         todays_pnl=_todays_move(ledger, priced_positions, label="Change since the previous close"),
+        week_pnl=_week_move(ledger, priced_positions),
         total_pnl=(
             _money_move(
                 amount=money(invested_value - invested),
@@ -2536,6 +2712,14 @@ async def portfolio_overview(
                 ],
                 label="Change since the previous close",
             ),
+            week_pnl=_week_move(
+                ledger,
+                [
+                    position
+                    for position in members
+                    if position.key.instrument_id not in ledger.prices.unpriced
+                ],
+            ),
             headline_return=_headline_for(
                 portfolio, [_nav_point(row) for row in series.get(portfolio_id, [])]
             ),
@@ -2585,7 +2769,7 @@ async def portfolio_overview(
         )
     )
 
-    synced_on = max((row.as_of for row in ledger.broker_cash), default=None)
+    synced_on = _latest_sync(ledger)
     sync_status = _sync_status(ledger)
     return OverviewOut(
         prices_as_of=ledger.prices.as_of,
@@ -2659,7 +2843,7 @@ def _attention_out(item: AttentionItem) -> AttentionOut:
 
 def _sync_status(ledger: _Ledger) -> list[SyncStatusOut]:
     """§6.1's per-broker sync status, one row per connected account, dated or explicitly never."""
-    dated = {int(row.broker_account_id): row.as_of for row in ledger.broker_cash}
+    dated = _synced_on_by_account(ledger)
     return [
         SyncStatusOut(
             broker=_broker_ref(account),
@@ -2949,7 +3133,7 @@ async def portfolio_holdings(
             )
         )
 
-    synced_on = max((row.as_of for row in ledger.broker_cash), default=None)
+    synced_on = _latest_sync(ledger)
     return HoldingsOut(
         prices_as_of=ledger.prices.as_of,
         prices_label=_label_for_prices(
@@ -4301,7 +4485,7 @@ async def portfolio_detail(
         for account_id in sorted({position.key.broker_account_id for position in members})
         if account_id in ledger.brokers
     ]
-    synced_on = max((cash_row.as_of for cash_row in ledger.broker_cash), default=None)
+    synced_on = _latest_sync(ledger)
     summary = PortfolioSummaryOut(
         portfolio_id=portfolio_id,
         name=portfolio.name,
@@ -4317,6 +4501,7 @@ async def portfolio_detail(
             None if invested is not None else "No purchase prices on record yet"
         ),
         todays_pnl=_todays_move(ledger, priced_members, label="Change since the previous close"),
+        week_pnl=_week_move(ledger, priced_members),
         total_pnl=(
             _money_move(
                 amount=money(invested_value - invested),

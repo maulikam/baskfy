@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import datetime as dt
 import re
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
@@ -50,6 +50,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from baskfy_api.auth import Principal, PrincipalKind
+from baskfy_api.invoices import IST
 from baskfy_api.problems import Problem, ProblemType
 from baskfy_api.routers.portfolio_overview import (
     BrokerRefOut,
@@ -1446,11 +1447,100 @@ async def test_live_overlay_sets_previous_to_the_stored_recency_one_close(
         "live_prices_by_instrument",
         AsyncMock(return_value=live),
     )
+    # The session after the newest stored close, mid-morning: the quote is genuinely newer.
+    monkeypatch.setattr(overview_mod, "_now_ist", lambda: _ist(TODAY + dt.timedelta(days=1), 11))
     prices = await overview_mod._load_prices(session, [book.infy])
     assert prices.latest[book.infy] == Decimal("1250.00")
     assert prices.previous[book.infy] == Decimal("1200"), (
         "previous must be the stored recency-1 close, not recency-2"
     )
+
+
+def _ist(day: dt.date, hour: int, minute: int = 0) -> dt.datetime:
+    return dt.datetime.combine(day, dt.time(hour, minute), tzinfo=IST)
+
+
+@requires_db
+@pytest.mark.parametrize(
+    ("when", "why"),
+    [
+        (lambda: _ist(TODAY, 20), "after the close, once the nightly has stored the day"),
+        (lambda: _ist(TODAY + dt.timedelta(days=1), 8), "before the next session opens"),
+    ],
+)
+async def test_a_quote_from_a_session_already_closed_does_not_overlay(
+    session: AsyncSession,
+    book: Book,
+    monkeypatch: pytest.MonkeyPatch,
+    when: Callable[[], dt.datetime],
+    why: str,
+) -> None:
+    """14 Sep 2026, an NSE holiday: "Today" read minus ₹2,226 on a ₹99.8 L book.
+
+    The quote was the last trade of 11 Sep and the stored close was 11 Sep's official close, so
+    the overlay turned "Today" into the gap between one session's last trade and its own close.
+    When the stored close already covers the quote's session, the close stays and "Today" is
+    that session's move against the one before it.
+    """
+    from baskfy_api.routers import portfolio_overview as overview_mod  # noqa: PLC0415
+
+    monkeypatch.setattr(
+        overview_mod,
+        "live_prices_by_instrument",
+        AsyncMock(return_value={book.infy: Decimal("1203.40")}),
+    )
+    monkeypatch.setattr(overview_mod, "_now_ist", when)
+    prices = await overview_mod._load_prices(session, [book.infy])
+    assert prices.latest[book.infy] == Decimal("1200"), why
+    assert prices.previous[book.infy] == Decimal("1100"), why
+    assert prices.live_overlay is False, why
+
+
+def test_the_last_session_skips_a_named_holiday_and_the_weekend() -> None:
+    from baskfy_api.routers.portfolio_overview import (  # noqa: PLC0415
+        _last_session_on_or_before,
+    )
+
+    ganesh_chaturthi = dt.date(2026, 9, 14)
+    closed = frozenset({ganesh_chaturthi})
+    friday = dt.date(2026, 9, 11)
+    assert _last_session_on_or_before(ganesh_chaturthi, closed=closed, open_days=frozenset()) == (
+        friday
+    )
+    assert (
+        _last_session_on_or_before(dt.date(2026, 9, 13), closed=frozenset(), open_days=frozenset())
+        == friday
+    )
+    # A weekday the calendar does not carry is a session, so a short calendar never goes silent.
+    assert _last_session_on_or_before(
+        dt.date(2026, 9, 15), closed=closed, open_days=frozenset()
+    ) == dt.date(2026, 9, 15)
+
+
+@requires_db
+async def test_this_week_is_measured_from_last_weeks_final_close(
+    session: AsyncSession, book: Book, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The weekly move's base is the close of the last session before the current week began.
+
+    TODAY is Tuesday 18 Aug 2026; the week began Monday 17 Aug, so the base is Friday 14 Aug.
+    """
+    from baskfy_api.routers import portfolio_overview as overview_mod  # noqa: PLC0415
+
+    friday = dt.date(2026, 8, 14)
+    await _bar(session, book.infy, friday, Decimal("1000"))
+    await session.flush()
+    monkeypatch.setattr(overview_mod, "live_prices_by_instrument", AsyncMock(return_value={}))
+    monkeypatch.setattr(overview_mod, "_now_ist", lambda: _ist(TODAY, 20))
+
+    prices = await overview_mod._load_prices(session, [book.infy])
+    assert prices.week_since == friday
+    assert prices.week_base[book.infy] == Decimal("1000")
+
+    view = await portfolio_overview(session, book.owner)
+    assert view.hero.week_pnl is not None
+    assert view.hero.week_pnl.since == friday
+    assert view.hero.week_pnl.amount is not None
 
 
 #: Every write ``portfolio_overview`` is allowed to declare, and why each is bookkeeping rather

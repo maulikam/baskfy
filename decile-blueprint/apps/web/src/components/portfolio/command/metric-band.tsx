@@ -161,6 +161,9 @@ export function MetricBand({ snapshot }: { snapshot: ExecutiveSnapshot }) {
         <div className="min-w-[15rem] flex-1">
           <MetricCell metric={snapshot.todaysPnl} emphasis="hero" signed />
         </div>
+        <div className="min-w-[15rem] flex-1">
+          <MetricCell metric={snapshot.weekPnl} emphasis="hero" signed />
+        </div>
       </div>
 
       <div className="flex flex-wrap divide-x divide-border">

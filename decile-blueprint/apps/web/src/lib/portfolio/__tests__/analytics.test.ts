@@ -97,6 +97,22 @@ describe("allocationAnalytics", () => {
     return analytics.slices.reduce((total, slice) => total + Number(slice.weightPct ?? 0), 0);
   }
 
+  it("carries each portfolio's weekly move beside its daily one, and null where the API has none", () => {
+    const analytics = allocationAnalytics(
+      [
+        row(1, "Swing", "30000", {
+          week_pnl: { amount: "-1200.00", label: "Change since last week's close" },
+        }),
+        row(2, "Bonds", "20000"),
+      ],
+      null,
+    );
+    expect(analytics.slices.map((slice) => [slice.name, slice.weekPnl])).toEqual([
+      ["Swing", "-1200.00"],
+      ["Bonds", null],
+    ]);
+  });
+
   it("weights every portfolio against the whole book, unallocated included", () => {
     const analytics = allocationAnalytics(rows, pile("10000"));
 

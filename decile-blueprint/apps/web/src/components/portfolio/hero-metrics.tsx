@@ -110,6 +110,12 @@ export function HeroMetrics({ hero }: { hero: Hero }) {
           <MoveFigure move={hero.todays_pnl} testId="todays-pnl-figure" />
         </Metric>
 
+        {hero.week_pnl ? (
+          <Metric label="This week" testId="hero-week-pnl">
+            <MoveFigure move={hero.week_pnl} testId="week-pnl-figure" />
+          </Metric>
+        ) : null}
+
         <Metric label="Total P&L" testId="hero-total-pnl">
           <MoveFigure move={hero.total_pnl} testId="total-pnl-figure" />
         </Metric>

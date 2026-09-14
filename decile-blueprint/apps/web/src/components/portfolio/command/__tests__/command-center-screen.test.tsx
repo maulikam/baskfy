@@ -87,6 +87,7 @@ function overview(over: Partial<Overview> = {}): Overview {
       holdings_without_cost_basis: 0,
       pending_reconciliation: false,
       todays_pnl: { amount: "72029.56", label: "today", pct: "0.019900" },
+      week_pnl: { amount: "-41250.00", label: "Change since last week's close", pct: "-0.011100" },
       total_pnl: { amount: "580509.37", label: "total" },
       twr: { label: "TWR since created", since: "2026-01-01", value: "0.187000" },
       xirr: { label: "XIRR", since: "2026-01-01", value: "0.214000" },
@@ -241,6 +242,15 @@ describe("the executive snapshot", () => {
     expect(band).toHaveTextContent("Invested");
     expect(band).toHaveTextContent("XIRR");
     expect(band).toHaveTextContent("Drawdown");
+  });
+
+  it("snapshot: this week sits beside today, with its amount and percentage", () => {
+    renderScreen();
+    const band = screen.getByTestId("metric-band");
+
+    expect(band).toHaveTextContent("This week");
+    expect(band).toHaveTextContent("₹41,250");
+    expect(band).toHaveTextContent("-1.11%");
   });
 
   it("snapshot: today's move carries its percentage as well as its amount", () => {

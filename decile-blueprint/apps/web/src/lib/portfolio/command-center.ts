@@ -145,6 +145,7 @@ export interface ExecutiveSnapshot {
   readonly cash: Metric;
   readonly unallocated: Metric;
   readonly todaysPnl: Metric;
+  readonly weekPnl: Metric;
   readonly unrealisedPnl: Metric;
   readonly realisedPnl: Metric;
   readonly xirr: Metric;
@@ -319,6 +320,13 @@ export function commandCenter(
       hero?.todays_pnl?.amount,
       hero?.todays_pnl?.unavailable_reason ?? "No previous close to compare against yet.",
       { pct: asPercent(hero?.todays_pnl?.pct) },
+    ),
+    weekPnl: metric(
+      "This week",
+      "The change in the value of what you hold now since the close of last week's final session. Deposits and withdrawals are not part of it, and a name bought this week is counted from last week's close.",
+      hero?.week_pnl?.amount,
+      hero?.week_pnl?.unavailable_reason ?? "No close from last week to compare against yet.",
+      { pct: asPercent(hero?.week_pnl?.pct) },
     ),
     unrealisedPnl: metric(
       "Unrealised",

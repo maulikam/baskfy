@@ -117,6 +117,28 @@ describe("§6.2 — five hero metrics, and not a sixth", () => {
     expect(screen.getByTestId("hero-invested")).toHaveTextContent("₹6,08,200");
   });
 
+  it("adds This week beside Today when the API carries it (Maulik, 14 Sep 2026)", () => {
+    /* §6.2's five became six by decision: "this should show today, weekly as well and for each
+       portfolio and then combined". An API without the field still draws exactly five. */
+    draw({
+      ...OVERVIEW,
+      hero: {
+        ...OVERVIEW.hero,
+        week_pnl: {
+          label: "Change since last week's close",
+          amount: "-15400.00",
+          pct: "-0.0214",
+          since: "2026-09-04",
+        },
+      },
+    });
+    expect(screen.getByTestId("hero-metrics").children).toHaveLength(6);
+    const week = screen.getByTestId("week-pnl-figure");
+    expect(week).toHaveTextContent("₹15,400");
+    expect(week).toHaveTextContent("-2.14%");
+    expect(week).toHaveTextContent("Change since last week's close");
+  });
+
   it("shows today's move in rupees and in percent, as §6.2 asks", () => {
     draw();
     const today = screen.getByTestId("todays-pnl-figure");

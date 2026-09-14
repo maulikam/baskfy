@@ -6600,6 +6600,7 @@ export interface components {
             todays_pnl: components["schemas"]["MoneyMoveOut"];
             total_pnl: components["schemas"]["MoneyMoveOut"];
             twr: components["schemas"]["LabelledRateOut"];
+            week_pnl?: components["schemas"]["MoneyMoveOut"] | null;
             xirr: components["schemas"]["LabelledRateOut"];
         };
         /**
@@ -8189,6 +8190,7 @@ export interface components {
             todays_pnl: components["schemas"]["MoneyMoveOut"];
             /** Value */
             value: string;
+            week_pnl?: components["schemas"]["MoneyMoveOut"] | null;
         };
         /**
          * PortfolioSource
@@ -8244,6 +8246,7 @@ export interface components {
             total_pnl: components["schemas"]["MoneyMoveOut"];
             /** Value */
             value: string;
+            week_pnl?: components["schemas"]["MoneyMoveOut"] | null;
             xirr: components["schemas"]["LabelledRateOut"];
         };
         /**

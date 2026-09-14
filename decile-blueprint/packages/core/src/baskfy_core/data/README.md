@@ -3,15 +3,24 @@
 ## `nse_trading_holidays.csv`
 
 NSE **equity segment** trading holidays, 2011 → current year, one row per holiday:
-`date,name`. Weekends are *not* listed — they are derived.
+`date,name,confidence`. Weekends are *not* listed — they are derived. `confidence` is `fixed`
+for a date computed from a rule (a fixed Gregorian date, or Good Friday via the Easter
+algorithm) or `circular` for a lunar/movable date taken from NSE's dated circular for that year;
+`baskfy_core.trading_calendar.parse_seed_holidays` rejects any other value.
 
 ### Provenance and confidence — read this before trusting it
 
-The doc bundle does not contain an NSE holiday list, and this environment has no access to
-NSE's holiday circulars, so **this file is a best-effort reconstruction, not a verified
-artefact.** It is almost certainly wrong in places: Indian exchange holidays follow lunar
-calendars, several are declared per-year by circular, and special sessions (Muhurat trading,
-budget-day Saturdays, live trading-from-DR-site Saturdays) are not derivable from any rule.
+The doc bundle does not contain a complete NSE holiday list, and most years' holiday circulars
+were not reachable when this was built, so **this file is a best-effort reconstruction for most
+years, not a verified artefact.** It is almost certainly wrong in places for the years where only
+`fixed` dates are seeded: Indian exchange holidays follow lunar calendars, several are declared
+per-year by circular, and special sessions (Muhurat trading, budget-day Saturdays, live
+trading-from-DR-site Saturdays) are not derivable from any rule.
+
+**2026 is the exception.** Its ten lunar/movable equity holidays were added on 14 Sep 2026 from
+NSE's 2026 circular, cross-checked across two independent sources (niftyscanner.in and groww.in)
+that agreed, each row carrying `confidence=circular`. No other year has had its circular read, so
+every other year's file still holds only the deterministic (`fixed`) dates.
 
 Treat every row with `source='holiday'` or `source='derived'` in `trading_day` as *provisional*.
 

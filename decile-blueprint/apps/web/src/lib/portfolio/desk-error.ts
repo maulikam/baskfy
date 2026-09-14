@@ -1,4 +1,5 @@
 import { DeskUnavailable } from "@/lib/desk/fetch";
+import { DESK_NO_EVALUATION } from "@/lib/portfolio/regime";
 
 /**
  * What a reader is told when the desk does not answer.
@@ -13,6 +14,7 @@ import { DeskUnavailable } from "@/lib/desk/fetch";
  * reading the logs, and the person reading the page can only act on "it did not answer".
  */
 export function readerSafeDeskError(error: unknown): string {
+  if (error instanceof DeskUnavailable && error.status === 404) return DESK_NO_EVALUATION;
   return error instanceof DeskUnavailable
     ? "The desk did not answer."
     : "The desk could not be reached.";

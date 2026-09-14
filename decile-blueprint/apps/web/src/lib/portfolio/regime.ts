@@ -496,6 +496,13 @@ export type RegimePanelState =
   | { readonly kind: "ready"; readonly reading: RegimeReading }
   | { readonly kind: "unavailable"; readonly notice: RegimeNotice };
 
+/**
+ * What a reader is told when the API answered and the desk has simply never evaluated (its 404,
+ * "the desk has recorded no regime evaluations yet"). Not an outage, so not critical: on 14 Sep
+ * 2026 the box's desk schema had no rows and the panel said "the desk did not answer" in red.
+ */
+export const DESK_NO_EVALUATION = "The desk has not recorded a weekly evaluation yet.";
+
 export interface RegimeInput {
   /** `GET /api/v1/desk/regime`, or `null` when the call did not answer. */
   readonly regime: RegimeOut | null;
@@ -668,6 +675,20 @@ function noticesFor(regime: RegimeOut, today: string | null): RegimeNotice[] {
 
 export function regimeReading(input: RegimeInput): RegimePanelState {
   const { regime, today } = input;
+
+  if (regime === null && input.unavailableReason === DESK_NO_EVALUATION) {
+    return {
+      kind: "unavailable",
+      notice: {
+        id: "desk-no-evaluation",
+        severity: "info",
+        headline: "No weekly stance has been recorded yet",
+        detail:
+          "The desk is reachable but has not run a weekly regime evaluation on this deployment, so there is no tier to show. This is not a risk-on or risk-off reading.",
+        nextStep: "Run the weekly evaluation on the desk console; the stance appears here after it.",
+      },
+    };
+  }
 
   if (regime === null) {
     const because = (input.unavailableReason ?? "").trim();

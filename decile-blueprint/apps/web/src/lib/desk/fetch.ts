@@ -1,7 +1,11 @@
 import "server-only";
 
 import { serverApiOrigin } from "@/lib/api/config";
-import { ServerFetchTimeoutError, serverFetchJson } from "@/lib/api/server-fetch";
+import {
+  ServerFetchStatusError,
+  ServerFetchTimeoutError,
+  serverFetchJson,
+} from "@/lib/api/server-fetch";
 import { auth } from "@/lib/auth";
 
 /**
@@ -15,7 +19,15 @@ import { auth } from "@/lib/auth";
  * cached one is a statement about a portfolio that has moved on.
  */
 
-export class DeskUnavailable extends Error {}
+export class DeskUnavailable extends Error {
+  /** The API's HTTP status, when it answered at all. 404 on `/desk/regime` means "no evaluation yet". */
+  readonly status: number | null;
+
+  constructor(message: string, status: number | null = null) {
+    super(message);
+    this.status = status;
+  }
+}
 
 export interface NavPoint {
   date: string;
@@ -136,6 +148,9 @@ async function readJson(path: string): Promise<unknown> {
   } catch (error) {
     if (error instanceof ServerFetchTimeoutError) {
       throw new DeskUnavailable(`${path} timed out after ${error.timeoutMs}ms`);
+    }
+    if (error instanceof ServerFetchStatusError) {
+      throw new DeskUnavailable(error.message, error.status);
     }
     throw new DeskUnavailable(error instanceof Error ? error.message : `${path} unavailable`);
   }

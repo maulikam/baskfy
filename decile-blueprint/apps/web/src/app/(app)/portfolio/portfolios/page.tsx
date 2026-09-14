@@ -43,7 +43,10 @@ export default async function PortfolioPortfoliosPage() {
   // panel reading "—": the grouping came from one source and the money from another that knew
   // nothing about grouped holdings. Maulik reported exactly that on 11 Sep 2026.
   const [{ data, error }, investments, overviewRead, holdings, regimeRead] = await Promise.all([
-    api.GET("/api/v1/portfolios"),
+    /* A timed-out hop throws out of the typed client. It is one list on a page of many, so it
+       degrades to the list's own "unreachable" state rather than taking the page down with it —
+       which is what happened on 14 Sep 2026 while a slow overview held the API's event loop. */
+    api.GET("/api/v1/portfolios").catch(() => ({ data: undefined, error: "unreachable" as const })),
     fetchInvestments(),
     readPortfolioOverview(),
     fetchPortfolioHoldings(),
@@ -54,9 +57,11 @@ export default async function PortfolioPortfoliosPage() {
   const initialSleeves: Record<number, SleeveListOut> = {};
   await Promise.all(
     list.map(async (portfolio) => {
-      const { data: sleeves } = await api.GET("/api/v1/portfolios/{portfolio_id}/sleeves", {
-        params: { path: { portfolio_id: portfolio.id } },
-      });
+      const { data: sleeves } = await api
+        .GET("/api/v1/portfolios/{portfolio_id}/sleeves", {
+          params: { path: { portfolio_id: portfolio.id } },
+        })
+        .catch(() => ({ data: undefined }));
       if (sleeves) initialSleeves[portfolio.id] = sleeves;
     }),
   );

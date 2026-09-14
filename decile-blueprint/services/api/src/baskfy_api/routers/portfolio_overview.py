@@ -86,6 +86,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Final
 
+import anyio
 from fastapi import APIRouter, Path, Query
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Select, delete, func, select, update
@@ -1321,8 +1322,9 @@ class _Ledger:
     #: ``portfolio_id -> the saved screen behind it``, for screen- and strategy-driven ones.
     screens: Mapping[int, Screen]
     benchmarks: Mapping[int, IndexDef]
-    #: ``instrument_id -> recorded trades`` (``broker_trade``), every broker account. Empty until a
-    #: tradebook is imported or a day is captured from Kite (NEEDS-MAULIK §32).
+    #: ``instrument_id -> recorded trades`` (``broker_trade``), every broker account. Loaded only
+    #: by the overview, and only when no cash was ever assigned — the one figure that reads it.
+    #: A real tradebook is thousands of rows; every other portfolio route paid for them unused.
     trades: Mapping[int, Sequence[TradeFill]] = field(default_factory=dict)
 
     @property
@@ -1615,7 +1617,6 @@ async def _load_ledger(session: AsyncSession, user_id: int) -> _Ledger:
         publishers=publishers,
         screens=screens,
         benchmarks=benchmarks,
-        trades=await fills_by_instrument(session, user_id=user_id),
     )
 
 
@@ -2603,6 +2604,12 @@ async def portfolio_overview(
     """
     user_id = principal.require_user()
     ledger = await _load_ledger(session, user_id)
+    trade_figure: LabelledRateOut | None = None
+    if not any(flow.kind.is_xirr_event for flow in ledger.flows):
+        ledger = replace(ledger, trades=await fills_by_instrument(session, user_id=user_id))
+        # Off the event loop: a first solve over a real tradebook is Decimal-heavy, and on
+        # 14 Sep 2026 running it inline held every other request on this process behind it.
+        trade_figure = await anyio.to_thread.run_sync(_trade_xirr, ledger)
     series = await _nav_by_portfolio(session, user_id)
     model_values = await _model_return_values(session, ledger)
 
@@ -2666,7 +2673,7 @@ async def portfolio_overview(
                 ),
             )
         ),
-        xirr=_consolidated_xirr(ledger, current_value),
+        xirr=_consolidated_xirr(ledger, current_value, from_trades=trade_figure),
         twr=_consolidated_twr(series.get(None, [])),
         invested=invested,
         invested_unavailable_reason=(
@@ -3010,7 +3017,9 @@ def _trade_xirr(ledger: _Ledger) -> LabelledRateOut | None:
     )
 
 
-def _consolidated_xirr(ledger: _Ledger, closing_value: Decimal) -> LabelledRateOut:
+def _consolidated_xirr(
+    ledger: _Ledger, closing_value: Decimal, *, from_trades: LabelledRateOut | None = None
+) -> LabelledRateOut:
     """§5.2's consolidated XIRR — the user's own money-weighted experience, labelled.
 
     Computed from §4.4's internal flows and nothing else: ``ASSIGN`` and ``RELEASE`` are the two
@@ -3032,7 +3041,8 @@ def _consolidated_xirr(ledger: _Ledger, closing_value: Decimal) -> LabelledRateO
     label = "XIRR since your first cash assignment"
     events = [flow for flow in ledger.flows if flow.kind.is_xirr_event]
     if not events:
-        from_trades = _trade_xirr(ledger)
+        if from_trades is None:
+            from_trades = _trade_xirr(ledger)
         if from_trades is not None:
             return from_trades
         return LabelledRateOut(

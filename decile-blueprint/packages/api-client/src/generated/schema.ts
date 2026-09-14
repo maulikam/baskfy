@@ -4228,9 +4228,13 @@ export interface components {
              */
             allocated: boolean;
             allocation?: components["schemas"]["PortfolioRefOut"] | null;
+            /** Avg Price */
+            avg_price?: string | null;
             /** Brokers */
             brokers?: components["schemas"]["HoldingBrokerLineOut"][];
             instrument: components["schemas"]["InstrumentRefOut"];
+            /** Invested */
+            invested?: string | null;
             /** Monitoring Views */
             monitoring_views?: components["schemas"]["PortfolioRefOut"][];
             /**
@@ -4249,8 +4253,11 @@ export interface components {
              * @default false
              */
             split_across_portfolios: boolean;
+            todays_pnl?: components["schemas"]["MoneyMoveOut"] | null;
+            total_pnl?: components["schemas"]["MoneyMoveOut"] | null;
             /** Value */
             value?: string | null;
+            week_pnl?: components["schemas"]["MoneyMoveOut"] | null;
         };
         /** AllocationOut */
         AllocationOut: {

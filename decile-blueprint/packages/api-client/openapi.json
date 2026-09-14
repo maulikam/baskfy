@@ -398,6 +398,18 @@
               }
             ]
           },
+          "avg_price": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Price"
+          },
           "brokers": {
             "items": {
               "$ref": "#/components/schemas/HoldingBrokerLineOut"
@@ -407,6 +419,18 @@
           },
           "instrument": {
             "$ref": "#/components/schemas/InstrumentRefOut"
+          },
+          "invested": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invested"
           },
           "monitoring_views": {
             "items": {
@@ -454,6 +478,26 @@
             "title": "Split Across Portfolios",
             "type": "boolean"
           },
+          "todays_pnl": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MoneyMoveOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "total_pnl": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MoneyMoveOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "value": {
             "anyOf": [
               {
@@ -465,6 +509,16 @@
               }
             ],
             "title": "Value"
+          },
+          "week_pnl": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MoneyMoveOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [

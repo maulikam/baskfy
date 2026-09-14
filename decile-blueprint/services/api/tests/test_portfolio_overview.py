@@ -934,6 +934,28 @@ async def test_a_stock_held_at_two_brokers_aggregates_with_the_breakdown_kept(
 
 
 @requires_db
+async def test_each_holding_row_carries_its_cost_pnl_and_moves(
+    session: AsyncSession, book: Book
+) -> None:
+    """14 Sep 2026: the holdings table showed symbol, quantity and value and nothing else.
+
+    INFY is 100 at Zerodha and 20 at Upstox, both bought at 1,000, closing 1,100 then 1,200. So
+    the row cost 1,20,000, is worth 1,44,000, made 24,000 (20%), and moved 120 x 100 today.
+    """
+    holdings = await portfolio_holdings(session, book.owner)
+    infy = next(row for row in holdings.rows if row.instrument.symbol == "INFY")
+
+    assert infy.invested == Decimal("120000.00")
+    assert infy.avg_price == Decimal("1000.00")
+    assert infy.total_pnl is not None
+    assert infy.total_pnl.amount == Decimal("24000.00")
+    assert infy.total_pnl.pct == Decimal("0.2")
+    assert infy.todays_pnl is not None
+    assert infy.todays_pnl.amount == Decimal("12000.00")
+    assert infy.week_pnl is not None
+
+
+@requires_db
 async def test_the_holdings_view_never_shows_another_tenants_shares(
     session: AsyncSession, book: Book
 ) -> None:

@@ -8077,3 +8077,20 @@ per portfolio and combined. He chose "CSV + daily Kite capture" for trade histor
    instruments only, labelled "(N of M holdings)". Per-portfolio XIRR is unchanged — a slice of a
    position split across portfolios has no trades of its own. *Reverse:* delete `_trade_xirr`'s
    call in `_consolidated_xirr`.
+
+## Factsheet: where a stock appears, from stored results (14 Sep 2026) · ⚠ UNREVIEWED
+
+Maulik asked that a stock's page mention every screen and strategy scan it is in, and that it
+**reuse persisted last-date results rather than compute again**.
+
+1. **Screens: the nightly publish's cache warm-up now stores each run in `screen_run`.** It already
+   ran every screen (top 200) after purging Redis; the result was thrown away with the cache. Same
+   idempotent upsert as the run route. *Rejected:* a new `instrument_appearance_daily` table —
+   Swing, VBT and TWT are already stored per session, and a second copy is a second thing to drift.
+2. **The factsheet reads the newest stored run per screen**, marks a screen edited since that run
+   (`definition_changed`) instead of re-running it, and names screens with no stored run.
+3. **Strategies are read at each hub's own "latest" session** (breadth/market row), so a name from
+   the session before is not shown as current. Sole tenant only, like the hubs.
+4. **The strip is per user and `no-store`, in the instrument layout under Suspense**, so the shared
+   factsheet cache is untouched and a slow read cannot delay the page.
+*Reverse:* remove the `record_run` call in `warm_screen_cache` and the strip from the layout.

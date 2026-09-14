@@ -1741,6 +1741,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/instruments/{symbol}/appearances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Screens and strategy scans this stock is in, from stored results
+         * @description Read-only, and nothing is re-run: ``screen_run`` for screens (stored nightly by publish) and
+         *     each strategy's own per-session table at the session its page treats as latest. Screens are
+         *     the caller's own plus the templates; strategy scans are the sole tenant's, read only for them.
+         */
+        get: operations["instrumentAppearances"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/instruments/{symbol}/corporate-actions": {
         parameters: {
             query?: never;
@@ -4461,6 +4483,47 @@ export interface components {
             requests: number;
             /** Throttled */
             throttled: number;
+        };
+        /** AppearanceOut */
+        AppearanceOut: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /**
+             * Definition Changed
+             * @default false
+             */
+            definition_changed: boolean;
+            /** Detail */
+            detail?: string | null;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+            /** Of */
+            of?: number | null;
+            /** Rank */
+            rank?: number | null;
+            /** Ref */
+            ref: string;
+        };
+        /**
+         * AppearancesOut
+         * @description Every screen and strategy scan whose latest *stored* result names this stock.
+         */
+        AppearancesOut: {
+            /** Appearances */
+            appearances: components["schemas"]["AppearanceOut"][];
+            /** Screens Checked */
+            screens_checked: number;
+            /** Screens Never Run */
+            screens_never_run: string[];
+            /** Strategies Checked */
+            strategies_checked: string[];
+            /** Symbol */
+            symbol: string;
         };
         /** ApplyBody */
         ApplyBody: {
@@ -21841,6 +21904,109 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FactsheetOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    instrumentAppearances: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                symbol: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppearancesOut"];
                 };
             };
             /** @description Bad request */

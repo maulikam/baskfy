@@ -956,6 +956,12 @@ async def warm_screen_cache(
     Called by step 10 (``publish``) once the quality gate has passed. A screen that fails to run
     is recorded and skipped rather than aborting the warm-up: a single malformed saved definition
     must not deprive every other screen of a warm cache.
+
+    **Every computed run is also stored in ``screen_run``** (14 Sep 2026). The warm-up already
+    paid for the query; before this it kept the result only in Redis, so a stock's factsheet
+    could not say which screens it is in without running them all again. The row is the same
+    idempotent upsert the run route writes, so a second publish of the same session changes
+    nothing. A cache hit stores nothing, for the reason :func:`record_run` gives.
     """
     plan = await top_screen_definitions(session, limit)
     warmed = 0
@@ -973,6 +979,10 @@ async def warm_screen_cache(
         except (ValueError, NoPublishedData) as exc:
             failures.append(f"{target.public_id}: {exc}")
             continue
+        if outcome.result is not None:
+            await record_run(
+                session, target.screen_id, outcome.result, target.definition.definition_hash()
+            )
         if outcome.cache_hit:
             skipped += 1
         else:

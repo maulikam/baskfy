@@ -23,6 +23,9 @@ from fastapi import APIRouter, Query, Response
 from pydantic import BaseModel
 from sqlalchemy import select
 
+from baskfy_api import instrument_appearances as appearances_service
+from baskfy_api.auth import AuthenticatedDep
+from baskfy_api.curated_tenant import scoped_sole_user_id
 from baskfy_api.db import SessionDep
 from baskfy_api.http_cache import snapshot_headers
 from baskfy_api.instruments import (
@@ -243,6 +246,72 @@ async def corporate_actions(symbol: str, session: SessionDep) -> Response:
                 for row in rows
             ],
         )
+    )
+
+
+class AppearanceOut(BaseModel):
+    kind: str
+    name: str
+    ref: str
+    as_of: dt.date
+    rank: int | None = None
+    of: int | None = None
+    detail: str | None = None
+    definition_changed: bool = False
+
+
+class AppearancesOut(BaseModel):
+    """Every screen and strategy scan whose latest *stored* result names this stock."""
+
+    symbol: str
+    appearances: list[AppearanceOut]
+    screens_checked: int
+    screens_never_run: list[str]
+    strategies_checked: list[str]
+
+
+@router.get(
+    "/{symbol}/appearances",
+    response_model=AppearancesOut,
+    summary="Screens and strategy scans this stock is in, from stored results",
+)
+async def instrument_appearances(
+    symbol: str, session: SessionDep, principal: AuthenticatedDep
+) -> AppearancesOut:
+    """Read-only, and nothing is re-run: ``screen_run`` for screens (stored nightly by publish) and
+    each strategy's own per-session table at the session its page treats as latest. Screens are
+    the caller's own plus the templates; strategy scans are the sole tenant's, read only for them.
+    """
+    user_id = principal.require_user()
+    try:
+        instrument = await load_instrument(session, symbol)
+    except InstrumentNotFound as exc:
+        raise not_found("instrument", symbol) from exc
+    try:
+        sole = await scoped_sole_user_id(session, user_id, surface="instrument appearances")
+    except Problem:
+        sole = None
+    view = await appearances_service.appearances(
+        session, user_id=user_id, instrument_id=instrument.id, strategies_user_id=sole
+    )
+    return AppearancesOut(
+        symbol=instrument.symbol,
+        appearances=[
+            AppearanceOut(
+                kind=item.kind.value,
+                name=item.name,
+                ref=item.ref,
+                as_of=item.as_of,
+                rank=item.rank,
+                of=item.of,
+                detail=item.detail,
+                definition_changed=item.definition_changed,
+            )
+            for item in view.appearances
+        ],
+        screens_checked=view.screens_checked,
+        screens_never_run=list(view.screens_never_run),
+        strategies_checked=list(view.strategies_checked),
     )
 
 

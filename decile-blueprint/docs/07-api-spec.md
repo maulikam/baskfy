@@ -83,6 +83,7 @@ GET /instruments/{symbol}                        → factsheet payload
 GET /instruments/{symbol}/history?from&to&field= → sparkline series
 GET /instruments/{symbol}/corporate-actions
 GET /instruments/{symbol}/rank-history?screen=…  → this stock's rank over time in a screen
+GET /instruments/{symbol}/appearances             → screens + strategy scans naming it (stored results; signed in)
 GET /listings?from&to&series=&cursor=            → NSE listings, newest first
 ```
 

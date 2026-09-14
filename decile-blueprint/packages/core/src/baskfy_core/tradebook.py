@@ -28,6 +28,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
+from functools import lru_cache
 from typing import Final
 
 from baskfy_core.curated_accounting import CashFlow, xirr
@@ -310,16 +311,26 @@ def history_for(fills: Sequence[TradeFill], held_quantity: Decimal) -> TradeHist
 
 
 def trade_flows(fills: Iterable[TradeFill]) -> list[CashFlow]:
-    """Buys as money in (negative), sells as money out (positive), dated by trade date."""
-    return [
-        CashFlow(
-            on=fill.trade_date,
-            amount=-(fill.quantity * fill.price)
-            if fill.side is TradeSide.BUY
-            else fill.quantity * fill.price,
-        )
-        for fill in fills
-    ]
+    """Buys as money in (negative), sells as money out (positive), **one flow per trade date**.
+
+    Summed by date because XIRR discounts by date, so same-day flows add exactly — and because
+    the solver raises ``(1 + r)`` to a fractional Decimal power per flow per iteration. On
+    14 Sep 2026 a real tradebook of 5,229 fills over 76 dates made the portfolio overview take
+    6.4 s and time the page out; the same answer over 76 flows takes a fraction of a second.
+    """
+    by_date: dict[dt.date, Decimal] = {}
+    for fill in fills:
+        value = fill.quantity * fill.price
+        signed = -value if fill.side is TradeSide.BUY else value
+        by_date[fill.trade_date] = by_date.get(fill.trade_date, Decimal("0")) + signed
+    return [CashFlow(on=day, amount=amount) for day, amount in sorted(by_date.items())]
+
+
+@lru_cache(maxsize=128)
+def _solve(flows: tuple[tuple[dt.date, Decimal], ...]) -> Decimal | None:
+    """The solve, memoised on its exact inputs: a page reload with unchanged trades and prices
+    asks the identical question, and the bisection fallback is not cheap. Pure, so safe to keep."""
+    return xirr([CashFlow(on=day, amount=amount) for day, amount in flows])
 
 
 def xirr_since_first_purchase(
@@ -333,4 +344,4 @@ def xirr_since_first_purchase(
     flows = trade_flows(fills)
     if closing_value > 0:
         flows.append(CashFlow(on=as_of, amount=closing_value))
-    return xirr(flows)
+    return _solve(tuple((flow.on, flow.amount) for flow in flows))

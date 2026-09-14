@@ -11,12 +11,14 @@ from decimal import Decimal
 
 import pytest
 
+from baskfy_core.curated_accounting import xirr
 from baskfy_core.tradebook import (
     TradebookError,
     TradeFill,
     TradeSide,
     history_for,
     parse_tradebook_csv,
+    trade_flows,
     xirr_since_first_purchase,
 )
 
@@ -141,3 +143,30 @@ def test_xirr_from_trades_and_closing_value() -> None:
     )
     assert rate is not None
     assert abs(rate - Decimal("0.10")) < Decimal("0.001")
+
+
+def test_flows_are_one_per_date_and_solve_to_the_same_rate_as_every_fill() -> None:
+    """14 Sep 2026: 5,229 fills over 76 dates took the overview to 6.4 s. Summing by date is
+    exact for XIRR, so the rate must not move — only the number of terms does."""
+    days = [dt.date(2025, 1, 1) + dt.timedelta(days=7 * week) for week in range(40)]
+    fills = [
+        _fill(TradeSide.BUY if n % 3 else TradeSide.SELL, "10", str(900 + n), day, f"t{week}-{n}")
+        for week, day in enumerate(days)
+        for n in range(1, 6)
+    ]
+    flows = trade_flows(fills)
+    assert [flow.on for flow in flows] == days
+
+    closing = Decimal("250000")
+    as_of = dt.date(2026, 1, 1)
+    from baskfy_core.curated_accounting import CashFlow  # noqa: PLC0415
+
+    per_fill = [
+        CashFlow(
+            on=f.trade_date,
+            amount=-(f.quantity * f.price) if f.side is TradeSide.BUY else f.quantity * f.price,
+        )
+        for f in fills
+    ]
+    expected = xirr([*per_fill, CashFlow(on=as_of, amount=closing)])
+    assert xirr_since_first_purchase(fills, closing_value=closing, as_of=as_of) == expected

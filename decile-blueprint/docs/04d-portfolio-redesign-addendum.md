@@ -214,3 +214,17 @@ CREATE TABLE reconciliation_item (
 * `portfolio_holding.first_bought_on` and `.history_source` (`NONE` | `CAS` | `BROKER` | `MANUAL`)
   — §5.3's switch. Before a CAS import a holding group shows "since grouped" only; after it, true
   XIRR and since-purchase P&L unlock. The column records *which* answer we are entitled to give.
+
+
+## `broker_trade` — trade history (added 14 Sep 2026, migration 0049)
+
+One row per equity execution at a broker, from a Zerodha Console tradebook (`CONSOLE_CSV`) or
+Kite's same-day `/trades` read (`KITE_API`). Primary key `id`; unique on
+`(broker_account_id, exchange, trade_id)`, so a re-import writes nothing new. `quantity`
+`numeric(20,4)` and `price` `numeric(18,4)`, both checked positive / non-negative; `side` is
+`BUY | SELL`. `instrument_id` is nullable: an unresolved symbol's trade is kept and named.
+
+It is not a cash flow (§4.4) and moves no allocation. It is what `portfolio_holding.first_bought_on`
+and `history_source = 'BROKER'` are derived from, for a holding whose trades replay FIFO to its
+held quantity, and what the consolidated XIRR is solved from when no cash was ever assigned
+(`docs/07a` §16).

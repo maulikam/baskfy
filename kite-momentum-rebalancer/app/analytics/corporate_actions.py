@@ -101,11 +101,13 @@ def record(conn, action: Action) -> int:
     with db.transaction(conn):
         cur = conn.execute(
             "INSERT OR REPLACE INTO corporate_actions(symbol, kind, ex_date, ratio_new,"
-            " ratio_old, note, created_at) VALUES(?,?,?,?,?,?,?)",
+            " ratio_old, note, created_at) VALUES(?,?,?,?,?,?,?) RETURNING id",
             (action.symbol, action.kind, action.ex_date.isoformat(), action.ratio_new,
              action.ratio_old, action.note,
              dt.datetime.now().isoformat(timespec="seconds")))
-    return int(cur.lastrowid)
+        # Read inside the transaction: RETURNING, because Postgres has no lastrowid (pg.py).
+        action_id = int(cur.fetchall()[0][0])
+    return action_id
 
 
 def load(conn, symbols: Sequence[str] | None = None) -> list[Action]:

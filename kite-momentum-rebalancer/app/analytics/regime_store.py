@@ -69,7 +69,8 @@ def _insert(conn, state: RegimeState, *, run_id: str, dry_run: bool, mode: Regim
                book_weights_json, book_weight_source, input_snapshot_json,
                reason_codes_json, reasons_json, next_evaluation_date,
                last_transition_date, algorithm_version, config_hash, created_at)
-           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+           RETURNING id""",
         (state.evaluation_id, run_id, int(committed), int(dry_run), mode.value,
          state.scheduled_week_end.isoformat(), state.signal_session_date.isoformat(),
          state.as_of_date.isoformat(),
@@ -84,7 +85,10 @@ def _insert(conn, state: RegimeState, *, run_id: str, dry_run: bool, mode: Regim
          state.next_evaluation_date.isoformat(),
          state.last_transition_date.isoformat() if state.last_transition_date else None,
          state.algorithm_version, state.config_hash, _now()))
-    return int(cur.lastrowid)
+    # RETURNING, not lastrowid: the Postgres backend has no lastrowid (pg.py refuses it), and on
+    # 14 Sep 2026 the first regime preview after D8 failed on exactly this line. fetchall()
+    # drains the statement so SQLite can commit the enclosing transaction.
+    return int(cur.fetchall()[0][0])
 
 
 def save_preview(conn, state: RegimeState, *, mode: RegimeMode, dry_run: bool = True,

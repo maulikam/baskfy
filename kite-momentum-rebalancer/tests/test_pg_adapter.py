@@ -91,3 +91,25 @@ def test_translation_is_not_applied_twice() -> None:
     once = pg.translate("select * from t where a=? and s like '%x%'")
     assert "%s" in once
     assert once.count("%%") == 2      # the two literal percents, and not the placeholder
+
+
+def test_no_desk_code_reads_lastrowid() -> None:
+    """The desk runs on Postgres on the box (D8, 14 Sep 2026), where `lastrowid` refuses.
+
+    Four call sites still read it after the migration — the regime preview, the daily-run
+    record, ops jobs and corporate actions — and the first weekly evaluation on the box failed
+    on the regime one. Every insert that needs its id uses `RETURNING id`; only the adapter
+    itself may name the attribute, to refuse it.
+    """
+    import pathlib
+
+    root = pathlib.Path(__file__).resolve().parents[1]
+    offenders = [
+        f"{path.relative_to(root)}:{number}"
+        for folder in ("app", "scripts")
+        for path in (root / folder).rglob("*.py")
+        if path.name != "pg.py"
+        for number, line in enumerate(path.read_text().splitlines(), start=1)
+        if ".lastrowid" in line
+    ]
+    assert offenders == []

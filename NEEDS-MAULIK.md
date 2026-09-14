@@ -2138,3 +2138,34 @@ path; the verify script is what proves the running tag matches HEAD.
 ## AFB — rotate web secrets if `.env.local` matched staging (AUDIT 2.8)
 
 `apps/web/.env.local` held 64-byte `AUTH_SECRET` / `BASKFY_JWT_SECRET` and was untracked (`git ls-files` clean). Confirm whether those values equal staging's; if they do, rotate both on the box and locally. Nothing else blocked.
+
+## BAR — five sessions of missing bars were repaired on the box; three findings need your call (15 Sep 2026)
+
+**What happened.** On 08-28 and 09-03 the nightly's Kite pass failed, and the bhavcopy alone
+wrote about 3,000 bars: none of the ~1,300 Kite-only names and **no index bars at all** (NIFTY 50,
+NIFTY 500 …). On 08-31, 09-01 and 09-02 it was the opposite: Kite only, missing about 295
+bhavcopy-only names. On your go-ahead ("Repair tonight", 14 Sep), the gaps were filled with the
+nightly's own bar step and 08-28…09-11 was recomputed. Every check passed. The full record is
+`docs/ranking/REPAIR-AUG-2026.md`, addendum.
+
+**1. The quality gate cannot see a source dropping out.** `bar_count_against_baseline` compares
+with a 10-day median, and through August that median was ~3,000 because August was bhavcopy-only.
+So a night that lost every Kite bar passed as normal. It needs an absolute floor, or a per-source
+check (e.g. "index bars present", "Kite rows > 0 when a token exists"). Not changed tonight: it is
+a gate policy.
+
+**2. Adjusted history has drifted for at least seven instruments.** For VTL, BLACKROSE, KRONOX,
+VSSL, WHIRLPOOL, WORTHPERI and ZEEL, the pipeline's own `reprocess_instrument` would rewrite 10 to
+2,386 older rows (back to 2017 on the `kite_adjusted` deep segments). The stored adjusted series is
+not what the code produces today. The repair refused those seven rather than rewrite history at
+midnight, so their new bars sit ~1% off. How many other instruments are in the same state is
+unmeasured. Measuring means a dry-run reprocess, which cannot be cheap across compressed chunks.
+
+**3. Before 27 Aug the bar history is bhavcopy-only.** It has no index bars and no Kite-only names.
+A Kite backfill of that window is about 1,400 requests (one per instrument for a two-month
+window, ~12 min), plus a recompute of 07-01…08-26 (~7 h). It was not done tonight, because it
+widens what was approved.
+
+**Also noticed:** on an ordinary night (09-04), 774 Kite rows have `adj_factor = 1` but
+`close <> close_raw`. A raw re-fetch refreshes `*_raw` and leaves `close`. The nightly never
+reconciles them unless the instrument has a new corporate action.

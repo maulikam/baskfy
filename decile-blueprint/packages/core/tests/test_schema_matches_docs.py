@@ -73,6 +73,8 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     "portfolio_holding": ("portfolio_id", "instrument_id", "broker_account_id"),
     # PORTFOLIO_REDESIGN.md's three data layers — docs/04d-portfolio-redesign-addendum.md
     "broker_cash": ("broker_account_id",),
+    # Trade history (14 Sep 2026) — docs/04d §"broker_trade", docs/07a §16.
+    "broker_trade": ("id",),
     "portfolio_cash_flow": ("id",),
     "portfolio_nav_daily": ("portfolio_id", "user_id", "date"),
     "reconciliation_item": ("id",),

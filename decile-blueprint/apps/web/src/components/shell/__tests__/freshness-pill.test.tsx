@@ -13,6 +13,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
  * it failed to say is that the product is not therefore a day stale — the portfolio's marks and
  * the swing book's setups are live from Kite while the pill shows yesterday.
  */
+const status = vi.hoisted(() => ({ market_open: true, session_day: true }));
 vi.mock("@/lib/api/browser", () => ({
   browserApi: () => ({
     GET: () =>
@@ -22,14 +23,11 @@ vi.mock("@/lib/api/browser", () => ({
           data_version: 15,
           degraded: false,
           pipeline_running: false,
+          market_open: status.market_open,
+          session_day: status.session_day,
         },
       }),
   }),
-}));
-
-const marketOpen = vi.hoisted(() => ({ value: true }));
-vi.mock("@/lib/market/session", () => ({
-  isMarketOpen: () => marketOpen.value,
 }));
 
 function renderPill() {
@@ -44,7 +42,9 @@ function renderPill() {
 }
 
 afterEach(() => {
-  marketOpen.value = true;
+  status.market_open = true;
+  status.session_day = true;
+  vi.useRealTimers();
 });
 
 describe("the freshness pill during an open market", () => {
@@ -65,10 +65,30 @@ describe("the freshness pill during an open market", () => {
   });
 
   it("drops the marker once the market has closed", async () => {
-    marketOpen.value = false;
+    status.market_open = false;
     const { container, findByText } = renderPill();
     await findByText(/Data:/);
     expect(container.textContent).toMatch(/8 Sept 2026/);
     expect(screen.queryByTestId("market-open")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * 14 Sep 2026, an NSE holiday: the pill read "Data: 11 Sept 2026 · market open" at midday because
+ * it asked the browser's clock. The server's `market_open` reads the trading calendar; the pill
+ * must believe it over the clock.
+ */
+describe("the freshness pill on a holiday", () => {
+  it("does not say market open during clock session hours when the API says closed", async () => {
+    // Monday 14 Sep 2026, 11:00 IST — inside 09:15–15:30 on a weekday, so the clock alone says open.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-14T05:30:00Z"));
+    status.market_open = false;
+    status.session_day = false;
+    const { container, findByText } = renderPill();
+    await findByText(/Data:/);
+    expect(container.textContent).toMatch(/8 Sept 2026/);
+    expect(screen.queryByTestId("market-open")).not.toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/market open/);
   });
 });

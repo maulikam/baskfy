@@ -15736,9 +15736,19 @@
             "title": "Live Quotes",
             "type": "boolean"
           },
+          "market_open": {
+            "default": false,
+            "title": "Market Open",
+            "type": "boolean"
+          },
           "pipeline_running": {
             "default": false,
             "title": "Pipeline Running",
+            "type": "boolean"
+          },
+          "session_day": {
+            "default": false,
+            "title": "Session Day",
             "type": "boolean"
           }
         },

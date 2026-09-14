@@ -10,10 +10,13 @@ from api_helpers import assert_problem, errors_of, url
 from screener_helpers import AS_OF, DATA_VERSION, requires_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from baskfy_api.routers import meta
 from baskfy_api.screener import DATA_START_DATE
 from baskfy_core.factor_registry import COLUMN_PICKER_KEYS, FACTORS, SORT_FACTOR_KEYS
-from baskfy_core.models import PipelineRun
+from baskfy_core.market_hours_cb import IST
+from baskfy_core.models import PipelineRun, TradingDay
 from baskfy_core.ranking_presets import PRESET_SPECS
+from baskfy_core.seed_data import NSE_EXCHANGE_ID
 from baskfy_core.universes import UNIVERSES
 
 pytestmark = [pytest.mark.db, pytest.mark.redis, requires_db]
@@ -240,6 +243,99 @@ class TestStatus:
             url("/screens/exmpl0000001/run"), json={"as_of": latest.isoformat()}
         )
         assert response.status_code == 200
+
+
+class TestMarketOpen:
+    """14 Sep 2026, an NSE holiday: the pill read "market open" because only the clock was asked.
+
+    ``market_open`` is the calendar AND the clock: today (IST) is a trading day in
+    ``trading_day``, and IST time is inside 09:15-15:30.
+    """
+
+    @staticmethod
+    async def _calendar(
+        session: AsyncSession, day: dt.date, *, trading: bool, source: str, name: str | None = None
+    ) -> None:
+        await session.merge(
+            TradingDay(
+                exchange_id=NSE_EXCHANGE_ID,
+                date=day,
+                is_trading_day=trading,
+                holiday_name=name,
+                source=source,
+            )
+        )
+        await session.flush()
+
+    @staticmethod
+    async def _status_at(
+        api: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch, moment: dt.datetime
+    ) -> dict[str, object]:
+        monkeypatch.setattr(meta, "_now", lambda: moment)
+        body: dict[str, object] = (await api.get(url("/meta/status"))).json()
+        return body
+
+    async def test_a_holiday_during_session_hours_is_not_open(
+        self,
+        api: httpx.AsyncClient,
+        screener_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        day = dt.date(2026, 9, 14)
+        await self._calendar(screener_session, day, trading=False, source="holiday", name="Holiday")
+        body = await self._status_at(api, monkeypatch, dt.datetime(2026, 9, 14, 11, 0, tzinfo=IST))
+        assert body["session_day"] is False
+        assert body["market_open"] is False
+
+    async def test_a_trading_day_during_session_hours_is_open(
+        self,
+        api: httpx.AsyncClient,
+        screener_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        day = dt.date(2026, 9, 15)
+        await self._calendar(screener_session, day, trading=True, source="derived")
+        body = await self._status_at(api, monkeypatch, dt.datetime(2026, 9, 15, 11, 0, tzinfo=IST))
+        assert body["session_day"] is True
+        assert body["market_open"] is True
+
+    async def test_a_trading_day_after_the_close_is_not_open(
+        self,
+        api: httpx.AsyncClient,
+        screener_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        day = dt.date(2026, 9, 15)
+        await self._calendar(screener_session, day, trading=True, source="derived")
+        body = await self._status_at(api, monkeypatch, dt.datetime(2026, 9, 15, 16, 0, tzinfo=IST))
+        assert body["session_day"] is True
+        assert body["market_open"] is False
+
+    async def test_a_weekend_is_not_open(
+        self,
+        api: httpx.AsyncClient,
+        screener_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        day = dt.date(2026, 9, 12)
+        await self._calendar(screener_session, day, trading=False, source="weekend")
+        body = await self._status_at(api, monkeypatch, dt.datetime(2026, 9, 12, 11, 0, tzinfo=IST))
+        assert body["session_day"] is False
+        assert body["market_open"] is False
+
+    async def test_a_weekend_the_calendar_does_not_carry_is_not_open(
+        self, api: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        body = await self._status_at(api, monkeypatch, dt.datetime(2099, 1, 3, 11, 0, tzinfo=IST))
+        assert body["market_open"] is False
+
+    async def test_a_weekday_the_calendar_does_not_carry_is_a_session(
+        self, api: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """``is_session_day``'s rule: an unloaded calendar must not silence the marker."""
+        body = await self._status_at(api, monkeypatch, dt.datetime(2099, 1, 5, 11, 0, tzinfo=IST))
+        assert body["session_day"] is True
+        assert body["market_open"] is True
 
 
 class TestLiveMarks:

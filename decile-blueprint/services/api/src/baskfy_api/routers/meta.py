@@ -18,6 +18,7 @@ from typing import Annotated, Final
 from fastapi import APIRouter, Query
 from pydantic import JsonValue, TypeAdapter
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.auth import AuthenticatedDep
 from baskfy_api.db import SessionDep
@@ -34,7 +35,9 @@ from baskfy_api.schemas import (
     UniverseOut,
 )
 from baskfy_api.screener import DATA_START_DATE, current_data_version, latest_published_date
+from baskfy_api.swing_health import is_session_day
 from baskfy_core.factor_registry import FACTORS, columns
+from baskfy_core.market_hours_cb import IST, is_nse_session_open
 from baskfy_core.models import PipelineRun, TradingDay
 from baskfy_core.ranking_presets import PRESET_SPECS, list_presets
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
@@ -53,6 +56,27 @@ FAILED_RUN_STATUSES: Final[frozenset[str]] = frozenset({"failed", "aborted"})
 RUNNING_RUN_STATUS: Final[str] = "running"
 #: Validates a core preset patch (typed ``dict[str, object]``) as the JSON the wire carries.
 _PRESET_PATCH: Final = TypeAdapter(dict[str, JsonValue])
+#: ``date.weekday()`` values from Saturday onward.
+_SATURDAY: Final = 5
+
+
+def _now() -> dt.datetime:
+    """Seam for tests — production uses wall-clock IST."""
+    return dt.datetime.now(tz=IST)
+
+
+async def _session_day_and_market_open(session: AsyncSession) -> tuple[bool, bool]:
+    """Whether today (IST) is an NSE session, and whether that session is open right now.
+
+    14 Sep 2026, an NSE holiday: the freshness pill said "market open" because the browser only
+    knew the clock. The calendar is the authority. A date it does not carry is a session on a
+    weekday (``is_session_day``'s rule, so a calendar not loaded that far never silences the
+    marker) and never on a weekend — the calendar gives every weekend a closed row anyway.
+    """
+    now = _now()
+    today = now.astimezone(IST).date()
+    session_day = today.weekday() < _SATURDAY and await is_session_day(session, today)
+    return session_day, is_nse_session_open(now, {today} if session_day else set())
 
 
 @router.get("/factors", response_model=list[FactorOut], summary="The factor registry")
@@ -196,6 +220,7 @@ async def get_status(session: SessionDep) -> StatusOut:
             .limit(1)
         )
     ).scalar_one_or_none()
+    session_day, market_open = await _session_day_and_market_open(session)
 
     return StatusOut(
         as_of=await latest_published_date(session),
@@ -215,6 +240,8 @@ async def get_status(session: SessionDep) -> StatusOut:
         pipeline_running=last_run is not None and last_run.status == RUNNING_RUN_STATUS,
         data_start_date=DATA_START_DATE,
         live_quotes=quotes_permitted(),
+        session_day=session_day,
+        market_open=market_open,
     )
 
 

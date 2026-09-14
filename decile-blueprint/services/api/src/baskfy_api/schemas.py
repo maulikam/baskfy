@@ -152,6 +152,12 @@ class StatusOut(_Out):
     #: Ranks and factors stay on ``as_of``. False is the default so an older client that never
     #: sent the field cannot invent a live book.
     live_quotes: bool = False
+    #: Today (IST) is an NSE trading day per the ``trading_day`` calendar. 14 Sep 2026: the pill
+    #: said "market open" on a holiday because only the browser's clock was asked.
+    session_day: bool = False
+    #: ``session_day`` and the IST clock is inside 09:15 to 15:30. False is the default so an older
+    #: server cannot make a client claim an open market.
+    market_open: bool = False
 
 
 class LiveMarksOut(_Out):

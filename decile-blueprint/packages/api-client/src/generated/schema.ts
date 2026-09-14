@@ -10081,10 +10081,20 @@ export interface components {
              */
             live_quotes: boolean;
             /**
+             * Market Open
+             * @default false
+             */
+            market_open: boolean;
+            /**
              * Pipeline Running
              * @default false
              */
             pipeline_running: boolean;
+            /**
+             * Session Day
+             * @default false
+             */
+            session_day: boolean;
         };
         /**
          * StopMode

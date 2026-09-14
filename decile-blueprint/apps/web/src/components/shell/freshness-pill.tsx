@@ -9,7 +9,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { browserApi } from "@/lib/api/browser";
 import { ApiError } from "@/lib/api/errors";
 import { formatTradeDate } from "@/lib/format";
-import { isMarketOpen } from "@/lib/market/session";
 import { cn } from "@/lib/utils";
 
 /**
@@ -93,7 +92,13 @@ export function FreshnessPill({ className }: { className?: string }) {
   // here is live": baskets, factors and market health are end-of-day by design (house rules 5
   // and 7), and a blanket claim would be the same over-reach in the other direction. The
   // tooltip carries the distinction.
-  const marketOpen = isMarketOpen();
+  //
+  // FROM THE CALENDAR, NOT THE CLOCK (14 Sep 2026). On an NSE holiday the pill read "market open"
+  // because it asked only the browser's clock (IST 09:15–15:30 on a weekday). The server now
+  // answers from the `trading_day` calendar and the IST session hours together, so a holiday
+  // shows the plain pill and the plain tooltip — never "Today's publishes after the market
+  // closes" on a day that has no session.
+  const marketOpen = data.market_open === true;
   const behindToday = marketOpen && !running && !degraded;
 
   return (

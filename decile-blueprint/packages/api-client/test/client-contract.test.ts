@@ -130,6 +130,9 @@ type _RowHasSymbol = Expect<Equal<ScreenRunRowOut["symbol"], string>>;
  * the second as "The last pipeline run did not publish", which it showed while a run was actually
  * in progress. A run in flight is neither, and the nightly now takes about an hour, so that window
  * is long enough to matter.
+ *
+ * `session_day` and `market_open` joined on 14 Sep 2026, an NSE holiday, when the pill read
+ * "market open" from the browser's clock alone. The server answers from the trading calendar.
  */
 type _StatusShape = Expect<
   Equal<
@@ -141,6 +144,8 @@ type _StatusShape = Expect<
     | "pipeline_running"
     | "data_start_date"
     | "live_quotes"
+    | "session_day"
+    | "market_open"
   >
 >;
 

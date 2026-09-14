@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { createPortfolioAction } from "@/app/actions/portfolio";
+import { HoldingsByPortfolioTable } from "@/components/portfolio/holdings-by-portfolio";
 import { UnallocatedSection } from "@/components/portfolio/unallocated-section";
 import { PageHeader } from "@/components/shell/page-header";
 import { SectionTabs } from "@/components/shell/section-tabs";
@@ -11,7 +12,6 @@ import {
   fetchPortfolioOverview,
 } from "@/lib/portfolio/fetch";
 import { isUnallocated, type AggregatedHolding } from "@/lib/portfolio/organize";
-import { formatRupees } from "@/lib/portfolios/decimal";
 import { PAGES } from "@/lib/vocabulary";
 
 /**
@@ -61,7 +61,7 @@ export default async function PortfolioHoldingsPage() {
     overview?.sync_summary ?? overview?.holdings_synced_label ?? holdings?.holdings_synced_label;
 
   return (
-    <div className="flex max-w-5xl flex-col gap-6">
+    <div className="flex w-full max-w-[104rem] flex-col gap-6">
       <SectionTabs section="portfolio" />
       <PageHeader title="Holdings" blurb={PAGES["/portfolio/holdings"].blurb} />
 
@@ -82,25 +82,7 @@ export default async function PortfolioHoldingsPage() {
         <section aria-label="Holdings by portfolio" data-testid="holdings-by-portfolio" className="space-y-4">
           <h2 className="text-base font-semibold">By portfolio</h2>
           {byPortfolio.map((group) => (
-            <div key={group.name} className="rounded-xl border border-border bg-card p-4">
-              <h3 className="text-sm font-medium">{group.name}</h3>
-              <ul className="mt-2 divide-y divide-border">
-                {group.rows.map((row) => (
-                  <li
-                    key={row.instrument.instrument_id}
-                    className="flex flex-wrap items-baseline justify-between gap-2 py-2 text-sm"
-                  >
-                    <span>
-                      {row.instrument.symbol}
-                      <span className="ml-2 text-muted-foreground">{row.quantity} sh</span>
-                    </span>
-                    <span className="tabular-nums text-muted-foreground">
-                      {row.value != null ? formatRupees(row.value) : "—"}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <HoldingsByPortfolioTable key={group.name} name={group.name} rows={group.rows} />
           ))}
         </section>
       ) : null}

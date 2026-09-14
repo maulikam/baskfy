@@ -803,6 +803,15 @@ class AggregatedHoldingOut(BaseModel):
     monitoring_views: list[PortfolioRefOut] = Field(default_factory=list)
     brokers: list[HoldingBrokerLineOut] = Field(default_factory=list)
     pending_reconciliation: bool = False
+    #: What every broker leg cost, from the average price each broker reports. ``None`` when any
+    #: leg has no purchase price: a partial cost beside a full value would report a false profit.
+    invested: Decimal | None = None
+    #: ``invested / quantity`` across the legs; ``None`` exactly when ``invested`` is.
+    avg_price: Decimal | None = None
+    #: Value minus cost, over the same legs. Unavailable, with its reason, when the cost is unknown.
+    total_pnl: MoneyMoveOut | None = None
+    todays_pnl: MoneyMoveOut | None = None
+    week_pnl: MoneyMoveOut | None = None
 
 
 class HoldingsOut(BaseModel):
@@ -2172,6 +2181,31 @@ def _week_move(ledger: _Ledger, positions: Sequence[_Position]) -> MoneyMoveOut:
     )
 
 
+def _holding_total_pnl(invested: Decimal | None, value: Decimal | None) -> MoneyMoveOut:
+    """One holding's value against what it cost. The same refusal as the hero's Total P&L."""
+    label = "Total P&L since purchase"
+    if invested is None:
+        return _money_move(
+            amount=None,
+            pct=None,
+            label=label,
+            since=None,
+            unavailable_reason="No purchase price on record for this holding",
+        )
+    if value is None:
+        return _money_move(
+            amount=None, pct=None, label=label, since=None, unavailable_reason="No price yet"
+        )
+    return _money_move(
+        amount=money(value - invested),
+        pct=None
+        if invested == ZERO
+        else ((value - invested) / invested).quantize(RETURN_PRECISION),
+        label=label,
+        since=None,
+    )
+
+
 def _cost_and_value(
     ledger: _Ledger, positions: Sequence[_Position]
 ) -> tuple[Decimal | None, Decimal | None, int]:
@@ -3108,6 +3142,13 @@ async def portfolio_holdings(
         if allocated_ids == {UNALLOCATED}:
             unallocated_count += 1
 
+        bases = [cost_basis(position.holding) for position in group]
+        invested = (
+            None
+            if any(b is None for b in bases)
+            else sum((b for b in bases if b is not None), ZERO)
+        )
+
         rows.append(
             AggregatedHoldingOut(
                 instrument=_instrument_ref(instrument),
@@ -3130,6 +3171,13 @@ async def portfolio_holdings(
                 ],
                 brokers=lines,
                 pending_reconciliation=any(freeze.is_frozen(p.key) for p in group),
+                invested=money(invested) if invested is not None else None,
+                avg_price=(
+                    money(invested / quantity) if invested is not None and quantity > ZERO else None
+                ),
+                total_pnl=_holding_total_pnl(invested, value),
+                todays_pnl=_todays_move(ledger, group, label="Change since the previous close"),
+                week_pnl=_week_move(ledger, group),
             )
         )
 

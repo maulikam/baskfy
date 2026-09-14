@@ -36,7 +36,7 @@ import { cn } from "@/lib/utils";
  * Direction in the P&L column is a glyph as well as a hue.
  */
 
-type SortKey = "name" | "value" | "share" | "today" | "week" | "holdings";
+type SortKey = "name" | "value" | "share" | "today" | "week" | "month" | "holdings";
 
 /** Shades of the one accent rather than a rainbow — an ordering, not a set of categories. */
 const SHADES = [
@@ -69,6 +69,8 @@ function compare(a: AllocationSlice, b: AllocationSlice, key: SortKey, dir: 1 | 
       return dir * (num(a.todaysPnl) - num(b.todaysPnl));
     case "week":
       return dir * (num(a.weekPnl) - num(b.weekPnl));
+    case "month":
+      return dir * (num(a.monthPnl) - num(b.monthPnl));
     case "holdings":
       return dir * (a.holdingsCount - b.holdingsCount);
     default:
@@ -242,7 +244,7 @@ export function ComparisonTable({
       {/* Below `md` this table is not attempted at all — see `PortfolioCards`. A ten-column grid
           on a 390px screen is a sideways scroll that hides the columns a person came for. */}
       <div className="hidden overflow-x-auto md:block">
-        <table className="w-full min-w-[54rem] text-sm">
+        <table className="w-full min-w-[60rem] text-sm">
           <thead className="border-b border-border">
             <tr>
               <th scope="col" className="w-8" />
@@ -254,6 +256,7 @@ export function ComparisonTable({
               ) : null}
               <Header label="Today" sortKey="today" active={sortKey} dir={dir} onSort={sortBy} />
               <Header label="This week" sortKey="week" active={sortKey} dir={dir} onSort={sortBy} />
+              <Header label="Last 30 days" sortKey="month" active={sortKey} dir={dir} onSort={sortBy} />
               <Header label="Return" active={sortKey} dir={dir} onSort={sortBy} />
               <Header label="Cash" active={sortKey} dir={dir} onSort={sortBy} />
               <Header label="Holdings" sortKey="holdings" active={sortKey} dir={dir} onSort={sortBy} />
@@ -351,6 +354,10 @@ export function ComparisonTable({
                       <Money value={slice.weekPnl} signed />
                     </td>
 
+                    <td className="py-2 pr-3 text-right">
+                      <Money value={slice.monthPnl} signed />
+                    </td>
+
                     <td className="py-2 pr-3 text-right tabular-nums">
                       {slice.returnPct === null ? (
                         <Tooltip>
@@ -408,7 +415,7 @@ export function ComparisonTable({
                   {open ? (
                     <tr key={`${slice.portfolioId}-detail`} data-testid={`portfolio-detail-${slice.portfolioId}`}>
                       <td />
-                      <td colSpan={mode === "capital" ? 10 : 9} className="pb-3 pr-3">
+                      <td colSpan={mode === "capital" ? 11 : 10} className="pb-3 pr-3">
                         <RowDetail slice={slice} row={row} />
                       </td>
                     </tr>
@@ -460,6 +467,12 @@ export function ComparisonTable({
                   <dt className="text-muted-foreground">This week</dt>
                   <dd>
                     <Money value={slice.weekPnl} signed />
+                  </dd>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <dt className="text-muted-foreground">Last 30 days</dt>
+                  <dd>
+                    <Money value={slice.monthPnl} signed />
                   </dd>
                 </div>
                 {mode === "capital" ? (

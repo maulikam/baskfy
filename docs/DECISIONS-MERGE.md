@@ -8094,3 +8094,32 @@ Maulik asked that a stock's page mention every screen and strategy scan it is in
 4. **The strip is per user and `no-store`, in the instrument layout under Suspense**, so the shared
    factsheet cache is untouched and a slow read cannot delay the page.
 *Reverse:* remove the `record_run` call in `warm_screen_cache` and the strip from the layout.
+
+## D8 run — the desk's SQLite into the box's `desk` schema (14 Sep 2026) · ✅ decided by Maulik
+
+**Decisions (Maulik, 14 Sep 2026):** fork policy **`box-plus-orphans`**; cutover **stop the old desk,
+then migrate**.
+
+1. **Old desk stopped and disabled** on 65.0.226.77: `momentum-web.service` and
+   `momentum-daily.timer` (last write to `portfolio.db` 11 Sep 18:30). `momentum-backup.timer` left
+   enabled — it only reads. *Reverse:* `sudo systemctl enable --now momentum-web momentum-daily.timer`.
+2. **Final copy:** `scripts.backup` on the old box, `verified.integrity = ok` (fills 9,609, trades 8,530,
+   rebalance_orders 425, regime_evaluations 28). Archived outside the repo at
+   `~/baskfy-safety/desk-migration-2026-09-14/portfolio-A-2026-09-14T1614-IST.db` (0444, sha256
+   `508a991d14c6a038…`), on the old box at `/home/desk/d8-final-20260914/`, on the Phase-A box at
+   `/opt/baskfy/d8-2026-09-14/`, and in `s3://baskfy-archive/d8-migration-2026-09-14/`.
+   The 31 Aug archive was stale (26 → 28 regime evaluations) and was not used.
+3. **Run** (in the desk image on the box, DSN never left the container): rehearse → dry apply →
+   `apply --commit` → verify. 19 tables, **43,506 rows**, every `row_count` and `checksum` matched,
+   all 12 semantic assertions passed (NAV identical, 20 PKs / 3 uniques / 2 FKs / 41 indexes,
+   sequences carried, 38 money columns numeric, 9,609 distinct fill trade ids). Schema digest
+   `d06b9cac188cc90d…`. Secondary stores: B = the 22 Aug SQLite archive, C = the laptop Postgres
+   `desk` schema restored into a temporary database `desk_fork_c`, dropped afterwards.
+4. **Orphans merged:** 7 plans (`rebalance_versions` 35 → 42) and 69 order lines
+   (`rebalance_orders` 425 → 494, ids reissued above 479; the old→new map is in
+   `/opt/baskfy/d8-2026-09-14/apply-commit.json`). `39efc9eefca7` existed in B and C; B's copy owns
+   it. A plain `verify` against file A therefore reports exactly those two tables as different —
+   expected under this policy, and the other 17 tables verify clean.
+5. **Tool path note:** `migrate_desk.py` treats `parents[2]` of itself as the repo root; staged at
+   `/d8/tools/` that resolved to `/` and the archive rail refused (correctly). Staged under
+   `/d8/repo/tools/migrate-desk/` instead — the rail was not bypassed.

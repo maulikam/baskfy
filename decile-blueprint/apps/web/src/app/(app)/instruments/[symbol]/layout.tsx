@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 
+import { AppearancesStrip } from "@/components/instrument/appearances-strip";
 import { SaveInstrumentButton } from "@/components/watchlist/save-instrument-button";
 
 /**
@@ -20,6 +21,10 @@ export default async function InstrumentSymbolLayout({
       <div className="flex justify-end">
         <SaveInstrumentButton symbol={symbol.toUpperCase()} />
       </div>
+      {/* Its own request, streamed: the factsheet never waits on the caller's screens. */}
+      <Suspense fallback={null}>
+        <AppearancesStrip symbol={symbol.toUpperCase()} />
+      </Suspense>
       {children}
     </div>
   );

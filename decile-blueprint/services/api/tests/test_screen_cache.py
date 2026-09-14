@@ -23,7 +23,7 @@ from screener_helpers import (
     requires_db,
     ttl_of,
 )
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from baskfy_api.screener import (
@@ -232,6 +232,35 @@ class TestWarming:
         hit = await run_screen(screener_session, INVESTING_001, columns=[], cache=screen_cache)
         assert hit.cache_hit is True
         assert '"result_count":271' in hit.payload
+
+    async def test_warming_stores_each_screens_run_once_per_session(
+        self, screener_session: AsyncSession, screen_cache: Redis
+    ) -> None:
+        """14 Sep 2026: a factsheet says which screens a stock is in by reading ``screen_run``.
+
+        The warm-up already computed every screen and kept the rows only in Redis. It now stores
+        them, and warming the same session again — every screen a cache hit — adds no row.
+        """
+        await warm_screen_cache(screener_session, screen_cache)
+        stored = (
+            await screener_session.execute(select(func.count()).select_from(ScreenRun))
+        ).scalar_one()
+        assert stored == len(EXAMPLE_SCREENS)
+        investing = (
+            await screener_session.scalars(
+                select(ScreenRun)
+                .join(Screen, Screen.id == ScreenRun.screen_id)
+                .where(Screen.public_id == EXAMPLE_SCREENS[0].public_id)
+            )
+        ).one()
+        assert investing.result_count == len(investing.results) > 0
+        assert {"rank", "instrument_id"} <= set(investing.results[0])
+
+        await warm_screen_cache(screener_session, screen_cache)
+        again = (
+            await screener_session.execute(select(func.count()).select_from(ScreenRun))
+        ).scalar_one()
+        assert again == stored
 
     async def test_the_limit_is_honoured(
         self, screener_session: AsyncSession, screen_cache: Redis

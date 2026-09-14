@@ -637,6 +637,53 @@ class BrokerCash(Base):
     as_of: Mapped[dt.date] = mapped_column(Date, nullable=False)
 
 
+class BrokerTrade(Base):
+    """One execution at a broker — the trade history NEEDS-MAULIK §32 said had nowhere to live.
+
+    Two sources and only two: a Zerodha Console tradebook export (``CONSOLE_CSV``), and Kite's
+    ``/trades`` read on the day it happened (``KITE_API``), which is the only chance the API gives —
+    it takes no date and is flushed nightly. ``(broker_account_id, exchange, trade_id)`` is unique,
+    so importing the same file twice, or a CSV that overlaps a day captured live, writes each
+    execution once (house rule 7).
+
+    Not a cash flow. §4.4 is explicit that a buy inside a portfolio is not an XIRR event; this
+    table is what a purchase date and a since-purchase return are *derived* from, and it moves no
+    allocation and no cash.
+    """
+
+    __tablename__ = "broker_trade"
+    __table_args__ = (
+        UniqueConstraint(
+            "broker_account_id", "exchange", "trade_id", name="uq_broker_trade_account_trade"
+        ),
+        CheckConstraint("side IN ('BUY', 'SELL')", name="broker_trade_side"),
+        CheckConstraint("source IN ('CONSOLE_CSV', 'KITE_API')", name="broker_trade_source"),
+        CheckConstraint("quantity > 0", name="broker_trade_quantity_positive"),
+        CheckConstraint("price >= 0", name="broker_trade_price_non_negative"),
+        Index("ix_broker_trade_user_instrument_date", "user_id", "instrument_id", "trade_date"),
+    )
+
+    id: Mapped[BigIntPk]
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("app_user.id"), nullable=False)
+    broker_account_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("broker_account.id", ondelete="CASCADE"), nullable=False
+    )
+    #: NULL when the symbol did not resolve to one instrument; the row is kept and named.
+    instrument_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("instrument.id"))
+    symbol: Mapped[str] = mapped_column(String, nullable=False)
+    isin: Mapped[str | None] = mapped_column(String)
+    exchange: Mapped[str] = mapped_column(String, nullable=False)
+    side: Mapped[str] = mapped_column(String, nullable=False)
+    quantity: Mapped[Decimal] = mapped_column(QUANTITY, nullable=False)
+    price: Mapped[Decimal] = mapped_column(PRICE_RAW, nullable=False)
+    trade_date: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    executed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    trade_id: Mapped[str] = mapped_column(String, nullable=False)
+    order_id: Mapped[str | None] = mapped_column(String)
+    source: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[CreatedAt]
+
+
 class PortfolioCashFlow(Base):
     """Layer 3 — every movement of money, and the only input to per-portfolio XIRR (§4.4).
 

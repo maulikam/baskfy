@@ -9,10 +9,12 @@ import {
   ACTIVITY_UNAVAILABLE,
 } from "@/components/portfolio/activity-honest-copy";
 import { ActivityTab } from "@/components/portfolio/detail/activity-tab";
+import { TradeHistory } from "@/components/portfolio/trade-history";
 import { PageHeader } from "@/components/shell/page-header";
 import { SectionTabs } from "@/components/shell/section-tabs";
 import { fetchBrokerCatalog } from "@/lib/brokers/fetch";
 import { fetchPortfolioActivity, fetchPortfolioOverview } from "@/lib/portfolio/fetch";
+import { fetchTrades } from "@/lib/trades/fetch";
 import { PAGES } from "@/lib/vocabulary";
 
 /**
@@ -41,9 +43,10 @@ export default async function PortfolioActivityPage() {
     connected = false;
   }
 
-  const [overview, activity] = await Promise.all([
+  const [overview, activity, trades] = await Promise.all([
     fetchPortfolioOverview().catch(() => null),
     fetchPortfolioActivity(),
+    fetchTrades().catch(() => null),
   ]);
   const items = activity === null ? null : (activity.items ?? []);
   const showConnect = !connected && (items === null || items.length === 0);
@@ -53,9 +56,11 @@ export default async function PortfolioActivityPage() {
     (connected ? "Holdings not synced yet" : "No broker connected");
 
   return (
-    <div className="flex max-w-3xl flex-col gap-6">
+    <div className="flex max-w-5xl flex-col gap-6">
       <SectionTabs section="portfolio" />
       <PageHeader title="Activity" blurb={PAGES["/portfolio/activity"].blurb} />
+
+      <TradeHistory trades={trades} />
 
       {showConnect ? (
         <div

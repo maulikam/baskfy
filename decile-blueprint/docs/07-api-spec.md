@@ -115,6 +115,18 @@ POST   /portfolios/{id}/rebalance
 
 `inside_wrh` = held names whose current rank is `> top_n` but `<= top_n + hold_buffer`.
 
+## Trade history
+
+```
+POST   /trades/import        multipart Zerodha Console tradebook CSV; ?broker_id=zerodha
+                             → { received, inserted, already_present, skipped_non_equity,
+                                 unresolved_symbols, dated_holdings, undated_holdings[] }
+POST   /trades/sync-today    Kite's read-only GET /trades (today only), stored and applied
+GET    /trades               ?limit&offset&symbol → { rows[], total, first_trade_on, last_trade_on }
+```
+
+Bookkeeping only — no order route (docs/07a §16). Re-importing is a no-op per trade id.
+
 ## Backtests
 
 ```

@@ -19,6 +19,15 @@ vi.mock("@/lib/portfolio/fetch", () => ({
   fetchPortfolioActivity: vi.fn(),
 }));
 
+vi.mock("@/lib/trades/fetch", () => ({
+  fetchTrades: vi.fn(() => Promise.resolve(null)),
+}));
+
+vi.mock("@/app/actions/trades", () => ({
+  importTradebookAction: vi.fn(),
+  syncTodaysTradesAction: vi.fn(),
+}));
+
 vi.mock("next/navigation", () => ({
   usePathname: () => "/portfolio/activity",
 }));

@@ -243,3 +243,24 @@ weights, so the web app cannot show a basket the desk would never trade. The pla
 clean-looking list would assert a cleanliness nobody has established: on real data it is **41 of
 271**, and some of those names are excluded from the basket that should not be
 (`NEEDS-MAULIK.md` item 4).
+
+## 16. `/trades` — trade history, added 14 Sep 2026
+
+`NEEDS-MAULIK.md` §32 recorded that Kite's `/trades` endpoint has today and nothing else, and
+that Postgres had no table for a trade. Maulik chose (14 Sep 2026) both paths: a Console tradebook
+upload for the past, and a same-day capture from Kite going forward.
+
+* **`broker_trade`** (migration 0049). Numeric quantity and price; unique on
+  `(broker_account_id, exchange, trade_id)`, so a re-import or an overlap with a captured day writes
+  nothing new.
+* **`POST /trades/import`** parses with `baskfy_core.tradebook.parse_tradebook_csv`, which refuses
+  the whole file with a line number rather than reading an unparseable number as zero — the desk's
+  parser did the latter. Equity (NSE/BSE) only; derivative rows are counted and skipped.
+* **`POST /trades/sync-today`** and Beat's `capture-kite-trades` (15:50 IST, session days) call the
+  provider's read-only `broker_trades`. No order vocabulary; `test_the_whole_api_has_no_order_route`
+  still covers the surface.
+* **What the trades change.** A holding whose trades replay FIFO to exactly the held quantity gets
+  `first_bought_on` = its oldest open lot and `history_source = 'BROKER'`; `CAS` and `MANUAL` are
+  never overwritten. With no cash assigned, the consolidated XIRR is solved from the trades of the
+  holdings that add up, labelled with how many of the holdings it covers. Per-portfolio returns
+  are unchanged: a slice of a position filed across portfolios has no trades of its own.

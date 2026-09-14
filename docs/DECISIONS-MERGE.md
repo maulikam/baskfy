@@ -8052,3 +8052,28 @@ is a bigger change than this incident justifies.
 `kite_token_alert_session_day`, `_claim_marker`, `_release_marker` and the marker constants from
 `ops.py`, the `suppressed` keyword from `alerts.dispatch`, and `TestKiteTokenAlertDelivery`. Stale
 markers expire on their own within 36 h.
+
+## Portfolio fixes and trade history (14 Sep 2026) · ⚠ UNREVIEWED
+
+Maulik asked (14 Sep 2026): the "primary has never synced" banner after a sync, Return "needs more
+data", more holdings columns, the regime panel's "desk could not be read", and Today / This week
+per portfolio and combined. He chose "CSV + daily Kite capture" for trade history.
+
+1. **Sync status reads `broker_account.holdings_synced_at` (0048), not `broker_cash`.** Nothing
+   wrote `broker_cash`, so every account read "never synced". No backfill: `added_on` is kept
+   across syncs and is not a sync date. *Reverse:* drop the column; status falls back to cash rows.
+2. **A live quote overlays the close only when its session is newer than the stored close.** On a
+   holiday, weekend, pre-open or post-nightly, "Today" is the last session's move. *Rejected:*
+   showing zero on a non-session day — it hides Friday's move on Monday morning.
+3. **"This week" is measured from the last close before the current week, on current quantities.**
+   A name bought mid-week counts from last week's close; the tooltip says so. *Rejected:* waiting
+   for trade history to weight it — most holdings have none yet.
+4. **Trade history: `broker_trade` (0049), strict CSV parser, 15:50 Beat capture.** The parser
+   refuses a file on any unreadable number or any row wider than the header (the desk's parser read
+   bad numbers as 0 and let a shifted row through). Equity only.
+5. **A holding is dated from trades only when FIFO nets to exactly the held quantity**, and CAS /
+   MANUAL history is never overwritten. Bonuses and transfers-in stay undated and are named.
+6. **Consolidated XIRR falls back to trades when no cash was ever assigned**, over reconciled
+   instruments only, labelled "(N of M holdings)". Per-portfolio XIRR is unchanged — a slice of a
+   position split across portfolios has no trades of its own. *Reverse:* delete `_trade_xirr`'s
+   call in `_consolidated_xirr`.

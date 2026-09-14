@@ -94,6 +94,7 @@ from baskfy_api.routers import (
     support,
     swing,
     track_b,
+    trades,
     twt,
     vbt,
     webhook_endpoints,
@@ -549,6 +550,9 @@ def _mount_routers(versioned: APIRouter) -> None:
     # `portfolios` because both live under a `/portfolio*` prefix and the older router owns
     # `/portfolios`; the two never collide, and this ordering keeps that visible.
     versioned.include_router(portfolio_overview.router)
+    # NEEDS-MAULIK §32: trade history — a Console tradebook import and Kite's same-day read.
+    # Bookkeeping only; the Kite call is the read-only /trades list.
+    versioned.include_router(trades.router)
     versioned.include_router(backtests.router)
     # M22: read-only basket surfaces. No POST, no PUT, no DELETE -- execution stays in the desk
     # console, so nothing here crosses the SEBI gate. `test_baskets_readonly.py` asserts it.

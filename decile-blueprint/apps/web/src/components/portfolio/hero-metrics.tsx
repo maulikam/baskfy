@@ -32,6 +32,9 @@ import { cn } from "@/lib/utils";
  * mean six hero metrics, and the ceiling is the part of §6.2 that is easiest to erode and hardest
  * to win back.
  *
+ * **Maulik widened the row on 14 Sep 2026:** "This week" and then "Last 30 days" sit beside Today.
+ * They are moves over named windows, not return metrics, and each carries its own label.
+ *
  * Every rate goes through {@link ReturnValue}, so none of them can appear unlabelled (§11
  * criterion 3). Every rupee figure goes through the show/hide-amounts context (§6.1).
  */
@@ -113,6 +116,12 @@ export function HeroMetrics({ hero }: { hero: Hero }) {
         {hero.week_pnl ? (
           <Metric label="This week" testId="hero-week-pnl">
             <MoveFigure move={hero.week_pnl} testId="week-pnl-figure" />
+          </Metric>
+        ) : null}
+
+        {hero.month_pnl ? (
+          <Metric label="Last 30 days" testId="hero-month-pnl">
+            <MoveFigure move={hero.month_pnl} testId="month-pnl-figure" />
           </Metric>
         ) : null}
 

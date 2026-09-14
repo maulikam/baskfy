@@ -953,6 +953,7 @@ async def test_each_holding_row_carries_its_cost_pnl_and_moves(
     assert infy.todays_pnl is not None
     assert infy.todays_pnl.amount == Decimal("12000.00")
     assert infy.week_pnl is not None
+    assert infy.month_pnl is not None
 
 
 @requires_db
@@ -1563,6 +1564,39 @@ async def test_this_week_is_measured_from_last_weeks_final_close(
     assert view.hero.week_pnl is not None
     assert view.hero.week_pnl.since == friday
     assert view.hero.week_pnl.amount is not None
+
+
+@requires_db
+async def test_the_last_30_days_are_measured_from_the_close_30_days_back(
+    session: AsyncSession, book: Book, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """14 Sep 2026: "add this month (last 30 days)" beside Today and This week.
+
+    TODAY is Tuesday 18 Aug 2026. Thirty days back is Sunday 19 Jul, so the base is the close of
+    Friday 17 Jul. INFY is 120 shares closing 1,200 now against 1,000 then: +24,000, 20%.
+    """
+    from baskfy_api.routers import portfolio_overview as overview_mod  # noqa: PLC0415
+
+    base_session = dt.date(2026, 7, 17)
+    await _bar(session, book.infy, base_session, Decimal("1000"))
+    await session.flush()
+    monkeypatch.setattr(overview_mod, "live_prices_by_instrument", AsyncMock(return_value={}))
+    monkeypatch.setattr(overview_mod, "_now_ist", lambda: _ist(TODAY, 20))
+
+    prices = await overview_mod._load_prices(session, [book.infy])
+    assert prices.month_since == base_session
+    assert prices.month_base[book.infy] == Decimal("1000")
+
+    view = await portfolio_overview(session, book.owner)
+    assert view.hero.month_pnl is not None
+    assert view.hero.month_pnl.since == base_session
+    assert view.hero.month_pnl.label == "Change over the last 30 days"
+
+    holdings = await portfolio_holdings(session, book.owner)
+    infy = next(row for row in holdings.rows if row.instrument.symbol == "INFY")
+    assert infy.month_pnl is not None
+    assert infy.month_pnl.amount == Decimal("24000.00")
+    assert infy.month_pnl.pct == Decimal("0.2")
 
 
 @requires_db

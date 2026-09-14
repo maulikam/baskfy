@@ -63,6 +63,7 @@ const HEADERS = [
   "P&L",
   "Today",
   "This week",
+  "Last 30 days",
 ] as const;
 
 export function HoldingsByPortfolioTable({
@@ -78,12 +79,13 @@ export function HoldingsByPortfolioTable({
   const totalPnl = sum(ordered.map((row) => row.total_pnl?.amount));
   const today = sum(ordered.map((row) => row.todays_pnl?.amount));
   const week = sum(ordered.map((row) => row.week_pnl?.amount));
+  const month = sum(ordered.map((row) => row.month_pnl?.amount));
 
   return (
     <div className="rounded-xl border border-border bg-card" data-testid="holdings-portfolio-table">
       <h3 className="px-4 pt-3 text-sm font-medium">{name}</h3>
       <div className="mt-2 overflow-x-auto">
-        <table className="w-full min-w-[60rem] text-sm">
+        <table className="w-full min-w-[66rem] text-sm">
           <caption className="sr-only">Holdings in {name}, with cost, value and moves.</caption>
           <thead>
             <tr className="border-b border-border text-xs text-muted-foreground">
@@ -131,6 +133,7 @@ export function HoldingsByPortfolioTable({
                   <MoveCell move={row.total_pnl} testId="holding-pnl" />
                   <MoveCell move={row.todays_pnl} testId="holding-today" />
                   <MoveCell move={row.week_pnl} testId="holding-week" />
+                  <MoveCell move={row.month_pnl} testId="holding-month" />
                 </tr>
               );
             })}
@@ -152,6 +155,7 @@ export function HoldingsByPortfolioTable({
               <TotalMoveCell amount={totalPnl} base={totalInvested} />
               <TotalMoveCell amount={today} base={totalValue === null || today === null ? null : totalValue - today} />
               <TotalMoveCell amount={week} base={totalValue === null || week === null ? null : totalValue - week} />
+              <TotalMoveCell amount={month} base={totalValue === null || month === null ? null : totalValue - month} />
             </tr>
           </tfoot>
         </table>

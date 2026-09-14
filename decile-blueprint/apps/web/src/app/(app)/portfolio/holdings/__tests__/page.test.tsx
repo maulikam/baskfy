@@ -59,6 +59,7 @@ vi.mock("@/lib/portfolio/fetch", () => ({
             label: "Change since last week's close",
             unavailable_reason: "No close from last week to compare against yet",
           },
+          month_pnl: { amount: "400.00", pct: "0.0870", label: "Change over the last 30 days" },
           allocated: true,
           split_across_portfolios: false,
           allocation: { portfolio_id: 1, name: "Bonds", kind: "CAPITAL" },
@@ -109,5 +110,9 @@ describe("holdings by portfolio", () => {
     const week = screen.getByTestId("holding-week");
     expect(week).toHaveTextContent("—");
     expect(week).toHaveAttribute("title", "No close from last week to compare against yet");
+    const month = screen.getByTestId("holding-month");
+    expect(month).toHaveTextContent("+₹400");
+    expect(month).toHaveTextContent("+8.70%");
+    expect(month).toHaveAttribute("title", "Change over the last 30 days");
   });
 });

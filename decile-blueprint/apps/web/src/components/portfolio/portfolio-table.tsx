@@ -148,6 +148,9 @@ export function PortfolioTable({ overview, onSelect, onRowsChange }: PortfolioTa
                     This week
                   </th>
                   <th scope="col" className="px-3 py-2 text-right font-normal">
+                    Last 30 days
+                  </th>
+                  <th scope="col" className="px-3 py-2 text-right font-normal">
                     Return
                   </th>
                   <th scope="col" className="px-3 py-2 font-normal">
@@ -207,6 +210,12 @@ export function PortfolioTable({ overview, onSelect, onRowsChange }: PortfolioTa
                       >
                         <MoneyDelta value={row.week_pnl?.amount ?? null} />
                       </td>
+                      <td
+                        className={cn("px-3 py-2 text-right tabular-nums", toneFor(row.month_pnl?.amount))}
+                        title={row.month_pnl?.label}
+                      >
+                        <MoneyDelta value={row.month_pnl?.amount ?? null} />
+                      </td>
                       <td className="px-3 py-2 text-right">
                         <ReturnValue
                           entry={fromFigure(row.headline_return)}
@@ -233,7 +242,7 @@ export function PortfolioTable({ overview, onSelect, onRowsChange }: PortfolioTa
                       <Money value={total} />
                     )}
                   </td>
-                  <td colSpan={5} />
+                  <td colSpan={6} />
                 </tr>
               </tfoot>
             </table>

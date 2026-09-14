@@ -139,6 +139,33 @@ describe("§6.2 — five hero metrics, and not a sixth", () => {
     expect(week).toHaveTextContent("Change since last week's close");
   });
 
+  it("adds Last 30 days beside This week when the API carries it (Maulik, 14 Sep 2026)", () => {
+    /* "add this month (last 30 days) in overview as well as in holdings". */
+    draw({
+      ...OVERVIEW,
+      hero: {
+        ...OVERVIEW.hero,
+        week_pnl: {
+          label: "Change since last week's close",
+          amount: "-15400.00",
+          pct: "-0.0214",
+          since: "2026-09-04",
+        },
+        month_pnl: {
+          label: "Change over the last 30 days",
+          amount: "295989.00",
+          pct: "0.0306",
+          since: "2026-08-14",
+        },
+      },
+    });
+    expect(screen.getByTestId("hero-metrics").children).toHaveLength(7);
+    const month = screen.getByTestId("month-pnl-figure");
+    expect(month).toHaveTextContent("+₹2,95,989");
+    expect(month).toHaveTextContent("+3.06%");
+    expect(month).toHaveTextContent("Change over the last 30 days");
+  });
+
   it("shows today's move in rupees and in percent, as §6.2 asks", () => {
     draw();
     const today = screen.getByTestId("todays-pnl-figure");

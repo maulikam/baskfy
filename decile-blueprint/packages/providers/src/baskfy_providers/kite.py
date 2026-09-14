@@ -36,6 +36,7 @@ import polars as pl
 from kiteconnect import KiteConnect
 from kiteconnect import exceptions as kite_exceptions
 
+from baskfy_core.tradebook import TradeFill, TradeSide
 from baskfy_providers.errors import (
     AccessTokenExpired,
     CredentialsMissing,
@@ -113,6 +114,8 @@ class KiteClientLike(Protocol):
     def margins(self, segment: str | None = None) -> dict[str, object]: ...
 
     def quote(self, *instruments: str) -> dict[str, dict[str, object]]: ...
+
+    def trades(self) -> list[dict[str, object]]: ...
 
 
 def _default_client_factory(api_key: str, *, timeout: float = 30.0) -> KiteClientLike:
@@ -390,6 +393,19 @@ class KiteProvider:
         payload = self._call(lambda client: client.margins(_EQUITY_SEGMENT))
         return _equity_net_cash(payload)
 
+    def broker_trades(self, account: BrokerAccountRef) -> list[TradeFill]:
+        """``GET /trades`` — today's executions, and only today's: Kite takes no date and flushes
+        the list nightly (NEEDS-MAULIK §32). Read-only, like every method here (law 2).
+
+        Strict where :meth:`broker_holdings` is lenient. A skipped trade would leave a holding
+        whose trades no longer add up, so an equity row this cannot read refuses the whole read
+        and the day can be captured again, rather than recorded with a hole in it. Derivative and
+        currency rows are not equity and are left out.
+        """
+        self._require_own_account(account)
+        raw = self._call(lambda client: client.trades())
+        return [fill for row in raw if (fill := _to_trade_fill(row)) is not None]
+
     # --- Quotes (SW6) ---------------------------------------------------------
 
     def quotes(self, symbols: Sequence[str], *, exchange: str = "NSE") -> list[QuoteRecord]:
@@ -638,6 +654,46 @@ def _to_holding_record(row: dict[str, object]) -> BrokerHoldingRecord | None:
         # own mapping still escapes. See broker_holdings' docstring for why one bad row does
         # not fail the whole fetch.
         return None
+
+
+_EQUITY_EXCHANGES: Final = frozenset({"NSE", "BSE"})
+
+
+def _to_trade_fill(row: dict[str, object]) -> TradeFill | None:
+    """Map one Kite trade. ``None`` off NSE/BSE; raises for an equity row it cannot read."""
+    exchange = (_text(row.get("exchange")) or "").upper()
+    if exchange not in _EQUITY_EXCHANGES:
+        return None
+    symbol = _text(row.get("tradingsymbol"))
+    trade_id = _text(row.get("trade_id"))
+    side_raw = (_text(row.get("transaction_type")) or "").upper()
+    quantity = _decimal(row.get("quantity"))
+    price = _decimal(row.get("average_price"))
+    when = row.get("fill_timestamp") or row.get("exchange_timestamp") or row.get("order_timestamp")
+    if (
+        not symbol
+        or not trade_id
+        or side_raw not in {"BUY", "SELL"}
+        or quantity is None
+        or quantity <= 0
+        or price is None
+        or not isinstance(when, dt.datetime)
+    ):
+        raise UnexpectedPayload(
+            f"a trade row could not be read (trade_id={trade_id!r}, symbol={symbol!r})",
+            provider=PROVIDER_NAME,
+        )
+    return TradeFill(
+        symbol=symbol.upper(),
+        exchange=exchange,
+        side=TradeSide(side_raw),
+        quantity=quantity,
+        price=price,
+        trade_date=when.date(),
+        trade_id=trade_id,
+        order_id=_text(row.get("order_id")),
+        executed_at=when,
+    )
 
 
 def _quote_call(batch: list[str]) -> Callable[[KiteClientLike], dict[str, dict[str, object]]]:

@@ -93,6 +93,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.auth import AuthenticatedDep, Principal
+from baskfy_api.broker_trades import fills_by_instrument
 from baskfy_api.db import SessionDep
 from baskfy_api.invoices import IST, today_ist
 from baskfy_api.live_prices import live_prices_by_instrument
@@ -191,6 +192,7 @@ from baskfy_core.reconciliation import (
     resolve,
 )
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
+from baskfy_core.tradebook import TradeFill, history_for, xirr_since_first_purchase
 
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 
@@ -1319,6 +1321,9 @@ class _Ledger:
     #: ``portfolio_id -> the saved screen behind it``, for screen- and strategy-driven ones.
     screens: Mapping[int, Screen]
     benchmarks: Mapping[int, IndexDef]
+    #: ``instrument_id -> recorded trades`` (``broker_trade``), every broker account. Empty until a
+    #: tradebook is imported or a day is captured from Kite (NEEDS-MAULIK §32).
+    trades: Mapping[int, Sequence[TradeFill]] = field(default_factory=dict)
 
     @property
     def holdings(self) -> list[Holding]:
@@ -1610,6 +1615,7 @@ async def _load_ledger(session: AsyncSession, user_id: int) -> _Ledger:
         publishers=publishers,
         screens=screens,
         benchmarks=benchmarks,
+        trades=await fills_by_instrument(session, user_id=user_id),
     )
 
 
@@ -2946,6 +2952,64 @@ def _valued_on(ledger: _Ledger, events: Sequence[LedgerCashFlow]) -> dt.date:
     return prices_on if prices_on is not None and prices_on >= last_event else last_event
 
 
+def _trade_xirr(ledger: _Ledger) -> LabelledRateOut | None:
+    """A money-weighted return from recorded trades, when no cash has been assigned (§32).
+
+    Each instrument's trades are replayed FIFO against everything held in it. Only instruments
+    whose trades add up — to the held quantity, or to zero for a position since closed — enter
+    the series, with their current value as the closing flow; a holding changed by a bonus or a
+    transfer-in would put shares in the closing value that no flow paid for. The label says how
+    many holdings the figure covers, so a partial history is never read as the whole book.
+
+    ``None`` when there are no trades at all, so the caller keeps its own explanation.
+    """
+    if not ledger.trades:
+        return None
+    held: dict[int, Decimal] = {}
+    value: dict[int, Decimal | None] = {}
+    for position in ledger.positions:
+        instrument_id = position.key.instrument_id
+        held[instrument_id] = held.get(instrument_id, ZERO) + position.holding.quantity
+        priced = ledger.value_of(position.holding)
+        previous = value.get(instrument_id, ZERO)
+        value[instrument_id] = None if priced is None or previous is None else previous + priced
+
+    fills: list[TradeFill] = []
+    closing = ZERO
+    covered = 0
+    for instrument_id, trades in ledger.trades.items():
+        quantity = held.get(instrument_id, ZERO)
+        if not history_for(trades, quantity).reconciles:
+            continue
+        if quantity > ZERO:
+            worth = value.get(instrument_id)
+            if worth is None:
+                continue
+            closing += worth
+            covered += 1
+        fills.extend(trades)
+    held_count = sum(1 for quantity in held.values() if quantity > ZERO)
+    label = f"XIRR since your first recorded purchase ({covered} of {held_count} holdings)"
+    if not fills:
+        return LabelledRateOut(
+            label=label,
+            value=None,
+            unavailable_reason=(
+                "Your recorded trades do not add up to any holding yet — a tradebook that starts "
+                "after a position was opened, or a bonus or split, leaves it out"
+            ),
+        )
+    since = min(fill.trade_date for fill in fills)
+    as_of = max([ledger.prices.as_of or since, *(fill.trade_date for fill in fills)])
+    rate = xirr_since_first_purchase(fills, closing_value=closing, as_of=as_of)
+    return LabelledRateOut(
+        label=label,
+        since=since,
+        value=rate,
+        unavailable_reason=None if rate is not None else "These trades do not solve to a rate yet",
+    )
+
+
 def _consolidated_xirr(ledger: _Ledger, closing_value: Decimal) -> LabelledRateOut:
     """§5.2's consolidated XIRR — the user's own money-weighted experience, labelled.
 
@@ -2968,10 +3032,16 @@ def _consolidated_xirr(ledger: _Ledger, closing_value: Decimal) -> LabelledRateO
     label = "XIRR since your first cash assignment"
     events = [flow for flow in ledger.flows if flow.kind.is_xirr_event]
     if not events:
+        from_trades = _trade_xirr(ledger)
+        if from_trades is not None:
+            return from_trades
         return LabelledRateOut(
             label=label,
             value=None,
-            unavailable_reason="Assign cash to a portfolio to start measuring XIRR",
+            unavailable_reason=(
+                "Assign cash to a portfolio, or import your Zerodha tradebook, to start measuring "
+                "XIRR"
+            ),
         )
     since = min(flow.occurred_on for flow in events)
     as_of = _valued_on(ledger, events)

@@ -117,6 +117,13 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
     # and `SESSION_DATA_READY_IST` puts the earliest it can exist at 18:00; the chain at 18:45
     # then finds the session already landed and its Kite pass is a top-up rather than the single
     # point of failure it was on 18-29 Aug. Needs no broker session at all.
+    # NEEDS-MAULIK §32: Kite's /trades is today only and flushed nightly. 15:50, after the close
+    # and well before any flush; a non-session day returns at once. Read-only.
+    "capture-kite-trades": {
+        "task": "baskfy.pipeline.capture_kite_trades",
+        "schedule": crontab(hour=15, minute=50, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_DEFAULT},
+    },
     "bhavcopy-eod": {
         "task": "baskfy.pipeline.bhavcopy_ingest",
         "schedule": crontab(hour=18, minute=15, day_of_week="mon-fri"),

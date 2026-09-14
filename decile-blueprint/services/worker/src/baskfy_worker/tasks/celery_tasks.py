@@ -32,6 +32,8 @@ from baskfy_api.broker_oauth import (
     token_encryption_key,
     token_store_path,
 )
+from baskfy_api.broker_trades import capture_kite_trades
+from baskfy_api.curated_seed import resolve_sole_user_id
 from baskfy_api.problems import Problem
 from baskfy_api.screener import (
     WARM_CACHE_SCREEN_LIMIT,
@@ -507,6 +509,32 @@ def check_publish_deadline_task() -> JsonObject:
 
     dispatched = run_in_session(check)
     return {"alert": dispatched}
+
+
+@shared_task(name="baskfy.pipeline.capture_kite_trades")
+def capture_kite_trades_task() -> JsonObject:
+    """Keep today's Zerodha executions before Kite flushes them tonight (NEEDS-MAULIK §32).
+
+    Kite's ``/trades`` takes no date and is emptied nightly, so a day not read by the evening is
+    gone from the API for good; only a Console export can recover it. Scheduled after the close,
+    silent on a day that is not a session, and idempotent — a second run the same day inserts
+    nothing (``broker_trade``'s unique trade id). A read-only call: no order is touched.
+    """
+
+    async def capture(session: AsyncSession) -> JsonObject:
+        today = dt.datetime.now(tz=IST).date()
+        if not await is_session_day(session, today):
+            return {"captured": False, "reason": f"{today} is not an NSE session"}
+        report = await capture_kite_trades(session, user_id=await resolve_sole_user_id(session))
+        store = report.store
+        return {
+            "captured": report.captured,
+            "reason": report.reason,
+            "inserted": store.inserted if store else 0,
+            "dated_holdings": report.history.dated if report.history else 0,
+        }
+
+    return run_in_session(capture)
 
 
 @shared_task(name="baskfy.ops.check_kite_token")

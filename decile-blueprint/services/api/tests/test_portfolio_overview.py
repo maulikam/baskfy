@@ -1565,6 +1565,49 @@ async def test_this_week_is_measured_from_last_weeks_final_close(
     assert view.hero.week_pnl.amount is not None
 
 
+@requires_db
+async def test_with_no_cash_assigned_the_return_comes_from_trades_that_add_up(
+    session: AsyncSession, book: Book
+) -> None:
+    """NEEDS-MAULIK §32 / 14 Sep 2026: Return read "—" because no cash had ever been assigned.
+
+    With a tradebook imported, the consolidated XIRR is solved from the trades — but only over
+    holdings the trades add up to, and the label says how many. INFY is 120 shares, bought here
+    at 1,000 exactly a year before TODAY and worth 1,200 now: 20% a year. TCS has no trades, so
+    it is not in the figure, and HDFC's trades say 10 where 50 are held, so it is not either.
+    """
+    from dataclasses import replace as replaced  # noqa: PLC0415
+
+    from baskfy_api.routers import portfolio_overview as overview_mod  # noqa: PLC0415
+    from baskfy_core.tradebook import TradeFill, TradeSide  # noqa: PLC0415
+
+    def bought(symbol: str, quantity: str) -> TradeFill:
+        return TradeFill(
+            symbol=symbol,
+            exchange="NSE",
+            side=TradeSide.BUY,
+            quantity=Decimal(quantity),
+            price=Decimal("1000"),
+            trade_date=dt.date(2025, 8, 18),
+            trade_id=f"{symbol}-1",
+        )
+
+    ledger = await overview_mod._load_ledger(session, book.owner.require_user())
+    held = {position.key.instrument_id for position in ledger.positions}
+    with_trades = replaced(
+        ledger,
+        flows=(),
+        trades={book.infy: [bought("INFY", "120")], book.hdfc: [bought("HDFCBANK", "10")]},
+    )
+
+    figure = overview_mod._consolidated_xirr(with_trades, Decimal("0"))
+
+    assert figure.label == (f"XIRR since your first recorded purchase (1 of {len(held)} holdings)")
+    assert figure.since == dt.date(2025, 8, 18)
+    assert figure.value is not None
+    assert abs(figure.value - Decimal("0.20")) < Decimal("0.002")
+
+
 #: Every write ``portfolio_overview`` is allowed to declare, and why each is bookkeeping rather
 #: than an order. A route not in this set fails the guard below until somebody adds it here with
 #: its reason — which is the review this test exists to force.

@@ -139,6 +139,10 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     "/portfolio/suggestions": {"get"},
     "/portfolio/overview": {"get"},
     "/portfolio/holdings": {"get"},
+    # docs/07 §"Trade history" (14 Sep 2026): bookkeeping, not an order path — 07a §16.
+    "/trades": {"get"},
+    "/trades/import": {"post"},
+    "/trades/sync-today": {"post"},
     "/portfolio/activity": {"get"},
     "/portfolio/reconciliation": {"get"},
     "/portfolio/reconciliation/{item_id}/resolve": {"post"},

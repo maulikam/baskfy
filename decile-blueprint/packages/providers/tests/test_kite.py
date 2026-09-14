@@ -61,7 +61,9 @@ class FakeKiteClient:
         positions: list[dict[str, object]] | None = None,
         margins: dict[str, object] | None = None,
         quotes: dict[str, dict[str, object]] | None = None,
+        trades: list[dict[str, object]] | None = None,
     ) -> None:
+        self._trades = trades or []
         self._quotes = quotes or {}
         self._candles = candles or []
         self._instruments = instruments or []
@@ -120,6 +122,10 @@ class FakeKiteClient:
         self.quote_batches.append(tuple(instruments))
         self._maybe_raise()
         return {key: self._quotes[key] for key in instruments if key in self._quotes}
+
+    def trades(self) -> list[dict[str, object]]:
+        self._maybe_raise()
+        return self._trades
 
 
 def _candle_date(candle: dict[str, object]) -> dt.date:
@@ -564,6 +570,60 @@ def _candles(start: dt.date, count: int) -> list[dict[str, object]]:
         }
         for offset in range(count)
     ]
+
+
+class TestBrokerTrades:
+    """Today's executions from ``GET /trades`` (NEEDS-MAULIK §32, 14 Sep 2026)."""
+
+    def test_maps_equity_trades_to_decimal_fills_and_leaves_out_derivatives(
+        self, configured_settings: ProviderSettings, stored_token: AccessTokenStore
+    ) -> None:
+        filled = dt.datetime(2026, 9, 11, 10, 5, 7)
+        client = FakeKiteClient(
+            trades=[
+                {
+                    "trade_id": "T1",
+                    "order_id": "O1",
+                    "exchange": "NSE",
+                    "tradingsymbol": "pwl",
+                    "transaction_type": "BUY",
+                    "quantity": 25,
+                    "average_price": 412.35,
+                    "fill_timestamp": filled,
+                },
+                {
+                    "trade_id": "F1",
+                    "exchange": "NFO",
+                    "tradingsymbol": "NIFTY26SEPFUT",
+                    "transaction_type": "BUY",
+                    "quantity": 75,
+                    "average_price": 25000,
+                    "fill_timestamp": filled,
+                },
+            ]
+        )
+        provider = build_provider(configured_settings, client, stored_token)
+
+        fills = provider.broker_trades(_ref())
+
+        assert len(fills) == 1
+        fill = fills[0]
+        assert fill.symbol == "PWL"
+        assert fill.quantity == Decimal("25")
+        assert fill.price == Decimal("412.35")
+        assert fill.trade_date == dt.date(2026, 9, 11)
+        assert fill.executed_at == filled
+
+    def test_an_unreadable_equity_trade_refuses_the_whole_read(
+        self, configured_settings: ProviderSettings, stored_token: AccessTokenStore
+    ) -> None:
+        client = FakeKiteClient(
+            trades=[{"trade_id": "T1", "exchange": "NSE", "tradingsymbol": "PWL", "quantity": 5}]
+        )
+        provider = build_provider(configured_settings, client, stored_token)
+
+        with pytest.raises(UnexpectedPayload):
+            provider.broker_trades(_ref())
 
 
 class TestBrokerHoldings:

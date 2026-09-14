@@ -100,26 +100,42 @@ describe("which screens the page runs", () => {
     { publicId: "user00000001", name: "My screen", isExample: false },
   ];
 
-  it("fills three columns from the list when the query is empty", () => {
+  it("selects the person's own screen by default, then Investing 001", () => {
     const ids = pickScreenIds(undefined, screens);
     expect(ids).toHaveLength(MAX_SCREEN_COLUMNS);
-    expect(ids[0]).toBe(DEFAULT_SCREEN_ID);
-    expect(ids).toEqual(["exmpl0000001", "exmpl0000002", "exmpl0000003"]);
+    expect(ids).toEqual(["user00000001", DEFAULT_SCREEN_ID, "exmpl0000002"]);
+  });
+
+  it("keeps every own screen ahead of the templates, in the list's order", () => {
+    const withTwo = [
+      ...screens,
+      { publicId: "user00000002", name: "Older screen", isExample: false },
+    ];
+    expect(pickScreenIds([], withTwo)).toEqual(["user00000001", "user00000002", DEFAULT_SCREEN_ID]);
+  });
+
+  it("fills from the templates, Investing 001 first, when nothing is the person's own", () => {
+    const templatesOnly = screens.filter((screen) => screen.isExample);
+    expect(pickScreenIds(undefined, templatesOnly)).toEqual([
+      "exmpl0000001",
+      "exmpl0000002",
+      "exmpl0000003",
+    ]);
   });
 
   it("keeps named screens first and fills the rest so there are still three", () => {
-    expect(pickScreenIds(["user00000001"], screens)).toEqual([
+    expect(pickScreenIds(["exmpl0000002"], screens)).toEqual([
+      "exmpl0000002",
       "user00000001",
       "exmpl0000001",
-      "exmpl0000002",
     ]);
   });
 
   it("ignores unknown ids and still fills three", () => {
     expect(pickScreenIds(["nope", "exmpl0000003"], screens)).toEqual([
       "exmpl0000003",
+      "user00000001",
       "exmpl0000001",
-      "exmpl0000002",
     ]);
   });
 

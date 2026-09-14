@@ -24,8 +24,10 @@ export interface ScreenOption {
  * Resolve screen ids from the URL, filling up to {@link MAX_SCREEN_COLUMNS} from the list so
  * the dropdowns always have three columns when three screens exist.
  *
- * Unknown ids are ignored. Investing 001 stays first when it is available and the URL did not
- * name something else in that slot.
+ * Unknown ids are ignored. When the URL leaves slots open, the person's own screens fill them
+ * first — in the list's order, which the API sorts most recently updated first — then Investing
+ * 001, then the other templates. Someone who built a screen came to see it against the scans,
+ * not a seeded example.
  */
 export function pickScreenIds(
   requested: readonly string[] | undefined,
@@ -40,9 +42,12 @@ export function pickScreenIds(
     }
     if (chosen.length >= max) return chosen;
   }
+  const mine = screens.filter((screen) => !screen.isExample).map((screen) => screen.publicId);
+  const templates = screens.filter((screen) => screen.isExample).map((screen) => screen.publicId);
   const preferred = [
-    ...available.filter((id) => id === DEFAULT_SCREEN_ID),
-    ...available.filter((id) => id !== DEFAULT_SCREEN_ID),
+    ...mine,
+    ...templates.filter((id) => id === DEFAULT_SCREEN_ID),
+    ...templates.filter((id) => id !== DEFAULT_SCREEN_ID),
   ];
   for (const id of preferred) {
     if (!chosen.includes(id)) chosen.push(id);

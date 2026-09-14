@@ -16,7 +16,7 @@ import { fetchToday as fetchVbtToday } from "@/lib/vbt/fetch";
  * Volume breakout and Three weeks tight are today's published candidates / tight names.
  * Swing is today's setups, every status — the question is which names appear on both scans,
  * not which names cleared a given status filter.
- * Screens are whichever screens the URL names (default: three, Investing 001 first). Each is
+ * Screens are whichever screens the URL names (default: three, your own screens first, then Investing 001). Each is
  * run fresh so those columns are against the same session the sleeves are showing — not a
  * stale prior run.
  */

@@ -15,10 +15,12 @@ from _law1_io import seed_holidays
 
 from baskfy_core.trading_calendar import (
     EXPECTED_WINDOW_LENGTHS,
+    SEED_HOLIDAY_CONFIDENCE_LEVELS,
     TradingDayRow,
     build_calendar,
     default_calendar_range,
     is_provisional,
+    parse_seed_holidays,
     reconcile,
     snap_backward,
     snap_forward,
@@ -67,6 +69,27 @@ class TestClassification:
         """The weakest claim in the table must not masquerade as an observed fact."""
         rows = {r.date: r for r in _cal(dt.date(2026, 8, 17), dt.date(2026, 8, 18))}
         assert rows[dt.date(2026, 8, 18)].source == "derived"
+
+    def test_2026s_circular_holidays_are_not_trading_days(self) -> None:
+        """NSE's 2026 circular, added 14 Sep 2026 (cross-checked against niftyscanner.in and
+        groww.in): Dussehra, Diwali Balipratipada and Guru Nanak Jayanti close the exchange, and
+        both `fixed` and `circular` confidence must produce `source == "holiday"`."""
+        rows = {r.date: r for r in _cal(dt.date(2026, 10, 1), dt.date(2026, 11, 30))}
+        for day, name in (
+            (dt.date(2026, 10, 20), "Dussehra"),
+            (dt.date(2026, 11, 10), "Diwali Balipratipada"),
+            (dt.date(2026, 11, 24), "Prakash Gurpurb Sri Guru Nanak Dev"),
+        ):
+            assert not rows[day].is_trading_day
+            assert rows[day].source == "holiday"
+            assert rows[day].holiday_name == name
+
+    def test_the_day_before_diwali_balipratipada_is_still_a_trading_day(self) -> None:
+        """2026-11-09 is a Monday with nothing seeded against it — a sibling-date regression
+        check that the new circular holidays did not swallow a neighbouring weekday."""
+        rows = {r.date: r for r in _cal(dt.date(2026, 11, 1), dt.date(2026, 11, 30))}
+        assert rows[dt.date(2026, 11, 9)].is_trading_day
+        assert rows[dt.date(2026, 11, 9)].source == "derived"
 
 
 class TestProvisionality:
@@ -128,6 +151,16 @@ class TestSeedFile:
     def test_every_year_from_2011_is_represented(self) -> None:
         years = {d.year for d in seed_holidays()}
         assert set(range(2011, 2027)) <= years
+
+    def test_confidence_levels_are_fixed_and_circular(self) -> None:
+        assert {"fixed", "circular"} == SEED_HOLIDAY_CONFIDENCE_LEVELS
+
+    def test_an_unknown_confidence_value_is_rejected_not_swallowed(self) -> None:
+        """House rule 3: no silently swallowed exceptions — a typo in the seed CSV must fail
+        loudly rather than pass an unrecognised confidence through in silence."""
+        text = "date,name,confidence\n2026-01-15,Made Up Holiday,guessed\n"
+        with pytest.raises(ValueError, match="guessed"):
+            parse_seed_holidays(text)
 
 
 def test_expected_window_lengths_are_the_docs_13_figures() -> None:

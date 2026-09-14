@@ -7873,7 +7873,7 @@ separate IS and OOS runs (OOS would start without the holdings IS left it). **Re
 one `ValidationConfig` field or one step in `_Simulator`; the buffer default moves when the grid
 result is recorded.
 
-**2F.2 Evidence and statuses (14 Sep 2026, gate G4/G5).** `docs/ranking/VALIDATION.md` is
+**2F.2 Evidence and statuses (14 Sep 2026, gate G4/G5).** ✅ **REVIEWED 14 Sep 2026 — Maulik accepted both outcomes as-is: the 17 C1 factors marked `rejected` by the promotion rule, and the `retention_rank` default 30 → 60.** `docs/ranking/VALIDATION.md` is
 written. `research/ranking-validation/render_validation.py` generates its tables from
 `out/ablation.csv` and applies the promotion rule in code.
 
@@ -7961,7 +7961,7 @@ moves the first ranking term with it, since C3 requires `sort_by == ranking_term
 **2H.5** New screens start at `fixed_universe` via `defaultDefinition()` (decision 2D.1); Reset
 and clearing the Ranking chip therefore also return to `fixed_universe`.
 
-## AF C.1 — The login scan's `task_id` is written before the commit, not after it · ⚠ UNREVIEWED
+## AF C.1 — The login scan's `task_id` is written before the commit, not after it · ✅ REVIEWED 14 Sep 2026 (Maulik: accepted as-is)
 
 **What happened.** `services/worker/tests/test_swing_scan_now.py::TestTheLoginTrigger::test_an_afternoon_login_creates_a_provisional_scan_once`
 failed with `task_id` None, already on HEAD before round 2. The test was right. `c944a22` (AFC,
@@ -7994,7 +7994,7 @@ broker; the worker's sweep will publish it" on every login, which is false.
 **Reverse.** Delete the two lines (`row.task_id = task_id`, `await session.flush()`) and their
 comment in `request_login_scan`, and the one new test.
 
-## Ops: token-expiry alert on trading days, once per day · ⚠ UNREVIEWED
+## Ops: token-expiry alert on trading days, once per day · ✅ REVIEWED 14 Sep 2026 (Maulik: accepted as-is)
 
 **Context.** 14 Sep 2026 was an NSE holiday (market shut) and Maulik got an email every hour
 saying the Kite token was expiring or expired. Beat runs `baskfy.ops.check_kite_token` hourly at

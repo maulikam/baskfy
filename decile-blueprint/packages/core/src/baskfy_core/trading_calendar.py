@@ -16,11 +16,20 @@ Confidence model
 ``derived``   assumed open because nothing said otherwise; the weakest claim in the table.
 ``bhavcopy``  corroborated by real NSE market data for that date; authoritative.
 
-The seeded list covers only the holidays that are deterministic (fixed Gregorian dates plus
-Good Friday). India's lunar-calendar holidays — Holi, Diwali, Dussehra, the Ids, Janmashtami,
-Ganesh Chaturthi, Guru Nanak Jayanti and friends — are declared per year by NSE circular and are
-**not** in the seed file, because guessing them would put plausible-looking wrong dates into the
-spine of every factor window. See ``data/README.md``.
+The seeded list covers the holidays that are deterministic (fixed Gregorian dates plus Good
+Friday) plus, year by year as NSE publishes its circular, the lunar-calendar holidays it has
+actually announced. India's lunar-calendar holidays — Holi, Diwali, Dussehra, the Ids,
+Janmashtami, Ganesh Chaturthi, Guru Nanak Jayanti and friends — cannot be computed from a rule:
+guessing them ahead of the circular would put plausible-looking wrong dates into the spine of
+every factor window, which is why they are added only once NSE has announced them. 2026's
+circular holidays were added on 14 Sep 2026, cross-checked across two independent sources
+(niftyscanner.in and groww.in) that agreed; see ``data/README.md``.
+
+Each seed row also carries a ``confidence``: ``fixed`` for a date computed from a rule (a fixed
+Gregorian date, or Good Friday from the Easter algorithm), ``circular`` for a lunar/movable date
+taken from NSE's dated circular for that year. Both still produce ``trading_day.source ==
+'holiday'`` — the distinction is provenance, not authority; ``PROVISIONAL_SOURCES`` treats every
+seeded holiday the same until :func:`reconcile` sees real bars.
 
 Consequence: a freshly seeded calendar is *provisional*. :func:`reconcile_from_bars` promotes
 real trading dates to ``bhavcopy`` and demotes the rest; Prompt 3 must run it across the whole
@@ -53,6 +62,13 @@ _HOLIDAY_FILE: Final = HOLIDAY_FILE  # backwards-compatible alias for importers
 #: ``date.weekday()`` values from Saturday onward.
 _SATURDAY: Final = 5
 
+#: The seed CSV's ``confidence`` column — how a seeded holiday's date was established.
+#: ``fixed``: computed from a rule (a fixed Gregorian date, or Good Friday via Easter).
+#: ``circular``: a lunar/movable date taken from NSE's dated circular for that year.
+#: Both map to ``trading_day.source == 'holiday'`` in :func:`build_calendar`; this is provenance
+#: of the *date*, not the resulting row's authority.
+SEED_HOLIDAY_CONFIDENCE_LEVELS: Final[frozenset[str]] = frozenset({"fixed", "circular"})
+
 
 @dataclass(frozen=True, slots=True)
 class TradingDayRow:
@@ -69,9 +85,22 @@ def parse_seed_holidays(text: str) -> dict[dt.date, str]:
 
     The package no longer opens ``baskfy_core.data`` itself (Law 1 / AF 3.10): the caller —
     seed job, test, or worker — reads the committed file and hands the text in.
+
+    Every row's ``confidence`` is validated against :data:`SEED_HOLIDAY_CONFIDENCE_LEVELS`
+    (house rule 3: no silently swallowed exceptions) — a typo or a future third tier must fail
+    loudly here rather than pass an unrecognised value through in silence. ``fixed`` and
+    ``circular`` currently both resolve to ``trading_day.source == 'holiday'`` in
+    :func:`build_calendar`; the confidence itself is not returned because nothing downstream of
+    this dict yet needs it.
     """
     holidays: dict[dt.date, str] = {}
     for row in csv.DictReader(text.splitlines()):
+        confidence = row["confidence"]
+        if confidence not in SEED_HOLIDAY_CONFIDENCE_LEVELS:
+            raise ValueError(
+                f"{row['date']}: unknown holiday confidence {confidence!r}, expected one of "
+                f"{sorted(SEED_HOLIDAY_CONFIDENCE_LEVELS)}"
+            )
         holidays[dt.date.fromisoformat(row["date"])] = row["name"]
     return holidays
 

@@ -41,20 +41,34 @@ day" and "outside the loaded range" are distinguishable, and so snapping is one 
 | `derived` | Assumed open because nothing said otherwise. The weakest claim in the table. |
 | `bhavcopy` | Corroborated by real NSE market data for that date. Authoritative. |
 
-## The seed list is deliberately incomplete
+This is `trading_day.source`, written by the seeder. It is a different axis from the seed CSV's
+own `confidence` column (below): every seeded holiday — `fixed` or `circular` — writes
+`source='holiday'` here; `confidence` records how *that date* was established, not how authoritative
+the resulting row is.
 
-The bundle contains no NSE holiday list, and NSE's holiday circulars were not reachable when this
-was built. `packages/core/src/decile_core/data/nse_trading_holidays.csv` therefore contains only
-the holidays that are **deterministic**: the fixed Gregorian dates (Republic Day, Ambedkar
-Jayanti, Maharashtra Day, Independence Day, Gandhi Jayanti, Christmas) plus Good Friday, computed
-from the Easter algorithm.
+## The seed list is deliberately incomplete — except where a circular has been read
+
+The bundle contains no complete NSE holiday list, and most years' circulars were not reachable
+when this was built. `packages/core/src/baskfy_core/data/nse_trading_holidays.csv` therefore
+contains the holidays that are **deterministic** — the fixed Gregorian dates (Republic Day,
+Ambedkar Jayanti, Maharashtra Day, Independence Day, Gandhi Jayanti, Christmas) plus Good Friday,
+computed from the Easter algorithm, `confidence=fixed` — plus, year by year as a circular is
+actually read, the lunar/movable holidays it announced, `confidence=circular`.
 
 India's lunar-calendar holidays — Holi, Mahashivratri, Ram Navami, Id-ul-Fitr, Bakri Id, Muharram,
 Janmashtami, Ganesh Chaturthi, Dussehra, Diwali Laxmi Pujan and Balipratipada, Guru Nanak Jayanti
-— are declared per year by circular and are **not** in the file. Guessing them would put
-plausible-looking wrong dates into the spine of every factor window, which is a worse failure than
-an obviously missing one: a seeded calendar currently yields ~255 trading days a year against a
-real ~246–250.
+— are declared per year by circular and are **not** in the file until that circular has been read.
+Guessing them ahead of the circular would put plausible-looking wrong dates into the spine of
+every factor window, which is a worse failure than an obviously missing one: a seed with only the
+deterministic dates yields ~255 trading days a year against a real ~246–250.
+
+**2026 is now complete.** On 14 Sep 2026, NSE's 2026 circular's lunar/movable equity holidays were
+added — Municipal Corporation General Elections (15 Jan), Holi (3 Mar), Shri Ram Navami (26 Mar),
+Shri Mahavir Jayanti (31 Mar), Bakri Id (28 May), Muharram (26 Jun), Ganesh Chaturthi (14 Sep),
+Dussehra (20 Oct), Diwali Balipratipada (10 Nov) and Guru Nanak Jayanti / Prakash Gurpurb Sri Guru
+Nanak Dev (24 Nov) — each `confidence=circular`, cross-checked across two independent sources
+(niftyscanner.in and groww.in) that agreed. Every other year in the file still carries only the
+deterministic dates.
 
 ## How it gets correct
 

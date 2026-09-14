@@ -22,6 +22,8 @@ import RegimePage from "../page";
  * value carries its reason rather than a dash — rather than the shape the markup happens to have.
  */
 
+vi.mock("@/lib/auth", () => ({ auth: () => Promise.resolve(null) }));
+
 vi.mock("@/lib/desk/fetch", async (importOriginal) => {
   const actual = await importOriginal<DeskFetch>();
   return { ...actual, fetchRegime: vi.fn() };

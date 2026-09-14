@@ -448,10 +448,11 @@ def start(conn, name: str, values: Mapping[str, Any] | None = None) -> dict:
         started = dt.datetime.now()
         with db.transaction(conn):
             cur = conn.execute(
-                "INSERT INTO ops_jobs(name, argv_json, status, started_at) VALUES(?,?,?,?)",
+                "INSERT INTO ops_jobs(name, argv_json, status, started_at) VALUES(?,?,?,?)"
+                " RETURNING id",
                 (name, json.dumps(argv[1:]), "running",
                  started.isoformat(timespec="seconds")))
-            job_id = int(cur.lastrowid)
+            job_id = int(cur.fetchall()[0][0])  # RETURNING: Postgres has no lastrowid
         _LIVE.add(job_id)
     except Exception:
         _LOCK.release()

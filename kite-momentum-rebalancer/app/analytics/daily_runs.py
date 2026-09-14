@@ -48,10 +48,12 @@ def record(conn, *, steps: Sequence[tuple[str, str, str]], trigger: str,
     with db.transaction(conn):
         cur = conn.execute(
             "INSERT INTO daily_runs(ran_at, session_date, trigger, outcome,"
-            " failed_steps, steps_json, duration_s) VALUES(?,?,?,?,?,?,?)",
+            " failed_steps, steps_json, duration_s) VALUES(?,?,?,?,?,?,?) RETURNING id",
             (dt.datetime.now().isoformat(timespec="seconds"), session_date.isoformat(),
              trigger, outcome, failed, json.dumps(steps), duration_s))
-    return int(cur.lastrowid)
+        # Read inside the transaction: RETURNING, because Postgres has no lastrowid (pg.py).
+        run_id = int(cur.fetchall()[0][0])
+    return run_id
 
 
 def history(conn, limit: int = 20) -> list[dict]:

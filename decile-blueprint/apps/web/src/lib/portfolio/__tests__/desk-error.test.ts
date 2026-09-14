@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+/* `lib/desk/fetch` reads the session for its bearer token; the class under test needs none. */
+vi.mock("@/lib/auth", () => ({ auth: () => Promise.resolve(null) }));
 
 import { DeskUnavailable } from "@/lib/desk/fetch";
 import { readerSafeDeskError } from "@/lib/portfolio/desk-error";

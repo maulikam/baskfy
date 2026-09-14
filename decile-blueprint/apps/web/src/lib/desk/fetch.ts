@@ -2,6 +2,7 @@ import "server-only";
 
 import { serverApiOrigin } from "@/lib/api/config";
 import { ServerFetchTimeoutError, serverFetchJson } from "@/lib/api/server-fetch";
+import { auth } from "@/lib/auth";
 
 /**
  * Server-side reads for the desk surfaces — M26.
@@ -119,9 +120,19 @@ export interface Reconcile {
   settled: boolean;
 }
 
+/**
+ * Every `/desk/*` route has required a signed-in caller since `079d2ba` (AFA 0.1). This reader
+ * kept calling them anonymously, so each one answered 401 and the portfolio page's regime panel
+ * said "the desk did not answer" about a desk that was up (found 14 Sep 2026). The token is read
+ * per call, never cached, for the reason `lib/api/server.ts` gives.
+ */
 async function readJson(path: string): Promise<unknown> {
+  const token = (await auth())?.accessToken;
   try {
-    return await serverFetchJson({ url: `${serverApiOrigin()}/api/v1${path}` });
+    return await serverFetchJson({
+      url: `${serverApiOrigin()}/api/v1${path}`,
+      ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
+    });
   } catch (error) {
     if (error instanceof ServerFetchTimeoutError) {
       throw new DeskUnavailable(`${path} timed out after ${error.timeoutMs}ms`);

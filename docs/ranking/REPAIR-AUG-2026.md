@@ -814,3 +814,99 @@ waited for 21:15 (the guard was not overridden, though 14 Sep has no nightly) an
 its first pass while services were still starting (HTTP 000) and passed the rerun at 21:23 (`SWING
 OK`). No repair container was running at deploy time. Nothing in this release touches the repair's
 tables.
+
+---
+
+## Addendum — bar-gap repair, 14–15 Sep 2026 (Maulik: "Repair tonight")
+
+### What was found after §5.3
+
+`ohlcv_daily` was short on five sessions, because the nightly for each had only one of its two
+bar sources:
+
+| Session | Before | Why |
+|---|---|---|
+| 08-28 | 3,002 (nse only) | Run 13's Kite pass failed 8,014 times; bhavcopy alone. No index bars (NIFTY 50, NIFTY 500, …) |
+| 09-03 | 3,027 (nse only) | Run 27's Kite pass failed 2,263 times; same |
+| 08-31, 09-01, 09-02 | 4,223 / 3,998 / 4,141 (kite only) | No bhavcopy; ~295 bhavcopy-only names absent (a normal day misses 25–50) |
+
+The quality gate passed all five because its 10-day median was itself ~3,000 through August.
+
+### How it was repaired
+
+Scripts are in `/opt/baskfy/repair/`. Backup schema `repair_20260914b` holds the five sessions'
+`ohlcv_daily` and `index_member_daily`, `factor_daily` and `market_health_daily` for
+08-28…09-11, and `gap` (day, instrument_id).
+
+1. **Gap set:** a bar on the session before or after, none on the day. 08-28: 1,721 (135
+   indices); 08-31: 444; 09-01: 403; 09-02: 459; 09-03: 1,543.
+2. **`bars_repair.py D`** runs the nightly's own `tasks.bars.run_fetch_daily_bars` over the gap set
+   only: bhavcopy first (the archived file, idempotent), then Kite for the gap names still
+   uncovered. One transaction per day. `baskfy_worker.backfill` was not used, because
+   `pending_units` is not scoped to the window or symbols it was given.
+   Results, all `exit=0 oom=false`:
+
+   | Session | Bars | Kite failures (stale instrument tokens: T-bills, G-secs, renamed SME series) |
+   |---|---|---|
+   | 08-28 | 3,002 → 4,312 | 79 |
+   | 08-31 | 4,223 → 4,495 | 7 |
+   | 09-01 | 3,998 → 4,401 | 17 |
+   | 09-02 | 4,141 → 4,408 | 7 |
+   | 09-03 | 3,027 → 4,304 | 65 |
+
+3. **`fix_adjusted.py`**, one transaction, committed 23:45:
+   - **(A) 7,988 overlap rows.** The bhavcopy's `upsert_day` refreshes `*_raw` and `source` over a
+     Kite row but keeps `close`, `volume` and OHL. Every such row with `adj_factor = 1` was set
+     from `*_raw`, which is what a bhavcopy-led night stores. 0 remain.
+   - **(B) `reprocess_instrument`**, run under a per-instrument savepoint, for the 14 instruments
+     with a new bar near an adjusted one. An instrument was kept only if every changed row fell on
+     the five sessions:
+     - **Kept:** 810, 1090, 2049, 2430, 2635 (a dividend factor applied on 08-31…09-02), and 1935,
+       2719 (no change).
+     - **Skipped:** 202 VTL, 671 BLACKROSE, 1564 KRONOX, 2792 VSSL, 2823 WHIRLPOOL, 2831 WORTHPERI,
+       2847 ZEEL. For each, the pipeline's own reprocess would also rewrite **older history**
+       (10–2,386 rows, back to 2017 for the `kite_adjusted` deep segments). That is pre-existing
+       drift and outside this repair. Their new bars on these sessions stay at factor 1, about
+       1% off their adjusted neighbours.
+   - Two earlier attempts wrote nothing. The first `UPDATE … WHERE (id, date) IN (subquery)`
+     scanned every chunk and was cancelled after 10 min. The whole-set reprocess was refused by
+     the outside-date guard.
+4. **Derived membership** (`membership_derived.py 2026-08-28 2026-09-03`): `nifty-allcap` now
+   equals EQ bars on every session (4,179 / 4,360 / 4,270 / 4,273 / 4,171).
+5. **`recompute2.sh`**: `factors_cli recompute` for the 11 sessions 08-28…09-11, started 23:55.
+
+### Checks after the bar-gap repair (15 Sep, 01:42–01:50 IST)
+
+| Check | Result |
+|---|---|
+| `recompute2` | 11 / 11, every `exit=0 oom=false`, done 01:42. Rows = bars: 4,312 / 4,495 / 4,401 / 4,408 / 4,304 / 4,421 / 4,433 / 4,386 / 4,407 / 4,378 / 4,358 |
+| **V2, 07-01…09-11** | **0 rows** |
+| Orphan factor rows | 0 |
+| V-DUP, plus `ohlcv_daily` 08-27…09-11 | 0 / 0 / 0 / 0 / 0 |
+| V2b | `mom_pctile` 2,234–2,258 a day on 08-27…09-11; `rank_persist_20` 1,960–2,071. `beta_12m` about 2,340 a day. 08-31 still has no market cap, as before: there is no `fundamental_daily` row for it |
+| §5.3 again (`market-health-2`, 11 sessions) | 12 rows each. 08-31…09-02 now carry total-market 750 and microcap 250 (before: 746/716/745 and 246/232/245) |
+| **V3** + V-DUP | Pass; 0 |
+
+### §5.4 changes because of this addendum
+
+Every date 08-27…09-11 now has different factor inputs from the ones its desk scores were computed
+on. On 09-04…09-11 the row counts did not change, so `day_is_complete` would call them complete
+while they are stale. After the 15 Sep nightly, run:
+
+1. `backfill-ranking --from 2026-07-01 --to 2026-08-26 --resume`: 41 days, all incomplete.
+2. `backfill-ranking --from 2026-08-27 --to 2026-09-11 --force`: 12 days. This replaces the single
+   09-08 `--force` in §5.4. Maulik's standing preference is to recompute rather than trust the
+   skip.
+
+That is 53 computed days at about 682 s each, **about 10 h**. Started at 21:20 on 15 Sep, it ends
+around 07:20 on 16 Sep, inside the 08:45 hard stop with little margin. It resumes by day. Then
+V4 and V-DUP.
+
+### Still wrong after the addendum
+
+- **Seven instruments carry unadjusted new bars** on 08-28…09-03, about 1% off their neighbours:
+  VTL, BLACKROSE, KRONOX, VSSL, WHIRLPOOL, WORTHPERI, ZEEL. The fix is a full
+  `reprocess_instrument`, which also rewrites their older history (NEEDS-MAULIK "BAR").
+- **Before 08-27, `ohlcv_daily` is bhavcopy-only.** It has no index bars and none of the ~1,300
+  names only Kite carries, so the factor history those dates feed is the thinner universe. That
+  is §8's first bullet, now measured.

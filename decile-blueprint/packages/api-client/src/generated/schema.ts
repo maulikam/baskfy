@@ -4318,6 +4318,7 @@ export interface components {
             invested?: string | null;
             /** Monitoring Views */
             monitoring_views?: components["schemas"]["PortfolioRefOut"][];
+            month_pnl?: components["schemas"]["MoneyMoveOut"] | null;
             /**
              * Pending Reconciliation
              * @default false
@@ -6765,6 +6766,7 @@ export interface components {
             invested?: string | null;
             /** Invested Unavailable Reason */
             invested_unavailable_reason?: string | null;
+            month_pnl?: components["schemas"]["MoneyMoveOut"] | null;
             /**
              * Pending Reconciliation
              * @default false
@@ -8340,6 +8342,7 @@ export interface components {
             holdings_count: number;
             kind: components["schemas"]["PortfolioKind"];
             model_return?: components["schemas"]["ReturnFigureOut"] | null;
+            month_pnl?: components["schemas"]["MoneyMoveOut"] | null;
             /** Name */
             name: string;
             /**
@@ -8393,6 +8396,7 @@ export interface components {
             invested_unavailable_reason?: string | null;
             kind: components["schemas"]["PortfolioKind"];
             model_return?: components["schemas"]["ReturnFigureOut"] | null;
+            month_pnl?: components["schemas"]["MoneyMoveOut"] | null;
             /** Name */
             name: string;
             /**

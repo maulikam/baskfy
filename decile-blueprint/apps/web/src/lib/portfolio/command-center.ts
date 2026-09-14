@@ -146,6 +146,7 @@ export interface ExecutiveSnapshot {
   readonly unallocated: Metric;
   readonly todaysPnl: Metric;
   readonly weekPnl: Metric;
+  readonly monthPnl: Metric;
   readonly unrealisedPnl: Metric;
   readonly realisedPnl: Metric;
   readonly xirr: Metric;
@@ -327,6 +328,13 @@ export function commandCenter(
       hero?.week_pnl?.amount,
       hero?.week_pnl?.unavailable_reason ?? "No close from last week to compare against yet.",
       { pct: asPercent(hero?.week_pnl?.pct) },
+    ),
+    monthPnl: metric(
+      "Last 30 days",
+      "The change in the value of what you hold now since the close of the last session 30 days ago. Deposits and withdrawals are not part of it, and a name bought in that time is counted from that close.",
+      hero?.month_pnl?.amount,
+      hero?.month_pnl?.unavailable_reason ?? "No close from 30 days ago to compare against yet.",
+      { pct: asPercent(hero?.month_pnl?.pct) },
     ),
     unrealisedPnl: metric(
       "Unrealised",

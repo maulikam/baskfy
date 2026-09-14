@@ -237,6 +237,11 @@ _MIN_MARKS_FOR_A_RETURN: Final = 2
 #: The weekly move's label. "Since last week's close", on what is held now — see `_week_move`.
 WEEK_LABEL: Final = "Change since last week's close"
 
+#: The monthly move's window and label. "Last 30 days" is calendar days, measured from the close of
+#: the last session on or before 30 days before the quote's session — see `_month_move`.
+MONTH_WINDOW: Final = dt.timedelta(days=30)
+MONTH_LABEL: Final = "Change over the last 30 days"
+
 #: A stored mark of one rupee or less is not a portfolio — it is a placeholder (audit 0.4) that
 #: turns TWR and drawdown into -100 % and the peak tile into ₹1.00. Derived returns use only
 #: marks strictly above this; the chart still shows every stored row.
@@ -480,6 +485,7 @@ class PortfolioRowOut(BaseModel):
     excluded_note: str | None = None
     todays_pnl: MoneyMoveOut
     week_pnl: MoneyMoveOut | None = None
+    month_pnl: MoneyMoveOut | None = None
     headline_return: ReturnFigureOut
     #: The publisher's own record. ``None`` for everything the user built themselves — there is
     #: no publisher whose record it could be, and an empty labelled figure would imply one.
@@ -575,6 +581,7 @@ class HeroOut(BaseModel):
     current_value: Decimal
     todays_pnl: MoneyMoveOut
     week_pnl: MoneyMoveOut | None = None
+    month_pnl: MoneyMoveOut | None = None
     total_pnl: MoneyMoveOut
     xirr: LabelledRateOut
     twr: LabelledRateOut
@@ -815,6 +822,7 @@ class AggregatedHoldingOut(BaseModel):
     total_pnl: MoneyMoveOut | None = None
     todays_pnl: MoneyMoveOut | None = None
     week_pnl: MoneyMoveOut | None = None
+    month_pnl: MoneyMoveOut | None = None
 
 
 class HoldingsOut(BaseModel):
@@ -907,6 +915,7 @@ class PortfolioSummaryOut(BaseModel):
     invested_unavailable_reason: str | None = None
     todays_pnl: MoneyMoveOut
     week_pnl: MoneyMoveOut | None = None
+    month_pnl: MoneyMoveOut | None = None
     total_pnl: MoneyMoveOut
     headline_return: ReturnFigureOut
     model_return: ReturnFigureOut | None = None
@@ -1239,6 +1248,10 @@ class _Prices:
     week_base: Mapping[int, Decimal] = field(default_factory=dict)
     #: The session ``week_base`` is dated: the last session before the current week began.
     week_since: dt.date | None = None
+    #: The close each instrument had 30 days ago — the base "last 30 days" is measured from.
+    month_base: Mapping[int, Decimal] = field(default_factory=dict)
+    #: The session ``month_base`` is dated: the last session on or before 30 days back.
+    month_since: dt.date | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1775,6 +1788,10 @@ async def _load_prices(session: AsyncSession, instrument_ids: Sequence[int]) -> 
         open_days=open_days,
     )
     week_base = await _closes_on_or_before(session, instrument_ids, week_since)
+    month_since = _last_session_on_or_before(
+        quote_session - MONTH_WINDOW, closed=closed, open_days=open_days
+    )
+    month_base = await _closes_on_or_before(session, instrument_ids, month_since)
 
     unpriced = tuple(sorted(set(instrument_ids) - set(latest)))
     as_of = max(dated.values()) if dated else None
@@ -1787,6 +1804,8 @@ async def _load_prices(session: AsyncSession, instrument_ids: Sequence[int]) -> 
         live_overlay=overlaid,
         week_base=week_base,
         week_since=week_since,
+        month_base=month_base,
+        month_since=month_since,
     )
 
 
@@ -1803,7 +1822,7 @@ async def _calendar_near(
         await session.execute(
             select(TradingDay.date, TradingDay.is_trading_day).where(
                 TradingDay.exchange_id == NSE_EXCHANGE_ID,
-                TradingDay.date >= today - _CALENDAR_LOOKBACK - dt.timedelta(days=7),
+                TradingDay.date >= today - MONTH_WINDOW - _CALENDAR_LOOKBACK - dt.timedelta(days=7),
                 TradingDay.date <= today,
             )
         )
@@ -2151,40 +2170,79 @@ def _todays_move(ledger: _Ledger, positions: Sequence[_Position], *, label: str)
     )
 
 
-def _week_move(ledger: _Ledger, positions: Sequence[_Position]) -> MoneyMoveOut:
-    """What the positions handed in have moved since the close of last week's final session.
+@dataclass(frozen=True, slots=True)
+class _MoveWindow:
+    """A window a money move is measured over: each instrument's opening close, and its words."""
 
-    Measured on the quantities held *now*, like "Today": a name bought on Wednesday is counted
-    from last week's close. There is no trade history to do better with yet, and the label says
-    what the figure is rather than calling it a return.
+    base: Mapping[int, Decimal]
+    since: dt.date | None
+    label: str
+    unavailable_reason: str
+
+
+def _move_since(
+    ledger: _Ledger, positions: Sequence[_Position], window: _MoveWindow
+) -> MoneyMoveOut:
+    """What the positions handed in have moved from the window's opening closes to the latest.
+
+    Measured on the quantities held *now*, like "Today": a name bought inside the window is
+    counted from the window's opening close. There is no trade history to do better with yet, and
+    the label says what the figure is rather than calling it a return.
     """
-    since = ledger.prices.week_since
     move = ZERO
-    base = ZERO
+    total_base = ZERO
     measured = False
     for position in positions:
         instrument_id = position.key.instrument_id
         latest = ledger.prices.latest.get(instrument_id)
-        start = ledger.prices.week_base.get(instrument_id)
+        start = window.base.get(instrument_id)
         if latest is None or start is None:
             continue
         measured = True
         quantity = position.holding.quantity
         move += quantity * (latest - start)
-        base += quantity * start
+        total_base += quantity * start
     if not measured:
         return _money_move(
             amount=None,
             pct=None,
-            label=WEEK_LABEL,
-            since=since,
-            unavailable_reason="No close from last week to compare against yet",
+            label=window.label,
+            since=window.since,
+            unavailable_reason=window.unavailable_reason,
         )
     return _money_move(
         amount=money(move),
-        pct=None if base == ZERO else (money(move) / base).quantize(RETURN_PRECISION),
-        label=WEEK_LABEL,
-        since=since,
+        pct=None if total_base == ZERO else (money(move) / total_base).quantize(RETURN_PRECISION),
+        label=window.label,
+        since=window.since,
+    )
+
+
+def _week_move(ledger: _Ledger, positions: Sequence[_Position]) -> MoneyMoveOut:
+    """What the positions handed in have moved since the close of last week's final session."""
+    return _move_since(
+        ledger,
+        positions,
+        _MoveWindow(
+            base=ledger.prices.week_base,
+            since=ledger.prices.week_since,
+            label=WEEK_LABEL,
+            unavailable_reason="No close from last week to compare against yet",
+        ),
+    )
+
+
+def _month_move(ledger: _Ledger, positions: Sequence[_Position]) -> MoneyMoveOut:
+    """What the positions handed in have moved since the close of the session 30 days back."""
+    return _move_since(
+        ledger,
+        positions,
+        _MoveWindow(
+            base=ledger.prices.month_base,
+            since=ledger.prices.month_since,
+            label=MONTH_LABEL,
+            unavailable_reason="No close from 30 days ago to compare against yet",
+        ),
     )
 
 
@@ -2650,6 +2708,7 @@ async def portfolio_overview(
         current_value=current_value,
         todays_pnl=_todays_move(ledger, priced_positions, label="Change since the previous close"),
         week_pnl=_week_move(ledger, priced_positions),
+        month_pnl=_month_move(ledger, priced_positions),
         total_pnl=(
             _money_move(
                 amount=money(invested_value - invested),
@@ -2760,6 +2819,14 @@ async def portfolio_overview(
                 label="Change since the previous close",
             ),
             week_pnl=_week_move(
+                ledger,
+                [
+                    position
+                    for position in members
+                    if position.key.instrument_id not in ledger.prices.unpriced
+                ],
+            ),
+            month_pnl=_month_move(
                 ledger,
                 [
                     position
@@ -3258,6 +3325,7 @@ async def portfolio_holdings(
                 total_pnl=_holding_total_pnl(invested, value),
                 todays_pnl=_todays_move(ledger, group, label="Change since the previous close"),
                 week_pnl=_week_move(ledger, group),
+                month_pnl=_month_move(ledger, group),
             )
         )
 
@@ -4630,6 +4698,7 @@ async def portfolio_detail(
         ),
         todays_pnl=_todays_move(ledger, priced_members, label="Change since the previous close"),
         week_pnl=_week_move(ledger, priced_members),
+        month_pnl=_month_move(ledger, priced_members),
         total_pnl=(
             _money_move(
                 amount=money(invested_value - invested),

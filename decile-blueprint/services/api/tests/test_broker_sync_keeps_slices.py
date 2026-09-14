@@ -42,7 +42,14 @@ from baskfy_api.broker_holdings_sync import (
     portfolio_for_broker_account,
     sync_holdings_into_portfolio,
 )
-from baskfy_api.routers.portfolio_overview import _apply_allocation, _Ledger, _load_ledger
+from baskfy_api.invoices import IST
+from baskfy_api.routers.portfolio_overview import (
+    _apply_allocation,
+    _Ledger,
+    _load_ledger,
+    _sync_status,
+    _sync_summary,
+)
 from baskfy_core.allocation_ledger import Allocation, HoldingKey, PortfolioKind, PortfolioSource
 from baskfy_core.models import Portfolio, PortfolioHolding
 
@@ -367,6 +374,33 @@ async def test_the_broker_group_is_still_created_and_named_once(db: AsyncSession
     ).all()
 
     assert len(piles) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_live_sync_marks_the_account_synced_without_any_cash_row(db: AsyncSession) -> None:
+    """14 Sep 2026: an account whose holdings had synced was shown "primary has never synced".
+
+    The status read ``broker_cash.as_of`` and nothing writes ``broker_cash``. A persisted live
+    sync is what "synced" means, so the sync itself must be enough — with no cash row at all.
+    """
+    user_id = await _user(db)
+    broker_account_id = await _broker(db, user_id)
+    await _instrument(db)
+
+    before = _sync_status(await _ledger_for(db, user_id))
+    assert [status.synced_on for status in before] == [None]
+    assert before[0].label == "Holdings not synced yet"
+
+    await _sync(db, user_id, broker_account_id)
+    db.expire_all()
+
+    ledger = await _ledger_for(db, user_id)
+    assert ledger.broker_cash == ()
+    after = _sync_status(ledger)
+    today = dt.datetime.now(tz=IST).date()
+    assert [status.synced_on for status in after] == [today]
+    assert _sync_summary(after) != "Holdings not synced yet"
+    assert "never synced" not in _sync_summary(after)
 
 
 # ===========================================================================================

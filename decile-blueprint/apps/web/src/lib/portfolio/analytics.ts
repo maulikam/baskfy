@@ -56,6 +56,8 @@ export interface AllocationSlice {
   weightPct: string | null;
   /** Today's move in rupees, `null` when unknown. */
   todaysPnl: string | null;
+  /** The move since last week's final close, in rupees; `null` when unknown. */
+  weekPnl: string | null;
   holdingsCount: number;
   cash: string;
   /** The labelled headline return, carried through so the table can print its label (§5.2). */
@@ -141,6 +143,7 @@ export function allocationAnalytics(
     value: row.value ?? null,
     weightPct: null,
     todaysPnl: row.todays_pnl?.amount ?? null,
+    weekPnl: row.week_pnl?.amount ?? null,
     holdingsCount: row.holdings_count ?? 0,
     cash: row.cash ?? "0",
     returnLabel: row.headline_return?.label ?? null,

@@ -173,6 +173,10 @@ class BrokerAccount(Base):
     #: The broker's own user/client id, when known. NULL until the first OAuth sync.
     kite_user_id: Mapped[str | None] = mapped_column(String)
     created_at: Mapped[CreatedAt]
+    #: When a live holdings read was last written into this account's holding group. NULL = never.
+    #: The Portfolio page's "synced" status reads this; ``broker_cash`` is never written by a
+    #: sync, so reading sync state from it said "never synced" to an account that had (0048).
+    holdings_synced_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class Plan(Base):

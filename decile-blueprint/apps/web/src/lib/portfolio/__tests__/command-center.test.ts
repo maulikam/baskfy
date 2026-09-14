@@ -368,6 +368,7 @@ function slice(over: Partial<AllocationSlice> = {}): AllocationSlice {
     value: "1250000.00",
     weightPct: "34.00",
     todaysPnl: "12500.00",
+    weekPnl: "31000.00",
     holdingsCount: 7,
     cash: "40000.00",
     returnLabel: "Since grouped",

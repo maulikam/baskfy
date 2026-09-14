@@ -6325,6 +6325,16 @@
           "twr": {
             "$ref": "#/components/schemas/LabelledRateOut"
           },
+          "week_pnl": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MoneyMoveOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "xirr": {
             "$ref": "#/components/schemas/LabelledRateOut"
           }
@@ -10729,6 +10739,16 @@
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Value",
             "type": "string"
+          },
+          "week_pnl": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MoneyMoveOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -10905,6 +10925,16 @@
             "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
             "title": "Value",
             "type": "string"
+          },
+          "week_pnl": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MoneyMoveOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "xirr": {
             "$ref": "#/components/schemas/LabelledRateOut"

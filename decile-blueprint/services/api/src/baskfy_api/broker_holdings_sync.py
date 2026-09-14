@@ -43,7 +43,7 @@ from baskfy_core.allocation_ledger import (
     attribute_sell,
 )
 from baskfy_core.models import Instrument, Portfolio, PortfolioHolding
-from baskfy_core.models.accounts import ReconciliationItem
+from baskfy_core.models.accounts import BrokerAccount, ReconciliationItem
 from baskfy_core.models.swing import SwPosition
 
 log = logging.getLogger(__name__)
@@ -240,6 +240,11 @@ async def sync_holdings_into_portfolio(  # noqa: PLR0913
         pile_portfolio_id=int(portfolio.id),
     )
     written = await replace_holdings(session, portfolio, wanted, added_on=as_of)
+    await session.execute(
+        update(BrokerAccount)
+        .where(BrokerAccount.id == broker_account_id)
+        .values(holdings_synced_at=func.now())
+    )
     reason = f"{written} holding(s) written to {portfolio.name} from a live read"
     if disappeared.reconciled:
         reason += f"; {disappeared.reconciled} filed holding(s) the broker no longer reports closed"

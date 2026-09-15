@@ -1,7 +1,9 @@
 import "server-only";
 
+import { cache } from "react";
+
 import { serverApiOrigin } from "@/lib/api/config";
-import { serverFetchJsonOrNull } from "@/lib/api/server-fetch";
+import { ServerFetchStatusError, serverFetchJson } from "@/lib/api/server-fetch";
 import { auth } from "@/lib/auth";
 import type {
   ActivityItem,
@@ -34,6 +36,12 @@ export interface PortfolioDetailBundle {
   readonly detail: PortfolioDetail | null;
   readonly nav: NavSeries | null;
   readonly activity: readonly ActivityItem[] | null;
+  /**
+   * `true` only when the API *answered* that this portfolio does not exist (404). A timeout or a
+   * 5xx is `false`: the portfolio may well exist, and the page must say "did not load", not
+   * "not a page" (15 Sep 2026 — `/portfolio/6` read "Page not found" on most live refreshes).
+   */
+  readonly missing: boolean;
   /** One sentence per read that came back with nothing. `null` where the read succeeded. */
   readonly failures: {
     readonly detail: string | null;
@@ -46,7 +54,18 @@ export interface PortfolioDetailBundle {
 export const DEFAULT_DETAIL_RANGE: NavRange = "1Y";
 
 const UNREACHABLE_DETAIL =
-  "This portfolio's summary did not load. The API did not answer — try again in a moment.";
+  "This portfolio's summary did not load. The API did not answer in time — try again in a moment.";
+
+/**
+ * The budget for these three reads, above the shell's 2.5 s default.
+ *
+ * They are the page: with no summary there is nothing to paint, so failing fast buys nothing. And
+ * they are the heaviest reads the API serves — each loads the whole ledger — on a single-worker API
+ * that answers concurrent requests in turn. Measured on staging, 15 Sep 2026, in market hours: one
+ * `GET /portfolio/6` took 311–643 ms alone, while a live refresh's burst of calls answered together
+ * at 2.1–2.5 s, so the default budget cut the summary off on most refreshes.
+ */
+export const DETAIL_FETCH_TIMEOUT_MS = 10_000;
 const UNREACHABLE_NAV =
   "The end-of-day valuation series did not load, so the chart is missing rather than empty.";
 const UNREACHABLE_ACTIVITY =
@@ -61,11 +80,23 @@ async function authHeaders(): Promise<HeadersInit> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-async function tryJson(path: string): Promise<unknown> {
-  return serverFetchJsonOrNull({
-    url: `${serverApiOrigin()}/api/v1${path}`,
-    headers: await authHeaders(),
-  });
+interface Read {
+  readonly data: unknown;
+  /** The API answered 404 — the one failure that means "there is no such portfolio". */
+  readonly notFound: boolean;
+}
+
+async function tryJson(path: string): Promise<Read> {
+  try {
+    const data = await serverFetchJson({
+      url: `${serverApiOrigin()}/api/v1${path}`,
+      headers: await authHeaders(),
+      timeoutMs: DETAIL_FETCH_TIMEOUT_MS,
+    });
+    return { data, notFound: false };
+  } catch (error) {
+    return { data: null, notFound: error instanceof ServerFetchStatusError && error.status === 404 };
+  }
 }
 
 interface ActivityPayload {
@@ -86,26 +117,36 @@ export function numericPortfolioId(id: string): number | null {
   return Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : null;
 }
 
-/** §7's three reads, in parallel, each reporting its own absence. */
-export async function loadPortfolioDetail(
-  portfolioId: number,
-  range: NavRange = DEFAULT_DETAIL_RANGE,
-): Promise<PortfolioDetailBundle> {
-  const id = encodeURIComponent(String(portfolioId));
-  const [detail, nav, activity] = await Promise.all([
-    tryJson(`/portfolio/${id}`),
-    tryJson(`/portfolio/${id}/nav?range=${encodeURIComponent(range)}`),
-    tryJson(`/portfolio/activity?portfolio_id=${id}&limit=${ACTIVITY_LIMIT}`),
-  ]);
+/**
+ * §7's three reads, in parallel, each reporting its own absence.
+ *
+ * Wrapped in React's `cache` so `generateMetadata` and the page share one set of requests per
+ * render. They used to issue the same three reads twice, doubling the burst a single-worker API
+ * has to answer inside the budget.
+ */
+export const loadPortfolioDetail = cache(
+  async (
+    portfolioId: number,
+    range: NavRange = DEFAULT_DETAIL_RANGE,
+  ): Promise<PortfolioDetailBundle> => {
+    const id = encodeURIComponent(String(portfolioId));
+    const [detail, nav, activity] = await Promise.all([
+      tryJson(`/portfolio/${id}`),
+      tryJson(`/portfolio/${id}/nav?range=${encodeURIComponent(range)}`),
+      tryJson(`/portfolio/activity?portfolio_id=${id}&limit=${ACTIVITY_LIMIT}`),
+    ]);
 
-  return {
-    detail: detail === null ? null : (detail as PortfolioDetail),
-    nav: nav === null ? null : (nav as NavSeries),
-    activity: activity === null ? null : ((activity as ActivityPayload).items ?? []),
-    failures: {
-      detail: detail === null ? UNREACHABLE_DETAIL : null,
-      nav: nav === null ? UNREACHABLE_NAV : null,
-      activity: activity === null ? UNREACHABLE_ACTIVITY : null,
-    },
-  };
-}
+    return {
+      detail: detail.data === null ? null : (detail.data as PortfolioDetail),
+      nav: nav.data === null ? null : (nav.data as NavSeries),
+      activity:
+        activity.data === null ? null : ((activity.data as ActivityPayload).items ?? []),
+      missing: detail.notFound,
+      failures: {
+        detail: detail.data === null ? UNREACHABLE_DETAIL : null,
+        nav: nav.data === null ? UNREACHABLE_NAV : null,
+        activity: activity.data === null ? UNREACHABLE_ACTIVITY : null,
+      },
+    };
+  },
+);

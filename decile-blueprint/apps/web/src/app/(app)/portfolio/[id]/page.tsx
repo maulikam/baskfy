@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Route } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -76,8 +76,14 @@ export default async function PortfolioDetailPage({
   ]);
 
   if (bundle === null || bundle.detail === null) {
-    if (investment === null) notFound();
-    return <ReducedView detail={investment} unavailableReason={bundle?.failures.detail ?? null} />;
+    if (investment !== null) {
+      return <ReducedView detail={investment} unavailableReason={bundle?.failures.detail ?? null} />;
+    }
+    /* "Not a page" only when the API said so. A summary that timed out or errored belongs to a
+       portfolio that may exist — 15 Sep 2026, `/portfolio/6` read "Page not found" on most live
+       refreshes because a slow read was treated as a missing one. */
+    if (bundle === null || bundle.missing) notFound();
+    return <DetailUnavailable id={id} reason={bundle.failures.detail} />;
   }
 
   return (
@@ -109,6 +115,25 @@ export default async function PortfolioDetailPage({
           </Link>
         </p>
       </PortfolioDetailWorkspace>
+    </div>
+  );
+}
+
+/** The summary read failed without the API saying the portfolio does not exist. */
+function DetailUnavailable({ id, reason }: { id: string; reason: string | null }) {
+  return (
+    <div className="flex max-w-3xl flex-col gap-4">
+      <SectionTabs section="portfolio" />
+      <p
+        role="status"
+        data-testid="detail-unavailable"
+        className="rounded-xl border border-warning/40 bg-warning-muted px-4 py-3 text-sm"
+      >
+        {reason ?? "This portfolio's summary did not load."}{" "}
+        <Link href={`/portfolio/${id}` as Route} className="font-medium underline-offset-4 hover:underline">
+          Try again
+        </Link>
+      </p>
     </div>
   );
 }

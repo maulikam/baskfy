@@ -101,7 +101,7 @@ if [ "${SKIP_BOX:-0}" != "1" ]; then
     "echo '## desk-env'; $C exec -T desk env | grep -E '^(DRY_RUN|BASKFY_REDIS_URL|BASKFY_SWING_[A-Z_]+)=' | sort" \
     "echo '## monitor-env'; $C exec -T swing-monitor env | grep -E '^(DRY_RUN|BASKFY_REDIS_URL|BASKFY_SWING_[A-Z_]+)=' | sort" \
     "echo '## window'; $C exec -T swing-monitor python -c \"from baskfy_core.swing.config import DEFAULT_SWING_CONFIG as c; w=c.opening_range; print('%02d:%02d %02d:%02d %02d:%02d %02d:%02d' % (*w.session_open, *w.pending_cutoff_at, *w.gtt_sweep_at, *w.monitor_close))\"" \
-    "echo '## desk-daily'; $C logs --no-log-prefix --tail 5 desk-daily" \
+    "echo '## desk-daily'; $C logs --no-log-prefix --tail 40 desk-daily" \
     "echo '## desk-mounts'; docker inspect --format '{{range .Mounts}}{{.Destination}} rw={{.RW}}{{\"\\n\"}}{{end}}' \$($C ps -q desk)" \
     "echo '## alembic'; $C exec -T postgres psql -U baskfy -d baskfy -tAc 'select version_num from alembic_version'; $C run --rm --no-deps migrate alembic heads 2>/dev/null | tail -1" \
     "echo '## desk-schema'; $C exec -T postgres psql -U baskfy -d baskfy -tAc \"select count(*) from information_schema.tables where table_schema='desk'\"" \

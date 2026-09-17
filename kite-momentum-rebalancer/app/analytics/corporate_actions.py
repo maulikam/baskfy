@@ -100,8 +100,15 @@ def parse(symbol: str, kind: str, ex_date: str, ratio_new, ratio_old,
 def record(conn, action: Action) -> int:
     with db.transaction(conn):
         cur = conn.execute(
-            "INSERT OR REPLACE INTO corporate_actions(symbol, kind, ex_date, ratio_new,"
-            " ratio_old, note, created_at) VALUES(?,?,?,?,?,?,?) RETURNING id",
+            # The natural key is (symbol, kind, ex_date); re-recording the same action updates
+            # its ratios and note. Spelt as an upsert because the Postgres adapter dropped
+            # SQLite's `OR REPLACE` (17 Sep 2026), turning a correction into a unique violation.
+            "INSERT INTO corporate_actions(symbol, kind, ex_date, ratio_new,"
+            " ratio_old, note, created_at) VALUES(?,?,?,?,?,?,?)"
+            " ON CONFLICT(symbol, kind, ex_date) DO UPDATE SET"
+            " ratio_new=excluded.ratio_new, ratio_old=excluded.ratio_old,"
+            " note=excluded.note, created_at=excluded.created_at"
+            " RETURNING id",
             (action.symbol, action.kind, action.ex_date.isoformat(), action.ratio_new,
              action.ratio_old, action.note,
              dt.datetime.now().isoformat(timespec="seconds")))

@@ -603,7 +603,8 @@ def record_cashflow(conn: sqlite3.Connection, date: str, amount: float, kind: st
     Returns True if a new row was inserted, False if it already existed.
     """
     cur = conn.execute(
-        "INSERT OR IGNORE INTO cashflows(date, amount, type) VALUES(?,?,?)",
+        "INSERT INTO cashflows(date, amount, type) VALUES(?,?,?)"
+        " ON CONFLICT(date, amount, type) DO NOTHING",
         (str(date), float(amount), str(kind)),
     )
     return cur.rowcount > 0

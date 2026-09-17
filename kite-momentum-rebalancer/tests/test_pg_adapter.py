@@ -46,8 +46,18 @@ class TestDialect:
         assert "BIGSERIAL PRIMARY KEY" in out
         assert "AUTOINCREMENT" not in out
 
-    def test_insert_or_replace_loses_its_sqlite_spelling(self) -> None:
-        assert pg.translate("INSERT OR REPLACE INTO t VALUES (?)").startswith("INSERT INTO")
+    def test_sqlite_conflict_spellings_are_refused_not_silently_dropped(self) -> None:
+        """17 Sep 2026: this rewrote `INSERT OR IGNORE` to a plain `INSERT` and the desk's trade
+        capture then died on `pk_fills` every evening for five days. A statement that says "skip
+        what I already have" must not reach Postgres saying "insert it again"."""
+        for spelling in ("INSERT OR IGNORE INTO t VALUES (?)", "INSERT OR REPLACE INTO t VALUES (?)"):
+            with pytest.raises(ValueError, match="no Postgres equivalent"):
+                pg.translate(spelling)
+
+    def test_an_explicit_conflict_clause_passes_through(self) -> None:
+        """The spelling both dialects accept is the one the call sites now use."""
+        out = pg.translate("INSERT INTO fills(trade_id) VALUES(?) ON CONFLICT(trade_id) DO NOTHING")
+        assert out == "INSERT INTO fills(trade_id) VALUES(%s) ON CONFLICT(trade_id) DO NOTHING"
 
     def test_strftime_becomes_to_char(self) -> None:
         out = pg.translate("select strftime('%Y-%m', trade_date) from trades")

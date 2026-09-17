@@ -64,8 +64,12 @@ def save_plan(conn, plan: Mapping, *, evaluation_id: str | None = None,
     with db.transaction(conn):
         conn.execute("DELETE FROM rebalance_orders WHERE version_id=?", (pid,))
         conn.execute(
-            "INSERT OR REPLACE INTO rebalance_versions(version_id, created_ts,"
-            " constituents_json, weights_json, note, evaluation_id) VALUES(?,?,?,?,?,?)",
+            "INSERT INTO rebalance_versions(version_id, created_ts,"
+            " constituents_json, weights_json, note, evaluation_id) VALUES(?,?,?,?,?,?)"
+            " ON CONFLICT(version_id) DO UPDATE SET"
+            " created_ts=excluded.created_ts, constituents_json=excluded.constituents_json,"
+            " weights_json=excluded.weights_json, note=excluded.note,"
+            " evaluation_id=excluded.evaluation_id",
             (pid, float(plan.get("created_at") or time.time()),
              json.dumps(constituents), json.dumps(weights), note, evaluation_id))
         conn.executemany(

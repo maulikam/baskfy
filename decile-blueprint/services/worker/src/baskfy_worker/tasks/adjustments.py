@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 
 import polars as pl
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -207,6 +207,23 @@ async def run_apply_adjustments(
     if not targets:
         outcome.note(reason="no instrument had a new corporate action")
         return 0
+
+    # THE COMPRESSED HISTORY THIS STEP HAS TO REWRITE (17 Sep 2026).
+    #
+    # `reprocess_instrument` rebuilds an instrument's WHOLE adjusted history, and
+    # `ohlcv_daily` compresses chunks older than 90 days. Updating a compressed row decompresses
+    # the batch it sits in, and TimescaleDB caps that at 100,000 tuples per DML transaction. On
+    # 12 Sep a new action on SANSERA (id 5) put the step over it: "tuple decompression limit
+    # exceeded ... tuples decompressed: 350845". The error aborted the chain's single
+    # transaction, and NO SESSION PUBLISHED FROM 12 TO 17 SEP — the product served 11 Sep for
+    # five days. The cap is a guard against an accidental whole-hypertable rewrite; this step's
+    # rewrite is bounded by the instruments that actually have a new action, so lifting it here
+    # is the same call migrations 0027 and 0044 already make for the same reason.
+    #
+    # SET LOCAL: it lasts to the end of this transaction and no longer.
+    await session.execute(
+        text("SET LOCAL timescaledb.max_tuples_decompressed_per_dml_transaction = 0")
+    )
 
     rewritten = 0
     applied = 0

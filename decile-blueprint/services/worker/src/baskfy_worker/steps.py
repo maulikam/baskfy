@@ -11,6 +11,7 @@ error payload." docs/09 §Observability makes that table the operator UI, expose
 from __future__ import annotations
 
 import datetime as dt
+import logging
 import time
 import traceback
 from collections.abc import AsyncIterator
@@ -27,6 +28,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from baskfy_api.metrics import observe_step
 from baskfy_api.telemetry import get_tracer
 from baskfy_core.models import JsonObject, PipelineRun, PipelineRunStep
+
+log = logging.getLogger(__name__)
 
 
 class PipelineStep(StrEnum):
@@ -218,20 +221,36 @@ async def record_step(
             observe_step(
                 step=step.value, status=StepStatus.FAILED.value, duration_seconds=duration_ms / 1000
             )
-            await _upsert_step(
-                session,
-                run_id,
-                step,
-                status=StepStatus.FAILED,
-                outcome=outcome,
-                duration_ms=duration_ms,
-                error={
-                    "type": type(exc).__name__,
-                    "message": str(exc),
-                    "traceback": traceback.format_exc(limit=20),
-                    **outcome.detail,
-                },
-            )
+            # THE FAILURE ROW MUST NEVER REPLACE THE FAILURE (17 Sep 2026).
+            #
+            # A step that fails with a database error leaves the transaction aborted, so this
+            # write fails too — with `InvalidRequestError: Can't operate on closed transaction`.
+            # That is what Celery then logged, five nights running, while the real cause (a
+            # TimescaleDB decompression limit in `apply_adjustments`) appeared nowhere at all.
+            # The row is a nice-to-have; the exception is the evidence. If the row cannot be
+            # written, say so in the log and re-raise the ORIGINAL exception.
+            try:
+                await _upsert_step(
+                    session,
+                    run_id,
+                    step,
+                    status=StepStatus.FAILED,
+                    outcome=outcome,
+                    duration_ms=duration_ms,
+                    error={
+                        "type": type(exc).__name__,
+                        "message": str(exc),
+                        "traceback": traceback.format_exc(limit=20),
+                        **outcome.detail,
+                    },
+                )
+            except Exception:
+                log.exception(
+                    "could not record the failure of step %s on run %s; the step's own error "
+                    "follows and is the one that matters",
+                    step.value,
+                    run_id,
+                )
             raise
         duration_ms = int((time.monotonic() - started) * 1000)
         _annotate(span, outcome, outcome.status)

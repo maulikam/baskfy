@@ -23,8 +23,10 @@ import datetime as dt
 import io
 import json
 import re
+import threading
 import zipfile
 from collections.abc import Callable, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Final, Protocol
@@ -215,6 +217,9 @@ class NSEProvider:
         )
         self._retry_hooks = wiring.retry_hooks
         self._cookies_primed = False
+        #: The cookie jar is primed once and shared; with concurrent symbol reads neither the
+        #: first prime nor the 401/403 re-prime may interleave.
+        self._cookie_lock = threading.Lock()
 
     # --- HealthReporting ------------------------------------------------
 
@@ -475,16 +480,33 @@ class NSEProvider:
         already). It is only a hint: a symbol whose hinted series returns an empty quote falls
         back to :meth:`_resolve_series`, so a stale hint costs a round trip, never a NULL row.
         """
-        records: list[EquityFundamental] = []
         hints = {k.upper(): v for k, v in (series_by_symbol or {}).items()}
-        for symbol in symbols:
-            token = symbol.strip().upper()
-            if not token:
-                continue
-            parsed = self._equity_fundamental(on, token, hints.get(token))
-            if parsed is not None:
-                records.append(parsed)
-        return records
+        tokens = [token for token in (s.strip().upper() for s in symbols) if token]
+        if not tokens:
+            return []
+
+        # CONCURRENT, BUT NOT FASTER THAN THE CLOCK (17 Sep 2026).
+        #
+        # One request per symbol, each ~1.4 s of mostly waiting, ~3,300 symbols: sequentially that
+        # was ~80 of the nightly chain's ~110 minutes (measured 9, 10 and 15 Sep), and the limiter
+        # sat idle through most of it. The workers below overlap the waiting only — `_throttle`
+        # still takes a token from the same Redis bucket before every departure, so the rate NSE
+        # sees is `nse_rate_limit_per_second`, unchanged. Raising that rate is a separate decision.
+        #
+        # Results keep the caller's symbol order: `store_fundamentals` upserts one row per
+        # instrument, and a deterministic order keeps a re-run's writes identical (house rule 7).
+        workers = min(self._settings.nse_fetch_concurrency, len(tokens))
+        if workers <= 1:
+            found = [self._equity_fundamental(on, token, hints.get(token)) for token in tokens]
+        else:
+            with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="nse-fund") as pool:
+                found = list(
+                    pool.map(
+                        lambda token: self._equity_fundamental(on, token, hints.get(token)),
+                        tokens,
+                    )
+                )
+        return [record for record in found if record is not None]
 
     def _equity_fundamental(
         self, on: dt.date, token: str, series_hint: str | None
@@ -699,11 +721,12 @@ class NSEProvider:
         AF 3.11: a 401/403 clears the flag so the next call re-primes rather than looping on a
         stale jar.
         """
-        if self._cookies_primed:
-            return
-        self._throttle()
-        _get(client, self._settings.nse_base_url)
-        self._cookies_primed = True
+        with self._cookie_lock:
+            if self._cookies_primed:
+                return
+            self._throttle()
+            _get(client, self._settings.nse_base_url)
+            self._cookies_primed = True
 
     def _throttle(self) -> None:
         """AF 3.11: a missing limiter is a hard refuse, not a silent no-op.

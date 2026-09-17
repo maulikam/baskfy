@@ -92,6 +92,15 @@ class ProviderSettings(BaseSettings):
     nse_request_timeout_seconds: float = Field(default=30.0, gt=0)
     #: NSE's public files are rate-sensitive (docs/09 §"NSE specifics").
     nse_rate_limit_per_second: float = Field(default=1.0, gt=0)
+    #: How many per-symbol NSE reads may be in flight at once.
+    #:
+    #: The nightly's fundamentals fetch is ~3,300 symbols, one request each. Sequentially that is
+    #: **~80 of the chain's ~110 minutes** (measured 9, 10 and 15 Sep 2026), and almost all of it
+    #: is spent waiting: a quote answers in ~1.4 s while the limiter only asks for 1 s between
+    #: departures. Overlapping the waits closes that gap; it does NOT raise the request rate,
+    #: which stays governed by ``nse_rate_limit_per_second`` — every thread takes the same
+    #: Redis-held token before it departs, so NSE sees the same clock it saw before.
+    nse_fetch_concurrency: int = Field(default=4, ge=1, le=16)
     #: How far past ``since`` the corporate-action window reaches, in days.
     #:
     #: NSE answers ``corporates-corporateActions`` **without** a date range with a default first

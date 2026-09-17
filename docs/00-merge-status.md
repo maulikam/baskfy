@@ -1664,3 +1664,45 @@ hit). The named pairwise lists remain, plus Swing ∩ Volume. Decision: `docs/DE
 fixtures. Running three screens on every load can time out the 2.5s RSC hop; unread columns say
 so rather than inventing a zero. A screen with hundreds of rows will scroll; it is not
 virtualised.
+
+---
+
+## The five days the product served 11 Sep (17 Sep 2026)
+
+**Symptom.** Maulik: "The last pipeline run did not publish. You are seeing the 11 Sept 2026
+trading session." Runs 50–55 (15, 16 and 17 Sep, nightly and catch-up) had all failed; the last
+successful publish was run 49 on 11 Sep, `data_version` 18.
+
+**Cause.** `apply_adjustments` rebuilds an instrument's whole adjusted history. `ohlcv_daily`
+compresses chunks older than 90 days, and TimescaleDB caps decompression at 100,000 tuples per DML
+transaction. A corporate action on **SANSERA** (instrument 5) needed **350,845**, so the step
+raised `ConfigurationLimitExceededError`, and the chain's single transaction (M84.1) aborted.
+
+**Why it took five days to notice.** `record_step`'s failure write then ran on the aborted
+transaction and raised `InvalidRequestError: Can't operate on closed transaction`. That is what
+Celery logged every night; the real error appeared in no log and in no `pipeline_run_step` row —
+the failed runs have **no step rows at all**, because the transaction that would have held them
+rolled back.
+
+**Fixed in `870a948`:** the step lifts the cap for its own transaction with `SET LOCAL`, the way
+migrations 0027 and 0044 already do (its rewrite is bounded by the instruments with a new action,
+which is what the cap is guarding against); and a step's own exception is always the one raised,
+with the failure row now best-effort. Three tests in
+`services/worker/tests/test_adjustments_decompression.py`.
+
+**On the box, before the deploy:**
+`alter role baskfy in database baskfy set timescaledb.max_tuples_decompressed_per_dml_transaction = 0;`
+— so the catch-up could run on the old image. **Remove it once `870a948` is deployed**; the code
+carries the fix, and a role-wide setting is broader than the step that needs it:
+`alter role baskfy in database baskfy reset timescaledb.max_tuples_decompressed_per_dml_transaction;`
+
+**Recovery.** `pipeline_cli --date` per session, in a capped container. 15 Sep published
+`data_version` 19 at 14:56 with every gate check passing (4,385 bars against a 10-day median of
+4,404); 16 Sep followed. Each took ~2 h, nearly all of it the Kite pass: a session whose bars are
+bhavcopy-only needs ~7,000 `historical_data` calls at the bulk lane's 2 req/s, where a normal
+night tops up a few hundred.
+
+**Worth knowing.** The daily Kite login is what makes a catch-up possible at all — 15 and 16 Sep
+had only the bhavcopy half (3,022 and 2,988 bars), and the gate's threshold (0.9 x the 10-day
+median, ~3,964) would have refused them. Maulik's 11:07 login on 17 Sep is what let both days
+land complete.

@@ -283,8 +283,12 @@ def store_fills(conn, fills: Sequence[Fill], *, source: str) -> dict:
     before = conn.execute("SELECT COUNT(*) c FROM fills").fetchone()["c"]
     with db.transaction(conn):
         conn.executemany(
-            "INSERT OR IGNORE INTO fills(trade_id, symbol, when_ts, side, quantity,"
-            " price, exchange, charges, source, captured_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
+            # `ON CONFLICT` spelt out rather than SQLite's `INSERT OR IGNORE`: both dialects
+            # accept this, and the Postgres adapter used to translate `OR IGNORE` away entirely
+            # (17 Sep 2026 — every re-capture died on pk_fills instead of skipping what it had).
+            "INSERT INTO fills(trade_id, symbol, when_ts, side, quantity,"
+            " price, exchange, charges, source, captured_at) VALUES(?,?,?,?,?,?,?,?,?,?)"
+            " ON CONFLICT(trade_id) DO NOTHING",
             rows)
     after = conn.execute("SELECT COUNT(*) c FROM fills").fetchone()["c"]
     return {"seen": len(rows), "new": after - before,

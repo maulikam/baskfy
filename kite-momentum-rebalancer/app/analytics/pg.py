@@ -37,8 +37,6 @@ from typing import Any
 #: really a rewrite in disguise.
 _DDL: tuple[tuple[str, str], ...] = (
     ("INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY"),
-    ("INSERT OR REPLACE INTO", "INSERT INTO"),
-    ("INSERT OR IGNORE INTO", "INSERT INTO"),
     ("AUTOINCREMENT", ""),
 )
 
@@ -47,8 +45,25 @@ _STRFTIME = re.compile(r"strftime\(\s*'([^']+)'\s*,\s*([^)]+)\)", re.I)
 _FORMATS = {"%Y-%m-%d": "YYYY-MM-DD", "%Y-%m": "YYYY-MM", "%Y": "YYYY", "%W": "IW", "%w": "ID"}
 
 
+#: SQLite's conflict spellings. Postgres has no equivalent, and they used to be rewritten to a
+#: plain ``INSERT INTO`` — which does not ignore anything and does not replace anything. On
+#: 17 Sep 2026 the desk's trade capture died every evening on ``pk_fills`` because of it: the
+#: statement said "skip fills I already have" and the database was asked to insert them again.
+#: Refused loudly now. The call sites spell the conflict clause themselves, which SQLite has
+#: understood since 3.24 and Postgres always has.
+_REFUSED = re.compile(r"\bINSERT\s+OR\s+(IGNORE|REPLACE|ABORT|FAIL|ROLLBACK)\b", re.I)
+
+
 def translate(sql: str) -> str:
     """SQLite SQL to Postgres SQL, for the constructs the desk actually uses."""
+    refused = _REFUSED.search(sql)
+    if refused is not None:
+        raise ValueError(
+            f"{refused.group(0)!r} has no Postgres equivalent and must not be dropped: write the "
+            "conflict clause the statement means, e.g. "
+            "'INSERT INTO t(...) VALUES(...) ON CONFLICT(key) DO NOTHING'. "
+            "Both SQLite and Postgres accept that spelling."
+        )
     out = sql
     for old, new in _DDL:
         out = re.sub(re.escape(old), new, out, flags=re.I)

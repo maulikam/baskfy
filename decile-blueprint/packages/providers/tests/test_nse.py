@@ -10,6 +10,7 @@ from __future__ import annotations
 import datetime as dt
 import io
 import json
+import time
 import zipfile
 from collections.abc import Mapping
 from decimal import Decimal
@@ -571,6 +572,89 @@ def _bhavcopy_zip() -> bytes:
     with zipfile.ZipFile(buffer, "w") as bundle:
         bundle.writestr("BhavCopy_NSE_CM_0_0_0_20260818_F_0000.csv", csv)
     return buffer.getvalue()
+
+
+class TestFundamentalsConcurrency:
+    """17 Sep 2026: ~80 of the nightly chain's ~110 minutes were spent waiting on NSE, one symbol
+    at a time. The reads now overlap — without asking NSE for more than the limiter allows."""
+
+    @staticmethod
+    def _symbols(count: int) -> list[str]:
+        return [f"SYM{index:03d}" for index in range(count)]
+
+    def test_every_symbol_is_fetched_and_the_caller_s_order_is_kept(
+        self, settings: ProviderSettings, archive: LocalRawArchive
+    ) -> None:
+        symbols = self._symbols(12)
+        client = FakeHttpClient({"getSymbolData": _get_symbol_data_json()})
+        provider = build(
+            settings.model_copy(update={"nse_fetch_concurrency": 4}), archive, client
+        )
+        records = provider.equity_fundamentals(
+            ON, symbols, series_by_symbol=dict.fromkeys(symbols, "EQ")
+        )
+        assert len(records) == len(symbols)
+        # The canned payload names INFY, so identity comes from the request order, not the body.
+        quoted = [u.split("symbol=")[1] for u in client.requests if "getSymbolData" in u]
+        assert sorted(quoted) == sorted(symbols)
+
+    def test_the_limiter_still_sees_one_acquire_per_request(
+        self, settings: ProviderSettings, archive: LocalRawArchive
+    ) -> None:
+        """Concurrency overlaps the waiting; it must not buy extra requests per second."""
+        symbols = self._symbols(9)
+        client = FakeHttpClient({"getSymbolData": _get_symbol_data_json()})
+        limiter = InertLimiter()
+        provider = build(
+            settings.model_copy(update={"nse_fetch_concurrency": 3}), archive, client, limiter
+        )
+        provider.equity_fundamentals(ON, symbols, series_by_symbol=dict.fromkeys(symbols, "EQ"))
+        assert limiter.acquisitions == len(client.requests)
+
+    def test_concurrency_never_exceeds_the_setting(
+        self, settings: ProviderSettings, archive: LocalRawArchive
+    ) -> None:
+        import threading  # noqa: PLC0415 - only this test counts threads
+
+        live = 0
+        peak = 0
+        guard = threading.Lock()
+
+        class CountingClient(FakeHttpClient):
+            def get(self, url: str, *, headers: Mapping[str, str] | None = None) -> FakeResponse:
+                nonlocal live, peak
+                with guard:
+                    live += 1
+                    peak = max(peak, live)
+                try:
+                    time.sleep(0.01)
+                    return super().get(url, headers=headers)
+                finally:
+                    with guard:
+                        live -= 1
+
+        symbols = self._symbols(16)
+        client = CountingClient({"getSymbolData": _get_symbol_data_json()})
+        provider = build(
+            settings.model_copy(update={"nse_fetch_concurrency": 4}), archive, client
+        )
+        provider.equity_fundamentals(ON, symbols, series_by_symbol=dict.fromkeys(symbols, "EQ"))
+        assert 1 < peak <= 4
+
+    def test_one_worker_keeps_the_old_sequential_path(
+        self, settings: ProviderSettings, archive: LocalRawArchive
+    ) -> None:
+        symbols = self._symbols(3)
+        client = FakeHttpClient({"getSymbolData": _get_symbol_data_json()})
+        provider = build(
+            settings.model_copy(update={"nse_fetch_concurrency": 1}), archive, client
+        )
+        records = provider.equity_fundamentals(
+            ON, symbols, series_by_symbol=dict.fromkeys(symbols, "EQ")
+        )
+        assert len(records) == 3
+        quoted = [u.split("symbol=")[1] for u in client.requests if "getSymbolData" in u]
+        assert quoted == symbols
 
 
 def _get_symbol_data_json() -> bytes:

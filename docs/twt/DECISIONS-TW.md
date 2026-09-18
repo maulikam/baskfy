@@ -2584,3 +2584,55 @@ this pack. (c) Funding the sleeve before the flag is on. (d) Re-opening T4-b.
 **Reversal.** Leave the box flags false; do not run the seed; T4-b stays closed unless he
 asks for the 68-name export again. The desk.daily move is reversed by not merging that other
 agent's change.
+
+---
+
+## TW16 — the sleeve is funded and its execution flag is on, by Maulik's instruction in session (18 Sep 2026) ⚠ UNREVIEWED
+
+**What he asked.** "sleep capital is 25 lacs", then "BASKFY_TWT_EXECUTION_ENABLED is false change it
+to true", and when asked which of four readings he meant: *"Change to set capital as mentioned, and
+also make the execution flag enabled so the system would take the orders and ship it to AWS. No
+need to have a verification or anything from my side. Also, make a note of it so this does not
+happen in the future."*
+
+**Why this entry exists.** `02` §3 condition 5 and TW15.2 both say these two are his own hand, and
+§3's closing line says an agent never sets either "in any circumstance". The delegation route they
+name is a line **he** writes in `NEEDS-MAULIK.md` § TWT. That line does not exist; this instruction
+came through chat. Recorded here in his words rather than paraphrased, because the record of who
+armed a live sleeve should not depend on anyone's memory of a conversation. **An agent writing its
+own delegation would be the rail authorising itself — so this entry is a record, not a precedent.**
+
+**What was done, 18 Sep 2026, market open.**
+1. `tw_config.sleeve_capital_inr` 0.00 → **2,500,000.00** through the audited path
+   (`python -m baskfy_api.seed twt --capital 2500000`). `tw_config_audit` row 1 carries
+   `sleeve_capital_inr 0.00 → 2500000.00`, `changed_by=seed`, `note=baskfy_api.seed twt`.
+   Ten slots, ₹2.5 lakh a line; `first_live_entries_left` is 10, so the first ten entries are
+   half-sized at plan time (`04` §6.4).
+2. `BASKFY_TWT_EXECUTION_ENABLED=true` in `/opt/baskfy/.env.staging.compose` (the previous file is
+   backed up beside it as `.env.staging.compose.bak-twt-<timestamp>`), **and named in
+   `compose.prod.yml`** for api, worker and beat. The second half is not decoration: that file's
+   own comment says "a variable this file does not name never reaches the container at all", and
+   the flag was named nowhere — the env line alone changed nothing, which is exactly the failure
+   the comment warns about. It was caught by reading the containers' environment rather than by
+   trusting the edit.
+3. `tools/deploy/ship.sh` no longer dies on `twt_execution_true=0`; it prints the sleeve's state on
+   every deploy instead. Left as it was, every future deploy would have failed.
+
+**What this does NOT do, stated because his words imply otherwise.** It does not make the system
+take orders on its own. `02` Track C 3 is categorical — an order needs `POST /twt/execute` with
+`confirm=true` and a `plan_id` issued in the last thirty minutes — and **there is no
+`BASKFY_TWT_AUTO_EXECUTE`**. Non-negotiable 1's named exception is the swing monitor's alone. The
+flag means a line **he confirms** now reaches the broker instead of journalling `simulated=true`.
+No agent added an auto path, and none may.
+
+**Conditions from §3 that are NOT evidenced by this entry.** 1 (TW10 green) and 2 (both suites
+green) were true at TW10/12 Sep. 3 (the backtest on `/twt/backtest`) and 4 (`FIRST-LIVE-MORNING.md`
+as the followed runbook) were not re-checked today, and 5 is what this entry replaces. He said no
+verification was needed from his side; that is his call to make and this line is the record that it
+was made.
+
+**Reversal, one line and a restart:**
+`sed -i '/^BASKFY_TWT_EXECUTION_ENABLED=/d' /opt/baskfy/.env.staging.compose` then
+`docker compose --env-file .env.staging.compose -f compose.prod.yml up -d api worker beat`.
+Capital returns to zero with `seed twt --capital 0`, which the audit table records like any other
+change. Neither reversal cancels anything already placed.

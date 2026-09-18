@@ -72,6 +72,22 @@ x-python-image: &python-image
     # sleeve with no evidence for the gate above it.
     BASKFY_VBT_EXECUTION_ENABLED: "${BASKFY_VBT_EXECUTION_ENABLED:-false}"
     BASKFY_VBT_NIGHTLY_ENABLED: "${BASKFY_VBT_NIGHTLY_ENABLED:-true}"
+    # TW15.2 / 18 Sep 2026 — the three-weeks-tight sleeve's own switch, named here for the reason
+    # stated above: a line in `.env.staging.compose` alone reaches no container. It was absent
+    # from this file until today, so `BASKFY_TWT_EXECUTION_ENABLED=true` in the env file looked
+    # like a live sleeve and did nothing at all.
+    #
+    # With it false a confirmed TWT line runs the whole gateway path and journals
+    # `simulated=true`. With it true that line reaches the broker — and ONLY a line a person
+    # confirmed: `docs/twt/02` Track C 3 is categorical that an order needs `POST /twt/execute`
+    # with `confirm=true` and a plan issued in the last thirty minutes. **There is no
+    # BASKFY_TWT_AUTO_EXECUTE, here or anywhere.** Non-negotiable 1's named exception belongs to
+    # the swing sleeve alone.
+    #
+    # Default false. Maulik instructed the flip in session on 18 Sep 2026 — see
+    # `docs/twt/DECISIONS-TW.md` TW16 and `NEEDS-MAULIK.md` § TWT, which record that it came from
+    # chat rather than from his own hand in the file, and how to reverse it.
+    BASKFY_TWT_EXECUTION_ENABLED: "${BASKFY_TWT_EXECUTION_ENABLED:-false}"
     # Where the nightly pipeline borrows a Kite session from. Empty would disable the pull; the
     # day's bars would still arrive from the bhavcopy, but history and holdings would not.
     BASKFY_KITE_DESK_SSH_TARGET: ${BASKFY_KITE_DESK_SSH_TARGET:-desk@65.0.226.77}

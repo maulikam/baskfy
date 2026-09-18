@@ -9,7 +9,9 @@
 #
 # WHAT IT WILL NOT DO, and none of these is an oversight:
 #   * It never sets `tw_config.sleeve_capital_inr` or `BASKFY_TWT_EXECUTION_ENABLED`.
-#     `docs/twt/02` §3: "never … in any circumstance." Those are yours.
+#     `docs/twt/02` §3: "never … in any circumstance." Those are yours. (Both were set on
+#     18 Sep 2026 on Maulik's instruction — DECISIONS-TW TW16 — by hand on the box, not by this
+#     script, which still sets neither.)
 #   * It never places an order. Nothing it runs can reach `OrderGateway.place`.
 #   * It does not reconcile holdings or file anything into a portfolio. That is
 #     `ops/bonds-portfolio/file-the-bond.py`, run deliberately and separately, because it moves
@@ -54,10 +56,22 @@ step "4. verify"
 bash tools/deploy/verify-swing.sh || die "verify-swing failed -- the box is up but not right."
 OUT="$(bash tools/deploy/verify-pc-deploy.sh "$TAG")"
 echo "   $OUT"
+# THE TWT SLEEVE IS LIVE SINCE 18 Sep 2026, SO THIS NO LONGER ASSERTS ITS FLAG IS FALSE.
+#
+# It used to die unless the box read `twt_execution_true=0`. Maulik funded the sleeve (₹25 lakh)
+# and instructed the flip in session that morning — `docs/twt/DECISIONS-TW.md` TW16. Leaving the
+# assertion would have killed every deploy from then on, and the honest fix is to check what this
+# script is actually for (the three images are pinned and the eleven services are up) and to
+# PRINT the sleeve's state rather than demand one value of it. A flag that changed without a
+# decision is still visible — it is on the line below, every deploy.
 case "$OUT" in
-  *"pins=3"*"running=11"*"twt_execution_true=0"*) ;;
+  *"pins=3"*"running=11"*) ;;
   *) die "post-deploy check failed: $OUT" ;;
 esac
+case "$OUT" in
+  *"twt_execution_true=0"*) TWT_STATE="TWT execution OFF" ;;
+  *) TWT_STATE="TWT execution ON — confirmed lines reach the broker (TW16)" ;;
+esac
 
-printf '\n\033[32m✓ DEPLOYED %s\033[0m — all three images pinned, eleven services up (desk-daily joined 13 Sep 2026), no execution flag moved.\n' "$TAG"
+printf '\n\033[32m✓ DEPLOYED %s\033[0m — all three images pinned, eleven services up (desk-daily joined 13 Sep 2026), swing flags unmoved; %s.\n' "$TAG" "$TWT_STATE"
 echo "  rollback: the tag lines in /opt/baskfy/.env.staging.compose back to the previous sha, then 'up -d'."

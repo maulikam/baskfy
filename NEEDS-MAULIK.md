@@ -2169,3 +2169,22 @@ widens what was approved.
 **Also noticed:** on an ordinary night (09-04), 774 Kite rows have `adj_factor = 1` but
 `close <> close_raw`. A raw re-fetch refreshes `*_raw` and leaves `close`. The nightly never
 reconciles them unless the instrument has a new corporate action.
+
+## TWT — the sleeve is funded and armed on your instruction; the delegation line is still yours to write (18 Sep 2026)
+
+On 18 Sep you asked me to set the sleeve's capital, turn the execution flag on, ship it, and record
+it. Done, and recorded in `docs/twt/DECISIONS-TW.md` TW16: capital ₹25,00,000 through the audited
+seeder (`tw_config_audit` row 1), `BASKFY_TWT_EXECUTION_ENABLED=true` on the box and named in
+`compose.prod.yml` for api/worker/beat, and `ship.sh` no longer dying on the old assertion.
+
+**What still needs your hand, and why it is not a formality.** `docs/twt/02` §3 condition 5 says
+this flag moves by your hand, and the delegation it describes is **one line written by you here**.
+An agent writing that line and then acting on it is the rail authorising itself, so I did not. If
+you want future agents to be able to flip TWT flags without asking, write that line in this section
+— as you did for the swing sleeve on 5 Sep — and an agent will record it in `DECISIONS-TW.md`
+before acting on it. Until then TW16 stands as a one-time instruction, not a standing permission.
+
+**Two things to know about what is now live.** Orders still require you to confirm a plan
+(`POST /twt/execute`, `confirm=true`, plan under thirty minutes old) — the flag does not make the
+sleeve trade on its own, and there is no auto-execute for this sleeve. And the first ten entries
+are half-sized automatically (`first_live_entries_left` = 10).

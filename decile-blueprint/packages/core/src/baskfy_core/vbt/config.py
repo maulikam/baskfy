@@ -158,6 +158,65 @@ class TrendConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class FilterExplanation:
+    """One trend filter in the words a page can print, beside the rule it actually applies."""
+
+    code: str
+    label: str
+    rule: str
+
+
+def _crore(rupees: float) -> str:
+    crore = rupees / 1e7
+    return f"Rs {crore:g} crore"
+
+
+def filter_legend(config: TrendConfig | None = None) -> tuple[FilterExplanation, ...]:
+    """A, B, C … spelled out, with each threshold read from the config that rejects the row.
+
+    The VBT page listed rejects as "MANGALAM — A, B, C, F" and nothing said what the letters
+    meant (Maulik, 21 Sep 2026). The obvious repair is a legend in the page; the reason it lives
+    here instead is that the numbers in it are `TrendConfig`'s, and a legend that restates them in
+    TypeScript is a second place for 25 %, 0.6, 15 % and Rs 2 crore to be true — which is how a
+    page ends up describing a filter the engine no longer applies.
+    """
+    cfg = config or DEFAULT_VBT_CONFIG.trend
+    return (
+        FilterExplanation(
+            TrendFilter.A_ABOVE_200DMA.value,
+            f"Above its {cfg.dma_bars}-day average",
+            f"close > SMA(close, {cfg.dma_bars})",
+        ),
+        FilterExplanation(
+            TrendFilter.B_TWENTY_DAY_HIGH.value,
+            f"New {cfg.breakout_high_bars}-day high",
+            f"close > the highest high of the prior {cfg.breakout_high_bars} sessions "
+            "(today excluded)",
+        ),
+        FilterExplanation(
+            TrendFilter.C_NOT_EXTENDED.value,
+            "Not already extended",
+            f"{cfg.ret_bars}-day return < {cfg.max_ret_20_pct:g}%",
+        ),
+        FilterExplanation(
+            TrendFilter.D_STRONG_CLOSE.value,
+            "Closed strong",
+            f"(close - low) / (high - low) >= {cfg.min_close_position:g}",
+        ),
+        FilterExplanation(
+            TrendFilter.E_CHANGE_CEILING.value,
+            "Not a spike",
+            f"the day's change <= {cfg.max_change_pct:g}%",
+        ),
+        FilterExplanation(
+            TrendFilter.F_TURNOVER_FLOOR.value,
+            "Liquid enough to exit",
+            f"{cfg.turnover_bars}-day average turnover >= {_crore(cfg.min_turnover_avg_inr)}",
+        ),
+    )
+
+
+@dataclass(frozen=True, slots=True)
 class BreadthConfig:
     """The regime gate (``docs/vbt/04`` §4).
 

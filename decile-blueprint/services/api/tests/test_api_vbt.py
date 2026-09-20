@@ -40,7 +40,12 @@ from baskfy_core.models import (
     VbSignalDaily,
 )
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
-from baskfy_core.vbt.config import Gate, SignalState
+from baskfy_core.vbt.config import (
+    DEFAULT_VBT_CONFIG,
+    Gate,
+    SignalState,
+    filter_legend,
+)
 from baskfy_core.vbt.published import PUBLISHED
 
 pytestmark = [requires_db, pytest.mark.db]
@@ -214,6 +219,32 @@ class TestTheTodayRoute:
         body = response.json()
         assert body["candidates"] == []
         assert [row["failed_filters"] for row in body["rejects"]] == [["B", "F"]]
+
+    async def test_the_letters_arrive_with_what_they_mean(
+        self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """21 Sep 2026 — "what is A, B, C, F, not clear".
+
+        The legend travels with the payload rather than being restated in the client, because the
+        thresholds in it are `TrendConfig`'s: a page carrying its own copy of 25 %, 0.6, 15 % and
+        ₹2 crore is a page that can describe a filter the engine no longer applies.
+        """
+        _user_id, public_id = await _sole_tenant(screener_session, monkeypatch)
+
+        async with running_app(settings, screener_session) as client:
+            response = await client.get(url("/vbt/today"), headers=bearer(public_id))
+
+        served = {row["code"]: row for row in response.json()["filters"]}
+        assert sorted(served) == ["A", "B", "C", "D", "E", "F"]
+        assert served == {
+            item.code: {"code": item.code, "label": item.label, "rule": item.rule}
+            for item in filter_legend()
+        }
+        # The numbers are the engine's, not a second copy: the config's values reach the page.
+        trend = DEFAULT_VBT_CONFIG.trend
+        assert str(trend.dma_bars) in served["A"]["rule"]
+        assert f"{trend.max_ret_20_pct:g}%" in served["C"]["rule"]
+        assert f"{trend.min_close_position:g}" in served["D"]["rule"]
 
     async def test_an_empty_session_still_says_why(
         self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch

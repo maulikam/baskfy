@@ -194,6 +194,12 @@ describe("the Today page answers the gate before it lists anything", () => {
     expect(screen.queryByTestId("gate-badge")).not.toBeInTheDocument();
   });
 
+  const FILTERS = [
+    { code: "A", label: "Above its 200-day average", rule: "close > SMA(close, 200)" },
+    { code: "B", label: "New 20-day high", rule: "close > the highest high of the prior 20 sessions (today excluded)" },
+    { code: "F", label: "Liquid enough to exit", rule: "20-day average turnover >= Rs 2 crore" },
+  ];
+
   it("lists what the filters rejected, with the letters that failed", async () => {
     vi.mocked(fetchToday).mockResolvedValue(
       today({
@@ -205,6 +211,7 @@ describe("the Today page answers the gate before it lists anything", () => {
             failed_filters: ["B", "F"],
           }),
         ],
+        filters: FILTERS,
       }),
     );
     vi.mocked(fetchBreadth).mockResolvedValue(NO_BREADTH);
@@ -212,7 +219,49 @@ describe("the Today page answers the gate before it lists anything", () => {
 
     render(await VbtTodayPage());
 
-    expect(screen.getByTestId("rejects")).toHaveTextContent("AHCL — B, F");
+    const row = screen.getByTestId("reject-row");
+    expect(row).toHaveTextContent("AHCL");
+    expect(row).toHaveTextContent("B, F");
+  });
+
+  it("says in words what each letter means, so a reject is readable without the spec", async () => {
+    /* 21 Sep 2026 — "MANGALAM — A, B, C, F ... but what is A, B, C, F, not clear". */
+    vi.mocked(fetchToday).mockResolvedValue(
+      today({
+        candidates: [],
+        rejects: [
+          candidate({ state: "SCAN_ONLY", symbol: "MANGALAM", failed_filters: ["B", "F"] }),
+        ],
+        filters: FILTERS,
+      }),
+    );
+    vi.mocked(fetchBreadth).mockResolvedValue(NO_BREADTH);
+    vi.mocked(fetchBars).mockResolvedValue(null);
+
+    render(await VbtTodayPage());
+
+    expect(screen.getByTestId("reject-row")).toHaveTextContent("New 20-day high");
+    const legend = screen.getByTestId("filter-legend");
+    expect(legend).toHaveTextContent("Liquid enough to exit");
+    expect(legend).toHaveTextContent("20-day average turnover >= Rs 2 crore");
+    // Only the filters these rejects actually failed: A rejected nobody here.
+    expect(legend).not.toHaveTextContent("Above its 200-day average");
+  });
+
+  it("still renders the letters when an older payload carries no legend", async () => {
+    vi.mocked(fetchToday).mockResolvedValue(
+      today({
+        candidates: [],
+        rejects: [candidate({ state: "SCAN_ONLY", symbol: "AHCL", failed_filters: ["B"] })],
+      }),
+    );
+    vi.mocked(fetchBreadth).mockResolvedValue(NO_BREADTH);
+    vi.mocked(fetchBars).mockResolvedValue(null);
+
+    render(await VbtTodayPage());
+
+    expect(screen.getByTestId("reject-row")).toHaveTextContent("B");
+    expect(screen.queryByTestId("filter-legend")).toBeNull();
   });
 
   it("flags a name locked at its upper circuit", async () => {

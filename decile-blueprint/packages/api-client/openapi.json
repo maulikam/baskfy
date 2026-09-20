@@ -21454,6 +21454,30 @@
         "title": "VbtFillRateOut",
         "type": "object"
       },
+      "VbtFilterOut": {
+        "description": "What one of `04` §3.2's letters means, and the rule it applies.\n\nServed rather than restated in the client: the thresholds are `TrendConfig`'s, and a legend\nwritten into the page is a second place for them to be true (Maulik, 21 Sep 2026 — \"what is\nA, B, C, F, not clear\").",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "rule": {
+            "title": "Rule",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "label",
+          "rule"
+        ],
+        "title": "VbtFilterOut",
+        "type": "object"
+      },
       "VbtPositionOut": {
         "properties": {
           "distance_to_ema_pct": {
@@ -21912,6 +21936,13 @@
             "title": "Candidates",
             "type": "array"
           },
+          "filters": {
+            "items": {
+              "$ref": "#/components/schemas/VbtFilterOut"
+            },
+            "title": "Filters",
+            "type": "array"
+          },
           "funnel": {
             "anyOf": [
               {
@@ -22005,7 +22036,8 @@
           "shut_sessions_recent",
           "shut_window",
           "candidates",
-          "rejects"
+          "rejects",
+          "filters"
         ],
         "title": "VbtTodayOut",
         "type": "object"

@@ -11,6 +11,7 @@ import {
   fetchLastScan,
   fetchToday,
   type VbtCandidate,
+  type VbtFilter,
 } from "@/lib/vbt/fetch";
 import { PAGES } from "@/lib/vocabulary";
 
@@ -164,6 +165,95 @@ function CandidateTable({
   );
 }
 
+/**
+ * The rejects, and what the letters beside them mean.
+ *
+ * It was a wrapped list of "MANGALAM — A, B, C, F" with no legend anywhere on the page, which
+ * tells a reader that four things were wrong and not one of them what (Maulik, 21 Sep 2026).
+ * A row now names the filters it failed in words, and the ones in play are spelled out
+ * underneath — from the API, because those thresholds belong to the engine's `TrendConfig`, and
+ * a legend written here would be a second place for 25 %, 0.6, 15 % and ₹2 crore to be true.
+ */
+function RejectTable({
+  rows,
+  filters,
+}: {
+  rows: readonly VbtCandidate[];
+  filters: readonly VbtFilter[];
+}) {
+  const byCode = new Map(filters.map((filter) => [filter.code, filter]));
+  const used = filters.filter((filter) =>
+    rows.some((row) => row.failed_filters.includes(filter.code)),
+  );
+  return (
+    <>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full min-w-[34rem] text-sm" data-testid="rejects">
+          <caption className="sr-only">
+            Scan hits that failed a trend filter, and which filters said no.
+          </caption>
+          <thead>
+            <tr className="border-b border-border text-xs text-muted-foreground">
+              <th scope="col" className="px-3 py-2 text-left font-normal">
+                Stock
+              </th>
+              <th scope="col" className="px-3 py-2 text-left font-normal">
+                Failed
+              </th>
+              <th scope="col" className="px-3 py-2 text-left font-normal">
+                What it failed
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border/60">
+            {rows.map((row) => (
+              <tr key={row.instrument_id} data-testid="reject-row">
+                <th scope="row" className="px-3 py-2 text-left font-medium">
+                  <InstrumentLink symbol={row.symbol} />
+                </th>
+                <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                  {row.failed_filters.length > 0 ? row.failed_filters.join(", ") : "—"}
+                </td>
+                <td className="px-3 py-2 text-muted-foreground">
+                  {row.failed_filters.length > 0
+                    ? row.failed_filters
+                        .map((code) => byCode.get(code)?.label ?? code)
+                        .join(" · ")
+                    : "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {used.length > 0 ? (
+        <div className="mt-4 overflow-x-auto">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            What each filter checks
+          </p>
+          <table className="mt-2 w-full min-w-[34rem] text-sm" data-testid="filter-legend">
+            <caption className="sr-only">
+              The trend filters behind the letters above, with the rule each applies.
+            </caption>
+            <tbody className="divide-y divide-border/60">
+              {used.map((filter) => (
+                <tr key={filter.code}>
+                  <th scope="row" className="px-3 py-2 text-left font-mono text-xs">
+                    {filter.code}
+                  </th>
+                  <td className="px-3 py-2 font-medium">{filter.label}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{filter.rule}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 export default async function VbtTodayPage() {
   const today = await fetchToday();
   const asOf = today?.as_of ?? null;
@@ -175,6 +265,7 @@ export default async function VbtTodayPage() {
 
   const candidates = today?.candidates ?? [];
   const rejects = today?.rejects ?? [];
+  const filters = today?.filters ?? [];
   const gate = today?.gate ?? null;
 
   return (
@@ -263,19 +354,7 @@ export default async function VbtTodayPage() {
             the filters, and a page that never shows the rejects makes that
             argument unreadable.
           </p>
-          <ul className="mt-3 flex flex-wrap gap-2" data-testid="rejects">
-            {rejects.map((row) => (
-              <li
-                key={row.instrument_id}
-                className="rounded-md border border-border/50 px-2.5 py-1 text-sm text-muted-foreground"
-              >
-                <InstrumentLink symbol={row.symbol} />
-                {row.failed_filters.length > 0
-                  ? ` — ${row.failed_filters.join(", ")}`
-                  : null}
-              </li>
-            ))}
-          </ul>
+          <RejectTable rows={rejects} filters={filters} />
         </details>
       ) : null}
     </div>

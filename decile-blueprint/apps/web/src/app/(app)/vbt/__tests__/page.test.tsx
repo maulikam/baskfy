@@ -197,6 +197,9 @@ describe("the Today page answers the gate before it lists anything", () => {
   const FILTERS = [
     { code: "A", label: "Above its 200-day average", rule: "close > SMA(close, 200)" },
     { code: "B", label: "New 20-day high", rule: "close > the highest high of the prior 20 sessions (today excluded)" },
+    { code: "C", label: "Not already extended", rule: "20-day return < 25%" },
+    { code: "D", label: "Closed strong", rule: "(close - low) / (high - low) >= 0.6" },
+    { code: "E", label: "Not a spike", rule: "the day's change <= 15%" },
     { code: "F", label: "Liquid enough to exit", rule: "20-day average turnover >= Rs 2 crore" },
   ];
 
@@ -244,8 +247,37 @@ describe("the Today page answers the gate before it lists anything", () => {
     const legend = screen.getByTestId("filter-legend");
     expect(legend).toHaveTextContent("Liquid enough to exit");
     expect(legend).toHaveTextContent("20-day average turnover >= Rs 2 crore");
-    // Only the filters these rejects actually failed: A rejected nobody here.
-    expect(legend).not.toHaveTextContent("Above its 200-day average");
+  });
+
+  it("says what a reject passed as well as what it failed", async () => {
+    /* 21 Sep 2026 — "also add what it has passed". A name that cleared five and missed one is a
+       different read from one that failed four, and the row could not tell them apart. */
+    vi.mocked(fetchToday).mockResolvedValue(
+      today({
+        candidates: [],
+        rejects: [
+          candidate({ state: "SCAN_ONLY", symbol: "ATGL", failed_filters: ["B"] }),
+          candidate({
+            instrument_id: 77,
+            state: "SCAN_ONLY",
+            symbol: "MANGALAM",
+            failed_filters: ["A", "B", "C", "F"],
+          }),
+        ],
+        filters: FILTERS,
+      }),
+    );
+    vi.mocked(fetchBreadth).mockResolvedValue(NO_BREADTH);
+    vi.mocked(fetchBars).mockResolvedValue(null);
+
+    render(await VbtTodayPage());
+
+    const [atgl, mangalam] = screen.getAllByTestId("reject-passed");
+    expect(atgl).toHaveTextContent("A, C, D, E, F");
+    expect(atgl).toHaveTextContent("5 of 6");
+    expect(atgl).toHaveAttribute("title", expect.stringContaining("A — Above its 200-day average"));
+    expect(mangalam).toHaveTextContent("D, E");
+    expect(mangalam).toHaveTextContent("2 of 6");
   });
 
   it("still renders the letters when an older payload carries no legend", async () => {

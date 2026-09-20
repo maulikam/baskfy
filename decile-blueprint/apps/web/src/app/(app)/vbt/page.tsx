@@ -182,15 +182,24 @@ function RejectTable({
   filters: readonly VbtFilter[];
 }) {
   const byCode = new Map(filters.map((filter) => [filter.code, filter]));
+  // What a row passed is the rest of the six, and it is worth as much as what it failed: a name
+  // that cleared five and missed the 20-day high by a rupee is a different read from one that
+  // failed four (Maulik, 21 Sep 2026 — "also add what it has passed").
+  const passedFor = (row: VbtCandidate) =>
+    filters.filter((filter) => !row.failed_filters.includes(filter.code));
   const used = filters.filter((filter) =>
-    rows.some((row) => row.failed_filters.includes(filter.code)),
+    rows.some(
+      (row) =>
+        row.failed_filters.includes(filter.code) ||
+        passedFor(row).some((passed) => passed.code === filter.code),
+    ),
   );
   return (
     <>
       <div className="mt-3 overflow-x-auto">
-        <table className="w-full min-w-[34rem] text-sm" data-testid="rejects">
+        <table className="w-full min-w-[44rem] text-sm" data-testid="rejects">
           <caption className="sr-only">
-            Scan hits that failed a trend filter, and which filters said no.
+            Scan hits that failed a trend filter: which filters said no, and which said yes.
           </caption>
           <thead>
             <tr className="border-b border-border text-xs text-muted-foreground">
@@ -202,6 +211,9 @@ function RejectTable({
               </th>
               <th scope="col" className="px-3 py-2 text-left font-normal">
                 What it failed
+              </th>
+              <th scope="col" className="px-3 py-2 text-left font-normal">
+                Passed
               </th>
             </tr>
           </thead>
@@ -220,6 +232,26 @@ function RejectTable({
                         .map((code) => byCode.get(code)?.label ?? code)
                         .join(" · ")
                     : "—"}
+                </td>
+                <td
+                  className="px-3 py-2 text-muted-foreground"
+                  data-testid="reject-passed"
+                  /* The letters, with the words on hover: five labels in a cell would push the
+                     failure — the reason the row is here at all — off the side of the table. */
+                  title={passedFor(row)
+                    .map((filter) => `${filter.code} — ${filter.label}`)
+                    .join("\n")}
+                >
+                  <span className="font-mono text-xs">
+                    {passedFor(row).length > 0
+                      ? passedFor(row).map((filter) => filter.code).join(", ")
+                      : "—"}
+                  </span>
+                  {passedFor(row).length > 0 ? (
+                    <span className="ml-2 text-xs">
+                      {passedFor(row).length} of {filters.length}
+                    </span>
+                  ) : null}
                 </td>
               </tr>
             ))}

@@ -12181,6 +12181,22 @@ export interface components {
             /** Resolved */
             resolved: number;
         };
+        /**
+         * VbtFilterOut
+         * @description What one of `04` §3.2's letters means, and the rule it applies.
+         *
+         *     Served rather than restated in the client: the thresholds are `TrendConfig`'s, and a legend
+         *     written into the page is a second place for them to be true (Maulik, 21 Sep 2026 — "what is
+         *     A, B, C, F, not clear").
+         */
+        VbtFilterOut: {
+            /** Code */
+            code: string;
+            /** Label */
+            label: string;
+            /** Rule */
+            rule: string;
+        };
         /** VbtPositionOut */
         VbtPositionOut: {
             /** Distance To Ema Pct */
@@ -12339,6 +12355,8 @@ export interface components {
             as_of: string | null;
             /** Candidates */
             candidates: components["schemas"]["VbtCandidateOut"][];
+            /** Filters */
+            filters: components["schemas"]["VbtFilterOut"][];
             /** Funnel */
             funnel: {
                 [key: string]: unknown;

@@ -47,7 +47,16 @@ UNIVERSE_FIELDS = (
 #: VBT: the edit is a house-rule sweep across both neighbours, made in one commit, and it
 #: brings VBT into line with `twt/config.py` rather than the other way round. The value is
 #: unchanged. See `gates/pinned-wrong-behaviour.md` P3.
-VBT_CONFIG_SHA256 = "cd8c216d9d6f3d844643a67fa9fb075ba3b24ee47870bc8aa6d6c8ad0313d6e1"
+#:
+#: **Moved again 21 Sep 2026, deliberately, for a VBT change with no TWT in it.** The VBT page
+#: listed its rejects as "MANGALAM — A, B, C, F" with no legend anywhere on it, so
+#: `filter_legend()` was added beside `TrendFilter` and `TrendConfig` — the letters in words,
+#: with each threshold read from the config that applies it, served to the page rather than
+#: restated in TypeScript where 25 %, 0.6, 15 % and ₹2 crore would become a second truth.
+#: **Nothing a filter does changed**: the six expressions in `signals.py` are untouched, the
+#: dataclass fields and their values are untouched, and the addition is a pure function nothing
+#: in the engine calls. The TW tree did not reach into VBT; a VBT task did, on purpose.
+VBT_CONFIG_SHA256 = "3fef0963ace92e5b32b3a915189fbfc700e3a31ad7bfefc1b99583cdd3d24b55"
 
 
 def _imports(path: Path) -> set[str]:

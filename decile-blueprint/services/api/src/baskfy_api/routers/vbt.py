@@ -72,7 +72,7 @@ from baskfy_api.vbt_settings import (
 )
 from baskfy_core.models import VbConfig
 from baskfy_core.screener import canonical_json
-from baskfy_core.vbt.config import DRY_RUN_SESSIONS_REQUIRED
+from baskfy_core.vbt.config import DRY_RUN_SESSIONS_REQUIRED, filter_legend
 from baskfy_core.vbt.published import PUBLISHED
 
 router = APIRouter(prefix="/vbt", tags=["vbt"])
@@ -166,6 +166,19 @@ class VbtScanRunOut(BaseModel):
     found: int | None = None
 
 
+class VbtFilterOut(BaseModel):
+    """What one of `04` §3.2's letters means, and the rule it applies.
+
+    Served rather than restated in the client: the thresholds are `TrendConfig`'s, and a legend
+    written into the page is a second place for them to be true (Maulik, 21 Sep 2026 — "what is
+    A, B, C, F, not clear").
+    """
+
+    code: str
+    label: str
+    rule: str
+
+
 class VbtTodayOut(BaseModel):
     """`05` §2's Today tab.
 
@@ -186,6 +199,8 @@ class VbtTodayOut(BaseModel):
     shut_window: int
     candidates: list[VbtCandidateOut]
     rejects: list[VbtCandidateOut]
+    #: The six trend filters, in order, so a reject's letters can be read without leaving the page.
+    filters: list[VbtFilterOut]
     #: This user's newest "Scan now" run, whatever state it is in — the shape ``/swing/setups``
     #: already serves, and the reason the page could not say when it last scanned.
     #:
@@ -456,6 +471,10 @@ async def get_vbt_today(
             shut_window=view.shut_window,
             candidates=[_candidate_out(row, marks) for row in view.candidates],
             rejects=[_candidate_out(row, marks) for row in view.rejects],
+            filters=[
+                VbtFilterOut(code=item.code, label=item.label, rule=item.rule)
+                for item in filter_legend()
+            ],
             last_scan=None if newest is None else _scan_run_out(vbt_scan.scan_run_view(newest)),
         )
     )

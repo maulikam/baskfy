@@ -93,6 +93,16 @@ export interface VbtScanRun {
   error: string | null;
 }
 
+/** One of `04` §3.2's six trend filters, as the API spells it out. */
+export interface VbtFilter {
+  /** `A` … `F`, the letter a reject carries in `failed_filters`. */
+  code: string;
+  /** What it is for, in words: "Above its 200-day average". */
+  label: string;
+  /** The rule as applied, thresholds included: "close > SMA(close, 200)". */
+  rule: string;
+}
+
 export interface VbtToday {
   /** Null means the detector has never written a session — not that today was quiet. */
   as_of: string | null;
@@ -107,6 +117,11 @@ export interface VbtToday {
   shut_window: number;
   candidates: VbtCandidate[];
   rejects: VbtCandidate[];
+  /**
+   * The legend for `failed_filters`. Served by the API because the thresholds in it are the
+   * engine's; an older payload omits it and the page then shows the letters alone.
+   */
+  filters?: VbtFilter[];
   /**
    * This user's newest "Scan now" run, if the payload carries it inline — the shape `/swing`
    * serves. Absent is not "no run"; see `fetchLastScan`.

@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import datetime as dt
+from decimal import Decimal
+from typing import Final
 
 import httpx
 import pytest
-from api_helpers import assert_problem, errors_of, url
+from api_helpers import assert_problem, bearer, errors_of, make_user, url
 from screener_helpers import AS_OF, DATA_VERSION, requires_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from baskfy_api.live_prices import LiveQuote
 from baskfy_api.routers import meta
 from baskfy_api.screener import DATA_START_DATE
 from baskfy_core.factor_registry import COLUMN_PICKER_KEYS, FACTORS, SORT_FACTOR_KEYS
@@ -343,3 +346,138 @@ class TestLiveMarks:
         """A Kite quote batch is not a public read — it spends the operator session."""
         response = await api.get(url("/meta/live-marks"), params={"symbols": "RELIANCE"})
         assert response.status_code == 401
+
+
+class TestLiveMarksOverlay:
+    """Maulik, 21 Sep 2026: "screens should have live data".
+
+    The spec: while the NSE session is open and a real Kite session exists, each requested name
+    gets its live last price, the exchange's previous close and today's % change; otherwise the
+    response is empty and says why, so the page keeps the close and labels it. Either way
+    ``as_of`` is the published session — the overlay never moves it.
+    """
+
+    OPEN: Final = dt.datetime(2099, 1, 5, 11, 0, tzinfo=IST)  # a weekday the calendar lacks
+    CLOSED: Final = dt.datetime(2099, 1, 5, 16, 0, tzinfo=IST)
+
+    @staticmethod
+    async def _get(
+        api: httpx.AsyncClient,
+        session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+        moment: dt.datetime,
+        symbols: str = "RELIANCE,TCS",
+    ) -> dict[str, object]:
+        monkeypatch.setattr(meta, "_now", lambda: moment)
+        _, public_id = await make_user(session, "live-marks@example.com")
+        response = await api.get(
+            url("/meta/live-marks"), params={"symbols": symbols}, headers=bearer(public_id)
+        )
+        assert response.status_code == 200, response.text
+        body: dict[str, object] = response.json()
+        return body
+
+    @staticmethod
+    def _no_kite(monkeypatch: pytest.MonkeyPatch) -> None:
+        def _boom(_symbols: object) -> dict[str, LiveQuote]:
+            raise AssertionError("Kite must not be asked for a quote here")
+
+        monkeypatch.setattr(meta, "live_quote_details", _boom)
+
+    async def test_a_closed_market_shows_the_close_and_never_asks_kite(
+        self,
+        api: httpx.AsyncClient,
+        screener_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(meta, "quotes_permitted", lambda: True)
+        self._no_kite(monkeypatch)
+        body = await self._get(api, screener_session, monkeypatch, self.CLOSED)
+        assert body["live"] is False
+        assert body["reason"] == "market_closed"
+        assert body["market_open"] is False
+        assert body["quotes"] == {}
+        assert body["marks"] == {}
+        assert body["as_of"] == AS_OF.isoformat()
+
+    async def test_no_kite_session_is_named_as_the_reason(
+        self,
+        api: httpx.AsyncClient,
+        screener_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(meta, "quotes_permitted", lambda: False)
+        self._no_kite(monkeypatch)
+        body = await self._get(api, screener_session, monkeypatch, self.OPEN)
+        assert body["live"] is False
+        assert body["reason"] == "no_session"
+        assert body["market_open"] is True
+        assert body["quotes"] == {}
+        assert body["as_of"] == AS_OF.isoformat()
+
+    async def test_an_open_market_with_a_session_overlays_price_and_change(
+        self,
+        api: httpx.AsyncClient,
+        screener_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(meta, "quotes_permitted", lambda: True)
+        monkeypatch.setattr(
+            meta,
+            "live_quote_details",
+            lambda _symbols: {
+                "RELIANCE": LiveQuote(Decimal("1520.40"), Decimal("1500.00")),
+                "TCS": LiveQuote(Decimal("3000"), None),
+            },
+        )
+        body = await self._get(api, screener_session, monkeypatch, self.OPEN)
+        assert body["live"] is True
+        assert body["reason"] is None
+        assert body["live_overlay"] is True
+        quotes = body["quotes"]
+        assert isinstance(quotes, dict)
+        # Decimal strings on the wire (house rule 9), change rounded to 0.01 (house rule 8).
+        assert quotes["RELIANCE"] == {
+            "last_price": "1520.40",
+            "prev_close": "1500.00",
+            "change_pct": "1.36",
+        }
+        assert quotes["TCS"]["change_pct"] is None
+        assert body["marks"] == {"RELIANCE": "1520.40", "TCS": "3000"}
+
+    async def test_the_overlay_never_moves_the_published_as_of(
+        self,
+        api: httpx.AsyncClient,
+        screener_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(meta, "quotes_permitted", lambda: True)
+        monkeypatch.setattr(
+            meta,
+            "live_quote_details",
+            lambda _symbols: {"RELIANCE": LiveQuote(Decimal("1"), Decimal("1"))},
+        )
+        body = await self._get(api, screener_session, monkeypatch, self.OPEN)
+        status = (await api.get(url("/meta/status"))).json()
+        assert body["live"] is True
+        assert body["as_of"] == status["as_of"] == AS_OF.isoformat()
+
+    async def test_a_session_that_answers_nothing_is_unavailable(
+        self,
+        api: httpx.AsyncClient,
+        screener_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(meta, "quotes_permitted", lambda: True)
+        monkeypatch.setattr(meta, "live_quote_details", lambda _symbols: {})
+        body = await self._get(api, screener_session, monkeypatch, self.OPEN)
+        assert body["live"] is False
+        assert body["reason"] == "unavailable"
+        assert body["quotes"] == {}
+
+    def test_the_overlay_is_a_read_and_adds_no_execute_route(self) -> None:
+        for route in meta.router.routes:
+            path = getattr(route, "path", "")
+            assert "execute" not in path
+            if path.endswith("/live-marks"):
+                assert getattr(route, "methods", set()) == {"GET"}

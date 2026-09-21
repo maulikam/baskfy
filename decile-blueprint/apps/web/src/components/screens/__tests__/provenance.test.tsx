@@ -10,7 +10,7 @@ import type * as LiveMarks from "@/lib/screens/live-marks";
 
 vi.mock("@/lib/screens/live-marks", async (importOriginal) => {
   const actual = await importOriginal<typeof LiveMarks>();
-  return { ...actual, useLiveMarks: () => ({ liveOverlay: false, marks: {} }) };
+  return { ...actual, useLiveMarks: () => actual.EMPTY_LIVE_MARKS };
 });
 
 /**

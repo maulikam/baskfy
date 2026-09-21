@@ -12,7 +12,7 @@ vi.mock("@/lib/screens/live-marks", async (importOriginal) => {
   const actual = await importOriginal<typeof LiveMarks>();
   return {
     ...actual,
-    useLiveMarks: () => ({ liveOverlay: false, marks: {} }),
+    useLiveMarks: () => actual.EMPTY_LIVE_MARKS,
   };
 });
 
@@ -284,7 +284,7 @@ describe("kept chrome", () => {
     renderPanel(run());
 
     expect(screen.getByTestId("result-count")).toHaveTextContent("1 matches");
-    expect(screen.getByTestId("as-of")).toHaveTextContent("fresh as of");
+    expect(screen.getByTestId("as-of")).toHaveTextContent("Close as of");
     expect(screen.getByTestId("sorting-factor")).toHaveTextContent("Ranked by Sharpe 12M");
   });
 });

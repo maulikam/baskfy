@@ -1,5 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import type * as LiveMarksModule from "@/lib/screens/live-marks";
 
 import type {
   VbtBacktest,
@@ -13,6 +14,14 @@ import type {
 import VbtBacktestPage from "../backtest/page";
 import VbtBookPage from "../book/page";
 import VbtTodayPage from "../page";
+
+// The live price overlay (21 Sep 2026) is its own query; these pages render without a
+// QueryClient, so they see the overlay's "not live" state and keep the close.
+vi.mock("@/lib/screens/live-marks", async (importOriginal) => {
+  const actual = await importOriginal<typeof LiveMarksModule>();
+  return { ...actual, useLiveMarks: () => actual.EMPTY_LIVE_MARKS };
+});
+
 
 /**
  * VB8's rendered-DOM acceptance (`docs/vbt/06` VB8): the four things `05` §2 says a reader must

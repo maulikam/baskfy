@@ -28,6 +28,7 @@ import datetime as dt
 import os
 import threading
 from collections.abc import Sequence
+from dataclasses import dataclass
 from decimal import Decimal
 
 import anyio
@@ -112,14 +113,55 @@ class _QuoteMemo:
             self._at = 0.0
 
 
+@dataclass(frozen=True)
+class LiveQuote:
+    """A last price with the exchange's own previous close — what "today's change" needs.
+
+    ``prev_close`` comes with the quote rather than from ``ohlcv_daily`` so that a nightly that
+    has not published yet (or a corporate action between the two) cannot manufacture a move.
+    """
+
+    last_price: Decimal
+    prev_close: Decimal | None
+
+
+class _DetailMemo:
+    """The quote memo's twin for :class:`LiveQuote` — the screens' overlay reads this one."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._at: float = 0.0
+        self._value: dict[str, LiveQuote] = {}
+
+    def snapshot(self) -> dict[str, LiveQuote]:
+        with self._lock:
+            if _now() - self._at < CACHE_TTL_SECONDS:
+                return dict(self._value)
+            return {}
+
+    def merge(self, value: dict[str, LiveQuote]) -> None:
+        with self._lock:
+            if _now() - self._at >= CACHE_TTL_SECONDS:
+                self._value = {}
+                self._at = _now()
+            self._value.update(value)
+
+    def clear(self) -> None:
+        with self._lock:
+            self._value = {}
+            self._at = 0.0
+
+
 _memo = _Memo()
 _quote_memo = _QuoteMemo()
+_detail_memo = _DetailMemo()
 
 
 def reset_cache() -> None:
-    """Drop both memos. For tests, and for a caller that has just changed the holdings."""
+    """Drop every memo. For tests, and for a caller that has just changed the holdings."""
     _memo.clear()
     _quote_memo.clear()
+    _detail_memo.clear()
 
 
 def quotes_permitted() -> bool:
@@ -164,8 +206,12 @@ def live_prices_by_symbol(broker_id: str = "zerodha") -> dict[str, Decimal]:
     return prices
 
 
-def _quote_symbols(symbols: Sequence[str]) -> dict[str, Decimal]:
-    """Read-only Kite quotes. Empty on any failure — the close stays in place."""
+def _quote_details(symbols: Sequence[str]) -> dict[str, LiveQuote]:
+    """Read-only Kite quotes with the previous close. Empty on any failure — the close stays.
+
+    ``KiteProvider.quotes`` is the shared, rate-limited read path (one limiter token per batch of
+    at most 500); nothing here builds a second client.
+    """
     wanted = [symbol for symbol in symbols if symbol]
     if not wanted:
         return {}
@@ -184,10 +230,22 @@ def _quote_symbols(symbols: Sequence[str]) -> dict[str, Decimal]:
     except (ProviderError, OSError):
         return {}
     return {
-        record.symbol.strip().upper(): record.last_price
+        record.symbol.strip().upper(): LiveQuote(
+            last_price=record.last_price,
+            prev_close=(
+                record.prev_close
+                if record.prev_close is not None and record.prev_close > 0
+                else None
+            ),
+        )
         for record in records
         if record.last_price is not None and record.last_price > 0
     }
+
+
+def _quote_symbols(symbols: Sequence[str]) -> dict[str, Decimal]:
+    """Read-only Kite quotes, last price only. Empty on any failure — the close stays in place."""
+    return {symbol: quote.last_price for symbol, quote in _quote_details(symbols).items()}
 
 
 def live_quotes_by_symbol(symbols: Sequence[str]) -> dict[str, Decimal]:
@@ -242,6 +300,32 @@ async def live_marks_for_symbols(symbols: Sequence[str]) -> dict[str, Decimal]:
         quoted = await anyio.to_thread.run_sync(live_quotes_by_symbol, tuple(missing))
         by_book = {**by_book, **quoted}
     return {symbol: by_book[symbol] for symbol in wanted if symbol in by_book}
+
+
+def live_quote_details(symbols: Sequence[str]) -> dict[str, LiveQuote]:
+    """`{symbol: LiveQuote}` for a page of screen rows — the screens' live overlay (21 Sep 2026).
+
+    Refuses unless :func:`quotes_permitted`; cached for :data:`CACHE_TTL_SECONDS` so a table that
+    polls every 30 s from several tabs costs Kite at most one batch per window. At most
+    :data:`MAX_LIVE_MARKS` names — a screen asks for the rows it shows, never the universe.
+    """
+    wanted: list[str] = []
+    for raw in symbols:
+        symbol = raw.strip().upper()
+        if symbol and symbol not in wanted:
+            wanted.append(symbol)
+        if len(wanted) >= MAX_LIVE_MARKS:
+            break
+    if not wanted:
+        return {}
+    cached = _detail_memo.snapshot()
+    missing = [symbol for symbol in wanted if symbol not in cached]
+    if missing and quotes_permitted():
+        fetched = _quote_details(missing)
+        if fetched:
+            _detail_memo.merge(fetched)
+            cached.update(fetched)
+    return {symbol: cached[symbol] for symbol in wanted if symbol in cached}
 
 
 async def live_prices_by_instrument(

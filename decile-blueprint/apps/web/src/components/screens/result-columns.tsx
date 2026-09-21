@@ -10,6 +10,7 @@ import {
   scoreBarScale,
 } from "@/components/screens/cell-encodings";
 import { InstrumentLink } from "@/components/instrument/instrument-link";
+import { TodayChange } from "@/components/screens/live-price";
 import { SaveInstrumentButton } from "@/components/watchlist/save-instrument-button";
 import {
   columnDisplayLabel,
@@ -288,7 +289,17 @@ export function buildColumns(
         const scoreScale = SCORE_COLUMNS.has(key)
           ? scaleForColumn(info.table, key)
           : undefined;
-        return renderEncodedCell(key, raw, unit, text, scoreScale);
+        const cell = renderEncodedCell(key, raw, unit, text, scoreScale);
+        // The live overlay (21 Sep 2026) stamps `live_change_pct` only while the market is open
+        // and Kite answered; the price above it is then Kite's last price, not the close.
+        const change = info.row.original.live_change_pct;
+        if (key !== "close_raw" || typeof change !== "number") return cell;
+        return (
+          <span className="block" title="Live — Kite last price">
+            {cell}
+            <TodayChange changePct={change} />
+          </span>
+        );
       },
     };
     if (tooltip) {

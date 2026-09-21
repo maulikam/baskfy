@@ -19,9 +19,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { formatTradeDate } from "@/lib/format";
 import { columnDisplayLabel, suppressedResultColumns } from "@/lib/screens/column-display";
-import { useLiveMarks, withLivePrice } from "@/lib/screens/live-marks";
+import { liveStatusLine, useLiveMarks, withLivePrice } from "@/lib/screens/live-marks";
 import { cn } from "@/lib/utils";
 
 /*
@@ -194,8 +193,8 @@ export function ResultsPanel({
   );
   const live = useLiveMarks(symbols);
   const rows = useMemo<readonly ResultRow[]>(
-    () => publishedRows.map((row) => withLivePrice(row, live.marks)),
-    [publishedRows, live.marks],
+    () => publishedRows.map((row) => withLivePrice(row, live.marks, live.quotes)),
+    [publishedRows, live.marks, live.quotes],
   );
 
   const sortingFactorLabel = result?.sorting_factor.label ?? "";
@@ -218,20 +217,20 @@ export function ResultsPanel({
   }
 
   const count = result?.result_count ?? 0;
-  const asOf = formatTradeDate(result?.as_of ?? null);
-
   return (
     <div className={cn("flex min-w-0 flex-col gap-4", className)}>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <p className="text-sm font-light tabular-nums text-muted-foreground" data-testid="result-count">
           {isPending ? "…" : `${count} matches`}
         </p>
-        <p className="text-sm font-light text-muted-foreground" data-testid="as-of">
-          {isPending
-            ? null
-            : live.liveOverlay
-              ? `live prices, over close of ${asOf}`
-              : `fresh as of ${asOf}`}
+        {/* Which numbers move (21 Sep 2026): Price and today's change are live while the market
+            is open and Kite answers; ranks and every factor stay on the published session. */}
+        <p
+          className="text-sm font-light text-muted-foreground"
+          data-testid="as-of"
+          data-live={live.liveOverlay ? "true" : "false"}
+        >
+          {isPending ? null : liveStatusLine(live, result?.as_of ?? null)}
         </p>
         {/* Keep the seeded factor string for e2e / power users; visually quieter. */}
         <p className="sr-only" data-testid="sorting-factor">

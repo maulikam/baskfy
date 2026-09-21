@@ -13,6 +13,7 @@ import {
 } from "@/components/screens/cell-encodings";
 import type { ResultRow } from "@/components/screens/result-columns";
 import { formatNumber, formatPercent } from "@/lib/format";
+import { formatTodayChange } from "@/lib/screens/live-marks";
 import { cn } from "@/lib/utils";
 
 /**
@@ -213,6 +214,7 @@ export function ResultCards({ rows, onActivate, className }: ResultCardsProps) {
         const ret = num(row, "ret_12m");
         const vol = num(row, "vol_12m");
         const close = num(row, "last_price") ?? num(row, "close_raw");
+        const liveChange = num(row, "live_change_pct");
         const rank = typeof row.rank === "number" ? row.rank : item.index + 1;
         const revealed = item.index < REVEAL_LIMIT;
 
@@ -281,6 +283,11 @@ export function ResultCards({ rows, onActivate, className }: ResultCardsProps) {
                   {close !== null ? (
                     <span className="truncate text-xs tabular-nums text-muted-foreground">
                       ₹{formatNumber(close, { decimals: 2 })}
+                      {liveChange !== null ? (
+                        <span className="ml-1" data-testid="live-change">
+                          {formatTodayChange(liveChange)}
+                        </span>
+                      ) : null}
                     </span>
                   ) : null}
                 </div>

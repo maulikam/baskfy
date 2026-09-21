@@ -160,9 +160,37 @@ class StatusOut(_Out):
     market_open: bool = False
 
 
-class LiveMarksOut(_Out):
-    """Last prices for a page of names. Empty ``marks`` when no session is trustworthy."""
+#: Why a screen shows the close instead of a live price. ``None`` exactly when ``live`` is true.
+LiveMarksReason = Literal["market_closed", "no_session", "unavailable"]
 
+
+class LiveQuoteOut(_Out):
+    """One row's live mark: the print, the exchange's previous close, and the move between them.
+
+    Decimal strings on the wire (house rule 9). ``change_pct`` is rounded at write time to two
+    places (house rule 8), and is ``None`` when Kite did not send a previous close.
+    """
+
+    last_price: Decimal
+    prev_close: Decimal | None
+    change_pct: Decimal | None
+
+
+class LiveMarksOut(_Out):
+    """The screens' live price overlay (21 Sep 2026). Display only.
+
+    ``as_of`` is the published session the ranks, factors and patterns were computed on; the
+    overlay never moves it. ``live`` is true only while the NSE session is open AND a real Kite
+    session answered; otherwise ``reason`` says which, and ``quotes``/``marks`` are empty so the
+    page keeps the close. ``live_overlay`` and ``marks`` are the pre-21-Sep shape, kept for
+    callers that only want a last price.
+    """
+
+    live: bool
+    reason: LiveMarksReason | None
+    market_open: bool
+    as_of: dt.date | None
+    quotes: dict[str, LiveQuoteOut]
     live_overlay: bool
     marks: dict[str, Decimal]
 

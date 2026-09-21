@@ -1,5 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import type * as LiveMarksModule from "@/lib/screens/live-marks";
 
 import type {
   SwingMarketDay,
@@ -9,6 +10,14 @@ import type {
 } from "@/lib/swing/fetch";
 
 import SwingSetupsPage from "../page";
+
+// The live price overlay (21 Sep 2026) is its own query; these pages render without a
+// QueryClient, so they see the overlay's "not live" state and keep the close.
+vi.mock("@/lib/screens/live-marks", async (importOriginal) => {
+  const actual = await importOriginal<typeof LiveMarksModule>();
+  return { ...actual, useLiveMarks: () => actual.EMPTY_LIVE_MARKS };
+});
+
 
 /**
  * SW11B, the setups page half — `docs/swing/STANDING-ANSWERS.md` A3 and `05` §2:

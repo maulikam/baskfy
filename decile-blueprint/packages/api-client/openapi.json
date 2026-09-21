@@ -8704,10 +8704,30 @@
       },
       "LiveMarksOut": {
         "additionalProperties": false,
-        "description": "Last prices for a page of names. Empty ``marks`` when no session is trustworthy.",
+        "description": "The screens' live price overlay (21 Sep 2026). Display only.\n\n``as_of`` is the published session the ranks, factors and patterns were computed on; the\noverlay never moves it. ``live`` is true only while the NSE session is open AND a real Kite\nsession answered; otherwise ``reason`` says which, and ``quotes``/``marks`` are empty so the\npage keeps the close. ``live_overlay`` and ``marks`` are the pre-21-Sep shape, kept for\ncallers that only want a last price.",
         "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "live": {
+            "title": "Live",
+            "type": "boolean"
+          },
           "live_overlay": {
             "title": "Live Overlay",
+            "type": "boolean"
+          },
+          "market_open": {
+            "title": "Market Open",
             "type": "boolean"
           },
           "marks": {
@@ -8717,13 +8737,83 @@
             },
             "title": "Marks",
             "type": "object"
+          },
+          "quotes": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/LiveQuoteOut"
+            },
+            "title": "Quotes",
+            "type": "object"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "market_closed",
+                  "no_session",
+                  "unavailable"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
           }
         },
         "required": [
+          "live",
+          "reason",
+          "market_open",
+          "as_of",
+          "quotes",
           "live_overlay",
           "marks"
         ],
         "title": "LiveMarksOut",
+        "type": "object"
+      },
+      "LiveQuoteOut": {
+        "additionalProperties": false,
+        "description": "One row's live mark: the print, the exchange's previous close, and the move between them.\n\nDecimal strings on the wire (house rule 9). ``change_pct`` is rounded at write time to two\nplaces (house rule 8), and is ``None`` when Kite did not send a previous close.",
+        "properties": {
+          "change_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Pct"
+          },
+          "last_price": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Last Price",
+            "type": "string"
+          },
+          "prev_close": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prev Close"
+          }
+        },
+        "required": [
+          "last_price",
+          "prev_close",
+          "change_pct"
+        ],
+        "title": "LiveQuoteOut",
         "type": "object"
       },
       "ManagerApplyIn": {
@@ -38142,7 +38232,7 @@
     },
     "/api/v1/meta/live-marks": {
       "get": {
-        "description": "Display marks only. Ranks, factors and sleeve signals stay on the published session.\n\nEmpty when there is no real Kite session. The page keeps the close in that case.",
+        "description": "The screens' live price overlay — display marks only (Maulik, 21 Sep 2026).\n\nRanks, factors, patterns and ``as_of`` stay on the last completed session (CLAUDE.md, \"Which\ndate the product shows\"); this endpoint cannot move them and does not read them. It answers\nlive only while the NSE session is open (calendar AND clock, as ``/meta/status``) and a real\nKite session exists. Outside those hours it does not call Kite at all: the published close\nis the right number then, and a quote would only spend the operator's rate limit.",
         "operationId": "getLiveMarks",
         "parameters": [
           {

@@ -8123,3 +8123,44 @@ then migrate**.
 5. **Tool path note:** `migrate_desk.py` treats `parents[2]` of itself as the repo root; staged at
    `/d8/tools/` that resolved to `/` and the archive rail refused (correctly). Staged under
    `/d8/repo/tools/migrate-desk/` instead — the rail was not bypassed.
+
+## Screens: a live price overlay, not intraday screens (21 Sep 2026) · ⚠ UNREVIEWED
+
+**Instruction (Maulik, in session, 21 Sep 2026):** "on baskfy we are not having any live data even
+on screens fix it" / "screens should have live data".
+
+**Chosen.** The screens get a live **price overlay**; their computations stay end-of-day.
+`GET /api/v1/meta/live-marks?symbols=…` (the M82/AF read path in `services/api/.../live_prices.py`,
+now also returning Kite's own previous close) answers `live: true` with, per name, `last_price`,
+`prev_close` and `change_pct` (decimal strings, rounded to 0.01 at write time) — only while the NSE
+session is open (the `trading_day` calendar AND 09:15–15:30 IST, the same test `/meta/status`
+uses) and `quotes_permitted()` says a real, unexpired Kite session exists. Otherwise it answers
+`live: false` with `reason` = `market_closed` | `no_session` | `unavailable`, empty quotes, and
+**does not call Kite at all** when the market is closed. Its `as_of` is the published session and
+the overlay cannot move it. The web app reads it through one shared hook/component
+(`lib/screens/live-marks.ts`, `components/screens/live-price.tsx`): the screener results
+(table and cards), Swing setups, Volume breakouts (VBT) candidates and TWT's "Quiet for three
+weeks" list show "Live price · +x.xx% today" in the price column and a header line "Live prices ·
+today's change vs previous close · ranks as of <date>", or "Close as of <date> · <reason>". It
+polls every 30 s while the market is open (the server memo is 20 s, and one call is one Kite
+batch of ≤500 on the shared limiter), every 5 min otherwise. The freshness pill's tooltip names
+these screens.
+
+**Why the computations stay EOD.** Rankings, factor values, pattern detection and the published
+`as_of` are daily-bar quantities; making them intraday was tried and reverted twice (M88; root
+CLAUDE.md, "Which date the product shows"). A price is a quote; a rank is a closed day.
+
+**Rejected.** (a) Intraday re-ranking — reverted history, and it would rewrite the published
+series. (b) Overlaying quotes after 15:30 too — the spec asked for the close outside hours, and
+after the close the published close is what the ranks were computed on. (c) A new endpoint — the
+existing `/meta/live-marks` already had the right auth and route shape; its old `live_overlay` /
+`marks` fields are kept, so the change is additive.
+
+**Why "no live data" may still show on the box.** The overlay needs a real Kite session on the API
+(`BASKFY_KITE_API_KEY`, an unexpired token in the API's token store, `BASKFY_DRY_RUN=false` for
+the api). The screens now say "no Kite session today, so no live prices" in that case instead of
+a silent close — that line is the diagnosis if it appears during market hours.
+
+**Reverse.** Drop the `LiveMarksProvider`/`LivePrice`/`LiveStatus` wrappers from the four pages
+(they fall back to the close they showed before) and restore `get_live_marks` to call
+`live_marks_for_symbols` without the market-hours gate. No schema, no migration, no stored data.

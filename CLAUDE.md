@@ -113,7 +113,8 @@ The product serves **two different clocks** and they are both correct:
 
 | Surface | Clock | Why |
 |---|---|---|
-| Baskets, factors, market health, the screener, the freshness pill's `as_of` | The **last completed trading session** | A daily bar is a *closed* day. House rules 5 and 7: point-in-time, idempotent. There is no "today" bar until today ends |
+| Baskets, factors, market health, the screener's ranks and patterns, the freshness pill's `as_of` | The **last completed trading session** | A daily bar is a *closed* day. House rules 5 and 7: point-in-time, idempotent. There is no "today" bar until today ends |
+| The **price column** on the four screen pages — screener, `/swing`, `/vbt`, `/twt` | **Close, plus live overlay 09:15–15:30 when the API has a Kite session** | Maulik, in session, 21 Sep 2026: "screens should have live data". `/meta/live-marks` returns last price + % today, polled every 30 s; ranks and `as_of` do not move. Outside hours or without a session the cell is the close and the header says why (`docs/DECISIONS-MERGE.md`, last entry) |
 | The **swing book's** setups and triggers, on the desk | **Live, from Kite quotes** | These are prices, not bars, and a quote is available whenever the market is |
 | The **web app's** portfolio marks — net worth, today's P&L, every holding's value | **Close, plus live overlay when a Kite session exists** | `ohlcv_daily` closes are the base; `live_prices.py` overlays Kite `last_price` when a live broker read is available (M82). Without a Kite session the page stays on the last close |
 

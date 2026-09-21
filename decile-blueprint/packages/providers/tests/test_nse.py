@@ -587,9 +587,7 @@ class TestFundamentalsConcurrency:
     ) -> None:
         symbols = self._symbols(12)
         client = FakeHttpClient({"getSymbolData": _get_symbol_data_json()})
-        provider = build(
-            settings.model_copy(update={"nse_fetch_concurrency": 4}), archive, client
-        )
+        provider = build(settings.model_copy(update={"nse_fetch_concurrency": 4}), archive, client)
         records = provider.equity_fundamentals(
             ON, symbols, series_by_symbol=dict.fromkeys(symbols, "EQ")
         )
@@ -635,9 +633,7 @@ class TestFundamentalsConcurrency:
 
         symbols = self._symbols(16)
         client = CountingClient({"getSymbolData": _get_symbol_data_json()})
-        provider = build(
-            settings.model_copy(update={"nse_fetch_concurrency": 4}), archive, client
-        )
+        provider = build(settings.model_copy(update={"nse_fetch_concurrency": 4}), archive, client)
         provider.equity_fundamentals(ON, symbols, series_by_symbol=dict.fromkeys(symbols, "EQ"))
         assert 1 < peak <= 4
 
@@ -646,9 +642,7 @@ class TestFundamentalsConcurrency:
     ) -> None:
         symbols = self._symbols(3)
         client = FakeHttpClient({"getSymbolData": _get_symbol_data_json()})
-        provider = build(
-            settings.model_copy(update={"nse_fetch_concurrency": 1}), archive, client
-        )
+        provider = build(settings.model_copy(update={"nse_fetch_concurrency": 1}), archive, client)
         records = provider.equity_fundamentals(
             ON, symbols, series_by_symbol=dict.fromkeys(symbols, "EQ")
         )

@@ -1,4 +1,5 @@
 import { InstrumentLink } from "@/components/instrument/instrument-link";
+import { LiveMarksProvider, LivePrice, LiveStatus } from "@/components/screens/live-price";
 import { formatTradeDate } from "@/lib/format";
 import { ENTRY_TODAY, WATCH_ONLY, pointInTimeLine } from "@/lib/twt/copy";
 import type { TightNameView } from "@/lib/twt/view";
@@ -65,7 +66,13 @@ export function TightNames({
           </p>
         )
       ) : (
-        <NameTable rows={entries} />
+        // Live price overlay (21 Sep 2026): the Close cell shows Kite's last price and today's
+        // change while the market is open. The pattern, the weekly closes and the entry stay on
+        // the published session.
+        <LiveMarksProvider symbols={entries.map((row) => row.symbol)}>
+          <LiveStatus asOf={session} className="mb-2" />
+          <NameTable rows={entries} />
+        </LiveMarksProvider>
       )}
 
       {session ? (
@@ -134,7 +141,7 @@ function NameTable({ rows }: { rows: readonly TightNameView[] }) {
               Stock
             </th>
             <th scope="col" className="py-2 pr-3 font-medium">
-              Close
+              Price
             </th>
             <th scope="col" className="py-2 pr-3 font-medium">
               Three weekly closes
@@ -177,7 +184,7 @@ function NameTable({ rows }: { rows: readonly TightNameView[] }) {
                 <span className="block text-xs text-muted-foreground">{row.name}</span>
               </td>
               <td className="py-2 pr-3">
-                <FigureValue figure={row.close} />
+                <LivePrice symbol={row.symbol} fallback={<FigureValue figure={row.close} />} />
               </td>
               <td className="py-2 pr-3">
                 <span className="flex flex-wrap gap-x-2">

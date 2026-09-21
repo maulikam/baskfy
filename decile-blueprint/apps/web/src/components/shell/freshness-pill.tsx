@@ -42,6 +42,18 @@ const REFETCH_INTERVAL_MS = 5 * 60_000;
  */
 const PILL_BOX = "h-7 w-[15rem]";
 
+/**
+ * Which surfaces are live while the market is open (21 Sep 2026, Maulik: "screens should have
+ * live data"). Named one by one, because a blanket "prices are live" is the over-reach the root
+ * CLAUDE.md's clock table warns about. The screens' overlay is `GET /meta/live-marks`, market
+ * hours only; the portfolio's is M82's.
+ */
+export const LIVE_OVERLAY_COPY =
+  "While the market is open and a Kite session exists, the price on the screener, Swing " +
+  "setups, Volume breakouts and Quiet-for-three-weeks lists is Kite's live last price with " +
+  "today's change, and holdings and the portfolio are marked live too. Ranks, factors, " +
+  "patterns, baskets and market health stay end-of-day.";
+
 export async function fetchStatus(): Promise<StatusOut> {
   const { data, error } = await browserApi().GET("/api/v1/meta/status");
   if (!data) throw ApiError.from(error, "Could not read the data freshness status.");
@@ -140,8 +152,8 @@ export function FreshnessPill({ className }: { className?: string }) {
           : degraded
             ? `The last pipeline run did not publish. You are seeing the ${formatTradeDate(data.as_of)} trading session.`
             : behindToday
-              ? `Published for the ${formatTradeDate(data.as_of)} trading session — the last one that has closed. Today's publishes after the market closes. Displayed prices on screens, scanners, holdings and the portfolio overlay Kite last-price when a session exists. Ranks, factors, baskets and market health stay end-of-day.`
-              : `Published for the ${formatTradeDate(data.as_of)} trading session. Displayed prices overlay Kite last-price when a session exists; ranks and factors stay on this close.`}
+              ? `Published for the ${formatTradeDate(data.as_of)} trading session — the last one that has closed. Today's publishes after the market closes. ${LIVE_OVERLAY_COPY}`
+              : `Published for the ${formatTradeDate(data.as_of)} trading session. The screens show this close until the market opens; the portfolio overlays Kite last-price when a session exists. Ranks and factors stay on this close.`}
       </TooltipContent>
     </Tooltip>
   );

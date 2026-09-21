@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { InstrumentLink } from "@/components/instrument/instrument-link";
+import { LiveMarksProvider, LivePrice, LiveStatus } from "@/components/screens/live-price";
 import { Answer, Mark } from "@/components/shell/answer";
 import { PageHeader } from "@/components/shell/page-header";
 import { SectionTabs } from "@/components/shell/section-tabs";
@@ -93,7 +94,7 @@ function CandidateTable({
         <thead>
           <tr className="border-b border-border/70 text-left text-xs uppercase tracking-wide text-muted-foreground">
             <th className="py-2 pr-3 font-medium">Stock</th>
-            <th className="py-2 pr-3 font-medium">Close</th>
+            <th className="py-2 pr-3 font-medium">Price</th>
             <th className="py-2 pr-3 font-medium">Limit</th>
             <th className="py-2 pr-3 font-medium">Stop</th>
             <th className="py-2 pr-3 font-medium">Change</th>
@@ -123,7 +124,9 @@ function CandidateTable({
                   {row.name}
                 </span>
               </td>
-              <td className="py-2 pr-3 tabular-nums">{money(row.last_price ?? row.close)}</td>
+              <td className="py-2 pr-3 tabular-nums">
+                <LivePrice symbol={row.symbol} close={row.last_price ?? row.close} />
+              </td>
               <td className="py-2 pr-3 font-medium tabular-nums">
                 {money(row.limit_price)}
               </td>
@@ -363,7 +366,12 @@ export default async function VbtTodayPage() {
           Today&rsquo;s candidates
         </h2>
         {candidates.length > 0 ? (
-          <CandidateTable rows={candidates} charts={charts} />
+          // Live price overlay (21 Sep 2026): Price shows Kite's last price and today's change
+          // while the market is open; the breakout, limit and stop stay on the scanned session.
+          <LiveMarksProvider symbols={candidates.map((row) => row.symbol)}>
+            <LiveStatus asOf={asOf} />
+            <CandidateTable rows={candidates} charts={charts} />
+          </LiveMarksProvider>
         ) : (
           <p
             className="text-sm text-muted-foreground"

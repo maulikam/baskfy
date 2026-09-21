@@ -2,6 +2,7 @@ import type { Metadata, Route } from "next";
 import Link from "next/link";
 
 import { InstrumentLink } from "@/components/instrument/instrument-link";
+import { LiveMarksProvider, LivePrice, LiveStatus } from "@/components/screens/live-price";
 import { Answer, Mark } from "@/components/shell/answer";
 import { PageHeader } from "@/components/shell/page-header";
 import { SectionTabs } from "@/components/shell/section-tabs";
@@ -171,7 +172,7 @@ function SetupTable({
             <th className="py-2 pr-3 font-medium">Stock</th>
             <th className="py-2 pr-3 font-medium">Status</th>
             <th className="py-2 pr-3 font-medium">Score</th>
-            <th className="py-2 pr-3 font-medium">Close</th>
+            <th className="py-2 pr-3 font-medium">Price</th>
             <th className="py-2 pr-3 font-medium">Trigger</th>
             <th className="py-2 pr-3 font-medium">Stop</th>
             <th className="py-2 pr-3 font-medium">Risk</th>
@@ -231,7 +232,9 @@ function SetupTable({
                   <StatusPill status={row.status} />
                 </td>
                 <td className="py-2 pr-3 tabular-nums">{row.score.toFixed(0)}</td>
-                <td className="py-2 pr-3 tabular-nums">{money(row.last_price ?? row.close)}</td>
+                <td className="py-2 pr-3 tabular-nums">
+                  <LivePrice symbol={row.symbol} close={row.last_price ?? row.close} />
+                </td>
                 <td className="py-2 pr-3 tabular-nums font-medium">{money(row.trigger)}</td>
                 <td className="py-2 pr-3 tabular-nums">{money(row.stop_ref)}</td>
                 <td className="py-2 pr-3 tabular-nums">{percent(row.stop_distance_pct)}</td>
@@ -445,6 +448,10 @@ export default async function SwingSetupsPage(props: {
         ))}
       </nav>
 
+      {/* Live price overlay (21 Sep 2026): one quote batch for every row on the page, polled only
+          while the market is open. Status, score, trigger and stop stay on the scan. */}
+      <LiveMarksProvider symbols={rows.map((row) => row.symbol)}>
+      <LiveStatus asOf={asOf} />
       {SETUP_SECTIONS.map((section) => {
         const sectionRows = rows
           .filter((row) => row.setup === section.key)
@@ -471,6 +478,7 @@ export default async function SwingSetupsPage(props: {
           </section>
         );
       })}
+      </LiveMarksProvider>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type * as LiveMarksModule from "@/lib/screens/live-marks";
 
 import { BacktestCard } from "@/components/twt/backtest-card";
 import { DeskPlan } from "@/components/twt/desk/desk-plan";
@@ -18,6 +19,14 @@ import {
 } from "@/lib/twt/__tests__/fixtures";
 import { deskView } from "@/lib/twt/desk";
 import { todayView } from "@/lib/twt/view";
+
+// The live price overlay (21 Sep 2026) is its own query; these pages render without a
+// QueryClient, so they see the overlay's "not live" state and keep the close.
+vi.mock("@/lib/screens/live-marks", async (importOriginal) => {
+  const actual = await importOriginal<typeof LiveMarksModule>();
+  return { ...actual, useLiveMarks: () => actual.EMPTY_LIVE_MARKS };
+});
+
 
 /**
  * The two rules the portfolio work established on 11 Sep 2026, applied to `/twt` — TW8 gate 5.

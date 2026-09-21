@@ -2267,9 +2267,13 @@ export interface paths {
         };
         /**
          * Live last prices
-         * @description Display marks only. Ranks, factors and sleeve signals stay on the published session.
+         * @description The screens' live price overlay — display marks only (Maulik, 21 Sep 2026).
          *
-         *     Empty when there is no real Kite session. The page keeps the close in that case.
+         *     Ranks, factors, patterns and ``as_of`` stay on the last completed session (CLAUDE.md, "Which
+         *     date the product shows"); this endpoint cannot move them and does not read them. It answers
+         *     live only while the NSE session is open (calendar AND clock, as ``/meta/status``) and a real
+         *     Kite session exists. Outside those hours it does not call Kite at all: the published close
+         *     is the right number then, and a quote would only spend the operator's rate limit.
          */
         get: operations["getLiveMarks"];
         put?: never;
@@ -7465,15 +7469,48 @@ export interface components {
         };
         /**
          * LiveMarksOut
-         * @description Last prices for a page of names. Empty ``marks`` when no session is trustworthy.
+         * @description The screens' live price overlay (21 Sep 2026). Display only.
+         *
+         *     ``as_of`` is the published session the ranks, factors and patterns were computed on; the
+         *     overlay never moves it. ``live`` is true only while the NSE session is open AND a real Kite
+         *     session answered; otherwise ``reason`` says which, and ``quotes``/``marks`` are empty so the
+         *     page keeps the close. ``live_overlay`` and ``marks`` are the pre-21-Sep shape, kept for
+         *     callers that only want a last price.
          */
         LiveMarksOut: {
+            /** As Of */
+            as_of: string | null;
+            /** Live */
+            live: boolean;
             /** Live Overlay */
             live_overlay: boolean;
+            /** Market Open */
+            market_open: boolean;
             /** Marks */
             marks: {
                 [key: string]: string;
             };
+            /** Quotes */
+            quotes: {
+                [key: string]: components["schemas"]["LiveQuoteOut"];
+            };
+            /** Reason */
+            reason: ("market_closed" | "no_session" | "unavailable") | null;
+        };
+        /**
+         * LiveQuoteOut
+         * @description One row's live mark: the print, the exchange's previous close, and the move between them.
+         *
+         *     Decimal strings on the wire (house rule 9). ``change_pct`` is rounded at write time to two
+         *     places (house rule 8), and is ``None`` when Kite did not send a previous close.
+         */
+        LiveQuoteOut: {
+            /** Change Pct */
+            change_pct: string | null;
+            /** Last Price */
+            last_price: string;
+            /** Prev Close */
+            prev_close: string | null;
         };
         /** ManagerApplyIn */
         ManagerApplyIn: {

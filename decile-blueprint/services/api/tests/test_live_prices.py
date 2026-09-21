@@ -243,3 +243,45 @@ async def test_live_marks_for_symbols_caps_the_page(
     assert "S0" in marks
     assert "S499" in marks
     assert "S500" not in marks
+
+
+class TestScreenQuoteDetails:
+    """The screens' overlay (21 Sep 2026): last price plus Kite's own previous close."""
+
+    def test_refused_without_a_session(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(live_prices, "quotes_permitted", lambda: False)
+
+        def _boom(_symbols: object) -> dict[str, live_prices.LiveQuote]:
+            raise AssertionError("no quote without a session")
+
+        monkeypatch.setattr(live_prices, "_quote_details", _boom)
+        assert live_prices.live_quote_details(["RELIANCE"]) == {}
+
+    def test_keeps_prev_close_and_caches_the_window(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        calls: list[tuple[str, ...]] = []
+
+        def _fetch(symbols: tuple[str, ...] | list[str]) -> dict[str, live_prices.LiveQuote]:
+            calls.append(tuple(symbols))
+            return {s: live_prices.LiveQuote(Decimal("101"), Decimal("100")) for s in symbols}
+
+        monkeypatch.setattr(live_prices, "quotes_permitted", lambda: True)
+        monkeypatch.setattr(live_prices, "_quote_details", _fetch)
+        first = live_prices.live_quote_details(["reliance", "TCS", "RELIANCE"])
+        assert first == {
+            "RELIANCE": live_prices.LiveQuote(Decimal("101"), Decimal("100")),
+            "TCS": live_prices.LiveQuote(Decimal("101"), Decimal("100")),
+        }
+        live_prices.live_quote_details(["RELIANCE", "TCS"])
+        assert calls == [("RELIANCE", "TCS")]
+
+    def test_caps_a_request_at_one_kite_batch(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        seen: list[int] = []
+
+        def _fetch(symbols: list[str]) -> dict[str, live_prices.LiveQuote]:
+            seen.append(len(symbols))
+            return {}
+
+        monkeypatch.setattr(live_prices, "quotes_permitted", lambda: True)
+        monkeypatch.setattr(live_prices, "_quote_details", _fetch)
+        live_prices.live_quote_details([f"S{i}" for i in range(900)])
+        assert seen == [live_prices.MAX_LIVE_MARKS]

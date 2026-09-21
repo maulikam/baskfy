@@ -13,8 +13,10 @@ the API enum", so the API's job is to publish it, not to keep a second copy.
 from __future__ import annotations
 
 import datetime as dt
+from decimal import Decimal
 from typing import Annotated, Final
 
+import anyio
 from fastapi import APIRouter, Query
 from pydantic import JsonValue, TypeAdapter
 from sqlalchemy import select
@@ -22,12 +24,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.auth import AuthenticatedDep
 from baskfy_api.db import SessionDep
-from baskfy_api.live_prices import live_marks_for_symbols, quotes_permitted
+from baskfy_api.live_prices import LiveQuote, live_quote_details, quotes_permitted
 from baskfy_api.problems import Problem, ProblemType
 from baskfy_api.schemas import (
     ColumnOut,
     FactorOut,
     LiveMarksOut,
+    LiveMarksReason,
+    LiveQuoteOut,
     PipelineRunOut,
     RankingPresetOut,
     StatusOut,
@@ -245,16 +249,61 @@ async def get_status(session: SessionDep) -> StatusOut:
     )
 
 
+_PCT_PLACES: Final = Decimal("0.01")
+
+
+def _live_quote_out(quote: LiveQuote) -> LiveQuoteOut:
+    change = None
+    if quote.prev_close is not None:
+        change = ((quote.last_price - quote.prev_close) / quote.prev_close * 100).quantize(
+            _PCT_PLACES
+        )
+    return LiveQuoteOut(last_price=quote.last_price, prev_close=quote.prev_close, change_pct=change)
+
+
 @router.get("/live-marks", response_model=LiveMarksOut, summary="Live last prices")
 async def get_live_marks(
     principal: AuthenticatedDep,
+    session: SessionDep,
     symbols: Annotated[str, Query(description="Comma-separated NSE symbols, at most 500.")] = "",
 ) -> LiveMarksOut:
-    """Display marks only. Ranks, factors and sleeve signals stay on the published session.
+    """The screens' live price overlay — display marks only (Maulik, 21 Sep 2026).
 
-    Empty when there is no real Kite session. The page keeps the close in that case.
+    Ranks, factors, patterns and ``as_of`` stay on the last completed session (CLAUDE.md, "Which
+    date the product shows"); this endpoint cannot move them and does not read them. It answers
+    live only while the NSE session is open (calendar AND clock, as ``/meta/status``) and a real
+    Kite session exists. Outside those hours it does not call Kite at all: the published close
+    is the right number then, and a quote would only spend the operator's rate limit.
     """
     del principal
     names = [part.strip() for part in symbols.split(",") if part.strip()]
-    marks = await live_marks_for_symbols(names)
-    return LiveMarksOut(live_overlay=bool(marks), marks=marks)
+    as_of = await latest_published_date(session)
+    _session_day, market_open = await _session_day_and_market_open(session)
+
+    def _closed(reason: LiveMarksReason) -> LiveMarksOut:
+        return LiveMarksOut(
+            live=False,
+            reason=reason,
+            market_open=market_open,
+            as_of=as_of,
+            quotes={},
+            live_overlay=False,
+            marks={},
+        )
+
+    if not market_open:
+        return _closed("market_closed")
+    if not quotes_permitted():
+        return _closed("no_session")
+    details = await anyio.to_thread.run_sync(live_quote_details, tuple(names))
+    if not details:
+        return _closed("unavailable")
+    return LiveMarksOut(
+        live=True,
+        reason=None,
+        market_open=True,
+        as_of=as_of,
+        quotes={symbol: _live_quote_out(quote) for symbol, quote in details.items()},
+        live_overlay=True,
+        marks={symbol: quote.last_price for symbol, quote in details.items()},
+    )

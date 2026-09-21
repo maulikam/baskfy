@@ -80,9 +80,11 @@ x-python-image: &python-image
     # With it false a confirmed TWT line runs the whole gateway path and journals
     # `simulated=true`. With it true that line reaches the broker — and ONLY a line a person
     # confirmed: `docs/twt/02` Track C 3 is categorical that an order needs `POST /twt/execute`
-    # with `confirm=true` and a plan issued in the last thirty minutes. **There is no
-    # BASKFY_TWT_AUTO_EXECUTE, here or anywhere.** Non-negotiable 1's named exception belongs to
-    # the swing sleeve alone.
+    # with `confirm=true` and a plan issued in the last thirty minutes — or, since TW17 (Maulik,
+    # in session, 21 Sep 2026), a MORNING-plan line the desk's `twt-auto` service confirms itself
+    # when BASKFY_TWT_AUTO_EXECUTE is also true. That flag is the desk's alone and is named in the
+    # desk block below, not here: the api, worker and beat have no auto-execute setting for this
+    # sleeve, and the web app has no execute route.
     #
     # Default false. Maulik instructed the flip in session on 18 Sep 2026 — see
     # `docs/twt/DECISIONS-TW.md` TW16 and `NEEDS-MAULIK.md` § TWT, which record that it came from
@@ -411,6 +413,14 @@ services:
       # line, and `tests/test_vbt_safety.py` asserts across both trees that no setting of that
       # shape exists.
       BASKFY_VBT_EXECUTION_ENABLED: "${BASKFY_VBT_EXECUTION_ENABLED:-false}"
+      # TW17 — AUTO-EXECUTE for the three-weeks-tight sleeve (Maulik, in session, 21 Sep 2026):
+      # the second named exception to non-negotiable 1, after SW25 above. `twt-auto` below runs
+      # `app.twt_auto` at 09:15 on a weekday and confirms today's MORNING plan through the same
+      # `execute_line` and gateway as the /twt/execute button. A real unattended order needs ALL
+      # THREE of DRY_RUN=false, BASKFY_TWT_EXECUTION_ENABLED=true and this. Named here because a
+      # variable this file does not name never reaches the container; `twt-auto` inherits it via
+      # `<<: *desk`. Default false. Setting it in `.env.staging.compose` is Maulik's hand only.
+      BASKFY_TWT_AUTO_EXECUTE: "${BASKFY_TWT_AUTO_EXECUTE:-false}"
       BASKFY_SWING_TIMING_PROBE: "${BASKFY_SWING_TIMING_PROBE:-false}"
       # BASKFY_SOLE_USER_ID / BASKFY_SOLE_BROKER_ACCOUNT_ID (P4.3, the tenant pair every order
       # carries) come from `.env.staging` through env_file, exactly as the api reads them —
@@ -437,6 +447,20 @@ services:
   swing-monitor:
     <<: *desk
     command: [swing-monitor-loop]
+    expose: []
+    healthcheck:
+      disable: true
+
+  # TW17 (Maulik, in session, 21 Sep 2026) — the TWT morning auto-execute. `twt-auto-loop`
+  # (scripts/twt_auto_loop.py) runs `python -m app.twt_auto` at 09:15:10 IST on a weekday, or at
+  # once if the container starts inside 09:15-09:35, then sleeps to the next weekday. Unless
+  # DRY_RUN is false AND BASKFY_TWT_EXECUTION_ENABLED AND BASKFY_TWT_AUTO_EXECUTE are true (not
+  # the defaults above), the module exits 0 without reading a plan, so this service can exist
+  # before the flag does. It never builds a plan: `twt-morning` (Beat, 09:05) does, and an expired
+  # or missing one is refused. Same image, same env, same read-only token, no port.
+  twt-auto:
+    <<: *desk
+    command: [twt-auto-loop]
     expose: []
     healthcheck:
       disable: true

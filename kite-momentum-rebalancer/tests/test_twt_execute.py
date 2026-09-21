@@ -1135,12 +1135,18 @@ class TestNoOrderReachesABrokerInDryRun:
         assert gates.intraday_enabled is False
         assert gates.options_enabled is False
 
-    def test_the_flag_is_false_by_default_and_no_auto_execute_setting_exists(self) -> None:
-        """Non-negotiable 1 — the named exception is the swing sleeve's alone."""
+    def test_both_flags_are_false_by_default_and_auto_execute_is_the_one_named_setting(
+        self,
+    ) -> None:
+        """Non-negotiable 1's second named exception (TW17, Maulik, in session, 21 Sep 2026):
+        ``TWT_AUTO_EXECUTE`` exists, defaults false, and is the only ``TWT_AUTO*`` setting."""
         import app.config as config_module
 
         assert config_module.TWT_EXECUTION_ENABLED is False
-        assert not [name for name in dir(config_module) if name.startswith("TWT_AUTO")]
+        assert config_module.TWT_AUTO_EXECUTE is False
+        assert [name for name in dir(config_module) if name.startswith("TWT_AUTO")] == [
+            "TWT_AUTO_EXECUTE"
+        ]
 
     def test_no_broker_client_method_is_ever_invoked_by_a_confirm(self) -> None:
         """The complement of :class:`ExplodingKC`, said as an assertion rather than as a crash.

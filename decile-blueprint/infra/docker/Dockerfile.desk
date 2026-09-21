@@ -184,7 +184,16 @@ RUN cat > /usr/local/bin/desk-daily-loop <<'EOF'
 set -eu
 exec python -m scripts.desk_daily_loop
 EOF
-RUN chmod 0755 /usr/local/bin/desk-entrypoint /usr/local/bin/swing-monitor-loop /usr/local/bin/desk-daily-loop
+# TW17 (Maulik, in session, 21 Sep 2026): the TWT morning auto-execute's clock. The schedule
+# lives in `scripts.twt_auto_loop` so a test can import it; `app.twt_auto` exits 0 without
+# reading a plan unless DRY_RUN is off AND BASKFY_TWT_EXECUTION_ENABLED AND
+# BASKFY_TWT_AUTO_EXECUTE are on, so with the default flags this loop idles.
+RUN cat > /usr/local/bin/twt-auto-loop <<'EOF'
+#!/bin/sh
+set -eu
+exec python -m scripts.twt_auto_loop
+EOF
+RUN chmod 0755 /usr/local/bin/desk-entrypoint /usr/local/bin/swing-monitor-loop /usr/local/bin/desk-daily-loop /usr/local/bin/twt-auto-loop
 
 WORKDIR /desk
 USER baskfy

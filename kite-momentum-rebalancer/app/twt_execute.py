@@ -10,10 +10,11 @@ THE RULES IT ENFORCES, AND WHERE THEY COME FROM
 -----------------------------------------------
 * **Never auto-execute** (non-negotiable 1; ``docs/twt/02`` Track C §3). Nothing here runs
   without ``confirm="true"``, a ``plan_id`` issued in the last thirty minutes and a line still
-  ``PROPOSED``; the refusals are 400 / 404 / 410 / 409. **There is no
-  ``BASKFY_TWT_AUTO_EXECUTE`` and there will not be one** — non-negotiable 1's named exception
-  belongs to the swing sleeve, by Maulik's own hand, and this sleeve's ratchet, which would
-  dearly like to fire on ten lines a night for months, is a plan line a person confirms.
+  ``PROPOSED``; the refusals are 400 / 404 / 410 / 409. The one caller besides the button is
+  ``app/twt_auto.py`` — ``BASKFY_TWT_AUTO_EXECUTE``, non-negotiable 1's **second** named
+  exception (Maulik, in session, 21 Sep 2026; DECISIONS-TW TW17), default false and gated by all
+  three flags. It calls *this* function with ``confirm="true"`` and the MORNING plan's own id, so
+  every refusal here applies to it unchanged; nothing in this module knows which caller it has.
 * **Every buy gets a GTT stop the same session** (non-negotiable 4; ``04`` §7.1, §7.4). The arm
   is in the *same request* as the fill that created it, which is what makes it one failure
   rather than two — and on this sleeve it is also the fill-day rule, because ``STOP_DAY0`` is

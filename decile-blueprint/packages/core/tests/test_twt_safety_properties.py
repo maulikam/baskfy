@@ -119,7 +119,7 @@ EXPECTED_TASKS: Final = frozenset(
     }
 )
 
-DESK_TWT_SOURCES: Final = ("twt_desk.py", "twt_execute.py")
+DESK_TWT_SOURCES: Final = ("twt_desk.py", "twt_execute.py", "twt_auto.py")
 
 
 # =========================================================================================
@@ -858,19 +858,26 @@ class TestTheFlagIsTheReasonAndNotDryRun:
 
 
 # =========================================================================================
-# G2 — there is no auto-execute for this sleeve, and the absence is asserted
+# G2 — auto-execute exists for this sleeve (TW17), in the desk only, default false
 # =========================================================================================
 
 
-class TestThereIsNoAutoExecute:
-    """``BASKFY_TWT_AUTO``-anything does not exist as a *setting*, anywhere in either tree.
+class TestAutoExecuteIsTheDesksAndOffByDefault:
+    """TW17 — Maulik, in session, 21 Sep 2026: *"TWT has no auto-execute flag - this should be
+    implemented auto execute"*.
 
-    A plain ``grep | wc -l == 0`` cannot express this and never could: the tree deliberately
-    contains the string inside prohibitions (``app/config.py`` and ``.env.example`` both carry
-    "THERE IS NO BASKFY_TWT_AUTO_EXECUTE AND THERE WILL NOT BE ONE"), inside this docstring, and
-    inside ``docs/twt``. ``tools/deploy/verify-safety.sh`` hit the same problem for VBT-1 and
-    recorded it in a comment: *a prohibition must not trip the check*. So prose is stripped and
-    what remains is scanned for a setting.
+    Until that sentence this class asserted that ``BASKFY_TWT_AUTO``-anything did not exist. That
+    was the decision until its owner changed it; what it asserts now is the new decision, pinned
+    to TW17 rather than to any document:
+
+    * ``BASKFY_TWT_AUTO_EXECUTE`` is **read in exactly one place** — the desk's ``app/config.py`` —
+      with a default of ``"false"``. The API, the worker and the engine never read it.
+    * Only ``app/twt_auto.py`` (the runner) may *name* it, and it names it in messages only.
+    * ``auto_execute_enabled()`` is the AND of all three flags.
+    * Non-negotiable 1 names two exceptions — swing and TWT — and VBT still has none.
+
+    Prose is stripped first, as before: *a prohibition must not trip the check*, and neither may a
+    comment that explains the flag.
     """
 
     def _sources(self) -> list[Path]:
@@ -883,6 +890,7 @@ class TestThereIsNoAutoExecute:
         paths.append(worker / "celery_app.py")
         api = BLUEPRINT / "services" / "api" / "src" / "baskfy_api"
         paths.append(api / "twt_sleeve.py")
+        paths.append(api / "settings.py")
         # TW12's two API modules. Added the day they were written: this scan is a list of files,
         # and a list of files is exactly the thing that stops being complete when somebody adds a
         # module without remembering it.
@@ -893,22 +901,47 @@ class TestThereIsNoAutoExecute:
         )
         return [p for p in paths if p.exists()]
 
+    def _mentions(self) -> dict[Path, list[str]]:
+        found: dict[Path, list[str]] = {}
+        for path in self._sources():
+            for line in _strip_prose(_source(path)).splitlines():
+                if re.search(r"BASKFY_TWT_AUTO", line):
+                    found.setdefault(path, []).append(line.strip())
+        return found
+
     def test_the_scan_reads_a_real_and_non_empty_set_of_files(self) -> None:
-        """Non-vacuity: a scan over nothing would pass the test below for the wrong reason."""
+        """Non-vacuity: a scan over nothing would pass the tests below for the wrong reason."""
         sources = self._sources()
-        assert len(sources) >= 18, f"only {len(sources)} files scanned"
+        assert len(sources) >= 19, f"only {len(sources)} files scanned"
         assert any(p.name == "twt_execute.py" for p in sources)
+        assert any(p.name == "twt_auto.py" for p in sources)
         assert any(p.name == "celery_tasks.py" for p in sources)
         assert any(p.name == "twt_scan.py" and "worker" in str(p) for p in sources)
         assert any(p.name == "twt_scan.py" and "api" in str(p) for p in sources)
 
-    def test_no_source_defines_or_reads_a_twt_auto_execute_flag(self) -> None:
-        offenders: list[str] = []
-        for path in self._sources():
-            for line in _strip_prose(_source(path)).splitlines():
-                if re.search(r"BASKFY_TWT_AUTO", line):
-                    offenders.append(f"{path.relative_to(REPO)}: {line.strip()}")
-        assert offenders == [], "an auto-execute setting exists for TWT:\n" + "\n".join(offenders)
+    def test_the_flag_is_read_once_in_the_desks_config_and_defaults_false(self) -> None:
+        config = DESK / "app" / "config.py"
+        readers = [
+            (path, line)
+            for path, lines in self._mentions().items()
+            for line in lines
+            if "getenv" in line or "environ" in line
+        ]
+        getenv = 'os.getenv("BASKFY_TWT_AUTO_EXECUTE", "false").lower() == "true"'
+        expected = f"TWT_AUTO_EXECUTE = {getenv}"
+        assert readers == [(config, expected)], readers
+
+    def test_nothing_outside_the_desk_config_and_its_runner_names_it(self) -> None:
+        allowed = {DESK / "app" / "config.py", DESK / "app" / "twt_auto.py"}
+        offenders = [
+            f"{path.relative_to(REPO)}: {line}"
+            for path, lines in self._mentions().items()
+            if path not in allowed
+            for line in lines
+        ]
+        assert offenders == [], "BASKFY_TWT_AUTO is named outside the desk:\n" + "\n".join(
+            offenders
+        )
 
     def test_the_scan_would_catch_a_real_one(self) -> None:
         """The scan is not vacuous: a planted setting survives prose-stripping and is found."""
@@ -925,15 +958,23 @@ class TestThereIsNoAutoExecute:
         assert len(remaining) == 1, remaining
         assert "os.getenv" in remaining[0]
 
-    def test_the_prohibition_is_where_somebody_would_look_for_the_setting(self) -> None:
-        for path in (DESK / "app" / "config.py", DESK / ".env.example"):
-            assert "THERE IS NO BASKFY_TWT_AUTO_EXECUTE" in _source(path), path
+    def test_it_needs_all_three_flags(self) -> None:
+        runner = _strip_prose(_source(DESK / "app" / "twt_auto.py"))
+        assert "return bool(C.TWT_EXECUTION_ENABLED) and not bool(C.DRY_RUN)" in runner
+        assert "return live_execution() and bool(C.TWT_AUTO_EXECUTE)" in runner
 
-    def test_non_negotiable_ones_exception_is_still_the_swing_sleeves_alone(self) -> None:
-        """The swing sleeve has an auto-execute flag. It is the only sleeve that does."""
+    def test_the_decision_is_cited_where_somebody_would_look_for_the_setting(self) -> None:
+        for path in (DESK / "app" / "config.py", DESK / ".env.example"):
+            text = _source(path)
+            assert "BASKFY_TWT_AUTO_EXECUTE" in text, path
+            assert "21 Sep 2026" in text, path
+        assert "BASKFY_TWT_AUTO_EXECUTE=false" in _source(DESK / ".env.example")
+
+    def test_non_negotiable_ones_exceptions_are_swing_and_twt_and_not_vbt(self) -> None:
+        """Two named exceptions, both Maulik's. VBT still confirms every order by hand."""
         config = _strip_prose(_source(DESK / "app" / "config.py"))
         assert "BASKFY_SWING_AUTO_EXECUTE" in config
-        for sleeve in ("TWT", "VBT"):
-            assert f"BASKFY_{sleeve}_AUTO_EXECUTE" not in config, (
-                f"{sleeve} grew an auto-execute flag — non-negotiable 1 names one exception"
-            )
+        assert "BASKFY_TWT_AUTO_EXECUTE" in config
+        assert "BASKFY_VBT_AUTO_EXECUTE" not in config, (
+            "VBT grew an auto-execute flag — non-negotiable 1 names two exceptions, not three"
+        )

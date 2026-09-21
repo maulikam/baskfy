@@ -337,11 +337,11 @@ class TestTheFlagsDefaultOff:
         """And the constructed settings agree, on this machine, with this `.env`."""
         assert Settings().twt_execution_enabled is False
 
-    def test_no_auto_execute_setting_exists_anywhere(self) -> None:
-        """`02` Track B and Track C §3. Non-negotiable 1's named exception belongs to the swing
-        sleeve, by Maulik's own hand; this run neither widens it nor adds a second one. In
-        particular the ratchet — which will want to fire on ten lines a night, for months — is a
-        plan line a person confirms, never a background job that talks to the broker."""
+    def test_no_auto_execute_setting_exists_in_the_api_or_the_worker(self) -> None:
+        """TW17 (Maulik, in session, 21 Sep 2026): TWT's auto-execute is non-negotiable 1's second
+        named exception and it lives **in the desk only** (``BASKFY_TWT_AUTO_EXECUTE``, read by
+        ``kite-momentum-rebalancer/app/config.py``, default false). The API and the worker plan
+        and publish; neither gains a setting that could confirm a line."""
         offenders = [
             name
             for name in (*Settings.model_fields, *WorkerSettings.model_fields)

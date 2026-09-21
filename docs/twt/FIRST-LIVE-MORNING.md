@@ -31,7 +31,8 @@ worker / desk images; **hold web**). Then:
 1. You flip both TWT flags and confirm `BASKFY_DESK_DRY_RUN=false` (§3.4). Agents do not.
 2. You enable the Kite login nudge on the box (§3.1). The address stays off the repo.
 3. First live morning: login → seed `--capital 2500000` → verify `tw_config_audit` → **then**
-   Confirm a plan. No `BASKFY_TWT_AUTO_*`.
+   Confirm a plan. Leave `BASKFY_TWT_AUTO_EXECUTE` false for the first live morning (TW17; it is
+   yours to flip later, NEEDS-MAULIK T5).
 
 ### The legend, and why half this file is marked
 
@@ -295,10 +296,12 @@ curl -fsS $DESK/status
 
 `[REAL]` Expect `"dry_run": false`. Record the date under `NEEDS-MAULIK.md` § TWT T2.
 
-**There is no auto-execute flag for this sleeve and none is ever added.** Non-negotiable 1's named
-exception belongs to the *swing* sleeve alone. TW10's property test greps both trees for
-`BASKFY_TWT_AUTO`-anything and asserts nothing is found. A TWT order exists only because you
-pressed Confirm on an unexpired plan.
+**Auto-execute exists since 21 Sep 2026 and is off by default (TW17).** You asked for it in
+session; `BASKFY_TWT_AUTO_EXECUTE` is non-negotiable 1's second named exception, desk only. With it
+false — the default, and the right setting for this runbook's first morning — a TWT order exists
+only because you pressed Confirm on an unexpired plan. With it and the two live flags true, the
+desk's `twt-auto` service confirms the 09:05 MORNING plan at 09:15 through the same path. TW10's
+property test asserts the flag is read in the desk's `config.py` and nowhere else.
 
 ### 3.5 The capital — your keystroke
 

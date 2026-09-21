@@ -344,10 +344,12 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
     },
     # **The 15:15 sweep is deliberately not here, and this comment is the record of that.** The
     # sweep re-arms GTT stops, so it is order flow, and a Beat entry for it would be the desk
-    # placing orders on a timer. The root `CLAUDE.md`'s first non-negotiable allows exactly one
-    # named auto-execute exception and it is the *swing* sleeve's, flagged and Maulik's; an agent
-    # may not add a second. The sweep stays `POST /twt/sweep` and `tools/twt/sweep.py`, which is
-    # what `docs/twt/FIRST-LIVE-MORNING.md` §9 already tells a person to run. TW11.
+    # placing orders on a timer. The root `CLAUDE.md`'s first non-negotiable names two
+    # auto-execute exceptions, both flagged and both Maulik's: the swing sleeve's (SW25) and,
+    # since 21 Sep 2026, TWT's morning-plan confirm (TW17) — which runs in the desk's own
+    # `twt-auto` container, not on Beat, and does not include the sweep. An agent may not widen
+    # either. The sweep stays `POST /twt/sweep` and `tools/twt/sweep.py`, which is what
+    # `docs/twt/FIRST-LIVE-MORNING.md` §9 already tells a person to run. TW11.
     # VB6: the plan, five minutes after the detector. The order matters and is the same argument
     # the swing pair makes at 21:00/21:05 — the plan is built from the session's signals and the
     # session's gate, so an evening that ran first would plan against yesterday's tape.

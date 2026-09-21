@@ -1843,8 +1843,9 @@ T3 below.
 |---|---|---|---|
 | **T1** | **The daily Kite login**, before 09:00 every live morning | Every order, every GTT, every ratchet | Open — every live morning |
 | **T1-nudge** | On the box: `BASKFY_KITE_LOGIN_NUDGE_ENABLED=true` + `BASKFY_KITE_LOGIN_NUDGE_TO=<your address>` (you authorized 13 Sep; do not commit the address) | The 08:45 / 09:05 login email | **Your hands after deploy.** In-repo default stays false |
-| **T2** | After TW15.1 is **committed and deployed**: `BASKFY_TWT_EXECUTION_ENABLED=true` in **both** box env files **and** confirm `BASKFY_DESK_DRY_RUN=false` | Any real TWT order. Confirm-gated. No auto-execute | **Your hands after deploy.** Agents do not flip box env |
+| **T2** | After TW15.1 is **committed and deployed**: `BASKFY_TWT_EXECUTION_ENABLED=true` in **both** box env files **and** confirm `BASKFY_DESK_DRY_RUN=false` | Any real TWT order. Confirm-gated unless T5 is also on | **Your hands after deploy.** Agents do not flip box env |
 | **T3** | On the **first live morning**, after the flag flip: `uv run python -m baskfy_api.seed twt --capital 2500000` and verify `tw_config_audit` **before any Confirm** | Plans on a box still at ₹0 | **Your hands after T2.** Do not raw-`UPDATE` |
+| **T5** | **Flipping `BASKFY_TWT_AUTO_EXECUTE=true` on the box is yours** (TW17, your instruction in session 21 Sep 2026). Set it in `/opt/baskfy/.env.staging.compose` and `up -d twt-auto desk`. It needs T2 as well (`BASKFY_TWT_EXECUTION_ENABLED=true` **in the desk container** and `BASKFY_DESK_DRY_RUN=false`) — check with `docker compose exec twt-auto env \| grep -E 'TWT_\|DRY_RUN'`, because the desk block of `compose.prod.yml` names the AUTO flag but reads `BASKFY_TWT_EXECUTION_ENABLED` only through `env_file: .env.staging` | The 09:15 unattended confirm of the MORNING plan. Off = every TWT line waits for your click, exactly as before | **Your hand only.** In-repo default stays false; the service is deployed idle |
 | **T4** | Nothing from you — **expect** `/twt` to look thinner than Chartink Mon–Thu | Nothing. It is not a bug | Open, not a blocker |
 | **T4-b** | Chartink 12 Sep 68-name export | Was only the 68×68 reconciliation | **✅ CLOSED 13 Sep 2026** — skip the 68×68; 11 Sep 82.5 % recall is enough |
 
@@ -1891,7 +1892,8 @@ The `/brokers` page still logs in by hand. Sequence: `FIRST-LIVE-MORNING.md` §3
 
 **Answered 13 Sep 2026.** Mode: flip `BASKFY_TWT_EXECUTION_ENABLED=true` in **both** box env
 files **and** keep/confirm `BASKFY_DESK_DRY_RUN=false` (real CNC/GTT; the weekly book is already
-live with swing). Confirm-gated; **no `BASKFY_TWT_AUTO_*`**.
+live with swing). Confirm-gated; **no `BASKFY_TWT_AUTO_*`** — true when written; since 21 Sep 2026
+see T5 / TW17.
 
 **When:** after TW15.1 is **committed and deployed**, then **you** flip. Agents do not flip box
 env, do not SSH, do not deploy.
@@ -1916,8 +1918,10 @@ AWS_PROFILE=baskfy-poc bash tools/deploy/box.sh 'cd /opt/baskfy && sudo docker c
 Then `curl -fsS $DESK/status` and confirm `"dry_run": false`. Sequence with checks:
 `docs/twt/FIRST-LIVE-MORNING.md` §3.4.
 
-**Do not set** `BASKFY_TWT_AUTO_EXECUTE` or any `BASKFY_TWT_AUTO_*` — those names must not
-exist. Non-negotiable 1's one named exception is the swing sleeve's.
+~~**Do not set** `BASKFY_TWT_AUTO_EXECUTE` or any `BASKFY_TWT_AUTO_*` — those names must not
+exist.~~ **Superseded 21 Sep 2026 (TW17):** you asked for TWT auto-execute in session, so
+`BASKFY_TWT_AUTO_EXECUTE` now exists (desk only, default false) as non-negotiable 1's second named
+exception. Setting it true is **T5**, and yours alone.
 
 **Deploy shape (docs only — no agent deploys this):** api / worker / desk images. **Hold web**
 until UI polish is green. DECISIONS-TW **TW15.2**.
@@ -2186,5 +2190,6 @@ before acting on it. Until then TW16 stands as a one-time instruction, not a sta
 
 **Two things to know about what is now live.** Orders still require you to confirm a plan
 (`POST /twt/execute`, `confirm=true`, plan under thirty minutes old) — the flag does not make the
-sleeve trade on its own, and there is no auto-execute for this sleeve. And the first ten entries
+sleeve trade on its own, and there is no auto-execute for this sleeve *(true on 18 Sep; since 21 Sep
+there is one, off by default — T5 / TW17)*. And the first ten entries
 are half-sized automatically (`first_live_entries_left` = 10).

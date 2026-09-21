@@ -91,6 +91,17 @@ def install(*, metrics_port: int | None = None) -> dict[str, bool]:
             _metrics.update(
                 {
                     **swing_metrics(Counter, Gauge, Histogram),
+                    # TW17 (Maulik, in session, 21 Sep 2026): the TWT morning auto-execute.
+                    "twt_auto_execute": Counter(
+                        "desk_twt_auto_execute_total",
+                        "TWT lines the morning auto-execute sent, by outcome",
+                        ["outcome"],
+                    ),
+                    "twt_auto_runs": Counter(
+                        "desk_twt_auto_runs_total",
+                        "TWT morning auto-execute runs, by how they ended",
+                        ["outcome"],
+                    ),
                     "plans": Counter("desk_plans_built_total", "Plans built", ["source"]),
                     "orders": Counter(
                         "desk_orders_total", "Orders leaving the gateway", ["action", "outcome"]

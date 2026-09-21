@@ -2636,3 +2636,63 @@ was made.
 `docker compose --env-file .env.staging.compose -f compose.prod.yml up -d api worker beat`.
 Capital returns to zero with `seed twt --capital 0`, which the audit table records like any other
 change. Neither reversal cancels anything already placed.
+
+## TW17 — TWT gains an auto-execute flag: the desk confirms the MORNING plan at the open, by Maulik's instruction in session (21 Sep 2026) ⚠ UNREVIEWED
+
+**What he said, verbatim, 21 Sep 2026:** *"TWT has no auto-execute flag - this should be implemented
+auto execute"*.
+
+**Context.** Until this instruction every layer said the opposite, in capitals: `app/config.py` and
+`.env.example` ("THERE IS NO BASKFY_TWT_AUTO_EXECUTE AND THERE WILL NOT BE ONE"), `02` Track B and
+Track C §3, TW15.1, TW16, `NEEDS-MAULIK.md` T2, `compose.prod.yml`, and TW10's safety property
+asserted the absence. That was the decision until its owner changed it. The change makes TWT the
+**second** named exception to the desk's first non-negotiable, after the swing sleeve's (SW25/SW26).
+Per the root `CLAUDE.md` rule ("when the code and a doc disagree, the decision wins"), the statements
+and the tests that asserted the old decision were rewritten to assert this one, citing this entry.
+
+**The choice taken.**
+1. **A third flag, `BASKFY_TWT_AUTO_EXECUTE`, default `false`, desk-only.** Read once, in
+   `kite-momentum-rebalancer/app/config.py`. A real unattended order needs all three of
+   `DRY_RUN=false`, `BASKFY_TWT_EXECUTION_ENABLED=true` and this (`app.twt_auto.auto_execute_enabled`)
+   — the swing sleeve's shape exactly. The API and the worker have no such setting, the web app
+   still has no execute route, and VBT still has no auto-execute.
+2. **A runner, `python -m app.twt_auto`, run once a weekday at 09:15:10 IST** by the `twt-auto`
+   compose service (`<<: *desk`, command `twt-auto-loop` → `scripts/twt_auto_loop.py`). A container
+   that starts inside 09:15–09:35 runs at once; outside it, the next weekday.
+3. **It acts on today's MORNING plan only** (built by Beat's `twt-morning` at 09:05, expiring 09:35).
+   It never builds or edits a plan. Refused loudly, sending nothing: no plan, an EVENING plan, a plan
+   not built today, an expired plan (which is also what a halt produces), a weekend, before 09:15 or
+   after 15:30, a day the `trading_day` calendar marks closed, and no Kite session after ten minutes
+   of retrying every thirty seconds.
+4. **Every `PROPOSED` executable line goes through the same `twt_execute.execute_line` the button
+   reaches**, with `confirm="true"`, the plan's own `plan_id`, `twt_desk.twt_gateway()` and
+   `twt_desk.last_price()`. So the three-entries-a-session cap, `ALREADY_HELD`, half size for the
+   first ten live entries, the halt, the thirty-minute expiry, `client_id` idempotency, every
+   gateway guard and the GTT armed in the same request as the fill all apply unchanged.
+5. **Order: the plan's own** — `ARM_GTT`, then `RAISE_GTT_STOP`, then `BUY_AT_OPEN`, alphabetical
+   within a kind (`LINE_ORDER`, as `assemble` and the page sort them). Stops first because they
+   protect shares already held and spend none of the session's three entries.
+6. **Fail soft per line.** A line that raises is logged, counted (`desk_twt_auto_execute_total`),
+   and left confirmable by hand; the next line still goes. One summary line ends each run.
+
+**Rejected alternatives.**
+* *A Beat task in the worker.* The worker image does not contain the desk tree or its gateway, and
+  putting an order path on Beat is what TW11 refused for the sweep. The desk's own container, as
+  `swing-monitor` and `desk-daily` already are, keeps order flow inside the desk.
+* *Folding it into `BASKFY_TWT_EXECUTION_ENABLED`.* Going live and going unattended are separate
+  decisions; with one flag, turning off unattended would also turn off the confirm button.
+* *Rebuilding the plan when the MORNING one is missing or expired.* A runner that builds its own
+  plan confirms something nobody could have read. A missed morning is a missed morning; the
+  evening plan and the page are unchanged.
+* *Sending the 15:15 naked-GTT sweep too.* Not asked for, and a widening; the sweep stays
+  `POST /twt/sweep` / `tools/twt/sweep.py`.
+
+**How to reverse.** Operationally: remove `BASKFY_TWT_AUTO_EXECUTE` from
+`/opt/baskfy/.env.staging.compose` (or set it `false`) and `up -d twt-auto` — the runner then exits
+0 each morning without reading a plan. In code: delete `app/twt_auto.py`, `scripts/twt_auto_loop.py`,
+`tests/test_twt_auto.py`, the `twt-auto` service and the `twt-auto-loop` heredoc, and the
+`TWT_AUTO_EXECUTE` line in `app/config.py`. Nothing already placed is cancelled by either.
+
+**Who may flip it.** Maulik, by his own hand, on the box (`NEEDS-MAULIK.md` § TWT, T5). An agent
+may not default it true, set it in any env file, widen what the runner sends, or add a third
+exception.

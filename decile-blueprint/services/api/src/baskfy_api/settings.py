@@ -413,9 +413,10 @@ class Settings(BaseSettings):
     # ``twt_nightly_enabled`` defaults **true**: detection moves no money, and a sleeve with no
     # history is a sleeve with no evidence.
     #
-    # There is no third flag. Non-negotiable 1's named exception is the *swing* sleeve's, by
-    # Maulik's own hand, and this run neither widens it nor adds a second one: no
-    # ``twt_auto_execute`` exists, and TW10 asserts that no setting of that shape can appear.
+    # There is no third flag *here*. TWT's auto-execute (TW17, Maulik, in session, 21 Sep 2026 —
+    # non-negotiable 1's second named exception) is the desk's ``BASKFY_TWT_AUTO_EXECUTE``,
+    # default false, read only by ``kite-momentum-rebalancer/app/config.py``. The API has no
+    # execute route for this sleeve and no ``twt_auto_execute``; TW10 asserts both.
     twt_execution_enabled: bool = False
     twt_nightly_enabled: bool = True
     #: ``tw_config.max_open_positions`` may not exceed this. ``SizingConfig.max_slots`` [10] is

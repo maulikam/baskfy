@@ -118,8 +118,9 @@ def test_the_calendar_module_calls_vbt_rather_than_copying_it() -> None:
 
 
 def test_no_auto_execute_setting_exists() -> None:
-    """``02`` Track C §3 — non-negotiable 1's named exception is the *swing* sleeve's, by Maulik's
-    own hand. An agent may not widen it, add a second one, or default a flag to true."""
+    """The engine is pure and knows nothing of execution. TWT's auto-execute (TW17, Maulik, in
+    session, 21 Sep 2026) is a desk flag, ``BASKFY_TWT_AUTO_EXECUTE``, default false — never a
+    setting of ``baskfy_core.twt``. An agent may not widen it or default it to true."""
     for path in modules():
         text = path.read_text(encoding="utf-8").upper()
         assert "AUTO_EXECUTE" not in text, path.name

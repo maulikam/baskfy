@@ -210,9 +210,10 @@ class TestItCannotReachAnOrder:
         ]
         assert offenders == [], f"the twt surface exposes {offenders}"
 
-    def test_no_twt_module_names_the_auto_execute_flag_that_does_not_exist(self) -> None:
-        """Non-negotiable #1's exception is the swing sleeve's alone, and `docs/twt/02` Track B
-        says in so many words that this sleeve has no equivalent and gains none."""
+    def test_no_twt_api_module_names_the_auto_execute_flag(self) -> None:
+        """TW17 (Maulik, in session, 21 Sep 2026) gave this sleeve an auto-execute flag, and it
+        is the **desk's**: ``BASKFY_TWT_AUTO_EXECUTE`` in ``kite-momentum-rebalancer``. The web
+        API stays read-only for TWT — no execute route, and no module here reads that flag."""
         for module in (twt_router, twt_scan, twt_service):
             source = inspect.getsource(module)
             assert "AUTO_EXECUTE" not in source.upper(), f"{module.__name__} names an auto-execute"

@@ -44,7 +44,7 @@ history; D3 is no longer the engineering blocker.
 
 ## The desk's seven non-negotiables (survive verbatim, forever)
 
-1. **Never auto-execute — with one named, flagged exception since 5 Sep 2026.** Orders fire only
+1. **Never auto-execute — with two named, flagged exceptions (5 Sep and 21 Sep 2026).** Orders fire only
    from `POST /execute` with `confirm=true` and the `plan_id` issued by `/analyze`; plans expire
    in 30 minutes. `DRY_RUN=true` must simulate end to end.
    ⚠️ **The exception, and it is Maulik's, not an agent's:** the swing sleeve's monitor confirms
@@ -52,8 +52,16 @@ history; D3 is no longer the engineering blocker.
    and since SW26 it may do so **any time between 09:15 and 15:30**, not just the opening 90
    minutes. Everything else about the path is unchanged — it goes through the same plan, the same
    gateway, the same guards, the same GTT stop, the same three-entries-a-session cap. The
-   *weekly* rebalancer has no such flag and never gains one. An agent may not widen this
-   exception, add a second one, or default the flag to true.
+   *weekly* rebalancer has no such flag and never gains one.
+   ⚠️ **The second exception, also Maulik's — "TWT has no auto-execute flag - this should be
+   implemented auto execute" (in session, 21 Sep 2026; `docs/twt/DECISIONS-TW.md` TW17):** the
+   desk's `twt-auto` service confirms the three-weeks-tight sleeve's MORNING plan at 09:15 when
+   `BASKFY_TWT_AUTO_EXECUTE=true` **and** `BASKFY_TWT_EXECUTION_ENABLED=true` **and**
+   `DRY_RUN=false`. The flag defaults false, exists in the desk only, and flipping it is Maulik's
+   hand. Each line goes through the same `execute_line`, plan expiry, gateway, guards, GTT stop,
+   three-entries-a-session cap and first-ten half size as a click; it never builds a plan and
+   refuses an expired or missing one. VBT has no such flag.
+   An agent may not widen either exception, add a third, or default either flag to true.
 2. Holdings quantity = `quantity` + `t1_quantity` + `collateral_quantity`.
 3. Pledged shares sell directly (Zerodha instant-sale); plan flags them as info only.
 4. Every buy gets a GTT stop the same session, vol-scaled 8–12% via `stop_from_vol()`.

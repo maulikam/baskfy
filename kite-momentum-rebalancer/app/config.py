@@ -209,12 +209,26 @@ VBT_GTT_LIMIT_FRACTION = float(os.getenv("BASKFY_VBT_GTT_LIMIT_FRACTION", "0.97"
 # docs/twt/02 §3 lists what must be true before it flips, and NONE of it is an agent's: a green
 # tree, the written runbook, Maulik's own flag flip and half size for the first ten live entries.
 #
-# THERE IS NO BASKFY_TWT_AUTO_EXECUTE AND THERE WILL NOT BE ONE. Non-negotiable 1's named
-# exception is the swing sleeve's, by Maulik's own hand (DECISIONS-SW SW25); TW10 asserts that no
-# setting of that shape exists anywhere in the tree. A TWT order exists because a person pressed
-# Confirm on an unexpired plan — the ratchet included, which is the line that would most like to
-# be a job and is not.
+# AUTO-EXECUTE (TW17) is a SEPARATE, third flag below — going live and going unattended are two
+# decisions, and either can be reversed without the other.
 TWT_EXECUTION_ENABLED = os.getenv("BASKFY_TWT_EXECUTION_ENABLED", "false").lower() == "true"
+# AUTO-EXECUTE for TWT (TW17): the desk confirms today's MORNING plan itself at the open.
+#
+# The SECOND named exception to the desk's first non-negotiable ("Never auto-execute"), the first
+# being SWING_AUTO_EXECUTE above. Maulik, in session, 21 Sep 2026, verbatim: "TWT has no
+# auto-execute flag - this should be implemented auto execute". Until then this block said there
+# was no such flag and never would be; that was the decision until its owner changed it.
+# `docs/twt/DECISIONS-TW.md` TW17 is the record, with how to reverse it.
+#
+# A real unattended TWT order needs ALL THREE: DRY_RUN off, TWT_EXECUTION_ENABLED on, and this
+# (`app.twt_auto.auto_execute_enabled`). Off by default, and flipping it on the box is Maulik's
+# hand alone — an agent may not default it true, widen it, or add a third exception.
+#
+# What it does NOT change: every line still goes through `twt_execute.execute_line` and the
+# sleeve's gateway, so the plan's 30-minute expiry, the 3-entries-a-session cap, half size for
+# the first ten live entries, the halt, client_id idempotency, every guard and the GTT stop in
+# the same request apply exactly as they do to a click. What is removed is the click.
+TWT_AUTO_EXECUTE = os.getenv("BASKFY_TWT_AUTO_EXECUTE", "false").lower() == "true"
 # The TWT stop band and the GTT cushion are NOT env knobs here: `04` §10.7 and §10.6 put both in
 # `baskfy_core.twt.config.ExitConfig` (0.5-30% and 0.97), and `app/twt_execute.py` reads them off
 # that config so the band the gateway is handed and the arithmetic that produced the trigger can

@@ -64,6 +64,10 @@ grep -q 'BASKFY_VBT_EXECUTION_ENABLED: "${BASKFY_VBT_EXECUTION_ENABLED:-false}"'
 # states it. A real assignment survives the strip and still fails.
 ! sed 's/^[[:space:]]*#.*$//' "$C" | grep -qiE 'VBT[_A-Z]*AUTO[_A-Z]*EXECUTE' \
   || fail "compose.prod.yml sets a VBT auto-execute flag — there is no such thing"
+# 3c. TW17 (Maulik, in session, 21 Sep 2026) — TWT's auto-execute exists, on the desk only, and
+# must be named-and-false in compose so the default on a fresh box is the rail.
+grep -q 'BASKFY_TWT_AUTO_EXECUTE: "${BASKFY_TWT_AUTO_EXECUTE:-false}"' "$C" \
+  || fail "BASKFY_TWT_AUTO_EXECUTE is not named-and-false in compose.prod.yml"
 
 # 4. Postgres and Redis must not be published to the host. On a box with a public EIP, 5432 is
 #    the most-scanned port on the internet.

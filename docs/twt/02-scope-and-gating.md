@@ -21,13 +21,18 @@ not understood it.**
 | Flag | Default | What it unlocks | Flip condition |
 |---|---|---|---|
 | `BASKFY_TWT_EXECUTION_ENABLED` | `false` | A confirmed TWT line may call `OrderGateway.place` / `place_gtt_stop` with `DRY_RUN=false`. With it false the desk's `/twt/execute` returns the simulated result and journals `simulated=true` **regardless of `DRY_RUN`** | §3 below, by Maulik's own hand, recorded in `NEEDS-MAULIK.md` § TWT |
+| `BASKFY_TWT_AUTO_EXECUTE` | `false` | **Desk only** (TW17, Maulik, in session, 21 Sep 2026). The desk's `twt-auto` service confirms today's MORNING plan itself at 09:15 IST, each `PROPOSED` line through the same `execute_line` and gateway as the button. Needs **all three**: `DRY_RUN=false`, `BASKFY_TWT_EXECUTION_ENABLED=true` and this. The API and worker have no such setting | Maulik's own hand on the box (`NEEDS-MAULIK.md` § TWT, T5). Never an agent's |
 | `BASKFY_TWT_NIGHTLY_ENABLED` | `true` | The nightly `compute_twt` step and the 21:00 IST retry actually detect. Default **true** because detection moves no money and a sleeve with no history is a sleeve with no evidence; set it false to silence the step without removing it | n/a — it is on |
 
-**There is no third flag, and specifically there is no auto-execute flag.** Non-negotiable 1's
-named exception is the *swing sleeve's*, by Maulik's own hand (`docs/swing/DECISIONS-SW.md`
-SW25/SW26). An agent may not widen it, add a second one, or default any flag to true. **A TWT
-order exists only because a human pressed Confirm on an unexpired plan**, and TW10 proves it with
-a property test rather than an assurance.
+**The auto-execute flag is new, and this paragraph was the stale half (21 Sep 2026).** It used to
+say there was no auto-execute flag and that a TWT order existed only because a person pressed
+Confirm. Maulik changed that in session on 21 Sep 2026 — *"TWT has no auto-execute flag - this should
+be implemented auto execute"* — and `DECISIONS-TW.md` **TW17** is the record. TWT is now the
+**second** named exception to non-negotiable 1, after the swing sleeve's (SW25/SW26). What still
+holds: a TWT order exists only on an **unexpired MORNING plan**, through `execute_line`, with every
+refusal of §3 below and `04` §§6, 10 in force; the flag defaults false; an agent may not default it
+true, widen it, or add a third exception. TW10's property test now asserts the flag is read in one
+place (the desk's `config.py`) and nowhere else.
 
 A flag is read once per process at startup by `baskfy_worker.settings` / `baskfy_api.settings` /
 the desk's `config.py`, and never from a form. Flags are **system-only** in `.env.example` (the M4
@@ -59,11 +64,15 @@ matters is a floor. (DECISIONS-TW **TW0.5**.)
    `product` other than `CNC`. The strategy is long-only and cash otherwise.
 2. **No leverage.** No MTF, no `variety="co"/"bo"`, no margin; exposure ≤ 100 % of the sleeve's
    own cash.
-3. **No auto-execution.** A signal is a row in `tw_signal_daily` and a line on a page. An order
-   requires `POST /twt/execute` with `confirm=true` and a `plan_id` issued in the last thirty
-   minutes. **No flag exists that changes this and none is added.** In particular the ratchet —
-   which will want to fire on ten lines a night, for months — is a **plan line a person confirms**,
-   never a background job that talks to the broker.
+3. **No auto-execution — except TW17's one flagged path (21 Sep 2026).** A signal is a row in
+   `tw_signal_daily` and a line on a page. An order requires `POST /twt/execute` with
+   `confirm=true` and a `plan_id` issued in the last thirty minutes — **or**, when
+   `BASKFY_TWT_AUTO_EXECUTE` and the two live flags are all on, the desk's `app.twt_auto` making that
+   same call against the 09:05 MORNING plan at 09:15 (Maulik, in session, 21 Sep 2026). The words
+   that followed here ("no flag exists that changes this and none is added") were true until then.
+   The ratchet's `RAISE_GTT_STOP` lines are in that MORNING plan, so with the flag on they are
+   confirmed by the runner too; the 15:15 naked-GTT sweep is **not** part of TW17 and stays a
+   person's command. With the flag off, every line is a plan line a person confirms.
 4. **No web-app orders.** `apps/web` gets no route under `/twt` that can reach the gateway. The
    `test_baskets_readonly.py` / `test_desk_readonly.py` / swing / VBT read-only pattern is
    extended to the new routers.

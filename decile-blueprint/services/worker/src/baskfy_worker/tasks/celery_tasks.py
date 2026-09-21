@@ -933,8 +933,10 @@ def twt_evening_task(trade_date: str | None = None) -> JsonObject:
     session's signals, the session's gate and the ``next_trigger`` the detector computed, and an
     evening that ran before the detector would plan against yesterday's tape.
 
-    Nothing here places an order. Every line it writes is ``PROPOSED`` until a person confirms it
-    on the desk (``docs/twt/02`` Track C §3), and there is no auto-execute flag for this sleeve.
+    Nothing here places an order. Every line it writes is ``PROPOSED`` until it is confirmed on
+    the desk — by a person, or, when ``BASKFY_TWT_AUTO_EXECUTE`` is on, by the desk's own
+    ``app.twt_auto`` against the 09:05 MORNING plan (TW17, Maulik, in session, 21 Sep 2026).
+    That flag is the desk's alone; this worker has no auto-execute setting and never confirms.
     """
     day = dt.date.fromisoformat(trade_date) if trade_date else dt.datetime.now(tz=IST).date()
     deps = build_pipeline_dependencies()

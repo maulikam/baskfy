@@ -5,7 +5,9 @@ what is NOT done**. A fresh session resumes from the first module not marked ✅
 
 **⚠️ 13 Sep 2026 — TW15.1 + TW15.2: floor ₹2 crore, seed ₹25 lakh, authorized go-live path.**
 Live floor `min_turnover_inr = 20 000 000`. Seeder writes `2_500_000`. Confirm-gated —
-**no `BASKFY_TWT_AUTO_*`**. Repo flag stays **false**.
+**no `BASKFY_TWT_AUTO_*`**. Repo flag stays **false**. *(21 Sep 2026, TW17: `BASKFY_TWT_AUTO_EXECUTE`
+now exists, desk only, default false — the `twt-auto` service confirms the MORNING plan at 09:15
+when all three flags are live. Flipping it is Maulik's, NEEDS-MAULIK T5.)*
 
 **Authorized sequence (TW15.2):** commit TW15.1 → Maulik reviews → deploy **api / worker /
 desk** (hold **web**) → **he** flips both TWT flags and confirms `BASKFY_DESK_DRY_RUN=false` →

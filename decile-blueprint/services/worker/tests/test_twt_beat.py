@@ -7,9 +7,10 @@ told a person to open the desk and read a plan that nothing was building.
 
 **The last test in this file is the important one.** The 15:15 sweep re-arms GTT stops, so it is
 order flow, and a Beat entry for it would be the desk placing orders on a timer. The root
-`CLAUDE.md`'s first non-negotiable allows exactly one named auto-execute exception and it is the
-swing sleeve's; an agent may not add a second. `test_the_sweep_is_not_on_a_timer` is what makes
-that a check rather than a comment.
+`CLAUDE.md`'s first non-negotiable names two auto-execute exceptions, both Maulik's — the swing
+sleeve's (SW25) and TWT's morning-plan confirm in the desk's `twt-auto` container (TW17, 21 Sep
+2026), which does not include the sweep — and an agent may not widen either or add another.
+`test_the_sweep_is_not_on_a_timer` is what makes that a check rather than a comment.
 """
 
 from __future__ import annotations
@@ -85,7 +86,8 @@ def test_the_sweep_is_not_on_a_timer() -> None:
     """**Non-negotiable #1, as a check.**
 
     The sweep re-arms GTT stops. Scheduling it would be the desk placing orders on a timer, which
-    is a second auto-execute exception, which an agent may not add. It stays `POST /twt/sweep` and
+    is an auto-execute exception nobody named (TW17's covers the morning plan only), which an
+    agent may not add. It stays `POST /twt/sweep` and
     `tools/twt/sweep.py` — a person's command, which is what the runbook §9 already says it is.
 
     Asserted two ways because either alone is weak: no TWT entry may be *named* for a sweep, and

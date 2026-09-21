@@ -80,9 +80,10 @@ so the morning plan is arithmetic that has already been done.
 
 It is not a new order path (law 2 stands; the web app gets no order route; the desk console is the
 only place a TWT line becomes an order). It is not shorting, not leverage, not intraday, not F&O.
-**It is not auto-execution:** non-negotiable 1's one named exception belongs to the *swing* sleeve
-by Maulik's own hand, and this run neither widens it nor adds a second — no `BASKFY_TWT_AUTO_*`
-flag exists and none is created. It is not a promise that the method works: `05`'s pages carry
+**It was not auto-execution when this was written; since 21 Sep 2026 it can be, by flag:** Maulik
+asked in session for TWT auto-execute, and `BASKFY_TWT_AUTO_EXECUTE` (desk only, default false) is
+now non-negotiable 1's second named exception — the desk confirms the 09:05 MORNING plan at 09:15
+through the same `execute_line` and gateway as the button (`DECISIONS-TW.md` TW17). It is not a promise that the method works: `05`'s pages carry
 STRATEGY §5's caveats verbatim, and 164 trades in nine years with ten of them carrying half the
 profit is a wide confidence interval, not a fact.
 

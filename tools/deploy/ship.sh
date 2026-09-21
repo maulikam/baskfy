@@ -61,11 +61,11 @@ echo "   $OUT"
 # It used to die unless the box read `twt_execution_true=0`. Maulik funded the sleeve (₹25 lakh)
 # and instructed the flip in session that morning — `docs/twt/DECISIONS-TW.md` TW16. Leaving the
 # assertion would have killed every deploy from then on, and the honest fix is to check what this
-# script is actually for (the three images are pinned and the eleven services are up) and to
+# script is actually for (the three images are pinned and the twelve services are up — twt-auto joined 22 Sep 2026) and to
 # PRINT the sleeve's state rather than demand one value of it. A flag that changed without a
 # decision is still visible — it is on the line below, every deploy.
 case "$OUT" in
-  *"pins=3"*"running=11"*) ;;
+  *"pins=3"*"running=12"*) ;;
   *) die "post-deploy check failed: $OUT" ;;
 esac
 case "$OUT" in
@@ -73,5 +73,5 @@ case "$OUT" in
   *) TWT_STATE="TWT execution ON — confirmed lines reach the broker (TW16)" ;;
 esac
 
-printf '\n\033[32m✓ DEPLOYED %s\033[0m — all three images pinned, eleven services up (desk-daily joined 13 Sep 2026), swing flags unmoved; %s.\n' "$TAG" "$TWT_STATE"
+printf '\n\033[32m✓ DEPLOYED %s\033[0m — all three images pinned, twelve services up (desk-daily joined 13 Sep 2026, twt-auto 22 Sep 2026), swing flags unmoved; %s.\n' "$TAG" "$TWT_STATE"
 echo "  rollback: the tag lines in /opt/baskfy/.env.staging.compose back to the previous sha, then 'up -d'."

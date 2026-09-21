@@ -413,6 +413,14 @@ services:
       # line, and `tests/test_vbt_safety.py` asserts across both trees that no setting of that
       # shape exists.
       BASKFY_VBT_EXECUTION_ENABLED: "${BASKFY_VBT_EXECUTION_ENABLED:-false}"
+      # TW16 / TW17 follow-up (Maulik, in session, 21 Sep 2026: "fix the execution flag in compose
+      # too"). The desk is the only process that reads BASKFY_TWT_EXECUTION_ENABLED — it is what
+      # `/twt/execute` and `twt-auto` consult before reaching a broker — and until today it was
+      # named only in the `x-python-image` block above (api, worker, beat), never here. So the
+      # value Maulik set in `.env.staging.compose` on 18 Sep never reached this container, and
+      # every confirmed TWT line journalled `simulated=true`. Same interpolation as the anchor's
+      # line, so both read the one value `--env-file .env.staging.compose` supplies; default false.
+      BASKFY_TWT_EXECUTION_ENABLED: "${BASKFY_TWT_EXECUTION_ENABLED:-false}"
       # TW17 — AUTO-EXECUTE for the three-weeks-tight sleeve (Maulik, in session, 21 Sep 2026):
       # the second named exception to non-negotiable 1, after SW25 above. `twt-auto` below runs
       # `app.twt_auto` at 09:15 on a weekday and confirms today's MORNING plan through the same

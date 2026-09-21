@@ -1,5 +1,9 @@
 # OC run — live status
 
+> **Superseded 22 Sep 2026 — the OC run is absorbed into `docs/options/` as sleeve O1 and will not
+> start.** Status for O1 now lives in [`docs/options/STATUS.md`](../options/STATUS.md) (modules
+> OP0–OP15; the OC → OP map is in `docs/options/06-module-plan.md`). This page is kept as history.
+
 The status page for the condor run. Updated at the end of every module, loud about what is NOT
 done. A fresh session resumes from the first module not marked ✅.
 

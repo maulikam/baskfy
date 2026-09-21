@@ -1,5 +1,16 @@
 # The condor run (OC) — one hedged expiry-day iron condor, inside Baskfy
 
+> **Absorbed into [`docs/options/`](../options/) as sleeve O1 (22 Sep 2026). Do not start the OC run.**
+> Maulik asked in session on 22 Sep 2026 for NIFTY index options on **weekly and monthly** expiries,
+> in three sleeves (hedged premium selling, directional buying, expiry-day setups), scans + paper
+> first. This condor becomes **O1-M**, with a separately-configured weekly variant **O1-W**. This
+> folder's `01`, `04` and `07` remain authoritative for O1's method, numbers and data tiers; its
+> `02` Track C §4 ("No weekly expiries") and `DECISIONS-OC` PACK.3 are **the stale half** —
+> superseded by his instruction (`docs/options/DECISIONS-OP.md` PACK.1) and left here unedited as
+> history. `03`, `05`, `06`, `KICKOFF-PROMPT.md` and `STATUS.md` are superseded by the options pack
+> (`docs/options/README.md` has the section-by-section map). BANKNIFTY is out of scope in v1
+> (PACK.12), not dark.
+
 This folder commissions the next autonomous run: making Baskfy **plan, gate, size, confirm and
 manage one range-filtered, fully hedged NIFTY monthly-expiry iron condor** — an intraday,
 defined-risk, option-selling trade — through Kite, under the charter that already governs this

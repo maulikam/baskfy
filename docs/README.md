@@ -22,8 +22,11 @@ rules as of today) and the AWS deployment design.
 Runs commissioned since the merge, each a folder with its own read order, scope law, module plan
 and status page: [`smallcase/`](smallcase/) (the product surface), [`swing/`](swing/) (Kullamägi's
 setups, SW0–SW14, code complete), [`go-rewrite/`](go-rewrite/) (the strangler, pre-G0),
-[`condor/`](condor/) (one hedged expiry-day NIFTY iron condor, OC0–OC12, **not started** — the
-kickoff prompt is [`condor/KICKOFF-PROMPT.md`](condor/KICKOFF-PROMPT.md)), and
+[`condor/`](condor/) (one hedged expiry-day NIFTY iron condor, OC0–OC12, never started —
+**absorbed 22 Sep 2026 into [`options/`](options/) as sleeve O1**), [`options/`](options/) (NIFTY
+index options on weekly and monthly expiries — O1 hedged premium selling, O2 directional buying, O3
+expiry-day setups — scans + paper, OP0–OP15, **not started**; the kickoff prompt is
+[`options/KICKOFF-PROMPT.md`](options/KICKOFF-PROMPT.md)), and
 [`vbt/`](vbt/) (VBT-1, the volume-breakout sleeve, VB0–VB10 — the strategy is
 [`research/volume-breakout/STRATEGY.md`](../research/volume-breakout/STRATEGY.md) and the pack is
 VB0-green).

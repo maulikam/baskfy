@@ -187,6 +187,10 @@ credit, lots, cost test and margin, into `op_plan`.
 - **AC:** the fixture morning yields the expected plan to the rupee; wide short-put spread →
   `REJECTED_COST`; only in-band call inside the OR → `REJECTED_NO_SHORT_CALL`; O1-W on the monthly
   Tuesday → no session; slot held by O3 → `REJECTED_SLOT_TAKEN`; idempotent per date.
+  *(OP6, 22 Sep 2026: "wide short-put spread → `REJECTED_COST`" is the stale half — under `04` a
+  spread past `max_spread_pct` is `REJECTED_NO_SHORT_PUT` and one inside it is already in the
+  credit, and the credit floor keeps O1's cost share near 0.16; the AC is asserted as scoped in
+  `DECISIONS-OP` OP6.1.)*
 
 ### OP7 — O2 plan builder
 

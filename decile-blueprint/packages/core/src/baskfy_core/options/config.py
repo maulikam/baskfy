@@ -33,6 +33,12 @@ import datetime as dt
 from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import StrEnum
+from typing import Final
+
+#: The day every rate of :class:`CostRates` was last checked against its primary source (OP0,
+#: ``DECISIONS-OP`` OP0.1; pinned by OP6, OP6.3). ``costs.rates_review_due`` warns once
+#: ``review_after_days`` have passed; re-verifying the rates moves this date and nothing else.
+OPTIONS_COST_RATES_REVIEWED_ON: Final = dt.date(2026, 9, 22)
 
 
 class Sleeve(StrEnum):
@@ -275,7 +281,7 @@ class CostRates:
     auto_squareoff_inr: Decimal = Decimal("50")
     synthetic_half_spread_pct: Decimal = Decimal("1.5")
     synthetic_half_spread_min_inr: Decimal = Decimal("0.10")
-    reviewed_on: dt.date = dt.date(2026, 9, 22)
+    reviewed_on: dt.date = OPTIONS_COST_RATES_REVIEWED_ON
     review_after_days: int = 90
 
 

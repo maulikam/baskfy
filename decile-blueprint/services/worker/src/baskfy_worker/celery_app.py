@@ -160,6 +160,15 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         "schedule": crontab(minute="*", hour="9-15", day_of_week="mon-fri"),
         "options": {"queue": QUEUE_DEFAULT, "expires": 55, "countdown": 20},
     },
+    # OP6 (docs/options/06 OP6): the O1 plan builder — each minute 10:00-10:16 it lapses what
+    # expired and decides O1-M/O1-W once (idempotent per date). 40 s after the minute so the 09:59
+    # bar and the 10:00 chain are stored. Dark unless BASKFY_OPTIONS_MONITOR_ENABLED ("raises
+    # plans", 02) and BASKFY_OPTIONS_COLLECT_ENABLED are true. Plans are proposals: nothing is sent.
+    "options-plan-o1": {
+        "task": "baskfy.options.plan_o1",
+        "schedule": crontab(minute="0-16", hour="10", day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_DEFAULT, "expires": 55, "countdown": 40},
+    },
     # The same session's bars once more after the close, correcting any minute read while forming.
     "options-index-bars-eod": {
         "task": "baskfy.options.index_bars_eod",

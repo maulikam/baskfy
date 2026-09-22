@@ -3,9 +3,9 @@
 The status page for the options run. Updated at the end of every module, loud about what is NOT
 done. A fresh session resumes from the first module not marked ✅.
 
-**Run state: OP0 🟡, OP1 ✅, OP2 ✅, OP3 🟡, OP4 ✅, OP5 ✅ (22 Sep 2026); OP6 not started.** Pack written 22 Sep 2026 on branch
+**Run state: OP0 🟡, OP1 ✅, OP2 ✅, OP3 🟡, OP4 ✅, OP5 ✅, OP6 ✅ (22 Sep 2026); OP7 not started.** Pack written 22 Sep 2026 on branch
 `developer`, absorbing the never-started condor pack (`docs/condor/`) as sleeve O1. OP0-OP5 were each run alone, by instruction ("execute only OP<N>, then stop"); the next session
-resumes at OP6 (and the orchestrator feeds back OP3's box probe — §"What is NOT done" under OP3).
+resumes at OP7 (and the orchestrator feeds back OP3's box probe — §"What is NOT done" under OP3).
 
 ## Module ledger
 
@@ -17,7 +17,7 @@ resumes at OP6 (and the orchestrator feeds back OP3's box probe — §"What is N
 | OP3 — Provider reads, index minute bars, collector, limiter | 🟡 | Option quotes with depth/OI, minute bars, basket margins; collector + index-bar tasks; per-family shared limiter proven on Redis. **Probe run on the box 22 Sep 2026 after deploying `1c9a3a5`: five of six reads answered** (evidence `docs/options/evidence/op3-probe-2026-09-22.json`); (b) waits for an expiry to pass. **Collector and scan flags ON on the box since 22 Sep 21:4x** (OP3.11). Backfill not run; live limiter share not measured |
 | OP4 — Sleeve signal cores and the scans | ✅ | `bars`, `structures`, `condor`, `directional`, `expiry_setups`, `scan` (pure; each sleeve's day function, `build`, exits); task `baskfy.options.scan` behind the scan **and** collect flags (both false), DB-only, idempotent per minute; 167 new tests; no live data yet (collector off) |
 | OP5 — API and the web Options tab (the scans ship) | ✅ | `routers/options.py` (10 paths, 2 money-free mutations, everything else 405), `/options`, `/options/journal`, `/options/calendar`, `/me/options`; Options appended after Tight; honest empty state names the switch; SEBI caveat + "Scan · paper only" on every page; 30 API + 34 web tests; e2e spec written, not run |
-| OP6 — O1 plan builder (monthly + weekly), costs pinned | ⬜ | |
+| OP6 — O1 plan builder (monthly + weekly), costs pinned | ✅ | `baskfy_core.options.plan` (pure: role → gate → chain → `condor.build` → costs → sizing → margin ceiling → `plan_id`, 10:15 expiry, legs wings-first) + `baskfy_worker.options.plan` (`op_session`/`op_plan`/`op_leg`, two margin-calculator reads, lapse, `OPTIONS_PLAN`); task + Beat `options-plan-o1` **dark** behind the monitor flag; 50 new tests |
 | OP7 — O2 plan builder | ⬜ | |
 | OP8 — O3 plan builder | ⬜ | |
 | OP9 — Desk process `options_monitor` | ⬜ | |
@@ -635,9 +635,94 @@ type-check/tests, web lint + typecheck and web unit tests: PASS.
 Nothing in code. OP6's plan builder writes `op_plan`/`op_session`, which `/options/today`'s
 `PLANNED` state and `/options/sessions` already read.
 
+## OP6 — O1 plan builder (monthly and weekly), costs pinned
+
+**✅, 22 Sep 2026.** Decisions `DECISIONS-OP.md` OP6.1–OP6.7. No order is placed anywhere: a plan is
+`ISSUED`, lapses at `expires_at`, and waits for OP10's confirm. Every money flag stays false.
+
+### What exists
+
+* **`packages/core/src/baskfy_core/options/plan.py`** (pure) — `decide_o1(sleeve, market, context,
+  snapshot, now)`: role (`NO_SESSION` off an O1 day; `SKIPPED/EVENT_DAY` on an event expiry) →
+  clock (`NOT_READY` before 10:00 or while the window/snapshot is not stored; `WINDOW_CLOSED` from
+  10:15) → `condor.observe` → `condor.build` over the scan's decision snapshot (`scan.priced_view`,
+  renamed from `_view`) → `STALE_CHAIN` → legs in `entry_sequence` order with master symbols and
+  depth → `plan_costs` (`04` §6.1 itemised over 8 orders). `finalize_o1(decision, margin, …)`:
+  never-naked asserted at every prefix, `sizing.margin_check` (hedged + transient), deterministic
+  `plan_id`, `expires_at = min(issued + 30 min, 10:15)`, or `REJECTED_MARGIN`.
+* **`config.OPTIONS_COST_RATES_REVIEWED_ON`** = 2026-09-22 (`CostRates.reviewed_on`'s default; OP6.3).
+* **`services/worker/src/baskfy_worker/options/plan.py`** — `build_o1_plan` (idempotent per date,
+  race-safe insert), `lapse_expired`, `plan_o1_minute`, `plan_gate_free`, `kite_margin_reader`
+  (`/margins/basket`, `consider_positions=False`), `plan_alert`.
+* **Task `baskfy.options.plan_o1`**, Beat `options-plan-o1` (10:00–10:16 each minute, countdown 40 s,
+  expires 55 s), gated on `BASKFY_OPTIONS_MONITOR_ENABLED` **and** `BASKFY_OPTIONS_COLLECT_ENABLED`
+  (monitor is false on the box → dark); CLI `options_cli plan [--at ISO]`.
+* **`AlertName.OPTIONS_PLAN`** + runbook `decile-blueprint/docs/runbooks/11-options-plan.md`.
+
+### Worked example (the fixture morning — quiet monthly, Tue 27 Oct 2026, 10:00:40)
+
+| seq | leg | symbol | bid / ask | limit |
+|---|---|---|---|---|
+| 1 | BUY 65 | NIFTY26102724700PE | 5.30 / 5.40 | 5.45 |
+| 2 | BUY 65 | NIFTY26102725300CE | 5.65 / 5.80 | 5.85 |
+| 3 | SELL 65 | NIFTY26102724850PE | 23.80 / 24.05 | 23.75 |
+| 4 | SELL 65 | NIFTY26102725150CE | 27.05 / 27.35 | 27.00 |
+
+Credit 39.65 pts = ₹2,577.25; 1 lot (paper, capital ₹0); max loss ₹7,172.75; risk/lot = R ₹8,172.75;
+profit target / stop ₹1,288.63 each; costs ₹198.33 (brokerage 160.00, STT 6.01, NSE 2.87, SEBI 0.01,
+IPFT 0.00, stamp 0.12, GST 29.32); cost share 0.1539; margin ₹1,30,903.05 (the probe's shape) with
+`MARGIN_POOL_UNSET`; expires 10:15.
+
+### AC → test
+
+| `06` OP6 AC | Test |
+|---|---|
+| fixture morning → the plan to the rupee | `packages/core/tests/test_options_plan.py::TestTheFixtureMorning` (plan, costs by hand, scan == plan, never naked, plan_id, expiry); `services/worker/tests/test_options_plan_task.py::…test_the_fixture_morning_writes_one_plan_to_the_rupee` (rows on `baskfy_test`) |
+| wide short-put spread → `REJECTED_COST` | **scoped** (OP6.1): `TestTheWideShortPut` (→ `REJECTED_NO_SHORT_PUT` / credit only), `TestTheCostTest` (`REJECTED_COST` at C 25.35 with floor 0.10; dormant at the default floor) |
+| only in-band call inside the OR → `REJECTED_NO_SHORT_CALL` | `TestTheShortCallInsideTheRange` (a 25,150 spike, gate passes) |
+| O1-W on the monthly Tuesday → no session | `TestWhichDaysHaveASession`, `…test_o1w_on_the_monthly_writes_nothing` |
+| slot held by O3 → `REJECTED_SLOT_TAKEN` | `TestTheSlotAndThePause`, `…test_a_slot_held_by_o3_skips_with_the_code` |
+| idempotent per date | `…test_idempotent_per_date` (same `plan_id`, no second margin read, no second alert) |
+| costs pinned; `OPTIONS_COST_RATES_REVIEWED_ON` | `TestTheRatesArePinned` |
+| `OPTIONS_PLAN` rendered in Mailpit | `…test_the_alert_renders_through_the_mail_transport` (real `Mailer`, recording transport — no Mailpit container ran) |
+
+### Tests (new)
+
+| File | Tests |
+|---|---|
+| `packages/core/tests/test_options_plan.py` | 33 |
+| `services/worker/tests/test_options_plan_task.py` (6 db-marked on `baskfy_test`) | 17 |
+| **Total** | **50** |
+
+**`tools/ci-local.sh` (one full run, alone, 22-23 Sep 2026): 16 passed, 1 failed, 3 skipped** (the
+same 3 web skips as OP1-OP5). The one failure is *Tests, with per-package coverage gates* — both
+suites ran and the failures are exactly the **three pre-existing non-options** ones OP1-OP5 recorded
+(`test_api_admin.py::…test_an_override_changes_the_effective_entitlements`, hard-coded expiry; and
+the two `packages/providers` Kite-health tests). No options test failed; nothing was weakened. Desk
+tests, Python lint + mypy, query plans, reconciliation, perf budgets, Prometheus rules, client and
+web lint/tests: PASS. Targeted before that: `test_options_plan.py` 33, `test_options_plan_task.py`
+17 (6 on `baskfy_test`), and the whole `test_options_*` + `test_ops_and_alerts` set green.
+
+### What is NOT done
+
+* **No plan has been built from a live chain.** The Beat entry is dark (monitor flag false on the
+  box); nothing was deployed or pushed.
+* **Finding:** on expiry day the delta band 0.20–0.25 over 50-point strikes is often empty (the
+  fixture sweep across flat/skewed vols 14–39 % left more than half the chains with no in-band
+  short beyond the range) — O1 will frequently skip `REJECTED_NO_SHORT_CALL/PUT`. Not changed; a
+  Tier-1/3 question for OP12.
+* The cost test is dormant for O1 at the default credit floor (OP6.1).
+* The desk does not read `op_plan` yet (OP9/OP10); `/options` shows `PLANNED` from the session.
+* Mutation harness does not cover `plan.py` (OP14).
+
+### What blocks OP7
+
+Nothing in code. O2's builder can follow the same two-phase shape (`decide` → `finalize`) and reuse
+`plan_costs`, `plan_legs`, `lapse_expired` and the alert.
+
 ## What is NOT done
 
-Everything after OP5. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
+Everything after OP6. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
 OP3 does them first); the two full-suite baseline runs (OP0.9); the gateway gap of OP0.6 is **fixed in OP2** (OP2.1); the
 `/ops` side door of OP0.5 is **recorded, not fixed** (OP13). Every money flag is false and stays false. The paper periods begin only after OP15, and
 the longest (O1-M) takes about six months after that.

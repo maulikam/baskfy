@@ -136,6 +136,27 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         "schedule": crontab(hour=19, minute=30, day_of_week="mon-fri"),
         "options": {"queue": QUEUE_DEFAULT},
     },
+    # OP3 (docs/options/03 §4-§5): the forward dataset. Every minute 09:00-15:59 on weekdays; the
+    # tasks themselves refuse — before any Kite call — unless BASKFY_OPTIONS_COLLECT_ENABLED is true
+    # (default false), the clock is inside 09:15-15:30, the NSE calendar names a trading day and a
+    # Kite session exists. Together: one quote() and two historical_data() calls a minute, on the
+    # box's shared per-family clocks (docs/options/STATUS.md OP3 has the arithmetic). No money.
+    "options-collect-chain": {
+        "task": "baskfy.options.collect_chain",
+        "schedule": crontab(minute="*", hour="9-15", day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_DEFAULT, "expires": 55},
+    },
+    "options-index-bars": {
+        "task": "baskfy.options.index_bars",
+        "schedule": crontab(minute="*", hour="9-15", day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_DEFAULT, "expires": 55},
+    },
+    # The same session's bars once more after the close, correcting any minute read while forming.
+    "options-index-bars-eod": {
+        "task": "baskfy.options.index_bars_eod",
+        "schedule": crontab(hour=15, minute=45, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_DEFAULT},
+    },
     "bhavcopy-eod": {
         "task": "baskfy.pipeline.bhavcopy_ingest",
         "schedule": crontab(hour=18, minute=15, day_of_week="mon-fri"),

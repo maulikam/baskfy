@@ -132,6 +132,9 @@ settings boundary intact.
   fit inside the 3 req/s budget with headroom; numbers in STATUS. If they do, the run sets the
   **default** of `BASKFY_OPTIONS_COLLECT_ENABLED` and `BASKFY_OPTIONS_SCAN_ENABLED` to true
   (PACK.11 — operational, moves no money) and records it.
+  *(OP3, 22 Sep 2026: this sentence is the stale half for OP3 — by the orchestrator's instruction the
+  collector shipped with its flag **default false**, and enabling it on the box after the live probe
+  and the limiter proof is the orchestrator's call, not the module's; `DECISIONS-OP` OP3.2.)*
 - **AC:** the fake client's bars and quotes round-trip idempotently; a quote batch never exceeds
   500 symbols or the limiter (test); the collector makes no call on a non-trading day; the Tier-1
   backfill runs on the dev stack for at least one full year and STATUS states the full backfill's

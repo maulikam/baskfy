@@ -45,6 +45,35 @@ KITE_READ_CLOCK_KEY: Final = "baskfy:ratelimit:kite:read"
 #: between this rate and the ceiling is the headroom a login-time read finds free.
 KITE_BULK_CLOCK_KEY: Final = "baskfy:ratelimit:kite:bulk"
 
+#: Kite's **per-endpoint** caps, as departure clocks under the same prefix the desk uses
+#: (`kite-momentum-rebalancer/app/core/kite_limits.py`, `SHARED_KEY_PREFIX` + family). The desk's
+#: swing monitor and page reads take ``read`` then the family; the options collector (OP3) takes
+#: the same two keys in the same order, so the box holds one 1 req/s quote clock and one 3 req/s
+#: historical clock, not one per container. The rates are the desk's `RATE_FOR_FAMILY`.
+KITE_CLOCK_PREFIX: Final = "baskfy:ratelimit:kite"
+
+
+class KiteFamily(StrEnum):
+    """Kite's endpoint families, each with its own published cap (Kite Connect docs)."""
+
+    QUOTE = "quote"
+    HISTORICAL = "historical"
+    GENERAL = "general"
+
+
+#: Per-family rates, identical to the desk's `RATE_FOR_FAMILY` (a test holds the two equal).
+KITE_FAMILY_RATE_PER_SECOND: Final[dict[KiteFamily, float]] = {
+    KiteFamily.QUOTE: 1.0,
+    KiteFamily.HISTORICAL: 3.0,
+    KiteFamily.GENERAL: 9.0,
+}
+
+
+def kite_family_key(family: KiteFamily) -> str:
+    """``baskfy:ratelimit:kite:<family>`` — the desk's key for the same family."""
+    return f"{KITE_CLOCK_PREFIX}:{family.value}"
+
+
 #: How long an interactive caller waits for a slot before giving up. Generous, because with the
 #: bulk lane in place the wait is a fraction of a second and a real wait this long means the
 #: ceiling is genuinely oversubscribed — at which point failing is better than hanging a page.
@@ -148,6 +177,73 @@ def build_kite_read_limiter(
         # the headroom, so say so rather than pretending the lane exists.
         return ceiling
     return LayeredCallSpacer((lane_clock, ceiling))
+
+
+def build_kite_family_limiter(
+    settings: ProviderSettings,
+    family: KiteFamily,
+    lane: KiteLane = KiteLane.INTERACTIVE,
+) -> RateLimiter | None:
+    """The lane's clocks, then the box's ``read`` ceiling, then ``family``'s own cap (OP3).
+
+    `build_kite_read_limiter` holds a caller to Kite's combined ceiling; this adds the endpoint's
+    cap on top, which is what the options reads need: the chain collector's ``quote()`` shares the
+    **1 req/s** quote clock with the desk's swing monitor and page reads, and the index-bar reads
+    share the **3 req/s** historical clock. The family clock is taken **last**, the desk's order
+    (`DeskLimits.slot` takes ``read`` then the family), so the tightest per-endpoint clock is the
+    one whose departures are exact.
+
+    ``BULK`` takes `KITE_BULK_CLOCK_KEY` first, as `build_kite_read_limiter` does.
+
+    ``None`` when Redis is unreachable — `KiteProvider` then refuses to call at all. Any clock
+    missing (Redis dropped between builds) also returns ``None`` rather than a partial limiter:
+    the quote cap is the tightest and silently losing it is the failure this exists to prevent.
+    """
+    max_wait = (
+        INTERACTIVE_MAX_WAIT_SECONDS if lane is KiteLane.INTERACTIVE else BULK_MAX_WAIT_SECONDS
+    )
+    clocks: list[RedisCallSpacer | None] = []
+    if lane is KiteLane.BULK:
+        clocks.append(
+            build_spaced_rate_limiter(
+                settings,
+                KITE_BULK_CLOCK_KEY,
+                settings.kite_bulk_rate_limit_per_second,
+                max_wait_seconds=BULK_MAX_WAIT_SECONDS,
+            )
+        )
+    clocks.append(
+        build_spaced_rate_limiter(
+            settings,
+            KITE_READ_CLOCK_KEY,
+            settings.kite_rate_limit_per_second,
+            max_wait_seconds=max_wait,
+        )
+    )
+    clocks.append(
+        build_spaced_rate_limiter(
+            settings,
+            kite_family_key(family),
+            KITE_FAMILY_RATE_PER_SECOND[family],
+            max_wait_seconds=max_wait,
+        )
+    )
+    built = [clock for clock in clocks if clock is not None]
+    if len(built) != len(clocks):
+        return None
+    return LayeredCallSpacer(built)
+
+
+def build_kite_family_provider(
+    settings: ProviderSettings,
+    family: KiteFamily,
+    retry_hooks: RetryHooks | None = None,
+    *,
+    lane: KiteLane = KiteLane.INTERACTIVE,
+) -> KiteProvider:
+    """A Kite adapter whose every call waits on ``family``'s cap as well as the ceiling (OP3)."""
+    limiter = build_kite_family_limiter(settings, family, lane)
+    return KiteProvider(settings, KiteRuntime(rate_limiter=limiter, retry_hooks=retry_hooks))
 
 
 def build_archive(settings: ProviderSettings, *, local_root: Path | None = None) -> RawArchive:

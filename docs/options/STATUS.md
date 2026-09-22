@@ -3,9 +3,10 @@
 The status page for the options run. Updated at the end of every module, loud about what is NOT
 done. A fresh session resumes from the first module not marked ✅.
 
-**Run state: OP0 🟡, OP1 ✅, OP2 ✅ (22 Sep 2026); OP3 not started.** Pack written 22 Sep 2026 on branch
-`developer`, absorbing the never-started condor pack (`docs/condor/`) as sleeve O1. OP0, OP1 and OP2
-were each run alone, by instruction ("execute only OP<N>, then stop"); the next session resumes at OP3.
+**Run state: OP0 🟡, OP1 ✅, OP2 ✅, OP3 🟡 (22 Sep 2026); OP4 not started.** Pack written 22 Sep 2026 on branch
+`developer`, absorbing the never-started condor pack (`docs/condor/`) as sleeve O1. OP0, OP1, OP2
+and OP3 were each run alone, by instruction ("execute only OP<N>, then stop"); the next session
+resumes at OP4 (and the orchestrator feeds back OP3's box probe — §"What is NOT done" under OP3).
 
 ## Module ledger
 
@@ -14,7 +15,7 @@ were each run alone, by instruction ("execute only OP<N>, then stop"); the next 
 | OP0 — Baseline, read-in, verified facts | 🟡 | Costs, expiry circular, F&O segment, algo rules, `OPTIONS_ENABLED` blast radius verified; six live Kite reads pending a session; full suites not re-run (memory rule) |
 | OP1 — The shared pure core `baskfy_core.options` | ✅ | 11 modules, 635 tests against `04`; purity, mypy strict, ruff, escape hatches clean; mutation 89.6 % (499/557), every survivor justified |
 | OP2 — Schema, NFO master, settings, `options_gates()` | ✅ | `0050_options` (17 tables, `op_sleeve` enum, monthly chain partitions), nightly NFO master + `op_expiry`, verified event-day seed, 9 flags + 6 ceilings in desk/API/worker, `options_gates()`, `OptionsSettings`; gateway product gate tightened (OP0.6); 587 new tests |
-| OP3 — Provider reads, index minute bars, collector, limiter | ⬜ | |
+| OP3 — Provider reads, index minute bars, collector, limiter | 🟡 | Option quotes with depth/OI, minute bars, basket margins; collector + index-bar tasks behind `BASKFY_OPTIONS_COLLECT_ENABLED` (default false); per-family shared limiter proven on Redis; read-only probe for OP0's six reads written, **not yet run on the box**; backfill not run (no Kite) |
 | OP4 — Sleeve signal cores and the scans | ⬜ | |
 | OP5 — API and the web Options tab (the scans ship) | ⬜ | |
 | OP6 — O1 plan builder (monthly + weekly), costs pinned | ⬜ | |
@@ -310,9 +311,107 @@ skips as OP1). The two failed steps, explained:
   box after migrating (NEEDS no Maulik: it writes zero capitals and verified dates only).
 * Not deployed, not pushed.
 
+## OP3 — Provider reads, index minute bars, the collector, the limiter
+
+**🟡, 22 Sep 2026.** Decisions `DECISIONS-OP.md` OP3.1–OP3.10. Why not ✅: the live half of `06`
+OP3's AC needs a Kite session — the six reads (now a probe the orchestrator runs on the box), the
+Tier-1 backfill on the dev stack, and a measured limiter share (⛁). Everything testable without
+Kite is built and green.
+
+### What exists
+
+| Piece | Where | Notes |
+|---|---|---|
+| Provider reads | `packages/providers/src/baskfy_providers/kite.py`, `records.py` | `option_quotes(keys)` → `OptionQuoteRecord` (depth, OI, OI-day high/low, both timestamps; zero padding dropped; NFO + `NSE:NIFTY 50` in one call); `minute_bars(token, start, end)` in 60-day windows (`MINUTE_MAX_DAYS_PER_REQUEST`), aware IST; `basket_order_margins(legs)` (a calculation, `consider_positions=False`); `margins_shape()` (names/types only). OP3.1 |
+| Per-family shared limiter | `packages/providers/src/baskfy_providers/factory.py` | `KiteFamily`, `kite_family_key`, `KITE_FAMILY_RATE_PER_SECOND` {quote 1, historical 3, general 9} = the desk's; `build_kite_family_limiter` = [bulk], `read`, family — the desk's keys and order (SW21/M85). OP3.5 |
+| Worker adapters | `baskfy_worker/options/reads.py` | `build_options_kite()` → one adapter per family |
+| Index minute bars | `baskfy_worker/options/index_bars.py` | intraday (since last stored minute), EOD reconcile, resumable Tier-1 backfill; closed minutes only; upsert on `(instrument_id, ts)`; index rows found by symbol, token from `instrument`. OP3.7 |
+| Chain collector | `baskfy_worker/options/collector.py` | two nearest expiries × ±15 strikes × CE/PE (≤ 124) + spot = **one** `quote()` (≤ 125 keys; > 500 refused); parity forward + Black-76 IV/greeks at write, rounded; append-only `ON CONFLICT DO NOTHING`; ensures this month's and next month's partitions first; `collect_gate` = flag → 09:15–15:30 → NSE calendar → Kite session. OP3.4, OP3.9 |
+| Celery tasks + Beat | `tasks/celery_tasks.py`, `celery_app.py` | `baskfy.options.collect_chain`, `.index_bars` (Beat every minute 09–15 mon–fri, `expires` 55 s, `acks_late=False`), `.index_bars_eod` (15:45), `.backfill_index_bars(from, to)` (on demand, bulk lane). OP3.3, OP3.8 |
+| Probe (OP0 §4 a–f) | `baskfy_worker/options/probe.py`; `options_cli probe` | Read-only JSON report; each read independent; OI-unit verdict by divisibility; margins shape only. OP3.6 |
+| CLI | `baskfy_worker/options_cli.py` | `probe`, `backfill-index-bars --from D [--to D]`, `collect-once` (ignores only the flag) |
+
+**The collector's flag:** `BASKFY_OPTIONS_COLLECT_ENABLED`, default **false** (OP3.2); it also gates
+the two index-bar tasks. Enabling it on the box is the orchestrator's decision after the probe.
+
+**Run the probe on the box** (after the deploy and a Kite login that day):
+
+```
+AWS_PROFILE=baskfy-poc bash tools/deploy/box.sh 'cd /opt/baskfy && sudo docker compose \
+  --env-file .env.staging.compose -f compose.prod.yml exec -T worker \
+  python -m baskfy_worker.options_cli probe'
+```
+
+It prints JSON and writes nothing. Its answers replace OP0 §4's "pending" rows; (e)'s `oi_unit.verdict`
+decides `chain.oi_unit` (OP1.3) — if `LOTS`, change the default and `04` §14 together. (b) will say
+"no expired contract yet" until the nightly master has watched the **29 Sep 2026** expiry pass.
+
+### The rate-limit proof (`packages/providers/tests/test_kite_options.py`)
+
+* **Same clocks as the desk:** the options adapters' keys, rates and order equal the desk's
+  `SHARED_KEY_PREFIX` / `RATE_FOR_FAMILY` / `DeskLimits.slot` (read from the desk's source) — so the
+  collector, the desk page and the swing monitor queue on **one** 1 req/s quote clock and one 3 req/s
+  historical clock under the one 3 req/s read ceiling.
+* **Measured on Redis:** a desk-shaped caller and a collector-shaped caller, six calls each, on one
+  departure clock (test keys at 10× Kite's rates): no two departures closer than the interval
+  (−20 ms timer slack), the run's span ≥ 11 intervals.
+* **Share (arithmetic, OP3.10):** ≤ 2 quote calls/min of 60 (3.3 %), 2 historical/min of 180
+  (1.1 %), ≤ 4 of the 180/min read ceiling (2.2 %). The swing timing probe that `06` says to replay is
+  still "NOT RUN YET" (`docs/swing/status/S2-kite-timing.md`), so no replay was possible.
+* No Redis → the limiter is `None` and the adapter refuses every call.
+
+### AC → test
+
+| `06` OP3 AC | Test |
+|---|---|
+| fake client's bars and quotes round-trip idempotently | `services/worker/tests/test_options_collector.py::TestTheCollectorOnADatabase::test_a_minute_round_trips_idempotently_in_one_call`, `TestTheIndexBarsOnADatabase::test_intraday_writes_only_closed_minutes_two_calls_idempotent` |
+| a quote batch never exceeds 500 symbols or the limiter | `test_kite_options.py::TestOptionQuotes::test_a_batch_never_exceeds_500_and_each_batch_is_one_limiter_token`; `test_options_collector.py::TestThePick::test_a_pick_that_would_need_two_calls_is_refused`; the shared-clock tests above |
+| the collector makes no call on a non-trading day | `test_options_collector.py::TestTheCeleryTasksMakeNoCallOnANonTradingDay` (the real task bodies; no adapter is even built) and `TestTheGate` |
+| partitions before writing (OP2 note) | `TestTheCollectorOnADatabase::test_both_partitions_exist_before_a_write_in_an_uncreated_month` (Mar/Apr 2028) |
+| Tier-1 backfill for a year on the dev stack; full duration in STATUS | ⛁ no Kite. Resumability: `TestTheIndexBarsOnADatabase::test_the_backfill_resumes_from_the_newest_stored_bar`; duration **estimated** (OP3.10): 144 calls, a few minutes, ≈ 2.2 M rows |
+
+### Tests (new)
+
+| File | Tests |
+|---|---|
+| `packages/providers/tests/test_kite_options.py` | 25 |
+| `services/worker/tests/test_options_collector.py` (db-marked half on `baskfy_test`) | 39 |
+| **Total** | **64** |
+
+**`tools/ci-local.sh` (one full run, alone, at the end): 16 passed, 1 failed, 3 skipped** (the same
+3 web skips as OP1/OP2). The failed step, *Tests, with per-package coverage gates*, failed on exactly
+the **three pre-existing non-options tests** OP1 and OP2 recorded — `test_api_admin.py::
+TestUserLookupAndOverrides::test_an_override_changes_the_effective_entitlements` (hard-coded
+2026-09-21 expiry) and the two `packages/providers` Kite-health tests that fail only in the full run
+(`test_cli_doctor.py::TestWithoutCredentials::test_kite_is_reported_unavailable_with_the_reason`,
+`test_kite.py::TestHealth::test_unconfigured_is_unavailable_not_an_exception`). Not OP3's; not
+weakened. Desk suite, lint + type-check, perf budgets, query plans, reconciliation: PASS. After a last
+edit made while CI ran (the minute tasks refuse before opening a DB session when the flag is off,
+plus one test), the two OP3 test files, `test_celery_config.py` and `test_no_escape_hatches.py` were
+re-run alone: **97 passed**.
+
+### What is NOT done
+
+* **The probe has not run.** OP0 §4's six rows stay "pending" until the orchestrator runs it on the box
+  and feeds the JSON back; `chain.oi_unit` stays `UNITS` (OP1.3) until then.
+* **The collector is off** (`BASKFY_OPTIONS_COLLECT_ENABLED=false`); no row of `op_chain_snapshot` or
+  `op_index_minute` exists anywhere yet. The first real rows follow the orchestrator enabling it.
+* **The Tier-1 backfill has not run** (no Kite); the duration is an estimate.
+* The worker's existing swing `quotes()` path still takes only the read ceiling, not the quote family
+  clock (OP3.5) — not this run's book.
+* **The minute tasks share the `default` queue** with the worker's compute/backtest queues
+  (`--concurrency=2` in `compose.prod.yml`): a long backtest holding both slots would let minutes
+  expire (55 s) unwritten. A dedicated options queue/worker is a compose change — OP14 hardening.
+* Not deployed, not pushed.
+
+### What blocks OP4
+
+Nothing in code: OP4's signal cores are pure and read fixtures. The scans' *inputs* on the box
+(`op_chain_snapshot`, `op_index_minute`) exist only once the collector is enabled.
+
 ## What is NOT done
 
-Everything after OP2. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
+Everything after OP3. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
 OP3 does them first); the two full-suite baseline runs (OP0.9); the gateway gap of OP0.6 is **fixed in OP2** (OP2.1); the
 `/ops` side door of OP0.5 is **recorded, not fixed** (OP13). Every money flag is false and stays false. The paper periods begin only after OP15, and
 the longest (O1-M) takes about six months after that.

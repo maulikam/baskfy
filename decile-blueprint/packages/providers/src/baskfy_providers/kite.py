@@ -30,7 +30,7 @@ import datetime as dt
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Final, Protocol
+from typing import Final, Protocol, runtime_checkable
 
 import polars as pl
 from kiteconnect import KiteConnect
@@ -54,10 +54,15 @@ from baskfy_providers.ports import (
 from baskfy_providers.ratelimit import RateLimiter
 from baskfy_providers.records import (
     DAILY_BARS_SCHEMA,
+    BasketMarginRecord,
     BrokerAccountRef,
     BrokerHoldingRecord,
+    DepthLevelRecord,
     InstrumentRecord,
+    MarginLegRecord,
+    MinuteBarRecord,
     OptionContractRecord,
+    OptionQuoteRecord,
     QuoteRecord,
     conform,
     empty_frame,
@@ -75,6 +80,14 @@ DEFAULT_MAX_DAYS_PER_REQUEST: Final = 2000
 #: "≤ 6 calls of 500" for the liquid universe). A larger batch is refused by Kite with a 400,
 #: which the retry policy would then repeat — so the cap is enforced here, before the call.
 QUOTE_BATCH_SIZE: Final = 500
+
+#: Kite's ``minute`` interval history cap per request, in calendar days (Kite Connect's historical
+#: API documentation: 60 days for ``minute``). A wider window is refused with an InputException,
+#: which retrying would not cure — so the chunking below is the contract, not an optimisation.
+MINUTE_MAX_DAYS_PER_REQUEST: Final = 60
+
+#: The exchange's clock. Kite stamps candles and quotes in IST; a naive stamp is read as IST.
+_IST: Final = dt.timezone(dt.timedelta(hours=5, minutes=30))
 
 #: The catalog id (``baskfy_core.broker_connections``) this adapter is the adapter *for*. A ref
 #: naming any other broker is refused rather than served, because "the holdings provider" and
@@ -117,6 +130,22 @@ class KiteClientLike(Protocol):
     def quote(self, *instruments: str) -> dict[str, dict[str, object]]: ...
 
     def trades(self) -> list[dict[str, object]]: ...
+
+
+@runtime_checkable
+class BasketMarginClient(Protocol):
+    """The one extra verb :meth:`KiteProvider.basket_order_margins` needs (OP3).
+
+    Kept out of :class:`KiteClientLike` so that every existing test double stays a valid client;
+    the real ``KiteConnect`` has it, and a client without it is refused, not guessed around.
+    """
+
+    def basket_order_margins(
+        self,
+        params: list[dict[str, object]],
+        consider_positions: bool = True,
+        mode: str | None = None,
+    ) -> dict[str, object]: ...
 
 
 def _default_client_factory(api_key: str, *, timeout: float = 30.0) -> KiteClientLike:
@@ -450,6 +479,109 @@ class KiteProvider:
                     records.append(record)
         return records
 
+    # --- Options reads (OP3, docs/options/06) ------------------------------------
+
+    def option_quotes(self, keys: Sequence[str]) -> list[OptionQuoteRecord]:
+        """``GET /quote`` for ``EXCHANGE:SYMBOL`` keys, **with** depth, OI and timestamps.
+
+        Keys are passed whole so one call can carry NFO contracts and the ``NSE:NIFTY 50`` spot
+        together — the collector's "one ``quote()`` call a minute" (``docs/options/03`` §5).
+        Batched at :data:`QUOTE_BATCH_SIZE`, each batch one throttled call, exactly like
+        :meth:`quotes`. A key Kite does not answer for is absent; an unreadable row is skipped.
+        Read-only (law 2).
+        """
+        wanted = list(dict.fromkeys(key for key in keys if key))
+        records: list[OptionQuoteRecord] = []
+        for start in range(0, len(wanted), QUOTE_BATCH_SIZE):
+            batch = wanted[start : start + QUOTE_BATCH_SIZE]
+            payload = self._call(_quote_call(batch))
+            for key, row in payload.items():
+                record = _to_option_quote(key, row)
+                if record is not None:
+                    records.append(record)
+        return records
+
+    def minute_windows(self, start: dt.date, end: dt.date) -> Iterator[tuple[dt.date, dt.date]]:
+        """``[start, end]`` in slices of at most :data:`MINUTE_MAX_DAYS_PER_REQUEST` days."""
+        if end < start:
+            raise ValueError(f"end {end} precedes start {start}")
+        span = dt.timedelta(days=MINUTE_MAX_DAYS_PER_REQUEST - 1)
+        cursor = start
+        while cursor <= end:
+            chunk_end = min(cursor + span, end)
+            yield cursor, chunk_end
+            cursor = chunk_end + dt.timedelta(days=1)
+
+    def minute_bars(
+        self,
+        token: int,
+        start: dt.datetime | dt.date,
+        end: dt.datetime | dt.date,
+    ) -> list[MinuteBarRecord]:
+        """One-minute candles for ``token`` over ``[start, end]``, chunked per Kite's cap.
+
+        A ``date`` means the whole day (00:00 to 23:59:59 IST); a ``datetime`` is read in IST.
+        Every chunk is one throttled call. Bars are de-duplicated on ``ts`` (chunks meet at a day
+        boundary) and returned in time order; an empty window is an empty list, not an error — an
+        index before Kite's history starts simply has no bars.
+        """
+        lo = _ist_wall(start, end_of_day=False)
+        hi = _ist_wall(end, end_of_day=True)
+        if hi < lo:
+            raise ValueError(f"end {hi} precedes start {lo}")
+        by_ts: dict[dt.datetime, MinuteBarRecord] = {}
+        for day_lo, day_hi in self.minute_windows(lo.date(), hi.date()):
+            chunk_lo = max(lo, dt.datetime.combine(day_lo, dt.time(0, 0)))
+            chunk_hi = min(hi, dt.datetime.combine(day_hi, dt.time(23, 59, 59)))
+            candles = self._call(_minute_call(token, chunk_lo, chunk_hi))
+            for candle in candles:
+                bar = _to_minute_bar(candle)
+                if bar is not None:
+                    by_ts.setdefault(bar.ts, bar)
+        return [by_ts[ts] for ts in sorted(by_ts)]
+
+    def basket_order_margins(
+        self, legs: Sequence[MarginLegRecord], *, consider_positions: bool = False
+    ) -> BasketMarginRecord:
+        """Kite's ``/margins/basket`` for ``legs`` — **a calculation, never an order** (OP3).
+
+        ``consider_positions`` defaults to ``False`` so the answer is the basket's own requirement
+        and not a function of whatever the account holds (Track C §8: the options book never reads
+        another book's positions). Plans use it as a ceiling, never to size (Track C §10).
+        """
+        if not legs:
+            raise ValueError("a basket margin needs at least one leg")
+        params: list[dict[str, object]] = [
+            {
+                "exchange": leg.exchange,
+                "tradingsymbol": leg.tradingsymbol,
+                "transaction_type": leg.transaction_type,
+                "variety": leg.variety,
+                "product": leg.product,
+                "order_type": leg.order_type,
+                "quantity": leg.quantity,
+                "price": float(leg.price),
+            }
+            for leg in legs
+        ]
+
+        def call(client: KiteClientLike) -> dict[str, object]:
+            if not isinstance(client, BasketMarginClient):
+                raise ProviderUnavailable(
+                    "this Kite client has no basket_order_margins", provider=PROVIDER_NAME
+                )
+            return client.basket_order_margins(params, consider_positions, None)
+
+        return _to_basket_margin(self._call(call), len(params))
+
+    def margins_shape(self) -> dict[str, object]:
+        """``margins()`` reduced to segment and field names with their types — **no figures**.
+
+        OP3's probe records what the NFO margin payload looks like (OP0 §4 (d)); an account's
+        balances have no business in a probe report or a log, so they never leave this method.
+        """
+        return _margins_shape(self._call(lambda client: client.margins()))
+
     def _require_own_account(self, account: BrokerAccountRef) -> None:
         """Refuse a read for an account this adapter's credentials do not belong to.
 
@@ -757,6 +889,142 @@ def _quote_call(batch: list[str]) -> Callable[[KiteClientLike], dict[str, dict[s
         return client.quote(*batch)
 
     return call
+
+
+def _minute_call(
+    token: int, start: dt.datetime, end: dt.datetime
+) -> Callable[[KiteClientLike], list[dict[str, object]]]:
+    """Bind one minute-history window to a call (naive IST wall-clock, as Kite reads it)."""
+
+    def call(client: KiteClientLike) -> list[dict[str, object]]:
+        return client.historical_data(token, start, end, "minute")
+
+    return call
+
+
+def _ist_wall(value: dt.datetime | dt.date, *, end_of_day: bool) -> dt.datetime:
+    """A naive IST wall-clock datetime: Kite's historical API reads its bounds that way."""
+    if isinstance(value, dt.datetime):
+        if value.tzinfo is None:
+            return value
+        return value.astimezone(_IST).replace(tzinfo=None)
+    return dt.datetime.combine(value, dt.time(23, 59, 59) if end_of_day else dt.time(0, 0))
+
+
+def _aware_ist(value: object) -> dt.datetime | None:
+    """A Kite timestamp as an aware datetime; a naive one is IST (Kite's own clock)."""
+    if isinstance(value, dt.datetime):
+        return value if value.tzinfo is not None else value.replace(tzinfo=_IST)
+    if isinstance(value, str) and value:
+        try:
+            parsed = dt.datetime.fromisoformat(value)
+        except ValueError:
+            return None
+        return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=_IST)
+    return None
+
+
+def _to_minute_bar(candle: dict[str, object]) -> MinuteBarRecord | None:
+    """One candle → :class:`MinuteBarRecord`; ``None`` when a price or the stamp is missing."""
+    ts = _aware_ist(candle.get("date"))
+    prices = [_decimal(candle.get(k)) for k in ("open", "high", "low", "close")]
+    if ts is None or any(p is None for p in prices):
+        return None
+    o, h, lo, c = (p for p in prices if p is not None)
+    return MinuteBarRecord(
+        ts=ts.replace(second=0, microsecond=0),
+        open=o,
+        high=h,
+        low=lo,
+        close=c,
+        volume=_int(candle.get("volume")) or 0,
+    )
+
+
+def _depth_side(raw: object) -> tuple[DepthLevelRecord, ...]:
+    """One side of Kite's ``depth``; zero-priced padding levels are dropped."""
+    if not isinstance(raw, list):
+        return ()
+    levels: list[DepthLevelRecord] = []
+    for level in raw:
+        if not isinstance(level, dict):
+            continue
+        price = _decimal(level.get("price"))
+        if price is None or price <= 0:
+            continue
+        levels.append(
+            DepthLevelRecord(
+                price=price,
+                quantity=max(_int(level.get("quantity")) or 0, 0),
+                orders=max(_int(level.get("orders")) or 0, 0),
+            )
+        )
+    return tuple(levels)
+
+
+def _to_option_quote(key: str, row: object) -> OptionQuoteRecord | None:
+    """One ``/quote`` entry with depth → :class:`OptionQuoteRecord`, or ``None``."""
+    if not isinstance(row, dict):
+        return None
+    exchange, _, symbol = key.partition(":")
+    if not symbol or not exchange:
+        return None
+    depth = row.get("depth")
+    sides = depth if isinstance(depth, dict) else {}
+    try:
+        return OptionQuoteRecord(
+            symbol=symbol,
+            exchange=exchange,
+            instrument_token=_int(row.get("instrument_token")),
+            last_price=_decimal(row.get("last_price")),
+            volume=_int(row.get("volume") or row.get("volume_traded")) or 0,
+            oi=_int(row.get("oi")),
+            oi_day_high=_int(row.get("oi_day_high")),
+            oi_day_low=_int(row.get("oi_day_low")),
+            bids=_depth_side(sides.get("buy")),
+            asks=_depth_side(sides.get("sell")),
+            as_of=_aware_ist(row.get("timestamp")),
+            last_trade_time=_aware_ist(row.get("last_trade_time")),
+        )
+    except (UnexpectedPayload, ValueError):
+        # Narrow on purpose (house rule 3): one unreadable quote must not cost the other 124.
+        return None
+
+
+def _margins_shape(payload: object) -> dict[str, object]:
+    """Segment -> field -> JSON type name (or a nested block's sorted keys). Never a value."""
+    if not isinstance(payload, dict):
+        return {"type": type(payload).__name__}
+    out: dict[str, object] = {}
+    for segment, body in sorted(payload.items(), key=lambda kv: str(kv[0])):
+        if not isinstance(body, dict):
+            out[str(segment)] = type(body).__name__
+            continue
+        out[str(segment)] = {
+            str(key): (
+                sorted(str(k) for k in value) if isinstance(value, dict) else type(value).__name__
+            )
+            for key, value in sorted(body.items(), key=lambda kv: str(kv[0]))
+        }
+    return out
+
+
+def _to_basket_margin(payload: object, legs: int) -> BasketMarginRecord:
+    """Kite's basket-margin response → totals and the response's shape (no account figures)."""
+    if not isinstance(payload, dict):
+        raise UnexpectedPayload("basket margins returned no object", provider=PROVIDER_NAME)
+    shape: dict[str, list[str]] = {"top": sorted(str(k) for k in payload)}
+    totals: dict[str, Decimal | None] = {}
+    for block in ("initial", "final"):
+        raw = payload.get(block)
+        if isinstance(raw, dict):
+            shape[block] = sorted(str(k) for k in raw)
+            totals[block] = _decimal(raw.get("total"))
+        else:
+            totals[block] = None
+    return BasketMarginRecord(
+        initial_total=totals["initial"], final_total=totals["final"], legs=legs, shape=shape
+    )
 
 
 def _to_quote_record(key: str, row: object) -> QuoteRecord | None:

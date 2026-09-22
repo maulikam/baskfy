@@ -57,7 +57,10 @@ from baskfy_worker.alerts import Alert, AlertName, Severity, dispatch
 from baskfy_worker.bhavcopy_backfill import backfill_bars_from_bhavcopy
 from baskfy_worker.celery_app import IST, QUEUE_COMPUTE, QUEUES
 from baskfy_worker.db import run_checkpointed, run_in_session, session_scope
+from baskfy_worker.options import index_bars as options_index_bars
+from baskfy_worker.options.collector import collect_gate, collect_minute, in_session
 from baskfy_worker.options.master import EmptyMaster, master_alert, refresh_master
+from baskfy_worker.options.reads import build_options_kite
 from baskfy_worker.orchestrator import PipelineOutcome, run_nightly_pipeline
 from baskfy_worker.providers import build_cache, build_pipeline_dependencies, sole_user_id
 from baskfy_worker.settings import get_worker_settings
@@ -922,6 +925,133 @@ def options_refresh_master_task(as_of: str | None = None) -> JsonObject:
         return out
 
     return run_in_session(_run)
+
+
+def _options_idle_reason(*, enabled: bool) -> str:
+    return "BASKFY_OPTIONS_COLLECT_ENABLED is false" if not enabled else "outside 09:15-15:30 IST"
+
+
+def _options_now(at: str | None) -> dt.datetime:
+    """The IST moment an options task acts for: ``at`` (ISO) when given, else now."""
+    if at:
+        parsed = dt.datetime.fromisoformat(at)
+        return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=IST)
+    return dt.datetime.now(tz=IST)
+
+
+@shared_task(name="baskfy.options.collect_chain", acks_late=False)
+def options_collect_chain_task(at: str | None = None) -> JsonObject:
+    """OP3: one minute of the NIFTY chain into ``op_chain_snapshot`` (``docs/options/03`` §5).
+
+    Beat fires it every minute 09:00-15:59 on weekdays; :func:`collect_gate` refuses — before any
+    Kite call — when ``BASKFY_OPTIONS_COLLECT_ENABLED`` is false (the default), outside
+    09:15-15:30, on a day the NSE calendar names a holiday, or with no usable Kite session. One
+    ``quote()`` call on the box's shared 1 req/s quote clock. ``acks_late=False``: a minute that
+    fails is gone, and redelivering it a minute later would stamp an old minute with new prices.
+    Moves no money.
+    """
+    now = _options_now(at)
+    enabled = get_worker_settings().options_collect_enabled
+    if not enabled or not in_session(now):
+        # The two free refusals, before a database connection: Beat fires this 420 times a day.
+        return {"at": now.isoformat(), "skipped": _options_idle_reason(enabled=enabled)}
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        refused = await collect_gate(
+            now,
+            enabled=enabled,
+            kite_ok=kite_session_usable,
+            trading_day=partial(is_session_day, session),
+        )
+        if refused is not None:
+            return {"at": now.isoformat(), "skipped": refused}
+        kite = build_options_kite(retry_hooks=provider_retry_hooks())
+        report = await collect_minute(session, kite.quotes, now)
+        return report.as_dict()
+
+    return run_in_session(_run)
+
+
+@shared_task(name="baskfy.options.index_bars", acks_late=False)
+def options_index_bars_task(at: str | None = None) -> JsonObject:
+    """OP3: NIFTY 50 and INDIA VIX closed minute bars since the last stored one (``03`` §4).
+
+    Same Beat slot and the same gate as the collector — it is half of the collector's load and
+    its ATM hint (DECISIONS-OP OP3.3). Two ``historical_data`` calls on the box's shared 3 req/s
+    historical clock.
+    """
+    now = _options_now(at)
+    enabled = get_worker_settings().options_collect_enabled
+    if not enabled or not in_session(now):
+        # The two free refusals, before a database connection: Beat fires this 420 times a day.
+        return {"at": now.isoformat(), "skipped": _options_idle_reason(enabled=enabled)}
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        refused = await collect_gate(
+            now,
+            enabled=enabled,
+            kite_ok=kite_session_usable,
+            trading_day=partial(is_session_day, session),
+        )
+        if refused is not None:
+            return {"at": now.isoformat(), "skipped": refused}
+        kite = build_options_kite(retry_hooks=provider_retry_hooks())
+        report = await options_index_bars.pull_intraday(session, kite.bars, now)
+        return {"at": now.isoformat(), **report.as_dict()}
+
+    return run_in_session(_run)
+
+
+@shared_task(name="baskfy.options.index_bars_eod", acks_late=True)
+def options_index_bars_eod_task(trade_date: str | None = None) -> JsonObject:
+    """OP3: after the close, the whole session's index bars again — the reconcile (``03`` §4).
+
+    Behind the same flag (it is the intraday task's correction); skipped on a holiday or with no
+    Kite session. Two calls. Idempotent: the upsert overwrites a minute with Kite's final reading.
+    """
+    now = dt.datetime.now(tz=IST)
+    day = dt.date.fromisoformat(trade_date) if trade_date else now.date()
+    if not get_worker_settings().options_collect_enabled:
+        return {"date": day.isoformat(), "skipped": "BASKFY_OPTIONS_COLLECT_ENABLED is false"}
+    if not kite_session_usable():
+        return {"date": day.isoformat(), "skipped": "no usable Kite session"}
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        if not await is_session_day(session, day):
+            return {"date": day.isoformat(), "skipped": "not an NSE trading day"}
+        kite = build_options_kite(retry_hooks=provider_retry_hooks())
+        report = await options_index_bars.reconcile_day(session, kite.bars, day, now)
+        return {"date": day.isoformat(), **report.as_dict()}
+
+    return run_in_session(_run)
+
+
+@shared_task(name="baskfy.options.backfill_index_bars", acks_late=True)
+def options_backfill_index_bars_task(date_from: str, date_to: str | None = None) -> JsonObject:
+    """OP3: the Tier-1 index minute backfill over ``[date_from, date_to]`` — resumable.
+
+    On demand only (no Beat entry). The **bulk** lane under the historical clock, so it yields to
+    the collector and the desk; committed per 60-day window, and a re-run resumes from the newest
+    stored bar. Not behind the collect flag: a person asked for it, and it is not a recurring load.
+    """
+    start = dt.date.fromisoformat(date_from)
+    end = dt.date.fromisoformat(date_to) if date_to else dt.datetime.now(tz=IST).date()
+    if not kite_session_usable():
+        return {"from": start.isoformat(), "skipped": "no usable Kite session"}
+    kite = build_options_kite(retry_hooks=provider_retry_hooks(), bars_lane=KiteLane.BULK)
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        report = await options_index_bars.backfill(
+            session,
+            kite.bars,
+            start,
+            end,
+            now=dt.datetime.now(tz=IST),
+            checkpoint=session.commit,
+        )
+        return {"from": start.isoformat(), "to": end.isoformat(), **report.as_dict()}
+
+    return run_checkpointed(_run)
 
 
 @shared_task(name="baskfy.twt.detect", acks_late=True)

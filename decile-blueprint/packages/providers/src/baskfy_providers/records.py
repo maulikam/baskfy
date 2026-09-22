@@ -368,3 +368,102 @@ class OptionContractRecord(_Record):
     option_type: Literal["CE", "PE"]
     lot_size: int = Field(gt=0)
     tick_size: Decimal = Field(gt=0)
+
+
+class DepthLevelRecord(_Record):
+    """One level of Kite's five-a-side market depth (``docs/options/03`` §5, OP3).
+
+    ``quantity`` is in units (shares), as Kite states it; ``orders`` is the count resting there.
+    Kite pads an empty level with zeros — those are dropped at the boundary, never stored as a
+    zero-priced bid.
+    """
+
+    price: Decimal = Field(gt=0)
+    quantity: int = Field(ge=0)
+    orders: int = Field(default=0, ge=0)
+
+
+class OptionQuoteRecord(_Record):
+    """One ``/quote`` entry **with** depth, OI and both timestamps (OP3, DECISIONS-OP OP3.1).
+
+    A separate record rather than more fields on :class:`QuoteRecord`: that one feeds the swing
+    premarket scan, and widening it would change a live book's input for a sleeve that has not
+    traded. Used for NFO option contracts and — in the same call — the NIFTY 50 index, whose
+    depth is simply empty. ``oi`` is stored **as Kite reports it**; its unit (units or lots,
+    ``docs/options/04`` §2.4) is a read-side conversion (``baskfy_core.options.chain.oi_in_units``)
+    and OP3's probe is what confirms it.
+    """
+
+    symbol: str = Field(min_length=1)
+    exchange: str = Field(min_length=1)
+    instrument_token: int | None = None
+    last_price: Decimal | None = None
+    volume: int = 0
+    oi: int | None = None
+    oi_day_high: int | None = None
+    oi_day_low: int | None = None
+    bids: tuple[DepthLevelRecord, ...] = ()
+    asks: tuple[DepthLevelRecord, ...] = ()
+    #: Kite's ``timestamp`` — when the exchange stamped this quote.
+    as_of: dt.datetime | None = None
+    #: Kite's ``last_trade_time`` — a quiet strike's quote can be fresh while its last trade is not.
+    last_trade_time: dt.datetime | None = None
+
+    @property
+    def key(self) -> str:
+        """``EXCHANGE:SYMBOL``, the form Kite keys a quote by."""
+        return f"{self.exchange}:{self.symbol}"
+
+
+class MinuteBarRecord(_Record):
+    """One one-minute candle from ``historical_data(interval="minute")`` (``03`` §4, OP3).
+
+    ``ts`` is the minute's **start**, timezone-aware (Kite stamps IST). Prices are raw — an index
+    has no corporate actions — and Decimal at the boundary (house rule 9).
+    """
+
+    ts: dt.datetime
+    open: Decimal
+    high: Decimal
+    low: Decimal
+    close: Decimal
+    volume: int = 0
+
+    @field_validator("ts")
+    @classmethod
+    def _aware(cls, value: dt.datetime) -> dt.datetime:
+        if value.tzinfo is None:
+            raise ValueError("a minute bar's timestamp must be timezone-aware")
+        return value
+
+
+class MarginLegRecord(_Record):
+    """One leg of a basket whose margin is *asked about* — never an order (OP3).
+
+    The fields are the ones Kite's ``/margins/basket`` takes. Nothing here can be sent to an order
+    endpoint: ``KiteProvider.basket_order_margins`` is a calculation, and this adapter has no order
+    verb (law 2).
+    """
+
+    exchange: str = Field(min_length=1)
+    tradingsymbol: str = Field(min_length=1)
+    transaction_type: Literal["BUY", "SELL"]
+    quantity: int = Field(gt=0)
+    product: Literal["MIS"] = "MIS"
+    order_type: Literal["LIMIT", "MARKET"] = "MARKET"
+    variety: Literal["regular"] = "regular"
+    price: Decimal = Decimal("0")
+
+
+class BasketMarginRecord(_Record):
+    """Kite's answer for a basket: the totals before and after the basket's hedge benefit.
+
+    ``initial_total`` is the sum of each leg alone, ``final_total`` what the basket needs once
+    Kite nets it; ``shape`` names the response's top-level keys and each total block's keys, so the
+    probe can report what Kite sends without copying account figures into a log.
+    """
+
+    initial_total: Decimal | None = None
+    final_total: Decimal | None = None
+    legs: int = 0
+    shape: dict[str, list[str]] = Field(default_factory=dict)

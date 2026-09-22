@@ -1,0 +1,440 @@
+{
+ "probe": "OP3 options live reads (OP0 \u00a74 a-f)",
+ "today": "2026-09-22",
+ "read_only": true,
+ "master": {
+  "ok": true,
+  "result": {
+   "contracts": 1706
+  }
+ },
+ "spot": {
+  "ok": true,
+  "result": {
+   "key": "NSE:NIFTY 50",
+   "last_price": "23329"
+  }
+ },
+ "a_earliest_minute_history": {
+  "INDIA VIX": {
+   "ok": true,
+   "result": {
+    "earliest": "2015-01-09T09:15:00+05:30",
+    "first_january_with_data": 2015,
+    "calls": 18,
+    "method": "first bar of the first window that answered (Jan 1-14 by year, then by month)"
+   }
+  },
+  "NIFTY 50": {
+   "ok": true,
+   "result": {
+    "earliest": "2015-01-09T09:15:00+05:30",
+    "first_january_with_data": 2015,
+    "calls": 18,
+    "method": "first bar of the first window that answered (Jan 1-14 by year, then by month)"
+   }
+  }
+ },
+ "b_expired_contract": {
+  "ok": true,
+  "result": {
+   "note": "op_contract holds no expired NIFTY contract yet (the nightly master has not seen an expiry pass); re-run the probe after the next Tuesday expiry"
+  }
+ },
+ "c_next_expiries": {
+  "ok": true,
+  "result": {
+   "spot_used": "23329",
+   "expiries": [
+    {
+     "expiry": "2026-09-22",
+     "weekday": "Tuesday",
+     "kind": "WEEKLY",
+     "lot_sizes": [
+      65
+     ],
+     "tick_sizes": [
+      "0.05"
+     ],
+     "strike_step_near_atm": "50.0",
+     "contracts": 192
+    },
+    {
+     "expiry": "2026-09-29",
+     "weekday": "Tuesday",
+     "kind": "MONTHLY",
+     "lot_sizes": [
+      65
+     ],
+     "tick_sizes": [
+      "0.05"
+     ],
+     "strike_step_near_atm": "50.0",
+     "contracts": 256
+    },
+    {
+     "expiry": "2026-10-06",
+     "weekday": "Tuesday",
+     "kind": "WEEKLY",
+     "lot_sizes": [
+      65
+     ],
+     "tick_sizes": [
+      "0.05"
+     ],
+     "strike_step_near_atm": "50.0",
+     "contracts": 180
+    },
+    {
+     "expiry": "2026-10-13",
+     "weekday": "Tuesday",
+     "kind": "WEEKLY",
+     "lot_sizes": [
+      65
+     ],
+     "tick_sizes": [
+      "0.05"
+     ],
+     "strike_step_near_atm": "50.0",
+     "contracts": 164
+    },
+    {
+     "expiry": "2026-10-19",
+     "weekday": "Monday",
+     "kind": "WEEKLY",
+     "lot_sizes": [
+      65
+     ],
+     "tick_sizes": [
+      "0.05"
+     ],
+     "strike_step_near_atm": "50.0",
+     "contracts": 154
+    },
+    {
+     "expiry": "2026-10-27",
+     "weekday": "Tuesday",
+     "kind": "MONTHLY",
+     "lot_sizes": [
+      65
+     ],
+     "tick_sizes": [
+      "0.05"
+     ],
+     "strike_step_near_atm": "50.0",
+     "contracts": 236
+    },
+    {
+     "expiry": "2026-11-23",
+     "weekday": "Monday",
+     "kind": "MONTHLY",
+     "lot_sizes": [
+      65
+     ],
+     "tick_sizes": [
+      "0.05"
+     ],
+     "strike_step_near_atm": "50.0",
+     "contracts": 192
+    },
+    {
+     "expiry": "2026-12-29",
+     "weekday": "Tuesday",
+     "kind": "MONTHLY",
+     "lot_sizes": [
+      65
+     ],
+     "tick_sizes": [
+      "0.05"
+     ],
+     "strike_step_near_atm": "500.0",
+     "contracts": 50
+    }
+   ]
+  }
+ },
+ "d_margins_shape": {
+  "ok": true,
+  "result": {
+   "commodity": {
+    "available": [
+     "adhoc_margin",
+     "cash",
+     "collateral",
+     "intraday_payin",
+     "live_balance",
+     "opening_balance"
+    ],
+    "enabled": "bool",
+    "net": "int",
+    "utilised": [
+     "additional",
+     "debits",
+     "delivery",
+     "equity",
+     "exposure",
+     "holding_sales",
+     "liquid_collateral",
+     "m2m_realised",
+     "m2m_unrealised",
+     "option_premium",
+     "payout",
+     "span",
+     "stock_collateral",
+     "turnover"
+    ]
+   },
+   "equity": {
+    "available": [
+     "adhoc_margin",
+     "cash",
+     "collateral",
+     "intraday_payin",
+     "live_balance",
+     "opening_balance"
+    ],
+    "enabled": "bool",
+    "net": "float",
+    "segment": "str",
+    "utilised": [
+     "additional",
+     "debits",
+     "delivery",
+     "equity",
+     "exposure",
+     "holding_sales",
+     "liquid_collateral",
+     "m2m_realised",
+     "m2m_unrealised",
+     "option_premium",
+     "payout",
+     "span",
+     "stock_collateral",
+     "turnover"
+    ]
+   }
+  }
+ },
+ "e_option_quotes": {
+  "ok": true,
+  "result": {
+   "quotes": [
+    {
+     "key": "NFO:NIFTY2692223250CE",
+     "fields_present": [
+      "last_price",
+      "last_trade_time",
+      "oi",
+      "oi_day_high",
+      "oi_day_low",
+      "timestamp"
+     ],
+     "depth_levels": {
+      "buy": 5,
+      "sell": 5
+     },
+     "best_bid": "78.75",
+     "best_ask": "78.9",
+     "volume": 157264640,
+     "oi": 1457950,
+     "oi_day_high": 6531655,
+     "oi_day_low": 1126190,
+     "timestamp": "2026-09-22T16:35:49+05:30",
+     "last_trade_time": "2026-09-22T15:39:59+05:30"
+    },
+    {
+     "key": "NFO:NIFTY2692223300CE",
+     "fields_present": [
+      "last_price",
+      "last_trade_time",
+      "oi",
+      "oi_day_high",
+      "oi_day_low",
+      "timestamp"
+     ],
+     "depth_levels": {
+      "buy": 5,
+      "sell": 5
+     },
+     "best_bid": "28.85",
+     "best_ask": "28.95",
+     "volume": 666816930,
+     "oi": 9428640,
+     "oi_day_high": 25675065,
+     "oi_day_low": 3889340,
+     "timestamp": "2026-09-22T16:35:49+05:30",
+     "last_trade_time": "2026-09-22T15:39:59+05:30"
+    },
+    {
+     "key": "NFO:NIFTY2692223350CE",
+     "fields_present": [
+      "last_price",
+      "last_trade_time",
+      "oi",
+      "oi_day_high",
+      "oi_day_low",
+      "timestamp"
+     ],
+     "depth_levels": {
+      "buy": 0,
+      "sell": 5
+     },
+     "best_bid": null,
+     "best_ask": "0.05",
+     "volume": 1244710480,
+     "oi": 22577230,
+     "oi_day_high": 36696920,
+     "oi_day_low": 2442505,
+     "timestamp": "2026-09-22T16:35:49+05:30",
+     "last_trade_time": "2026-09-22T15:39:59+05:30"
+    },
+    {
+     "key": "NFO:NIFTY2692223400CE",
+     "fields_present": [
+      "last_price",
+      "last_trade_time",
+      "oi",
+      "oi_day_high",
+      "oi_day_low",
+      "timestamp"
+     ],
+     "depth_levels": {
+      "buy": 0,
+      "sell": 5
+     },
+     "best_bid": null,
+     "best_ask": "0.05",
+     "volume": 1720620070,
+     "oi": 24120395,
+     "oi_day_high": 47351005,
+     "oi_day_low": 8603270,
+     "timestamp": "2026-09-22T16:35:49+05:30",
+     "last_trade_time": "2026-09-22T15:39:59+05:30"
+    },
+    {
+     "key": "NFO:NIFTY2692223450CE",
+     "fields_present": [
+      "last_price",
+      "last_trade_time",
+      "oi",
+      "oi_day_high",
+      "oi_day_low",
+      "timestamp"
+     ],
+     "depth_levels": {
+      "buy": 0,
+      "sell": 5
+     },
+     "best_bid": null,
+     "best_ask": "0.05",
+     "volume": 1360035170,
+     "oi": 13858130,
+     "oi_day_high": 40120405,
+     "oi_day_low": 6430060,
+     "timestamp": "2026-09-22T16:35:49+05:30",
+     "last_trade_time": "2026-09-22T15:39:57+05:30"
+    }
+   ],
+   "oi_unit": {
+    "verdict": "UNITS",
+    "sample": [
+     {
+      "oi": 1457950,
+      "lot_size": 65
+     },
+     {
+      "oi": 9428640,
+      "lot_size": 65
+     },
+     {
+      "oi": 22577230,
+      "lot_size": 65
+     },
+     {
+      "oi": 24120395,
+      "lot_size": 65
+     },
+     {
+      "oi": 13858130,
+      "lot_size": 65
+     }
+    ],
+    "rule": "UNITS if every OI is a multiple of its lot size; LOTS if none is"
+   },
+   "asked": 5,
+   "answered": 5
+  }
+ },
+ "f_basket_margins": {
+  "ok": true,
+  "result": {
+   "legs": [
+    {
+     "tradingsymbol": "NIFTY2692223700CE",
+     "side": "BUY",
+     "qty": 65
+    },
+    {
+     "tradingsymbol": "NIFTY2692223000PE",
+     "side": "BUY",
+     "qty": 65
+    },
+    {
+     "tradingsymbol": "NIFTY2692223550CE",
+     "side": "SELL",
+     "qty": 65
+    },
+    {
+     "tradingsymbol": "NIFTY2692223150PE",
+     "side": "SELL",
+     "qty": 65
+    }
+   ],
+   "initial_total": "130909.54999999999",
+   "final_total": "130903.05",
+   "shape": {
+    "top": [
+     "charges",
+     "final",
+     "initial",
+     "orders"
+    ],
+    "initial": [
+     "additional",
+     "bo",
+     "cash",
+     "charges",
+     "exchange",
+     "exposure",
+     "leverage",
+     "mtf",
+     "option_premium",
+     "pnl",
+     "span",
+     "total",
+     "tradingsymbol",
+     "type",
+     "var"
+    ],
+    "final": [
+     "additional",
+     "bo",
+     "cash",
+     "charges",
+     "exchange",
+     "exposure",
+     "leverage",
+     "mtf",
+     "option_premium",
+     "pnl",
+     "span",
+     "total",
+     "tradingsymbol",
+     "type",
+     "var"
+    ]
+   },
+   "consider_positions": false
+  }
+ }
+}

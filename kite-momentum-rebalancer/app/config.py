@@ -234,6 +234,38 @@ TWT_AUTO_EXECUTE = os.getenv("BASKFY_TWT_AUTO_EXECUTE", "false").lower() == "tru
 # that config so the band the gateway is handed and the arithmetic that produced the trigger can
 # never be two different numbers. DECISIONS-TW TW6.5.
 
+# ---- The options run (docs/options/02 Track B, OP2) ---------------------------------------
+# Three intraday NIFTY index-option sleeves (O1 hedged premium selling, O2 directional buying, O3
+# expiry-day debit spreads), PAPER ONLY. A real options order needs FOUR switches at once for its
+# sleeve — DRY_RUN off, OPTIONS_ENABLED, INTRADAY_ENABLED, and the sleeve's own flag below — and
+# `app/options_gates.py` ANDs them through `baskfy_core.options.gating.options_gates`. With any
+# one false the sleeve is PAPER and journals simulated=true whatever DRY_RUN says. Flipping any of
+# them is Maulik's hand alone after docs/options/02 §3 (OP13 green, the per-sleeve paper period,
+# the tiers on the page, his written risk decision). Read once, here; never a form field.
+#
+# THERE IS NO AUTO-EXECUTE FLAG FOR ANY OPTIONS SLEEVE, and none may be added (PACK.3). The swing
+# and TWT exceptions above are Maulik's for those books only.
+OPTIONS_O1M_EXECUTION_ENABLED = (
+    os.getenv("BASKFY_OPTIONS_O1M_EXECUTION_ENABLED", "false").lower() == "true")
+OPTIONS_O1W_EXECUTION_ENABLED = (
+    os.getenv("BASKFY_OPTIONS_O1W_EXECUTION_ENABLED", "false").lower() == "true")
+OPTIONS_O2_EXECUTION_ENABLED = (
+    os.getenv("BASKFY_OPTIONS_O2_EXECUTION_ENABLED", "false").lower() == "true")
+OPTIONS_O3_EXECUTION_ENABLED = (
+    os.getenv("BASKFY_OPTIONS_O3_EXECUTION_ENABLED", "false").lower() == "true")
+# Operational (PACK.11) — they move no money. The monitor (OP9) is the desk's; the collector and
+# the scans run in the worker and are read here only so the desk can say whether they are on.
+OPTIONS_MONITOR_ENABLED = os.getenv("BASKFY_OPTIONS_MONITOR_ENABLED", "false").lower() == "true"
+OPTIONS_COLLECT_ENABLED = os.getenv("BASKFY_OPTIONS_COLLECT_ENABLED", "false").lower() == "true"
+OPTIONS_SCAN_ENABLED = os.getenv("BASKFY_OPTIONS_SCAN_ENABLED", "false").lower() == "true"
+# The six ceilings (docs/options/02 "Ceilings"): a setting may sit below them, never above.
+OPTIONS_RISK_PER_TRADE_INR_MAX = os.getenv("BASKFY_OPTIONS_RISK_PER_TRADE_INR_MAX", "25000")
+OPTIONS_RISK_PCT_MAX = os.getenv("BASKFY_OPTIONS_RISK_PCT_MAX", "1.0")
+OPTIONS_MAX_LOTS_MAX = int(os.getenv("BASKFY_OPTIONS_MAX_LOTS_MAX", "10") or 10)
+OPTIONS_BOOK_DAILY_LOSS_INR_MAX = os.getenv("BASKFY_OPTIONS_BOOK_DAILY_LOSS_INR_MAX", "30000")
+OPTIONS_BOOK_MONTHLY_LOSS_INR_MAX = os.getenv("BASKFY_OPTIONS_BOOK_MONTHLY_LOSS_INR_MAX", "75000")
+OPTIONS_HARD_EXIT_LATEST = os.getenv("BASKFY_OPTIONS_HARD_EXIT_LATEST", "15:00")
+
 # ---- The swing book's notifier (SW11, STANDING-ANSWERS A2) -------------------------------
 # One-way. A TRIGGERED signal for a daily-focus name is emailed with the whole line; nothing
 # that comes back — a reply, a tap — can reach an order. The desk does not import the data

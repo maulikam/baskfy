@@ -134,6 +134,67 @@ class TestTheSwingBoundary:
         assert (C.STOP_MIN, C.STOP_MAX) == (0.08, 0.12), "the weekly book's band moved"
 
 
+#: OP2. The options run's switches and ceilings (docs/options/02 Track B and "Ceilings"). Every
+#: one is system-only; the four execution flags are safety switches (§3 puts six conditions in
+#: front of each, none of them a click) and the six ceilings bound `op_*_config`.
+OPTIONS_SYSTEM_ONLY = (
+    "BASKFY_OPTIONS_O1M_EXECUTION_ENABLED",
+    "BASKFY_OPTIONS_O1W_EXECUTION_ENABLED",
+    "BASKFY_OPTIONS_O2_EXECUTION_ENABLED",
+    "BASKFY_OPTIONS_O3_EXECUTION_ENABLED",
+    "BASKFY_OPTIONS_MONITOR_ENABLED",
+    "BASKFY_OPTIONS_COLLECT_ENABLED",
+    "BASKFY_OPTIONS_SCAN_ENABLED",
+    "BASKFY_OPTIONS_RISK_PER_TRADE_INR_MAX",
+    "BASKFY_OPTIONS_RISK_PCT_MAX",
+    "BASKFY_OPTIONS_MAX_LOTS_MAX",
+    "BASKFY_OPTIONS_BOOK_DAILY_LOSS_INR_MAX",
+    "BASKFY_OPTIONS_BOOK_MONTHLY_LOSS_INR_MAX",
+    "BASKFY_OPTIONS_HARD_EXIT_LATEST",
+)
+
+
+class TestTheOptionsBoundary:
+    """docs/options/06 OP2: ceilings never form fields; OPTIONS_ENABLED / INTRADAY_ENABLED stay
+    LOCKED_KEYS; no auto-execute key exists for any options sleeve (PACK.3)."""
+
+    @pytest.mark.parametrize("key", OPTIONS_SYSTEM_ONLY)
+    def test_options_switch_or_ceiling_is_env_only(self, key: str) -> None:
+        assert key in st.LOCKED_KEYS, f"{key} must be a LOCKED_KEY (docs/options/02 Track B)"
+        assert not _editable(key)
+
+    @pytest.mark.parametrize("key", ["OPTIONS_ENABLED", "INTRADAY_ENABLED"])
+    def test_the_desk_product_switches_stay_locked(self, key: str) -> None:
+        assert key in st.LOCKED_KEYS
+        assert not _editable(key)
+
+    def test_no_options_key_at_all_leaks_in_by_prefix(self) -> None:
+        leaked = sorted(k for k in st.BY_KEY if k.startswith("BASKFY_OPTIONS_") and _editable(k))
+        assert leaked == [], f"new user-editable options knobs: {leaked}"
+
+    def test_there_is_no_options_auto_execute_key_anywhere_in_the_boundary(self) -> None:
+        keys = set(st.LOCKED_KEYS) | set(st.BY_KEY)
+        assert not [k for k in keys if k.startswith("BASKFY_OPTIONS_") and "AUTO" in k]
+
+    def test_every_options_flag_defaults_false_in_the_config_module(self) -> None:
+        import os
+
+        from app import config as C
+
+        for key in OPTIONS_SYSTEM_ONLY[:7]:
+            assert os.environ.get(key, "false").lower() != "true", (
+                f"this suite must not run with {key} set"
+            )
+        assert C.OPTIONS_O1M_EXECUTION_ENABLED is False
+        assert C.OPTIONS_O1W_EXECUTION_ENABLED is False
+        assert C.OPTIONS_O2_EXECUTION_ENABLED is False
+        assert C.OPTIONS_O3_EXECUTION_ENABLED is False
+        assert C.OPTIONS_MONITOR_ENABLED is False
+        assert C.OPTIONS_COLLECT_ENABLED is False
+        assert C.OPTIONS_SCAN_ENABLED is False
+        assert not [name for name in vars(C) if name.startswith("OPTIONS_") and "AUTO" in name]
+
+
 class TestTheSettingsPageItself:
     """`save()` refusing a key is the enforcement; this asserts the surface agrees.
 

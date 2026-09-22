@@ -349,3 +349,22 @@ __all__ = [
     "conform",
     "empty_frame",
 ]
+
+
+class OptionContractRecord(_Record):
+    """One NFO option contract, as Kite's instrument dump states it (``docs/options/03`` §1, OP2).
+
+    The facts are the dump's columns — ``expiry``, ``strike``, ``instrument_type``, ``lot_size``,
+    ``tick_size`` — and **never** a parse of the trading symbol (weekly and monthly symbols have
+    different shapes). Lot size and tick size are read here and nowhere asserted as constants
+    (``docs/options/04`` §1.4).
+    """
+
+    instrument_token: int = Field(gt=0)
+    tradingsymbol: str = Field(min_length=1)
+    underlying: str = Field(min_length=1)
+    expiry: dt.date
+    strike: Decimal = Field(gt=0)
+    option_type: Literal["CE", "PE"]
+    lot_size: int = Field(gt=0)
+    tick_size: Decimal = Field(gt=0)

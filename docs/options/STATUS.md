@@ -3,9 +3,9 @@
 The status page for the options run. Updated at the end of every module, loud about what is NOT
 done. A fresh session resumes from the first module not marked ✅.
 
-**Run state: OP0 🟡, OP1 ✅ (22 Sep 2026); OP2 not started.** Pack written 22 Sep 2026 on branch
-`developer`, absorbing the never-started condor pack (`docs/condor/`) as sleeve O1. OP0 and OP1 were
-each run alone, by instruction ("execute only OP<N>, then stop"); the next session resumes at OP2.
+**Run state: OP0 🟡, OP1 ✅, OP2 ✅ (22 Sep 2026); OP3 not started.** Pack written 22 Sep 2026 on branch
+`developer`, absorbing the never-started condor pack (`docs/condor/`) as sleeve O1. OP0, OP1 and OP2
+were each run alone, by instruction ("execute only OP<N>, then stop"); the next session resumes at OP3.
 
 ## Module ledger
 
@@ -13,7 +13,7 @@ each run alone, by instruction ("execute only OP<N>, then stop"); the next sessi
 |---|---|---|
 | OP0 — Baseline, read-in, verified facts | 🟡 | Costs, expiry circular, F&O segment, algo rules, `OPTIONS_ENABLED` blast radius verified; six live Kite reads pending a session; full suites not re-run (memory rule) |
 | OP1 — The shared pure core `baskfy_core.options` | ✅ | 11 modules, 635 tests against `04`; purity, mypy strict, ruff, escape hatches clean; mutation 89.6 % (499/557), every survivor justified |
-| OP2 — Schema, NFO master, settings, `options_gates()` | ⬜ | |
+| OP2 — Schema, NFO master, settings, `options_gates()` | ✅ | `0050_options` (17 tables, `op_sleeve` enum, monthly chain partitions), nightly NFO master + `op_expiry`, verified event-day seed, 9 flags + 6 ceilings in desk/API/worker, `options_gates()`, `OptionsSettings`; gateway product gate tightened (OP0.6); 587 new tests |
 | OP3 — Provider reads, index minute bars, collector, limiter | ⬜ | |
 | OP4 — Sleeve signal cores and the scans | ⬜ | |
 | OP5 — API and the web Options tab (the scans ship) | ⬜ | |
@@ -230,9 +230,89 @@ swing's is). First run 74.5 % (415/557) exposed real gaps, closed by
 * `chain.oi_unit` defaults to `UNITS` **unverified** (OP1.3) — OP3's first NFO `quote()` confirms it.
 * Nothing is wired to a database, the desk or the web; no flag exists yet (OP2).
 
+## OP2 — Schema, the NFO master, settings, `options_gates()`
+
+**✅, 22 Sep 2026.** Decisions `DECISIONS-OP.md` OP2.1–OP2.10.
+
+### What exists
+
+| Piece | Where | Notes |
+|---|---|---|
+| Gateway product gate tightened (OP0.6) | `packages/execution/src/baskfy_execution/guards.py` `product_exchange_refusal` | Derivative venue: `OPTIONS_ENABLED` required, **MIS only**, and MIS needs `INTRADAY_ENABLED` there too. `assert_not_overnight_option` unchanged. Cash branch unchanged. OP2.1 |
+| Migration **`0050_options`** (revises `0049_broker_trade`; single head) | `services/api/alembic/versions/0050_options.py` | 17 tables + enum `op_sleeve`; `op_chain_snapshot` RANGE-partitioned by month (Sep 2026 → Dec 2027, IST bounds, no DEFAULT — OP2.5); downgrade drops all, round trip tested on `baskfy_test` |
+| Models | `packages/core/src/baskfy_core/models/options.py` | Vocabularies imported from `baskfy_core.options`; market tables shared, every other table `user_id` cascading |
+| `options_gates()` (pure) | `packages/core/src/baskfy_core/options/gating.py` | `OptionsFlags`, `OptionsGate`, flag/ceiling env names; LIVE iff all four; the paper gates (OP2.3) |
+| Desk readers | `kite-momentum-rebalancer/app/config.py` (13 new env reads), `app/options_gates.py` (`options_gates`, `product_gates`), `app/analytics/settings.py` `LOCKED_KEYS` (+13) | Nothing constructs an options gateway yet (OP10) |
+| Worker | `baskfy_worker/options/` (`options_gates`, `options_ceilings`, `master.py`, `partitions.py`), `seeds/options_event_days.py`, `options_cli.py` (`seed`, `refresh-master`), task `baskfy.options.refresh_master` + Beat `options-contract-master` 19:30 mon–fri, route `baskfy.options.*` → default, alert `OPTIONS_MASTER_CHANGED` | OP2.7 |
+| Provider read | `KiteProvider.option_contracts(underlying)`, `OptionContractRecord` | One `instruments("NFO")` call, dump columns only |
+| API | `baskfy_api/options_settings.py` (patch models, ceilings, derived ₹ risk, audited writes), `settings.py` (7 flags + 6 ceilings), problem type `underlying-not-allowed` (422) | Routes are OP5's |
+| Env | root, `decile-blueprint` and desk `.env.example`: `BASKFY_OPTIONS_*` block, all flags `false`; `BASKFY_CONDOR_*` removed (OP0.7) | |
+| Event days seeded (source `SEED`, URL on the row) | RBI MPC decision days FY 2026-27: 8 Apr, 5 Jun, 5 Aug, 7 Oct, 4 Dec 2026, 5 Feb 2027 | Budget 2027-28 not announced → not seeded (OP2.6) |
+
+### AC → test
+
+| `06` OP2 AC | Test |
+|---|---|
+| migrate → seed → migrate is a no-op | `packages/core/tests/test_options_schema.py::TestMigrateSeedMigrate` (second `upgrade head` runs nothing; second seed writes 0 rows; a chosen number survives) |
+| calendar's next monthly equals the master's; a shifted expiry moves it | `services/worker/tests/test_options_master.py::TestTheMaster::test_the_calendar_monthly_is_the_masters_and_a_holiday_shift_moves_it` (27 Oct → 26 Oct fixture) |
+| every user-scoped `op_` table has `user_id` | `test_options_schema.py::test_every_user_scoped_table_has_a_cascading_non_null_user_id` (13 tables; 4 market tables have none) |
+| `options_gates()` PAPER for all but all-four-true, 16 rows × every sleeve | core `test_options_gating.py` (5 sleeves × 16), worker `test_options_master.py` (5 × 16, desk-style parsing), desk `tests/test_options_gates.py` (5 × 16 + `product_gates`) |
+| adding BANKNIFTY to any config is a 422 | `services/api/tests/test_options_settings.py::TestNiftyOnly` (book and sleeve patches; pure config raises; DB CHECK in `test_options_schema.py`) |
+| M4.1 boundary intact | desk `tests/test_settings_boundary.py::TestTheOptionsBoundary` (13 keys locked, `OPTIONS_ENABLED`/`INTRADAY_ENABLED` locked, no `*AUTO*`), API ceilings + audited writes |
+| Guard (OP0.6), tests first | `packages/execution/tests/test_derivative_product_gate.py` (174; red before the change, green after) |
+
+### Tests (new)
+
+| File | Tests |
+|---|---|
+| `packages/execution/tests/test_derivative_product_gate.py` | 174 |
+| `packages/core/tests/test_options_gating.py` | 115 |
+| `packages/core/tests/test_options_schema.py` (db-marked half runs on `baskfy_test`) | 53 |
+| `services/worker/tests/test_options_master.py` | 100 |
+| `services/api/tests/test_options_settings.py` | 42 |
+| desk `tests/test_options_gates.py` | 83 |
+| desk `tests/test_settings_boundary.py::TestTheOptionsBoundary` | 19 |
+| `packages/core/tests/test_schema_matches_docs.py::test_options_tables_are_recorded_in_docs` | 1 |
+| **Total** | **587** (485 screener tree, 102 desk) |
+
+**Suites.** Desk full run: **2,221 passed, 17 skipped, 12 subtests** (`DRY_RUN=true OPTIONS_ENABLED=false INTRADAY_ENABLED=false`). `packages/execution/tests`: **378 passed**. Swing/TWT/VBT/weekly guard files green. CI: see below.
+
+**`tools/ci-local.sh` (one full run, at the end): 15 passed, 2 failed, 3 skipped** (the same 3 web
+skips as OP1). The two failed steps, explained:
+
+* *Tests, with per-package coverage gates* — the whole of both suites ran; **five** tests failed.
+  Two were OP2's and are fixed and re-run green: `test_schema_matches_docs.py::
+  test_no_undocumented_tables` (the 17 `op_` tables are now in its list, plus
+  `test_options_tables_are_recorded_in_docs`) and `test_ops_and_alerts.py::
+  test_the_runbook_map_is_complete` (new `docs/runbooks/10-options-master.md`, mapped for
+  `OPTIONS_MASTER_CHANGED`). **Three are the pre-existing, non-options failures OP1 recorded**:
+  `services/api/tests/test_api_admin.py::TestUserLookupAndOverrides::
+  test_an_override_changes_the_effective_entitlements` (hard-coded 2026-09-21 expiry; still fails in
+  isolation) and the two `packages/providers` Kite-health tests (`test_cli_doctor.py::
+  TestWithoutCredentials::test_kite_is_reported_unavailable_with_the_reason`, `test_kite.py::
+  TestHealth::test_unconfigured_is_unavailable_not_an_exception`), which pass in isolation. Not
+  OP2's to fix; not weakened. The coverage-gate step was not re-run end to end (the Mac's memory
+  rule: one full CI); the per-package percentages of this run were not captured.
+* *Performance budgets* — failed **only because this session ran db-marked tests (including the
+  schema round trip) concurrently with it**; re-run alone afterwards: **all 17 benchmark tests
+  pass**. Lesson for OP3+: never run db tests while `ci-local.sh` is running.
+
+### What is NOT done (by design, for later modules)
+
+* **No route** reads or writes `op_*_config` yet (OP5); `OptionsSettings` is exercised by tests only.
+* **Nothing has run against a real master**: no Kite session on this Mac (OP0.3). The first 19:30 run
+  on the box (after deploy) is the first real `op_contract`/`op_expiry`; its columns follow Kite's
+  documented dump. Lot size is still unrecorded as a number — it is read.
+* `op_index_minute`, `op_chain_snapshot`, `op_scan` exist but nothing writes them (OP3/OP4); OP3's
+  collector must call `ensure_chain_partition` for this month and next before writing.
+* The `/ops` side door (OP0.5) is untouched — OP13.
+* The seed is not part of `make seed`; run `uv run python -m baskfy_worker.options_cli seed` on the
+  box after migrating (NEEDS no Maulik: it writes zero capitals and verified dates only).
+* Not deployed, not pushed.
+
 ## What is NOT done
 
-Everything after OP1. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
-OP3 does them first); the two full-suite baseline runs (OP0.9); the gateway gap of OP0.6 and the
-`/ops` side door of OP0.5 are **recorded, not fixed** (OP2 and OP13). Every money flag is false and stays false. The paper periods begin only after OP15, and
+Everything after OP2. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
+OP3 does them first); the two full-suite baseline runs (OP0.9); the gateway gap of OP0.6 is **fixed in OP2** (OP2.1); the
+`/ops` side door of OP0.5 is **recorded, not fixed** (OP13). Every money flag is false and stays false. The paper periods begin only after OP15, and
 the longest (O1-M) takes about six months after that.

@@ -99,6 +99,8 @@ RUNBOOKS: Final[dict[AlertName, str]] = {
     AlertName.TWT_POSITION_NAKED: "docs/runbooks/09-twt-morning.md",
     AlertName.TWT_GTT_MISSING_AT_1515: "docs/runbooks/09-twt-morning.md",
     AlertName.TWT_ADJUSTMENT_RESET: "docs/runbooks/09-twt-morning.md",
+    # OP2: the options master changed under the calendar (docs/options/03 §2).
+    AlertName.OPTIONS_MASTER_CHANGED: "docs/runbooks/10-options-master.md",
 }
 
 

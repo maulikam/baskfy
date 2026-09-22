@@ -59,7 +59,23 @@ LOCKED_KEYS = frozenset({"DRY_RUN", "INTRADAY_ENABLED", "OPTIONS_ENABLED",
                          "BASKFY_SWING_EP_PREMARKET_ENABLED",
                          "BASKFY_SWING_RISK_PER_TRADE_PCT_MAX",
                          "BASKFY_SWING_MAX_POSITION_PCT_MAX",
-                         "BASKFY_SWING_MAX_OPEN_POSITIONS_MAX"})
+                         "BASKFY_SWING_MAX_OPEN_POSITIONS_MAX",
+                         # The options run (OP2, docs/options/02 Track B): four execution
+                         # flags, three operational flags and six ceilings, all system-only.
+                         # OPTIONS_ENABLED / INTRADAY_ENABLED are already above.
+                         "BASKFY_OPTIONS_O1M_EXECUTION_ENABLED",
+                         "BASKFY_OPTIONS_O1W_EXECUTION_ENABLED",
+                         "BASKFY_OPTIONS_O2_EXECUTION_ENABLED",
+                         "BASKFY_OPTIONS_O3_EXECUTION_ENABLED",
+                         "BASKFY_OPTIONS_MONITOR_ENABLED",
+                         "BASKFY_OPTIONS_COLLECT_ENABLED",
+                         "BASKFY_OPTIONS_SCAN_ENABLED",
+                         "BASKFY_OPTIONS_RISK_PER_TRADE_INR_MAX",
+                         "BASKFY_OPTIONS_RISK_PCT_MAX",
+                         "BASKFY_OPTIONS_MAX_LOTS_MAX",
+                         "BASKFY_OPTIONS_BOOK_DAILY_LOSS_INR_MAX",
+                         "BASKFY_OPTIONS_BOOK_MONTHLY_LOSS_INR_MAX",
+                         "BASKFY_OPTIONS_HARD_EXIT_LATEST"})
 
 
 class SettingsError(ValueError):

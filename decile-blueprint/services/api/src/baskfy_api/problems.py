@@ -57,6 +57,11 @@ class ProblemType(StrEnum):
     #: the 422 description on every route in the published contract and in the generated
     #: TypeScript client. Adding a 422 type? Put it above this line.
     SETTING_BELOW_FLOOR = "setting-below-floor"
+    #: OP2 (docs/options/02 Track C §5), not in docs/07's table. The options book trades NIFTY
+    #: index options only in v1; a settings write naming any other underlying is well formed and
+    #: refused by the scope, not by the JSON. Declared here, above SETTING_ABOVE_CEILING, for the
+    #: load-bearing order described on SETTING_BELOW_FLOOR's comment.
+    UNDERLYING_NOT_ALLOWED = "underlying-not-allowed"
     #: SW2, also not in docs/07's table. A settings write that exceeds a server-side ceiling is
     #: not "your JSON is wrong" (400) — the payload is well formed and the value is a number a
     #: person can legitimately want. It is the M4.1 boundary refusing, and the caller needs the
@@ -84,6 +89,7 @@ STATUS_FOR: Final[Mapping[ProblemType, int]] = {
     ProblemType.PIPELINE_DEGRADED: 503,
     ProblemType.INTERNAL_ERROR: 500,
     ProblemType.SETTING_BELOW_FLOOR: 422,
+    ProblemType.UNDERLYING_NOT_ALLOWED: 422,
     ProblemType.SETTING_ABOVE_CEILING: 422,
     ProblemType.SCAN_IN_FLIGHT: 409,
 }
@@ -100,6 +106,7 @@ TITLE_FOR: Final[Mapping[ProblemType, str]] = {
     ProblemType.PIPELINE_DEGRADED: "Data pipeline is degraded",
     ProblemType.INTERNAL_ERROR: "Internal server error",
     ProblemType.SETTING_BELOW_FLOOR: "Setting is below the server's floor",
+    ProblemType.UNDERLYING_NOT_ALLOWED: "Underlying is not allowed",
     ProblemType.SETTING_ABOVE_CEILING: "Setting exceeds the server's ceiling",
     ProblemType.SCAN_IN_FLIGHT: "A scan is already in flight",
 }
@@ -260,4 +267,20 @@ def setting_below_floor(*, field: str, value: object, floor: object, env_var: st
         requested=str(value),
         floor=str(floor),
         env_var=env_var,
+    )
+
+
+def underlying_not_allowed(*, value: object, allowed: tuple[str, ...]) -> Problem:
+    """OP2 / ``docs/options/02`` Track C §5: NIFTY index options only in v1 (PACK.12).
+
+    Names what is allowed, so the refusal is not something to bisect around, and says it is the
+    scope of the run rather than a ceiling a server could raise.
+    """
+    return Problem(
+        ProblemType.UNDERLYING_NOT_ALLOWED,
+        f"underlying {value!r} is not allowed; the options book trades "
+        f"{', '.join(allowed)} only in v1 (docs/options/02 Track C §5).",
+        field="underlying",
+        requested=str(value),
+        allowed=list(allowed),
     )

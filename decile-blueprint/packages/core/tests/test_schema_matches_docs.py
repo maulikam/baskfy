@@ -199,6 +199,27 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     # `tw_backtest_run`, and the only `tw_` table that records a *request* rather than a
     # measurement. There is deliberately no `provisional` column — DECISIONS-TW TW12.2.
     "tw_scan_run": ("id",),
+    # The options run — docs/options/03-data-model.md (OP2, migration 0050). Seventeen tables:
+    # four market-data tables shared like `ohlcv_daily` (no user_id), the rest keyed with
+    # `user_id` (P4.1). `op_chain_snapshot` is RANGE-partitioned by month; its partitions are
+    # not models. `op_config_audit` is 03 §7's "settings_audit on every write".
+    "op_contract": ("instrument_token",),
+    "op_expiry": ("underlying", "expiry_date"),
+    "op_event_day": ("user_id", "date"),
+    "op_index_minute": ("instrument_id", "ts"),
+    "op_chain_snapshot": ("ts", "instrument_token"),
+    "op_scan": ("id",),
+    "op_book_config": ("user_id",),
+    "op_sleeve_config": ("user_id", "sleeve"),
+    "op_config_audit": ("id",),
+    "op_session": ("id",),
+    "op_plan": ("id",),
+    "op_leg": ("id",),
+    "op_order": ("id",),
+    "op_fill": ("id",),
+    "op_position": ("session_id",),
+    "op_journal": ("session_id",),
+    "op_backtest_run": ("id",),
     # AF lane I (migration 0045): the Stocks watchlist and the goal composer's saved answers.
     # Neither is a curated basket, so neither belongs with the `cb_` tables — a watched
     # *instrument* is a bookmark on a symbol, and the preferences row is what `/discover`
@@ -375,6 +396,31 @@ def test_twt_tables_are_recorded_in_docs() -> None:
         "tw_scan_run",
     ):
         assert table in twt_model, f"{table} is not described in docs/twt/03"
+
+
+def test_options_tables_are_recorded_in_docs() -> None:
+    """OP2 tables live in docs/options/03, by the same rule as every sleeve's above."""
+    model = (MONOREPO_ROOT / "docs" / "options" / "03-data-model.md").read_text(encoding="utf-8")
+    for table in (
+        "op_contract",
+        "op_expiry",
+        "op_event_day",
+        "op_index_minute",
+        "op_chain_snapshot",
+        "op_scan",
+        "op_book_config",
+        "op_sleeve_config",
+        "op_config_audit",
+        "op_session",
+        "op_plan",
+        "op_leg",
+        "op_order",
+        "op_fill",
+        "op_position",
+        "op_journal",
+        "op_backtest_run",
+    ):
+        assert table in model, f"{table} is not described in docs/options/03"
 
 
 #: Every column `docs/twt/03` names in prose, table by table. The point is not coverage for its

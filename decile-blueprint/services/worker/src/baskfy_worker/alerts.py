@@ -105,6 +105,10 @@ class AlertName(StrEnum):
     TWT_POSITION_NAKED = "TWT_POSITION_NAKED"
     TWT_GTT_MISSING_AT_1515 = "TWT_GTT_MISSING_AT_1515"
     TWT_ADJUSTMENT_RESET = "TWT_ADJUSTMENT_RESET"
+    # OP2 (docs/options/03 §2): the NFO master changed under the options calendar — a lot size
+    # moved, an expiry changed kind, or a listed future expiry was withdrawn (a holiday shift).
+    # Sizing and each sleeve's day role both depend on it, so a person looks before the open.
+    OPTIONS_MASTER_CHANGED = "OPTIONS_MASTER_CHANGED"
 
 
 #: How long the webhook is given before it is abandoned. An alert that blocks the reaper for

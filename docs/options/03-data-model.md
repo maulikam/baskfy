@@ -120,7 +120,8 @@ session referenced.
 [**0**], `risk_per_trade_pct` [O1M 1.0, O1W 0.5, O2 0.5, O3 0.5], `max_lots` [O1M 3, others 2],
 `paper_enabled` [true], `hard_exit_time` [O1 14:30, O2 15:00, O3 14:45], `paused_until`,
 `paused_reason`, `updated_at`, `updated_by`. Bounded by `02`'s ceilings; `settings_audit` on every
-write.
+write — `op_config_audit` (`user_id`, `scope` = `BOOK` or the sleeve group, `key`, `old_value`,
+`new_value`, `changed_at`, `changed_by`, `note`; OP2, `DECISIONS-OP` OP2.2).
 
 Strategy thresholds (gap, range, ER, delta band, widths, stops, targets, windows) are **not**
 columns: they are fields of `baskfy_core.options.config` with the defaults of `04`, shown read-only

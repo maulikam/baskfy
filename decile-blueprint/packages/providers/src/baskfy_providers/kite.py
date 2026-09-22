@@ -57,6 +57,7 @@ from baskfy_providers.records import (
     BrokerAccountRef,
     BrokerHoldingRecord,
     InstrumentRecord,
+    OptionContractRecord,
     QuoteRecord,
     conform,
     empty_frame,
@@ -320,6 +321,25 @@ class KiteProvider:
             if name:
                 underlyings.add(name.upper())
         return sorted(underlyings)
+
+    def option_contracts(self, underlying: str) -> list[OptionContractRecord]:
+        """Every listed CE/PE contract on ``underlying`` from the NFO dump (``docs/options/03`` §1).
+
+        One HTTP call, on the same rate-limited path as :meth:`fno_underlyings`. Filtered to
+        ``name == underlying`` and ``instrument_type in {CE, PE}``; a row missing a fact the
+        options calendar needs (expiry, strike, lot size, tick size) is skipped rather than
+        guessed, because a contract with an invented lot size would size a plan wrong. Sorted by
+        token so a re-run writes identical rows (house rule 7). Read-only: this never reaches an
+        order path.
+        """
+        wanted = underlying.upper().strip()
+        raw = self._call(lambda client: client.instruments("NFO"))
+        out: list[OptionContractRecord] = []
+        for row in raw:
+            record = _to_option_contract(row, wanted)
+            if record is not None:
+                out.append(record)
+        return sorted(out, key=lambda r: r.instrument_token)
 
     def daily_bars(self, token: int, start: dt.date, end: dt.date) -> pl.DataFrame:
         """Raw daily candles for one instrument, chunked to respect the day-interval cap.
@@ -623,6 +643,40 @@ def _to_instrument_record(row: dict[str, object]) -> InstrumentRecord | None:
         kite_token=_int(row.get("instrument_token")),
         lot_size=_int(row.get("lot_size")),
         exchange=exchange,
+    )
+
+
+def _to_option_contract(row: dict[str, object], underlying: str) -> OptionContractRecord | None:
+    """One NFO dump row as an option contract on ``underlying``, or ``None``."""
+    if (_text(row.get("name")) or "").upper() != underlying:
+        return None
+    option_type = (_text(row.get("instrument_type")) or "").upper()
+    if option_type not in ("CE", "PE"):
+        return None
+    token = _int(row.get("instrument_token"))
+    symbol = _text(row.get("tradingsymbol"))
+    expiry_raw = row.get("expiry")
+    strike = _decimal(row.get("strike"))
+    lot_size = _int(row.get("lot_size"))
+    tick_size = _decimal(row.get("tick_size"))
+    if (
+        not token
+        or not symbol
+        or expiry_raw in (None, "")
+        or not strike
+        or not lot_size
+        or not tick_size
+    ):
+        return None
+    return OptionContractRecord(
+        instrument_token=token,
+        tradingsymbol=symbol,
+        underlying=underlying,
+        expiry=_date(expiry_raw),
+        strike=strike,
+        option_type="CE" if option_type == "CE" else "PE",
+        lot_size=lot_size,
+        tick_size=tick_size,
     )
 
 

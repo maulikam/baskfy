@@ -17,7 +17,7 @@ OP0 → OP1 → OP2 → OP3 → OP4 → OP5            (scans on the web)
                                  OP11 + OP12 → OP13 → OP14 → OP15
 ```
 
-Nothing in this plan edits `frozen/`, the gateway's product gates, or the overnight-option guard.
+Nothing in this plan edits `frozen/`, the gateway's product gates, or the overnight-option guard. (One exception, found by OP0 and made in OP2: the product gate was *tightened* so a derivative venue admits MIS only and MIS needs `INTRADAY_ENABLED` there too — `DECISIONS-OP` OP0.6/OP2.1; this sentence was the stale half.)
 Nothing flips a money flag. **Data-blocked** modules are marked ⛁ and say what they wait for.
 
 ## Where the condor modules went

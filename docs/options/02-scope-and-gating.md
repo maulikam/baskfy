@@ -70,7 +70,7 @@ dark: `_options_operations()` guards on an `ImportError` from `strategies.strang
 is live, so the flag alone puts five strangle controls on the page (they would fail at spawn —
 `DECISIONS-OP` OP0.5). (2) The gateway's product gate admits **any** product on a derivative venue once
 `options_enabled` is true — NFO MIS without `INTRADAY_ENABLED`, and NRML futures — so the flag alone
-widens the weekly desk's gateway (OP0.6). OP2 tightens (2); OP13's test covers (1).
+widens the weekly desk's gateway (OP0.6). OP2 tightens (2); OP13's test covers (1). **(2) is closed (OP2, `DECISIONS-OP` OP2.1):** a derivative venue now admits `MIS` only, and only with `INTRADAY_ENABLED` as well as `OPTIONS_ENABLED`.
 
 ### Ceilings (system-only env; a setting may sit below them, never above)
 

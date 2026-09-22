@@ -57,6 +57,7 @@ from baskfy_worker.alerts import Alert, AlertName, Severity, dispatch
 from baskfy_worker.bhavcopy_backfill import backfill_bars_from_bhavcopy
 from baskfy_worker.celery_app import IST, QUEUE_COMPUTE, QUEUES
 from baskfy_worker.db import run_checkpointed, run_in_session, session_scope
+from baskfy_worker.options.master import EmptyMaster, master_alert, refresh_master
 from baskfy_worker.orchestrator import PipelineOutcome, run_nightly_pipeline
 from baskfy_worker.providers import build_cache, build_pipeline_dependencies, sole_user_id
 from baskfy_worker.settings import get_worker_settings
@@ -887,6 +888,38 @@ def vbt_detect_task(trade_date: str | None = None) -> JsonObject:
         outcome = StepOutcome()
         signals = await run_detect_vbt(session, outcome, day, user_id=user_id)
         return {"date": day.isoformat(), "signals": signals, "detail": outcome.detail}
+
+    return run_in_session(_run)
+
+
+@shared_task(name="baskfy.options.refresh_master", acks_late=True)
+def options_refresh_master_task(as_of: str | None = None) -> JsonObject:
+    """OP2: tonight's NIFTY options master into ``op_contract`` and ``op_expiry``.
+
+    One read-only Kite call (``instruments("NFO")``) on the bulk lane, then an idempotent upsert:
+    contracts are never deleted, the calendar is rebuilt from the master and never from a weekday
+    rule (``docs/options/04`` §1.1). A lot-size change, a kind change or a withdrawn future expiry
+    raises ``OPTIONS_MASTER_CHANGED``. No Kite session → skipped, not failed: the calendar keeps
+    last night's rows. An empty dump is refused rather than applied.
+    """
+    day = dt.date.fromisoformat(as_of) if as_of else dt.datetime.now(tz=IST).date()
+    if not kite_session_usable():
+        return {"date": day.isoformat(), "skipped": "no usable Kite session"}
+    provider = build_kite_provider(
+        get_provider_settings(), provider_retry_hooks(), lane=KiteLane.BULK
+    )
+    records = provider.option_contracts("NIFTY")
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        try:
+            report = await refresh_master(session, records, as_of=day)
+        except EmptyMaster as exc:
+            return {"date": day.isoformat(), "refused": str(exc)}
+        alert = master_alert(report)
+        out = report.as_dict()
+        if alert is not None:
+            out["alert"] = await dispatch(alert)
+        return out
 
     return run_in_session(_run)
 

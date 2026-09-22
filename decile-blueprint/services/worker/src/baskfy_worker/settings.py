@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import datetime as dt
+from decimal import Decimal
 from functools import lru_cache
 
 from pydantic import Field
@@ -112,6 +114,40 @@ class WorkerSettings(BaseSettings):
     #: A FLOOR, not a ceiling: ``tw_config.trail_pct`` may not fall below it (DECISIONS-TW
     #: TW0.5). The API mirrors the same four bounds.
     twt_trail_pct_min: float = Field(default=18.00, gt=0, le=100)
+
+    # --- The options run (docs/options/02 Track B, OP2) ------------------------
+    #
+    # Nine flags and six ceilings, every one system-only and read once at startup. A real options
+    # order needs FOUR switches at once for its sleeve — the desk's DRY_RUN off, OPTIONS_ENABLED,
+    # INTRADAY_ENABLED and the sleeve's own execution flag — and ``baskfy_core.options.gating.
+    # options_gates`` is the one function that ANDs them (``baskfy_worker.options`` calls it). The
+    # worker places nothing; it reads the switches so a session's ``mode`` and a scan's label say
+    # the same thing the desk would. **Every money flag defaults false and no agent flips one**
+    # (``02`` §3). There is no auto-execute flag for any options sleeve (PACK.3).
+    options_o1m_execution_enabled: bool = False
+    options_o1w_execution_enabled: bool = False
+    options_o2_execution_enabled: bool = False
+    options_o3_execution_enabled: bool = False
+    #: Operational (PACK.11): they move no money. OP3 may default collect/scan true after the
+    #: limiter measurement; until then false.
+    options_monitor_enabled: bool = False
+    options_collect_enabled: bool = False
+    options_scan_enabled: bool = False
+    #: The desk's own product switches and DRY_RUN, read under the desk's unprefixed names and
+    #: parsed the desk's way (``app/config.py``): DRY_RUN is on unless exactly ``false``; the two
+    #: switches are on only when exactly ``true``. Strings, so pydantic's lenient bool parsing
+    #: ("yes", "1", "on") cannot read a value as live that the desk reads as off.
+    options_desk_dry_run: str = Field(default="true", validation_alias="DRY_RUN")
+    options_desk_options_enabled: str = Field(default="false", validation_alias="OPTIONS_ENABLED")
+    options_desk_intraday_enabled: str = Field(default="false", validation_alias="INTRADAY_ENABLED")
+    #: ``02`` "Ceilings". A setting may sit below them, never above; mirrored in the API.
+    options_risk_per_trade_inr_max: Decimal = Field(default=Decimal("25000"), gt=0)
+    options_risk_pct_max: Decimal = Field(default=Decimal("1.0"), gt=0, le=100)
+    options_max_lots_max: int = Field(default=10, gt=0, le=100)
+    options_book_daily_loss_inr_max: Decimal = Field(default=Decimal("30000"), gt=0)
+    options_book_monthly_loss_inr_max: Decimal = Field(default=Decimal("75000"), gt=0)
+    #: No hard exit later than this (``02`` Track C §1). Never later than 15:00 in v1.
+    options_hard_exit_latest: dt.time = dt.time(15, 0)
 
     # --- SW18: the 08:45 Kite login nudge (docs/swing/DECISIONS-SW SW18.1) ------
     #

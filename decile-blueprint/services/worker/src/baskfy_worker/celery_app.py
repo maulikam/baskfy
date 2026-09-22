@@ -102,6 +102,9 @@ TASK_ROUTES: Final[dict[str, dict[str, str]]] = {
     # the day's closes: compute-bound over price history, exactly like the factor and curated
     # metric steps, and it must not sit behind a backfill chunk on the ingest queue.
     "baskfy.portfolio.*": {"queue": QUEUE_COMPUTE},
+    # OP2: the options run's jobs. The nightly NFO master is one Kite read and one upsert — no
+    # heavier than the ops checks — so it takes the default queue.
+    "baskfy.options.*": {"queue": QUEUE_DEFAULT},
 }
 
 #: docs/09 §Schedule (IST), weekdays. Times are the doc's; the task names are docs/03's.
@@ -122,6 +125,15 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
     "capture-kite-trades": {
         "task": "baskfy.pipeline.capture_kite_trades",
         "schedule": crontab(hour=15, minute=50, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_DEFAULT},
+    },
+    # OP2 (docs/options/03 §1-§2): the NIFTY options master and the expiry calendar, from Kite's
+    # NFO dump. 19:30 on weekdays — the morning's Kite session is still valid, the day's chain has
+    # started, and the calendar is current long before tomorrow's 09:15. One read-only call; a box
+    # with no Kite session skips it. Moves no money.
+    "options-contract-master": {
+        "task": "baskfy.options.refresh_master",
+        "schedule": crontab(hour=19, minute=30, day_of_week="mon-fri"),
         "options": {"queue": QUEUE_DEFAULT},
     },
     "bhavcopy-eod": {

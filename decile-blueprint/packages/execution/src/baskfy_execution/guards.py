@@ -85,12 +85,26 @@ def product_exchange_refusal(
     Allow-list, not deny-list (AF 0.7): CNC on NSE/BSE is the only cash path; MIS needs
     ``intraday_enabled``; any venue in ``DERIVATIVE_EXCHANGES`` needs ``options_enabled``.
     A deny-list of NFO/BFO alone let MCX/NRML and CDS through every guard.
+
+    **A derivative venue admits MIS only, and MIS needs ``intraday_enabled`` there too** (OP2,
+    ``docs/options/DECISIONS-OP.md`` OP0.6/OP2.1). Until 22 Sep 2026 this branch returned "" for
+    *any* product once ``options_enabled`` was true, so the flag alone admitted NFO MIS without
+    the intraday switch and NRML futures — non-negotiable 5 says "MIS needs INTRADAY_ENABLED",
+    and nothing in this system may carry a derivative past the close. Both flags are false
+    everywhere, so nothing in force changed when this tightened.
     """
     product_u = (product or "").upper().strip()
     exchange_u = (exchange or "").upper().strip()
     if exchange_u in DERIVATIVE_EXCHANGES:
         if not options_enabled:
             return "F&O/derivatives disabled (config.OPTIONS_ENABLED)"
+        if product_u != "MIS":
+            return (
+                f"{product_u or product!r}: only MIS is allowed on a derivative venue "
+                f"({exchange_u}); nothing is carried past the close"
+            )
+        if not intraday_enabled:
+            return "MIS/intraday disabled (config.INTRADAY_ENABLED)"
         return ""
     if exchange_u not in CASH_EXCHANGES:
         return (

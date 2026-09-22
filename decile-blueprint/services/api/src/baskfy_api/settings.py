@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 from decimal import Decimal
 from functools import lru_cache
 from typing import Final, Literal
@@ -446,6 +447,34 @@ class Settings(BaseSettings):
     #: swing book and VBT-1 use, and the desk copies it (`app/twt_desk.py`) because it cannot
     #: import the worker.
     twt_scan_stale_after_seconds: int = Field(default=600, gt=0)
+
+    # --- The options run (docs/options/02 Track B, OP2) ------------------------
+    #
+    # Seven flags and six ceilings, system-only, read once at startup, never from a form. The two
+    # desk switches (OPTIONS_ENABLED, INTRADAY_ENABLED) complete ``02``'s nine and are the desk's;
+    # the worker reads them for ``options_gates``. The API places nothing and has no execute route
+    # for options (``02`` Track C §4); the execution flags are here so the settings page can say
+    # "Execution: disabled on this server". **Every money flag defaults false; no agent flips one.**
+    # There is no auto-execute flag for any options sleeve and none may be added (PACK.3).
+    options_o1m_execution_enabled: bool = False
+    options_o1w_execution_enabled: bool = False
+    options_o2_execution_enabled: bool = False
+    options_o3_execution_enabled: bool = False
+    options_monitor_enabled: bool = False
+    options_collect_enabled: bool = False
+    options_scan_enabled: bool = False
+    #: ``op_sleeve_config`` — any sleeve's per-trade risk in ₹ may not exceed this.
+    options_risk_per_trade_inr_max: Decimal = Field(default=Decimal("25000"), gt=0)
+    #: ``op_sleeve_config.risk_per_trade_pct`` may not exceed this.
+    options_risk_pct_max: Decimal = Field(default=Decimal("1.0"), gt=0, le=100)
+    #: ``op_sleeve_config.max_lots`` may not exceed this.
+    options_max_lots_max: int = Field(default=10, gt=0, le=100)
+    #: ``op_book_config.daily_loss_limit_inr`` may not exceed this.
+    options_book_daily_loss_inr_max: Decimal = Field(default=Decimal("30000"), gt=0)
+    #: ``op_book_config.monthly_pause_inr`` may not exceed this.
+    options_book_monthly_loss_inr_max: Decimal = Field(default=Decimal("75000"), gt=0)
+    #: ``op_sleeve_config.hard_exit_time`` may not be later than this (``02`` Track C §1).
+    options_hard_exit_latest: dt.time = dt.time(15, 0)
 
     # --- Rate limits (docs/07 §Conventions) ----------------------------------
     rate_limit_anonymous_per_minute: int = Field(default=10, gt=0)

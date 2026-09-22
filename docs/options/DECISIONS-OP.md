@@ -388,3 +388,132 @@ the 58 survivors are each justified in `reconciliation/mutant-justifications.jso
 no statistic reads, and two exit-rank ties decided by string hashing). Report:
 `decile-blueprint/reconciliation/MUTANTS-options.md` (its own file, so swing's `MUTANTS.md` is not
 overwritten by a partial run). **Reversal.** Remove the targets.
+
+---
+
+# OP2 — Schema, the NFO master, settings, `options_gates()` (22 Sep 2026)
+
+## OP2.1 — The gateway's product gate: a derivative venue admits MIS only, and MIS needs `INTRADAY_ENABLED` there too · ⚠ UNREVIEWED
+
+**Context.** OP0.6: `product_exchange_refusal` returned `""` for any product on a
+`DERIVATIVE_EXCHANGES` venue once `options_enabled` was true, so `OPTIONS_ENABLED` alone admitted NFO
+MIS without `INTRADAY_ENABLED` and NRML futures — against non-negotiable 5 ("MIS needs
+`INTRADAY_ENABLED`"). `06`'s preamble says "nothing in this plan edits the gateway's product gates";
+that sentence was written before OP0 found the hole and is the stale half for this one change (the
+coordinator carried OP0.6 into OP2 by instruction). **Choice.** On a derivative venue: no
+`options_enabled` → the existing "F&O/derivatives disabled" refusal; any product but `MIS` → refused
+("only MIS is allowed on a derivative venue … nothing is carried past the close"); `MIS` without
+`intraday_enabled` → "MIS/intraday disabled". `assert_not_overnight_option` is unchanged and still
+refuses an option under a carry product first. The cash branch is untouched. Tests first:
+`packages/execution/tests/test_derivative_product_gate.py` (every product × both switches × every
+derivative venue, plus gateway-level cases with a recording broker: 0 calls). A GTT on a derivative
+venue (its leg is CNC by construction) is now refused whatever the switches. Both flags are false in
+every environment, so nothing in force changed — the stricter boundary (charter tie-break). Weekly
+desk, swing, TWT and VBT suites green. **Rejected.** Leaving it to `options_gates()` (the weekly
+desk's gateway does not call it); allowing NRML futures behind a third flag (futures are Track C §6).
+**Reversal.** Delete the two added branches in `guards.py`.
+
+## OP2.2 — The `op_` schema: 17 tables, one enum, one migration (`0050_options`) · ⚠ UNREVIEWED
+
+`03` §1–§12 plus **`op_config_audit`** (`03` §7's "settings_audit on every write", shaped like
+`tw_config_audit` with a `scope` column: `BOOK` or the sleeve group). Interpretations: `op_event_day`
+carries `user_id` (as `03` §3 lists), so its key is `(user_id, date)`; `op_sleeve_config` is keyed by
+sleeve **group** (`O1M`, `O1W`, `O2`, `O3` — `03` "config and flags group O3A/O3B as O3"), a text
+column with a CHECK, while session/plan/scan/journal/backtest rows use the Postgres enum `op_sleeve`;
+`op_book_config` gains `underlying` (default `NIFTY`, `CHECK = 'NIFTY'`) so "adding BANKNIFTY" has a
+place to be refused (OP2.9); `op_leg.instrument_token` references `op_contract` (never deleted, so
+the reference is always resolvable); `op_chain_snapshot` has no FK to the master (46 k inserts a day
+for a fact the collector just read). Downgrade drops every table (partitions with their parent) and
+the enum, and is **tested** (`test_options_schema.py` round trip on `baskfy_test`). **Reversal.**
+`alembic downgrade 0049_broker_trade`.
+
+## OP2.3 — `options_gates()`: one pure rule, two readers; what the gateway is handed · ⚠ UNREVIEWED
+
+`baskfy_core.options.gating.options_gates(sleeve, flags)` is the only AND of the four switches;
+`app/options_gates.py` (desk, reads `app.config` at call time) and `baskfy_worker.options` (worker
+settings) are thin readers. Mode is `LIVE` iff all four are on. **What the gateway is handed in
+PAPER** is a judgement: with the sleeve's execution flag **off**, `dry_run=True` plus
+`options_enabled=intraday_enabled=True` — so OP10's paper confirm runs the real gateway path and is
+simulated by its dry-run branch (otherwise the product gate refuses every paper leg before the code
+under rehearsal is reached, contradicting `06` OP10). With the execution flag **on** but not all four,
+the desk's real switches pass through, so a half-flipped configuration is refused by the gateway
+itself (`06` OP13's defence in depth). `dry_run=True` in every PAPER row is what guarantees no broker
+call (tests at all three layers). **Rejected.** Always passing the desk's real switches (paper would
+be blocked, not simulated); always passing True/True (a half-flip would silently simulate).
+**Reversal.** The two `return` lines in `gating.py`.
+
+## OP2.4 — Vocabularies later modules own are not CHECK-constrained yet · ⚠ UNREVIEWED
+
+Vocabularies OP1 owns (sleeves, expiry kinds, option types, sides, session states, modes, sizing
+modes) are imported from `baskfy_core.options` into the models and CHECKed. A scan's state, skip and
+reject codes, close reasons and `verdict` are OP4/OP6–OP9's; they are text now and get their CHECK
+from the module that defines them (a transcription now would be a list that module must match —
+TW3.1's problem). No `04` threshold is a CHECK (condor PACK.7). **Reversal.** A later migration adds
+each CHECK with its module.
+
+## OP2.5 — Chain partitions Sep 2026 → Dec 2027, no DEFAULT partition · ⚠ UNREVIEWED
+
+A DEFAULT partition would silently absorb a month nobody created, and `CREATE TABLE … PARTITION OF`
+for that month would then be refused. So the migration creates 16 monthly partitions (IST
+boundaries) and `baskfy_worker.options.partitions.ensure_chain_partition` creates later ones
+idempotently; OP3's collector must call it for the current and next month before writing. A row for
+an unpartitioned month fails loudly (tested). **Reversal.** Add a DEFAULT partition.
+
+## OP2.6 — Event days seeded: six RBI MPC decision days for FY 2026-27; no Budget date · ⚠ UNREVIEWED
+
+Verified 22 Sep 2026 from the RBI press release "Meeting Schedule of the Monetary Policy Committee
+for 2026-2027" (23 Mar 2026, https://www.rbi.org.in/scripts/BS_PressReleaseDisplay.aspx?prid=62422):
+Apr 6–8, Jun 3–5, Aug 3–5, Oct 5–7, Dec 2–4 2026, Feb 3–5 2027. The decision day is the meeting's
+last day (the statements of 5 Jun and 5 Aug 2026 are so dated): **8 Apr, 5 Jun, 5 Aug, 7 Oct, 4 Dec
+2026, 5 Feb 2027**, each with the URL in the seed file and on the row (`source_url`). The Union Budget
+2027-28 date is **not seeded** — not announced by the Finance Ministry as of today (1 Feb is
+convention, not a source); no election result is announced. QUESTIONS Q4 stands for anything else.
+Note 7 Oct 2026 is a Wednesday (not an expiry) — it blocks O2 only. **Reversal.** Delete a row
+(source `SEED`) or add one on the web tab (OP5).
+
+## OP2.7 — The nightly master: its Beat slot, its refusals, and the provider read OP2 needed · ⚠ UNREVIEWED
+
+`baskfy.options.refresh_master` at **19:30 IST mon–fri** (the morning's Kite token is still valid;
+the calendar is current long before 09:15; one read on the bulk lane). No Kite session → skipped. An
+**empty** dump is refused, never applied (it would mark every live contract expired). Contracts absent
+from tonight's dump are marked `expired`, never deleted. `op_expiry` is rebuilt from tonight's listed
+contracts with `calendar.kind` (monthly = the last listed expiry of the month, no weekday rule); an
+expiry absent tonight is left as it was if in the past, and marked `withdrawn_on` + alerted if it had
+not yet happened (the holiday-shift shape). A lot-size or kind change is alerted and written to
+`detail.history`. Where one expiry states two lot sizes the larger is kept and noted (under-counting
+risk per lot is the worse error). `06` lists provider reads under OP3, but the master's read belongs
+with its table, so `KiteProvider.option_contracts(underlying)` and `OptionContractRecord` land here
+(read-only, dump columns only, never a symbol parse). **Reversal.** Remove the Beat entry; the CLI
+(`python -m baskfy_worker.options_cli refresh-master`) still works by hand.
+
+## OP2.8 — Where the flags live, and how the worker reads the desk's switches · ⚠ UNREVIEWED
+
+Desk `config.py`: the 4 execution + 3 operational flags and 6 ceilings, all in `LOCKED_KEYS`
+(`OPTIONS_ENABLED`/`INTRADAY_ENABLED` already were). API settings: the 7 prefixed flags + 6 ceilings
+(the two desk switches are the desk's). Worker settings: the same 13 **plus** the desk's `DRY_RUN`,
+`OPTIONS_ENABLED`, `INTRADAY_ENABLED` read under their unprefixed names **as strings and parsed the
+desk's way** (dry unless exactly `false`; on only if exactly `true`), so pydantic's lenient booleans
+("yes", "1") can never read a switch as live that the desk reads as off (tested). All defaults false;
+the root, `decile-blueprint` and desk `.env.example` carry the block; the never-read
+`BASKFY_CONDOR_*` block is removed (OP0.7). No `*AUTO*` name exists anywhere (tested in all three).
+**Reversal.** Config edits.
+
+## OP2.9 — BANKNIFTY (or any non-NIFTY underlying) is a 422 in every config · ⚠ UNREVIEWED
+
+A new problem type `underlying-not-allowed` (422, declared above `SETTING_ABOVE_CEILING` for the
+OpenAPI-order reason on `SETTING_BELOW_FLOOR`). Both patch models (`OptionsBookPatch`,
+`OptionsSleevePatch`) refuse a non-NIFTY `underlying` before any other validation; the pure
+`CalendarConfig` already raises; `op_book_config` has the DB CHECK. **Rejected.** Reusing
+`setting-above-ceiling` (it is the scope, not a server bound). **Reversal.** The allowed tuple.
+
+## OP2.10 — `OptionsSettings` is a module, not yet a route; the seed is a worker CLI · ⚠ UNREVIEWED
+
+`baskfy_api.options_settings` holds the patch models, the ceiling checks (including the derived
+per-trade ₹ risk, capital × risk %, checked on the row as it would stand — either field can cross
+it), and `apply_book_patch` / `apply_sleeve_patch` with an audit row per moved field, bounds first so
+a refused patch writes nothing (tested on the DB). The routes are OP5's (`05` §2). Seeding is
+`python -m baskfy_worker.options_cli seed` (`06` puts the event-day seed in `baskfy_worker/seeds/`,
+and the API cannot import the worker, so `make seed` does not call it). Every capital seeds as **0**;
+the other sleeve defaults are read off `OptionsConfig` so `03` §7 and `04` cannot disagree. Idempotent
+(`ON CONFLICT DO NOTHING`); never resets a chosen number (tested). **Reversal.** Move the seed into
+`baskfy_api.seed` if the dependency direction ever allows it.

@@ -191,21 +191,24 @@ both setups; if both would fire, O3-B (earlier) holds.
 | Rate | Default | Applies to |
 |---|---|---|
 | `brokerage_per_order_inr` | 20 | every executed order (Zerodha flat F&O) |
-| `stt_sell_premium_pct` | **0.1 ⚠ verify** | sell side, on premium × qty |
-| `stt_exercise_intrinsic_pct` | **0.125 ⚠ verify** | an ITM long held to expiry, on settlement intrinsic × qty |
-| `exchange_txn_pct` | 0.03503 | premium turnover, both sides |
+| `stt_sell_premium_pct` | **0.15** (from 1 Apr 2026; verified OP0) | sell side, on premium × qty |
+| `stt_exercise_intrinsic_pct` | **0.15** (from 1 Apr 2026; verified OP0) | an ITM long held to expiry, on settlement intrinsic × qty |
+| `exchange_txn_pct` | **0.03553** (NSE, from 1 Mar 2026; verified OP0) | premium turnover, both sides |
 | `sebi_per_crore_inr` | 10 | turnover |
-| `ipft_per_crore_inr` | 0.5 ⚠ verify | turnover (NSE investor-protection fund) |
+| `ipft_per_crore_inr` | **0.01** (from 1 Mar 2026; verified OP0) | premium turnover (NSE investor-protection fund) |
 | `stamp_buy_pct` | 0.003 | buy side, premium |
 | `gst_pct` | 18 | on brokerage + exchange txn + SEBI (+ IPFT) |
-| `auto_squareoff_inr` | 50 (+GST) ⚠ verify | charged if the broker squares off an MIS position; should be unreachable |
+| `auto_squareoff_inr` | 50 (+GST) per order (verified OP0) | charged if the broker squares off an MIS position (Zerodha F&O auto square-off 15:26); unreachable behind every hard exit ≤ 15:00 |
 
-⚠ **The STT rates are the ones the condor pack used (effective 1 Oct 2024). This pack's author
-believes the Union Budget 2026–27 raised STT on options (sale of premium and exercise) with effect
-from 1 Apr 2026, but has not verified it from a primary source in this repository.** OP0 checks
-Zerodha's published charges page and the Finance Act / CBDT notification, records URL and date in
-`CostRates`' docstring, and fixes this table. `OPTIONS_COST_RATES_REVIEWED_ON` warns after 90 days
-(condor OC5/OC11).
+**Verified by OP0 (22 Sep 2026) — sources in `DECISIONS-OP.md` OP0.1.** The pack's author was right:
+the Finance Bill 2026 (Memorandum, "Increase in tax rates of Securities Transaction Tax", Clause 143)
+raised STT on the sale of an option from 0.1 % to **0.15 % of premium** and on an exercised option from
+0.125 % to **0.15 % of intrinsic**, for transactions on or after **1 Apr 2026**; Zerodha's charges page
+shows the same. NSE circular NSE/FA/73061 (27 Feb 2026) rolled the IPFT contribution back and raised
+the transaction charge by the same amount from 1 Mar 2026 — Zerodha now shows NSE options at
+**0.03553 %** of premium and IPFT at **₹0.01 per crore** (+GST). The condor pack's 0.1 % / 0.125 % /
+0.03503 % are the stale half. `CostRates`' docstring carries each URL and the date read;
+`OPTIONS_COST_RATES_REVIEWED_ON` warns after 90 days (condor OC5/OC11).
 
 6.1 `charges(fills)` = the statutory sum and brokerage over the actual (or planned) orders:
 O1 eight orders, O2 two, O3 four.

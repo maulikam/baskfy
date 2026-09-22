@@ -132,3 +132,147 @@ Condor PACK.8 carried. `OPTIONS_ENABLED` and `INTRADAY_ENABLED` change what the 
 and `OPTIONS_ENABLED` also wakes the frozen lab's deferred hooks; §3 of `02` therefore requires
 OP13's side-door test before any flip and Maulik's own hand for it. Reversal: his line in
 NEEDS-MAULIK § Options.
+
+---
+
+# OP0 — Baseline, read-in, verified facts (22 Sep 2026)
+
+## OP0.1 — Cost rates verified from primary sources; `04` §6 edited (facts, not judgement)
+
+**Context.** `04` §6 carried the condor pack's STT (0.1 % premium / 0.125 % exercise) with a ⚠, the
+author suspecting a 2026 Budget change. **Found (read 22 Sep 2026):**
+
+| Rate | Value | Source |
+|---|---|---|
+| STT, sale of an option | **0.15 % of premium** (was 0.1 %), transactions on/after **1 Apr 2026** | Memorandum Explaining the Provisions in the Finance Bill, 2026, "Increase in tax rates of Securities Transaction Tax", Clause 143, p. 63 — https://www.indiabudget.gov.in/doc/memo.pdf ; corroborated by https://zerodha.com/charges/ ("0.15% on sell side (on premium)") |
+| STT, option exercised | **0.15 % of intrinsic** (was 0.125 %), same date | same memorandum; Zerodha: "0.15% of the intrinsic value on options that are bought and exercised" |
+| (STT, futures — not traded here) | 0.05 % (was 0.02 %) | same memorandum |
+| NSE transaction charge, options | **0.03553 % of premium** (was 0.03503 %), from 1 Mar 2026 | https://zerodha.com/charges/ ; NSE circular NSE/FA/73061, 27 Feb 2026 (https://nsearchives.nseindia.com/content/circulars/FA73061.pdf) — its text rolls the IPFT contribution back to the pre-Apr-2023 level and revises transaction charges from 1 Mar 2026; the circular's table itself could not be machine-read, so the numbers are Zerodha's |
+| NSE IPFT, options | **₹0.01 per crore of premium (+GST)** | Zerodha charges page, verbatim; consistent with FA73061's roll-back (+₹49.99 moved into the transaction charge: 0.03503 % → 0.03553 %) |
+| Brokerage | ₹20 flat per executed F&O order | Zerodha charges page |
+| SEBI fee / stamp | ₹10 per crore / 0.003 % buy side | Zerodha charges page |
+| GST | 18 % on brokerage + SEBI + transaction charges | Zerodha charges page |
+| MIS auto square-off, F&O | **15:26 IST**; **₹50 + 18 % GST per order** squared off | https://support.zerodha.com/category/trading-and-markets/trading-faqs/market-sessions/articles/intraday-auto-square-off-timings |
+
+**Choice.** `04` §6 now carries 0.15 / 0.15 / 0.03553 / 0.01 with "verified OP0". OP1's `CostRates`
+docstring must carry these URLs and "read 22 Sep 2026". Every hard exit (≤ 15:00) sits 26 minutes
+before the broker's square-off, so `auto_squareoff_inr` stays unreachable. **Reversal.** A later
+Budget or circular is a new dated `CostRates` row; the 90-day review warning catches drift.
+
+## OP0.2 — NIFTY's Tuesday expiry: the primary source
+
+NSE circular **NSE/FAOP/68747, 25 Jun 2025** ("Revision in Expiry Day of Index and Stock Derivatives
+Contracts – Update", modifying 68685 of 23 Jun 2025): NIFTY weekly "Thursday of the week → Tuesday of
+the week"; NIFTY monthly/quarterly/half-yearly "Last Thursday → Last Tuesday"; newly generated
+contracts expiring on/after **1 Sep 2025** carry the Tuesday expiry
+(https://nsearchives.nseindia.com/content/circulars/FAOP68747.pdf). Corroboration from the live
+account: the order book of 21 Sep 2026 (OP0.4) holds `NIFTY26922…` contracts — expiry 22 Sep 2026, a
+Tuesday. **This does not license a weekday rule** (`04` §1.1): the calendar still reads the master;
+the circular is why a Tuesday-moved-to-Monday fixture is the right test.
+
+## OP0.3 — Live Kite reads (a)(b)(c)(e)(f) are deferred, not guessed · ⚠ UNREVIEWED
+
+**Context.** `06` OP0 asks for rate-limited read-only calls: earliest minute history for NIFTY 50 and
+INDIA VIX, an expired weekly's absence and error text, the next eight expiries from
+`instruments("NFO")` (weekday, `lot_size`, `tick_size`, strike step, which is monthly), `quote()` on
+five options (fields, depth levels, OI unit), `basket_order_margins` on a fixture condor. This session
+has no Kite session (the dev Mac has no `data/.kite_token.json`; the agent was told not to log in).
+**Choice.** Record each as **pending** in STATUS with the exact call, rather than write down a value
+from memory. What is known from the code and Kite Connect's docs (not live-verified) is recorded as
+such: the instrument dump's columns (`instrument_token, exchange_token, tradingsymbol, name,
+last_price, expiry, strike, tick_size, lot_size, instrument_type, segment, exchange`), `quote()` at
+≤ 500 instruments per call (`QUOTE_BATCH_SIZE = 500`, `baskfy_providers/kite.py:76`) with five depth
+levels a side and `oi`, `oi_day_high`, `oi_day_low`, `timestamp`, `last_trade_time`, and minute
+history served ≤ 60 days per request. **Lot size is not recorded as a number** — it is read from the
+master (`04` §1.4); a literal belongs only in fixtures. **Nothing downstream is blocked:** OP1 is pure
+arithmetic over fixtures; OP2's `op_contract` columns follow the documented dump and are checked the
+first night the loader runs; OP3 performs (a)–(f) as its first Kite-session act and fills STATUS.
+**Rejected.** Using the box's token (not this session's to use); writing remembered values (a
+number in STATUS is believed — CLAUDE.md's 11 Sep lesson). **Reversal.** Any agent or Maulik with a
+Kite session runs the six calls and replaces "pending" with the answers.
+
+## OP0.4 — The F&O segment is active: verified, not an open question
+
+The coordinating session's read-only `get_orders` on **21 Sep 2026** showed filled (`COMPLETE`) NFO
+orders at 14:42 IST — `NIFTY2692223700CE`, `NIFTY2692223200PE`, `NIFTY2692223750CE`,
+`NIFTY2692223150PE`, product `MIS`. Filled NFO orders mean the segment is active on the account the
+desk trades; Maulik also answered "yes" in session on 22 Sep 2026. It is recorded as fact in STATUS
+and **not** raised in NEEDS-MAULIK. The margin pool and `basket_order_margins` for a real basket
+remain his (§3.5).
+
+**A consequence for later modules.** Those orders were placed **outside Baskfy** (Kite basket
+orders, by hand) — the account already carries manual intraday NIFTY option trades, here a
+condor-shaped four-leg basket with 50-point wings. Track C §8 is therefore concrete, not
+theoretical: OP9/OP11's reconciliation must identify the options book's own positions by its
+`client_id`/order tag and never read, mark, count against a limit, or close a position it did not
+open. OP13 should hold a test with a foreign NFO MIS position present in the broker fixture.
+
+## OP0.5 — `OPTIONS_ENABLED` side door: the "stays dark" comments are not true for `/ops` · ⚠ UNREVIEWED
+
+**Found** (read-only; the probe set the attribute in one throwaway process, as the desk's own tests
+do — no env file touched, no network): with `C.OPTIONS_ENABLED = True`,
+`app.analytics.ops._options_operations()` returns **five strangle operations**
+(`strangle_check`, `strangle_collect`, `strangle_calibrate`, `strangle_calibrate_write`,
+`strangle_session`) and `by_name()` includes them. Its comment says it returns nothing until the
+subsystem is thawed, but the guard is an `ImportError` on `strategies.strangle.instruments` — one of
+the four modules M6 deliberately left in the live tree — so the import succeeds. The operations would
+appear on `/ops` and, when started, spawn `python -m scripts.strangle`, which is frozen and would fail
+with `ModuleNotFoundError`. Nothing reaches a broker (the lab was paper-only and its code is absent),
+but the desk would show controls that cannot work. The autorun loop stays dark only **by accident**:
+`_observed_today` imports `strategies.strangle.calibrate` (frozen), so the loop raises the caught
+`ImportError` after 09:15; before 09:15 the entry-window veto returns nothing. Full inventory with
+file:line in STATUS.
+
+**Choice.** OP0 records it and changes no desk code (inventory module; D4 and `02` put the
+side-door test in OP13). **Recommended for OP13:** gate `_options_operations()` and the autorun
+options loop on the presence of a *frozen* module (`find_spec("app.strategies.strangle.book")`,
+the same probe `tests/_frozen.py:21` uses) rather than on `instruments`, and add the test `02`
+names. **Reversal.** n/a — nothing changed.
+
+## OP0.6 — The gateway's product gate: `OPTIONS_ENABLED` alone admits MIS and NRML-futures on derivative venues · ⚠ UNREVIEWED
+
+**Found.** `baskfy_execution.guards.product_exchange_refusal` (`guards.py:76–108`, AFE `8cbe278`,
+12 Sep 2026) returns `""` for **any product** on a `DERIVATIVE_EXCHANGES` venue once
+`options_enabled` is true (`guards.py:91–94`) — the MIS branch that demands `intraday_enabled` is only
+reached for cash venues. So with `OPTIONS_ENABLED=true` and `INTRADAY_ENABLED=false`, the desk's
+default gateway (`app/core/gateway.py:24–30`, which the weekly book uses) would pass an **NFO MIS**
+order, and an **NRML future** on NFO/BFO/MCX/CDS (`assert_not_overnight_option` blocks only
+*options* under carry products). Non-negotiable 5 says "MIS needs `INTRADAY_ENABLED`"; `02`'s
+"four flags at once" is true only because `options_gates()` (OP2) will AND them for the options book.
+Swing, TWT and VBT pin `options_enabled=False` and are unaffected. `git log -S` shows no decision
+saying derivative-venue MIS should skip the intraday flag — AFE's intent was to close the MCX/NRML
+hole, and this is a residual of the same shape.
+
+**Choice.** Not fixed in OP0 (a change to the gateway's gate is a non-negotiable surface and needs
+its own tests; OP0 is an inventory). **Recommended for OP2**, beside `options_gates()`: MIS needs
+`intraday_enabled` on every venue, and a derivative venue admits only `MIS` (futures are Track C
+anyway) — the stricter boundary with nothing in force changing, since both flags are false
+everywhere today. Until then **no one may set `OPTIONS_ENABLED=true`** on the desk — already true
+(PACK.14), now with a second reason. **Reversal.** n/a — nothing changed.
+
+## OP0.7 — `.env.example`'s `BASKFY_CONDOR_*` block is read by nothing
+
+`.env.example` (lines ~254–271, added in `bd3f32f`) declares `BASKFY_CONDOR_EXECUTION_ENABLED`,
+`_MONITOR_`, `_CHAIN_COLLECT_`, `_BANKNIFTY_` and six ceilings; `grep` finds no reader in either tree.
+OP2 replaces the block with `02`'s `BASKFY_OPTIONS_*` names (all false; BANKNIFTY dropped, PACK.12).
+Left untouched in OP0 so the rename lands with the settings that read it.
+
+## OP0.8 — Zerodha's retail-algo rules shape OP10, not OP0
+
+Zerodha's own write-up (https://inthemoneybyzerodha.substack.com/p/sebi-algo-trading-changes-april-2026,
+read 22 Sep 2026), effective **1 Apr 2026**: a **static IP** is mandatory for API orders (a primary
+and a backup); below **10 orders/second** no strategy registration is needed (the options book peaks
+at a handful per minute); API orders are tagged and treated distinctly by the exchange; and a
+**MARKET order must carry non-zero market protection**. `04` §8.1 already forbids MARKET entries; §8.2's
+third, marketable exit attempt must therefore stay a **LIMIT at the touch**, never a MARKET order, in
+OP10. Whether Zerodha requires anything of the user for the algo-ID tag (versus stamping it itself)
+is not stated in that source — recorded unverified in NEEDS-MAULIK § Options O4 for `02` §3.5.
+
+## OP0.9 — Baseline suites: counts collected and targeted runs green; full runs not repeated · ⚠ UNREVIEWED
+
+The coordinator's standing memory constraint for this Mac (≤ 2 agents; run the full desk suite only
+if code changed) applies; OP0 changed no code. Recorded instead: collected counts (desk 2,123;
+screener tree 9,071), the gate-and-guard files in both trees run green (desk 143 + 12 subtests;
+`packages/execution/tests/test_non_negotiables.py` 25), and the last full green recorded in
+`docs/00-merge-status.md`. **Reversal.** `tools/ci-local.sh` at the start of OP1 gives the full
+baseline before the first code change.

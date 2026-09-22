@@ -367,6 +367,21 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     # finished run per source with `docs/twt/01` §8's conditions attached, and an empty answer
     # names which of the three absences it is instead of one sentence that is only sometimes true.
     "/twt/backtest": {"get"},
+    # OP5 (docs/options/05 §2, DECISIONS-OP OP5.1): the NIFTY options tab. Every route a GET
+    # except the two money-free writes `05` allows — an event day (a day no sleeve trades) and
+    # the settings patch behind OP2's ceilings. No `/options/execute`, confirm or close exists
+    # here or ever will: the desk's `/nifty-options` is the only surface with a Confirm.
+    # `test_options_readonly.py` asserts the verb set exactly.
+    "/options/today": {"get"},
+    "/options/scan/{sleeve}": {"get"},
+    "/options/chain": {"get"},
+    "/options/positions": {"get"},
+    "/options/sessions": {"get"},
+    "/options/journal": {"get"},
+    "/options/backtest": {"get"},
+    "/options/calendar": {"get"},
+    "/options/event-day": {"post", "delete"},
+    "/options/config": {"get", "patch"},
     # VB15 (docs/vbt/DECISIONS-VB): the same button for the volume-breakout sleeve. Leaf 3 built
     # the routes and leaf 4 documented its own beside them, so these two were the last pair left
     # out of `EXPECTED_PATHS` and this set-equality stayed red until they landed — which is the

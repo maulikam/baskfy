@@ -116,6 +116,25 @@ export const PAGES = {
     title: "Backtest · Three weeks tight",
     blurb: "What the rule did over nine years, with the conditions on it read first.",
   },
+  /* —— The NIFTY options tab (OP5, docs/options/05 §2). Read-only where money is concerned:
+     every plan is confirmed in the desk console and nowhere else (docs/options/02 Track C §4).
+     Everything on it is a scan or paper — no option sleeve has traded real money. —— */
+  "/options": {
+    title: "NIFTY options",
+    blurb: "Each options strategy's scan today — what it sees, what it would do, and why not.",
+  },
+  "/options/journal": {
+    title: "Journal · NIFTY options",
+    blurb: "Every paper session by strategy, never pooled, and how far each paper period has run.",
+  },
+  "/options/calendar": {
+    title: "Calendar · NIFTY options",
+    blurb: "The year's NIFTY expiries and the days no options strategy trades.",
+  },
+  "/me/options": {
+    title: "Options settings",
+    blurb: "The options account's money limits, the server's ceilings, and every rule read-only.",
+  },
   /* The settings live under Me, not the hub (docs/swing/05 §2): they are about the person's
      money and limits, not today's tape. */
   "/me/swing": {

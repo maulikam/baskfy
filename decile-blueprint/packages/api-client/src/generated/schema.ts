@@ -2384,6 +2384,194 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/options/backtest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Backtests per tier */
+        get: operations["getOptionsBacktest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/options/calendar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Expiries and event days */
+        get: operations["getOptionsCalendar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/options/chain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The chain around ATM */
+        get: operations["getOptionsChain"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/options/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Settings, ceilings, thresholds */
+        get: operations["getOptionsConfig"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change the options settings
+         * @description Mutation 2 of 2. The OP2 boundary unchanged: a value above its ceiling is a 422 naming the
+         *     ceiling and its env var; ``paused_*`` and the execution flags are not fields at all.
+         *
+         *     **Atomic across the request**: every part's bounds are checked before any part is written,
+         *     so a two-part patch that crosses a ceiling on its second part changes neither.
+         */
+        patch: operations["patchOptionsConfig"];
+        trace?: never;
+    };
+    "/api/v1/options/event-day": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add an event day (no sleeve trades it)
+         * @description Mutation 1 of 2 (``05`` §2). A day no sleeve trades — it can only make the book *do less*.
+         */
+        post: operations["postOptionsEventDay"];
+        /**
+         * Remove a person's event day
+         * @description Mutation 1 of 2, its other half. A seeded, source-verified day is refused (400).
+         */
+        delete: operations["deleteOptionsEventDay"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/options/journal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The journal, never pooled */
+        get: operations["getOptionsJournal"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/options/positions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Open and closed today */
+        get: operations["getOptionsPositions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/options/scan/{sleeve}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One sleeve's scan rows */
+        get: operations["getOptionsScan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/options/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sessions in a window */
+        get: operations["getOptionsSessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/options/today": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The tab: roles, scans, book
+         * @description ``05`` §2's header strip, the four panels and the clock, in one call.
+         */
+        get: operations["getOptionsToday"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/plans": {
         parameters: {
             query?: never;
@@ -7932,6 +8120,636 @@ export interface components {
             name: string;
             source: components["schemas"]["PortfolioSource"];
         };
+        /** OptionsAuditOut */
+        OptionsAuditOut: {
+            /**
+             * Changed At
+             * Format: date-time
+             */
+            changed_at: string;
+            /** Changed By */
+            changed_by: string;
+            /** Key */
+            key: string;
+            /** New Value */
+            new_value: string | null;
+            /** Old Value */
+            old_value: string | null;
+            /** Scope */
+            scope: string;
+        };
+        /** OptionsBacktestOut */
+        OptionsBacktestOut: {
+            /** Reason */
+            reason: string | null;
+            /** Runs */
+            runs: components["schemas"]["OptionsBacktestRunOut"][];
+        };
+        /** OptionsBacktestRunOut */
+        OptionsBacktestRunOut: {
+            /** Caveats */
+            caveats: string;
+            /**
+             * Date From
+             * Format: date
+             */
+            date_from: string;
+            /**
+             * Date To
+             * Format: date
+             */
+            date_to: string;
+            /** Expectancy R */
+            expectancy_r: string | null;
+            /** Id */
+            id: number;
+            /** Max Drawdown R */
+            max_drawdown_r: string | null;
+            /** Net Pnl Inr */
+            net_pnl_inr: string | null;
+            /**
+             * Ran At
+             * Format: date-time
+             */
+            ran_at: string;
+            /** Sessions */
+            sessions: number;
+            /** Signals */
+            signals: number;
+            /** Skipped By Reason */
+            skipped_by_reason: {
+                [key: string]: unknown;
+            };
+            /** Sleeve */
+            sleeve: string;
+            /** Tier */
+            tier: number;
+            /** Traded */
+            traded: number;
+            /** Win Rate */
+            win_rate: string | null;
+        };
+        /** OptionsBookOut */
+        OptionsBookOut: {
+            /** Account Inr */
+            account_inr: string;
+            /** Daily Loss Limit Inr */
+            daily_loss_limit_inr: string;
+            /** Margin Pool Inr */
+            margin_pool_inr: string;
+            /** Monthly Pause Inr */
+            monthly_pause_inr: string;
+            /** Paused Reason */
+            paused_reason: string | null;
+            /** Paused Until */
+            paused_until: string | null;
+            /** Underlying */
+            underlying: string;
+        };
+        /**
+         * OptionsBookPatch
+         * @description A partial update of ``op_book_config``. Engine bounds here (400); ceilings later (422).
+         */
+        OptionsBookPatch: {
+            /** Account Inr */
+            account_inr?: number | string | null;
+            /** Daily Loss Limit Inr */
+            daily_loss_limit_inr?: number | string | null;
+            /** Margin Pool Inr */
+            margin_pool_inr?: number | string | null;
+            /** Monthly Pause Inr */
+            monthly_pause_inr?: number | string | null;
+            /** Underlying */
+            underlying?: string | null;
+        };
+        /** OptionsBucketOut */
+        OptionsBucketOut: {
+            /** Count */
+            count: number;
+            /** Label */
+            label: string;
+            /** Mean R */
+            mean_r: string;
+        };
+        /** OptionsCalendarOut */
+        OptionsCalendarOut: {
+            /** Event Days */
+            event_days: components["schemas"]["OptionsEventDayOut"][];
+            /** Expiries */
+            expiries: components["schemas"]["OptionsExpiryOut"][];
+            /** Year */
+            year: number;
+        };
+        /** OptionsCeilingsOut */
+        OptionsCeilingsOut: {
+            /** Book Daily Loss Inr Max */
+            book_daily_loss_inr_max: string;
+            /** Book Monthly Loss Inr Max */
+            book_monthly_loss_inr_max: string;
+            /**
+             * Hard Exit Latest
+             * Format: time
+             */
+            hard_exit_latest: string;
+            /** Max Lots Max */
+            max_lots_max: number;
+            /** Risk Pct Max */
+            risk_pct_max: string;
+            /** Risk Per Trade Inr Max */
+            risk_per_trade_inr_max: string;
+        };
+        /** OptionsChainExpiryOut */
+        OptionsChainExpiryOut: {
+            /** Atm Iv */
+            atm_iv: string | null;
+            /** Atm Strike */
+            atm_strike: string | null;
+            /**
+             * Expiry
+             * Format: date
+             */
+            expiry: string;
+            /** Forward */
+            forward: string | null;
+            /** Pcr Oi */
+            pcr_oi: string | null;
+            /** Rows */
+            rows: components["schemas"]["OptionsChainRowOut"][];
+            /** Spot */
+            spot: string | null;
+            /**
+             * Ts
+             * Format: date-time
+             */
+            ts: string;
+        };
+        /** OptionsChainOut */
+        OptionsChainOut: {
+            /** Expiries */
+            expiries: components["schemas"]["OptionsChainExpiryOut"][];
+        };
+        /** OptionsChainRowOut */
+        OptionsChainRowOut: {
+            /** Ask */
+            ask: string | null;
+            /** Bid */
+            bid: string | null;
+            /** Delta */
+            delta: string | null;
+            /** Gamma */
+            gamma: string | null;
+            /** Iv */
+            iv: string | null;
+            /** Last */
+            last: string | null;
+            /** Oi */
+            oi: number | null;
+            /** Oi Change */
+            oi_change: number | null;
+            /** Option Type */
+            option_type: string;
+            /** Strike */
+            strike: string;
+            /** Theta */
+            theta: string | null;
+        };
+        /** OptionsClosedOut */
+        OptionsClosedOut: {
+            /** Closed Reason */
+            closed_reason: string;
+            /** Minutes Held */
+            minutes_held: number;
+            /** Net Pnl Inr */
+            net_pnl_inr: string;
+            /** R Multiple */
+            r_multiple: string;
+            /** Session Id */
+            session_id: number;
+            /** Simulated */
+            simulated: boolean;
+            /** Sizing Mode */
+            sizing_mode: string;
+            /** Sleeve */
+            sleeve: string;
+            /** Structure */
+            structure: string;
+            /**
+             * Trade Date
+             * Format: date
+             */
+            trade_date: string;
+        };
+        /** OptionsConfigOut */
+        OptionsConfigOut: {
+            /** Audit */
+            audit: components["schemas"]["OptionsAuditOut"][];
+            book: components["schemas"]["OptionsBookOut"] | null;
+            ceilings: components["schemas"]["OptionsCeilingsOut"];
+            /** Gates */
+            gates: components["schemas"]["OptionsGateOut"][];
+            /** Seeded */
+            seeded: boolean;
+            /** Sleeves */
+            sleeves: components["schemas"]["OptionsSleeveConfigOut"][];
+            /** Thresholds */
+            thresholds: components["schemas"]["OptionsThresholdOut"][];
+        };
+        /**
+         * OptionsConfigPatch
+         * @description One request, atomic: every ceiling is checked before anything is written.
+         */
+        OptionsConfigPatch: {
+            book?: components["schemas"]["OptionsBookPatch"] | null;
+            /** Sleeves */
+            sleeves?: {
+                [key: string]: components["schemas"]["OptionsSleevePatch"];
+            };
+        };
+        /** OptionsEventDayIn */
+        OptionsEventDayIn: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Note */
+            note?: string | null;
+            /**
+             * Reason
+             * @default MANUAL
+             */
+            reason: string;
+        };
+        /** OptionsEventDayOut */
+        OptionsEventDayOut: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Note */
+            note: string | null;
+            /** Reason */
+            reason: string;
+            /** Removable */
+            removable: boolean;
+            /** Source */
+            source: string;
+            /** Source Url */
+            source_url: string | null;
+        };
+        /** OptionsExpiryOut */
+        OptionsExpiryOut: {
+            /** Event Day */
+            event_day: boolean;
+            /** Event Reason */
+            event_reason: string | null;
+            /**
+             * Expiry Date
+             * Format: date
+             */
+            expiry_date: string;
+            /** Kind */
+            kind: string;
+            /** Lot Size */
+            lot_size: number;
+        };
+        /**
+         * OptionsGateOut
+         * @description Per sleeve group: ``PAPER`` while its execution flag is off on this server. When it is on,
+         *     the desk's own switches decide, and the API cannot see them — ``DESK_DECIDES``, never a guess
+         *     of ``LIVE`` (DECISIONS-OP OP5.5).
+         */
+        OptionsGateOut: {
+            /** Execution Enabled */
+            execution_enabled: boolean;
+            /** Group */
+            group: string;
+            /** Mode */
+            mode: string;
+        };
+        /** OptionsIndexOut */
+        OptionsIndexOut: {
+            /** At */
+            at: string | null;
+            /** Close Of */
+            close_of: string | null;
+            /** Level */
+            level: string | null;
+            /** Symbol */
+            symbol: string;
+        };
+        /** OptionsJournalOut */
+        OptionsJournalOut: {
+            /** Min Sessions */
+            min_sessions: {
+                [key: string]: number;
+            };
+            /** Progress */
+            progress: components["schemas"]["OptionsProgressOut"][];
+            /** Recent */
+            recent: components["schemas"]["OptionsClosedOut"][];
+            /** Skips By Reason */
+            skips_by_reason: {
+                [key: string]: {
+                    [key: string]: number;
+                };
+            };
+            /** Summaries */
+            summaries: components["schemas"]["OptionsSummaryOut"][];
+        };
+        /** OptionsPauseOut */
+        OptionsPauseOut: {
+            /** Paused Reason */
+            paused_reason: string | null;
+            /** Paused Until */
+            paused_until: string | null;
+            /** Scope */
+            scope: string;
+        };
+        /** OptionsPositionOut */
+        OptionsPositionOut: {
+            /** Entry Inr */
+            entry_inr: string;
+            /** Entry Points */
+            entry_points: string;
+            /**
+             * Hard Exit At
+             * Format: date-time
+             */
+            hard_exit_at: string;
+            /** Last Mark At */
+            last_mark_at: string | null;
+            /** Last Mark Points */
+            last_mark_points: string | null;
+            /** Lots */
+            lots: number;
+            /** Minutes To Hard Exit */
+            minutes_to_hard_exit: number | null;
+            /**
+             * Opened At
+             * Format: date-time
+             */
+            opened_at: string;
+            /** Session Id */
+            session_id: number;
+            /** Simulated */
+            simulated: boolean;
+            /** Sleeve */
+            sleeve: string;
+            /**
+             * Trade Date
+             * Format: date
+             */
+            trade_date: string;
+        };
+        /** OptionsPositionsOut */
+        OptionsPositionsOut: {
+            /** Closed Today */
+            closed_today: components["schemas"]["OptionsClosedOut"][];
+            /** Positions */
+            positions: components["schemas"]["OptionsPositionOut"][];
+        };
+        /** OptionsProgressOut */
+        OptionsProgressOut: {
+            /** Group */
+            group: string;
+            /** Sessions Done */
+            sessions_done: number;
+            /** Sessions Needed */
+            sessions_needed: number;
+            /** Traded */
+            traded: number;
+            /** Traded Needed */
+            traded_needed: number;
+        };
+        /** OptionsRoleOut */
+        OptionsRoleOut: {
+            /** Next Date */
+            next_date: string | null;
+            /** Reason */
+            reason: string;
+            /** Sleeve */
+            sleeve: string;
+            /** Today */
+            today: boolean;
+        };
+        /** OptionsScanHistoryOut */
+        OptionsScanHistoryOut: {
+            /** Rows */
+            rows: components["schemas"]["OptionsScanOut"][];
+            /** Sleeve */
+            sleeve: string;
+            /** Trade Date */
+            trade_date: string | null;
+        };
+        /**
+         * OptionsScanOut
+         * @description One ``op_scan`` row. ``numbers`` and ``candidates`` are the JSONB the worker wrote, passed
+         *     through: every money figure in them is already a decimal string (OP4), and re-rendering them
+         *     here would round a second time.
+         */
+        OptionsScanOut: {
+            /** As Of Minute */
+            as_of_minute: string | null;
+            /** Candidates */
+            candidates: unknown[];
+            /** Numbers */
+            numbers: {
+                [key: string]: unknown;
+            };
+            /** Reasons */
+            reasons: string[];
+            /** Sleeve */
+            sleeve: string;
+            /** Stale */
+            stale: boolean;
+            /** State */
+            state: string;
+            /**
+             * Trade Date
+             * Format: date
+             */
+            trade_date: string;
+            /**
+             * Ts
+             * Format: date-time
+             */
+            ts: string;
+        };
+        /** OptionsSessionOut */
+        OptionsSessionOut: {
+            /** Closed Reason */
+            closed_reason: string | null;
+            /** Expiry Used */
+            expiry_used: string | null;
+            /** Id */
+            id: number;
+            /** Mode */
+            mode: string;
+            /** Pnl Inr */
+            pnl_inr: string | null;
+            /** Pnl R */
+            pnl_r: string | null;
+            /** Skip Reasons */
+            skip_reasons: string[];
+            /** Sleeve */
+            sleeve: string;
+            /** Slot Holder */
+            slot_holder: string | null;
+            /** State */
+            state: string;
+            /**
+             * Trade Date
+             * Format: date
+             */
+            trade_date: string;
+            /** Verdict */
+            verdict: string | null;
+        };
+        /** OptionsSessionsOut */
+        OptionsSessionsOut: {
+            /** Sessions */
+            sessions: components["schemas"]["OptionsSessionOut"][];
+        };
+        /** OptionsSleeveConfigOut */
+        OptionsSleeveConfigOut: {
+            /**
+             * Hard Exit Time
+             * Format: time
+             */
+            hard_exit_time: string;
+            /** Max Lots */
+            max_lots: number;
+            /** Paper Enabled */
+            paper_enabled: boolean;
+            /** Paused Reason */
+            paused_reason: string | null;
+            /** Paused Until */
+            paused_until: string | null;
+            /** Risk Per Trade Pct */
+            risk_per_trade_pct: string;
+            /** Sleeve */
+            sleeve: string;
+            /** Sleeve Capital Inr */
+            sleeve_capital_inr: string;
+        };
+        /**
+         * OptionsSleevePatch
+         * @description A partial update of one ``op_sleeve_config`` row (a sleeve group).
+         */
+        OptionsSleevePatch: {
+            /** Hard Exit Time */
+            hard_exit_time?: string | null;
+            /** Max Lots */
+            max_lots?: number | null;
+            /** Paper Enabled */
+            paper_enabled?: boolean | null;
+            /** Risk Per Trade Pct */
+            risk_per_trade_pct?: number | string | null;
+            /** Sleeve Capital Inr */
+            sleeve_capital_inr?: number | string | null;
+        };
+        /**
+         * OptionsSummaryOut
+         * @description One pool of ``04`` §12: a (sleeve, simulated, sizing mode) key, never merged with another.
+         */
+        OptionsSummaryOut: {
+            /** By Closed Reason */
+            by_closed_reason: components["schemas"]["OptionsBucketOut"][];
+            /** Count */
+            count: number;
+            /** Expectancy Inr */
+            expectancy_inr: string | null;
+            /** Expectancy R */
+            expectancy_r: string | null;
+            /** Max Drawdown Inr */
+            max_drawdown_inr: string;
+            /** Max Drawdown R */
+            max_drawdown_r: string;
+            /** Mean R */
+            mean_r: string | null;
+            /** R Values */
+            r_values: string[];
+            /** Simulated */
+            simulated: boolean;
+            /** Sizing Mode */
+            sizing_mode: string;
+            /** Sleeve */
+            sleeve: string;
+            /** Traded */
+            traded: number;
+            /** Win Rate */
+            win_rate: string | null;
+            /** Worst R */
+            worst_r: string | null;
+        };
+        /** OptionsThresholdOut */
+        OptionsThresholdOut: {
+            /** Anchor */
+            anchor: string;
+            /** Key */
+            key: string;
+            /** Section */
+            section: string;
+            /** Value */
+            value: string;
+        };
+        /** OptionsTodayOut */
+        OptionsTodayOut: {
+            /** As Of Minute */
+            as_of_minute: string | null;
+            /** Closed Today */
+            closed_today: components["schemas"]["OptionsClosedOut"][];
+            /** Collect Enabled */
+            collect_enabled: boolean;
+            /** Empty Reason */
+            empty_reason: string | null;
+            /** Expiries */
+            expiries: components["schemas"]["OptionsExpiryOut"][];
+            /** Gates */
+            gates: components["schemas"]["OptionsGateOut"][];
+            /** Live */
+            live: boolean;
+            /** Market Open */
+            market_open: boolean;
+            nifty: components["schemas"]["OptionsIndexOut"];
+            /** Pauses */
+            pauses: components["schemas"]["OptionsPauseOut"][];
+            /** Positions */
+            positions: components["schemas"]["OptionsPositionOut"][];
+            /** Roles */
+            roles: components["schemas"]["OptionsRoleOut"][];
+            /** Scan Date */
+            scan_date: string | null;
+            /** Scan Enabled */
+            scan_enabled: boolean;
+            /** Scans */
+            scans: components["schemas"]["OptionsScanOut"][];
+            /** Session Day */
+            session_day: boolean;
+            /** Stale */
+            stale: boolean;
+            /**
+             * Today
+             * Format: date
+             */
+            today: string;
+            vix: components["schemas"]["OptionsIndexOut"];
+            /** Week R */
+            week_r: components["schemas"]["OptionsWeekROut"][];
+        };
+        /** OptionsWeekROut */
+        OptionsWeekROut: {
+            /** R */
+            r: string;
+            /** Simulated */
+            simulated: boolean;
+            /** Sleeve */
+            sleeve: string;
+            /** Trades */
+            trades: number;
+        };
         /**
          * OverviewOut
          * @description §6, in one response. The two timestamps §6.1 requires are separate fields, deliberately.
@@ -10128,6 +10946,12 @@ export interface components {
              */
             unpriced: string[];
         };
+        /**
+         * SleeveGroup
+         * @description How config and flags group the sleeves: ``O3A``/``O3B`` are one sleeve, ``O3`` (``03``).
+         * @enum {string}
+         */
+        SleeveGroup: "O1M" | "O1W" | "O2" | "O3";
         /** SleeveIn */
         SleeveIn: {
             /** Basket Slug */
@@ -25381,6 +26205,1245 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UniverseOut"][];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getOptionsBacktest: {
+        parameters: {
+            query?: {
+                sleeve?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OptionsBacktestOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getOptionsCalendar: {
+        parameters: {
+            query?: {
+                year?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OptionsCalendarOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getOptionsChain: {
+        parameters: {
+            query?: {
+                /** @description default: the nearest two */
+                expiry?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OptionsChainOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getOptionsConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OptionsConfigOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    patchOptionsConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OptionsConfigPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OptionsConfigOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    postOptionsEventDay: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OptionsEventDayIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OptionsEventDayOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    deleteOptionsEventDay: {
+        parameters: {
+            query: {
+                /** @description the day to remove */
+                date: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getOptionsJournal: {
+        parameters: {
+            query?: {
+                sleeve?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OptionsJournalOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getOptionsPositions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OptionsPositionsOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getOptionsScan: {
+        parameters: {
+            query?: {
+                /** @description a scanned session; default the latest */
+                date?: string | null;
+            };
+            header?: never;
+            path: {
+                sleeve: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OptionsScanHistoryOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getOptionsSessions: {
+        parameters: {
+            query?: {
+                from?: string | null;
+                to?: string | null;
+                sleeve?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OptionsSessionsOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getOptionsToday: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OptionsTodayOut"];
                 };
             };
             /** @description Bad request */

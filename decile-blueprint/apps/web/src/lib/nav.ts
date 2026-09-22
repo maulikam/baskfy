@@ -216,6 +216,16 @@ export const SECTION_TABS = {
     { href: "/twt/backtest" as Route, label: "Backtest" },
   ],
   /*
+    The NIFTY options tab (OP5, `docs/options/05` §2): "Today | Journal | Calendar". The settings
+    sit under Me with the other sleeves' (`/me/options`), for the same reason — they are about a
+    person's money, not today's tape.
+  */
+  options: [
+    { href: "/options" as Route, label: "Today" },
+    { href: "/options/journal" as Route, label: "Journal" },
+    { href: "/options/calendar" as Route, label: "Calendar" },
+  ],
+  /*
     PORTFOLIO_REDESIGN.md §2, in order. Overview first because it is the default landing tab —
     the single consolidated screen (§6). Portfolios is the logical grouping layer, Holdings the
     flat broker-level truth beneath it, Activity the ledger behind both.
@@ -240,6 +250,8 @@ export const SECTION_TABS = {
     { href: "/pricing" as Route, label: "Subscription" },
     /* `docs/swing/05` §2: the swing settings sit "inside `/me`, not a hub tab" (SW14). */
     { href: "/me/swing" as Route, label: "Swing settings" },
+    /* `docs/options/05` §2: the options book's settings, beside the swing book's. */
+    { href: "/me/options" as Route, label: "Options settings" },
   ],
 } as const;
 
@@ -258,6 +270,7 @@ export const SECTION_LABEL: Record<SectionKey, string> = {
   swing: "Build",
   vbt: "Build",
   twt: "Build",
+  options: "Build",
   portfolio: "Portfolio",
   me: "Me",
 };
@@ -308,18 +321,21 @@ const STAFF_BUILD_TABS: readonly SectionTab[] = [
   { href: "/swing", label: "Swing" },
   { href: "/vbt", label: "Volume" },
   { href: "/twt", label: "Tight" },
+  /* `docs/options/05` §1: appended after Tight. The Overlap matrix gains no Options column — an
+     option contract is never an equity name several sleeves hold. */
+  { href: "/options", label: "Options" },
 ];
 
-/** The three operator sleeves that live under Build for staff. */
+/** The four operator sleeves that live under Build for staff. */
 export function isSleeveSection(section: SectionKey): boolean {
-  return section === "swing" || section === "vbt" || section === "twt";
+  return section === "swing" || section === "vbt" || section === "twt" || section === "options";
 }
 
 /**
  * Section tabs for a hub. `SECTION_TABS.build` is the consumer default and stays unchanged.
- * Staff get Swing / Volume / Tight appended after Overlap.
+ * Staff get Swing / Volume / Tight / Options appended after Overlap.
  *
- * Sleeve pages (`swing` / `vbt` / `twt`) keep their own local row. Staff also get this Build
+ * Sleeve pages (`swing` / `vbt` / `twt` / `options`) keep their own local row. Staff also get this Build
  * row rendered above it (`SectionTabs`), so switching Volume → Swing does not require a hop
  * through `/build`.
  */
@@ -359,6 +375,8 @@ export function primarySection(pathname: string): SectionKey | null {
   if (pathname === "/vbt" || pathname.startsWith("/vbt/")) return "vbt";
   // `docs/twt/05` §1: the fourth sleeve, by the same argument again.
   if (pathname === "/twt" || pathname.startsWith("/twt/")) return "twt";
+  // `docs/options/05` §1: the options tab, by the same argument — it lights Build.
+  if (pathname === "/options" || pathname.startsWith("/options/")) return "options";
   /* `/portfolios` (plural, the desk's rebalance sub-pages) must not match here — hence the exact
      compare and the trailing slash, never a bare `startsWith("/portfolio")`. */
   if (pathname === "/portfolio" || pathname.startsWith("/portfolio/")) return "portfolio";
@@ -414,6 +432,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       page("/swing", "activity"),
       page("/vbt", "trending-up"),
       page("/twt", "line-chart"),
+      page("/options", "activity"),
     ],
   },
   {

@@ -763,3 +763,121 @@ every gate reason, or the candidate built from the `plan_time` snapshot → `WOU
 `PLANNED`/`CONFIRMED`/`OPEN` shows `PLANNED`; `CLOSED`/`LAPSED`/`SKIPPED`, or the clock past
 `entry_window_end`, shows `DONE`, keeping the verdict in `numbers.verdict`. `PAUSED` overrides every
 state but `NOT_TODAY`, keeps the numbers and adds `REJECTED_PAUSED`. **Reversal.** `scan._scan_o1`.
+
+## OP5.1 — The surface: ten paths, twelve handlers, exactly two mutations, the patch atomic by construction · ⚠ UNREVIEWED
+
+**Context.** `05` §2 lists the routes and "no other verb on any path"; `06` OP5 wants "exactly two
+mutations (event day, settings), everything else 405". **Choice.** `routers/options.py` serves the
+ten paths of `05` §2 (twelve handlers). The event day's two halves share one path —
+`POST /options/event-day` (body `{date, reason='MANUAL', note}`) and `DELETE /options/event-day?date=`
+— so "exactly two mutations" is two paths: `/options/event-day {post, delete}` and
+`/options/config {patch}`. The settings PATCH takes `{book?, sleeves: {O1M|O1W|O2|O3: …}}` and
+checks **every** part's bounds (`check_book`, `check_sleeve` on the current row) before writing any
+part, so a two-part patch that crosses a ceiling on its second part changes neither — atomic by
+construction, not only by the transaction's rollback (the test harness never rolls back, so only
+the former is testable). Every handler resolves the sole tenant (`scoped_sole_user_id`), and
+`test_options_readonly.py` asserts the verb set exactly, 405 on every other verb against the
+running app, no execution/broker name in the router or its two modules, and — app-wide — no
+`execute`/`confirm`/`place_order` path anywhere under `/api/v1`. **Rejected.** A `PATCH` per sleeve
+(`/options/config/{sleeve}` — a path `05` does not name); a separate `/options/event-day/{date}`
+DELETE path (a third mutating path for one mutation). **Reversal.** The router.
+
+## OP5.2 — An empty tab names its reason, most fundamental first · ⚠ UNREVIEWED
+
+**Context.** With the collector and scan flags off (their defaults; the box when OP5 shipped)
+`op_scan` is empty, and the TWT lesson (DECISIONS-TW TW14.1) is that "nothing found" and "nothing
+looked" must not render alike. **Choice.** `GET /options/today` carries `empty_reason`:
+`collector_off` if the API's `BASKFY_OPTIONS_COLLECT_ENABLED` is false; else `scan_off`; else
+`no_scan_yet_today` on a session day with no row for today; else `never_scanned`; `null` when
+today's rows are served. A previous session's rows are still served, dated, with `live=false` and
+the `As of close, <day>` label, beside the reason. The API reads the two flags from its own env;
+on the box the API and the worker share `.env.staging` (`compose.prod.yml`'s `python-image`), so
+they agree — **after a flag flip both containers must be recreated**. **Rejected.** Inferring
+"collector off" from the absence of chain rows (a quiet holiday and a switched-off collector would
+read alike). **Reversal.** `options_read.empty_reason`.
+
+## OP5.3 — The shared live overlay touches the two header index levels only · ⚠ UNREVIEWED
+
+**Context.** The orchestrator asked to reuse `useLiveMarks` / `/meta/live-marks` (4aad7a4) where the
+UI spec shows live values; `05` §2 says "the page never calls Kite … the collector is the one reader
+of the chain, so the tab adds no load to the limiter". **Choice.** Both honoured: the NIFTY 50 and
+India VIX levels in the header strip are `<LivePrice>` cells inside one `<LiveMarksProvider>` (two
+NSE symbols, the screens' cached, rate-limited, session-hours-only read — not an options read and
+not a chain read); their base value is the collector's last minute bar, else the last
+`index_snapshot_daily` close, and the cell says which. Every scan number, candidate price, chain
+quote and position mark stays on the collector's minute / the desk's mark. Option contracts are
+never overlaid: `/meta/live-marks` quotes `NSE:` symbols, and an NFO quote from the web would be a
+second reader of the chain. **Rejected.** Overlaying candidate legs with live quotes (a candidate
+priced from a different minute than its decision is not the plan the desk would build — OP4.4).
+**Reversal.** `components/options/header-strip.tsx`.
+
+## OP5.4 — Today's roles come from `op_expiry` through the pure `calendar.role` · ⚠ UNREVIEWED
+
+The header's `O1-M: next 29 Sep · O1-W: today · …` is `baskfy_core.options.calendar.role` /
+`next_session` fed one stub `Contract` per live `op_expiry` row (withdrawn expiries excluded,
+OP2.7) and the tenant's event days — the same rule the scan uses, without loading the ~thousand-row
+master for a header. The NSE session-day answer is the API's `is_session_day`. **Reversal.**
+`options_read.roles_for`.
+
+## OP5.5 — The API reports `PAPER` or `DESK_DECIDES`, never `LIVE` · ⚠ UNREVIEWED
+
+The API carries the four per-group execution flags (OP2.8) but not the desk's `OPTIONS_ENABLED` /
+`INTRADAY_ENABLED` / `DRY_RUN`, so it cannot compute `options_gates()`. It reports `PAPER` while a
+group's flag is false (certain), and `DESK_DECIDES` when it is true — never a guessed `LIVE`. The
+flags are reported, never branched on (`test_options_readonly` counts each exactly once).
+**Reversal.** `routers/options._gates`.
+
+## OP5.6 — Event days: `source='USER'`, reason `MANUAL`, seeded days not removable, conflicts are 400 · ⚠ UNREVIEWED
+
+`05` §2 says "add/remove of `MANUAL` event days"; the schema's vocabulary (`03` §3, OP2) is
+`reason ∈ {RBI_POLICY, UNION_BUDGET, ELECTION_RESULT, MANUAL}`, `source ∈ {SEED, USER}`. A web add
+writes `source='USER'`, reason `MANUAL` by default (any schema reason accepted). DELETE removes only
+a `USER` row; a `SEED` row (a source-verified RBI date, OP2.6) is refused with 400 — removing one is
+a DECISIONS-OP entry. A duplicate add is 400 too: the problem catalogue has no generic 409 and a new
+problem type for one form was not worth a catalogue change. **Reversal.** `options_read.add_event_day`
+/ `remove_event_day`.
+
+## OP5.7 — The journal page reads `op_journal`; the paper progress counts ended PAPER sessions · ⚠ UNREVIEWED
+
+`GET /options/journal` summarises `op_journal` rows with OP1's `summarize` (never pooled across
+`(sleeve, simulated, sizing_mode)`), plus each pool's R values for the histogram, skips by first
+reason from `op_session` (`SKIPPED`), and per group the paper progress of `02` §3.2: sessions =
+`op_session` rows in `PAPER` mode that ended (`CLOSED`/`LAPSED`/`SKIPPED` — "a skipped day counts"),
+traded = simulated `op_journal` rows. **Not** enforced here: "consecutive" and "zero rule
+violations" — OP11 owns the ledger and OP15 the evidence. Both tables are empty until OP9-OP11 run.
+**Reversal.** `options_read.journal`.
+
+## OP5.8 — The AC's three sleeve states are asserted over fixtures; the browser spec asserts the empty tab · ⚠ UNREVIEWED
+
+**Context.** `06` OP5's AC: "Playwright renders `/options` from fixtures showing an O1 `WOULD_SKIP`
+with all its reasons, an O2 `ARMED` with distance-to-trigger, an O3 candidate spread, and the
+`As of close` label outside hours." The Playwright stack runs the real API over `baskfy_e2e`, which
+has no `op_scan` rows and no seam to inject them. **Choice.** The swing hub's precedent (DECISIONS-SW
+SW4.3): the three states and the clock label are asserted in the page's rendered-DOM tests over
+fixtures written to the API's shapes (`app/(app)/options/__tests__/page.test.tsx`, over a mocked
+fetch), and the four API states are asserted against a real database (`test_api_options.py`: the AC
+morning's rows served as written, `Live`/`stale`/after-close). `e2e/options.spec.ts` renders the tab
+in a browser with the flags at their defaults and asserts the caveat, the paper label and the named
+empty reason. **Not run here:** the e2e spec (`tools/ci-local.sh` skips Playwright — browsers, a
+seeded `baskfy_e2e`, both servers). **Reversal.** Seed `op_scan` rows into `baskfy_e2e` and move the
+three assertions into the spec.
+
+## OP5.9 — The web tab says "strategy" and "options account", and translates every code · ⚠ UNREVIEWED
+
+`no-jargon.test.ts` (PORTFOLIO_REDESIGN §8) bans "sleeve" and "book" in user-visible strings, and
+the TWT `no-internals` rule bans snake_case and SCREAMING_CASE on screen. The tab says "strategy"
+and "options account"; `05` §2's panel names are kept ("Premium selling", "Directional",
+"Expiry-day setups") with the codes `O1-M`, `O1-W`, `O2`, `O3-A`, `O3-B` as short labels;
+`lib/options/view.ts` translates every `04` state, reason and rejection code and sentence-cases one
+it has not met. The rules on `/me/options` are listed with their keys as words ("er max") and their
+`04` anchor. The SEBI caveat of `01` §0 is `<FnoRiskCaveat/>`, above the numbers on every options
+page, and `<ScanOnly/>` labels the tab "Scan · paper only" (house rule 9). **Reversal.**
+`lib/options/view.ts`, `components/options/caveats.tsx`.
+
+## OP5.10 — The chain panel: ±10 strikes around ATM from the forward, ΔOI from the day's first minute · ⚠ UNREVIEWED
+
+`GET /options/chain` serves, per expiry (default the nearest two live ones), the collector's latest
+minute today (else its latest ever), strikes within 10 steps of the ATM strike nearest the parity
+forward (else the spot), ΔOI against the same contract's first snapshot of that session, ATM IV as
+the mean of the ATM call's and put's IV, and put/call OI over the strikes served. Collapsed by
+default on the page; numbers, no chart (`05` §2 v1). **Reversal.** `options_read._chain_for`.

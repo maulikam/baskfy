@@ -29,6 +29,7 @@ describe("staff can switch strategies without a hop through Screens", () => {
     expect(within(hub).getByRole("link", { name: "Swing" })).toHaveAttribute("href", "/swing");
     expect(within(hub).getByRole("link", { name: "Volume" })).toHaveAttribute("href", "/vbt");
     expect(within(hub).getByRole("link", { name: "Tight" })).toHaveAttribute("href", "/twt");
+    expect(within(hub).getByRole("link", { name: "Options" })).toHaveAttribute("href", "/options");
     expect(within(hub).getByRole("link", { name: "Screens" })).toHaveAttribute("href", "/build");
     expect(within(hub).getByRole("link", { name: "Swing" })).toHaveAttribute("aria-current", "page");
 

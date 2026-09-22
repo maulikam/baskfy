@@ -10014,6 +10014,2036 @@
         "title": "NewPortfolioIn",
         "type": "object"
       },
+      "OptionsAuditOut": {
+        "properties": {
+          "changed_at": {
+            "format": "date-time",
+            "title": "Changed At",
+            "type": "string"
+          },
+          "changed_by": {
+            "title": "Changed By",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "new_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Value"
+          },
+          "old_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Old Value"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "key",
+          "old_value",
+          "new_value",
+          "changed_at",
+          "changed_by"
+        ],
+        "title": "OptionsAuditOut",
+        "type": "object"
+      },
+      "OptionsBacktestOut": {
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/OptionsBacktestRunOut"
+            },
+            "title": "Runs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "runs",
+          "reason"
+        ],
+        "title": "OptionsBacktestOut",
+        "type": "object"
+      },
+      "OptionsBacktestRunOut": {
+        "properties": {
+          "caveats": {
+            "title": "Caveats",
+            "type": "string"
+          },
+          "date_from": {
+            "format": "date",
+            "title": "Date From",
+            "type": "string"
+          },
+          "date_to": {
+            "format": "date",
+            "title": "Date To",
+            "type": "string"
+          },
+          "expectancy_r": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expectancy R"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "max_drawdown_r": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Drawdown R"
+          },
+          "net_pnl_inr": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Net Pnl Inr"
+          },
+          "ran_at": {
+            "format": "date-time",
+            "title": "Ran At",
+            "type": "string"
+          },
+          "sessions": {
+            "title": "Sessions",
+            "type": "integer"
+          },
+          "signals": {
+            "title": "Signals",
+            "type": "integer"
+          },
+          "skipped_by_reason": {
+            "additionalProperties": true,
+            "title": "Skipped By Reason",
+            "type": "object"
+          },
+          "sleeve": {
+            "title": "Sleeve",
+            "type": "string"
+          },
+          "tier": {
+            "title": "Tier",
+            "type": "integer"
+          },
+          "traded": {
+            "title": "Traded",
+            "type": "integer"
+          },
+          "win_rate": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Win Rate"
+          }
+        },
+        "required": [
+          "id",
+          "sleeve",
+          "tier",
+          "date_from",
+          "date_to",
+          "sessions",
+          "signals",
+          "traded",
+          "skipped_by_reason",
+          "win_rate",
+          "expectancy_r",
+          "net_pnl_inr",
+          "max_drawdown_r",
+          "caveats",
+          "ran_at"
+        ],
+        "title": "OptionsBacktestRunOut",
+        "type": "object"
+      },
+      "OptionsBookOut": {
+        "properties": {
+          "account_inr": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Account Inr",
+            "type": "string"
+          },
+          "daily_loss_limit_inr": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Daily Loss Limit Inr",
+            "type": "string"
+          },
+          "margin_pool_inr": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Margin Pool Inr",
+            "type": "string"
+          },
+          "monthly_pause_inr": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Monthly Pause Inr",
+            "type": "string"
+          },
+          "paused_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paused Reason"
+          },
+          "paused_until": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paused Until"
+          },
+          "underlying": {
+            "title": "Underlying",
+            "type": "string"
+          }
+        },
+        "required": [
+          "underlying",
+          "account_inr",
+          "margin_pool_inr",
+          "daily_loss_limit_inr",
+          "monthly_pause_inr",
+          "paused_until",
+          "paused_reason"
+        ],
+        "title": "OptionsBookOut",
+        "type": "object"
+      },
+      "OptionsBookPatch": {
+        "additionalProperties": false,
+        "description": "A partial update of ``op_book_config``. Engine bounds here (400); ceilings later (422).",
+        "properties": {
+          "account_inr": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Inr"
+          },
+          "daily_loss_limit_inr": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Loss Limit Inr"
+          },
+          "margin_pool_inr": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Margin Pool Inr"
+          },
+          "monthly_pause_inr": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Pause Inr"
+          },
+          "underlying": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Underlying"
+          }
+        },
+        "title": "OptionsBookPatch",
+        "type": "object"
+      },
+      "OptionsBucketOut": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "mean_r": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Mean R",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "count",
+          "mean_r"
+        ],
+        "title": "OptionsBucketOut",
+        "type": "object"
+      },
+      "OptionsCalendarOut": {
+        "properties": {
+          "event_days": {
+            "items": {
+              "$ref": "#/components/schemas/OptionsEventDayOut"
+            },
+            "title": "Event Days",
+            "type": "array"
+          },
+          "expiries": {
+            "items": {
+              "$ref": "#/components/schemas/OptionsExpiryOut"
+            },
+            "title": "Expiries",
+            "type": "array"
+          },
+          "year": {
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "year",
+          "expiries",
+          "event_days"
+        ],
+        "title": "OptionsCalendarOut",
+        "type": "object"
+      },
+      "OptionsCeilingsOut": {
+        "properties": {
+          "book_daily_loss_inr_max": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Book Daily Loss Inr Max",
+            "type": "string"
+          },
+          "book_monthly_loss_inr_max": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Book Monthly Loss Inr Max",
+            "type": "string"
+          },
+          "hard_exit_latest": {
+            "format": "time",
+            "title": "Hard Exit Latest",
+            "type": "string"
+          },
+          "max_lots_max": {
+            "title": "Max Lots Max",
+            "type": "integer"
+          },
+          "risk_pct_max": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Risk Pct Max",
+            "type": "string"
+          },
+          "risk_per_trade_inr_max": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Risk Per Trade Inr Max",
+            "type": "string"
+          }
+        },
+        "required": [
+          "risk_per_trade_inr_max",
+          "risk_pct_max",
+          "max_lots_max",
+          "book_daily_loss_inr_max",
+          "book_monthly_loss_inr_max",
+          "hard_exit_latest"
+        ],
+        "title": "OptionsCeilingsOut",
+        "type": "object"
+      },
+      "OptionsChainExpiryOut": {
+        "properties": {
+          "atm_iv": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Atm Iv"
+          },
+          "atm_strike": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Atm Strike"
+          },
+          "expiry": {
+            "format": "date",
+            "title": "Expiry",
+            "type": "string"
+          },
+          "forward": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Forward"
+          },
+          "pcr_oi": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pcr Oi"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/OptionsChainRowOut"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "spot": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spot"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expiry",
+          "ts",
+          "spot",
+          "forward",
+          "atm_strike",
+          "atm_iv",
+          "pcr_oi",
+          "rows"
+        ],
+        "title": "OptionsChainExpiryOut",
+        "type": "object"
+      },
+      "OptionsChainOut": {
+        "properties": {
+          "expiries": {
+            "items": {
+              "$ref": "#/components/schemas/OptionsChainExpiryOut"
+            },
+            "title": "Expiries",
+            "type": "array"
+          }
+        },
+        "required": [
+          "expiries"
+        ],
+        "title": "OptionsChainOut",
+        "type": "object"
+      },
+      "OptionsChainRowOut": {
+        "properties": {
+          "ask": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ask"
+          },
+          "bid": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bid"
+          },
+          "delta": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delta"
+          },
+          "gamma": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gamma"
+          },
+          "iv": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iv"
+          },
+          "last": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last"
+          },
+          "oi": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oi"
+          },
+          "oi_change": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oi Change"
+          },
+          "option_type": {
+            "title": "Option Type",
+            "type": "string"
+          },
+          "strike": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Strike",
+            "type": "string"
+          },
+          "theta": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theta"
+          }
+        },
+        "required": [
+          "strike",
+          "option_type",
+          "bid",
+          "ask",
+          "last",
+          "oi",
+          "oi_change",
+          "iv",
+          "delta",
+          "gamma",
+          "theta"
+        ],
+        "title": "OptionsChainRowOut",
+        "type": "object"
+      },
+      "OptionsClosedOut": {
+        "properties": {
+          "closed_reason": {
+            "title": "Closed Reason",
+            "type": "string"
+          },
+          "minutes_held": {
+            "title": "Minutes Held",
+            "type": "integer"
+          },
+          "net_pnl_inr": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Net Pnl Inr",
+            "type": "string"
+          },
+          "r_multiple": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "R Multiple",
+            "type": "string"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "integer"
+          },
+          "simulated": {
+            "title": "Simulated",
+            "type": "boolean"
+          },
+          "sizing_mode": {
+            "title": "Sizing Mode",
+            "type": "string"
+          },
+          "sleeve": {
+            "title": "Sleeve",
+            "type": "string"
+          },
+          "structure": {
+            "title": "Structure",
+            "type": "string"
+          },
+          "trade_date": {
+            "format": "date",
+            "title": "Trade Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "sleeve",
+          "trade_date",
+          "structure",
+          "net_pnl_inr",
+          "r_multiple",
+          "closed_reason",
+          "minutes_held",
+          "simulated",
+          "sizing_mode"
+        ],
+        "title": "OptionsClosedOut",
+        "type": "object"
+      },
+      "OptionsConfigOut": {
+        "properties": {
+          "audit": {
+            "items": {
+              "$ref": "#/components/schemas/OptionsAuditOut"
+            },
+            "title": "Audit",
+            "type": "array"
+          },
+          "book": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OptionsBookOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ceilings": {
+            "$ref": "#/components/schemas/OptionsCeilingsOut"
+          },
+          "gates": {
+            "items": {
+              "$ref": "#/components/schemas/OptionsGateOut"
+            },
+            "title": "Gates",
+            "type": "array"
+          },
+          "seeded": {
+            "title": "Seeded",
+            "type": "boolean"
+          },
+          "sleeves": {
+            "items": {
+              "$ref": "#/components/schemas/OptionsSleeveConfigOut"
+            },
+            "title": "Sleeves",
+            "type": "array"
+          },
+          "thresholds": {
+            "items": {
+              "$ref": "#/components/schemas/OptionsThresholdOut"
+            },
+            "title": "Thresholds",
+            "type": "array"
+          }
+        },
+        "required": [
+          "seeded",
+          "book",
+          "sleeves",
+          "ceilings",
+          "gates",
+          "thresholds",
+          "audit"
+        ],
+        "title": "OptionsConfigOut",
+        "type": "object"
+      },
+      "OptionsConfigPatch": {
+        "additionalProperties": false,
+        "description": "One request, atomic: every ceiling is checked before anything is written.",
+        "properties": {
+          "book": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OptionsBookPatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sleeves": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/OptionsSleevePatch"
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/SleeveGroup"
+            },
+            "title": "Sleeves",
+            "type": "object"
+          }
+        },
+        "title": "OptionsConfigPatch",
+        "type": "object"
+      },
+      "OptionsEventDayIn": {
+        "additionalProperties": false,
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 280,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "reason": {
+            "default": "MANUAL",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date"
+        ],
+        "title": "OptionsEventDayIn",
+        "type": "object"
+      },
+      "OptionsEventDayOut": {
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "removable": {
+            "title": "Removable",
+            "type": "boolean"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          }
+        },
+        "required": [
+          "date",
+          "reason",
+          "source",
+          "source_url",
+          "note",
+          "removable"
+        ],
+        "title": "OptionsEventDayOut",
+        "type": "object"
+      },
+      "OptionsExpiryOut": {
+        "properties": {
+          "event_day": {
+            "title": "Event Day",
+            "type": "boolean"
+          },
+          "event_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Reason"
+          },
+          "expiry_date": {
+            "format": "date",
+            "title": "Expiry Date",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "lot_size": {
+            "title": "Lot Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expiry_date",
+          "kind",
+          "lot_size",
+          "event_day",
+          "event_reason"
+        ],
+        "title": "OptionsExpiryOut",
+        "type": "object"
+      },
+      "OptionsGateOut": {
+        "description": "Per sleeve group: ``PAPER`` while its execution flag is off on this server. When it is on,\nthe desk's own switches decide, and the API cannot see them — ``DESK_DECIDES``, never a guess\nof ``LIVE`` (DECISIONS-OP OP5.5).",
+        "properties": {
+          "execution_enabled": {
+            "title": "Execution Enabled",
+            "type": "boolean"
+          },
+          "group": {
+            "title": "Group",
+            "type": "string"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "group",
+          "execution_enabled",
+          "mode"
+        ],
+        "title": "OptionsGateOut",
+        "type": "object"
+      },
+      "OptionsIndexOut": {
+        "properties": {
+          "at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          },
+          "close_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close Of"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "level",
+          "at",
+          "close_of"
+        ],
+        "title": "OptionsIndexOut",
+        "type": "object"
+      },
+      "OptionsJournalOut": {
+        "properties": {
+          "min_sessions": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Min Sessions",
+            "type": "object"
+          },
+          "progress": {
+            "items": {
+              "$ref": "#/components/schemas/OptionsProgressOut"
+            },
+            "title": "Progress",
+            "type": "array"
+          },
+          "recent": {
+            "items": {
+              "$ref": "#/components/schemas/OptionsClosedOut"
+            },
+            "title": "Recent",
+            "type": "array"
+          },
+          "skips_by_reason": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            "title": "Skips By Reason",
+            "type": "object"
+          },
+          "summaries": {
+            "items": {
+              "$ref": "#/components/schemas/OptionsSummaryOut"
+            },
+            "title": "Summaries",
+            "type": "array"
+          }
+        },
+        "required": [
+          "summaries",
+          "skips_by_reason",
+          "progress",
+          "min_sessions",
+          "recent"
+        ],
+        "title": "OptionsJournalOut",
+        "type": "object"
+      },
+      "OptionsPauseOut": {
+        "properties": {
+          "paused_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paused Reason"
+          },
+          "paused_until": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paused Until"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "paused_until",
+          "paused_reason"
+        ],
+        "title": "OptionsPauseOut",
+        "type": "object"
+      },
+      "OptionsPositionOut": {
+        "properties": {
+          "entry_inr": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Entry Inr",
+            "type": "string"
+          },
+          "entry_points": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Entry Points",
+            "type": "string"
+          },
+          "hard_exit_at": {
+            "format": "date-time",
+            "title": "Hard Exit At",
+            "type": "string"
+          },
+          "last_mark_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Mark At"
+          },
+          "last_mark_points": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Mark Points"
+          },
+          "lots": {
+            "title": "Lots",
+            "type": "integer"
+          },
+          "minutes_to_hard_exit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minutes To Hard Exit"
+          },
+          "opened_at": {
+            "format": "date-time",
+            "title": "Opened At",
+            "type": "string"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "integer"
+          },
+          "simulated": {
+            "title": "Simulated",
+            "type": "boolean"
+          },
+          "sleeve": {
+            "title": "Sleeve",
+            "type": "string"
+          },
+          "trade_date": {
+            "format": "date",
+            "title": "Trade Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "sleeve",
+          "trade_date",
+          "lots",
+          "entry_points",
+          "entry_inr",
+          "opened_at",
+          "hard_exit_at",
+          "last_mark_points",
+          "last_mark_at",
+          "minutes_to_hard_exit",
+          "simulated"
+        ],
+        "title": "OptionsPositionOut",
+        "type": "object"
+      },
+      "OptionsPositionsOut": {
+        "properties": {
+          "closed_today": {
+            "items": {
+              "$ref": "#/components/schemas/OptionsClosedOut"
+            },
+            "title": "Closed Today",
+            "type": "array"
+          },
+          "positions": {
+            "items": {
+              "$ref": "#/components/schemas/OptionsPositionOut"
+            },
+            "title": "Positions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "positions",
+          "closed_today"
+        ],
+        "title": "OptionsPositionsOut",
+        "type": "object"
+      },
+      "OptionsProgressOut": {
+        "properties": {
+          "group": {
+            "title": "Group",
+            "type": "string"
+          },
+          "sessions_done": {
+            "title": "Sessions Done",
+            "type": "integer"
+          },
+          "sessions_needed": {
+            "title": "Sessions Needed",
+            "type": "integer"
+          },
+          "traded": {
+            "title": "Traded",
+            "type": "integer"
+          },
+          "traded_needed": {
+            "title": "Traded Needed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "group",
+          "sessions_needed",
+          "traded_needed",
+          "sessions_done",
+          "traded"
+        ],
+        "title": "OptionsProgressOut",
+        "type": "object"
+      },
+      "OptionsRoleOut": {
+        "properties": {
+          "next_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Date"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "sleeve": {
+            "title": "Sleeve",
+            "type": "string"
+          },
+          "today": {
+            "title": "Today",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "sleeve",
+          "today",
+          "reason",
+          "next_date"
+        ],
+        "title": "OptionsRoleOut",
+        "type": "object"
+      },
+      "OptionsScanHistoryOut": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/OptionsScanOut"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "sleeve": {
+            "title": "Sleeve",
+            "type": "string"
+          },
+          "trade_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trade Date"
+          }
+        },
+        "required": [
+          "sleeve",
+          "trade_date",
+          "rows"
+        ],
+        "title": "OptionsScanHistoryOut",
+        "type": "object"
+      },
+      "OptionsScanOut": {
+        "description": "One ``op_scan`` row. ``numbers`` and ``candidates`` are the JSONB the worker wrote, passed\nthrough: every money figure in them is already a decimal string (OP4), and re-rendering them\nhere would round a second time.",
+        "properties": {
+          "as_of_minute": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of Minute"
+          },
+          "candidates": {
+            "items": {},
+            "title": "Candidates",
+            "type": "array"
+          },
+          "numbers": {
+            "additionalProperties": true,
+            "title": "Numbers",
+            "type": "object"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "sleeve": {
+            "title": "Sleeve",
+            "type": "string"
+          },
+          "stale": {
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "trade_date": {
+            "format": "date",
+            "title": "Trade Date",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sleeve",
+          "trade_date",
+          "ts",
+          "state",
+          "reasons",
+          "numbers",
+          "candidates",
+          "as_of_minute",
+          "stale"
+        ],
+        "title": "OptionsScanOut",
+        "type": "object"
+      },
+      "OptionsSessionOut": {
+        "properties": {
+          "closed_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed Reason"
+          },
+          "expiry_used": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiry Used"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "pnl_inr": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pnl Inr"
+          },
+          "pnl_r": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pnl R"
+          },
+          "skip_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Skip Reasons",
+            "type": "array"
+          },
+          "sleeve": {
+            "title": "Sleeve",
+            "type": "string"
+          },
+          "slot_holder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slot Holder"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "trade_date": {
+            "format": "date",
+            "title": "Trade Date",
+            "type": "string"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict"
+          }
+        },
+        "required": [
+          "id",
+          "sleeve",
+          "trade_date",
+          "expiry_used",
+          "mode",
+          "state",
+          "verdict",
+          "skip_reasons",
+          "closed_reason",
+          "pnl_inr",
+          "pnl_r",
+          "slot_holder"
+        ],
+        "title": "OptionsSessionOut",
+        "type": "object"
+      },
+      "OptionsSessionsOut": {
+        "properties": {
+          "sessions": {
+            "items": {
+              "$ref": "#/components/schemas/OptionsSessionOut"
+            },
+            "title": "Sessions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sessions"
+        ],
+        "title": "OptionsSessionsOut",
+        "type": "object"
+      },
+      "OptionsSleeveConfigOut": {
+        "properties": {
+          "hard_exit_time": {
+            "format": "time",
+            "title": "Hard Exit Time",
+            "type": "string"
+          },
+          "max_lots": {
+            "title": "Max Lots",
+            "type": "integer"
+          },
+          "paper_enabled": {
+            "title": "Paper Enabled",
+            "type": "boolean"
+          },
+          "paused_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paused Reason"
+          },
+          "paused_until": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paused Until"
+          },
+          "risk_per_trade_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Risk Per Trade Pct",
+            "type": "string"
+          },
+          "sleeve": {
+            "title": "Sleeve",
+            "type": "string"
+          },
+          "sleeve_capital_inr": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Sleeve Capital Inr",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sleeve",
+          "sleeve_capital_inr",
+          "risk_per_trade_pct",
+          "max_lots",
+          "paper_enabled",
+          "hard_exit_time",
+          "paused_until",
+          "paused_reason"
+        ],
+        "title": "OptionsSleeveConfigOut",
+        "type": "object"
+      },
+      "OptionsSleevePatch": {
+        "additionalProperties": false,
+        "description": "A partial update of one ``op_sleeve_config`` row (a sleeve group).",
+        "properties": {
+          "hard_exit_time": {
+            "anyOf": [
+              {
+                "format": "time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hard Exit Time"
+          },
+          "max_lots": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Lots"
+          },
+          "paper_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paper Enabled"
+          },
+          "risk_per_trade_pct": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Per Trade Pct"
+          },
+          "sleeve_capital_inr": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sleeve Capital Inr"
+          }
+        },
+        "title": "OptionsSleevePatch",
+        "type": "object"
+      },
+      "OptionsSummaryOut": {
+        "description": "One pool of ``04`` §12: a (sleeve, simulated, sizing mode) key, never merged with another.",
+        "properties": {
+          "by_closed_reason": {
+            "items": {
+              "$ref": "#/components/schemas/OptionsBucketOut"
+            },
+            "title": "By Closed Reason",
+            "type": "array"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "expectancy_inr": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expectancy Inr"
+          },
+          "expectancy_r": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expectancy R"
+          },
+          "max_drawdown_inr": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Max Drawdown Inr",
+            "type": "string"
+          },
+          "max_drawdown_r": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Max Drawdown R",
+            "type": "string"
+          },
+          "mean_r": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean R"
+          },
+          "r_values": {
+            "items": {
+              "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+              "type": "string"
+            },
+            "title": "R Values",
+            "type": "array"
+          },
+          "simulated": {
+            "title": "Simulated",
+            "type": "boolean"
+          },
+          "sizing_mode": {
+            "title": "Sizing Mode",
+            "type": "string"
+          },
+          "sleeve": {
+            "title": "Sleeve",
+            "type": "string"
+          },
+          "traded": {
+            "title": "Traded",
+            "type": "integer"
+          },
+          "win_rate": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Win Rate"
+          },
+          "worst_r": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Worst R"
+          }
+        },
+        "required": [
+          "sleeve",
+          "simulated",
+          "sizing_mode",
+          "count",
+          "traded",
+          "win_rate",
+          "mean_r",
+          "expectancy_inr",
+          "expectancy_r",
+          "worst_r",
+          "max_drawdown_r",
+          "max_drawdown_inr",
+          "r_values",
+          "by_closed_reason"
+        ],
+        "title": "OptionsSummaryOut",
+        "type": "object"
+      },
+      "OptionsThresholdOut": {
+        "properties": {
+          "anchor": {
+            "title": "Anchor",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "section": {
+            "title": "Section",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "section",
+          "key",
+          "value",
+          "anchor"
+        ],
+        "title": "OptionsThresholdOut",
+        "type": "object"
+      },
+      "OptionsTodayOut": {
+        "properties": {
+          "as_of_minute": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of Minute"
+          },
+          "closed_today": {
+            "items": {
+              "$ref": "#/components/schemas/OptionsClosedOut"
+            },
+            "title": "Closed Today",
+            "type": "array"
+          },
+          "collect_enabled": {
+            "title": "Collect Enabled",
+            "type": "boolean"
+          },
+          "empty_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Empty Reason"
+          },
+          "expiries": {
+            "items": {
+              "$ref": "#/components/schemas/OptionsExpiryOut"
+            },
+            "title": "Expiries",
+            "type": "array"
+          },
+          "gates": {
+            "items": {
+              "$ref": "#/components/schemas/OptionsGateOut"
+            },
+            "title": "Gates",
+            "type": "array"
+          },
+          "live": {
+            "title": "Live",
+            "type": "boolean"
+          },
+          "market_open": {
+            "title": "Market Open",
+            "type": "boolean"
+          },
+          "nifty": {
+            "$ref": "#/components/schemas/OptionsIndexOut"
+          },
+          "pauses": {
+            "items": {
+              "$ref": "#/components/schemas/OptionsPauseOut"
+            },
+            "title": "Pauses",
+            "type": "array"
+          },
+          "positions": {
+            "items": {
+              "$ref": "#/components/schemas/OptionsPositionOut"
+            },
+            "title": "Positions",
+            "type": "array"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/OptionsRoleOut"
+            },
+            "title": "Roles",
+            "type": "array"
+          },
+          "scan_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scan Date"
+          },
+          "scan_enabled": {
+            "title": "Scan Enabled",
+            "type": "boolean"
+          },
+          "scans": {
+            "items": {
+              "$ref": "#/components/schemas/OptionsScanOut"
+            },
+            "title": "Scans",
+            "type": "array"
+          },
+          "session_day": {
+            "title": "Session Day",
+            "type": "boolean"
+          },
+          "stale": {
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "today": {
+            "format": "date",
+            "title": "Today",
+            "type": "string"
+          },
+          "vix": {
+            "$ref": "#/components/schemas/OptionsIndexOut"
+          },
+          "week_r": {
+            "items": {
+              "$ref": "#/components/schemas/OptionsWeekROut"
+            },
+            "title": "Week R",
+            "type": "array"
+          }
+        },
+        "required": [
+          "today",
+          "session_day",
+          "market_open",
+          "scan_date",
+          "as_of_minute",
+          "live",
+          "stale",
+          "empty_reason",
+          "collect_enabled",
+          "scan_enabled",
+          "gates",
+          "roles",
+          "expiries",
+          "pauses",
+          "nifty",
+          "vix",
+          "scans",
+          "positions",
+          "closed_today",
+          "week_r"
+        ],
+        "title": "OptionsTodayOut",
+        "type": "object"
+      },
+      "OptionsWeekROut": {
+        "properties": {
+          "r": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "R",
+            "type": "string"
+          },
+          "simulated": {
+            "title": "Simulated",
+            "type": "boolean"
+          },
+          "sleeve": {
+            "title": "Sleeve",
+            "type": "string"
+          },
+          "trades": {
+            "title": "Trades",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sleeve",
+          "simulated",
+          "r",
+          "trades"
+        ],
+        "title": "OptionsWeekROut",
+        "type": "object"
+      },
       "OverviewOut": {
         "description": "§6, in one response. The two timestamps §6.1 requires are separate fields, deliberately.\n\nA price date and a sync date answer different questions — \"how old is the market data\" and\n\"how old is our copy of what you own\" — and a single \"last updated\" that quietly reports the\nolder of the two is how a user comes to believe a stale holdings list is a stale price. They\nare two fields with two labels and they are never merged.\n\n``holdings_synced_on`` is a **date**, not a wall-clock time, because a date is the finest\ntruth the schema holds: ``broker_cash.as_of`` records the day a balance is true for, and\nnothing records the instant a sync ran. Rendering a fabricated time would be the page\nclaiming a precision the data does not have. When a sync timestamp column exists, this field\nbecomes a datetime and its label stops saying \"close of\".",
         "properties": {
@@ -15724,6 +17754,17 @@
         ],
         "title": "SleeveAllocationOut",
         "type": "object"
+      },
+      "SleeveGroup": {
+        "description": "How config and flags group the sleeves: ``O3A``/``O3B`` are one sleeve, ``O3`` (``03``).",
+        "enum": [
+          "O1M",
+          "O1W",
+          "O2",
+          "O3"
+        ],
+        "title": "SleeveGroup",
+        "type": "string"
       },
       "SleeveIn": {
         "properties": {
@@ -38835,6 +40876,1524 @@
         "summary": "The selectable universes",
         "tags": [
           "meta"
+        ]
+      }
+    },
+    "/api/v1/options/backtest": {
+      "get": {
+        "operationId": "getOptionsBacktest",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "sleeve",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sleeve"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptionsBacktestOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Backtests per tier",
+        "tags": [
+          "options"
+        ]
+      }
+    },
+    "/api/v1/options/calendar": {
+      "get": {
+        "operationId": "getOptionsCalendar",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 2100,
+                  "minimum": 2020,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Year"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptionsCalendarOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Expiries and event days",
+        "tags": [
+          "options"
+        ]
+      }
+    },
+    "/api/v1/options/chain": {
+      "get": {
+        "operationId": "getOptionsChain",
+        "parameters": [
+          {
+            "description": "default: the nearest two",
+            "in": "query",
+            "name": "expiry",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "default: the nearest two",
+              "title": "Expiry"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptionsChainOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "The chain around ATM",
+        "tags": [
+          "options"
+        ]
+      }
+    },
+    "/api/v1/options/config": {
+      "get": {
+        "operationId": "getOptionsConfig",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptionsConfigOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Settings, ceilings, thresholds",
+        "tags": [
+          "options"
+        ]
+      },
+      "patch": {
+        "description": "Mutation 2 of 2. The OP2 boundary unchanged: a value above its ceiling is a 422 naming the\nceiling and its env var; ``paused_*`` and the execution flags are not fields at all.\n\n**Atomic across the request**: every part's bounds are checked before any part is written,\nso a two-part patch that crosses a ceiling on its second part changes neither.",
+        "operationId": "patchOptionsConfig",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OptionsConfigPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptionsConfigOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Change the options settings",
+        "tags": [
+          "options"
+        ]
+      }
+    },
+    "/api/v1/options/event-day": {
+      "delete": {
+        "description": "Mutation 1 of 2, its other half. A seeded, source-verified day is refused (400).",
+        "operationId": "deleteOptionsEventDay",
+        "parameters": [
+          {
+            "description": "the day to remove",
+            "in": "query",
+            "name": "date",
+            "required": true,
+            "schema": {
+              "description": "the day to remove",
+              "format": "date",
+              "title": "Date",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Remove a person's event day",
+        "tags": [
+          "options"
+        ]
+      },
+      "post": {
+        "description": "Mutation 1 of 2 (``05`` §2). A day no sleeve trades — it can only make the book *do less*.",
+        "operationId": "postOptionsEventDay",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OptionsEventDayIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptionsEventDayOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Add an event day (no sleeve trades it)",
+        "tags": [
+          "options"
+        ]
+      }
+    },
+    "/api/v1/options/journal": {
+      "get": {
+        "operationId": "getOptionsJournal",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "sleeve",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sleeve"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptionsJournalOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "The journal, never pooled",
+        "tags": [
+          "options"
+        ]
+      }
+    },
+    "/api/v1/options/positions": {
+      "get": {
+        "operationId": "getOptionsPositions",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptionsPositionsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Open and closed today",
+        "tags": [
+          "options"
+        ]
+      }
+    },
+    "/api/v1/options/scan/{sleeve}": {
+      "get": {
+        "operationId": "getOptionsScan",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sleeve",
+            "required": true,
+            "schema": {
+              "title": "Sleeve",
+              "type": "string"
+            }
+          },
+          {
+            "description": "a scanned session; default the latest",
+            "in": "query",
+            "name": "date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "a scanned session; default the latest",
+              "title": "Date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptionsScanHistoryOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "One sleeve's scan rows",
+        "tags": [
+          "options"
+        ]
+      }
+    },
+    "/api/v1/options/sessions": {
+      "get": {
+        "operationId": "getOptionsSessions",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sleeve",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sleeve"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptionsSessionsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Sessions in a window",
+        "tags": [
+          "options"
+        ]
+      }
+    },
+    "/api/v1/options/today": {
+      "get": {
+        "description": "``05`` §2's header strip, the four panels and the clock, in one call.",
+        "operationId": "getOptionsToday",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OptionsTodayOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "The tab: roles, scans, book",
+        "tags": [
+          "options"
         ]
       }
     },

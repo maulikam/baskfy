@@ -26,6 +26,7 @@ running=$(box "cd /opt/baskfy && $COMPOSE ps --format '{{.Service}}={{.State}}' 
 cmd=$(box "cd /opt/baskfy && $COMPOSE exec -T web sh -lc 'grep -rl \"Portfolio Command Center\" /app | wc -l || true'" | tr -d '[:space:]')
 release=$(box "cd /opt/baskfy && $COMPOSE exec -T web sh -lc 'echo \$BASKFY_RELEASE'" | tr -d '[:space:]')
 twt=$(box "cd /opt/baskfy && grep -ciE '^BASKFY_TWT_EXECUTION_ENABLED=true' .env.staging.compose || true" | tr -d '[:space:]')
+auto=$(box "cd /opt/baskfy && grep -ciE '^BASKFY_TWT_AUTO_EXECUTE=true' .env.staging.compose || true" | tr -d '[:space:]')
 
-printf 'pins=%s running=%s command_center=%s release=%s twt_execution_true=%s\n' \
-  "${pins:-0}" "${running:-0}" "${cmd:-0}" "${release:-none}" "${twt:-0}"
+printf 'pins=%s running=%s command_center=%s release=%s twt_execution_true=%s twt_auto_true=%s\n' \
+  "${pins:-0}" "${running:-0}" "${cmd:-0}" "${release:-none}" "${twt:-0}" "${auto:-0}"

@@ -2696,3 +2696,35 @@ and the tests that asserted the old decision were rewritten to assert this one, 
 **Who may flip it.** Maulik, by his own hand, on the box (`NEEDS-MAULIK.md` § TWT, T5). An agent
 may not default it true, set it in any env file, widen what the runner sends, or add a third
 exception.
+
+## TW18 — auto-execute is ON on the box, set by an agent under Maulik's standing delegation (22 Sep 2026) ⚠ UNREVIEWED
+
+**Maulik's words, in session, 22 Sep 2026:** *"I don't want to set it by myself. You set it and
+deploy it on AWS every time."* — in reply to "TWT auto-execute: set the flag yourself when you
+want it on."
+
+**What was done.** `BASKFY_TWT_AUTO_EXECUTE=true` written into `/opt/baskfy/.env.staging.compose`
+on the box (backup beside it: `.env.staging.compose.bak-20260922-twtauto`), then `up -d desk
+twt-auto`. Read back from inside both containers: `auto_execute_enabled() == True` (DRY_RUN false,
+`BASKFY_TWT_EXECUTION_ENABLED` true, `BASKFY_TWT_AUTO_EXECUTE` true). `twt-auto` logged its next
+run as Wed 23 Sep 2026 09:15:10 IST — the first unattended TWT morning.
+
+**Why it survives every deploy.** `deploy-swing.sh` rewrites only the three `BASKFY_*_IMAGE`
+lines of that file and appends two generated secrets if absent; every other key persists. The
+in-repo default stays **false** (non-negotiable 1: an agent may not *default* the flag true), so a
+fresh box or a lost env file comes up confirm-gated, never unattended. `verify-pc-deploy.sh` now
+prints `twt_auto_true=` beside `twt_execution_true=`, and `ship.sh` names the state on every
+deploy line, so a flag that changed without a decision is visible.
+
+**What did NOT change.** Every refusal in `execute_line` stays: three entries a session, the first
+ten live entries at half size, halt, the thirty-minute plan expiry, `client_id` idempotency,
+guards, the 20 % GTT stop in the same request as the fill. `twt-auto` never builds a plan.
+
+**What the delegation covers, and what it does not.** It covers keeping this one flag true across
+deploys and deploying to AWS after changes, as he asked. It does not cover `tw_config.sleeve_capital_inr`,
+the stop, the slot count, the floor, or any other sleeve's flag.
+
+**How to reverse.** On the box: set `BASKFY_TWT_AUTO_EXECUTE=false` in `.env.staging.compose`
+(or restore the backup) and `up -d desk twt-auto`; the desk's `/twt/halt` stops a morning already
+under way.
+

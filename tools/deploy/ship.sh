@@ -72,6 +72,10 @@ case "$OUT" in
   *"twt_execution_true=0"*) TWT_STATE="TWT execution OFF" ;;
   *) TWT_STATE="TWT execution ON — confirmed lines reach the broker (TW16)" ;;
 esac
+case "$OUT" in
+  *"twt_auto_true=1"*) TWT_STATE="$TWT_STATE; TWT AUTO-EXECUTE ON — twt-auto confirms the 09:15 MORNING plan (TW18)" ;;
+  *) TWT_STATE="$TWT_STATE; TWT auto-execute off" ;;
+esac
 
 printf '\n\033[32m✓ DEPLOYED %s\033[0m — all three images pinned, twelve services up (desk-daily joined 13 Sep 2026, twt-auto 22 Sep 2026), swing flags unmoved; %s.\n' "$TAG" "$TWT_STATE"
 echo "  rollback: the tag lines in /opt/baskfy/.env.staging.compose back to the previous sha, then 'up -d'."

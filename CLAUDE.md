@@ -61,6 +61,9 @@ history; D3 is no longer the engineering blocker.
    hand. Each line goes through the same `execute_line`, plan expiry, gateway, guards, GTT stop,
    three-entries-a-session cap and first-ten half size as a click; it never builds a plan and
    refuses an expired or missing one. VBT has no such flag.
+   **Delegated 22 Sep 2026** (DECISIONS-TW TW18): Maulik — *"You set it and deploy it on AWS
+   every time"* — so it is **true on the box** in `.env.staging.compose`, set by an agent, and
+   deploys preserve it. The in-repo default stays false.
    An agent may not widen either exception, add a third, or default either flag to true.
 2. Holdings quantity = `quantity` + `t1_quantity` + `collateral_quantity`.
 3. Pledged shares sell directly (Zerodha instant-sale); plan flags them as info only.

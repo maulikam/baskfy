@@ -1,0 +1,5572 @@
+[
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:27:18:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 27,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:27:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 27,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:53:18:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 53,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:53:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 53,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:60:35:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 60,
+    "operator": "comparison"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:72:55:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 72,
+    "operator": "comparison"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:72:74:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 72,
+    "operator": "comparison"
+  },
+  {
+    "after": "Or",
+    "before": "And",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:72:55:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 72,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:73:19:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 73,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:81:39:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 81,
+    "operator": "comparison"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:82:55:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 82,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:82:33:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 82,
+    "operator": "comparison"
+  },
+  {
+    "after": "x",
+    "before": "not x",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:103:7:not_removal",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 103,
+    "operator": "not_removal"
+  },
+  {
+    "after": "True",
+    "before": "False",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:104:23:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 104,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "True",
+    "before": "False",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:106:23:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 106,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:108:23:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 108,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "True",
+    "before": "False",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:111:23:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 111,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "Or",
+    "before": "And",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:113:7:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 113,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "True",
+    "before": "False",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:114:23:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 114,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "Or",
+    "before": "And",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:115:7:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 115,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "True",
+    "before": "False",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:116:23:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 116,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:117:19:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 117,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:139:11:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 139,
+    "operator": "comparison"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:146:24:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 146,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:155:48:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 155,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:155:33:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 155,
+    "operator": "comparison"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:166:70:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 166,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:168:47:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 168,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:168:40:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 168,
+    "operator": "comparison"
+  },
+  {
+    "after": "Or",
+    "before": "And",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:168:19:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 168,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:175:71:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 175,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:177:47:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 177,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:177:40:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 177,
+    "operator": "comparison"
+  },
+  {
+    "after": "Or",
+    "before": "And",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:177:19:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 177,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:188:54:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 188,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/calendar.py",
+    "identifier": "options/calendar.py:189:17:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_calendar.py",
+    "line": 189,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "366.0",
+    "before": "365.0",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:26:20:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 26,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "25.0",
+    "before": "24.0",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:26:28:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 26,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:26:20:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 26,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "61.0",
+    "before": "60.0",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:26:35:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 26,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:26:20:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 26,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "366.0",
+    "before": "365.0",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:27:17:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 27,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "101.0",
+    "before": "100.0",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:28:13:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 28,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:38:12:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 38,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "61.0",
+    "before": "60.0",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:38:43:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 38,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:38:11:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 38,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:38:11:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 38,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "1.5",
+    "before": "0.5",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:42:11:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 42,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "2.0",
+    "before": "1.0",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:42:18:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 42,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "3.0",
+    "before": "2.0",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:42:47:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 42,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:42:33:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 42,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:42:18:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 42,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:42:11:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 42,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "1.5",
+    "before": "0.5",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:46:21:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 46,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:46:20:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 46,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:46:20:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 46,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "3.0",
+    "before": "2.0",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:46:46:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 46,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:46:46:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 46,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:46:11:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 46,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:50:11:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 50,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:51:19:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 51,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "1.5",
+    "before": "0.5",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:51:39:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 51,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:51:39:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 51,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:51:39:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 51,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:51:39:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 51,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:51:10:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 51,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:51:9:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 51,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:52:15:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 52,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:56:21:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 56,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:56:11:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 56,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:56:36:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 56,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:56:27:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 56,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:56:50:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 56,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:56:42:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 56,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:56:62:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 56,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:56:56:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 56,
+    "operator": "comparison"
+  },
+  {
+    "after": "Or",
+    "before": "And",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:56:11:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 56,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "1",
+    "before": "0.0",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:63:43:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 63,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:63:24:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 63,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "x",
+    "before": "not x",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:64:7:not_removal",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 64,
+    "operator": "not_removal"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:65:20:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 65,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:65:67:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 65,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "1",
+    "before": "0.0",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:66:41:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 66,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:66:15:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 66,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:69:27:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 69,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:69:53:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 69,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:69:27:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 69,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:69:15:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 69,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:70:23:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 70,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:70:49:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 70,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:70:23:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 70,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:70:11:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 70,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:75:15:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 75,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "1",
+    "before": "0.0",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:75:33:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 75,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:75:72:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 75,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "1",
+    "before": "0.0",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:75:90:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 75,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:96:16:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 96,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:96:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 96,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:96:30:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 96,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:96:21:comparison",
+    "killed": false,
+    "killed_by": null,
+    "line": 96,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:96:46:numeric_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 96,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:96:35:comparison",
+    "killed": false,
+    "killed_by": null,
+    "line": 96,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:96:61:numeric_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 96,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:96:51:comparison",
+    "killed": false,
+    "killed_by": null,
+    "line": 96,
+    "operator": "comparison"
+  },
+  {
+    "after": "And",
+    "before": "Or",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:96:7:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 96,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "LtE",
+    "before": "Lt",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:100:7:comparison",
+    "killed": false,
+    "killed_by": null,
+    "line": 100,
+    "operator": "comparison"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:100:28:comparison",
+    "killed": false,
+    "killed_by": null,
+    "line": 100,
+    "operator": "comparison"
+  },
+  {
+    "after": "And",
+    "before": "Or",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:100:7:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 100,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:103:10:arithmetic",
+    "killed": true,
+    "killed_by": "timeout",
+    "line": 103,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:103:10:comparison",
+    "killed": false,
+    "killed_by": null,
+    "line": 103,
+    "operator": "comparison"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:104:15:arithmetic",
+    "killed": true,
+    "killed_by": "timeout",
+    "line": 104,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "3.0",
+    "before": "2.0",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:104:26:numeric_constant",
+    "killed": true,
+    "killed_by": "timeout",
+    "line": 104,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:104:14:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 104,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "LtE",
+    "before": "Lt",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:105:11:comparison",
+    "killed": false,
+    "killed_by": null,
+    "line": 105,
+    "operator": "comparison"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:109:12:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 109,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "3.0",
+    "before": "2.0",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:109:23:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 109,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:109:11:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 109,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:112:18:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 112,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:112:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 112,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "x",
+    "before": "not x",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:128:7:not_removal",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 128,
+    "operator": "not_removal"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:130:24:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 130,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:135:12:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 135,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:135:67:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 135,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:136:12:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 136,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:136:34:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 136,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:136:34:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 136,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:136:12:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 136,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:137:12:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 137,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:137:12:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 137,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:137:12:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 137,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "3.0",
+    "before": "2.0",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:137:50:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 137,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:137:50:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 137,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:137:12:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 137,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:138:17:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 138,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:138:17:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 138,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:139:11:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 139,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:139:11:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 139,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:139:11:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 139,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:139:11:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 139,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:140:58:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 140,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:163:16:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 163,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:163:7:comparison",
+    "killed": false,
+    "killed_by": null,
+    "line": 163,
+    "operator": "comparison"
+  },
+  {
+    "after": "LtE",
+    "before": "Lt",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:163:21:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 163,
+    "operator": "comparison"
+  },
+  {
+    "after": "And",
+    "before": "Or",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:163:7:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 163,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:165:13:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 165,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "LtE",
+    "before": "Lt",
+    "file": "options/greeks.py",
+    "identifier": "options/greeks.py:165:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 165,
+    "operator": "comparison"
+  },
+  {
+    "after": "3",
+    "before": "2",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:26:15:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 26,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "101",
+    "before": "100",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:27:19:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 27,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "3",
+    "before": "2",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:28:15:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 28,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:31:18:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 31,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:31:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 31,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:54:18:numeric_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 54,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:59:63:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 59,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:59:51:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 59,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:59:80:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 59,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:59:68:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 59,
+    "operator": "comparison"
+  },
+  {
+    "after": "And",
+    "before": "Or",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:59:11:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 59,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:61:16:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 61,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:61:15:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 61,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "And",
+    "before": "Or",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:67:11:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 67,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:69:16:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 69,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:69:15:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 69,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:69:15:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 69,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:39:18:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 39,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:39:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 39,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:74:15:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 74,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:74:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 74,
+    "operator": "comparison"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:76:12:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 76,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:77:12:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 77,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:78:20:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 78,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:78:36:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 78,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:78:20:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 78,
+    "operator": "comparison"
+  },
+  {
+    "after": "LtE",
+    "before": "Lt",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:89:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 89,
+    "operator": "comparison"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:91:50:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 91,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "3",
+    "before": "2",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:91:67:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 91,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:91:67:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 91,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:91:80:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 91,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:91:67:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 91,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:93:19:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 93,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "x",
+    "before": "not x",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:94:7:not_removal",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 94,
+    "operator": "not_removal"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:97:53:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 97,
+    "operator": "comparison"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:105:25:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 105,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:105:16:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 105,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:105:48:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 105,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:105:39:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 105,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:106:50:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 106,
+    "operator": "comparison"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:106:50:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 106,
+    "operator": "comparison"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:117:41:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 117,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:117:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 117,
+    "operator": "comparison"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:122:14:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 122,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:123:68:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 123,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Or",
+    "before": "And",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:125:11:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 125,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:126:29:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 126,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:126:28:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 126,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:126:19:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 126,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:168:18:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 168,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:168:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 168,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:177:79:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 177,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:177:62:comparison",
+    "killed": false,
+    "killed_by": null,
+    "line": 177,
+    "operator": "comparison"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:182:11:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 182,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "True",
+    "before": "False",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:192:17:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 192,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "x",
+    "before": "not x",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:202:9:not_removal",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 202,
+    "operator": "not_removal"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:202:22:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 202,
+    "operator": "comparison"
+  },
+  {
+    "after": "Or",
+    "before": "And",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:202:9:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 202,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "LtE",
+    "before": "Lt",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:204:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 204,
+    "operator": "comparison"
+  },
+  {
+    "after": "x",
+    "before": "not x",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:206:7:not_removal",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 206,
+    "operator": "not_removal"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:206:67:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 206,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "LtE",
+    "before": "Lt",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:206:20:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 206,
+    "operator": "comparison"
+  },
+  {
+    "after": "Or",
+    "before": "And",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:206:7:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 206,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "x",
+    "before": "not x",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:208:24:not_removal",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 208,
+    "operator": "not_removal"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:213:12:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 213,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:213:11:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 213,
+    "operator": "comparison"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:219:15:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 219,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:220:12:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 220,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:220:11:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 220,
+    "operator": "comparison"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:225:12:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 225,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/chain.py",
+    "identifier": "options/chain.py:225:11:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_greeks.py",
+    "line": 225,
+    "operator": "comparison"
+  },
+  {
+    "after": "101",
+    "before": "100",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:25:19:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 25,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "10000001",
+    "before": "10000000",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:26:17:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 26,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:44:15:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 44,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:34:18:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 34,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:34:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 34,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:63:12:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 63,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:63:12:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 63,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:63:12:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 63,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:63:12:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 63,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:63:12:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 63,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:63:12:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 63,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:47:18:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 47,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:47:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 47,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:78:77:numeric_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 78,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:79:75:numeric_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 79,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:80:15:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 80,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:81:22:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 81,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:82:16:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 82,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:82:16:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 82,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:83:21:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 83,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:83:21:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 83,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:84:17:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 84,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:84:17:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 84,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:85:17:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 85,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:85:17:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 85,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:86:18:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 86,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:86:18:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 86,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:87:17:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 87,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:87:17:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 87,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:87:17:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 87,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:87:16:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 87,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:87:16:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 87,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:104:38:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 104,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:104:8:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 104,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:104:8:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 104,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:104:8:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 104,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:108:18:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 108,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:108:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 108,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "LtE",
+    "before": "Lt",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:131:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 131,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:133:20:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 133,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:135:16:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 135,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:135:66:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 135,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:144:8:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 144,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:144:8:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 144,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:150:20:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 150,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:150:12:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 150,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:150:11:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 150,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:155:11:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 155,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:155:11:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 155,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:162:12:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 162,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:162:12:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 162,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:162:11:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 162,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:170:18:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 170,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:170:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 170,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:181:28:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 181,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:181:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 181,
+    "operator": "comparison"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:183:12:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 183,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:184:32:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 184,
+    "operator": "comparison"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:191:12:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 191,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/costs.py",
+    "identifier": "options/costs.py:191:11:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_costs.py",
+    "line": 191,
+    "operator": "comparison"
+  },
+  {
+    "after": "101",
+    "before": "100",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:22:19:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 22,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:36:12:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 36,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:36:11:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 36,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:36:11:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 36,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:43:11:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 43,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:43:11:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 43,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:43:11:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 43,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:48:11:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 48,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:55:11:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 55,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:55:11:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 55,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:58:18:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 58,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:58:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 58,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:74:87:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 74,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:77:13:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 77,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "True",
+    "before": "False",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:82:18:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 82,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "LtE",
+    "before": "Lt",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:90:11:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 90,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:115:39:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 115,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:115:27:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 115,
+    "operator": "comparison"
+  },
+  {
+    "after": "And",
+    "before": "Or",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:115:7:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 115,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:121:27:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 121,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:121:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 121,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:123:29:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 123,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:123:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 123,
+    "operator": "comparison"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:131:17:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 131,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "True",
+    "before": "False",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:136:22:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 136,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:141:17:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 141,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:141:17:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 141,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:144:17:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 144,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:145:15:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 145,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:147:15:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 147,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:147:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 147,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:171:29:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 171,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:171:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 171,
+    "operator": "comparison"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:172:15:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 172,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:173:11:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 173,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:173:11:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 173,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:173:38:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 173,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:173:38:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 173,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:173:11:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 173,
+    "operator": "comparison"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:182:18:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 182,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:182:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 182,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:207:16:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 207,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:208:71:numeric_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 208,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "And",
+    "before": "Or",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:208:37:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 208,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:209:26:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 209,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:209:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 209,
+    "operator": "comparison"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:217:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 217,
+    "operator": "comparison"
+  },
+  {
+    "after": "Eq",
+    "before": "NotEq",
+    "file": "options/sizing.py",
+    "identifier": "options/sizing.py:218:31:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_sizing.py",
+    "line": 218,
+    "operator": "comparison"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/session.py",
+    "identifier": "options/session.py:65:18:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 65,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/session.py",
+    "identifier": "options/session.py:65:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 65,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "options/session.py",
+    "identifier": "options/session.py:76:38:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_session.py",
+    "line": 76,
+    "operator": "comparison"
+  },
+  {
+    "after": "Or",
+    "before": "And",
+    "file": "options/session.py",
+    "identifier": "options/session.py:76:11:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_session.py",
+    "line": 76,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "x",
+    "before": "not x",
+    "file": "options/session.py",
+    "identifier": "options/session.py:91:38:not_removal",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_session.py",
+    "line": 91,
+    "operator": "not_removal"
+  },
+  {
+    "after": "Or",
+    "before": "And",
+    "file": "options/session.py",
+    "identifier": "options/session.py:91:7:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_session.py",
+    "line": 91,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "options/session.py",
+    "identifier": "options/session.py:93:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_session.py",
+    "line": 93,
+    "operator": "comparison"
+  },
+  {
+    "after": "Eq",
+    "before": "NotEq",
+    "file": "options/session.py",
+    "identifier": "options/session.py:93:65:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_session.py",
+    "line": 93,
+    "operator": "comparison"
+  },
+  {
+    "after": "Or",
+    "before": "And",
+    "file": "options/session.py",
+    "identifier": "options/session.py:93:7:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_session.py",
+    "line": 93,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "options/session.py",
+    "identifier": "options/session.py:95:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_session.py",
+    "line": 95,
+    "operator": "comparison"
+  },
+  {
+    "after": "x",
+    "before": "not x",
+    "file": "options/session.py",
+    "identifier": "options/session.py:95:61:not_removal",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_session.py",
+    "line": 95,
+    "operator": "not_removal"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "options/session.py",
+    "identifier": "options/session.py:95:75:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_session.py",
+    "line": 95,
+    "operator": "comparison"
+  },
+  {
+    "after": "And",
+    "before": "Or",
+    "file": "options/session.py",
+    "identifier": "options/session.py:95:61:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_session.py",
+    "line": 95,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "Or",
+    "before": "And",
+    "file": "options/session.py",
+    "identifier": "options/session.py:95:7:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_session.py",
+    "line": 95,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/session.py",
+    "identifier": "options/session.py:105:15:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_session.py",
+    "line": 105,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "LtE",
+    "before": "Lt",
+    "file": "options/session.py",
+    "identifier": "options/session.py:110:11:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_session.py",
+    "line": 110,
+    "operator": "comparison"
+  },
+  {
+    "after": "101",
+    "before": "100",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:24:19:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 24,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:35:18:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 35,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:35:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 35,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:45:18:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 45,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:45:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 45,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:56:56:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 56,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:56:37:arithmetic",
+    "killed": false,
+    "killed_by": null,
+    "line": 56,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:56:13:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 56,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "7",
+    "before": "6",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:57:46:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 57,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:57:19:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 57,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:64:41:comparison",
+    "killed": false,
+    "killed_by": null,
+    "line": 64,
+    "operator": "comparison"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:64:41:comparison",
+    "killed": false,
+    "killed_by": null,
+    "line": 64,
+    "operator": "comparison"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:69:69:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 69,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:95:22:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 95,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:95:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 95,
+    "operator": "comparison"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:98:60:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 98,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:98:92:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 98,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:99:8:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 99,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:99:7:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 99,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:99:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 99,
+    "operator": "comparison"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:102:51:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 102,
+    "operator": "comparison"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:102:51:comparison",
+    "killed": false,
+    "killed_by": null,
+    "line": 102,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:102:94:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 102,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:103:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 103,
+    "operator": "comparison"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:109:15:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 109,
+    "operator": "comparison"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:110:16:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 110,
+    "operator": "comparison"
+  },
+  {
+    "after": "Or",
+    "before": "And",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:109:15:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 109,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:112:16:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 112,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:114:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 114,
+    "operator": "comparison"
+  },
+  {
+    "after": "x",
+    "before": "not x",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:116:7:not_removal",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 116,
+    "operator": "not_removal"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:128:29:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 128,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:128:11:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 128,
+    "operator": "comparison"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:131:18:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 131,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:131:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 131,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:147:45:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 147,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:148:16:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 148,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:148:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 148,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:152:34:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 152,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:152:11:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 152,
+    "operator": "comparison"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:153:13:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 153,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:153:13:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 153,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:157:31:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 157,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:157:11:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 157,
+    "operator": "comparison"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:158:13:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 158,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:158:13:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 158,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:178:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 178,
+    "operator": "comparison"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:180:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 180,
+    "operator": "comparison"
+  },
+  {
+    "after": "x",
+    "before": "not x",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:182:7:not_removal",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 182,
+    "operator": "not_removal"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:192:40:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 192,
+    "operator": "comparison"
+  },
+  {
+    "after": "Or",
+    "before": "And",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:192:11:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 192,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "And",
+    "before": "Or",
+    "file": "options/risk.py",
+    "identifier": "options/risk.py:202:7:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_risk.py",
+    "line": 202,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:30:16:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 30,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:30:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_journal.py",
+    "line": 30,
+    "operator": "comparison"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:32:11:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_journal.py",
+    "line": 32,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:46:35:numeric_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 46,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:47:29:numeric_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 47,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:49:24:numeric_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 49,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:50:29:numeric_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 50,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:51:29:numeric_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 51,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:35:18:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 35,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:35:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 35,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:58:18:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_journal.py",
+    "line": 58,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:58:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 58,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:69:18:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 69,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:69:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 69,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:77:18:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 77,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:77:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 77,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:101:29:numeric_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 101,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:102:20:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_journal.py",
+    "line": 102,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:106:27:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_journal.py",
+    "line": 106,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:111:31:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_journal.py",
+    "line": 111,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:111:11:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_journal.py",
+    "line": 111,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:120:47:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_journal.py",
+    "line": 120,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:120:31:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_journal.py",
+    "line": 120,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:121:74:numeric_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 121,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:132:20:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_journal.py",
+    "line": 132,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Eq",
+    "before": "NotEq",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:132:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_journal.py",
+    "line": 132,
+    "operator": "comparison"
+  },
+  {
+    "after": "And",
+    "before": "Or",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:136:22:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_journal.py",
+    "line": 136,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "x",
+    "before": "not x",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:136:74:not_removal",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_journal.py",
+    "line": 136,
+    "operator": "not_removal"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:138:15:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_journal.py",
+    "line": 138,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:138:36:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_journal.py",
+    "line": 138,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:138:32:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 138,
+    "operator": "comparison"
+  },
+  {
+    "after": "Or",
+    "before": "And",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:142:11:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_journal.py",
+    "line": 142,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "And",
+    "before": "Or",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:147:18:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_journal.py",
+    "line": 147,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/journal.py",
+    "identifier": "options/journal.py:153:17:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_journal.py",
+    "line": 153,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "3",
+    "before": "2",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:40:20:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 40,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "4",
+    "before": "3",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:41:22:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 41,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:79:22:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 79,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:80:23:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 80,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "3",
+    "before": "2",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:81:23:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 81,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "4",
+    "before": "3",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:82:24:numeric_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 82,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:87:24:numeric_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 87,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:88:23:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 88,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "3",
+    "before": "2",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:89:23:numeric_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 89,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "4",
+    "before": "3",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:90:22:numeric_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 90,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Eq",
+    "before": "NotEq",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:97:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 97,
+    "operator": "comparison"
+  },
+  {
+    "after": "Or",
+    "before": "And",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:101:11:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 101,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:113:44:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 113,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:114:27:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 114,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:113:11:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 113,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:115:42:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 115,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:115:79:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 115,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:115:10:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 115,
+    "operator": "comparison"
+  },
+  {
+    "after": "Or",
+    "before": "And",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:113:11:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 113,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:124:18:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 124,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:124:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 124,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:146:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 146,
+    "operator": "comparison"
+  },
+  {
+    "after": "True",
+    "before": "False",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:148:55:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 148,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:149:15:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 149,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:149:15:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 149,
+    "operator": "comparison"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:149:15:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 149,
+    "operator": "comparison"
+  },
+  {
+    "after": "x",
+    "before": "not x",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:149:11:not_removal",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 149,
+    "operator": "not_removal"
+  },
+  {
+    "after": "LtE",
+    "before": "Lt",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:151:11:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 151,
+    "operator": "comparison"
+  },
+  {
+    "after": "True",
+    "before": "False",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:153:76:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 153,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:153:95:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 153,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:153:86:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 153,
+    "operator": "comparison"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:159:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 159,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:168:34:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 168,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:168:11:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 168,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:171:37:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 171,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:171:42:numeric_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 171,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:171:12:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 171,
+    "operator": "comparison"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:181:18:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 181,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:181:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 181,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:207:16:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 207,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "LtE",
+    "before": "Lt",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:207:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 207,
+    "operator": "comparison"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:209:24:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 209,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:209:61:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 209,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:211:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 211,
+    "operator": "comparison"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:212:55:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 212,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:212:46:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 212,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:212:16:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 212,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:213:24:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 213,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:213:24:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 213,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:213:16:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 213,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "True",
+    "before": "False",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:214:66:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 214,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:215:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 215,
+    "operator": "comparison"
+  },
+  {
+    "after": "Or",
+    "before": "And",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:215:7:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 215,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:216:66:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 216,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:238:15:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 238,
+    "operator": "comparison"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:224:18:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 224,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:224:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 224,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:257:19:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 257,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Lt",
+    "before": "LtE",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:257:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 257,
+    "operator": "comparison"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:259:14:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 259,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:259:45:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 259,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:259:73:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 259,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:259:14:arithmetic",
+    "killed": false,
+    "killed_by": null,
+    "line": 259,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:260:50:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 260,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:260:54:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 260,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:261:68:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 261,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:261:57:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 261,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:261:88:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 261,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:261:74:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 261,
+    "operator": "comparison"
+  },
+  {
+    "after": "Or",
+    "before": "And",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:261:57:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 261,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:262:50:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 262,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:262:42:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 262,
+    "operator": "comparison"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:262:65:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 262,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:262:16:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 262,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:263:17:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 263,
+    "operator": "comparison"
+  },
+  {
+    "after": "LtE",
+    "before": "Lt",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:263:62:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 263,
+    "operator": "comparison"
+  },
+  {
+    "after": "Div",
+    "before": "Mult",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:267:16:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 267,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:269:20:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 269,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:270:24:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 270,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "NotEq",
+    "before": "Eq",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:270:11:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 270,
+    "operator": "comparison"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:272:13:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 272,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:277:18:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 277,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:290:14:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 290,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Or",
+    "before": "And",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:305:48:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 305,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "x",
+    "before": "not x",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:305:43:not_removal",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 305,
+    "operator": "not_removal"
+  },
+  {
+    "after": "True",
+    "before": "False",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:324:15:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 324,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:326:36:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 326,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:326:35:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 326,
+    "operator": "comparison"
+  },
+  {
+    "after": "And",
+    "before": "Or",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:326:8:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 326,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "x",
+    "before": "not x",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:328:7:not_removal",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 328,
+    "operator": "not_removal"
+  },
+  {
+    "after": "True",
+    "before": "False",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:329:15:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 329,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:331:16:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 331,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:331:15:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 331,
+    "operator": "comparison"
+  },
+  {
+    "after": "Gt",
+    "before": "GtE",
+    "file": "options/execution.py",
+    "identifier": "options/execution.py:332:11:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_execution.py",
+    "line": 332,
+    "operator": "comparison"
+  },
+  {
+    "after": "101",
+    "before": "100",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:31:19:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_backtest.py",
+    "line": 31,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Gt",
+    "before": "GtE",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:71:7:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_backtest.py",
+    "line": 71,
+    "operator": "comparison"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:76:18:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 76,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:76:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 76,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:96:18:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_backtest.py",
+    "line": 96,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:96:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 96,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "And",
+    "before": "Or",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:129:22:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 129,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "Or",
+    "before": "And",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:130:11:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_backtest.py",
+    "line": 130,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "Or",
+    "before": "And",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:132:11:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_backtest.py",
+    "line": 132,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "And",
+    "before": "Or",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:135:22:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_backtest.py",
+    "line": 135,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "x",
+    "before": "not x",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:135:73:not_removal",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_backtest.py",
+    "line": 135,
+    "operator": "not_removal"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:138:59:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_backtest.py",
+    "line": 138,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:138:62:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_backtest.py",
+    "line": 138,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:139:14:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_backtest.py",
+    "line": 139,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:139:20:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_backtest.py",
+    "line": 139,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:140:14:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_backtest.py",
+    "line": 140,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:146:26:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_backtest.py",
+    "line": 146,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:147:25:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_backtest.py",
+    "line": 147,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:151:31:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_backtest.py",
+    "line": 151,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:151:37:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_backtest.py",
+    "line": 151,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Or",
+    "before": "And",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:152:67:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_backtest.py",
+    "line": 152,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "2",
+    "before": "1",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:152:29:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_backtest.py",
+    "line": 152,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:152:50:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_backtest.py",
+    "line": 152,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "GtE",
+    "before": "Gt",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:152:46:comparison",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 152,
+    "operator": "comparison"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:152:17:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_backtest.py",
+    "line": 152,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Or",
+    "before": "And",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:153:54:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_backtest.py",
+    "line": 153,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:153:37:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_backtest.py",
+    "line": 153,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:153:21:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_backtest.py",
+    "line": 153,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:155:42:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 155,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "And",
+    "before": "Or",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:155:17:boolean_operator",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_backtest.py",
+    "line": 155,
+    "operator": "boolean_operator"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:155:71:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_backtest.py",
+    "line": 155,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:162:18:boolean_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_edges.py",
+    "line": 162,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "False",
+    "before": "True",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:162:30:boolean_constant",
+    "killed": false,
+    "killed_by": null,
+    "line": 162,
+    "operator": "boolean_constant"
+  },
+  {
+    "after": "Mult",
+    "before": "Div",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:186:63:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_backtest.py",
+    "line": 186,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "Add",
+    "before": "Sub",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:191:43:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_backtest.py",
+    "line": 191,
+    "operator": "arithmetic"
+  },
+  {
+    "after": "1",
+    "before": "0",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:191:65:numeric_constant",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_backtest.py",
+    "line": 191,
+    "operator": "numeric_constant"
+  },
+  {
+    "after": "Sub",
+    "before": "Add",
+    "file": "options/backtest.py",
+    "identifier": "options/backtest.py:191:74:arithmetic",
+    "killed": true,
+    "killed_by": "packages/core/tests/test_options_backtest.py",
+    "line": 191,
+    "operator": "arithmetic"
+  }
+]

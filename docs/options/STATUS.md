@@ -3,17 +3,16 @@
 The status page for the options run. Updated at the end of every module, loud about what is NOT
 done. A fresh session resumes from the first module not marked ✅.
 
-**Run state: OP0 🟡 (22 Sep 2026); OP1 not started.** Pack written 22 Sep 2026 on branch
-`developer`, absorbing the never-started condor pack (`docs/condor/`) as sleeve O1. Nothing under
-`packages/core/src/baskfy_core/options/` exists yet; OP1 writes it from `04`. OP0 was run alone, by
-instruction ("execute only OP0, then stop"); the next session resumes at OP1.
+**Run state: OP0 🟡, OP1 ✅ (22 Sep 2026); OP2 not started.** Pack written 22 Sep 2026 on branch
+`developer`, absorbing the never-started condor pack (`docs/condor/`) as sleeve O1. OP0 and OP1 were
+each run alone, by instruction ("execute only OP<N>, then stop"); the next session resumes at OP2.
 
 ## Module ledger
 
 | Module | State | One line |
 |---|---|---|
 | OP0 — Baseline, read-in, verified facts | 🟡 | Costs, expiry circular, F&O segment, algo rules, `OPTIONS_ENABLED` blast radius verified; six live Kite reads pending a session; full suites not re-run (memory rule) |
-| OP1 — The shared pure core `baskfy_core.options` | ⬜ | |
+| OP1 — The shared pure core `baskfy_core.options` | ✅ | 11 modules, 635 tests against `04`; purity, mypy strict, ruff, escape hatches clean; mutation 89.6 % (499/557), every survivor justified |
 | OP2 — Schema, NFO master, settings, `options_gates()` | ⬜ | |
 | OP3 — Provider reads, index minute bars, collector, limiter | ⬜ | |
 | OP4 — Sleeve signal cores and the scans | ⬜ | |
@@ -157,12 +156,83 @@ superseded. The F&O-segment question is **not** there — it is answered (OP0.4)
 
 ### What blocks OP1
 
-Nothing. OP1 needs `04` (now with verified costs) and fixtures. OP2 should carry OP0.6's gateway
-tightening and OP0.7's env rename; OP3 does §4's six reads first.
+Nothing (OP1 is now ✅). OP2 should carry OP0.6's gateway tightening and OP0.7's env rename; OP3
+does §4's six reads first.
+
+
+## OP1 — The shared pure core `baskfy_core.options`
+
+**✅, 22 Sep 2026.** Decisions `DECISIONS-OP.md` OP1.1–OP1.11.
+
+### What exists (`decile-blueprint/packages/core/src/baskfy_core/options/`)
+
+| Module | `04` | What it holds |
+|---|---|---|
+| `config.py` | all | `OptionsConfig` — ten frozen groups (`calendar`, `chain`, `condor_monthly`, `condor_weekly` — distinct instances, `directional`, `expiry_setups`, `costs` = `CostRates` with OP0's verified rates and their URLs, `sizing`, `execution`, `risk`), 147 fields; `Sleeve`/`SleeveGroup`/enums; `OptionsCeilings` (the `02` env ceilings' defaults, not config); NIFTY-only refusal |
+| `calendar.py` | §1 | `Contract` (a master row), `expiries`, `monthly_expiry`, `kind`, `role` (§1.2's table), `next_session`, `lot_size_for`/`tick_size_for` (`None` when missing/0/ambiguous), `expiry_for_o2`, `expiry_for_o1_o3` — no weekday arithmetic (source-scanned) |
+| `greeks.py` | §2.3 | `year_fraction` (calendar minutes), Black-76 price/greeks on `F`, bisection IV on [0.01, 5.0] to 1e-6, `solve` with the three refusals |
+| `chain.py` | §2.1–2.5 | `OptionQuote`/`Level`, `atm` (ties low), `strike_step` (modal, read), `snapshot_strikes`, `parity_forward` (with fallback), `quote_greeks`, `is_liquid` (every reason; wing = depth only), OI unit conversion, the three staleness tests |
+| `costs.py` | §6 | `charges` (per component, to the paisa), `exercise_stt`, `settlement_stt` (the STT trap), `synthetic_half_spread`, the three expected gains, `cost_test`, `rates_review_due` |
+| `sizing.py` | §7, §4.6, §5.5 | risk per lot for condor/long/debit spread, `gap_through_long`, `size` (paper-one-lot, `NO_SLEEVE_CAPITAL`, ceilings, first-live ×0.5), `premium_cap_ok`, `margin_check` |
+| `session.py` | §11 | the seven-edge machine, `transition` (raises), one session per sleeve per date, `plan_expires_at` |
+| `risk.py` | §9 | `evaluate_sleeve` (DAILY/WEEKLY/MONTHLY_R), `trade_breached`, `book_limits` (derived, capped), `evaluate_book`, `plan_refusal` → `REJECTED_PAUSED` |
+| `journal.py` | §12 | `summarize` per `(sleeve, simulated, sizing_mode)`, `summarize_one` refuses pooling; R, win rate, expectancy ₹/R, worst R, drawdown ₹/R, MAE/MFE, by reason / expiry kind / weekday |
+| `execution.py` | §8 | entry/exit sequences (naked short refused), `advance_entry`, `next_exit_leg`, `never_naked`, `next_attempt` (1, reprice, cancel; marketable LIMIT for a risk-reducing third), `simulate_fill` (depth ladder, no LTP), precedence, stale-mark filter, `feed_lost`, the expiry-day slot |
+| `backtest.py` | §13 | the engine: one sleeve, one tier, Tier 1 without P&L, caveats verbatim from `07`, Tier 3 banner, `tier2_quote` |
+
+Ported by re-implementation from the frozen lab's `options.py`, `options_costs.py`,
+`strangle/fills_paper.py`, `strangle/calendar_nse.py` (named in each docstring); nothing imports
+`frozen/` (purity test). `04` gained **§14**, the machine-checked field table (OP1.2).
+
+### Tests (`packages/core/tests/test_options_*.py`, `options_fixtures.py`)
+
+| File | Tests |
+|---|---|
+| `test_options_calendar.py` (holiday shift defeats a weekday rule; O1-W refuses the monthly Tuesday) | 128 |
+| `test_options_greeks.py` (Hull's Black-76 example; parity to 1e-9; delta parity; finite differences; IV round trips; refusals; forward; liquidity; staleness) | 52 |
+| `test_options_costs.py` (worked round trip to the paisa; each rate a field; the STT trap both ways) | 24 |
+| `test_options_sizing.py` | 23 |
+| `test_options_session.py` (all 49 pairs; 500 random edge walks) | 60 |
+| `test_options_risk.py` | 19 |
+| `test_options_journal.py` (never pools) | 13 |
+| `test_options_execution.py` (never-naked over 500 seeded fill sequences per structure, entry and exit) | 42 |
+| `test_options_backtest.py` | 12 |
+| `test_options_purity.py` | 28 |
+| `test_options_docs_parity.py` (§14 both ways, prose numbers, variants distinct, NIFTY only) | 166 |
+| `test_options_edges.py` (the boundaries the first mutation run found unasserted; every result frozen) | 68 |
+| **Total new** | **635** |
+
+**Suite counts.** Before OP1's first change (collected): screener core `packages/core/tests` **5,173**,
+screener tree **9,071**, desk **2,123**. After: core **5,820**, tree **9,718**, desk **2,123**
+(635 new options tests, plus 12 existing file-parametrised tests that pick up the twelve new
+source files; the desk is unchanged — OP1 touched no desk file). `tools/ci-local.sh` before the first change: **15 passed, 2 failed, 3 skipped** —
+the failures were "Tests, with per-package coverage gates" and "Performance budgets" (the latter a
+latency budget on a loaded Mac). After: **16 passed, 1 failed, 3 skipped** — desk suite, lint and
+type-check, perf budgets all PASS; the one failure is the same coverage-gate step, failing on three
+tests that do not touch options and fail without it: `services/api/tests/test_api_admin.py::
+TestUserLookupAndOverrides::test_an_override_changes_the_effective_entitlements` (fails in
+isolation too) and two `packages/providers` Kite-health tests that pass in isolation and fail only
+in the full run (environment/order). **Not OP1's to fix; recorded here so the next module does not
+mistake them for its own.**
+
+**Lint.** `ruff check`, `ruff format --check`, `mypy --strict` clean on the package, its tests and
+`tools/mutation.py`; `test_no_escape_hatches.py` green.
+
+**Mutation.** `tools/mutation.py` gained `OPTIONS_TARGETS` (ten modules; `config.py` excluded as
+swing's is). First run 74.5 % (415/557) exposed real gaps, closed by
+`test_options_edges.py`; second run **89.6 % (499/557)**, all 58 survivors justified in
+`reconciliation/mutant-justifications.json` (swing's last: 88.2 %). Report: `decile-blueprint/reconciliation/MUTANTS-options.md`.
+
+### What is NOT done (by design, for later modules)
+
+* The sleeves' signal/structure/exit modules and the scan (`condor`, `directional`,
+  `expiry_setups`, `scan`) — **OP4**. The engine's day functions, tools and worker task — OP12.
+* `chain.oi_unit` defaults to `UNITS` **unverified** (OP1.3) — OP3's first NFO `quote()` confirms it.
+* Nothing is wired to a database, the desk or the web; no flag exists yet (OP2).
 
 ## What is NOT done
 
-Everything after OP0. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
+Everything after OP1. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
 OP3 does them first); the two full-suite baseline runs (OP0.9); the gateway gap of OP0.6 and the
 `/ops` side door of OP0.5 are **recorded, not fixed** (OP2 and OP13). Every money flag is false and stays false. The paper periods begin only after OP15, and
 the longest (O1-M) takes about six months after that.

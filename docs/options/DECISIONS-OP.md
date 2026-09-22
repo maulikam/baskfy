@@ -276,3 +276,115 @@ screener tree 9,071), the gate-and-guard files in both trees run green (desk 143
 `packages/execution/tests/test_non_negotiables.py` 25), and the last full green recorded in
 `docs/00-merge-status.md`. **Reversal.** `tools/ci-local.sh` at the start of OP1 gives the full
 baseline before the first code change.
+
+---
+
+# OP1 — The shared pure core `baskfy_core.options` (22 Sep 2026)
+
+## OP1.1 — What OP1 builds and what it leaves to OP4 · ⚠ UNREVIEWED
+
+**Context.** `06` OP1 lists `config`, `calendar`, `greeks` + `chain`, `costs`, `sizing`, `session`,
+`risk`, `journal`, `execution` ("§8's pure decisions") and `backtest` ("engine only"); OP4 lists the
+sleeves' `condor`, `directional`, `expiry_setups` and `scan`. **Choice.** OP1 holds everything the
+three sleeves share: the full config (every `04` field, including the sleeves' thresholds, because
+`04` says every number is a field of one `OptionsConfig`), and in `execution` only the *shared*
+exit plumbing — `first_by_precedence`, `drop_on_stale` (§8.5), `feed_lost` — never a sleeve's own
+exit rules, which are OP4's (`06`: "OP4 (O1 signal/structure/exits)"). The backtest engine takes a
+sleeve's day function as an argument. **Rejected.** Writing the sleeves' exit evaluators now (they
+belong with the signals they read, and OP4's fixtures test them). **Reversal.** Move a function.
+
+## OP1.2 — `04` gains §14, the field table, asserted both ways · ⚠ UNREVIEWED
+
+**Context.** `06` OP1 asks `test_options_docs_parity.py` to prove "every config field name appears
+in `04`". Several fields have no bracketed name in §1–§13 (the clock fields — `observation_start`,
+`o3a_window_start` — the IV solver bounds, `greeks_model`, `oi_unit`, `plan_ttl_minutes`). **Choice.**
+The VBT pattern (`test_vbt_docs_parity.py`): `04` §14 lists every `group.field` with its default,
+regenerated from the code and asserted **both ways**, plus a prose check that §1–§9's load-bearing
+bracketed numbers are still stated. This edits `04` by *adding an inventory*, not by changing any
+number. **Rejected.** A name-appears scan (weaker: a re-valued default would pass). **Reversal.**
+Delete §14 and the two table tests.
+
+## OP1.3 — Kite's OI unit is a field, defaulting to `UNITS`, unverified · ⚠ UNREVIEWED
+
+**Context.** `04` §2.4 says the OI floor's conversion follows the unit OP0 records; OP0's read (e) is
+pending a Kite session (OP0.3). **Choice.** `chain.oi_unit` ∈ {`UNITS`, `LOTS`}, default `UNITS`
+(Kite Connect reports F&O `oi` in shares/units as far as its documentation shows — **not
+live-verified**); `oi_in_units()` does the conversion and a test covers both. **OP3 must verify it
+with its first `quote()` on NFO** and, if Kite counts lots, change the default here and in §14.
+**Rejected.** Assuming lots (would admit strikes with 1/65th of the required OI). **Reversal.** One
+default.
+
+## OP1.4 — Sizing details `04` §7 leaves open · ⚠ UNREVIEWED
+
+(a) The **first-live multiplier** applies to every `BUDGET` sizing, paper or live, while fewer than
+five `simulated=false` rows exist — so a paper plan with capital set shows the half size a live plan
+would take; it never applies to `PAPER_ONE_LOT` (one lot is already the floor). (b) The core also
+clamps `risk_per_trade_pct` at `RISK_PCT_MAX` (the settings form refuses above it in OP2; the core
+does not trust that). (c) Both O1 margin figures (hedged and transient) reject as
+`REJECTED_MARGIN` — `04` §7.4's code — with the message naming which; condor's
+`REJECTED_MARGIN_TRANSIENT` is the stale half. **Reversal.** Each is one line in `sizing.py`.
+
+## OP1.5 — Execution: the latency penalty, the third attempt, and the cancel · ⚠ UNREVIEWED
+
+**Context.** `04` §8.4: "adding `latency_ticks` [1] of adverse price per level consumed beyond the
+first"; §8.2: the third attempt on a risk-reducing close is "marketable at the touch". **Choice.**
+(a) Each depth level after the first fills `latency_ticks` worse than its quoted price (a flat
+penalty per extra level), and a level whose penalised price is beyond the limit stops the walk; the
+rest is a partial. (b) Attempt 3 is a **LIMIT at the current far touch** (ask for a buy-back, bid for
+O2's sell) flagged `marketable` — never a MARKET order (OP0.8's market-protection rule). (c) Any other
+leg is cancelled after its second wait (`next_attempt` returns `None`). **Rejected.** A cumulative
+penalty (level *k* +*k* ticks — harsher, and the text's "per level" reads as flat); a MARKET order.
+**Reversal.** Tier 3 / live fills calibrate `latency_ticks`; the shape is two lines.
+
+## OP1.6 — The journal never pools `(sleeve code, simulated, sizing_mode)`; O3A and O3B are separate · ⚠ UNREVIEWED
+
+`summarize` keys by the `op_sleeve` code, so O3-A and O3-B get separate summaries although they share
+config, flags and a paper period (a pooled O3 number would hide which setup carries it); the page can
+show both side by side. `summarize_one` raises on mixed rows. The risk ledger likewise refuses rows of
+another sleeve. **Reversal.** Key by `group_of(sleeve)`.
+
+## OP1.7 — Risk-ledger details · ⚠ UNREVIEWED
+
+Realised R over a week or month is the sum of each row's own `r_multiple` (each trade against the R
+it was taken at); the daily test divides today's realised + marked ₹ by today's R. The weekly pause
+runs to the ISO week's last trading day **from the caller's trading calendar** (the core owns no
+calendar); monthly to the calendar month's last day. Book pauses carry `BOOK_DAILY_INR` /
+`BOOK_MONTHLY_INR` (`04` §9.3 names no code). **Reversal.** Local to `risk.py`.
+
+## OP1.8 — Numbers: greeks are floats, money is `Decimal`, costs round per component · ⚠ UNREVIEWED
+
+Greeks and IV are model outputs stored as `numeric(10,6)` rounded at write (OP3), so they are
+computed in `float` (`math.erf`); every premium, strike, charge and budget is `Decimal`. Delta is
+Black-76's forward delta (`e^{-rT}N(d1)`, so call − put = `e^{-rT}`), theta per calendar day, vega
+per vol point. `charges()` rounds each component to the paisa half-up, as a contract note does, and
+the total is the sum of the rounded components. **Reversal.** A new `greeks_model` version.
+
+## OP1.9 — The Tier 2 caveat stays verbatim although it says "Black–Scholes"
+
+`04` §13.2 requires condor `07` §4's caveat **verbatim**, and it names Black–Scholes while this pack's
+model is Black-76 on the forward (PACK.8; for Tier 2 the forward is spot, so the two coincide up to
+the discounting). Verbatim wins; the test asserts the string is in condor `07`. The source spells the
+en dash as `–` only because ruff's confusable-character rule forbids the literal. Changing the
+wording is Maulik's edit to `07`, then here.
+
+## OP1.10 — Lint: per-function `noqa: PLR0913` with a reason, the house convention
+
+Pure functions take every input explicitly (law 1 puts `now` and the config in the signature), so
+eleven exceed ruff's five-argument limit; each carries `# noqa: PLR0913 - <why>` as `factors.py` and
+`momentum_scan.py` do, and the rest are keyword-only. No per-file blanket ignore was added.
+
+## OP1.11 — Mutation: `baskfy_core.options` joins the harness; 89.6 %, every survivor justified · ⚠ UNREVIEWED
+
+**Context.** `06` OP1: "Mutation harness at the `factors` threshold; score recorded." The threshold
+the harness enforces is Prompt 19 §6's "fix or justify every surviving mutant" (swing's last recorded
+score is 88.2 %). **Choice.** `tools/mutation.py` gains `OPTIONS_TARGETS` (ten modules; `config.py`
+excluded for swing's reason) with a per-module primary test file. The first run scored **74.5 %**
+(415/557); the survivors showed real gaps — `role()`'s `trades` flag never asserted, sells *at*
+their limit, a scratch trade counted as a win, Monday rows, last month's losses, input-order ties,
+`frozen=True` on every dataclass — so `test_options_edges.py` (68 tests) and three calendar tests
+were added, each asserting a `04` rule at its boundary. The second run: **499/557 killed, 89.6 %**;
+the 58 survivors are each justified in `reconciliation/mutant-justifications.json` (25 are
+`slots=True` flips, the rest measure-zero float boundaries, sub-paisa sums, skip-row defaults that
+no statistic reads, and two exit-rank ties decided by string hashing). Report:
+`decile-blueprint/reconciliation/MUTANTS-options.md` (its own file, so swing's `MUTANTS.md` is not
+overwritten by a partial run). **Reversal.** Remove the targets.

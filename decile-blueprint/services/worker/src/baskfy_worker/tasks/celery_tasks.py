@@ -61,6 +61,7 @@ from baskfy_worker.options import index_bars as options_index_bars
 from baskfy_worker.options.collector import collect_gate, collect_minute, in_session
 from baskfy_worker.options.master import EmptyMaster, master_alert, refresh_master
 from baskfy_worker.options.reads import build_options_kite
+from baskfy_worker.options.scan import scan_gate_free, scan_minute_for
 from baskfy_worker.orchestrator import PipelineOutcome, run_nightly_pipeline
 from baskfy_worker.providers import build_cache, build_pipeline_dependencies, sole_user_id
 from baskfy_worker.settings import get_worker_settings
@@ -1022,6 +1023,42 @@ def options_index_bars_eod_task(trade_date: str | None = None) -> JsonObject:
         kite = build_options_kite(retry_hooks=provider_retry_hooks())
         report = await options_index_bars.reconcile_day(session, kite.bars, day, now)
         return {"date": day.isoformat(), **report.as_dict()}
+
+    return run_in_session(_run)
+
+
+@shared_task(name="baskfy.options.scan", acks_late=False)
+def options_scan_task(at: str | None = None) -> JsonObject:
+    """OP4: each sleeve's scan state and candidates for this minute into ``op_scan``.
+
+    Reads only the database — the collector's snapshot, the index bars, the master, the sole
+    tenant's config and sessions — and makes **no Kite call** (PACK.11). Beat sends it every minute
+    09:00-15:59 on weekdays, 20 s after the collector, with ``expires=55``. Refused before a
+    database session unless ``BASKFY_OPTIONS_SCAN_ENABLED`` **and**
+    ``BASKFY_OPTIONS_COLLECT_ENABLED`` are true (both default false), the clock is inside
+    09:15-15:30 and a sole tenant is configured; then refused on an NSE holiday. Idempotent per
+    minute (an upsert on ``(user_id, sleeve, ts)``). ``acks_late=False``, like the collector: a
+    minute redelivered later would stamp an old minute with a later snapshot. Moves no money;
+    has no order path.
+    """
+    now = _options_now(at)
+    settings = get_worker_settings()
+    user_id = sole_user_id()
+    refused = scan_gate_free(
+        now,
+        scan_enabled=settings.options_scan_enabled,
+        collect_enabled=settings.options_collect_enabled,
+        user_id=user_id,
+    )
+    if refused is not None or user_id is None:
+        return {"at": now.isoformat(), "skipped": refused or "no BASKFY_SOLE_USER_ID configured"}
+    tenant = user_id
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        if not await is_session_day(session, now.astimezone(IST).date()):
+            return {"at": now.isoformat(), "skipped": "not an NSE trading day"}
+        report = await scan_minute_for(session, tenant, now, trading_day=True)
+        return report.as_dict()
 
     return run_in_session(_run)
 

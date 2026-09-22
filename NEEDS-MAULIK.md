@@ -1687,6 +1687,9 @@ the box but not reachable from the internet.
 
 ## Condor
 
+> **Superseded 22 Sep 2026 by `## Options` below** — the condor is now sleeve O1 of the options
+> run (`docs/options/README.md`). C1–C5 are carried there; this section stays as history.
+
 Raised by the pack, 9 Sep 2026 (`docs/condor/`). The run does not wait on any of these; each has
 a standing default in `docs/condor/QUESTIONS.md`. OC0 fills in what it verifies.
 
@@ -1714,6 +1717,53 @@ best knowledge; edit on `/condor/calendar` once OC4 lands.
 `DRY_RUN=false`, `OPTIONS_ENABLED`, `INTRADAY_ENABLED`, `BASKFY_CONDOR_EXECUTION_ENABLED` — by
 your hand after `02` §3, or delegated by one line here (then recorded in DECISIONS-OC before an
 agent acts). Note the two product flags also widen what the *weekly* book's gateway accepts.
+
+## Options
+
+Opened by OP0, 22 Sep 2026 (`docs/options/`). The run does not wait on any of these; each has a
+standing default in `docs/options/QUESTIONS.md`, and every module that does not depend on an answer
+is built anyway. **Not here, because it is answered:** the F&O segment is active — filled NFO MIS
+orders on 21 Sep 2026 and your "yes" on 22 Sep (`DECISIONS-OP` OP0.4).
+
+### O1 — Sleeve capital and the written risk decision, per sleeve (blocks the real-money gate only)
+Capital for O1-M, O1-W, O2, O3 (and the margin pool), risk % per trade, max lots, loss limits — as
+an entry in `docs/options/DECISIONS-OP.md` (`02` §3.4; Q1–Q3). Until then every sleeve is ₹0: paper
+runs one lot per plan and measures in R; live refuses `NO_SLEEVE_CAPITAL`.
+
+### O2 — Broker readiness for a real basket (blocks the flags, `02` §3.5)
+The margin pool in place; `basket_order_margins` answering for a real four-leg basket; the desk's
+static IP unchanged (mandatory for API orders since 1 Apr 2026, OP0.8). Note: the account already
+carries hand-placed NIFTY option baskets (21 Sep 2026) — the options book will never read or close
+those (Track C §8).
+
+### O3 — A Kite session on a trading day for six read-only facts (blocks nothing; OP3 does them)
+OP0 could not make the six reads of `06` OP0 (earliest minute history, an expired weekly's error,
+the next eight expiries with lot/tick/step, the quote's fields and **OI unit**, `basket_order_margins`
+shape). Your ordinary morning login is enough; OP3 runs them as its first act. Listed in
+`docs/options/STATUS.md` OP0 §4.
+
+### O4 — Zerodha's retail-algo requirements for API orders (blocks the flags only)
+From 1 Apr 2026: static IP, < 10 orders/s without strategy registration, market protection on
+MARKET orders (the book never sends one). **Unverified:** whether Zerodha needs anything from you
+for the exchange algo-ID tag on API orders (a registration, a declaration in the developer
+console), or stamps it itself. Worth one look at the Kite Connect console or a support ticket before
+any flag flip.
+
+### O5 — Historical minute option data (blocks Tier 3 of the backtest only; Q5)
+Kite serves no history for expired contracts. A vendor purchase is a new provider and a licensing
+question. If you buy one, the loader wants: underlying, expiry, strike, type, minute timestamp, bid,
+ask, last, volume, OI (depth if available) → `op_chain_snapshot` with `source = VENDOR`. Default: no
+purchase; Tier 3 runs on the collector's own days.
+
+### O6 — Event days for FY 2026–27, the Q6–Q13 defaults, and the flag flip (blocks nothing until OP15)
+RBI MPC decision dates, Budget day, election-result dates (Q4); whether PACK.2 (one confirm covers the
+exits), O1-W expiry-day-only, O2's strike/stop/target, O3's two setups and the paper periods stand
+(Q6–Q10); turning the collector on as soon as OP3 is green (Q12). The four-flag flip per sleeve —
+`DRY_RUN=false`, `OPTIONS_ENABLED`, `INTRADAY_ENABLED`, `BASKFY_OPTIONS_<SLEEVE>_EXECUTION_ENABLED` —
+is yours alone and not delegated (Q13, PACK.14). **Before anyone sets `OPTIONS_ENABLED=true`:** OP0
+found that it alone lets the weekly desk's gateway accept NFO MIS orders without `INTRADAY_ENABLED`
+and NRML futures, and puts five dead strangle controls on `/ops` (`DECISIONS-OP` OP0.5, OP0.6). OP2 and
+OP13 close both; until then leave it false.
 
 ## VBT — the volume-breakout sleeve
 

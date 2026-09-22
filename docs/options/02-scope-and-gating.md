@@ -65,6 +65,13 @@ the live tree. OP0 inventories exactly what `OPTIONS_ENABLED=true` would wake to
 a test that with it true those hooks stay dark unless `frozen/` is thawed (a decision that is D4's,
 not this run's). Until that test is green, §3 cannot be met.
 
+**OP0's inventory (22 Sep 2026, `STATUS.md` OP0 §5) found two more things.** (1) `/ops` is *not*
+dark: `_options_operations()` guards on an `ImportError` from `strategies.strangle.instruments`, which
+is live, so the flag alone puts five strangle controls on the page (they would fail at spawn —
+`DECISIONS-OP` OP0.5). (2) The gateway's product gate admits **any** product on a derivative venue once
+`options_enabled` is true — NFO MIS without `INTRADAY_ENABLED`, and NRML futures — so the flag alone
+widens the weekly desk's gateway (OP0.6). OP2 tightens (2); OP13's test covers (1).
+
 ### Ceilings (system-only env; a setting may sit below them, never above)
 
 | Env | Default | Bounds |

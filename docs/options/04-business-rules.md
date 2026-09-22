@@ -10,7 +10,8 @@ When code and document disagree the document wins, unless the document is wrong 
 Units: `*_pct` are percent (0.75 = 0.75 %); points are index points; money is ₹ and `Decimal`; times
 IST. The pure core takes `now` as an argument (law 1). "Bar" means a one-minute bar unless it says
 5-minute; 5-minute bars are aligned to 09:15 (09:15–09:19, 09:20–09:24, …) and built from the
-one-minute bars, never fetched separately.
+one-minute bars, never fetched separately. A 5-minute bar's **close time** is the start of its last minute (the
+10:15–10:19 bar closes at 10:19) and it is complete once that minute is stored (OP4.2).
 
 ## §1 Calendar and event days (`calendar.py`)
 
@@ -308,6 +309,15 @@ it to month-end.
 
 A scan's candidate uses **exactly** the functions the plan builder uses (§3–§7) over the minute's
 snapshot; a test asserts that a plan built from the same inputs equals the scan's candidate.
+
+**As built (OP4, `baskfy_core.options.scan`).** O3-A and O3-B are separate rows (their `op_sleeve`
+codes), and a setup whose conditions fail is `DAY_SKIPPED` with its reasons, as O2's is (OP4.9). A
+decided sleeve prices its candidate from the snapshot of its decision minute — O1 `plan_time`, O3-B
+`o3b_plan_time`, O2/O3-A the trigger minute — so a verdict does not move with later premiums
+(OP4.4). A window is judged once its last minute is stored, or `stale_scan_seconds` after (OP4.3).
+Refusal codes beyond §3–§7: `REJECTED_NO_SHORT_PUT`, `REJECTED_NO_CONTRACT`, `REJECTED_NO_CHAIN`;
+skip reasons beyond the tables: `TREND_UNKNOWN`, `VIX_UNKNOWN`, `NO_PREV_CLOSE`, `O3B_HOLDS`,
+`SETUP_DISABLED` (OP4.6, OP4.8, OP4.9).
 
 ## §11 Session state machine (`session.py`)
 

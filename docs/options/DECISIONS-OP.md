@@ -631,3 +631,135 @@ one departure clock and shows their combined gaps never beat the cap; (2) the sh
 180/min read ceiling (2.2 %); (3) the backfill's duration is an **estimate**: 1 Jan 2015 → today is
 ≈ 4,282 days = 72 sixty-day windows × 2 indices = 144 calls, ≥ 72 s of bulk-lane spacing plus
 Kite's response time — a few minutes, and ≈ 2.2 M rows. The box's first run replaces the estimate.
+
+## OP4.1 — What OP4 builds: six pure modules, each sleeve's exits included, and one worker task · ⚠ UNREVIEWED
+
+**Context.** `06` OP4 names `options.condor`, `.directional`, `.expiry_setups`, `.scan` and the task
+`baskfy.options.scan`; OP1.1 left each sleeve's **exit rules** to OP4 ("they belong with the signals
+they read"). **Choice.** Six modules in `baskfy_core.options`: the four named, plus `bars` (windows,
+5-minute bars, Kaufman's ER — the readings all three sleeves share, so they cannot disagree) and
+`structures` (the priced chain `ChainView`, `CandidateLeg`/`Candidate`, the round trip, sizing with
+the sleeve's own settings — what a candidate and a plan are both made of). Each sleeve module has a
+day function, a `build` (the one OP6-OP8's plan builders will call) and an `exit_decision` with its
+precedence (condor §7.6, `04` §4.5, §5.3), including `04` §9.2's budget breach as `STOP`. Worker:
+`baskfy_worker/options/scan.py` + task `baskfy.options.scan` + Beat `options-scan`. **Rejected.**
+Putting the shared pieces in `chain.py`/`execution.py` (OP1's modules, mutation-scored; widening
+them would reopen their scores); a plan builder now (OP6). **Reversal.** Move functions.
+
+## OP4.2 — A 5-minute bar is named by the start of its last minute and is complete when that minute is stored · ⚠ UNREVIEWED
+
+**Context.** `04` §4.2's window is "[09:30, 13:30] (the trigger bar's close time)" and §5.1's
+"[10:19, 13:00]"; neither says whether a bar "closes at" 10:19 or 10:20. **Choice.** The close time
+is the start of the bar's last minute — the convention condor uses for "the 09:59 bar" — which
+makes 10:19 the 10:15-10:19 bar, the first after the 10:14 range, and 13:29 the last O2 bar. A bar
+is complete once its last one-minute bar is stored (that minute's close *is* its close); a missing
+middle minute does not void it. The decision minute that prices a trigger is the minute after
+(10:20 for a 10:19 close). **Rejected.** Closing at the end instant (10:20) — the 10:15-10:19 bar
+would fall outside `[10:19, 13:00]`'s spirit only by the naming; all-five-minutes completeness
+(one lost minute would make a trigger impossible for five minutes). **Reversal.** `bars.five_minute_bars`.
+
+## OP4.3 — A window is judged once its last minute is stored, or `stale_scan_seconds` after it should have been · ⚠ UNREVIEWED
+
+**Context.** The scan runs at the same minute the index-bar task writes the previous minute, so at
+10:00 the 09:59 bar may not be stored yet; a verdict computed then would flip a minute later, and
+`04` §10's states are one-way. **Choice.** `bars.window_settled`: final when the window's last minute
+is stored, or once `chain.stale_scan_seconds` [120 s] have passed after it closed (then a missing
+minute is `INCOMPLETE_OBSERVATION`). While a window fills: gap needs the 09:15 bar; a range excess is
+reported at once (a range only grows); containment and ER are judged only on the complete window.
+Reasons found early are shown live (`OBSERVING`, `BUILDING_RANGE`). No new config field — the grace
+reuses §2.5's scan staleness. **Rejected.** Judging at the clock time regardless (flips); a separate
+grace field (one more number for the same idea). **Reversal.** Pass a different `grace_seconds`.
+
+## OP4.4 — A decided candidate is priced from its decision minute's snapshot; greeks are recomputed from the quotes · ⚠ UNREVIEWED
+
+**Context.** `04` §10: the scan's candidate equals a plan built from the same inputs; a scan
+re-computed each minute from the latest quotes would move a `WOULD_TRADE` to a `REJECTED_CREDIT` as
+premiums decay, breaking one-way states and per-minute idempotence. **Choice.** Before a sleeve
+decides, the latest snapshot (a preview). Once decided, the snapshot at its **decision minute** — O1's
+`plan_time`, O3-B's `o3b_plan_time`, O2's and O3-A's trigger minute — the first stored minute at or
+after it. The pure `scan.wanted_minutes` runs the scan with an empty `SnapshotBook` and records which
+minutes it asked for; the worker loads those, then runs `scan_all`. Greeks and the forward are
+recomputed by `chain`'s own functions from the stored quotes (the plan builder will do the same from
+its quotes); the collector's stored greeks stay Tier 3's record. `stale` = the snapshot is missing or
+more than `stale_scan_seconds` from the minute it should describe. **Rejected.** Reading the stored
+greeks (a plan would then use a different computation than its scan); latest-only pricing.
+**Reversal.** `SnapshotBook` keys.
+
+## OP4.5 — The round trip is `04` §6.1's charges on every order a plan implies, both crossings at the conservative side · ⚠ UNREVIEWED
+
+**Context.** `04` §6.4's `cost_share = expected_round_trip / expected_gain` does not say at what
+price the exit orders are costed; condor §5.2 adds a separate `spread_cost`. **Choice.** Each leg
+enters at its attempt-1 limit (buy `ask + tick`, sell `bid - tick`) and exits at the same quotes'
+opposite attempt-1 limit; `expected_round_trip = charges(those orders)` — O1 eight, O2 two, O3 four
+(`04` §6.1). Crossing the spread both ways at the conservative side *is* §6.2's slippage, so no
+separate spread cost is added; condor §5.2's `spread_cost` is the stale half (`04` §3.1 does not cite
+condor §5). O1 also warns `RESERVE_EXCEEDED` when the round trip per lot exceeds
+`reserve_per_lot_inr`. **OP6-OP8 pin these figures to the paisa.** **Rejected.** Exit priced at the
+profit-take premiums (unknown at plan time); adding condor's spread cost (double counting).
+**Reversal.** `structures.round_trip`.
+
+## OP4.6 — Three refusal codes `04` does not name, and liquidity checked twice · ⚠ UNREVIEWED
+
+(a) `REJECTED_NO_SHORT_PUT` — condor §4.2's "symmetric" of `REJECTED_NO_SHORT_CALL`, so the page says
+which side failed. (b) `REJECTED_NO_CONTRACT` — the strike a rule names (O2's ITM contract, a spread
+leg) is not quoted two-sided this minute. (c) `REJECTED_NO_CHAIN` — no snapshot, no quotes for the
+expiry, or no tick/step to read; the scan shows it rather than guessing. (d) Liquidity: a short (O1)
+is **selected** among contracts liquid for one lot, then every leg is re-checked at the **sized**
+quantity (`REJECTED_ILLIQUID`) — sizing needs the credit, which needs the legs. O1's wings take the
+depth test only (`04` §2.4). (e) A debit ≤ 0 (crossed quotes) is `REJECTED_DEBIT`. Rejection order:
+paused, slot, chain, lot size, structure, premium, sizing, (premium cap), liquidity, cost.
+**Reversal.** Each is one branch in the sleeve's `build`.
+
+## OP4.7 — Among in-band shorts the one nearest `delta_target` wins; a tie goes further from the money · ⚠ UNREVIEWED
+
+Condor §4.1 names no tie-break. The further strike is the safer short (less gamma, further from the
+range). **Reversal.** `condor.select_short`'s key.
+
+## OP4.8 — O2's trend: an SMA-seeded EMA over 120 NIFTY 50 closes; missing data refuses the day · ⚠ UNREVIEWED
+
+**Context.** `04` §4.1 says "20-day EMA of NIFTY 50 closes from `index_snapshot_daily` through the
+previous session" and "India VIX previous close", nothing about seeding or missing data.
+**Choice.** `alpha = 2/(n+1)`, seeded with the mean of the first `n` closes, fed the last 120 stored
+closes (`nifty-50`) so the seed has decayed to nothing; fewer than 20 → `TREND_UNKNOWN`. VIX from
+`index_snapshot_daily` `india-vix`, falling back to the last stored `INDIA VIX` minute before today;
+none → `VIX_UNKNOWN`. Both are skip reasons, not guesses. The same daily series gives every sleeve's
+`prev_close` (O1/O3 with none show `NO_PREV_CLOSE`). NIFTY 50, not the swing gate's MidSmall 400
+(PACK.5; the kickoff's note). **Rejected.** Seeding with the first close (a 20-close series would
+then depend on its first print); trading without VIX. **Reversal.** `directional.ema`, `DAILY_HISTORY`.
+
+## OP4.9 — O3-A and O3-B are separate rows; O3 borrows `DAY_SKIPPED`; O3-B holds the day at scan level · ⚠ UNREVIEWED
+
+`op_sleeve` has `O3A` and `O3B`, so each gets its own `op_scan` row (OP1.6 keeps them apart in the
+journal too). `04` §10's O3 vocabulary has no state for a setup whose conditions failed (a gap too
+small, a wide morning range, a broken hold); it uses O2's `DAY_SKIPPED` with the reasons
+(`GAP_TOO_SMALL`, `GAP_TOO_BIG`, `HOLD_BROKEN`, `RANGE_TOO_WIDE`, `INCOMPLETE_OBSERVATION`,
+`EVENT_DAY`). `04` §5.5 "if both would fire, O3-B holds": when O3-B has `TRIGGERED` with a viable
+candidate and its session is not `LAPSED`/`SKIPPED`, O3-A is `SLOT_TAKEN` with `O3B_HOLDS` (its
+candidates carry `REJECTED_SLOT_TAKEN`). O3-B's hold completeness is the 30 bars 09:15-09:44, derived
+from the two clock fields — no new field. A disabled setup is `NOT_TODAY`/`SETUP_DISABLED`.
+**Reversal.** `scan._scan_o3a`/`_scan_o3b`.
+
+## OP4.10 — The scan task is gated on both flags, reads only the database, and runs 20 s after the collector · ⚠ UNREVIEWED
+
+**Context.** `06` puts the task behind `BASKFY_OPTIONS_SCAN_ENABLED`; the orchestrator's instruction
+for this session: no DB or Kite work while the collector flag is off, and share OP3's queue/limiter
+conventions. **Choice.** Refusals before any database session, cheapest first: the scan flag, the
+collector flag (no collector, nothing to scan), 09:15-15:30, `BASKFY_SOLE_USER_ID` (the tenant the
+`op_` rows belong to — the swing/TWT/VBT convention); then, inside the session, the NSE calendar.
+The task makes **no Kite call** (PACK.11), so it needs no limiter at all. Beat `options-scan` every
+minute 09:00-15:59 mon-fri on the `default` queue with `expires=55` (OP3.8) and `countdown=20`, so
+the collector's minute and the bars are stored first; `acks_late=False` like the collector. Rows are
+upserted on `(user_id, sleeve, ts)` — a re-run of a minute rewrites the same row. Mode per sleeve is
+`options_gates()` (PAPER with every money flag false), so a candidate with sleeve capital ₹0 is paper
+one lot. **Rejected.** Scanning with the collector off (it would write `NO_CHAIN` rows all day); a
+per-user loop over every `op_sleeve_config` owner (P4 multi-tenancy is not in force for options).
+**Reversal.** The flags; the Beat entry.
+
+## OP4.11 — How the O1 scan walks `04` §10 · ⚠ UNREVIEWED
+
+`OBSERVING` until the gate is final **and** the clock has reached `plan_time`; then `WOULD_SKIP` with
+every gate reason, or the candidate built from the `plan_time` snapshot → `WOULD_TRADE`, or
+`WOULD_SKIP`/`SLOT_TAKEN` with its rejection. A session row for the sleeve (the desk's, OP9) in
+`PLANNED`/`CONFIRMED`/`OPEN` shows `PLANNED`; `CLOSED`/`LAPSED`/`SKIPPED`, or the clock past
+`entry_window_end`, shows `DONE`, keeping the verdict in `numbers.verdict`. `PAUSED` overrides every
+state but `NOT_TODAY`, keeps the numbers and adds `REJECTED_PAUSED`. **Reversal.** `scan._scan_o1`.

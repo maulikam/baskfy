@@ -3,10 +3,9 @@
 The status page for the options run. Updated at the end of every module, loud about what is NOT
 done. A fresh session resumes from the first module not marked ✅.
 
-**Run state: OP0 🟡, OP1 ✅, OP2 ✅, OP3 🟡 (22 Sep 2026); OP4 not started.** Pack written 22 Sep 2026 on branch
-`developer`, absorbing the never-started condor pack (`docs/condor/`) as sleeve O1. OP0, OP1, OP2
-and OP3 were each run alone, by instruction ("execute only OP<N>, then stop"); the next session
-resumes at OP4 (and the orchestrator feeds back OP3's box probe — §"What is NOT done" under OP3).
+**Run state: OP0 🟡, OP1 ✅, OP2 ✅, OP3 🟡, OP4 ✅ (22 Sep 2026); OP5 not started.** Pack written 22 Sep 2026 on branch
+`developer`, absorbing the never-started condor pack (`docs/condor/`) as sleeve O1. OP0-OP4 were each run alone, by instruction ("execute only OP<N>, then stop"); the next session
+resumes at OP5 (and the orchestrator feeds back OP3's box probe — §"What is NOT done" under OP3).
 
 ## Module ledger
 
@@ -16,7 +15,7 @@ resumes at OP4 (and the orchestrator feeds back OP3's box probe — §"What is N
 | OP1 — The shared pure core `baskfy_core.options` | ✅ | 11 modules, 635 tests against `04`; purity, mypy strict, ruff, escape hatches clean; mutation 89.6 % (499/557), every survivor justified |
 | OP2 — Schema, NFO master, settings, `options_gates()` | ✅ | `0050_options` (17 tables, `op_sleeve` enum, monthly chain partitions), nightly NFO master + `op_expiry`, verified event-day seed, 9 flags + 6 ceilings in desk/API/worker, `options_gates()`, `OptionsSettings`; gateway product gate tightened (OP0.6); 587 new tests |
 | OP3 — Provider reads, index minute bars, collector, limiter | 🟡 | Option quotes with depth/OI, minute bars, basket margins; collector + index-bar tasks behind `BASKFY_OPTIONS_COLLECT_ENABLED` (default false); per-family shared limiter proven on Redis; read-only probe for OP0's six reads written, **not yet run on the box**; backfill not run (no Kite) |
-| OP4 — Sleeve signal cores and the scans | ⬜ | |
+| OP4 — Sleeve signal cores and the scans | ✅ | `bars`, `structures`, `condor`, `directional`, `expiry_setups`, `scan` (pure; each sleeve's day function, `build`, exits); task `baskfy.options.scan` behind the scan **and** collect flags (both false), DB-only, idempotent per minute; 167 new tests; no live data yet (collector off) |
 | OP5 — API and the web Options tab (the scans ship) | ⬜ | |
 | OP6 — O1 plan builder (monthly + weekly), costs pinned | ⬜ | |
 | OP7 — O2 plan builder | ⬜ | |
@@ -409,9 +408,111 @@ re-run alone: **97 passed**.
 Nothing in code: OP4's signal cores are pure and read fixtures. The scans' *inputs* on the box
 (`op_chain_snapshot`, `op_index_minute`) exist only once the collector is enabled.
 
+## OP4 — The sleeves' signal cores and the scans
+
+**✅, 22 Sep 2026.** Decisions `DECISIONS-OP.md` OP4.1–OP4.11. Every test runs from fixtures shaped
+as OP3 stores them (`op_index_minute` bars, `op_chain_snapshot` minutes); no live row exists yet.
+
+### What exists (`packages/core/src/baskfy_core/options/`)
+
+| Module | `04` | What it holds |
+|---|---|---|
+| `bars.py` | preamble | `Bar`, closed minutes only, IST from any zone, inclusive windows, `window_settled` (OP4.3), 5-minute bars aligned to 09:15 named by their last minute (OP4.2), Kaufman's ER (`c_0` = the first bar's open) |
+| `structures.py` | §2, §6, §7, §8.2 | `ChainView` (step, ATM, parity forward, Black-76 greeks recomputed per quote — OP4.4), `CandidateLeg` at the attempt-1 limit, `Candidate`, `round_trip` (OP4.5), `SleeveBook` + `size_for`, the `Rejection` codes, `to_json` (strings, never floats) |
+| `condor.py` | §3; condor §2, §4, §7 | `observe` (every reason, condor order), `select_short` (delta ∧ range, nearest 0.22, tie further OTM — OP4.7), `build` (wings depth-only, credit floor, sizing, liquidity at the sized quantity, cost test, `RESERVE_EXCEEDED`), `exit_decision` (`HARD_EXIT > STRIKE_TOUCH > STOP > PROFIT`, budget breach, no profit on a stale mark) — one function for both variants |
+| `directional.py` | §4 | `ema`/`trend` on **NIFTY 50** (OP4.8), `day_filters`, `find_trigger` (counter-trend breaks recorded, never traded), `build` (one step ITM, delta band, premium cap), `exit_decision` (`HARD_EXIT > STOP > INVALIDATED > TARGET > TIME_STOP`) |
+| `expiry_setups.py` | §5 | `range_break` (O3-A; low-ER breaks recorded), `gap_hold` (O3-B), `build` (ATM/100 debit spread, debit cap, slot), invalidation helpers, `exit_decision` |
+| `scan.py` | §10 | `scan_all` (five rows, O3-B before O3-A), `wanted_minutes` + `SnapshotBook` (the decision-minute snapshots — OP4.4), states per sleeve (OP4.9, OP4.11), `PAUSED` override, `stale` |
+
+**Each sleeve's signal, as implemented:**
+
+* **O1-M / O1-W** — at `plan_time` (10:00), gap ≤ 0.75 %, 09:15-09:59 range ≤ 0.80 %, the 09:59 close
+  inside the 09:15-09:44 range, ER ≤ 0.30, not an event day, 45 bars; then the liquid CE/PE with
+  |delta| 0.20-0.25 beyond the opening range nearest 0.22, wings ±150, credit ≥ 25 % of width.
+* **O2** — at 09:30, NIFTY 50 prev close vs its EMA20 gives the side; gap ≤ 1 %, 15-minute OR ≤ 0.90 %,
+  VIX ≤ 22; trigger = first completed 5-minute close in [09:30, 13:30] beyond OR ± 0.05 % with the
+  trend; buy one step ITM on the nearest non-expiring weekly, |delta| 0.50-0.75.
+* **O3-A** — 09:15-10:14 range ≤ 1.20 %; first 5-minute close in [10:19, 13:00] beyond it ± 0.05 %
+  with ER(09:15→bar) ≥ 0.40; ATM/±100 debit spread on today's expiry, debit ≤ 55 % of width.
+* **O3-B** — gap 0.50-1.50 % that never trades through half the gap to 09:44; triggers at 09:45 in
+  the gap's direction; same spread. O3-B holds the day if both fire.
+
+**Worker:** `baskfy_worker/options/scan.py` (reads bars, `index_snapshot_daily` `nifty-50`/`india-vix`,
+the master, the decision snapshots, the sole tenant's event days/config/sessions/journal count;
+upserts `op_scan` on `(user_id, sleeve, ts)`); task **`baskfy.options.scan`** (`acks_late=False`);
+Beat `options-scan` every minute 09:00-15:59 mon-fri, `default` queue, `expires=55`, `countdown=20`.
+**Gating (OP4.10):** refused before any DB session unless `BASKFY_OPTIONS_SCAN_ENABLED` **and**
+`BASKFY_OPTIONS_COLLECT_ENABLED` are true (both default false), inside 09:15-15:30, with
+`BASKFY_SOLE_USER_ID` set; then refused on an NSE holiday. **No Kite call, ever** (PACK.11) — so no
+limiter share.
+
+### AC → test
+
+| `06` OP4 AC | Test |
+|---|---|
+| quiet monthly → O1-M `WOULD_TRADE`, to the rupee | `test_options_condor.py::TestTheStructure::test_the_quiet_monthly_condor_to_the_rupee` (credit 39.55, risk/lot ₹8,179.25, round trip ₹198.32 from the eight fills), `test_options_scan.py::TestEachFixtureDay::test_quiet_monthly_o1m_would_trade` |
+| weekly trend → O1-W `WOULD_SKIP` (ER, containment), O3-A `TRIGGERED` | `test_options_scan.py::…test_trend_weekly_o1w_skips_with_er_and_containment`, `…test_trend_weekly_o3a_triggers`; `test_options_expiry_setups.py::TestO3ARangeBreak` |
+| gap-hold → O3-B | `…test_gap_hold_o3b_triggers_at_0945` (debit 26.95), `TestO3BGapHold` |
+| O2 up-trend break; counter-trend seen not traded; Monday → Tuesday's contract; Tuesday → next week's | `…test_o2_up_break_monday_uses_tuesdays_contract` (E ₹106.75), `…test_o2_counter_trend_break_is_seen_not_traded`, `…test_o2_on_a_tuesday_expiry_uses_next_weeks_contract` |
+| ER identities; delta ∧ range; never-naked | `test_options_condor.py::TestEfficiencyRatio`, `…test_delta_and_range_neither_relaxed_*`, `TestNeverNaked` + `test_options_expiry_setups.py` (OP1's harness) |
+| scan candidate == plan from the same inputs; slot exclusivity | `test_options_scan.py::TestTheCandidateIsThePlan` (O1, O2, O3), `TestTheSlot` |
+| scan task idempotent per minute | `services/worker/tests/test_options_scan_task.py::TestTheScanOnADatabase::test_a_minute_writes_one_row_per_sleeve_idempotently` (on `baskfy_test`) |
+| (extra) one-way states through whole fixture days | `test_options_scan.py::test_states_are_one_way_through_the_day` |
+
+### Tests (new)
+
+| File | Tests |
+|---|---|
+| `packages/core/tests/test_options_bars.py` | 10 |
+| `packages/core/tests/test_options_condor.py` | 36 |
+| `packages/core/tests/test_options_directional.py` | 34 |
+| `packages/core/tests/test_options_expiry_setups.py` | 30 |
+| `packages/core/tests/test_options_scan.py` | 37 |
+| `services/worker/tests/test_options_scan_task.py` (db-marked half on `baskfy_test`) | 20 |
+| **Total** | **167** (+ `options_scan_fixtures.py`, the fixture days) |
+
+Collected after OP4: screener core `packages/core/tests` **6,192**, screener tree **10,491**; desk
+unchanged (OP4 touched no desk file). `ruff check`, `ruff format --check`, `mypy` (whole tree, 791
+files) clean; `test_no_escape_hatches.py` and `test_options_purity.py` green over the new modules.
+
+**`tools/ci-local.sh` (one full run, alone, at the end): 14 passed, 3 failed, 3 skipped** (the same 3
+web skips as OP1-OP3). The three failed steps:
+
+* *Tests, with per-package coverage gates* — both suites ran; exactly the **three pre-existing
+  non-options failures** OP1-OP3 recorded (`test_api_admin.py::TestUserLookupAndOverrides::
+  test_an_override_changes_the_effective_entitlements`, hard-coded 2026-09-21 expiry; and the two
+  `packages/providers` Kite-health tests). Not OP4's; not weakened.
+* *Lint and type-check* — one mypy `unreachable` in OP4's own new worker test (a JSON column typed as
+  an object holding a list); **fixed**, and `ruff check`, `ruff format --check`, `mypy` (792 files)
+  re-run alone afterwards: clean. The worker test file re-run green on `baskfy_test`.
+* *Performance budgets* — `services/api/tests/test_load.py::TestFiftyConcurrentScreenRuns` (screener
+  API p95 490 ms against 400 ms), and it failed again when re-run alone. OP4 changes no API code and
+  nothing the screener reads; OP1 recorded this same step failing as "a latency budget on a loaded
+  Mac". Recorded, not OP4's; not weakened.
+
+Desk suite, query plans, reconciliation, Prometheus rules, client and web lint/unit: PASS.
+
+### What is NOT done
+
+* **No live scan has run.** `op_scan` stays empty until the orchestrator enables the collector
+  (after the OP3 probe) **and** the scan flag on the box; both default false.
+* The daily inputs (`index_snapshot_daily` `nifty-50` and `india-vix`) are assumed present on the box
+  from the dashboard snapshot job; if `india-vix` is absent the VIX falls back to the stored minute
+  bars, and with neither O2 skips `VIX_UNKNOWN` — not verified on the box.
+* **Costs are estimates** (OP4.5); OP6-OP8 pin them to the paisa. **Margin** is not estimated by the
+  scan (a broker call; the plan builder's, `04` §7.4).
+* The mutation harness does not yet cover the six new modules (OP1.11's `OPTIONS_TARGETS`) — OP14.
+* No route reads `op_scan` yet (OP5). No pruning of `op_scan` to 90 days yet (`03` §6) — OP14.
+* Not deployed, not pushed.
+
+### What blocks OP5
+
+Nothing in code: OP5's routes read `op_scan` rows whose shape is fixed here (`reasons` text[],
+`numbers` and `candidates` JSONB with strings for money). Live rows need the two flags on the box.
+
 ## What is NOT done
 
-Everything after OP3. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
+Everything after OP4. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
 OP3 does them first); the two full-suite baseline runs (OP0.9); the gateway gap of OP0.6 is **fixed in OP2** (OP2.1); the
 `/ops` side door of OP0.5 is **recorded, not fixed** (OP13). Every money flag is false and stays false. The paper periods begin only after OP15, and
 the longest (O1-M) takes about six months after that.

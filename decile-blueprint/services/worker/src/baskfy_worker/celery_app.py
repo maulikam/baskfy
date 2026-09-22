@@ -151,6 +151,15 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         "schedule": crontab(minute="*", hour="9-15", day_of_week="mon-fri"),
         "options": {"queue": QUEUE_DEFAULT, "expires": 55},
     },
+    # OP4 (docs/options/04 §10): each sleeve's scan state and candidates into op_scan, from the
+    # database only — no Kite call. 20 s after the collector's minute so the minute's snapshot and
+    # bars are stored; refused before any database session unless BASKFY_OPTIONS_SCAN_ENABLED and
+    # BASKFY_OPTIONS_COLLECT_ENABLED are both true (default false). No money.
+    "options-scan": {
+        "task": "baskfy.options.scan",
+        "schedule": crontab(minute="*", hour="9-15", day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_DEFAULT, "expires": 55, "countdown": 20},
+    },
     # The same session's bars once more after the close, correcting any minute read while forming.
     "options-index-bars-eod": {
         "task": "baskfy.options.index_bars_eod",

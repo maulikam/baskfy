@@ -8,6 +8,7 @@ import {
   NAV_ITEMS,
   PRIMARY_NAV,
   primarySection,
+  SECTION_LABEL,
   SECTION_TABS,
 } from "@/lib/nav";
 import { PAGES } from "@/lib/vocabulary";
@@ -133,6 +134,21 @@ describe("the primary consumer IA", () => {
     for (const tab of SECTION_TABS.twt) {
       expect(PAGES[tab.href as keyof typeof PAGES], `${tab.href} has no page record`).toBeDefined();
     }
+    /* `docs/options/05` §2: the options tab is Today, Journal and Calendar; its settings sit
+       under Me with the swing book's (OP5). */
+    expect(SECTION_TABS.options.map((t) => t.label)).toEqual(["Today", "Journal", "Calendar"]);
+    expect(SECTION_TABS.options.map((t) => t.href)).toEqual([
+      "/options",
+      "/options/journal",
+      "/options/calendar",
+    ]);
+    for (const tab of SECTION_TABS.options) {
+      expect(PAGES[tab.href as keyof typeof PAGES], `${tab.href} has no page record`).toBeDefined();
+    }
+    expect(SECTION_TABS.me.map((t) => t.href)).toContain("/me/options");
+    expect(primarySection("/options")).toBe("options");
+    expect(primarySection("/options/journal")).toBe("options");
+    expect(SECTION_LABEL.options).toBe("Build");
     expect(SECTION_TABS.swing.map((t) => t.label)).toEqual([
       "Setups",
       "Watchlist",
@@ -173,6 +189,8 @@ describe("the primary consumer IA", () => {
       "Brokers",
       "Subscription",
       "Swing settings",
+      /* OP5: `docs/options/05` §2 puts the options book's settings at `/me/options`. */
+      "Options settings",
     ]);
     for (const tab of SECTION_TABS.me) {
       expect(tab.href.startsWith("/portfolio"), `${tab.href} is money, not account`).toBe(false);
@@ -253,6 +271,7 @@ describe("the primary consumer IA", () => {
       "/swing",
       "/vbt",
       "/twt",
+      "/options",
     ]);
     expect(staff.map((t) => t.label)).toEqual([
       "Screens",
@@ -262,6 +281,8 @@ describe("the primary consumer IA", () => {
       "Swing",
       "Volume",
       "Tight",
+      // `docs/options/05` §1: Options is appended after Tight (OP5).
+      "Options",
     ]);
     expect(buildSectionTabs("market", { isStaff: true }).map((t) => t.href)).toEqual(
       SECTION_TABS.market.map((t) => t.href),
@@ -272,6 +293,7 @@ describe("the primary consumer IA", () => {
     expect(isSleeveSection("swing")).toBe(true);
     expect(isSleeveSection("vbt")).toBe(true);
     expect(isSleeveSection("twt")).toBe(true);
+    expect(isSleeveSection("options")).toBe(true);
     expect(isSleeveSection("build")).toBe(false);
     expect(isSleeveSection("discover")).toBe(false);
     expect(buildSectionTabs("swing", { isStaff: true }).map((t) => t.href)).toEqual(
@@ -309,7 +331,12 @@ describe("the sidebar IA", () => {
   });
 
   it("lists operator sleeve hubs for staff", () => {
-    expect(NAV_GROUPS[2]?.items.map((item) => item.href)).toEqual(["/swing", "/vbt", "/twt"]);
+    expect(NAV_GROUPS[2]?.items.map((item) => item.href)).toEqual([
+      "/swing",
+      "/vbt",
+      "/twt",
+      "/options",
+    ]);
   });
 
   it("lists the account group with fees and brokers", () => {

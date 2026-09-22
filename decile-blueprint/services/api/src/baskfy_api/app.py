@@ -85,6 +85,7 @@ from baskfy_api.routers import (
     managers,
     market_data,
     meta,
+    options,
     portfolio_overview,
     portfolios,
     public,
@@ -615,3 +616,4 @@ def _mount_routers(versioned: APIRouter) -> None:
     # worker to run the detectors and moves no money (Track A, DECISIONS-TW TW12.3), and
     # `test_twt_readonly.py` asserts both over the source and the OpenAPI document.
     versioned.include_router(twt.router)
+    versioned.include_router(options.router)

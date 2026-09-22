@@ -3,9 +3,9 @@
 The status page for the options run. Updated at the end of every module, loud about what is NOT
 done. A fresh session resumes from the first module not marked ✅.
 
-**Run state: OP0 🟡, OP1 ✅, OP2 ✅, OP3 🟡, OP4 ✅ (22 Sep 2026); OP5 not started.** Pack written 22 Sep 2026 on branch
-`developer`, absorbing the never-started condor pack (`docs/condor/`) as sleeve O1. OP0-OP4 were each run alone, by instruction ("execute only OP<N>, then stop"); the next session
-resumes at OP5 (and the orchestrator feeds back OP3's box probe — §"What is NOT done" under OP3).
+**Run state: OP0 🟡, OP1 ✅, OP2 ✅, OP3 🟡, OP4 ✅, OP5 ✅ (22 Sep 2026); OP6 not started.** Pack written 22 Sep 2026 on branch
+`developer`, absorbing the never-started condor pack (`docs/condor/`) as sleeve O1. OP0-OP5 were each run alone, by instruction ("execute only OP<N>, then stop"); the next session
+resumes at OP6 (and the orchestrator feeds back OP3's box probe — §"What is NOT done" under OP3).
 
 ## Module ledger
 
@@ -16,7 +16,7 @@ resumes at OP5 (and the orchestrator feeds back OP3's box probe — §"What is N
 | OP2 — Schema, NFO master, settings, `options_gates()` | ✅ | `0050_options` (17 tables, `op_sleeve` enum, monthly chain partitions), nightly NFO master + `op_expiry`, verified event-day seed, 9 flags + 6 ceilings in desk/API/worker, `options_gates()`, `OptionsSettings`; gateway product gate tightened (OP0.6); 587 new tests |
 | OP3 — Provider reads, index minute bars, collector, limiter | 🟡 | Option quotes with depth/OI, minute bars, basket margins; collector + index-bar tasks behind `BASKFY_OPTIONS_COLLECT_ENABLED` (default false); per-family shared limiter proven on Redis; read-only probe for OP0's six reads written, **not yet run on the box**; backfill not run (no Kite) |
 | OP4 — Sleeve signal cores and the scans | ✅ | `bars`, `structures`, `condor`, `directional`, `expiry_setups`, `scan` (pure; each sleeve's day function, `build`, exits); task `baskfy.options.scan` behind the scan **and** collect flags (both false), DB-only, idempotent per minute; 167 new tests; no live data yet (collector off) |
-| OP5 — API and the web Options tab (the scans ship) | ⬜ | |
+| OP5 — API and the web Options tab (the scans ship) | ✅ | `routers/options.py` (10 paths, 2 money-free mutations, everything else 405), `/options`, `/options/journal`, `/options/calendar`, `/me/options`; Options appended after Tight; honest empty state names the switch; SEBI caveat + "Scan · paper only" on every page; 30 API + 34 web tests; e2e spec written, not run |
 | OP6 — O1 plan builder (monthly + weekly), costs pinned | ⬜ | |
 | OP7 — O2 plan builder | ⬜ | |
 | OP8 — O3 plan builder | ⬜ | |
@@ -510,9 +510,134 @@ Desk suite, query plans, reconciliation, Prometheus rules, client and web lint/u
 Nothing in code: OP5's routes read `op_scan` rows whose shape is fixed here (`reasons` text[],
 `numbers` and `candidates` JSONB with strings for money). Live rows need the two flags on the box.
 
+## OP5 — API and the web Options tab (the scans ship)
+
+**✅, 22 Sep 2026.** Decisions `DECISIONS-OP.md` OP5.1–OP5.10. Nothing here moves money: the tab
+reads what the worker (OP3/OP4) wrote and the desk (OP9+) will write, and its two writes are an
+event day and the settings.
+
+### What exists
+
+**API** (`services/api/src/baskfy_api/routers/options.py`, reads in `options_read.py`; mounted in
+`app.py`; OpenAPI + `packages/api-client` regenerated):
+
+| Route | What it answers |
+|---|---|
+| `GET /options/today` | today's role per sleeve (`calendar.role` over `op_expiry`, OP5.4), the next six expiries with event days, pauses, NIFTY 50 / India VIX (collector minute else daily close), the newest `op_scan` row per sleeve, open positions, today's closed trades, the week's R per sleeve (real/paper apart), per-group gate (`PAPER` / `DESK_DECIDES`, OP5.5), the clock (`live`, `stale` > 2 min, `as_of_minute`, `scan_date`) and `empty_reason` (OP5.2) |
+| `GET /options/scan/{sleeve}` | one sleeve's rows through a session (default the latest scanned) |
+| `GET /options/chain?expiry` | nearest two expiries, ±10 strikes around ATM, ΔOI, ATM IV, PCR (OP5.10) |
+| `GET /options/positions`, `/sessions?from&to&sleeve`, `/journal?sleeve`, `/backtest?sleeve`, `/calendar?year` | as named; journal never pooled (OP5.7); backtest newest run per sleeve per tier with its caveat verbatim, or a reason |
+| `POST` / `DELETE /options/event-day` | mutation 1 of 2 — a person's day (`USER`); a seeded day is refused (OP5.6) |
+| `GET` / `PATCH /options/config` | settings, ceilings, gates, every `04` threshold read-only with its anchor, the audit trail; mutation 2 of 2, atomic across parts (OP5.1) |
+
+**Web** (`apps/web`): `/options` (header strip, the four panels — Premium selling O1-M/O1-W,
+Directional O2, Expiry-day setups O3-B/O3-A, Positions & paper results — and the collapsed chain),
+`/options/journal` (paper-period progress per group, per-pool summaries with R spread, backtest
+cards or "Not run yet"), `/options/calendar` (the year's expiries from `op_expiry`, event days, add /
+remove your own), `/me/options` (the settings form with the server's ceilings under each box, a 422
+rendered as "Most lots: max 10 — set by the server", execution per group "disabled on this server —
+paper only", every rule read-only). `lib/options/{types,fetch,write,view}.ts`,
+`components/options/*`. `STAFF_BUILD_TABS` is Swing / Volume / Tight / **Options**;
+`isSleeveSection("options")`; `SECTION_TABS.options` = Today / Journal / Calendar; `/me/options` in
+Me's row; the Operator nav group lists `/options`. No Overlap column (`05` §1).
+
+**The clock** (root `CLAUDE.md`'s clock table gains the options row, this commit): `Live · 13:14`
+(amber `· stale` beyond two minutes) while the session is open and the rows are today's; `As of
+close, Mon 21 Sep · market closed` otherwise; `Marked 13:14:30` on a position. The shared
+`useLiveMarks` overlay touches only the two header index levels (OP5.3).
+
+**With the flags off** (the box now): `/options` renders the header (roles, expiries from
+`op_expiry`, index levels from the daily snapshot), five "Not scanned" cards, and the answer "The
+options collector is off, so there is no option chain for a scan to read. Nothing below is a
+statement about today's market — the strategies have not looked." — never a blank, never an error.
+**With them on**: each card shows its state chip, every reason in words, the filters against their
+thresholds (green/red), O2's trigger and distance, the counter-trend breaks "seen, not traded", and
+each priced candidate (legs, bid/ask, delta, limit, points, lots and sizing mode, max loss, round
+trip and cost share).
+
+### AC → test
+
+| `06` OP5 AC | Test |
+|---|---|
+| read-only test green, both sides | `services/api/tests/test_options_readonly.py` (13: exact verb set, 405 on every other verb against the running app, no execution/broker/auto-execute name, flags reported not branched, app-wide no execute/confirm path, sole tenant on all 12 handlers); `apps/web/src/app/(app)/options/__tests__/read-only.test.tsx` (7: exactly three server actions across the tree, the write union is exactly two paths, no route handler, no execute/confirm/broker word, app-wide no execute/confirm page) |
+| `GET /options/today` p95 < 200 ms on the dev stack | `test_api_options.py::TestItIsFastAndItIsOnePersons::test_today_p95_under_200ms` (40 requests, full morning + calendar, in-process ASGI over `baskfy_test`) |
+| `/options` from fixtures: O1 `WOULD_SKIP` + reasons, O2 `ARMED` + distance, O3 candidate, `As of close` outside hours | `app/(app)/options/__tests__/page.test.tsx` (rendered DOM over fixtures, OP5.8) + `test_api_options.py::TestTheRowsTheWorkerWrote`, `TestTheClock`; `e2e/options.spec.ts` asserts the empty tab in a browser — **written, not run** (Playwright is skipped by `ci-local.sh`) |
+| (extra) empty tab names its reason; calendar from `op_expiry`; the two writes | `TestTheEmptyTabSaysWhy`, `TestTheCalendar`, `TestTheTwoWrites`, `TestTheChain`; web `view.test.ts`, `components/options/__tests__/pages.test.tsx` (no internal name on any options page), `me/options/__tests__/actions.test.ts` |
+
+### Tests (new)
+
+| File | Tests |
+|---|---|
+| `services/api/tests/test_api_options.py` (db-marked, `baskfy_test`) | 17 |
+| `services/api/tests/test_options_readonly.py` | 13 |
+| `apps/web/src/lib/options/__tests__/view.test.ts` | 11 |
+| `apps/web/src/app/(app)/options/__tests__/page.test.tsx` | 7 |
+| `apps/web/src/app/(app)/options/__tests__/read-only.test.tsx` | 7 |
+| `apps/web/src/components/options/__tests__/pages.test.tsx` | 4 |
+| `apps/web/src/app/(app)/me/options/__tests__/actions.test.ts` | 5 |
+| **Total** | **64** (+ `e2e/options.spec.ts`, 2, not run) |
+
+Extended, not rewritten: `test_api_artifacts.py` `EXPECTED_PATHS` (the ten paths), `nav.test.ts`,
+`section-tabs-hub.test.tsx`, `section-tabs.test.ts`.
+
+**`tools/ci-local.sh` (one full run, alone, 22:01-22:45 IST, after the deploy window): 14 passed,
+3 failed, 3 skipped** (the same 3 web skips as OP1-OP4). The three failed steps:
+
+* *Tests, with per-package coverage gates* — both suites ran; exactly the **pre-existing non-options
+  failures** OP1-OP4 recorded: `test_api_admin.py::…test_an_override_changes_the_effective_entitlements`
+  (hard-coded 2026-09-21 expiry) and the Kite-health pair (`packages/providers/tests/test_kite.py::
+  TestHealth::test_unconfigured_is_unavailable_not_an_exception`,
+  `test_cli_doctor.py::TestWithoutCredentials::test_kite_is_reported_unavailable_with_the_reason`).
+  No options test failed. Not OP5's; not weakened.
+* *Performance budgets* — `test_load.py::TestFiftyConcurrentScreenRuns` (the screener p95 on this
+  Mac), the same pre-existing failure. OP5's own budget (`/options/today` p95 < 200 ms) passed in
+  the test suite.
+* *Fail if the checked-in client is stale* — `git diff --exit-code -- src/generated` compares the
+  working tree with the **index**, and the regenerated client was not yet staged; the sibling steps
+  "openapi.json is current" and "Generated client is current" passed. Re-run after staging OP5's
+  files: **PASS** (`generate:check` exit 0).
+
+Namespace, desk suite, Python lint + mypy, query plans, reconciliation, Prometheus rules, client
+type-check/tests, web lint + typecheck and web unit tests: PASS.
+
+### Deploy notes (the scan + collector on the box — for the orchestrator, not done here)
+
+* **No new compose service.** The collector (`options-collect-chain`, `options-index-bars`), the scan
+  (`options-scan`), the nightly master (`options-contract-master`) and `options-index-bars-eod` are
+  Beat entries (OP2-OP4) on the existing `beat`, run by the existing `worker` on the `default` queue.
+* **Order:** run OP3's read-only probe (`python -m baskfy_worker.options_cli probe`) on the box with a
+  Kite session; confirm `op_expiry` is filled (the nightly master, or `python -m baskfy_worker.options_cli refresh-master` by hand); then in
+  `infra/docker/.env.staging` set `BASKFY_OPTIONS_COLLECT_ENABLED=true` and, once minutes are
+  arriving, `BASKFY_OPTIONS_SCAN_ENABLED=true`. `BASKFY_SOLE_USER_ID` must be set (the scan refuses
+  without it).
+* **Recreate `api`, `worker` and `beat`** after a flip (`docker compose -f compose.prod.yml up -d api
+  worker beat`): every service reads the flags once at startup, and the API reads the same two to
+  tell the tab *why* it is empty — an API left on the old env would keep saying "collector off" over
+  a running collector.
+* **Seed the settings** once (`python -m baskfy_worker.options_cli seed`) or `/me/options` says "not
+  set up yet". The money flags (`BASKFY_OPTIONS_*_EXECUTION_ENABLED`, `OPTIONS_ENABLED`,
+  `INTRADAY_ENABLED`) stay false — Maulik's, never the orchestrator's.
+* Check: `/options` should read `Live · HH:MM` within two minutes of 09:16 on a session day.
+
+### What is NOT done
+
+* **No live row has been rendered** — the collector and scan are off on the box; the tab has only
+  ever rendered fixtures and an empty `baskfy_test`.
+* **The Playwright spec was not run** (OP5.8); the AC's three states are asserted over fixtures.
+* The journal, positions and sessions reads have no rows to read until OP9-OP11; their shapes are
+  tested empty only (plus the AC morning for positions/closed trades — empty).
+* "Consecutive" sessions and "zero rule violations" in the paper progress are not computed (OP11,
+  OP15). No per-sleeve Backtest card has data until OP12.
+* Not deployed, not pushed.
+
+### What blocks OP6
+
+Nothing in code. OP6's plan builder writes `op_plan`/`op_session`, which `/options/today`'s
+`PLANNED` state and `/options/sessions` already read.
+
 ## What is NOT done
 
-Everything after OP4. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
+Everything after OP5. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
 OP3 does them first); the two full-suite baseline runs (OP0.9); the gateway gap of OP0.6 is **fixed in OP2** (OP2.1); the
 `/ops` side door of OP0.5 is **recorded, not fixed** (OP13). Every money flag is false and stays false. The paper periods begin only after OP15, and
 the longest (O1-M) takes about six months after that.

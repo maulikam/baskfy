@@ -517,3 +517,117 @@ and the API cannot import the worker, so `make seed` does not call it). Every ca
 the other sleeve defaults are read off `OptionsConfig` so `03` §7 and `04` cannot disagree. Idempotent
 (`ON CONFLICT DO NOTHING`); never resets a chosen number (tested). **Reversal.** Move the seed into
 `baskfy_api.seed` if the dependency direction ever allows it.
+
+## OP3.1 — Option quotes are a new `OptionQuoteRecord` and `KiteProvider.option_quotes(keys)`, not a wider `QuoteRecord` · ⚠ UNREVIEWED
+
+**Context.** `06` OP3 lets the run extend `QuoteRecord` or add an `OptionQuoteRecord` and asks that
+the choice be recorded. `QuoteRecord` feeds the swing premarket scan (a live book). **Choice.** A new
+`OptionQuoteRecord` (depth as `DepthLevelRecord`s with Kite's zero padding dropped, `oi`,
+`oi_day_high/low`, `timestamp` → `as_of`, `last_trade_time`) returned by a new
+`option_quotes(keys)` that takes whole `EXCHANGE:SYMBOL` keys, so the collector's one call carries
+the NFO contracts **and** `NSE:NIFTY 50` for the spot. Same 500-key batching and one limiter token
+per batch as `quotes()`. Also new, read-only: `minute_bars(token, start, end)` (60-day windows,
+aware IST bars), `basket_order_margins(legs)` (a calculation; `consider_positions=False` so the
+answer is the basket's own, never a function of other books' positions — Track C §8), and
+`margins_shape()` (field names and types only — no account figure leaves the provider). The
+basket verb is a separate runtime-checked Protocol so every existing test double stays a valid
+client; a client without it is refused. **Rejected.** Widening `QuoteRecord` (changes a live book's
+input for a sleeve that has not traded); `quotes(..., exchange="NFO")` (one exchange per call would
+cost the spot a second quote). **Reversal.** Fold the fields into `QuoteRecord`.
+
+## OP3.2 — `BASKFY_OPTIONS_COLLECT_ENABLED` and `BASKFY_OPTIONS_SCAN_ENABLED` stay default **false** · ⚠ UNREVIEWED
+
+`06` OP3 and PACK.11 let this module set both defaults to true once the limiter measurement is
+green. **The orchestrator's instruction for this session supersedes that: the collector ships
+disabled by its own flag, default false, and the orchestrator may enable it on the box later, after
+the rate-limit proof and the live probe** (QUESTIONS Q12's standing default: yes, once green). So
+the doc's "the run sets the default to true" is the stale half for OP3 — `06` now says so. The
+scan flag is untouched (the scans are OP4). Neither flag moves money. **Reversal.** Set
+`BASKFY_OPTIONS_COLLECT_ENABLED=true` in the box's env (operational; not a Track B money flag).
+
+## OP3.3 — The index-bar tasks sit behind the collector's flag; the backfill does not · ⚠ UNREVIEWED
+
+`baskfy.options.index_bars` (each minute) and `.index_bars_eod` (15:45) are half the collector's
+Kite load and its ATM hint, so they share `collect_gate` (flag → 09:15–15:30 → NSE calendar → Kite
+session, cheapest first, every refusal before any network call). `.backfill_index_bars(from, to)`
+and the CLI `backfill-index-bars` are on demand, not recurring load, so they are not flagged; they
+take the **bulk** lane under the historical clock so they yield to the collector and the desk.
+**Rejected.** A third operational flag for bars alone (one more switch to forget). **Reversal.** Give
+the bar tasks their own settings field.
+
+## OP3.4 — The collector centres its strikes on the last stored NIFTY 50 close; a spot-only quote only when there is none · ⚠ UNREVIEWED
+
+Which strikes to quote needs a spot before the call. The newest `op_index_minute` NIFTY 50 close
+within four days (normally the minute before; at 09:15, yesterday's 15:29) picks the ±15-strike
+window — a one-minute-old ATM still brackets the true ATM by fourteen strikes, and a 1 % gap by ten.
+Only with no stored bar in four days does the collector spend a second `quote()` on the spot alone.
+The rows' `spot` is always the one quoted in the same call as the chain. **Rejected.** Two quote calls
+every minute (doubles the quote-clock share for nothing); a strike window from yesterday's daily
+close (wrong after a big move). **Reversal.** `SPOT_HINT_MAX_AGE`.
+
+## OP3.5 — Every options read waits on the box's `read` ceiling and then its endpoint family's clock — the desk's keys, rates and order · ⚠ UNREVIEWED
+
+Kite's caps are per family (quote 1 req/s, historical 3, general 10) under the combined read ceiling
+M85 put on `baskfy:ratelimit:kite:read`. The worker's `KiteProvider` so far took only the ceiling;
+the desk (`kite_limits.py`, SW21) takes `read` **then** `baskfy:ratelimit:kite:<family>`. OP3 adds
+`KiteFamily`, `kite_family_key`, `KITE_FAMILY_RATE_PER_SECOND` (= the desk's `RATE_FOR_FAMILY`,
+asserted by reading the desk's source) and `build_kite_family_limiter(settings, family, lane)` =
+`LayeredCallSpacer([bulk?], read, family)` — the family clock last, as the desk does, so the
+tightest per-endpoint clock is the exact one. `baskfy_worker.options.reads.build_options_kite`
+builds one adapter per family (quote, historical, general). If any clock cannot be built (Redis
+gone) the limiter is `None` and the adapter refuses every call — never a partial limiter.
+**Recorded, not changed:** the existing worker `quotes()` path (swing premarket) still takes only
+the ceiling, not the quote family clock — another book's input; a later swing module may move it.
+**Reversal.** Build the options adapters with `build_kite_provider` instead.
+
+## OP3.6 — OP0's six live reads are one read-only CLI probe, run on the box by the orchestrator · ⚠ UNREVIEWED
+
+No Kite session on this Mac and no login allowed, so the reads are code, not answers:
+`python -m baskfy_worker.options_cli probe` inside the worker container prints one JSON report of
+(a)–(f), each read independent (a failure is recorded with its error type and text and the rest
+run). (a) probes 1–14 January of each year from 2010, then month by month in the year before the
+first hit; (b) needs an expired NIFTY contract in `op_contract` — there is none until the nightly
+master has watched an expiry pass (the first is **29 Sep 2026**'s, marked expired that evening), so
+before then it says so; (c) reads expiries/lots/ticks/strike step/kind off the master with no
+weekday rule; (d) is `margins_shape()` — names and types, no figures; (e) quotes ATM ± 2 CE on the
+nearest expiry and gives an **OI-unit verdict by divisibility** (OI in units is always a multiple
+of the lot; five lot-counted OIs all landing on multiples of ~65 by chance is ~1 in 10⁹) — `UNITS`,
+`LOTS` or `UNDETERMINED`; `chain.oi_unit` stays at OP1.3's `UNITS` until the probe answers;
+(f) asks the margin calculator about a fixture ±4/±7-step condor, one lot a leg, MIS. Nothing is
+written to the database; the module's source names no order verb (tested) and it runs end to end
+against a fake client that has none. **Reversal.** Delete the subcommand.
+
+## OP3.7 — Only closed minutes are written; the upsert overwrites; an inverted bar is dropped · ⚠ UNREVIEWED
+
+A minute bar is written only once `ts + 1 min ≤ now` — a forming bar is not a fact yet. The upsert
+on `(instrument_id, ts)` overwrites prices with Kite's latest reading, so the 15:45 reconcile
+corrects any minute and re-running a day is identical (house rule 7). Prices round to two places at
+write. A bar with `high < low` is dropped and logged, never repaired by swapping. **Reversal.** The
+`closed_bars` filter.
+
+## OP3.8 — The minute tasks are `acks_late=False` and expire after 55 s · ⚠ UNREVIEWED
+
+A chain minute redelivered a minute later would stamp an old `ts` with new prices, and a backlog of
+minutes after a worker stall would burst the quote clock. So the two minute tasks ack on receipt
+and Beat sends them with `expires=55`. Beat fires every minute 09:00–15:59 mon–fri; the task's own
+gate decides. **Reversal.** Beat options.
+
+## OP3.9 — Greeks outside `numeric(10,6)` are stored null, never truncated; `greeks_model` marks every row a forward was computed for · ⚠ UNREVIEWED
+
+`|x| ≥ 10⁴` cannot be stored in the column; truncating it would store a wrong number, so it is null
+(realistic NIFTY greeks are far inside). A row whose IV the solver refuses keeps its quote with null
+greeks; a row with no forward (no spot, or `T ≤ 0`) has null `greeks_model` too. **Reversal.** Widen
+the column.
+
+## OP3.10 — The Tier-1 backfill and the live limiter measurement are not run; the budget is arithmetic · ⚠ UNREVIEWED
+
+`06` OP3 asks the backfill to run on the dev stack for a year and STATUS to state the full duration,
+and the limiter share to be measured with the swing morning replayed from its timing probe. No Kite
+session (⛁); and `docs/swing/status/S2-kite-timing.md` is still "NOT RUN YET", so there is nothing to
+replay. Instead: (1) the proof is structural and measured on Redis — the options reads take the
+desk's own clocks (OP3.5), and a test runs a desk-shaped and a collector-shaped caller together on
+one departure clock and shows their combined gaps never beat the cap; (2) the share is arithmetic —
+≤ 2 quote calls/min of a 60/min cap (3.3 %), 2 historical calls/min of 180 (1.1 %), ≤ 4 of the
+180/min read ceiling (2.2 %); (3) the backfill's duration is an **estimate**: 1 Jan 2015 → today is
+≈ 4,282 days = 72 sixty-day windows × 2 indices = 144 calls, ≥ 72 s of bulk-lane spacing plus
+Kite's response time — a few minutes, and ≈ 2.2 M rows. The box's first run replaces the estimate.

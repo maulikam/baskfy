@@ -917,3 +917,91 @@ minute, ~3 % of the quote cap; the cost of waiting is a week without a chain.
 **Reverse.** Set both false in `/opt/baskfy/.env.staging` (or restore the backup) and
 `up -d api worker beat`.
 
+
+## OP6.1 — `06` OP6's "wide short-put spread → `REJECTED_COST`" cannot happen at `04`'s defaults; the AC is scoped · ⚠ UNREVIEWED
+
+**Context.** The AC (carried from condor OC5) expects a wide spread on the short put to fail the cost
+test. Under `04` it cannot: (1) a spread wider than `max_spread_pct` [3 %] makes the put illiquid, so
+it is never a short — `REJECTED_NO_SHORT_PUT` (§2.4); (2) a spread inside 3 % is already paid in the
+credit (shorts at bid, `04` §4.4) and in the conservative close `D` the profit target is measured on
+— OP4.5 rejected condor §5.2's separate `spread_cost` as double counting; and (3) the credit floor
+dominates the cost test: at `C = 0.25 × 150 = 37.5` the expected gain is `0.5 × 37.5 × 65 =
+₹1,218.75`, and a one-lot round trip near ₹200 is a share near 0.16 < 0.20. For O1 at defaults the
+cost test binds only below ~30.5 points of credit, which the floor already refuses.
+**Choice.** The AC is asserted as what the rules do: a 3.17 % short-put spread → `REJECTED_NO_SHORT_PUT`;
+a 1.6 % one lowers the credit by exactly the bid's move (39.65 → 39.25) and plans; `REJECTED_COST` is
+reached through the plan builder with a flat 16 % chain and `credit_floor_frac` 0.10 (C = 25.35,
+share 0.234). Nothing in `04` or the code changed. **Finding for Maulik:** for O1 the cost test is
+dormant at the default floor; it becomes live only if a Tier-3 finding lowers the floor.
+**Rejected.** Re-adding condor's `spread_cost` (double counts; would move OP4's pinned ₹198.32);
+a fixture that bends liquidity to make the AC literal. **Reversal.** Re-add `spread_cost` to
+`structures.round_trip` and re-pin OP4/OP6's figures.
+
+## OP6.2 — Which days write a session; the builder waits rather than guesses · ⚠ UNREVIEWED
+
+An O1 day (`calendar.role` trades) writes one `op_session` — `PLANNED` or `SKIPPED` with every reason.
+An O1 day that is an event day is `SKIPPED / EVENT_DAY` (`04` §1.3: skipped, never shifted), so it
+counts as a skipped session in the paper period. Any other day (O1-W on the monthly Tuesday, O1-M on
+a weekly, a holiday) is `NO_SESSION` and writes nothing. Before `plan_time`, while the 09:15-09:59
+window is unsettled (OP4.3), or before the decision minute's snapshot is stored, the answer is
+`NOT_READY` and nothing is written — the Beat entry asks again next minute. First asked at or after
+`entry_window_end` with nothing decided → `WINDOW_CLOSED`, nothing written: a morning the builder
+never saw is not a skipped day (`02` §3.2: a day the desk was down does not count). **Rejected.**
+Writing `SKIPPED/NO_CHAIN` at 10:00 when the collector is a few seconds late (a false skip).
+**Reversal.** `plan.decide_o1`'s early returns.
+
+## OP6.3 — `CostRates` pinned: `OPTIONS_COST_RATES_REVIEWED_ON` is a constant, and the plan itemises the note · ⚠ UNREVIEWED
+
+OP0 verified every rate on 22 Sep 2026 (OP0.1); OP6 did not re-read the sources (same day) but pins
+them: `config.OPTIONS_COST_RATES_REVIEWED_ON = 2026-09-22` is `CostRates.reviewed_on`'s default,
+tests assert each rate's value, each source URL/circular in the docstring, and the 90-day warning.
+The plan stores `04` §6.1's components over the eight orders in `op_plan.detail.costs`, each rounded
+once over all eight (one day's orders are one contract note); its total **is** the scan's
+`round_trip_inr` (tested). Worked fixture: brokerage 160.00, STT 6.01, NSE txn 2.87, SEBI 0.01, IPFT
+0.00, stamp 0.12, GST 29.32 = ₹198.33. The one-tick limit improvement is not added as a cost (the
+plan's prices already carry it; OP4.5 stands). **Reversal.** Re-verify and move the constant.
+
+## OP6.4 — A plan is priced from the scan's decision snapshot and refused if it is stale · ⚠ UNREVIEWED
+
+The builder reads the first stored snapshot at or after `plan_time` (the scan's, OP4.4), so plan and
+scan are one computation (tested equal). If that snapshot is more than `stale_scan_seconds` [120] old
+when the plan would be issued (the builder ran late), the session is `SKIPPED / STALE_CHAIN` — no plan
+from stale quotes (`02` §3.2's "no stale-quote entry"). **Reversal.** Remove the check.
+
+## OP6.5 — Margin: two calculator reads, the transient basket is the three-leg entry prefix; no answer is a paper warning · ⚠ UNREVIEWED
+
+`04` §7.4 / condor §6.3 ask for the hedged figure and the "transient" one between wing and short
+fills. With wings sent first there is never a naked short, so the worst intermediate state is both
+wings plus the first short; the builder asks Kite's `/margins/basket` (`consider_positions=False`,
+read-only, OP3.1) for the four-leg basket and that three-leg prefix, and `sizing.margin_check` takes
+the larger against `margin_pool_inr − margin in use` (plans of today's `CONFIRMED`/`OPEN` sessions).
+Lots are fixed before the calculator is asked (Track C §10; tested). No answer (no Kite session, or a
+broker error, recorded not swallowed): PAPER → the plan is issued with `MARGIN_UNKNOWN`; LIVE →
+`REJECTED_MARGIN`. Pool ₹0 in PAPER → `MARGIN_POOL_UNSET` warning (OP1). **Rejected.** Asking only
+`initial_total` as the transient (the naked sum — far above any real intermediate state).
+**Reversal.** `plan.O1Decision.margin_baskets`.
+
+## OP6.6 — Where the builder lives, and what switches it on · ⚠ UNREVIEWED
+
+Pure decision in `baskfy_core.options.plan` (so OP9's desk process can call the same functions);
+database writes, the calculator read and the alert in `baskfy_worker.options.plan`; task
+`baskfy.options.plan_o1`, Beat `options-plan-o1` every minute 10:00-10:16 mon-fri (countdown 40 s,
+expires 55 s) — each run lapses expired plans (`PLANNED → LAPSED`) then decides O1-M and O1-W,
+idempotent per date (a decided session is returned untouched; the session insert is `ON CONFLICT DO
+NOTHING`; the `plan_id` is a deterministic `O1M-YYYYMMDD-<sha12>`, a valid `client_id` half). **Dark
+by default**: gated on `BASKFY_OPTIONS_MONITOR_ENABLED` (`02`: the monitor "raises plans";
+operational, moves no money, default false and false on the box) and the collect flag. CLI
+`options_cli plan [--at]` ignores only the monitor flag. **Rejected.** Gating on the scan flag (on on
+the box — it would start writing plans the day this deploys, before OP9's replay proves the desk);
+putting the builder in the desk now (OP9's module). **Reversal.** Drop the Beat entry when OP9's
+desk raises plans itself; both paths are idempotent, so running both is safe meanwhile.
+
+## OP6.7 — `AlertName.OPTIONS_PLAN`: one per sleeve per day, rendered through the mail transport · ⚠ UNREVIEWED
+
+Sent once, when the session is first written: a skip lists every reason; a plan carries sleeve,
+date, mode, `plan_id`, expiry, credit (points and ₹), lots and sizing mode, max loss, round-trip cost
+and share, margin, every leg in send order with its limit, the 10:15 expiry and "nothing is sent
+without a confirm on the desk". Severity `warning` (not a failure — the TWT_EVENING precedent),
+runbook `docs/runbooks/11-options-plan.md`. "Rendered in Mailpit" is asserted through the real
+`Mailer` over a recording transport (no Mailpit container was running on this Mac). **Reversal.**
+`plan.plan_alert`.

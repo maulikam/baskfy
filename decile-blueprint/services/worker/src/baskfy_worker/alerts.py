@@ -109,6 +109,10 @@ class AlertName(StrEnum):
     # moved, an expiry changed kind, or a listed future expiry was withdrawn (a holiday shift).
     # Sizing and each sleeve's day role both depend on it, so a person looks before the open.
     OPTIONS_MASTER_CHANGED = "OPTIONS_MASTER_CHANGED"
+    # OP6 (docs/options/06 OP6): an O1 sleeve's morning — the verdict, or the four-leg plan with
+    # its credit, lots, costs, margin and expiry. Like TWT_EVENING it is not a failure: it is the
+    # plan, delivered by the one mechanism that already tells Maulik something (DECISIONS-OP OP6.7).
+    OPTIONS_PLAN = "OPTIONS_PLAN"
 
 
 #: How long the webhook is given before it is abandoned. An alert that blocks the reaper for

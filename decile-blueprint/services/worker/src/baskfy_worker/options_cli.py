@@ -5,6 +5,7 @@
     uv run python -m baskfy_worker.options_cli probe            # OP0's six live reads (OP3)
     uv run python -m baskfy_worker.options_cli backfill-index-bars --from 2015-01-01 [--to D]
     uv run python -m baskfy_worker.options_cli collect-once     # one chain minute, by hand
+    uv run python -m baskfy_worker.options_cli plan [--at ISO]  # the O1 plan builder, once (OP6)
 
 ``seed`` writes, for ``BASKFY_SOLE_USER_ID``, the verified event days of
 ``baskfy_worker.seeds.options_event_days``, the ``op_book_config`` row and the four
@@ -17,7 +18,9 @@ report; it writes nothing to the database and places nothing. ``backfill-index-b
 Tier-1 NIFTY 50 / INDIA VIX minute backfill (resumable, committed per 60-day window, on the bulk
 lane). ``collect-once`` takes one chain snapshot now, **ignoring** the collect flag but not the
 session window, the trading day or the Kite session — for a person verifying the collector by hand.
-None of these commands has an order path, and no flag changes that.
+``plan`` runs the O1 builder for ``--at`` (default now) ignoring the monitor flag but nothing
+else — idempotent per date, it returns a decided session unchanged and prints the alert instead of
+sending it. None of these commands has an order path, and no flag changes that.
 """
 
 from __future__ import annotations
@@ -41,6 +44,7 @@ from baskfy_worker.db import checkpointed_session, session_scope
 from baskfy_worker.options import index_bars
 from baskfy_worker.options.collector import collect_gate, collect_minute
 from baskfy_worker.options.master import EmptyMaster, master_alert, refresh_master, to_contract
+from baskfy_worker.options.plan import kite_margin_reader, plan_o1_minute
 from baskfy_worker.options.probe import ProbeInputs, run_probe
 from baskfy_worker.options.reads import build_options_kite
 from baskfy_worker.providers import sole_user_id
@@ -131,13 +135,39 @@ async def _collect_once() -> JsonObject:
     return report.as_dict()
 
 
+async def _plan(now: dt.datetime) -> JsonObject:
+    from baskfy_api.swing_health import is_session_day  # noqa: PLC0415 - the API's calendar read
+    from baskfy_worker.tasks.celery_tasks import kite_session_usable  # noqa: PLC0415 - heavy
+
+    user_id = sole_user_id()
+    if user_id is None:
+        return {"skipped": "no BASKFY_SOLE_USER_ID configured"}
+    margin = kite_margin_reader(build_options_kite().general) if kite_session_usable() else None
+    async with session_scope() as session:
+        if not await is_session_day(session, now.astimezone(IST).date()):
+            return {"skipped": "not an NSE trading day"}
+        report, alerts = await plan_o1_minute(
+            session, user_id, now, trading_day=True, margin=margin
+        )
+    report["alerts"] = [alert.summary for alert in alerts]
+    return report
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="options_cli", description=__doc__)
     parser.add_argument(
         "command",
-        choices=("seed", "refresh-master", "probe", "backfill-index-bars", "collect-once"),
+        choices=(
+            "seed",
+            "refresh-master",
+            "probe",
+            "backfill-index-bars",
+            "collect-once",
+            "plan",
+        ),
     )
     parser.add_argument("--date", help="refresh-master / probe: the as-of date (default: today)")
+    parser.add_argument("--at", help="plan: the IST moment to plan for (default: now)")
     parser.add_argument("--from", dest="start", help="backfill-index-bars: first date")
     parser.add_argument("--to", dest="end", help="backfill-index-bars: last date (default: today)")
     args = parser.parse_args(argv)
@@ -154,6 +184,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             parser.error("backfill-index-bars needs --from")
         end = dt.date.fromisoformat(args.end) if args.end else dt.datetime.now(tz=IST).date()
         result = asyncio.run(_backfill(dt.date.fromisoformat(args.start), end))
+    elif args.command == "plan":
+        at = dt.datetime.fromisoformat(args.at) if args.at else dt.datetime.now(tz=IST)
+        result = asyncio.run(_plan(at if at.tzinfo is not None else at.replace(tzinfo=IST)))
     else:
         result = asyncio.run(_collect_once())
     sys.stdout.write(json.dumps(result, indent=2, default=str) + "\n")

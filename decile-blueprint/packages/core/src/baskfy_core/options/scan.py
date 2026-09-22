@@ -201,7 +201,7 @@ def _last_close_by(bars: Sequence[Bar], at: dt.datetime) -> Decimal | None:
     return seen[-1].close if seen else None
 
 
-def _view(
+def priced_view(
     snapshot: Snapshot | None, expiry: dt.date | None, market: MarketDay, options: OptionsConfig
 ) -> ChainView | None:
     """The snapshot's chain for ``expiry``, priced at the snapshot's minute."""
@@ -374,7 +374,7 @@ def _scan_o1(  # noqa: PLR0913, PLR0917 - the sleeve, the market, the user, the 
         snapshot = snapshots.get(decision)
         expiry = expiry_for_o1_o3(market.trade_date)
         candidate = condor.build(
-            _view(snapshot, expiry, market, options),
+            priced_view(snapshot, expiry, market, options),
             or_high=n.or_high or Decimal(0),
             or_low=n.or_low or Decimal(0),
             lot_size=lot_size_for(market.contracts, expiry, options.calendar.underlying),
@@ -503,7 +503,7 @@ def _scan_o2(  # noqa: PLR0913, PLR0917 - the market, the user, the clock, the b
             }
         row.snapshot, row.reference = snapshots.get(None), now
     candidate = directional.build(
-        _view(row.snapshot, expiry, market, options),
+        priced_view(row.snapshot, expiry, market, options),
         direction,
         lot_size=lot_size_for(market.contracts, expiry, options.calendar.underlying)
         if expiry
@@ -558,7 +558,7 @@ def _spread(  # noqa: PLR0913, PLR0917 - one candidate's inputs
 ) -> Candidate:
     expiry = expiry_for_o1_o3(market.trade_date)
     return expiry_setups.build(
-        _view(snapshot, expiry, market, options),
+        priced_view(snapshot, expiry, market, options),
         direction,
         lot_size=lot_size_for(market.contracts, expiry, options.calendar.underlying),
         book=mine.book,

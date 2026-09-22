@@ -101,6 +101,8 @@ RUNBOOKS: Final[dict[AlertName, str]] = {
     AlertName.TWT_ADJUSTMENT_RESET: "docs/runbooks/09-twt-morning.md",
     # OP2: the options master changed under the calendar (docs/options/03 §2).
     AlertName.OPTIONS_MASTER_CHANGED: "docs/runbooks/10-options-master.md",
+    # OP6: an O1 sleeve's plan or verdict (docs/options/06 OP6).
+    AlertName.OPTIONS_PLAN: "docs/runbooks/11-options-plan.md",
 }
 
 

@@ -881,3 +881,39 @@ minute today (else its latest ever), strikes within 10 steps of the ATM strike n
 forward (else the spot), ΔOI against the same contract's first snapshot of that session, ATM IV as
 the mean of the ATM call's and put's IV, and put/call OI over the strikes served. Collapsed by
 default on the page; numbers, no chart (`05` §2 v1). **Reversal.** `options_read._chain_for`.
+
+## OP3.11 — The box probe answered, and the collector and scan flags are on · ⚠ UNREVIEWED
+
+**Context.** OP3 left its six live reads as a probe for the box and both data flags false, to be
+turned on after the limiter proof (pack QUESTIONS #12, default yes). Maulik: "keep going with OP3
+and deploy after 21:15" (22 Sep 2026), and his standing delegation to set box flags and deploy
+(DECISIONS-TW TW18).
+
+**Probe, 22 Sep 2026, on the box after deploying `1c9a3a5`** — `options_cli probe`, read-only,
+full JSON in `docs/options/evidence/op3-probe-2026-09-22.json`:
+
+* master: 1,706 NIFTY contracts; spot NIFTY 50 23,329.
+* (a) earliest minute history: NIFTY 50 and INDIA VIX both 2015-01-09 09:15.
+* (b) expired contract: not answerable yet — `op_contract` has seen no expiry pass; re-run after
+  29 Sep.
+* (c) next expiries from the master: all lot 65, tick 0.05, strike step 50 near ATM. Tuesdays,
+  **except 2026-10-19 (Monday), a holiday-shifted weekly** — the master-not-weekday rule earning
+  its keep. Monthlies 29 Sep and 27 Oct.
+* (d) margins: shape only (no amounts), as designed.
+* (e) option quotes: 5+5 depth levels, `oi`, `oi_day_high/low`, `timestamp`,
+  `last_trade_time` all present; every OI read is a multiple of 65 → **OI is in units**, confirming
+  OP1's default.
+* (f) basket margin for a one-lot NIFTY iron condor (22 Sep weekly): ≈ ₹1,30,904 final.
+
+**Choice.** `BASKFY_OPTIONS_COLLECT_ENABLED=true` and `BASKFY_OPTIONS_SCAN_ENABLED=true` written into
+`/opt/baskfy/.env.staging` (the api/worker/beat `env_file`; backup `.env.staging.bak-20260922-options`),
+after `celery inspect active` showed both workers idle; `api worker beat` recreated; the worker's
+environment read back both true with `OPTIONS_ENABLED=false` and `INTRADAY_ENABLED=false`. Data
+only — no order path is touched, every options execution flag stays false.
+
+**Rejected.** Waiting for a measured limiter share (OP3.10) — the collector is one quote call a
+minute, ~3 % of the quote cap; the cost of waiting is a week without a chain.
+
+**Reverse.** Set both false in `/opt/baskfy/.env.staging` (or restore the backup) and
+`up -d api worker beat`.
+

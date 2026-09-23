@@ -455,7 +455,7 @@ def exit_decision(  # noqa: PLR0913 - every input condor §7 and 04 §9.2 name, 
     *,
     entry_credit: Decimal,
     cost_now: Decimal,
-    spot: Decimal,
+    spot: Decimal | None,
     short_call_strike: Decimal,
     short_put_strike: Decimal,
     now: dt.datetime,
@@ -470,12 +470,14 @@ def exit_decision(  # noqa: PLR0913 - every input condor §7 and 04 §9.2 name, 
 
     ``04`` §9.2's budget breach closes as ``STOP`` whatever D/C says; a stale mark drops only
     ``PROFIT`` (§7.7). Feed loss is ``execution.feed_lost``'s, raised by the desk as
-    ``HARD_EXIT``/``FEED_LOST``.
+    ``HARD_EXIT``/``FEED_LOST``. An unknown ``spot`` (the desk restarted and no index tick has
+    come yet) cannot touch a strike, so only ``STRIKE_TOUCH`` is not judged; every premium rule and
+    the clock still are (DECISIONS-OP OP13.2).
     """
     fired: list[CondorExit] = []
     if ist(now).time() >= config.hard_exit_time:
         fired.append(CondorExit.HARD_EXIT)
-    if spot >= short_call_strike or spot <= short_put_strike:
+    if spot is not None and (spot >= short_call_strike or spot <= short_put_strike):
         fired.append(CondorExit.STRIKE_TOUCH)
     if cost_now >= config.stop_frac * entry_credit or trade_breached(
         marked_loss_inr, risk_budget_inr, options.risk

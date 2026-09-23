@@ -1466,3 +1466,73 @@ reason, that is evidence for a `04` change that Maulik decides.
 "if OP0 found the file reachable through the NSE provider". The provider method exists (FO-PACK,
 `fo_bhavcopy`, 7 tests), but a comparison needs Tier 2 runs over days the box has data for.
 **Choice.** Deferred to the box (⛁) with Tier 2's first real run. **Reversal.** Not applicable.
+
+## OP13.1 — The side door is closed in the live tree, on the lab's own presence · ⚠ UNREVIEWED
+
+`02` Track B and OP0.5: with `OPTIONS_ENABLED=true` the frozen lab's `/options*` routes, its nav
+entry, five `/ops` controls and the autorun's options loop would wake. The `/ops` controls did
+(their guard was an `ImportError` from `strategies.strangle.instruments`, a live module), and the
+autorun loop stayed dark only by accident. **Choice.** A new live module,
+`kite-momentum-rebalancer/app/options_lab.py`: `lab_present()` asks for a *frozen* module
+(`app.strategies.strangle.book`) and the lab's runner (`scripts/strangle.py`), the probe
+`tests/_frozen.py` already uses, and `lab_enabled()` = the flag **and** the lab present. All four
+surfaces gate on `lab_enabled()` (`main._options_view`, the nav global, `ops._options_operations`,
+`autorun.needed`). `frozen/` is not touched, and thawing the lab is still a `git mv`.
+`tests/test_options_safety.py::TestTheSideDoor` flips the flag and asserts all four stay dark.
+With `lab_present` forced true, the five controls come back, so the test tests the gate.
+**Rejected.** Renaming the book's flag away from `OPTIONS_ENABLED` (it is the desk's product switch
+and `02` names it). Deleting the live strangle modules (D4: frozen, not deleted). **Reversal.**
+Return the four call sites to `C.OPTIONS_ENABLED`.
+
+## OP13.2 — Found by the property test: a condor with no index level raised instead of closing · ⚠ UNREVIEWED
+
+Hypothesis over tick paths (`test_options_safety_proof.py::test_at_or_after_the_hard_exit_every_
+position_closes`) found that `exits.evaluate` raised `ValueError("a condor exit needs both shorts and
+the index level")` whenever `IndexState.spot` was `None`, even at the hard exit. The desk sees that
+state after a restart, before the first index tick: `NiftyOptionsMonitor` resumes from
+`op_position` with `spot=None`, so a leg tick arriving first would raise inside the monitor's loop
+for any open condor. **Choice.** `condor.exit_decision` takes `spot: Decimal | None`. An unknown index
+cannot touch a strike, so only `STRIKE_TOUCH` is not judged; `STOP`, `PROFIT`, the §9.2 breach and
+the hard exit still are (`test_options_exits.py::test_an_unknown_index_holds_the_touch_rule_only`).
+§8.5's feed rule already closes a position whose index stays silent. **Rejected.** Holding the whole
+position until a spot arrives: a stop would go unjudged. **Reversal.** Restore the raise.
+
+## OP13.3 — The drill is the desk's path over fixture minutes, not the tick bus · ⚠ UNREVIEWED
+
+`tools/options/drill.py` runs, per sleeve, what each process does. The plan builder's decision is
+`replay_day.decide_plan` (now public), the same `decide_o*` the Beat tasks call, written as the
+worker writes it. The confirm is `execute_entry`, the POST handler, through a real `OrderGateway`
+with the sleeve's `product_gates`. Each minute after entry, `exits.evaluate` runs on the position
+`PgPositionStore` reads, then `raise_exit`, then `run_pending_exits` (the monitor's sweep), then the
+ledger's journal. The broker is a counter. Fixture chains: OP6's expiry-day skew for O1 and the
+flat 14 % for O2/O3, the choices their own tests made. The tick-by-tick path (bars from ticks, marks
+from depth, staleness) is OP9's replay, not repeated here. `tests/test_options_drill.py` runs the
+drill and reads its lines. **Rejected.** Driving `NiftyOptionsMonitor` from a synthetic tick stream
+inside the drill (OP9 proved that path; here it would add minutes to a test and prove nothing new).
+
+## OP13.4 — What the scans read, and what they do not · ⚠ UNREVIEWED
+
+`packages/core/tests/test_options_safety_proof.py` strips docstrings and comments (Python by AST and
+tokenizer, TS/JS by regex, shell/YAML by `#`) and scans:
+
+* **order path**: the web app's, the API's, the worker's and the pure core's options code for
+  `baskfy_execution`, `OrderGateway`, `place_order`, `place_gtt`, `kite_client`, `gateway.place`,
+  the execute route and the executor's entry points;
+* **auto flag**: every code or config file under the screener's packages, services, apps and infra,
+  the desk's `app` and `scripts`, `tools/`, `infra/` and the `.env*` examples, for `OPTIONS…AUTO`;
+* **scheduling**: the same trees for the execute route outside its handler and form; Beat's
+  options tasks for execute/confirm/order/place; the desk's callers of `execute_entry`, where only
+  the POST handler calls it.
+
+Tests, docs, `frozen/`, `data/` and fixtures are not scanned. They name these strings to assert
+their absence, and `frozen/` is out of every gate (D4). **Reversal.** Widen `tops`.
+
+## OP13.5 — The four-flag AND is proven at the gateway, and the LIVE row at the confirm · ⚠ UNREVIEWED
+
+For each sleeve, all 16 combinations of `DRY_RUN`, `OPTIONS_ENABLED`, `INTRADAY_ENABLED` and the
+execution flag are set on the desk. A MIS NFO leg is sent through a real `OrderGateway` built with
+`product_gates(sleeve)` over a spy broker, and the 15 non-LIVE rows record **0** broker calls. The
+half-flipped row (sleeve flag and intraday on, `OPTIONS_ENABLED` off, `DRY_RUN=false`) is refused by
+the gateway with the `OPTIONS_ENABLED` reason, leg by leg. The one LIVE row is refused at
+`execute_entry` (`LIVE_NOT_BUILT`, OP10.3) before any order. The NRML/CNC refusal is an integration
+test with every switch on; its control, MIS through the same gateway, reaches the spy.

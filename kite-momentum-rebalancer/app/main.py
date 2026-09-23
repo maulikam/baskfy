@@ -27,6 +27,7 @@ from .core.risk import RiskManager
 from .scoring import load_scan, score, audit
 from .rebalance import build_plan
 from .kite_client import Kite
+from .options_lab import lab_enabled
 
 logging.basicConfig(level=logging.INFO)
 try:
@@ -74,7 +75,7 @@ def _asset_version() -> str:
 ASSET_V = _asset_version()
 templates.env.globals["asset_v"] = ASSET_V
 # The options lab is frozen (M6); its nav entry and routes appear together or not at all.
-templates.env.globals["options_enabled"] = C.OPTIONS_ENABLED
+templates.env.globals["options_enabled"] = lab_enabled()
 # Argv is stored as JSON so the exact command can be shown back without re-quoting it.
 templates.env.filters["fromjson"] = json.loads
 
@@ -697,7 +698,7 @@ STOP_OK = frozenset({"GTT_PLACED", "DRY_RUN_GTT"})
 # route that does not exist should say to anyone probing for it.
 def _options_view():
     """The options page module, or a 404. Never raises ImportError into a request."""
-    if not C.OPTIONS_ENABLED:
+    if not lab_enabled():  # the flag and the thawed lab (OP13.1)
         raise HTTPException(status_code=404)
     try:
         from .analytics import options_view as _ov

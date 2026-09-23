@@ -3,10 +3,10 @@
 The status page for the options run. Updated at the end of every module, loud about what is NOT
 done. A fresh session resumes from the first module not marked ✅.
 
-**Run state: OP0 🟡, OP1 ✅, OP2 ✅, OP3 🟡, OP4 ✅, OP5 ✅, OP6 ✅, OP7 ✅, OP8 ✅, OP9 ✅, OP10 ✅, OP11 ✅, OP12 ✅ (23 Sep 2026); OP13 not started.** Pack written 22 Sep 2026 on branch
+**Run state: OP0 🟡, OP1 ✅, OP2 ✅, OP3 🟡, OP4 ✅, OP5 ✅, OP6 ✅, OP7 ✅, OP8 ✅, OP9 ✅, OP10 ✅, OP11 ✅, OP12 ✅, OP13 ✅ (23 Sep 2026); OP14 not started.** Pack written 22 Sep 2026 on branch
 `developer`, absorbing the never-started condor pack (`docs/condor/`) as sleeve O1. OP0-OP7 were each run alone, by instruction ("execute only OP<N>, then stop"); OP8 was run by Maulik's
 "continue the OP run from OP8" (23 Sep 2026), which also committed OP7's green work (`00cb48b`), found
-uncommitted in the tree. The next session resumes at OP13 (and the orchestrator feeds back OP3's box probe — §"What is NOT done" under OP3).
+uncommitted in the tree. The next session resumes at OP14 (and the orchestrator feeds back OP3's box probe — §"What is NOT done" under OP3).
 
 ## Module ledger
 
@@ -25,7 +25,7 @@ uncommitted in the tree. The next session resumes at OP13 (and the orchestrator 
 | OP10 — Desk page + `/nifty-options/execute` (paper) | ✅ | pure `baskfy_core.options.executor` (entry/exit procedure over a venue, never-naked asserted per attempt) + desk `app/options_execute.py` (gateway-backed venue, depth-ladder paper fills, `PgOptionsStore`, LIVE refused) + `app/options_desk.py` (`/nifty-options`, `/data`, execute, close) + template; the monitor's loop sweeps raised exits; 32 new tests |
 | OP11 — Journal, ledger, pauses, first-live multiplier | ✅ | pure `ledger.journal_figures` (gross, §6.1 costs, net, R, MAE/MFE from fills) + desk `app/options_ledger.py` (journal at every close, §9.1/§9.3 pauses audited, `close_now` exits, 09:00 on start) + migration `0051` (`op_position.trough_value`) + worker `OPTIONS_WEEKLY` (one line per pool, Fridays); 17 new tests |
 | OP12 — Backtests: Tier 1–2 per sleeve; Tier 3 ⛁ | ✅ | pure `replay_day` (Tier 1 signals, `priced_day` = the live scan → plan builder → executor → exit rules → ledger over a `ModelChain` or `StoredChain`) + `backtest_suite` (`run_tier`, ±25 % sensitivity); worker `backtest_run` → `op_backtest_run`, task `baskfy.options.backtest` (compute queue, no Beat), `tools/options/backtest.py`; 19 new tests. Days before the master are `uncalendared` (OP12.3); full backfill and Tier 3 ⛁ |
-| OP13 — Gating and safety proof | ⬜ | |
+| OP13 — Gating and safety proof | ✅ | the side door closed in the live tree (`app/options_lab.lab_enabled()`, OP13.1); gateway refusals, the 16-row four-flag AND with a spy, no second entry (desk `test_options_safety.py`); Hypothesis never-naked/exact-close/never-overnight + repo scans (core `test_options_safety_proof.py`); `tools/options/drill.py` prints `sleeve=O1M confirms=1 fills=8 orders_to_broker=0` for every sleeve + a skip day; a condor-with-no-spot crash found and fixed (OP13.2); 31 new tests |
 | OP14 — Hardening and observability | ⬜ | |
 | OP15 — Verification, goldens, deploy, final report | ⬜ | |
 
@@ -1160,9 +1160,81 @@ passed**; whole worker suite **1,390 passed**; API `options` **72 passed**; web
 
 Nothing.
 
+## OP13 — Gating and safety proof
+
+**✅, 23 Sep 2026.** Decisions `DECISIONS-OP.md` OP13.1–OP13.5. Every Track B/C claim of `02` is
+now a test, and the drill trades a whole paper day per sleeve with **0 orders reaching a broker**.
+
+### What exists
+
+* **`kite-momentum-rebalancer/app/options_lab.py`**: `lab_present()` / `lab_enabled()`. The four
+  side-door surfaces (`/options*` routes, the nav entry, `/ops` controls, the autorun loop) gate on
+  it. `frozen/` untouched (OP13.1).
+* **`packages/core/src/baskfy_core/options/condor.py`**: `exit_decision` takes an unknown spot;
+  `exits.evaluate` no longer raises for a condor before the first index tick (OP13.2).
+* **`replay_day.decide_plan` / `Decided`** are public (the drill decides with them).
+* **`tools/options/drill.py`**: a paper day per sleeve against PostgreSQL, plus the O1-W skip day.
+  Plan rows as the worker writes them, `execute_entry` through a real gateway over a counting broker,
+  minute-by-minute `evaluate`, `raise_exit`, `run_pending_exits`, the ledger's journal (OP13.3).
+
+**Drill output (baskfy_test, 23 Sep 2026):**
+
+```
+sleeve=O1M confirms=1 fills=8 orders_to_broker=0 day=2026-10-27 entry=OPEN exit=PROFIT at 12:41
+sleeve=O1W confirms=1 fills=8 orders_to_broker=0 day=2026-10-20 entry=OPEN exit=PROFIT at 12:41
+sleeve=O2 confirms=1 fills=2 orders_to_broker=0 day=2026-10-19 entry=OPEN exit=TARGET at 10:32
+sleeve=O3A confirms=1 fills=4 orders_to_broker=0 day=2026-10-20 entry=OPEN exit=TARGET at 10:40
+sleeve=O3B confirms=1 fills=4 orders_to_broker=0 day=2026-10-13 entry=OPEN exit=STOP at 13:19
+sleeve=O1W confirms=0 fills=0 orders_to_broker=0 day=2026-10-20 skipped=NOT_CONTAINED
+```
+
+Each traded line is followed by its `op_journal` row (`simulated=True`, `PAPER_ONE_LOT`; e.g. O2 net
+₹4,576.95, 1.84R, `TARGET`; O3-B net −₹1,223.30, −0.54R, `STOP`).
+
+### AC → test
+
+| `06` OP13 item | Test |
+|---|---|
+| never naked (O1, O3) over fills | core `test_options_safety_proof.py::test_never_naked_and_the_exit_closes_exactly_the_position` (Hypothesis, 300 fill scripts × every sleeve) + OP10's 3 × 500 seeds + per-structure prefix tests |
+| never overnight: only MIS constructible; the guard refuses NRML with `OPTIONS_ENABLED=true` | desk `TestNeverOvernight` (NRML and CNC refused by the real gateway with every switch on, 0 broker calls; MIS control); core `test_no_sleeve_holds_past_the_ceiling` + Hypothesis `test_at_or_after_the_hard_exit_every_position_closes`; OP10's `test_every_leg_is_nfo_mis_limit_through_the_gateway` |
+| no second entry per sleeve per day | desk `TestNoSecondEntry` (a second entry plan on a confirmed session → 409 `NOT_ISSUED`; a second session → `uq_op_session_user_sleeve_date`) |
+| exit plans close exactly the position's legs | core Hypothesis property (sends only for open legs, never more than open, FLAT → all zero) |
+| four-flag AND with a gateway spy | desk `TestTheFourFlags::test_fifteen_of_sixteen_never_reach_the_broker` (every sleeve) + `TestLiveRefused` |
+| execution flag true, `OPTIONS_ENABLED` false → the gateway refuses every leg | desk `test_a_half_flipped_sleeve_is_refused_by_the_gateway_leg_by_leg` (every sleeve) |
+| the side door stays dark while `frozen/` is not thawed | desk `TestTheSideDoor` (4 tests) |
+| no gateway import in web/API/worker options code | core `test_the_options_code_outside_the_desk_has_no_order_path` |
+| no `BASKFY_OPTIONS_*AUTO*` read anywhere | core `test_no_options_auto_execute_flag_is_read_anywhere` (+ OP2/OP5's settings scans) |
+| no scheduler or Beat entry targets `/nifty-options/execute` | core `test_nothing_schedules_the_options_execute_route`, `test_no_beat_entry_targets_an_options_order`, `test_only_the_post_route_calls_execute_entry` |
+| the drill prints `sleeve=O1M confirms=1 fills=8 orders_to_broker=0` (+ O2/O3) and the journal rows | desk `tests/test_options_drill.py` runs `tools/options/drill.py` |
+
+### Tests (new)
+
+| File | Tests |
+|---|---|
+| `kite-momentum-rebalancer/tests/test_options_safety.py` (3 on `baskfy_test`) | 20 |
+| `kite-momentum-rebalancer/tests/test_options_drill.py` (on `baskfy_test`) | 1 |
+| `packages/core/tests/test_options_safety_proof.py` | 9 |
+| `packages/core/tests/test_options_exits.py` (the unknown-spot case) | 1 |
+| **Total** | **31** |
+
+**Regression (Postgres + Redis up, 23 Sep 2026):** whole desk suite **2,305 passed**, 17 skipped as
+before; core `options`/escape-hatch/schema **1,750 passed**; ruff and mypy strict clean on every touched
+screener file.
+
+### What is NOT done
+
+* The drill runs on fixture days. The same path on the box's live chain is the paper period
+  (after OP15).
+* `02` §3's other conditions (the paper periods, the tiers on the page, Maulik's written capital
+  decision) are not met; every money flag stays false.
+
+### What blocks OP14
+
+Nothing.
+
 ## What is NOT done
 
-Everything after OP12. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
+Everything after OP13. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
 OP3 does them first); the two full-suite baseline runs (OP0.9); the gateway gap of OP0.6 is **fixed in OP2** (OP2.1); the
-`/ops` side door of OP0.5 is **recorded, not fixed** (OP13). Every money flag is false and stays false. The paper periods begin only after OP15, and
+`/ops` side door of OP0.5 is **closed in OP13** (OP13.1). Every money flag is false and stays false. The paper periods begin only after OP15, and
 the longest (O1-M) takes about six months after that.

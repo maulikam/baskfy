@@ -63,14 +63,16 @@ desk still carries the frozen lab's deferred hooks: `app/main.py`'s `/options`, 
 `app/strategies/strangle/` (`calendar_nse.py`, `clock.py`, `config.py`, `instruments.py`) still in
 the live tree. OP0 inventories exactly what `OPTIONS_ENABLED=true` would wake today, and OP13 adds
 a test that with it true those hooks stay dark unless `frozen/` is thawed (a decision that is D4's,
-not this run's). Until that test is green, §3 cannot be met.
+not this run's). Until that test is green, §3 cannot be met. **Green since OP13 (23 Sep 2026)**: the four surfaces gate on
+`app/options_lab.lab_enabled()` (the flag and the thawed lab), and
+`tests/test_options_safety.py::TestTheSideDoor` holds them dark with the flag on (DECISIONS-OP OP13.1).
 
 **OP0's inventory (22 Sep 2026, `STATUS.md` OP0 §5) found two more things.** (1) `/ops` is *not*
 dark: `_options_operations()` guards on an `ImportError` from `strategies.strangle.instruments`, which
 is live, so the flag alone puts five strangle controls on the page (they would fail at spawn —
 `DECISIONS-OP` OP0.5). (2) The gateway's product gate admits **any** product on a derivative venue once
 `options_enabled` is true — NFO MIS without `INTRADAY_ENABLED`, and NRML futures — so the flag alone
-widens the weekly desk's gateway (OP0.6). OP2 tightens (2); OP13's test covers (1). **(2) is closed (OP2, `DECISIONS-OP` OP2.1):** a derivative venue now admits `MIS` only, and only with `INTRADAY_ENABLED` as well as `OPTIONS_ENABLED`.
+widens the weekly desk's gateway (OP0.6). OP2 tightens (2); OP13's test covers (1), and OP13 closed it (OP13.1). **(2) is closed (OP2, `DECISIONS-OP` OP2.1):** a derivative venue now admits `MIS` only, and only with `INTRADAY_ENABLED` as well as `OPTIONS_ENABLED`.
 
 ### Ceilings (system-only env; a setting may sit below them, never above)
 

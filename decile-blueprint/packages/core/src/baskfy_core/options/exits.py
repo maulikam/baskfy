@@ -222,8 +222,8 @@ def _decide(  # noqa: PLR0913, PLR0917 - the position, its mark, the index, the 
             raise ValueError(f"{position.sleeve.value} does not trade a condor")
         short_call = position.leg(LegRole.SHORT_CALL)
         short_put = position.leg(LegRole.SHORT_PUT)
-        if short_call is None or short_put is None or index.spot is None:
-            raise ValueError("a condor exit needs both shorts and the index level")
+        if short_call is None or short_put is None:
+            raise ValueError("a condor exit needs both shorts")
         cfg = options.condor_monthly if position.sleeve is Sleeve.O1M else options.condor_weekly
         verdict = condor.exit_decision(
             entry_credit=position.entry_points,

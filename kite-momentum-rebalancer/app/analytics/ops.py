@@ -143,9 +143,11 @@ def _options_operations() -> tuple["Operation", ...]:
     would drive is frozen. A missing subsystem is reported once, plainly, rather than
     raising an ImportError out of a page that has nothing to do with options.
     """
-    from .. import config as C
+    from ..options_lab import lab_enabled
 
-    if not C.OPTIONS_ENABLED:
+    # OP13.1: the flag alone no longer means the lab — the options book shares it, and
+    # `instruments` is live, so its ImportError never fired (DECISIONS-OP OP0.5).
+    if not lab_enabled():
         return ()
     try:
         from ..strategies.strangle import instruments as _INS

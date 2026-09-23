@@ -132,9 +132,10 @@ def needed(conn, *, now: dt.datetime, is_trading_day: bool,
 
     # The options lab is a separate, paper-only subsystem and it is frozen (M6). Off by
     # default, and when off this loop must not import it — autorun runs on every login.
-    from .. import config as C
+    from ..options_lab import lab_enabled
 
-    if C.OPTIONS_ENABLED:
+    # OP13.1: dark by design, not by the accident of a frozen import after 09:15.
+    if lab_enabled():
         try:
             for spec in _underlyings(forward_path, session_journal, lock_path):
                 out.extend(_options_items(spec, now=now, today=today,

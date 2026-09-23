@@ -208,6 +208,19 @@ class TestTheCondor:
         marks = condor_marks("20.00", "1.00", now)  # D = 2 x 20.10 - 2 x 1.00 = 38.20
         assert evaluate(condor(), marks, live("25000", now), now, options=CFG) is None
 
+    def test_an_unknown_index_holds_the_touch_rule_only(self) -> None:
+        """OP13.2: a restart before the first index tick. Nothing raises; the premium rules and
+        the clock still judge, and only the strike touch waits for a spot."""
+        now = at(11, 0)
+        blind = IndexState(spot=None, last_tick_at=None)
+        assert evaluate(condor(), condor_marks("20.00", "1.00", now), blind, now,
+                        options=CFG) is None  # fmt: skip
+        stop = evaluate(condor(), condor_marks("35.00", "1.00", now), blind, now, options=CFG)
+        assert stop is not None and stop.code == "STOP"  # D = 68.20 >= 1.5 x 40
+        late = at(14, 30)
+        hard = evaluate(condor(), condor_marks("20.00", "1.00", late), blind, late, options=CFG)
+        assert hard is not None and hard.code == "HARD_EXIT"
+
 
 class TestTheLong:
     def test_the_time_stop_after_45_minutes_without_the_gain(self) -> None:

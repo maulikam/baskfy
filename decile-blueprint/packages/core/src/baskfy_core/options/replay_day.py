@@ -275,7 +275,9 @@ def _entry_points(structure: Structure, result: Result) -> Decimal:
 
 
 @dataclass(frozen=True, slots=True)
-class _Decided:
+class Decided:
+    """The plan builder's decided plan for a day, as the backtests and the drill use it."""
+
     legs: tuple[PlanLeg, ...]
     candidate: Candidate
     decision_minute: dt.datetime
@@ -285,14 +287,14 @@ class _Decided:
     half_gap: Decimal | None
 
 
-def _decide(  # noqa: PLR0913, PLR0917 - one return per stage; the builders' inputs
+def decide_plan(  # noqa: PLR0913, PLR0917 - one return per stage; the builders' inputs
     sleeve: Sleeve,
     market: MarketDay,
     context: DayContext,
     source: SnapshotSource,
     options: OptionsConfig,
     ceilings: OptionsCeilings,
-) -> _Decided | str | None:
+) -> Decided | str | None:
     """The plan builder minute by minute: a decided plan, a skip reason, or None (no session)."""
     day = market.trade_date
     start = (
@@ -334,7 +336,7 @@ def _decide(  # noqa: PLR0913, PLR0917 - one return per stage; the builders' inp
             as_of, direction, high, low, half = (o3.as_of_minute, o3.direction, o3.range_high,
                                                  o3.range_low, o3.half_gap)  # fmt: skip
         if state is PlanState.PLANNED and candidate is not None and as_of is not None:
-            return _Decided(legs, candidate, as_of, direction, high, low, half)
+            return Decided(legs, candidate, as_of, direction, high, low, half)
         if state is PlanState.SKIPPED:
             return reasons[0] if reasons else "SKIPPED"
         if state in (PlanState.NO_SESSION, PlanState.WINDOW_CLOSED):
@@ -354,7 +356,7 @@ def priced_day(  # noqa: PLR0913 - the sleeve, the day, the user, the chain and 
 ) -> DayOutcome | None:
     """``04`` §13.2 / §13.3: the day as the desk would have traded it on ``source``'s prices."""
     day = market.trade_date
-    decided = _decide(sleeve, market, context, source, options, ceilings)
+    decided = decide_plan(sleeve, market, context, source, options, ceilings)
     if decided is None:
         return None
     if isinstance(decided, str):
@@ -433,9 +435,11 @@ def _with_strikes(position: OpenPosition, legs: Sequence[PlanLeg]) -> OpenPositi
 
 
 __all__ = [
+    "Decided",
     "ModelChain",
     "SnapshotSource",
     "StoredChain",
+    "decide_plan",
     "priced_day",
     "tier1_day",
 ]

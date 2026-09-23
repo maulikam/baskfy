@@ -2244,7 +2244,7 @@ sleeve trade on its own, and there is no auto-execute for this sleeve *(true on 
 there is one, off by default — T5 / TW17)*. And the first ten entries
 are half-sized automatically (`first_live_entries_left` = 10).
 
-## F&O — the overnight F&O research is done; two answers before any F&O order can leave paper (23 Sep 2026)
+## F&O — the overnight F&O research is done; answered the same day (23 Sep 2026)
 
 **What happened.** You asked for opportunities across stock options, stock futures and index F&O,
 defined-risk overnight, research first. The research (`docs/fno/RESEARCH.md`, 1,162 sessions of
@@ -2262,3 +2262,9 @@ data layer that re-tests the rest each quarter. Nothing trades.
 3. **Q4**: whether you want any rejected family built anyway, knowing its numbers.
 
 Blocks: only FO's live flip, which is months away. Everything else proceeds on the defaults.
+
+**✅ Answered in session, 23 Sep 2026** (`docs/fno/DECISIONS-FO.md` M.1): Q2 structure stop plus a
+close order at a 1.5 × credit loss; Q1 F1 capital ₹10 lakh; Q4 build the long-only futures trend
+as F2 on paper; FO starts after OP15. **Still yours later:** neither sleeve meets `02` §3's Tier 2E
+item as tested (F1 is −0.010R in 2022 with the loss close; F2 is negative in four of five years),
+so any flag flip needs your written waiver or forward evidence, and F2's capital is ₹0.

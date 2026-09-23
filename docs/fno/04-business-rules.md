@@ -12,6 +12,7 @@ and IV are floats (options OP1.8, carried).
 | `f1_underlyings` | `NIFTY, BANKNIFTY` | subset of the index underlyings in the NFO master | anything else is a 422 |
 | `f1_entry_sessions_before` | `15` | 10–20 | entry day = the exchange session that many sessions before the **monthly** expiry, counted on `trading_day`. Monthly = the last expiry of the calendar month for that underlying in the master, never a weekday rule |
 | `f1_entry_window` | `09:20–10:30` | inside 09:15–15:00 | the plan is raised at 09:20; `expires_at = min(issued + 30 min, 10:30)`. A missed window is a `LAPSED` plan, not a retry on a later day |
+| `f1_loss_close_mult` | `1.5` | 1.0–2.0 | **Maulik, M.1.** Close the whole structure, shorts first, when the cost to close ≥ (1 + mult) × entry credit. Checked by the monitor on live mids every 60 s and at each close. It never widens past the wings' max loss. Tested: +0.022R, worst −0.73R (`RESEARCH.md` §B4) |
 | `f1_profit_take_pct` | `50` | 30–80 | exit when the cost to close ≤ (1 − pct) × entry credit. Checked at each close (on the bhavcopy settle, for the mark) and by the monitor on live mid-quotes during the session; the exit plan fires on the live check |
 | `fo_hard_exit_before_expiry` | `1` (index); stock sleeves `1` | 1–5 | flat by 15:00 on session `E − n`. **Never zero**: no position is ever held into its expiry day (`02` §2.2) |
 | `f1_max_open_per_underlying` | `1` | 1 | one F1 structure per underlying; the next cycle's entry waits for the previous exit |
@@ -52,9 +53,10 @@ already filled are longs only, so they are closed at once (`ABANDONED_PARTIAL`).
 
 `lots = floor(min(risk_budget_inr, BASKFY_FNO_RISK_PER_TRADE_INR_MAX) ÷ (max_loss_per_unit × lot_size))`,
 capped at `fo_max_lots` (2; ceiling 10). `risk_budget_inr = sleeve_capital × risk_per_trade_pct`
-(1.0 %). With capital ₹0 (QUESTIONS Q1), paper runs one lot and live refuses
-`NO_SLEEVE_CAPITAL`. The broker's `basket_order_margins` for the four legs must be ≤ free margin,
-or `REJECTED_MARGIN`. **Margin never sizes** (Track C §6).
+(1.0 %). **F1's capital is ₹10,00,000** (Maulik, M.1), seeded by FO2, so ₹10,000 per structure,
+and paper sizes exactly as live would. A sleeve at ₹0 (F2) runs one lot on paper, and live refuses
+`NO_SLEEVE_CAPITAL`. Zero lots is `REJECTED_SIZE`, never rounded up to one. The broker's
+`basket_order_margins` for the plan's legs must be ≤ free margin, or `REJECTED_MARGIN`. **Margin never sizes** (Track C §6).
 
 Costs are `docs/options/04` §6's rates (OP0.1, verified 22 Sep 2026) on all eight orders, with no
 exercise STT because nothing is held to expiry. The plan shows the round trip in ₹ and as a share
@@ -93,22 +95,54 @@ FO3 has ≥ 20 sessions of it, and the research default otherwise. Each run writ
 `fo_backtest_run` with the tier, the caveat text, n, net and gross R, per-year rows, and the
 slippage source. The page shows the latest run per family beside the original.
 
-## §7 — Loss limits (F1)
+## §7 — Loss limits
 
-Per underlying: pause after **3** consecutive max-loss (≤ −0.9R) trades. Book: pause when the
+F1, per underlying: pause after **3** consecutive trades closed by the loss close or worse
+(≤ −0.6R; the loss close makes −0.73R the tested worst). F2: pause new entries for the rest of
+the calendar month once the month's closed F2 trades reach **−6R**. Book: pause when the
 month's realised FO loss reaches `fo_book_config.monthly_pause_inr` (≤ the ₹75,000 ceiling). A
 pause stops new entries only. Open structures run to their own exits.
 
 ## §8 — States (`fo_scan.state`, `fo_plan.state`)
 
 Scan: `NOT_ENTRY_DAY` (with the next entry date) · `CANDIDATE` · `SKIPPED_EVENT` · `PAUSED` ·
-`OPEN_POSITION` · `NO_DATA`. Plan: `ISSUED` → `CONFIRMED` → `FILLING` → `OPEN` → `EXITING` →
-`CLOSED`, or `LAPSED`, `REJECTED_*`, `ABANDONED_PARTIAL`. Every non-happy state carries its reason
+`OPEN_POSITION` · `NO_DATA`; for F2 also `NO_SIGNAL`, `BLOCKED_BAN`, `BLOCKED_REGIME` (NIFTY below
+its 50-session average), `BLOCKED_CAPACITY`. Plan: `ISSUED` → `CONFIRMED` → `FILLING` → `OPEN` →
+`EXITING` → `CLOSED`, or `LAPSED`, `REJECTED_*`, `ABANDONED_PARTIAL`; a `ROLL` plan goes
+`ISSUED` → `FILLING` → `OPEN` under the original confirm. Every non-happy state carries its reason
 in words.
 
-## §9 — Paper period (F1, `02` §3.3)
+## §9 — Paper periods (`02` §3.3)
 
-**6 consecutive monthly cycles per underlying** (12 structures in all), with ≥ 4 actually opened.
+**F1: 6 consecutive monthly cycles per underlying** (12 structures in all), with ≥ 4 actually
+opened. **F2: 60 consecutive trading sessions with ≥ 15 positions closed**, including ≥ 3 rolls.
 Zero rule violations: no uncovered short at any step, no position into expiry day, no
 `LATE_EXIT`, no journal gap. A cycle the desk missed for want of a Kite login counts as a
 violation, not a skip, because an overnight position needs the desk on every day it is open.
+
+## §10 — F2, stock-futures breakout long (paper; Maulik, M.1)
+
+| Field | Default | Bounds | Rule |
+|---|---|---|---|
+| `f2_universe_turnover_pct` | `60` | 20–100 | F&O stocks in this top share by 20-session median futures turnover |
+| `f2_breakout_sessions` | `20` | 10–60 | close > the max of the prior n continuous closes |
+| `f2_trend_sessions` | `50` | 20–200 | close > its n-session average; NIFTY's continuous future > its own n-session average |
+| `f2_stop_atr` | `3.0` | 1.5–5.0 | initial stop = entry − mult × ATR14 (at the signal close) |
+| `f2_trail` | `true` | — | each close: stop = max(stop, highest close since entry − mult × ATR14 at entry). Never lowered |
+| `f2_max_sessions` | `40` | 10–60 | time exit at 15:00 on that session |
+| `f2_roll_before_expiry` | `1` | 1–3 | roll at 15:00 on E−n (`02` Track C §5's exception) |
+| `f2_max_open` | `5` | 1–10 | open F2 positions; one per stock; ≤ 2 per NSE industry |
+
+**The GTT** triggers at `max(stop, stop_from_vol(entry, ann_vol))`: for a long, the higher price is
+the tighter stop. It is placed within the same session as the fill and modified
+each evening after the trail moves. A GTT that fails to place is an alert and a `NAKED_FUTURE`
+violation on the paper checklist; the monitor then exits the position at the next check.
+
+**Sizing.** `lots = floor(min(capital × risk %, ₹25,000 ceiling) ÷ (entry − stop) ÷ lot_size)`.
+One lot's 3-ATR risk is often ₹30,000–₹80,000, so most names size to zero under the ceiling and are
+`REJECTED_SIZE`. That is the ceiling working, not a bug. Paper, with capital ₹0, runs one lot and
+records what the live size would have been.
+
+**Costs** per round trip, and again per roll: futures STT 0.05 % on the sale, exchange 0.00173 %
+per side, stamp 0.002 % on the buy, ₹20 per order, GST 18 % on brokerage and exchange charges,
+and the measured slippage (FO3), or 0.03 % a side until it is measured.

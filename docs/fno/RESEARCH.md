@@ -68,6 +68,11 @@ Universe: the top 60 % of F&O stocks by 20-session futures turnover, each day.
 | A2 weekly XS momentum, top/bottom 10 | 2,705 | −0.004 | −0.4 | 51 % | |
 | A4 index trend, chandelier | 119 | −0.033 | −0.3 | 37 % | |
 
+**F2, the long-only chandelier, re-costed with its rolls** (`evidence/research/res_f2.py`). A
+live future cannot be held through expiry, and a position held about 22 sessions rolls 0.96 times
+on average, each roll another 0.12 % round trip: n = 2,334, **+0.017R** (t = 0.71). By year:
+−0.026, +0.455, −0.129, −0.143, −0.141. Maulik chose to build it on paper anyway (M.1).
+
 **Reading.** The 2022–mid-2023 slice, run first while the fetch was still going, showed +0.06 to
 +0.09R. The full sample removes it. The long side's whole result is the 2023 mid/small-cap rally.
 **This is the swing book's thesis in another wrapper.** A futures version adds leverage and a
@@ -123,6 +128,12 @@ N=15 by year: +0.054, +0.011, +0.093, −0.000, −0.014 (2026 is 12 trades). By
 **A defensive exit was tested too** (close the whole structure at the next close after the
 underlying closes beyond a short strike): N=15 falls to **+0.018R** (t = 0.84; worst −0.95R); N=20
 −0.008; N=10 −0.045. It gives up edge and buys almost no tail protection, so F1 does not use it.
+
+**Maulik's loss close** (M.1: close the structure when the loss reaches 1.5 × the credit),
+tested after his answer (`evidence/idx_stop15.txt`): N=15 gives **+0.022R** (t = 1.01), win 83 %,
+worst −0.73R, max drawdown −1.35R. By year: −0.010, −0.004, +0.078, +0.010, +0.047. At 1.0×:
++0.025R, worst −0.66R; at 2.0×: +0.023R, worst −0.95R. It costs about a third of the edge and cuts
+the tail by about a quarter.
 
 What makes it worth paper, and nothing else: it is hedged at every instant, it trades once a month
 per index, its costs are a third of the stock versions' (0.015R), its worst trade is bounded at

@@ -30,7 +30,7 @@ this file → [`RESEARCH.md`](RESEARCH.md) (why the pack is shaped the way it is
 | [`05-ui-spec.md`](05-ui-spec.md) | `/options/overnight`, `/options/fno`, the desk's `/fno` |
 | [`06-module-plan.md`](06-module-plan.md) | FO0–FO12 |
 | [`07-data-reality.md`](07-data-reality.md) | The F&O bhavcopy, what it can and cannot tell, the tiers, physical settlement |
-| [`DECISIONS-FO.md`](DECISIONS-FO.md) | Judgement calls, PACK.1–PACK.8 |
+| [`DECISIONS-FO.md`](DECISIONS-FO.md) | Judgement calls PACK.1–PACK.8, and **M.1, Maulik's answers** |
 | [`QUESTIONS.md`](QUESTIONS.md) | What only Maulik can answer, each with a standing default |
 | [`STATUS.md`](STATUS.md) | The live status page |
 | [`KICKOFF-PROMPT.md`](KICKOFF-PROMPT.md) | The prompt that starts the run |
@@ -57,13 +57,22 @@ are impossible.
 
 The OP run (O1–O3, intraday NIFTY) is **unchanged and unfinished** (OP8 next). Its Track C (no
 overnight, NIFTY only, no futures) stays true **for O1–O3**. This pack governs only `fo_` sleeves.
-The two share the NFO master, the greeks and the cost model; FO2 widens the master and FO6 adds one
-gateway branch, and each is constrained so no O-sleeve behaviour moves (`06`, "Coordination with
+The two share the NFO master, the greeks and the cost model; FO2 widens the master and FO6 adds two
+narrow gateway branches (NRML for `fo_plan` orders; an F2 future's GTT), and each is constrained so no O-sleeve behaviour moves (`06`, "Coordination with
 the OP run").
 
 ## What this run is not
 
-It is not a stock-options book, a futures book or a carry book: the research rejected each
-(`01` §4). It is not naked selling, not auto-execution, and not a hedge on the equity books
+It is not a stock-options book or a carry book: the research rejected each (`01` §4). Its one
+futures sleeve, F2, exists by Maulik's choice against the research, and says so on every surface. It is not naked selling, not auto-execution, and not a hedge on the equity books
 (QUESTIONS Q5). It is not live money: every FO flag defaults false, and only Maulik flips one. And
 it is not a claim of profitability.
+
+## Maulik's answers, 23 Sep 2026 (after the research; `DECISIONS-FO` M.1)
+
+* **Stop rule for derivatives:** a defined-risk option structure is its own stop, **plus** a close
+  order at a loss of 1.5 × the credit. Futures get a GTT.
+* **F1 capital:** ₹10 lakh.
+* **Build F2 anyway:** stock-futures breakout, long only, paper. The research says +0.017R after
+  rolls, negative in four of five years. It is built faithfully and labelled honestly.
+* **Order:** the OP run finishes first. FO0 starts after OP15.

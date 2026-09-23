@@ -8,9 +8,10 @@ note.
 ---
 
 ```
-This is the FO run: add overnight, defined-risk F&O to Baskfy as the research
-in docs/fno/RESEARCH.md supports it — one paper sleeve (F1, NIFTY/BANKNIFTY
-monthly iron condors carried overnight), the F&O data layer (nightly bhavcopy
+This is the FO run: add overnight, defined-risk F&O to Baskfy — two paper
+sleeves (F1, NIFTY/BANKNIFTY monthly iron condors carried overnight; F2,
+stock-futures breakout long only, built by Maulik's choice against the research,
+DECISIONS-FO M.1), the F&O data layer (nightly bhavcopy
 ingest, measured option spreads, a quarterly re-test of every rejected family),
 and a read-only Stock F&O information page — with every money flag off.
 
@@ -41,7 +42,8 @@ Then execute FO0 through FO12 in order, under the Autonomy charter in CLAUDE.md.
   trading a banned stock, no touching frozen/.
 - The O-sleeves (docs/options) keep their Track C: FO6's gateway branch applies
   to fo_plan orders only, and every OP gating test stays green unedited.
-- Do not build a family RESEARCH.md rejected. If a module's evidence says
+- Start only when docs/options/STATUS.md shows OP15 ✅ (M.1).
+- Do not build a family RESEARCH.md rejected, other than F2. If a module's evidence says
   otherwise, write it in DECISIONS-FO.md for Maulik and carry on with the plan.
 - A backtest number carries its tier and caveat (07 §4) on the row and the page.
 - Judgement calls go in docs/fno/DECISIONS-FO.md, numbered by module, tagged

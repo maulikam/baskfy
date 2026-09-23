@@ -89,8 +89,8 @@ never a blank.
 
 The shape of `op_plan`/`op_leg`, with three additions:
 
-* `fo_plan.structure` (`IRON_CONDOR` in v1; the enum is `IRON_CONDOR` only, and a later sleeve
-  widens it by migration) and `fo_plan.max_loss_inr`, computed from the legs, never entered.
+* `fo_plan.structure` (`IRON_CONDOR` for F1, `FUTURE` for F2; a later sleeve widens the enum by
+  migration) and `fo_plan.kind` (`ENTRY`, `EXIT`, `ROLL`) and `fo_plan.max_loss_inr`, computed from the legs, never entered.
 * `fo_leg.entry_seq`: the order legs go out in. Longs first, and the covered-overnight guard
   re-proves every prefix (`02` §2.1).
 * `fo_plan.hard_exit_date`: `E − fo_hard_exit_before_expiry`, in exchange sessions from
@@ -101,8 +101,9 @@ The shape of `op_plan`/`op_leg`, with three additions:
 
 ## 5. `fo_position`, `fo_fill`, `fo_mark` — the carried book (per user)
 
-* `fo_position`: one row per open structure, with sleeve, symbol, legs, entry credit, max loss,
-  profit-take level, `hard_exit_date` and `simulated`.
+* `fo_position`: one row per open structure, with sleeve, symbol, legs, entry price or credit,
+  max loss, profit-take and loss-close levels (F1), the current trailing stop and its GTT id (F2),
+  `hard_exit_date` (F1) or next roll date (F2), and `simulated`.
 * `fo_fill`: every order's fill, real or simulated (`simulated=true` whatever `DRY_RUN` says while
   the sleeve's flag is off). The paper fill walks the live depth at confirm time (options PACK.2's
   simulator, reused).

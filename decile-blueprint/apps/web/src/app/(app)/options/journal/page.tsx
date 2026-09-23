@@ -147,7 +147,7 @@ function BacktestCard({ run }: { run: OptionsBacktestRun }) {
         {formatTradeDate(run.date_from)} to {formatTradeDate(run.date_to)}
       </h3>
       <p
-        className="rounded-md bg-warning-muted p-2 text-xs text-foreground"
+        className="whitespace-pre-line rounded-md bg-warning-muted p-2 text-xs text-foreground"
         data-testid="options-backtest-caveat"
       >
         {run.caveats}

@@ -46,6 +46,7 @@ from baskfy_api.swing_health import is_session_day
 from baskfy_api.swing_scan import request_scan
 from baskfy_core.models import PipelineRun
 from baskfy_core.models.base import JsonObject
+from baskfy_core.options.config import OptionsConfig, Sleeve
 from baskfy_providers.errors import TransientProviderError
 from baskfy_providers.factory import KiteLane, build_kite_provider, build_nse_provider
 from baskfy_providers.kite import KiteProvider
@@ -58,6 +59,9 @@ from baskfy_worker.bhavcopy_backfill import backfill_bars_from_bhavcopy
 from baskfy_worker.celery_app import IST, QUEUE_COMPUTE, QUEUES
 from baskfy_worker.db import run_checkpointed, run_in_session, session_scope
 from baskfy_worker.options import index_bars as options_index_bars
+from baskfy_worker.options import options_ceilings
+from baskfy_worker.options.backtest_run import TIERS as OPTIONS_TIERS
+from baskfy_worker.options.backtest_run import git_sha, run_backtest
 from baskfy_worker.options.collector import collect_gate, collect_minute, in_session
 from baskfy_worker.options.master import EmptyMaster, master_alert, refresh_master
 from baskfy_worker.options.plan import kite_margin_reader, plan_gate_free, plan_o1_minute
@@ -1191,6 +1195,33 @@ def options_weekly_task(at: str | None = None) -> JsonObject:
         today = now.astimezone(IST).date()
         alert = weekly_alert(await week_rows(session, tenant, today), today)
         return {"at": now.isoformat(), "summary": alert.summary, "sent": await dispatch(alert)}
+
+    return run_in_session(_run)
+
+
+@shared_task(name="baskfy.options.backtest", acks_late=True, queue=QUEUE_COMPUTE)
+def options_backtest_task(
+    sleeve: str, tier: str, date_from: str, date_to: str | None = None
+) -> JsonObject:
+    """OP12: one sleeve at one tier over ``[date_from, date_to]``, appended to ``op_backtest_run``.
+
+    On demand only (no Beat entry) and on the compute queue: a person asks for a run, from
+    ``tools/options/backtest.py`` or by name. Reads stored bars, the master and (Tier 3) stored
+    chain minutes; makes no Kite call and reaches no broker, so no flag gates it.
+    """
+    start = dt.date.fromisoformat(date_from)
+    end = dt.date.fromisoformat(date_to) if date_to else dt.datetime.now(tz=IST).date()
+    user_id = sole_user_id()
+    if user_id is None:
+        return {"from": start.isoformat(), "skipped": "no BASKFY_SOLE_USER_ID configured"}
+    tenant = user_id
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        report = await run_backtest(
+            session, tenant, Sleeve(sleeve), OPTIONS_TIERS[tier], start, end,
+            options=OptionsConfig(), ceilings=options_ceilings(), sha=git_sha(),
+        )  # fmt: skip
+        return report.as_dict()
 
     return run_in_session(_run)
 

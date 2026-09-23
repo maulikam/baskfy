@@ -146,6 +146,13 @@ app.include_router(vbt_desk.router)
 from . import twt_desk                                               # noqa: E402
 app.include_router(twt_desk.router)
 
+# OP10: the NIFTY options operator page, its one confirm route and its Close now. Mounted here for
+# the same reason as the three above: the desk console is the only place an options plan becomes
+# an order (docs/options/02 Track C §4). /nifty-options, not /options — that path is the frozen
+# lab's thaw hook (PACK.9).
+from . import options_desk                                           # noqa: E402
+app.include_router(options_desk.router)
+
 PLANS: dict[str, dict] = {}          # plan_id -> plan (in-memory, session-scoped)
 _kite: Kite | None = None
 _gateway: OrderGateway | None = None

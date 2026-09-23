@@ -1260,3 +1260,76 @@ first tick (the monitor was right; the fixture was not a real position), and the
 adapter, the ticker with new legs followed via `kws.subscribe` + full mode). The compose service and
 its scheduling loop (the `swing-monitor` / `twt-auto` shape in `infra/docker`) are deployment, and
 deployment is OP15's. With the flag false on the box it would exit 0 anyway.
+
+## OP10.1 — The send procedure is pure (`baskfy_core.options.executor`); the desk supplies a venue · ⚠ UNREVIEWED
+
+`04` §8.2–§8.4 (longs first, attempt 1 at the touch plus a tick, one reprice, cancel; abandon on any
+short leg and close what filled in exit order; shorts first on exit; a marketable third attempt for
+a risk-reducing close) is `run_entry` / `run_exit` over a `Venue` protocol, built on OP1's
+`advance_entry`, `next_exit_leg`, `next_attempt`. Every attempt asserts `never_naked` on the
+position it could leave *before* it is sent. That is what makes `06`'s "never-naked across 500 seeded
+fill sequences per structure" a pure property test (`test_options_executor.py`, 3 × 500 seeds, both
+outcomes exercised). The desk's `DeskVenue` is the only adapter: `gateway.place(...)` per attempt on
+the desk's event loop (the executor runs in a worker thread), then the depth-ladder simulator on a
+`DRY_RUN` answer. **Rejected.** Writing the procedure inside the desk module (untestable without a
+gateway and a database). **Reversal.** Inline the two functions.
+
+## OP10.2 — The options gateways share the desk's risk manager · ⚠ UNREVIEWED
+
+One gateway per sleeve (`options_execute.options_gateway`), gated by that sleeve's
+`options_gates.product_gates`, its own journal file, and **`app.main._risk`** — the vbt/twt rule
+("one account, one daily-loss cap, one order counter", `vbt_desk.vbt_gateway`). A day's paper legs
+(≤ ~20 orders) are small against the 500-a-day cap. **Rejected** (considered first, then reversed
+before it landed): a separate `RiskManager` for options — it would let a paper book and the live
+weekly book each think they had the whole cap. **Reversal.** Pass a separate `RiskManager`.
+
+## OP10.3 — LIVE is refused with `LIVE_NOT_BUILT` · ⚠ UNREVIEWED
+
+With all four switches on (`02` §3), the gateway would send a real NFO order and answer `PLACED`;
+the fill then has to be read back from the broker's order book (partials, the wait, the cancel of
+§8.2), which OP10 does not build. Rather than send a real order it cannot track, `execute_entry`
+refuses a LIVE plan before any send (409, `LIVE_NOT_BUILT`; tested). Every switch is false, so
+nothing in force changes. **Reversal.** Build the live venue (order-status polling through the
+gateway's read path) and remove the refusal — a module of its own, before any flag flip.
+
+## OP10.4 — Client ids: `plan:symbol`, `plan:symbol:CLOSE`, and `:R<n>` for every later attempt · ⚠ UNREVIEWED
+
+`04` §8.1 names `plan_id:symbol` and `plan_id:symbol:CLOSE`; the gateway's idempotency map answers a
+repeated id `DUPLICATE`, so a reprice (attempt 2), a marketable close (attempt 3) or a retried exit
+pass needs its own. Entries number by attempt; closes number by the leg's count of closing orders
+already written (`op_order` rows on the leg's opposite side), so a `PARTIAL_EXIT` retried next second
+never collides. Built by hand like vbt's (`mint_client_id` refuses a `:` inside a half).
+
+## OP10.5 — Paper fills are immediate, at the resting level; a refusal is an unfilled leg · ⚠ UNREVIEWED
+
+In PAPER the simulator walks the snapshot's depth at once — no `fill_wait_seconds` wait (a paper
+order has nothing to wait for; the live venue will). It fills at the resting level's price inside the
+limit (`04` §8.4: the ladder, not the limit), so a condor at bids 20.00 / asks 5.10 opens at a 29.80
+credit, not the limits' 29.70 (the test pins it). A gateway refusal (`BLOCKED`, `RISK_BLOCKED`) is a
+leg that filled nothing: an entry abandons, an exit retries — never an exception mid-sequence.
+
+## OP10.6 — The store is tested on real PostgreSQL, not a sqlite twin · ⚠ UNREVIEWED
+
+`06` OP10 says "`PgOptionsStore` (sqlite twin in tests)". The `op_` schema exists only as the
+screener's Postgres migration (partitioned tables, JSONB, arrays); a twin would be a second schema to
+keep in step and would not exercise `ANY(?)`, `RETURNING`, or the constraints. The desk tests run on
+`BASKFY_TEST_DATABASE_URL` (the migrated `baskfy_test`) and skip without it, as the worker's
+database tests do. Found by them: the desk adapter returns a `date` as an ISO string (sqlite's shape),
+so `PlanRow.trade_date` is coerced. **Reversal.** Add the twin.
+
+## OP10.7 — Who closes a raised exit: the monitor process's loop, through the executor · ⚠ UNREVIEWED
+
+The monitor raises an EXIT plan (OP9.4) and never sends. `run_session` gained an `act(now)` hook run
+after every evaluation pass; the runner hands it `options_execute.run_pending_exits`, which closes
+every open position with an exit plan under its entry's confirm (PACK.2), marks the exit plan
+`CONFIRMED` and the session `CLOSED` with the rule's code as `closed_reason`. A `PARTIAL_EXIT` stays
+open and is retried on the next pass. **Close now** (`POST /nifty-options/close`) raises a `MANUAL`
+exit plan and closes at once. The monitor module still contains no placing verb (OP9's scan).
+
+## OP10.8 — The page is the confirm surface; `05` §3's status bar, mark bar and ledger are not built · ⚠ UNREVIEWED
+
+`/nifty-options` shows today's plans with their legs in send order, the **"Confirm — simulated"**
+button and the sleeve's sentence verbatim (tested), and open positions with their mark and **Close
+now**. Not yet: the four-flag status bar, the Kite token state, the mark on a stop–target bar, spot
+against the levels, and the ledger panel — the ledger is OP11's, the rest OP14's hardening. Recorded
+in STATUS as NOT done.

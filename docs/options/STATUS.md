@@ -3,10 +3,10 @@
 The status page for the options run. Updated at the end of every module, loud about what is NOT
 done. A fresh session resumes from the first module not marked ✅.
 
-**Run state: OP0 🟡, OP1 ✅, OP2 ✅, OP3 🟡, OP4 ✅, OP5 ✅, OP6 ✅, OP7 ✅, OP8 ✅, OP9 ✅ (23 Sep 2026); OP10 not started.** Pack written 22 Sep 2026 on branch
+**Run state: OP0 🟡, OP1 ✅, OP2 ✅, OP3 🟡, OP4 ✅, OP5 ✅, OP6 ✅, OP7 ✅, OP8 ✅, OP9 ✅, OP10 ✅ (23 Sep 2026); OP11 not started.** Pack written 22 Sep 2026 on branch
 `developer`, absorbing the never-started condor pack (`docs/condor/`) as sleeve O1. OP0-OP7 were each run alone, by instruction ("execute only OP<N>, then stop"); OP8 was run by Maulik's
 "continue the OP run from OP8" (23 Sep 2026), which also committed OP7's green work (`00cb48b`), found
-uncommitted in the tree. The next session resumes at OP10 (and the orchestrator feeds back OP3's box probe — §"What is NOT done" under OP3).
+uncommitted in the tree. The next session resumes at OP11 (and the orchestrator feeds back OP3's box probe — §"What is NOT done" under OP3).
 
 ## Module ledger
 
@@ -22,7 +22,7 @@ uncommitted in the tree. The next session resumes at OP10 (and the orchestrator 
 | OP7 — O2 plan builder | ✅ | `baskfy_core.options.plan_o2` (pure: role → day filters → trigger → `expiry_for_o2` → `directional.build` over the trigger minute → costs → `plan_id`, exits, `min(+30 min, 13:30)` expiry) + `baskfy_worker.options.plan_o2` (`op_session`/`op_plan`/one `op_leg`, lapse, `OPTIONS_PLAN`); **no broker call at all** (OP7.3); task + Beat `options-plan-o2` **dark** behind the monitor flag; 49 new tests |
 | OP8 — O3 plan builder | ✅ | `baskfy_core.options.plan_o3` (pure: role → setup → one-O3-a-day → slot → `expiry_setups.build` over the decision minute → costs → margin ceiling → `plan_id`, exits) + `baskfy_worker.options.plan_o3` (O3-B then O3-A each minute, the margin calculator for the hedged basket, `OPTIONS_PLAN`); task + Beat `options-plan-o3` **dark** behind the monitor flag; 65 new tests (8 on `baskfy_test`) |
 | OP9 — Desk process `options_monitor` | ✅ | `baskfy_core.options.exits.evaluate` (pure) + desk `app/strategies/nifty_options.py` (marks from depth ticks, bars from index ticks reconciled to `op_index_minute`, one EXIT plan per position), `app/options_clock.py` (loop with idle evaluation, ≤ 1 quote / 5 s fallback, new legs followed), `app/options_monitor.py` (flag-first runner, `PgPositionStore`); `tools/options/replay.py` + five priced fixtures with an independent answer key; 58 new tests |
-| OP10 — Desk page + `/nifty-options/execute` (paper) | ⬜ | |
+| OP10 — Desk page + `/nifty-options/execute` (paper) | ✅ | pure `baskfy_core.options.executor` (entry/exit procedure over a venue, never-naked asserted per attempt) + desk `app/options_execute.py` (gateway-backed venue, depth-ladder paper fills, `PgOptionsStore`, LIVE refused) + `app/options_desk.py` (`/nifty-options`, `/data`, execute, close) + template; the monitor's loop sweeps raised exits; 32 new tests |
 | OP11 — Journal, ledger, pauses, first-live multiplier | ⬜ | |
 | OP12 — Backtests: Tier 1–2 per sleeve; Tier 3 ⛁ | ⬜ | |
 | OP13 — Gating and safety proof | ⬜ | |
@@ -974,9 +974,69 @@ Nothing in code. OP10's executor reads `op_plan` (`kind='ENTRY'` to confirm, `ki
 close), sends legs through the gateway's dry-run branch in `entry_sequence` / `exit_sequence`, writes
 `op_order`/`op_fill`/`op_position`, and closes the position the monitor raised an exit for.
 
+## OP10 — The desk page and `/nifty-options/execute` (paper)
+
+**✅, 23 Sep 2026.** Decisions `DECISIONS-OP.md` OP10.1–OP10.8. Every leg is an
+`OrderGateway.place(exchange="NFO", product="MIS", order_type="LIMIT")` on a gateway gated by the
+sleeve's own switches; with every flag false each comes back `DRY_RUN` and the broker is never
+called (a spy proves it under both `DRY_RUN` values). LIVE is refused (OP10.3).
+
+### What exists
+
+* **`packages/core/src/baskfy_core/options/executor.py`** (pure) — `run_entry` / `run_exit` over a
+  `Venue`: longs first, attempt 1 + reprice + cancel, abandon-and-close on any short leg, shorts
+  first on exit, the marketable third attempt for a short buy-back or O2's sell, `PARTIAL_EXIT` for a
+  wing that will not fill; `never_naked` asserted before every send.
+* **`kite-momentum-rebalancer/app/options_execute.py`** — `execute_entry` (400/404/409/410 refusals,
+  LIVE refused, the expiry-day slot taken on confirm and freed on abandon), `execute_exit`,
+  `run_pending_exits`, `DeskVenue`, `PgOptionsStore` (`op_order` per attempt, `op_fill` per fill,
+  `op_leg` totals, `op_position` on OPEN, session and plan states), `options_gateway` (shared risk,
+  OP10.2), `kite_quotes`.
+* **`app/options_desk.py`** + **`app/templates/nifty_options.html`** — `GET /nifty-options`,
+  `GET /nifty-options/data`, `POST /nifty-options/execute`, `POST /nifty-options/close`; mounted in
+  `app/main.py`.
+* **`app/options_clock.run_session(act=…)`** and the runner's exit sweep (OP10.7).
+
+### AC → test
+
+| `06` OP10 AC | Test |
+|---|---|
+| O1 confirm → four simulated fills wings-first and `OPEN` | `kite-momentum-rebalancer/tests/test_options_execute.py::TestTheConfirm::test_o1_confirm_is_four_simulated_fills_wings_first_and_open` (orders, fills, position, slot, credit 29.80 from the ladder) |
+| thin long-call depth → `ABANDONED_ENTRY`, no short ever sent | `TestAbandonment::test_thin_long_call_depth_abandons_…` (+ core `test_options_executor.py::TestAbandonment`) |
+| O3 partial long → abandoned, no short sent | `TestAbandonment::test_an_o3_partial_long_is_abandoned_…` (net open 0 on both legs) |
+| an exit produces closes in sequence with the final attempt marketable | `TestTheExit` (shorts first, position and session closed, the exit plan `CONFIRMED`, a second sweep empty) + core `TestTheExit` (the marketable third attempt; a wing gets none) |
+| gateway spy: 0 broker calls under both `DRY_RUN` values with the execution flag false | `TestNoBrokerCall` (parametrised over `DRY_RUN`) and every other desk test's spy |
+| never-naked across 500 seeded fill sequences per structure | `packages/core/tests/test_options_executor.py::TestNeverNaked` (condor, spread, long) |
+| no path calls `place_gtt_stop` | `TestNoGtt` (+ NFO/MIS/LIMIT through `gateway.place`, two POSTs, the sentences verbatim) |
+| the page | `TestThePage` (the plan, "Confirm — simulated", the O3 sentence; `confirm` not `true` → 400 before the store is opened) |
+
+### Tests (new)
+
+| File | Tests |
+|---|---|
+| `packages/core/tests/test_options_executor.py` | 10 (incl. 3 × 500 seeds) |
+| `kite-momentum-rebalancer/tests/test_options_execute.py` (on `baskfy_test`) | 17 |
+| **Total** | **27** |
+
+**Regression (Postgres + Redis up, 23 Sep 2026):** the **whole desk suite: 2,275 passed**, 17 skipped
+as before; ruff + mypy strict clean on `executor.py` and its test; pyflakes clean on the new desk files.
+
+### What is NOT done
+
+* **LIVE execution is not built** (OP10.3): the live venue must read fills back from the broker.
+* `05` §3's status bar (the four flags, Kite token, hard-exit countdown), the mark on a stop–target
+  bar, spot against the levels, and the ledger panel (OP11) are not on the page (OP10.8).
+* Paper fills do not wait `fill_wait_seconds` (OP10.5); the journal row (`op_journal`) is OP11's.
+* The monitor process and its exit sweep still run by hand (OP9.6); nothing is deployed.
+
+### What blocks OP11
+
+Nothing in code. Closed sessions now carry their fills; OP11 writes `op_journal` in ₹ and R from them
+and enforces the pauses and the first-live multiplier.
+
 ## What is NOT done
 
-Everything after OP9. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
+Everything after OP10. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
 OP3 does them first); the two full-suite baseline runs (OP0.9); the gateway gap of OP0.6 is **fixed in OP2** (OP2.1); the
 `/ops` side door of OP0.5 is **recorded, not fixed** (OP13). Every money flag is false and stays false. The paper periods begin only after OP15, and
 the longest (O1-M) takes about six months after that.

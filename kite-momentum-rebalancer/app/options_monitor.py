@@ -61,8 +61,11 @@ def _d(value: object) -> Decimal | None:
     return Decimal(str(value))
 
 
-def _aware(at: dt.datetime) -> dt.datetime:
-    return at if at.tzinfo is not None else at.replace(tzinfo=IST)
+def _aware(at: dt.datetime | str) -> dt.datetime:
+    """The desk's adapter hands timestamps back as ISO strings (`analytics/pg.py`, sqlite's shape);
+    a caller may pass datetimes. Either way: an aware datetime."""
+    value = dt.datetime.fromisoformat(at) if isinstance(at, str) else at
+    return value if value.tzinfo is not None else value.replace(tzinfo=IST)
 
 
 def _detail(value: object) -> dict:
@@ -101,7 +104,7 @@ def position_from_rows(head: Any, legs: list[Any]) -> TrackedPosition:
         structure=Structure(str(head["structure"])),
         legs=open_legs,
         entry_points=Decimal(str(head["entry_points"])),
-        opened_at=head["opened_at"],
+        opened_at=_aware(head["opened_at"]),
         risk_budget_inr=Decimal(str(head["risk_budget_inr"] or 0)),
         direction=direction,
         range_high=high,
@@ -273,7 +276,19 @@ def main() -> int:
                 kws.subscribe(tokens)
                 kws.set_mode(kws.MODE_FULL, tokens)
 
-            return await run_session(strategy, bus, follow=follow, quotes=LegQuotes(kite))
+            from . import options_desk, options_execute  # noqa: PLC0415 - the executor, lazily
+            book = options_execute.PgOptionsStore(conn, user_id=user_id)
+
+            async def sweep(_now: dt.datetime) -> None:
+                # The monitor raised these exits; the executor closes them under the entry's
+                # confirm (PACK.2). The monitor itself never sends anything.
+                await options_execute.run_pending_exits(
+                    book, options_desk.gateway_for, quotes=options_execute.kite_quotes(kite)
+                )
+
+            return await run_session(
+                strategy, bus, follow=follow, quotes=LegQuotes(kite), act=sweep
+            )
 
         raised = asyncio.run(_serve())
         log.info("options monitor done: %d exit(s) raised", raised)

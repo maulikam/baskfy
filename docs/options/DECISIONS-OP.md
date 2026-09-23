@@ -1184,3 +1184,79 @@ four-place daily close. House rule 8 (round at write time) applies to it like ev
 plan, so `exits_for` stores it through `paise` (25,100.00, not 25,100.0000). Found by the database
 test, not by the pure one: `Decimal("25100") == Decimal("25100.0000")` in Python, but not in the
 JSON the page reads.
+
+## OP9.1 — The desk monitor owns positions and exits; the worker's builders keep raising plans · ⚠ UNREVIEWED
+
+`06` OP9's bullet says the desk process "calls the plan builders", and PACK.11 says the desk's
+tick-built bars decide plans. OP6–OP8 built those builders as worker minute tasks behind the same
+`BASKFY_OPTIONS_MONITOR_ENABLED` flag, idempotent per date, with the database writes, the margin
+calculator and the `OPTIONS_PLAN` alert all tested on a real database; OP6.6 named the reversal
+("drop the Beat entry when OP9's desk raises plans itself"). **Choice.** Keep one plan writer: the
+worker. The desk's `options_monitor` does what only a live process can — marks open legs from the
+websocket, evaluates every exit per tick and on idle passes, and raises the exit plan — and it
+reconciles its tick bars to `op_index_minute` (the minutes the worker's builders read), so a plan
+and an exit read the same bars. None of OP9's acceptance criteria concern plan raising; all of
+them are exits, feed loss and resume, and each is green. **Rejected.** Re-implementing the plan
+writes in the desk (a second writer for `op_plan`, and every OP6–OP8 database test re-done against
+the desk's adapter); calling the worker from the desk (a cross-tree import the desk does not have).
+**Reversal.** Give `NiftyOptionsMonitor` a `plan_at(now)` that calls `plan.decide_o1` /
+`plan_o2.decide_o2` / `plan_o3.decide_o3` on `self.bars()` and a desk store for the writes, then drop
+the three Beat entries.
+
+## OP9.2 — The strategy module is `app/strategies/nifty_options.py`, not `options_monitor.py` · ⚠ UNREVIEWED
+
+`tests/test_frozen_boundary.py` forbids any module-scope import whose dotted path contains
+`strategies.options` — the frozen strangle lab's name (D4). `app.strategies.options_monitor`
+contains it, so the name `06` wrote would fail the boundary the moment the runner imported it.
+**Choice.** `app/strategies/nifty_options.py` (the desk's route is already `/nifty-options`,
+PACK.9); the runner is `app/options_monitor.py` and the clock `app/options_clock.py`, which do not
+collide. **Rejected.** Loosening the boundary test to exact-module matching (weakening a D4 guard
+to fit a filename); importing the strategy inside a function (legal, but every reader would trip on
+the same trap). **Reversal.** Rename, and tighten the boundary test first.
+
+## OP9.3 — A polled index quote counts as the feed; `FEED_LOST` means no NIFTY price from anywhere · ⚠ UNREVIEWED
+
+When the websocket goes quiet, the quote fallback (the swing B10 pattern: ≤ 1 `quote` call per 5 s,
+keyed by instrument token, `quote_raw`) delivers the index and every leg as ticks. `04` §8.5's
+"no index tick for `stale_index_seconds`" is read as *no NIFTY price by any path*: a desk that
+still gets the index every five seconds from the REST endpoint is not blind, and closing a
+condor for want of a websocket while the price is known would be an exit the rule did not intend.
+`FEED_LOST` fires when both paths are silent — the replay's `o1-feed-lost` has no index price
+after 14:04:45 and raises `HARD_EXIT / FEED_LOST` at 14:05:50. **Rejected.** Websocket-only.
+**Reversal.** Tag polled ticks and skip them in `NiftyOptionsMonitor._index`.
+
+## OP9.4 — `baskfy_core.options.exits`: one pure `evaluate`, and one EXIT plan per position · ⚠ UNREVIEWED
+
+`06` OP9 names `exits.evaluate`; no such module existed — each sleeve's rule was its own function.
+**Choice.** `exits.evaluate(position, marks, index, now)` composes them: the conservative mark
+(longs at the bid, shorts at the ask; `None` when a leg has no two-sided quote), staleness at
+`stale_quote_seconds` (drops only `PROFIT`/`TARGET`, §8.5), the marked loss for §9.2's budget
+breach, the latest *completed* 5-minute close after entry for O2/O3-A invalidation and the latest
+1-minute bar for O3-B, and feed loss first. With no mark at all only the hard exit can fire (a stop
+cannot be judged on nothing). A verdict becomes one `op_plan` of `kind='EXIT'`, `plan_id =
+<entry plan>-X` (deterministic; `ON CONFLICT DO NOTHING`), `status='ISSUED'`, `expires_at` = the
+session close (an exit under the entry's confirm must never lapse, PACK.2), with the code, reason,
+mark and loss in `detail`; `op_position.exit_plan_id` is set only where it is null. The monitor
+never evaluates a position again once it has an exit plan. **Reversal.** The exit plan's shape is
+OP10's to consume; change it there and here together.
+
+## OP9.5 — The replay fixtures are priced by Black-76, and their answer key is independent of the monitor · ⚠ UNREVIEWED
+
+`tools/options/make_fixtures.py` writes five days: O1 decaying to `PROFIT`, the same day
+restarted at 11:30, O1 open when the index feed stops at 14:05, O2 going nowhere to `TIME_STOP`,
+and an O3-A trend to `TARGET`. Legs are priced by `greeks.black76_price` on the spot at a flat 14 %
+vol, 1 % either side on the 0.05 tick. The expected exit is computed by `expected()` in that
+script, which walks the same tick timeline and applies each rule's text to the numbers — including
+every STOP, staleness for the profit rules only, and §8.5's 30 silent seconds after 14:00 — with no
+call into `exits`. The desk test also asserts the key names what `06` asks (PROFIT, TIME_STOP at
+10:51:00, TARGET, FEED_LOST at 14:05). Two things this found: the first feed-lost fixture opened a
+condor at 13:50 with strikes 150 points out, so its ₹0.07 credit tripped condor §7's stop on the
+first tick (the monitor was right; the fixture was not a real position), and the harness, loaded as
+`replay`, collided with the swing suite's own `replay` module — it is loaded as `options_replay`.
+
+## OP9.6 — The monitor runs by hand until OP15 wires its container · ⚠ UNREVIEWED
+
+`python -m app.options_monitor` is complete (flag first, `BASKFY_SOLE_USER_ID`, the desk's Postgres
+adapter, the ticker with new legs followed via `kws.subscribe` + full mode). The compose service and
+its scheduling loop (the `swing-monitor` / `twt-auto` shape in `infra/docker`) are deployment, and
+deployment is OP15's. With the flag false on the box it would exit 0 anyway.

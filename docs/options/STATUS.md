@@ -3,10 +3,10 @@
 The status page for the options run. Updated at the end of every module, loud about what is NOT
 done. A fresh session resumes from the first module not marked ✅.
 
-**Run state: OP0 🟡, OP1 ✅, OP2 ✅, OP3 🟡, OP4 ✅, OP5 ✅, OP6 ✅, OP7 ✅, OP8 ✅ (23 Sep 2026); OP9 not started.** Pack written 22 Sep 2026 on branch
+**Run state: OP0 🟡, OP1 ✅, OP2 ✅, OP3 🟡, OP4 ✅, OP5 ✅, OP6 ✅, OP7 ✅, OP8 ✅, OP9 ✅ (23 Sep 2026); OP10 not started.** Pack written 22 Sep 2026 on branch
 `developer`, absorbing the never-started condor pack (`docs/condor/`) as sleeve O1. OP0-OP7 were each run alone, by instruction ("execute only OP<N>, then stop"); OP8 was run by Maulik's
 "continue the OP run from OP8" (23 Sep 2026), which also committed OP7's green work (`00cb48b`), found
-uncommitted in the tree. The next session resumes at OP9 (and the orchestrator feeds back OP3's box probe — §"What is NOT done" under OP3).
+uncommitted in the tree. The next session resumes at OP10 (and the orchestrator feeds back OP3's box probe — §"What is NOT done" under OP3).
 
 ## Module ledger
 
@@ -21,7 +21,7 @@ uncommitted in the tree. The next session resumes at OP9 (and the orchestrator f
 | OP6 — O1 plan builder (monthly + weekly), costs pinned | ✅ | `baskfy_core.options.plan` (pure: role → gate → chain → `condor.build` → costs → sizing → margin ceiling → `plan_id`, 10:15 expiry, legs wings-first) + `baskfy_worker.options.plan` (`op_session`/`op_plan`/`op_leg`, two margin-calculator reads, lapse, `OPTIONS_PLAN`); task + Beat `options-plan-o1` **dark** behind the monitor flag; 50 new tests |
 | OP7 — O2 plan builder | ✅ | `baskfy_core.options.plan_o2` (pure: role → day filters → trigger → `expiry_for_o2` → `directional.build` over the trigger minute → costs → `plan_id`, exits, `min(+30 min, 13:30)` expiry) + `baskfy_worker.options.plan_o2` (`op_session`/`op_plan`/one `op_leg`, lapse, `OPTIONS_PLAN`); **no broker call at all** (OP7.3); task + Beat `options-plan-o2` **dark** behind the monitor flag; 49 new tests |
 | OP8 — O3 plan builder | ✅ | `baskfy_core.options.plan_o3` (pure: role → setup → one-O3-a-day → slot → `expiry_setups.build` over the decision minute → costs → margin ceiling → `plan_id`, exits) + `baskfy_worker.options.plan_o3` (O3-B then O3-A each minute, the margin calculator for the hedged basket, `OPTIONS_PLAN`); task + Beat `options-plan-o3` **dark** behind the monitor flag; 65 new tests (8 on `baskfy_test`) |
-| OP9 — Desk process `options_monitor` | ⬜ | |
+| OP9 — Desk process `options_monitor` | ✅ | `baskfy_core.options.exits.evaluate` (pure) + desk `app/strategies/nifty_options.py` (marks from depth ticks, bars from index ticks reconciled to `op_index_minute`, one EXIT plan per position), `app/options_clock.py` (loop with idle evaluation, ≤ 1 quote / 5 s fallback, new legs followed), `app/options_monitor.py` (flag-first runner, `PgPositionStore`); `tools/options/replay.py` + five priced fixtures with an independent answer key; 58 new tests |
 | OP10 — Desk page + `/nifty-options/execute` (paper) | ⬜ | |
 | OP11 — Journal, ledger, pauses, first-live multiplier | ⬜ | |
 | OP12 — Backtests: Tier 1–2 per sleeve; Tier 3 ⛁ | ⬜ | |
@@ -908,9 +908,75 @@ Nothing in code. Every sleeve now writes `op_plan`/`op_leg` with its exits on th
 `options_monitor` reads them, subscribes the legs, and evaluates each sleeve's exits
 (`condor`, `directional`, `expiry_setups.exit_decision`) under the confirm.
 
+## OP9 — The desk process `options_monitor` (positions and exits)
+
+**✅, 23 Sep 2026.** Decisions `DECISIONS-OP.md` OP9.1–OP9.6. The process holds no gateway; it raises
+EXIT plans, and OP10's executor will send them. Every flag stays false.
+
+### What exists
+
+* **`packages/core/src/baskfy_core/options/exits.py`** (pure) — `evaluate(position, marks, index,
+  now)`: feed loss first (`HARD_EXIT/FEED_LOST`, §8.5), then the conservative mark, staleness, the
+  marked loss and each structure's own rule (`condor.exit_decision`, `directional.exit_decision`,
+  `expiry_setups.exit_decision`) with the invalidation bars they read; `mark`, `marked_loss_inr`,
+  `latest_five_minute_close`, `latest_bar_after` (OP9.4).
+* **`kite-momentum-rebalancer/app/strategies/nifty_options.py`** — `NiftyOptionsMonitor`
+  (`generate_targets` → `[]`, no gateway): minute bars from NIFTY 50 ticks, reconciled every 60 s
+  to `op_index_minute`; leg marks from depth ticks; `check(now)` on every tick and idle pass; one
+  exit plan per position; marks written every 30 s; `on_start` resumes from the store.
+* **`app/options_clock.py`** — `run_session` (drain, B10 fallback when quiet 5 s, `check` every
+  pass, new tokens followed, `now`/`sleep` seams) and `LegQuotes` (≤ 1 `quote_raw` / 5 s, by token).
+* **`app/options_monitor.py`** — `build_monitor` (flag off → not constructed), `PgPositionStore`
+  (`open_positions`, `raise_exit`, `record_mark`, `index_minutes` over `public.op_*`),
+  `position_from_rows`, `main()` (flag before any import of the database, the ticker or Kite).
+* **`tools/options/replay.py`** + **`make_fixtures.py`** + five fixtures under
+  `tools/options/fixtures/` with their expected exits (OP9.5).
+
+### AC → test (`kite-momentum-rebalancer/tests/test_options_monitor.py` unless named)
+
+| `06` OP9 AC | Test |
+|---|---|
+| flag off → not instantiated | `TestTheFlag` (a spy on `__init__`; default false; `main` returns 0 and checks the flag before importing the world) |
+| O1 fixture → `PROFIT` at the expected minute | `TestTheReplays` — `o1-profit` → PROFIT at 11:14:50 |
+| O2 fixture → `TIME_STOP` | `o2-time-stop` → TIME_STOP at 10:51:00 (45 minutes after the 10:06 entry) |
+| O3-A fixture → `TARGET` | `o3a-target` → TARGET at 10:40:50 |
+| index feed dies at 14:05 with O1 open → `HARD_EXIT / FEED_LOST` | `o1-feed-lost` → 14:05:50; and `TestTheLoop::test_an_idle_pass_judges_a_silent_feed` (no ticks at all: the loop's clock raises it) |
+| restart at 11:30 resumes from `op_position` | `TestTheRestart` (the position from the store, the morning's bars back from `op_index_minute`, the rules' exit from 11:30) |
+| a source scan finds no `place(` | `TestNothingPlaces` (strategy, runner and clock; whole-word verbs; `quote_raw`, never `kc.quote(`) |
+| (the store's SQL) | `TestTheStoreOnADatabase` — on `baskfy_test`: open positions with legs and the plan's range, one EXIT plan however often raised, the mark written |
+| (the composition) | `packages/core/tests/test_options_exits.py` (24) |
+
+### Tests (new)
+
+| File | Tests |
+|---|---|
+| `packages/core/tests/test_options_exits.py` | 24 |
+| `kite-momentum-rebalancer/tests/test_options_monitor.py` (1 on `baskfy_test`) | 34 |
+| **Total** | **58** |
+
+**Regression (Postgres and Redis up, 23 Sep 2026):** the **whole desk suite, 2,258 passed**, 17
+skipped as before (the swing suite included — see OP9.5 for the name collision found and fixed);
+core `options`/escape-hatch/purity tests 1,171 passed; ruff (pyflakes) clean on every new desk and
+tools file; ruff + mypy strict clean on `exits.py` and its test.
+
+### What is NOT done
+
+* **No position exists to monitor**: OP10 writes `op_position` when a paper plan fills. Until then the
+  monitor runs with nothing to watch, and its exit plans have no executor.
+* The compose service and scheduling loop are OP15's (OP9.6); the process runs by hand.
+* Plans are still raised by the worker, not the desk (OP9.1).
+* The replay fixtures are modelled quotes (Black-76, flat vol); no recorded live session exists yet.
+* Mutation harness does not cover `exits.py` (OP14).
+
+### What blocks OP10
+
+Nothing in code. OP10's executor reads `op_plan` (`kind='ENTRY'` to confirm, `kind='EXIT'` to
+close), sends legs through the gateway's dry-run branch in `entry_sequence` / `exit_sequence`, writes
+`op_order`/`op_fill`/`op_position`, and closes the position the monitor raised an exit for.
+
 ## What is NOT done
 
-Everything after OP8. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
+Everything after OP9. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
 OP3 does them first); the two full-suite baseline runs (OP0.9); the gateway gap of OP0.6 is **fixed in OP2** (OP2.1); the
 `/ops` side door of OP0.5 is **recorded, not fixed** (OP13). Every money flag is false and stays false. The paper periods begin only after OP15, and
 the longest (O1-M) takes about six months after that.

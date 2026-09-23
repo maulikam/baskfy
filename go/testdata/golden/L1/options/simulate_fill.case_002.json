@@ -1,0 +1,48 @@
+{
+ "fn": "baskfy_core.options.execution.simulate_fill",
+ "inputs": {
+  "config": {
+   "exit_final_marketable": true,
+   "feed_grace_seconds": 60,
+   "feed_watch_from": "14:00:00",
+   "fill_wait_seconds": 20,
+   "latency_ticks": 1,
+   "limit_improve_ticks": 1,
+   "plan_ttl_minutes": 30
+  },
+  "ladder": [
+   {
+    "price": "35.20",
+    "quantity": 20
+   },
+   {
+    "price": "35.30",
+    "quantity": 20
+   },
+   {
+    "price": "35.40",
+    "quantity": 1300
+   }
+  ],
+  "limit_price": "35.35",
+  "quantity": 65,
+  "side": "BUY",
+  "tick": "0.05"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "Decimals are strings; enums are their values; datetimes carry +05:30. Config is OptionsConfig() defaults, written into the inputs. Regenerate with `uv run python ../tools/parity/golden_options.py` from decile-blueprint; packages/core/tests/test_options_goldens.py recomputes every case from these inputs.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "avg_price": "35.275",
+  "filled": 40,
+  "levels_consumed": 2,
+  "method": "DEPTH_LADDER",
+  "requested": 65,
+  "side": "BUY"
+ }
+}

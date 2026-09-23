@@ -1,0 +1,83 @@
+{
+ "fn": "baskfy_core.options.costs.charges",
+ "inputs": {
+  "fills": [
+   {
+    "price": "5.10",
+    "quantity": 65,
+    "side": "BUY"
+   },
+   {
+    "price": "5.10",
+    "quantity": 65,
+    "side": "BUY"
+   },
+   {
+    "price": "20.00",
+    "quantity": 65,
+    "side": "SELL"
+   },
+   {
+    "price": "20.00",
+    "quantity": 65,
+    "side": "SELL"
+   },
+   {
+    "price": "9.85",
+    "quantity": 65,
+    "side": "BUY"
+   },
+   {
+    "price": "9.85",
+    "quantity": 65,
+    "side": "BUY"
+   },
+   {
+    "price": "1.20",
+    "quantity": 65,
+    "side": "SELL"
+   },
+   {
+    "price": "1.20",
+    "quantity": 65,
+    "side": "SELL"
+   }
+  ],
+  "rates": {
+   "auto_squareoff_inr": "50",
+   "brokerage_per_order_inr": "20",
+   "exchange_txn_pct": "0.03553",
+   "gst_pct": "18",
+   "ipft_per_crore_inr": "0.01",
+   "review_after_days": 90,
+   "reviewed_on": "2026-09-22",
+   "sebi_per_crore_inr": "10",
+   "stamp_buy_pct": "0.003",
+   "stt_exercise_intrinsic_pct": "0.15",
+   "stt_sell_premium_pct": "0.15",
+   "synthetic_half_spread_min_inr": "0.10",
+   "synthetic_half_spread_pct": "1.5"
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "Decimals are strings; enums are their values; datetimes carry +05:30. Config is OptionsConfig() defaults, written into the inputs. Regenerate with `uv run python ../tools/parity/golden_options.py` from decile-blueprint; packages/core/tests/test_options_goldens.py recomputes every case from these inputs.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "breakdown": {
+   "brokerage": "160.00",
+   "exchange_txn": "1.67",
+   "gst": "29.10",
+   "ipft": "0.00",
+   "orders": 8,
+   "sebi": "0.00",
+   "stamp": "0.06",
+   "stt": "4.13"
+  },
+  "total": "194.96"
+ }
+}

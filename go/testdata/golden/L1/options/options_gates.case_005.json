@@ -1,0 +1,27 @@
+{
+ "fn": "baskfy_core.options.gating.options_gates",
+ "inputs": {
+  "flags": {
+   "dry_run": true,
+   "intraday_enabled": true,
+   "o2_execution_enabled": true,
+   "options_enabled": false
+  },
+  "sleeve": "O2"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "Decimals are strings; enums are their values; datetimes carry +05:30. Config is OptionsConfig() defaults, written into the inputs. Regenerate with `uv run python ../tools/parity/golden_options.py` from decile-blueprint; packages/core/tests/test_options_goldens.py recomputes every case from these inputs.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "dry_run": true,
+  "intraday_enabled": true,
+  "mode": "PAPER",
+  "options_enabled": false,
+  "sleeve": "O2"
+ }
+}

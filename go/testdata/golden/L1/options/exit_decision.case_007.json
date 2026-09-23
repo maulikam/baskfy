@@ -1,0 +1,25 @@
+{
+ "fn": "baskfy_core.options.condor.exit_decision",
+ "inputs": {
+  "cost_now": "61.00",
+  "entry_credit": "40.00",
+  "manual": false,
+  "marked_loss_inr": "0",
+  "now": "2026-10-27T11:00:00+05:30",
+  "risk_budget_inr": "50000",
+  "short_call_strike": "25150",
+  "short_put_strike": "24850",
+  "spot": null,
+  "stale": false,
+  "variant": "MONTHLY"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "Decimals are strings; enums are their values; datetimes carry +05:30. Config is OptionsConfig() defaults, written into the inputs. Regenerate with `uv run python ../tools/parity/golden_options.py` from decile-blueprint; packages/core/tests/test_options_goldens.py recomputes every case from these inputs.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": "STOP"
+}

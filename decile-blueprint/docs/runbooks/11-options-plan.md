@@ -5,7 +5,8 @@
 against a live chain; both have run only against fixtures on `baskfy_test`. Every options money
 flag is **false**, and nothing in this alert, either builder or their tasks can send an order.
 
-One alert name covers every sleeve; `labels.sleeve` says which one (`O1M`, `O1W`, `O2`).
+One alert name covers every sleeve; `labels.sleeve` says which one (`O1M`, `O1W`, `O2`, `O3A`,
+`O3B`).
 
 ## What fired
 
@@ -40,6 +41,28 @@ a long option costs its premium, so there is no margin to ask about (`DECISIONS-
 An O2 plan's leg is always a single `LONG_CALL` or `LONG_PUT` — there is no short leg in this
 sleeve, so `margin_required_inr` is `NULL` by design and `detail.premium_inr` is the money at risk
 in the worst case.
+
+### O3 (the expiry-day setups, OP8)
+
+`baskfy.options.plan_o3` (Beat `options-plan-o3`, every minute 09:45–13:34 IST mon–fri, behind the
+same two flags) decides **O3-B, then O3-A**, once each, on every NIFTY expiry (weekly or monthly);
+any other day is `NO_SESSION` and writes nothing. O3-B is judged at 09:45 (gap 0.50–1.50 % and held
+above/below half the gap to the 09:44 bar) and lapses at 10:00; O3-A waits for the first 5-minute
+break of the 09:15–10:14 range at ER ≥ 0.40, 10:19–13:00, and lapses 30 minutes after issue, never
+later than 13:30 (`04` §5.1–§5.2, `DECISIONS-OP` OP8.1). Its one Kite read is the margin
+**calculator** for the hedged two-leg basket — never an order.
+
+| Summary begins | Meaning |
+|---|---|
+| `O3B 2026-10-13: no trade — GAP_TOO_SMALL.` | the setup refused (gap size, `HOLD_BROKEN`, `RANGE_TOO_WIDE`, event day) |
+| `O3A 2026-10-13: no trade — NO_TRIGGER.` | O3-A's window closed with no break at the required efficiency; low-ER breaks are in `op_session.numbers.low_er_breaks` |
+| `O3A 2026-10-13: no trade — REJECTED_SLOT_TAKEN, O3B_HOLDS.` | O3-B planned (or was confirmed) today: one O3 a day (`04` §5.5, OP8.2). A plain `REJECTED_SLOT_TAKEN` means an O1 plan was confirmed first (§8.6) |
+| `O3B 2026-10-13: no trade — REJECTED_DEBIT.` | the ATM spread cost more than 0.55 × its 100-point width |
+| `O3B 2026-10-13 PAPER plan O3B-20261013-…: UP debit spread 25200/25300 CE …` | one spread, `ISSUED`: the long leg is bought first, the short second; debit, max loss, target and stop values, invalidation level, hard exit 14:45, margin |
+
+An O3 plan's legs are `seq 1` the long, `seq 2` the short: the send order (never naked, `04` §5.4).
+`margin_required_inr` is the calculator's hedged figure, or `NULL` with `MARGIN_UNKNOWN` when there
+was no Kite session.
 
 ## What to do
 

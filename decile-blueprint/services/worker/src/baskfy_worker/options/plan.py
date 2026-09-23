@@ -28,7 +28,7 @@ import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Final
+from typing import Final, Protocol
 
 from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
@@ -42,7 +42,6 @@ from baskfy_core.options.plan import (
     O1_SLEEVES,
     MarginLeg,
     MarginQuote,
-    O1Decision,
     O1Outcome,
     O1Plan,
     PlanLeg,
@@ -288,9 +287,19 @@ async def margin_pool(session: AsyncSession, user_id: int) -> Decimal:
     return Decimal(pool) if pool is not None else Decimal(0)
 
 
-def ask_margin(reader: MarginReader | None, decision: O1Decision) -> tuple[MarginQuote | None, str]:
-    """The calculator's two answers, or ``None`` with the reason it did not answer (recorded on
-    the plan — never swallowed)."""
+class MarginBaskets(Protocol):
+    """A decision that names the baskets the margin calculator is asked about — O1's four-leg
+    condor and O3's two-leg spread both do (OP8.4)."""
+
+    def margin_baskets(self) -> tuple[tuple[MarginLeg, ...], tuple[MarginLeg, ...]]: ...
+
+
+def ask_margin(
+    reader: MarginReader | None, decision: MarginBaskets
+) -> tuple[MarginQuote | None, str]:
+    """The calculator's answers — the hedged basket and, where the decision names one, the
+    transient entry prefix — or ``None`` with the reason it did not answer (recorded on the plan,
+    never swallowed)."""
     if reader is None:
         return None, "no Kite session: the margin calculator was not asked"
     hedged_basket, transient_basket = decision.margin_baskets()

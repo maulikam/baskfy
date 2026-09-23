@@ -179,6 +179,17 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         "schedule": crontab(minute="*", hour="9-13", day_of_week="mon-fri"),
         "options": {"queue": QUEUE_DEFAULT, "expires": 55, "countdown": 45},
     },
+    # OP8 (docs/options/06 OP8): the O3 plan builder — each minute 09:45-13:34 it lapses what
+    # expired and decides O3-B, then O3-A, once each per expiry day (idempotent per date; a
+    # non-expiry day is NO_SESSION and writes nothing). 45 s after the minute so the trigger bar's
+    # last minute and the decision minute's chain are stored. Dark unless
+    # BASKFY_OPTIONS_MONITOR_ENABLED and BASKFY_OPTIONS_COLLECT_ENABLED are true. The only Kite
+    # read is the margin calculator for the hedged two-leg basket. Plans propose; nothing is sent.
+    "options-plan-o3": {
+        "task": "baskfy.options.plan_o3",
+        "schedule": crontab(minute="*", hour="9-13", day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_DEFAULT, "expires": 55, "countdown": 45},
+    },
     # The same session's bars once more after the close, correcting any minute read while forming.
     "options-index-bars-eod": {
         "task": "baskfy.options.index_bars_eod",

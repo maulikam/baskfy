@@ -170,7 +170,9 @@ liquid for the quantity, the day's slot free (§8.6).
 `(high − low) / prev_close × 100 ≤ range_max_pct` [1.20] (else `RANGE_TOO_WIDE`). Trigger: the first
 completed 5-minute bar closing in [10:19, 13:00] whose close is beyond the range by `buffer_pct`
 [0.05] **and** `er ≥ er_min` [0.40], where `er` is Kaufman's ER (condor `04` §2.4's formula) over the
-one-minute closes from 09:15 to the trigger bar's close. Direction = the side broken.
+one-minute closes from 09:15 to the trigger bar's close. Direction = the side broken. The plan prices
+from the minute after the trigger bar's close and lapses at `min(issued + 30 min,
+o3a_entry_window_end)` [13:30] (`DECISIONS-OP` OP8.1).
 
 5.2 **O3-B — gap hold.** `gap = open_0915 − prev_close`; required `gap_min_pct ≤ |gap| / prev_close ×
 100 ≤ gap_max_pct` [0.50, 1.50]. Hold: from 09:15 to the 09:44 bar inclusive, no bar trades through
@@ -474,6 +476,7 @@ this table is the inventory. The env ceilings of `02` are not fields (they are
 | `expiry_setups.o3a_range_max_pct` | `1.20` |
 | `expiry_setups.o3a_window_start` | `10:19` |
 | `expiry_setups.o3a_window_end` | `13:00` |
+| `expiry_setups.o3a_entry_window_end` | `13:30` |
 | `expiry_setups.o3a_buffer_pct` | `0.05` |
 | `expiry_setups.o3a_er_min` | `0.40` |
 | `expiry_setups.o3b_gap_min_pct` | `0.50` |

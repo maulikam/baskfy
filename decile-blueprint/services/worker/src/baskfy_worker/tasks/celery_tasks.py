@@ -62,6 +62,7 @@ from baskfy_worker.options.collector import collect_gate, collect_minute, in_ses
 from baskfy_worker.options.master import EmptyMaster, master_alert, refresh_master
 from baskfy_worker.options.plan import kite_margin_reader, plan_gate_free, plan_o1_minute
 from baskfy_worker.options.plan_o2 import plan_o2_gate_free, plan_o2_minute
+from baskfy_worker.options.plan_o3 import plan_o3_gate_free, plan_o3_minute
 from baskfy_worker.options.reads import build_options_kite
 from baskfy_worker.options.scan import scan_gate_free, scan_minute_for
 from baskfy_worker.orchestrator import PipelineOutcome, run_nightly_pipeline
@@ -1127,6 +1128,41 @@ def options_plan_o2_task(at: str | None = None) -> JsonObject:
         if not await is_session_day(session, now.astimezone(IST).date()):
             return {"at": now.isoformat(), "skipped": "not an NSE trading day"}
         report, alerts = await plan_o2_minute(session, tenant, now, trading_day=True)
+        await session.flush()
+        report["alerts"] = [await dispatch(alert) for alert in alerts]
+        return report
+
+    return run_in_session(_run)
+
+
+@shared_task(name="baskfy.options.plan_o3", acks_late=False)
+def options_plan_o3_task(at: str | None = None) -> JsonObject:
+    """OP8: lapse expired plans, then decide today's O3-B and O3-A sessions — once each.
+
+    Refused before any database session unless ``BASKFY_OPTIONS_MONITOR_ENABLED`` and
+    ``BASKFY_OPTIONS_COLLECT_ENABLED`` are true (both default false), inside 09:45-13:34 and with a
+    sole tenant; then on an NSE holiday. The only Kite read is the margin **calculator** for the
+    hedged two-leg basket, and only with a usable session (otherwise the plan carries
+    ``MARGIN_UNKNOWN``). ``OPTIONS_PLAN`` is sent once per setup per day. No order path.
+    """
+    now = _options_now(at)
+    settings = get_worker_settings()
+    user_id = sole_user_id()
+    refused = plan_o3_gate_free(
+        now,
+        monitor_enabled=settings.options_monitor_enabled,
+        collect_enabled=settings.options_collect_enabled,
+        user_id=user_id,
+    )
+    if refused is not None or user_id is None:
+        return {"at": now.isoformat(), "skipped": refused or "no BASKFY_SOLE_USER_ID configured"}
+    tenant = user_id
+    margin = kite_margin_reader(build_options_kite().general) if kite_session_usable() else None
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        if not await is_session_day(session, now.astimezone(IST).date()):
+            return {"at": now.isoformat(), "skipped": "not an NSE trading day"}
+        report, alerts = await plan_o3_minute(session, tenant, now, trading_day=True, margin=margin)
         await session.flush()
         report["alerts"] = [await dispatch(alert) for alert in alerts]
         return report

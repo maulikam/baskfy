@@ -229,6 +229,9 @@ class ExpirySetupsConfig:
     o3a_range_max_pct: Decimal = Decimal("1.20")
     o3a_window_start: dt.time = dt.time(10, 19)
     o3a_window_end: dt.time = dt.time(13, 0)
+    #: The last moment an O3-A plan can be confirmed (OP8.1): half an hour past the last trigger
+    #: bar, so a 13:00 trigger still gets its full 30 minutes; O3-B's is ``o3b_window_end``.
+    o3a_entry_window_end: dt.time = dt.time(13, 30)
     o3a_buffer_pct: Decimal = Decimal("0.05")
     o3a_er_min: Decimal = Decimal("0.40")
     o3b_gap_min_pct: Decimal = Decimal("0.50")

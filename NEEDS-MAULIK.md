@@ -2243,3 +2243,22 @@ before acting on it. Until then TW16 stands as a one-time instruction, not a sta
 sleeve trade on its own, and there is no auto-execute for this sleeve *(true on 18 Sep; since 21 Sep
 there is one, off by default — T5 / TW17)*. And the first ten entries
 are half-sized automatically (`first_live_entries_left` = 10).
+
+## F&O — the overnight F&O research is done; two answers before any F&O order can leave paper (23 Sep 2026)
+
+**What happened.** You asked for opportunities across stock options, stock futures and index F&O,
+defined-risk overnight, research first. The research (`docs/fno/RESEARCH.md`, 1,162 sessions of
+NSE's F&O bhavcopy, Jan 2022 → Sep 2026) found **every stock family negative after costs**:
+condors, credit spreads, debit spreads, long options, futures trend and carry. The one survivor is
+a hedged NIFTY/BANKNIFTY monthly iron condor entered 15 sessions before expiry, at +0.033R a trade
+on 100 trades (not significant). The pack (`docs/fno/`) builds that one sleeve on paper, plus a
+data layer that re-tests the rest each quarter. Nothing trades.
+
+**What only you can supply** (`docs/fno/QUESTIONS.md`):
+1. **Q2: how non-negotiable 4 applies to option legs.** A GTT on a spread's long leg would leave
+   the short naked, so the pack proposes that a defined-risk structure is its own stop. An agent
+   cannot settle a non-negotiable's reading, so no F&O option order leaves paper until you answer.
+2. **Q1: F1's capital** (default ₹0, paper at one structure).
+3. **Q4**: whether you want any rejected family built anyway, knowing its numbers.
+
+Blocks: only FO's live flip, which is months away. Everything else proceeds on the defaults.

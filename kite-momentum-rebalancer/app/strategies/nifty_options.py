@@ -40,6 +40,7 @@ from baskfy_core.options.bars import Bar
 from baskfy_core.options.config import OptionsConfig
 from baskfy_core.options.execution import LegRole
 from baskfy_core.options.exits import (
+    FEED_LOST,
     ExitVerdict,
     IndexState,
     LegMark,
@@ -204,6 +205,26 @@ class NiftyOptionsMonitor(BaseStrategy):
             verdict = evaluate(tracked.position, marks, index, now, options=self.options)
             if verdict is None:
                 continue
+            plan_id = self._raise(tracked, verdict, now)
+            self.state.positions[session_id] = replace(tracked, exit_plan_id=plan_id or "RAISED")
+            self.exits.append((session_id, verdict.code, verdict.reason, now))
+            raised.append((session_id, verdict))
+        return raised
+
+    def token_lost(self, now: dt.datetime) -> list[tuple[int, ExitVerdict]]:
+        """The Kite token was refused with positions open: `HARD_EXIT / FEED_LOST` for each, now.
+
+        `04` §8.5's feed rule waits for 14:00 (O1, O3) or the grace (O2) because a quiet tape is
+        not a dead one. A refused token is: nothing will mark these legs again until a person logs
+        in, so every open position gets its exit raised at once and the sweep closes it as soon
+        as a quote can be read (OP14; runbook 12 says what the human does meanwhile).
+        """
+        now = _naive(now)
+        raised: list[tuple[int, ExitVerdict]] = []
+        for session_id, tracked in list(self.state.positions.items()):
+            if tracked.exit_plan_id is not None:
+                continue
+            verdict = ExitVerdict("HARD_EXIT", FEED_LOST, None, None, True)
             plan_id = self._raise(tracked, verdict, now)
             self.state.positions[session_id] = replace(tracked, exit_plan_id=plan_id or "RAISED")
             self.exits.append((session_id, verdict.code, verdict.reason, now))

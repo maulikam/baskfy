@@ -105,6 +105,13 @@ RUNBOOKS: Final[dict[AlertName, str]] = {
     AlertName.OPTIONS_PLAN: "docs/runbooks/11-options-plan.md",
     # OP11: the options book's weekly summary.
     AlertName.OPTIONS_WEEKLY: "docs/runbooks/11-options-plan.md",
+    # OP14: the options book's health — the five rules and the in-process checks.
+    AlertName.OPTIONS_OPEN_AFTER_HARD_EXIT: "docs/runbooks/12-options-health.md",
+    AlertName.OPTIONS_COLLECTOR_GAP: "docs/runbooks/12-options-health.md",
+    AlertName.OPTIONS_SCAN_STALE: "docs/runbooks/12-options-health.md",
+    AlertName.OPTIONS_LIMITER_SHARE_HIGH: "docs/runbooks/12-options-health.md",
+    AlertName.OPTIONS_NO_SESSION_ON_TRADING_DAY: "docs/runbooks/12-options-health.md",
+    AlertName.OPTIONS_CHECK_FAILED: "docs/runbooks/12-options-health.md",
 }
 
 

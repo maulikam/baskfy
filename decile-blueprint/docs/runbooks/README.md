@@ -24,6 +24,7 @@ line; update it the first time you use it, and paste the real output in.
 | [08-vbt-evening.md](08-vbt-evening.md) | the four `VBT_*` rules: an order past its three-session window, a naked position, a stale detect, a held name that stopped printing (VB7) |
 | [10-options-master.md](10-options-master.md) | `OPTIONS_MASTER_CHANGED`: the NIFTY options master moved a lot size, an expiry's kind, or withdrew a future expiry (OP2) |
 | [11-options-plan.md](11-options-plan.md) | `OPTIONS_PLAN`: an O1 sleeve's morning — the reasoned no-trade, or the four-leg paper plan with its credit, lots, costs, margin and 10:15 expiry (OP6) |
+| [12-options-health.md](12-options-health.md) | the options book's health: `OPTIONS_OPEN_AFTER_HARD_EXIT`, `OPTIONS_COLLECTOR_GAP`, `OPTIONS_SCAN_STALE`, `OPTIONS_LIMITER_SHARE_HIGH`, `OPTIONS_NO_SESSION_ON_TRADING_DAY`, the worker's `OPTIONS_CHECK_FAILED`, and a Kite token that dies with a position open (OP14) |
 | [06-swing-morning.md](06-swing-morning.md) | the five `SWING_*` rules: a naked position, the monitor not starting, a stale detect, an order open after 10:45, a GTT missing at 15:15 (SW11) |
 
 ## Before anything else

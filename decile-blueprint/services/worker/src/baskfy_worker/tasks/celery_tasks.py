@@ -62,6 +62,7 @@ from baskfy_worker.options import index_bars as options_index_bars
 from baskfy_worker.options import options_ceilings
 from baskfy_worker.options.backtest_run import TIERS as OPTIONS_TIERS
 from baskfy_worker.options.backtest_run import git_sha, run_backtest
+from baskfy_worker.options.checks import Switches, check_alert, due_checks, run_checks
 from baskfy_worker.options.collector import collect_gate, collect_minute, in_session
 from baskfy_worker.options.master import EmptyMaster, master_alert, refresh_master
 from baskfy_worker.options.plan import kite_margin_reader, plan_gate_free, plan_o1_minute
@@ -1195,6 +1196,34 @@ def options_weekly_task(at: str | None = None) -> JsonObject:
         today = now.astimezone(IST).date()
         alert = weekly_alert(await week_rows(session, tenant, today), today)
         return {"at": now.isoformat(), "summary": alert.summary, "sent": await dispatch(alert)}
+
+    return run_in_session(_run)
+
+
+@shared_task(name="baskfy.options.checks", acks_late=False)
+def options_checks_task(at: str | None = None) -> JsonObject:
+    """OP14: the options checks due this minute; each failure is one ``OPTIONS_CHECK_FAILED``.
+
+    Read-only. Returns before a database session when no check is due at the minute, and on a
+    day the NSE calendar names a holiday. ``FLAT_AFTER_HARD_EXIT`` runs whatever the flags say.
+    """
+    now = _options_now(at)
+    names = due_checks(now, OptionsConfig())
+    if not names:
+        return {"at": now.isoformat(), "skipped": "no options check is due at this minute"}
+    settings = get_worker_settings()
+    switches = Switches(
+        scan_enabled=settings.options_scan_enabled,
+        collect_enabled=settings.options_collect_enabled,
+        monitor_enabled=settings.options_monitor_enabled,
+    )
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        if not await is_session_day(session, now.astimezone(IST).date()):
+            return {"at": now.isoformat(), "skipped": "not an NSE trading day"}
+        results = await run_checks(session, names, now, switches)
+        sent = [await dispatch(check_alert(r, now)) for r in results if not r.ok]
+        return {"at": now.isoformat(), "checks": [r.as_dict() for r in results], "sent": sent}
 
     return run_in_session(_run)
 

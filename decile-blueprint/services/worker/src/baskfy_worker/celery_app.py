@@ -190,6 +190,15 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         "schedule": crontab(minute="*", hour="9-13", day_of_week="mon-fri"),
         "options": {"queue": QUEUE_DEFAULT, "expires": 55, "countdown": 45},
     },
+    # OP14 (docs/options/06 OP14): the options book's in-process checks — 09:20 (every sleeve's
+    # scan started), 10:20 (an O1 day's verdict or plan), each hard exit + 3 min (14:33, 14:48,
+    # 15:03: nothing open) and 15:35 (the collector's full day). The task asks `due_checks` for
+    # the minute and returns without a database session at every other minute this matches.
+    "options-checks": {
+        "task": "baskfy.options.checks",
+        "schedule": crontab(minute="3,20,33,35,48", hour="9-15", day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_DEFAULT, "expires": 55},
+    },
     # OP11 (docs/options/06 OP11): the options book's week — Friday 16:30, one OPTIONS_WEEKLY alert
     # with a line per (sleeve, simulated, sizing mode), never pooled. Read-only; dark unless
     # BASKFY_OPTIONS_MONITOR_ENABLED (with the monitor off there is no book to summarise).

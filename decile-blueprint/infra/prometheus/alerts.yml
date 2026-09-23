@@ -316,3 +316,81 @@ groups:
         annotations:
           summary: "{{ $value }} swing position(s) still without a GTT after the 15:15 sweep."
           runbook_url: docs/runbooks/06-swing-morning.md
+
+  # -------------------------------------------------------------------------------------------
+  # The options book (OP14, docs/options/05 §4). The facts are rows the desk and the worker write,
+  # read by the API once per scrape (baskfy_api.options_health). The worker's in-process checks
+  # (baskfy.options.checks: 09:20, 10:20, each hard exit + 3 min, 15:35) raise the same failures
+  # the moment each is about, so these rules are the second net, not the first.
+  #
+  # IST windows as UTC minutes-of-day: 09:20 = 230, 10:20 = 290, 15:30 = 600.
+  # -------------------------------------------------------------------------------------------
+  - name: baskfy-options
+    interval: 60s
+    rules:
+      - alert: OPTIONS_OPEN_AFTER_HARD_EXIT
+        # 05 §4: "a loud page if any op_position is still open at its hard_exit_time + 2 min
+        # (should be impossible)". The gauge already applies the two minutes, per sleeve.
+        expr: baskfy_options_open_after_hard_exit > 0
+        for: 1m
+        labels: {severity: critical, service: options}
+        annotations:
+          summary: "{{ $value }} options position(s) still open past their hard exit."
+          runbook_url: docs/runbooks/12-options-health.md
+
+      - alert: OPTIONS_COLLECTOR_GAP
+        # The collector writes one chain minute each minute 09:15-15:30 with its flag on. Three
+        # minutes without one from 09:20 means the plans and the monitor are reading old quotes.
+        expr: |
+          baskfy_options_collect_enabled == 1
+          and on() baskfy_options_trading_day == 1
+          and on() baskfy_options_collector_gap_minutes > 3
+          and on() (hour() * 60 + minute()) >= 230
+          and on() (hour() * 60 + minute()) < 600
+          and on() (day_of_week() > 0 and day_of_week() < 6)
+        for: 2m
+        labels: {severity: warning, service: options}
+        annotations:
+          summary: "No options chain snapshot for {{ $value }} minutes in session."
+          runbook_url: docs/runbooks/12-options-health.md
+
+      - alert: OPTIONS_SCAN_STALE
+        expr: |
+          baskfy_options_scan_enabled == 1
+          and on() baskfy_options_trading_day == 1
+          and on() baskfy_options_scan_stale_minutes > 3
+          and on() (hour() * 60 + minute()) >= 230
+          and on() (hour() * 60 + minute()) < 600
+          and on() (day_of_week() > 0 and day_of_week() < 6)
+        for: 2m
+        labels: {severity: warning, service: options}
+        annotations:
+          summary: "The options scan has not written for {{ $value }} minutes in session."
+          runbook_url: docs/runbooks/12-options-health.md
+
+      - alert: OPTIONS_LIMITER_SHARE_HIGH
+        # The collector is one quote call a minute (~2 % of the quote family). A quarter of the
+        # family for ten minutes is a collector calling more than it was built to, and the swing,
+        # TWT and VBT mornings share the same budget.
+        expr: baskfy_options_limiter_share_pct > 25
+        for: 10m
+        labels: {severity: warning, service: options}
+        annotations:
+          summary: "The options collector is using {{ $value }}% of the Kite quote budget."
+          runbook_url: docs/runbooks/12-options-health.md
+
+      - alert: OPTIONS_NO_SESSION_ON_TRADING_DAY
+        # O2 decides every trading day, so with the plan builders running (the monitor flag) a
+        # trading day has at least one op_session by 10:20 IST.
+        expr: |
+          baskfy_options_monitor_enabled == 1
+          and on() baskfy_options_trading_day == 1
+          and on() baskfy_options_sessions_today == 0
+          and on() (hour() * 60 + minute()) >= 290
+          and on() (hour() * 60 + minute()) < 600
+          and on() (day_of_week() > 0 and day_of_week() < 6)
+        for: 5m
+        labels: {severity: warning, service: options}
+        annotations:
+          summary: "No options session has been decided today by 10:20."
+          runbook_url: docs/runbooks/12-options-health.md

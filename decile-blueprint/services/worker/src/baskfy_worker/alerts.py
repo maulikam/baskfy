@@ -116,6 +116,15 @@ class AlertName(StrEnum):
     # OP11: the options book's week, one line per (sleeve, simulated, sizing mode) — never pooled
     # (docs/options/04 §12). Read-only; like OPTIONS_PLAN it is information, not a failure.
     OPTIONS_WEEKLY = "OPTIONS_WEEKLY"
+    # OP14 (docs/options/05 §4): the options book's five Prometheus rules, verbatim, and the
+    # worker's in-process checks (09:20, 10:20, each hard exit + 3 min, 15:35), which raise the
+    # failure the moment it is about rather than waiting for a scrape.
+    OPTIONS_OPEN_AFTER_HARD_EXIT = "OPTIONS_OPEN_AFTER_HARD_EXIT"
+    OPTIONS_COLLECTOR_GAP = "OPTIONS_COLLECTOR_GAP"
+    OPTIONS_SCAN_STALE = "OPTIONS_SCAN_STALE"
+    OPTIONS_LIMITER_SHARE_HIGH = "OPTIONS_LIMITER_SHARE_HIGH"
+    OPTIONS_NO_SESSION_ON_TRADING_DAY = "OPTIONS_NO_SESSION_ON_TRADING_DAY"
+    OPTIONS_CHECK_FAILED = "OPTIONS_CHECK_FAILED"
 
 
 #: How long the webhook is given before it is abandoned. An alert that blocks the reaper for

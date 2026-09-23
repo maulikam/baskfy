@@ -498,6 +498,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     await metrics.refresh_swing_metrics(
                         session, monitor_enabled=resolved.swing_monitor_enabled
                     )
+                    # OP14: the options book's facts, for the OPTIONS_* rules.
+                    await metrics.refresh_options_metrics(
+                        session,
+                        collect_enabled=resolved.options_collect_enabled,
+                        scan_enabled=resolved.options_scan_enabled,
+                        monitor_enabled=resolved.options_monitor_enabled,
+                    )
             except SQLAlchemyError as exc:
                 log.warning("pipeline metrics unavailable", extra={"error": str(exc)})
         cache = getattr(app.state, "cache", None)

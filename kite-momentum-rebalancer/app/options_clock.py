@@ -112,12 +112,16 @@ async def run_session(  # noqa: PLR0913 - the strategy, the bus and every seam a
     *,
     follow: Callable[[list[int]], None] | None = None,
     quotes: LegQuotes | None = None,
+    act: Callable[[dt.datetime], Awaitable[Any]] | None = None,
     now: Callable[[], dt.datetime] = ist_now,
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     poll_seconds: float = 1.0,
     clock: Callable[[], float] = time.monotonic,
 ) -> int:
-    """Drive `strategy` until `session_over(now())`. Returns the number of exits it raised."""
+    """Drive `strategy` until `session_over(now())`. Returns the number of exits it raised.
+
+    `act(now)` runs after every evaluation pass — the runner hands it the executor's sweep of
+    pending exit plans (OP10), so a raised exit is closed within a second of being raised."""
     queues: dict[int, asyncio.Queue] = {}
 
     def sync_tokens() -> None:
@@ -150,6 +154,11 @@ async def run_session(  # noqa: PLR0913 - the strategy, the bus and every seam a
                 for tick in quotes.poll(list(queues), now()) or []:
                     await strategy.on_tick(tick)
             strategy.check(now())
+            if act is not None:
+                try:
+                    await act(now())
+                except Exception:  # an executor error must not stop the marks and the exits
+                    log.exception("options monitor: the exit sweep failed")
             sync_tokens()
             await sleep(poll_seconds)
     finally:

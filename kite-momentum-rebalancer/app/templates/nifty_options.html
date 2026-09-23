@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Momentum Desk — NIFTY options{% endblock %}
+
+{% block heading %}NIFTY options{% endblock %}
+{% block heading_aside %}
+  <span class="pill warn" id="noMode">SIMULATED</span>
+{% endblock %}
+
+{% block content %}
+{% if not v.ok %}
+  <p class="muted" id="noUnavailable">Unavailable: {{ v.error }}</p>
+{% endif %}
+
+<section id="noPlans">
+  <h2>Plans today</h2>
+  {% if not v.plans %}<p class="muted">No plan has been issued today.</p>{% endif %}
+  {% for p in v.plans %}
+  <article class="card" data-plan-id="{{ p.plan_id }}">
+    <h3>{{ p.sleeve }} · {{ p.structure }} · {{ p.status }} ({{ p.session_state }})</h3>
+    <table>
+      <thead><tr><th>#</th><th>Leg</th><th>Contract</th><th>Side</th><th>Qty</th></tr></thead>
+      <tbody>
+      {% for lg in p.legs %}
+        <tr><td>{{ lg.seq }}</td><td>{{ lg.role }}</td><td>{{ lg.symbol }}</td>
+            <td>{{ lg.side }}</td><td>{{ lg.quantity }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <p class="muted">Lapses {{ p.expires_at }}</p>
+    {#- ONE form per plan: exactly one plan_id, exactly one confirm. -#}
+    {% if p.confirmable %}
+    <form method="post" action="/nifty-options/execute" class="no-confirm">
+      <input type="hidden" name="plan_id" value="{{ p.plan_id }}">
+      <input type="hidden" name="confirm" value="true">
+      <button type="submit">{{ 'Confirm — simulated' if p.paper else 'Confirm' }}</button>
+    </form>
+    <p class="no-sentence">{{ p.sentence }}</p>
+    {% endif %}
+  </article>
+  {% endfor %}
+</section>
+
+<section id="noPositions">
+  <h2>Open positions</h2>
+  {% if not v.positions %}<p class="muted">Nothing open.</p>{% endif %}
+  {% for pos in v.positions %}
+  <article class="card" data-session-id="{{ pos.session_id }}">
+    <h3>{{ pos.sleeve }} · entry {{ pos.entry_points }} · mark {{ pos.last_mark_points or '—' }}</h3>
+    <p class="muted">Hard exit {{ pos.hard_exit_at }}{% if pos.exit_plan_id %} · exiting ({{ pos.exit_plan_id }}){% endif %}</p>
+    {% if not pos.exit_plan_id %}
+    <form method="post" action="/nifty-options/close" class="no-close"
+          onsubmit="return confirm('Close this position now, shorts first?')">
+      <input type="hidden" name="session_id" value="{{ pos.session_id }}">
+      <input type="hidden" name="confirm" value="true">
+      <button type="submit">Close now</button>
+    </form>
+    {% endif %}
+  </article>
+  {% endfor %}
+</section>
+{% endblock %}

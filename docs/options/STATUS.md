@@ -3,9 +3,10 @@
 The status page for the options run. Updated at the end of every module, loud about what is NOT
 done. A fresh session resumes from the first module not marked ✅.
 
-**Run state: OP0 🟡, OP1 ✅, OP2 ✅, OP3 🟡, OP4 ✅, OP5 ✅, OP6 ✅, OP7 ✅ (23 Sep 2026); OP8 not started.** Pack written 22 Sep 2026 on branch
-`developer`, absorbing the never-started condor pack (`docs/condor/`) as sleeve O1. OP0-OP7 were each run alone, by instruction ("execute only OP<N>, then stop"); the next session
-resumes at OP8 (and the orchestrator feeds back OP3's box probe — §"What is NOT done" under OP3).
+**Run state: OP0 🟡, OP1 ✅, OP2 ✅, OP3 🟡, OP4 ✅, OP5 ✅, OP6 ✅, OP7 ✅, OP8 ✅ (23 Sep 2026); OP9 not started.** Pack written 22 Sep 2026 on branch
+`developer`, absorbing the never-started condor pack (`docs/condor/`) as sleeve O1. OP0-OP7 were each run alone, by instruction ("execute only OP<N>, then stop"); OP8 was run by Maulik's
+"continue the OP run from OP8" (23 Sep 2026), which also committed OP7's green work (`00cb48b`), found
+uncommitted in the tree. The next session resumes at OP9 (and the orchestrator feeds back OP3's box probe — §"What is NOT done" under OP3).
 
 ## Module ledger
 
@@ -19,7 +20,7 @@ resumes at OP8 (and the orchestrator feeds back OP3's box probe — §"What is N
 | OP5 — API and the web Options tab (the scans ship) | ✅ | `routers/options.py` (10 paths, 2 money-free mutations, everything else 405), `/options`, `/options/journal`, `/options/calendar`, `/me/options`; Options appended after Tight; honest empty state names the switch; SEBI caveat + "Scan · paper only" on every page; 30 API + 34 web tests; e2e spec written, not run |
 | OP6 — O1 plan builder (monthly + weekly), costs pinned | ✅ | `baskfy_core.options.plan` (pure: role → gate → chain → `condor.build` → costs → sizing → margin ceiling → `plan_id`, 10:15 expiry, legs wings-first) + `baskfy_worker.options.plan` (`op_session`/`op_plan`/`op_leg`, two margin-calculator reads, lapse, `OPTIONS_PLAN`); task + Beat `options-plan-o1` **dark** behind the monitor flag; 50 new tests |
 | OP7 — O2 plan builder | ✅ | `baskfy_core.options.plan_o2` (pure: role → day filters → trigger → `expiry_for_o2` → `directional.build` over the trigger minute → costs → `plan_id`, exits, `min(+30 min, 13:30)` expiry) + `baskfy_worker.options.plan_o2` (`op_session`/`op_plan`/one `op_leg`, lapse, `OPTIONS_PLAN`); **no broker call at all** (OP7.3); task + Beat `options-plan-o2` **dark** behind the monitor flag; 49 new tests |
-| OP8 — O3 plan builder | ⬜ | |
+| OP8 — O3 plan builder | ✅ | `baskfy_core.options.plan_o3` (pure: role → setup → one-O3-a-day → slot → `expiry_setups.build` over the decision minute → costs → margin ceiling → `plan_id`, exits) + `baskfy_worker.options.plan_o3` (O3-B then O3-A each minute, the margin calculator for the hedged basket, `OPTIONS_PLAN`); task + Beat `options-plan-o3` **dark** behind the monitor flag; 65 new tests (8 on `baskfy_test`) |
 | OP9 — Desk process `options_monitor` | ⬜ | |
 | OP10 — Desk page + `/nifty-options/execute` (paper) | ⬜ | |
 | OP11 — Journal, ledger, pauses, first-live multiplier | ⬜ | |
@@ -815,9 +816,101 @@ Nothing in code. O3's builder can follow the same three modules (`plan.py`'s sha
 `write_session_row`, `lapse_expired` and the alert; it adds the day's slot (`04` §8.6), the
 two-leg debit spread's sequences (§5.4) and `REJECTED_DEBIT`.
 
+## OP8 — O3 plan builder (the expiry-day setups)
+
+**✅, 23 Sep 2026.** Decisions `DECISIONS-OP.md` OP8.1–OP8.5. No order is placed anywhere: a plan is
+`ISSUED`, lapses at `expires_at`, and waits for OP10's confirm. Every money flag stays false. The one
+broker read is the margin **calculator** for the hedged two-leg basket.
+
+### What exists
+
+* **`packages/core/src/baskfy_core/options/plan_o3.py`** (pure) — `decide_o3(sleeve, market,
+  context, snapshots, now)`: role (`NO_SESSION` off an expiry; `SKIPPED/EVENT_DAY` on an event
+  expiry; `NO_SESSION/SETUP_DISABLED`) → clock (`NOT_READY/BEFORE_PLAN_TIME` before 09:45 for O3-B,
+  10:19 for O3-A) → the setup by the scan's own functions (`expiry_setups.gap_hold` /
+  `range_break`; `WINDOW_NOT_SETTLED`, `NO_TRIGGER_YET`, `SKIPPED/NO_TRIGGER` and every setup
+  reason) → `WINDOW_CLOSED` past the entry window → the decision minute's chain (09:45 for O3-B; the
+  minute after the trigger bar for O3-A) → one-O3-a-day (`O3B_HOLDS`, OP8.2) and the expiry-day
+  slot → `expiry_setups.build` (ATM long, ±100 short, `REJECTED_DEBIT` above 0.55 × width, sizing,
+  liquidity, cost) → `STALE_CHAIN` → two legs, long first → `plan_costs` (4 orders).
+  `finalize_o3(decision, margin, …)`: never-naked asserted, `margin_check` on the hedged figure
+  (`MARGIN_UNKNOWN` on paper, `REJECTED_MARGIN` live), deterministic `plan_id`, `expires_at =
+  min(issued + 30 min, 10:00 | 13:30)`, and `04` §5.3's exits (target value, stop value,
+  invalidation rule and level to the paisa, hard exit 14:45).
+* **`services/worker/src/baskfy_worker/options/plan_o3.py`** — `build_o3_plan` (idempotent per date
+  and setup, race-safe insert, the calculator asked only for a `PLANNED` decision),
+  `plan_o3_minute` (lapse, then O3-B, then O3-A), `plan_o3_gate_free` (09:45–13:34), `plan_alert`,
+  `plan_detail`. It imports no provider and no order path; the task hands it
+  `kite_margin_reader` only when a Kite session is usable.
+* **Task `baskfy.options.plan_o3`**, Beat `options-plan-o3` (every minute 09–13h, countdown 45 s,
+  expires 55 s), gated on `BASKFY_OPTIONS_MONITOR_ENABLED` **and** `BASKFY_OPTIONS_COLLECT_ENABLED`
+  (monitor is false on the box → dark); CLI `options_cli plan-o3 [--at ISO]`.
+* **`config.expiry_setups.o3a_entry_window_end = 13:30`** (OP8.1), in `04` §5.1 and §14.
+* **`plan.ask_margin`** takes any decision with `margin_baskets()` (OP8.4); O1 unchanged.
+* Runbook `docs/runbooks/11-options-plan.md` gained an O3 section.
+
+### Worked example (the gap-hold expiry — `GAP_HOLD`, Tue 13 Oct 2026, 09:46:20)
+
+Previous close 25,000; open 25,200 (+0.80 %), half-gap 25,100, held to the 09:44 bar. The plan
+prices from the 09:45 chain (spot 25,190, ATM 25,200):
+
+| seq | leg | symbol | bid / ask | limit |
+|---|---|---|---|---|
+| 1 | BUY 65 | NIFTY26101325200CE | 31.60 / 31.95 | 32.00 |
+| 2 | SELL 65 | NIFTY26101325300CE | 5.00 / 5.10 | 4.95 |
+
+Debit 31.95 − 5.00 = 26.95 of a 100-point width (cap 55.00) → max loss ₹1,751.75 for 1 lot (paper,
+capital ₹0); risk/lot ₹2,251.75 with the ₹500 reserve; target value 80.00 (₹3,448.25); stop value
+13.48 (₹875.88); invalidation at 25,100.00; hard exit 14:45; costs ₹100.04 over four orders (cost
+share 0.0290); expires 10:00. O3-A on `TREND_WEEKLY` (Tue 20 Oct): the 10:15–10:19 bar breaks
+25,182 × 1.0005; the 10:20 chain gives the 25,200/25,300 CE spread at 33.55, expiring 10:51:20.
+
+### AC → test
+
+| `06` OP8 AC | Test |
+|---|---|
+| fixtures for each setup and each direction plan the expected strikes and debit | `test_options_plan_o3.py::TestEachSetupAndDirection` (O3-B up/down, O3-A up/down by the rule; O3-B up and O3-A up to the rupee; the plan equals the scan's candidate) |
+| a debit above 55 % of width → `REJECTED_DEBIT` | `TestTheDebitCap` (a chain whose forward sits 80 points above spot: debit > 55; and the cap read from config) |
+| O3-A and O3-B both firing → O3-B holds | `TestOneO3ADay` (a fixture that fires both; `PLANNED`/`CONFIRMED`/`OPEN`/`CLOSED` O3-B → O3-A `REJECTED_SLOT_TAKEN, O3B_HOLDS`; `LAPSED`/`SKIPPED` frees it) + on a database `test_options_plan_o3_task.py::…test_one_o3_a_day_on_the_database` and `…test_an_unconfirmed_o3b_lapses_and_frees_o3a` |
+| a confirmed O1 → O3 `SLOT_TAKEN` | `TestTheExpiryDaySlot` (O1-W and O1-M holders × both setups; a merely planned O1 does not hold it) |
+| two legs, long first, with exits and lots | `TestThePlan`, and on a database `…test_the_gap_hold_expiry_writes_one_spread_to_the_rupee` (session, plan, both legs in send order, the calculator asked once about exactly those two legs) |
+| margin (`04` §7.4) | `TestMargin`, `…test_a_failing_calculator_is_a_warning_on_paper` |
+| idempotent per date; lapses; alert | `…test_idempotent_per_date`, `…test_the_minute_lapses_an_expired_plan`, `…test_the_alert_renders_through_the_mail_transport` |
+| dark behind the flags, no order path | `TestTheGate` (both flags, the window, no tenant, no database session when refused, the Beat entry, the order-path scan, O3-B decided before O3-A) |
+
+### Tests (new)
+
+| File | Tests |
+|---|---|
+| `packages/core/tests/test_options_plan_o3.py` | 46 |
+| `services/worker/tests/test_options_plan_o3_task.py` (8 db-marked on `baskfy_test`) | 19 |
+| **Total** | **65** |
+
+**Regression, with Postgres and Redis up locally (`infra/docker/compose.yml`, 23 Sep 2026):** every
+`options` test in core (1,085), worker (`options` + `ops_and_alerts`, 259) and API (72): **0 failed,
+0 skipped**; the escape-hatch scan and `test_options_docs_parity.py` green; ruff, format and mypy
+clean on every touched file. The providers suite (368) is green too, including the six Kite-lane
+tests that need Redis. **Not run:** `tools/ci-local.sh` and the desk suite (OP8 touched neither the
+desk nor anything it imports).
+
+### What is NOT done
+
+* **No O3 plan has been built from a live chain.** The Beat entry is dark (monitor flag false on
+  the box); nothing was deployed or pushed.
+* The plan's stop value is written from the *planned* debit; OP9's exit engine must re-derive it
+  from the filled debit (`04` §5.3 — "`D` = the entry debit from fills").
+* The desk does not read O3's `op_plan` yet (OP9/OP10); `/options` shows the scan, not the plan.
+* Mutation harness does not cover `plan_o3.py` (OP14).
+
+### What blocks OP9
+
+Nothing in code. Every sleeve now writes `op_plan`/`op_leg` with its exits on the plan; OP9's
+`options_monitor` reads them, subscribes the legs, and evaluates each sleeve's exits
+(`condor`, `directional`, `expiry_setups.exit_decision`) under the confirm.
+
 ## What is NOT done
 
-Everything after OP7. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
+Everything after OP8. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
 OP3 does them first); the two full-suite baseline runs (OP0.9); the gateway gap of OP0.6 is **fixed in OP2** (OP2.1); the
 `/ops` side door of OP0.5 is **recorded, not fixed** (OP13). Every money flag is false and stays false. The paper periods begin only after OP15, and
 the longest (O1-M) takes about six months after that.

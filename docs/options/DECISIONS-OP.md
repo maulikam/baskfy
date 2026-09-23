@@ -1128,3 +1128,59 @@ figures, the time stop, the hard exit, the gap-through worst case, the cost shar
 an O2 section and lost its O1-only title. **Rejected.** A second `AlertName` for O2 (a new alert
 name is a new Prometheus rule, a new runbook and a new row in every inventory, for the same event).
 **Reversal.** `plan_o2.plan_alert`.
+
+## OP8.1 — O3-A's plan lapses at `min(issued + 30 min, 13:30)`: a new field, `o3a_entry_window_end` · ⚠ UNREVIEWED
+
+`04` §5.1 gives O3-A a *trigger* window (bars closing 10:19–13:00) but no entry-window end, which
+`03` §9's `expires_at = min(issued_at + 30 min, entry_window_end)` needs. Using 13:00 would give a
+12:55 trigger five minutes to confirm and a 13:00 trigger none. **Choice.** A config field
+`expiry_setups.o3a_entry_window_end = 13:30` (§14 and §5.1 updated in the same change, the parity
+test asserting it both ways): the last trigger still gets its full 30 minutes, and the 14:45 hard
+exit is still 75 minutes past the latest confirm — O2's shape (its trigger window and entry window
+both end 13:30, OP7.5). O3-B's is §5.2's own `o3b_window_end` (10:00). **Rejected.** 13:00 (a late
+trigger is unconfirmable); no cap at all (a plan could outlive the setup's own timetable).
+**Reversal.** Change the field; the builder and the task's window read it.
+
+## OP8.2 — "One O3 a day" is read from O3-B's session, and O3-B is decided first · ⚠ UNREVIEWED
+
+`04` §5.5: "One O3 trade per day across both setups; if both would fire, O3-B (earlier) holds."
+**Choice.** O3-A is refused `REJECTED_SLOT_TAKEN` with the reason `O3B_HOLDS` while today's O3-B
+session is `PLANNED`, `CONFIRMED`, `OPEN` or `CLOSED`; a `LAPSED` or `SKIPPED` O3-B frees it. The
+task decides O3-B before O3-A every minute (`plan_o3.ORDER`, tested), so O3-A always reads a row
+O3-B wrote, never a guess. This is the scan's `_o3b_holds` stated on the rows (the scan also asks
+that O3-B's candidate be viable, which a `PLANNED` session implies). O3-B's window (to 10:00) ends
+before O3-A's first trigger bar (10:19), so the order is never contended. It is separate from the
+expiry-day slot (§8.6), which the first *confirmed* O1-or-O3 plan holds. **Rejected.** Letting
+both plan and refusing at confirm (two alerts for one trade); holding the day on a lapsed O3-B
+(a plan nobody confirmed would block a real setup). **Reversal.** `_O3B_HOLDING` in
+`baskfy_core.options.plan_o3`.
+
+## OP8.3 — Which days write an O3 session · ⚠ UNREVIEWED
+
+The O1/O2 rule (OP6.2, OP7.2) carried: an expiry day writes one session per enabled setup —
+`PLANNED`, or `SKIPPED` with every reason (setup refusals, `NO_TRIGGER`, `REJECTED_*`,
+`STALE_CHAIN`, `REJECTED_MARGIN`); an event expiry is `SKIPPED / EVENT_DAY`; a non-expiry day, a
+holiday or a disabled setup (`o3a_enabled` / `o3b_enabled` false) is `NO_SESSION` and writes
+nothing; before the setup's first decision time, while its window is unsettled, before a trigger or
+before the decision minute's chain is stored it is `NOT_READY`, and first asked after the entry
+window with nothing decided it is `WINDOW_CLOSED` — neither writes. **Reversal.** The early returns
+in `decide_o3`.
+
+## OP8.4 — O3's margin: the hedged two-leg basket, no transient figure; `ask_margin` takes a protocol · ⚠ UNREVIEWED
+
+`04` §7.4 asks the calculator for O1 and O3. O1 also asks about its transient three-leg prefix,
+because wings-then-first-short is costlier than the finished condor. O3's only prefix short of the
+whole spread is the long alone, which costs its premium and holds no margin. So
+`O3Decision.margin_baskets()` returns the hedged basket and an empty transient one, and `margin_check`
+runs on the hedged figure. `baskfy_worker.options.plan.ask_margin` now takes any decision with
+`margin_baskets()` (a `Protocol`) instead of `O1Decision` — no behaviour change for O1, whose tests
+are green unedited. **Rejected.** A second copy of `ask_margin` for O3. **Reversal.** Type it back to
+`O1Decision` and give O3 its own.
+
+## OP8.5 — O3's invalidation level is written to the paisa · ⚠ UNREVIEWED
+
+O3-B's invalidation level is `half_gap = prev_close + gap / 2`, computed from the database's
+four-place daily close. House rule 8 (round at write time) applies to it like every price on the
+plan, so `exits_for` stores it through `paise` (25,100.00, not 25,100.0000). Found by the database
+test, not by the pure one: `Decimal("25100") == Decimal("25100.0000")` in Python, but not in the
+JSON the page reads.

@@ -1005,3 +1005,126 @@ without a confirm on the desk". Severity `warning` (not a failure — the TWT_EV
 runbook `docs/runbooks/11-options-plan.md`. "Rendered in Mailpit" is asserted through the real
 `Mailer` over a recording transport (no Mailpit container was running on this Mac). **Reversal.**
 `plan.plan_alert`.
+
+## OP7.1 — The O2 builder is its own module pair; the shared plan vocabulary moves up · ⚠ UNREVIEWED
+
+**Context.** OP6 put O1's pure decision in `baskfy_core.options.plan` and its database side in
+`baskfy_worker.options.plan`. O2 (and OP8's O3) need the same vocabulary — `PlanState`, `PlanLeg`,
+`Verdict`, `plan_legs`, `plan_costs`, `plan_id_for`, the never-naked assertion, `lapse_expired`,
+`PlanReport`, `costs_json`, `leg_row`, the session row's values and its race-safe insert.
+**Choice.** Keep `plan.py` as *the shared plan vocabulary plus O1*, and add
+`baskfy_core.options.plan_o2` + `baskfy_worker.options.plan_o2` beside it. Three small refactors,
+no behaviour change: `finalize_o1`'s inline prefix loop became `plan.assert_never_naked(legs)`;
+`plan_id_for` now takes a `Decided` protocol (sleeve, trade date, legs) instead of `O1Decision`;
+the worker's `_leg_row`/`_session_values`/`_write_session` became public `leg_row`,
+`session_values`, `write_session_row` with the O1 wrappers delegating to them. O1's tests are
+untouched and still green. **Rejected.** Growing `plan.py` past 1,200 lines once OP8 lands;
+copying the cost and leg code per sleeve (two places to get `04` §6.1 wrong). **Reversal.** Inline
+the three helpers back and delete `plan_o2.py`.
+
+## OP7.2 — Which days write an O2 session, and what each answer is called · ⚠ UNREVIEWED
+
+Every non-event trading day is an O2 day (`calendar.role`), so every one of them writes an
+`op_session` **once it is decided**: `PLANNED`, or `SKIPPED` with every reason. The five answers:
+
+| State | When | Written? |
+|---|---|---|
+| `NO_SESSION` | not a trading day | no |
+| `NOT_READY` | before 09:30 (`BEFORE_ENTRY_WINDOW`), the 09:15–09:29 range not settled (`RANGE_NOT_SETTLED`), no with-trend break yet (`NO_TRIGGER_YET`), the trigger minute's chain not stored (`NO_DECISION_SNAPSHOT`), or the master has no future expiry (`NO_EXPIRY`) | no |
+| `SKIPPED` | a day filter refused (`04` §4.1), an event day, the window closed with no break (`NO_TRIGGER`), the contract refused (`REJECTED_*`), or the chain was stale (`STALE_CHAIN`) | yes |
+| `PLANNED` | a with-trend break, a contract in band, sized and affordable | yes |
+| `WINDOW_CLOSED` | first asked at or after 13:30 with a trigger standing (OP7.5) | no |
+
+**The one that took thought:** a day that armed and never broke. O1's `WINDOW_CLOSED` writes
+nothing because a morning the builder never saw is not a skipped day (OP6.2). O2's no-break day is
+different — it *was* watched all day and it decided: `SKIPPED / NO_TRIGGER`, verdict `SKIP`, so the
+paper period counts it and the journal can say how often the tape simply never broke. Counter-trend
+breaks are on `op_session.numbers.counter_trend_breaks`, seen and never traded (`04` §4.2).
+**Rejected.** Writing `SKIPPED / NO_TRIGGER` the moment 13:30 passes (the last 5-minute bar is not
+final yet — `find_trigger` waits `stale_scan_seconds` for its last minute); treating an armed day
+as `WINDOW_CLOSED` (it would vanish from the paper period). **Reversal.** `plan_o2.decide_o2`'s
+early returns.
+
+## OP7.3 — O2 asks the broker nothing at all; the premium is the ceiling · ⚠ UNREVIEWED
+
+`04` §7.4 names **O1 and O3** for the basket-margin ceiling; a long option is paid for in full, so
+there is no margin to ask about. `finalize_o2` therefore takes no `MarginQuote`, the worker module
+imports no provider, `op_plan.margin_required_inr` stays `NULL`, and a test scans both the module
+and the task for `baskfy_providers` / `build_options_kite` / `basket_order_margins` as well as the
+usual order-path names. What replaces it on the plan: `detail.premium_inr` (what leaves the
+account) and `detail.gap_through_inr` — `04` §4.6's true worst case, the whole premium, which the
+AC asks to see. The sleeve's own ceiling is the premium cap of §4.6, applied inside
+`directional.build` before any of this. **Rejected.** Asking `/margins/basket` for the single buy
+so the number is "consistent across sleeves" (a Kite call per trigger that answers the premium we
+already know); writing the premium into `margin_required_inr` (O1's "margin in use" sum would then
+double-count a debit as blocked margin). **Reversal.** Add a `MarginReader` argument to
+`build_o2_plan` and a `margin` field to `O2Plan`.
+
+## OP7.4 — A master with no future expiry is `NOT_READY`, never a skip · ⚠ UNREVIEWED
+
+`expiry_for_o2` returns the smallest master expiry strictly after today; with a stale `op_contract`
+it can return `None`. That is a data gap, not a verdict, so the builder answers `NOT_READY /
+NO_EXPIRY` and writes nothing — the nightly master refresh fixes it and the next minute decides.
+Same reasoning as OP6.2's refusal to write a false skip when the collector is a few seconds late.
+**Reversal.** `plan_o2.decide_o2`'s `NO_EXPIRY` branch.
+
+## OP7.5 — A trigger at or after 13:30 gets no plan, and the task runs to 13:34 · ⚠ UNREVIEWED
+
+`06` OP7 fixes `expires_at = min(issued + 30 min, 13:30)` and `op_plan` requires `expires_at >
+issued_at`, so a plan issued at 13:30 or later could not outlive its own issue. The builder
+answers `WINDOW_CLOSED` instead of writing a plan nobody could confirm. **Consequence, and it is a
+finding for Maulik, not a bug:** a break whose 5-minute bar closes at 13:29 or 13:30 is watched,
+recorded and never planned, and one closing after ≈ 13:24 leaves under five minutes to confirm. Widening it means either a later `entry_window_end` (a `04` §4.2
+change) or letting `expires_at` run past the window (a non-negotiable-1 change) — neither is an
+agent's to make. The Beat entry runs 09:30–13:34 rather than to 13:30, because `find_trigger` only
+calls the window closed `stale_scan_seconds` after its last minute; without those four minutes a
+no-trigger day would never be written. **Reversal.** `plan_o2_gate_free`'s window and the
+`ENTRY_WINDOW_CLOSED` branch.
+
+## OP7.6 — O2's premium cap and cost test are dormant at `04`'s ceilings (the OP6.1 pattern) · ⚠ UNREVIEWED
+
+**Finding for Maulik.** Two of `04` §4's refusals cannot fire at the documented defaults:
+
+* **Premium cap** (§4.6, 10 % of sleeve capital). Lots come from the risk budget:
+  `lots ≤ budget / risk_per_lot` and `risk_per_lot > E × 0.30 × lot`, so the premium is under
+  `budget / 0.30`. With `BASKFY_OPTIONS_RISK_PCT_MAX` 1 %, that is at most `1 / 0.30 = 3.33 %` of
+  capital — a third of the cap. It can only bind if the risk-per-trade ceiling is raised above 3 %.
+* **Cost test** (§6.4, share ≤ 0.15). The round trip on one lot is ~₹78 and the expected gain is
+  `0.60 × E × 65`, so it binds only below `E ≈ 13` points — and O2 buys one step **in** the money,
+  where `E` is at least the 50-point intrinsic. On the fixture morning the share is 0.0099.
+
+Nothing in `04` or the code changed. The tests assert that arithmetic, and show the cap
+refusing when a ceiling is raised to 5 %, so the rule is proven to work and its dormancy is
+written down rather than discovered later. `REJECTED_BUDGET`,
+by contrast, is very much live: at ₹1,00,000 of sleeve capital the budget is ₹250 against the
+fixture's ₹4,273 of risk per lot. At that risk per lot (an ITM NIFTY call near 200 points) the
+0.5 % rule needs **≈ ₹8.5 lakh of sleeve capital for one lot — ≈ ₹17 lakh while §7.5's first-live
+multiplier halves the budget** — or a larger `risk_per_trade_pct`. That is a number for the human
+track (D7/C3), not an agent's.
+**Reversal.** Raise `risk_pct_max` or `risk_per_trade_pct` in `op_sleeve_config` and the cap
+becomes reachable.
+
+## OP7.7 — How `06` OP7's "0.45-delta ITM strike on a fast day" is built · ⚠ UNREVIEWED
+
+**Context.** The AC wants the one-step-ITM contract refused for delta. On a chain that agrees with
+itself this cannot happen on the low side: the strike is `atm(spot) − 50 < forward`, so
+`ln(F/K) > 0`, `d1 > 0` and a call's delta is always above 0.50 — the band's floor is unreachable
+while the spot and the option book tell the same story. **Choice.** The fixture is the fast day the
+AC names: the collector's minute quotes the index at 25,150 while the chain's own parity forward is
+still 25,000 (the book has not followed the move), so the nominally ITM 25,100 CE prices at
+`|delta|` 0.4508 → `REJECTED_DELTA`, with the number in the message. The upper bound (0.75) is
+reachable the ordinary way, on a quiet expiry-eve chain. **Finding:** in production, a low-side
+`REJECTED_DELTA` means spot and chain disagree — worth watching once real minutes exist (OP12).
+**Rejected.** Moving the band or `itm_steps` to make the AC literal on a consistent chain.
+**Reversal.** The fixture in `TestTheDelta`.
+
+## OP7.8 — `OPTIONS_PLAN` covers O2 too, one alert a day, with the exits in words · ⚠ UNREVIEWED
+
+One alert name for every sleeve (`labels.sleeve` separates them), sent once, when the session is
+first written. An O2 plan's summary carries the contract and its limit, lots and sizing mode, the
+break it came from (level and time), the premium, the stop and target prices with their rupee
+figures, the time stop, the hard exit, the gap-through worst case, the cost share, the expiry and
+"nothing is sent without a confirm on the desk". Runbook `docs/runbooks/11-options-plan.md` gained
+an O2 section and lost its O1-only title. **Rejected.** A second `AlertName` for O2 (a new alert
+name is a new Prometheus rule, a new runbook and a new row in every inventory, for the same event).
+**Reversal.** `plan_o2.plan_alert`.

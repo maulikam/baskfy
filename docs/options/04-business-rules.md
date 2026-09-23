@@ -147,6 +147,17 @@ session (test).
 Additionally `lots × E × lot_size ≤ premium_cap_pct` [10] % of sleeve capital (`REJECTED_PREMIUM_CAP`)
 when capital > 0.
 
+**As built (OP7, `baskfy_core.options.plan_o2`).** The plan builder walks §4.1 → §4.2 → §4.3 → §4.6
+over the **trigger minute's** snapshot, so a plan equals the scan's candidate (§10, tested). Its
+answers beyond this section's codes: `NO_TRIGGER` (the window closed with no with-trend break — a
+*skipped session*, so the paper period counts the day), `NO_TRIGGER_YET`, `BEFORE_ENTRY_WINDOW`,
+`RANGE_NOT_SETTLED`, `NO_DECISION_SNAPSHOT`, `NO_EXPIRY` (all "ask again next minute", nothing
+written) and `ENTRY_WINDOW_CLOSED` — a trigger at or after 13:30 is never planned, because
+`expires_at = min(issued + 30 min, 13:30)` could not then outlive its issue (`DECISIONS-OP` OP7.2,
+OP7.5). O2 asks the broker's margin calculator nothing: §7.4 is O1 and O3 (OP7.3). At the ceilings
+of `02`, §4.6's premium cap and §6.4's cost test cannot bind for this sleeve — OP7.6 has the
+arithmetic, and it is a finding, not a change.
+
 ## §5 O3 — expiry-day setups (`expiry_setups.py`)
 
 Both setups trade the **expiring** contract (`expiry_for_o1_o3`), structure `DEBIT_SPREAD`:

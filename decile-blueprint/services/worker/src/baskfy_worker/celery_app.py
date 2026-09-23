@@ -169,6 +169,16 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         "schedule": crontab(minute="0-16", hour="10", day_of_week="mon-fri"),
         "options": {"queue": QUEUE_DEFAULT, "expires": 55, "countdown": 40},
     },
+    # OP7 (docs/options/06 OP7): the O2 plan builder — each minute 09:30-13:34 it lapses what
+    # expired and decides today's O2 session once (idempotent per date). 45 s after the minute so
+    # the trigger bar's last minute and that minute's chain are stored. Dark unless
+    # BASKFY_OPTIONS_MONITOR_ENABLED and BASKFY_OPTIONS_COLLECT_ENABLED are true. It makes no Kite
+    # call at all (a long option's ceiling is the premium cap). Plans propose; nothing is sent.
+    "options-plan-o2": {
+        "task": "baskfy.options.plan_o2",
+        "schedule": crontab(minute="*", hour="9-13", day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_DEFAULT, "expires": 55, "countdown": 45},
+    },
     # The same session's bars once more after the close, correcting any minute read while forming.
     "options-index-bars-eod": {
         "task": "baskfy.options.index_bars_eod",

@@ -3,9 +3,9 @@
 The status page for the options run. Updated at the end of every module, loud about what is NOT
 done. A fresh session resumes from the first module not marked ✅.
 
-**Run state: OP0 🟡, OP1 ✅, OP2 ✅, OP3 🟡, OP4 ✅, OP5 ✅, OP6 ✅ (22 Sep 2026); OP7 not started.** Pack written 22 Sep 2026 on branch
-`developer`, absorbing the never-started condor pack (`docs/condor/`) as sleeve O1. OP0-OP5 were each run alone, by instruction ("execute only OP<N>, then stop"); the next session
-resumes at OP7 (and the orchestrator feeds back OP3's box probe — §"What is NOT done" under OP3).
+**Run state: OP0 🟡, OP1 ✅, OP2 ✅, OP3 🟡, OP4 ✅, OP5 ✅, OP6 ✅, OP7 ✅ (23 Sep 2026); OP8 not started.** Pack written 22 Sep 2026 on branch
+`developer`, absorbing the never-started condor pack (`docs/condor/`) as sleeve O1. OP0-OP7 were each run alone, by instruction ("execute only OP<N>, then stop"); the next session
+resumes at OP8 (and the orchestrator feeds back OP3's box probe — §"What is NOT done" under OP3).
 
 ## Module ledger
 
@@ -18,7 +18,7 @@ resumes at OP7 (and the orchestrator feeds back OP3's box probe — §"What is N
 | OP4 — Sleeve signal cores and the scans | ✅ | `bars`, `structures`, `condor`, `directional`, `expiry_setups`, `scan` (pure; each sleeve's day function, `build`, exits); task `baskfy.options.scan` behind the scan **and** collect flags (both false), DB-only, idempotent per minute; 167 new tests; no live data yet (collector off) |
 | OP5 — API and the web Options tab (the scans ship) | ✅ | `routers/options.py` (10 paths, 2 money-free mutations, everything else 405), `/options`, `/options/journal`, `/options/calendar`, `/me/options`; Options appended after Tight; honest empty state names the switch; SEBI caveat + "Scan · paper only" on every page; 30 API + 34 web tests; e2e spec written, not run |
 | OP6 — O1 plan builder (monthly + weekly), costs pinned | ✅ | `baskfy_core.options.plan` (pure: role → gate → chain → `condor.build` → costs → sizing → margin ceiling → `plan_id`, 10:15 expiry, legs wings-first) + `baskfy_worker.options.plan` (`op_session`/`op_plan`/`op_leg`, two margin-calculator reads, lapse, `OPTIONS_PLAN`); task + Beat `options-plan-o1` **dark** behind the monitor flag; 50 new tests |
-| OP7 — O2 plan builder | ⬜ | |
+| OP7 — O2 plan builder | ✅ | `baskfy_core.options.plan_o2` (pure: role → day filters → trigger → `expiry_for_o2` → `directional.build` over the trigger minute → costs → `plan_id`, exits, `min(+30 min, 13:30)` expiry) + `baskfy_worker.options.plan_o2` (`op_session`/`op_plan`/one `op_leg`, lapse, `OPTIONS_PLAN`); **no broker call at all** (OP7.3); task + Beat `options-plan-o2` **dark** behind the monitor flag; 49 new tests |
 | OP8 — O3 plan builder | ⬜ | |
 | OP9 — Desk process `options_monitor` | ⬜ | |
 | OP10 — Desk page + `/nifty-options/execute` (paper) | ⬜ | |
@@ -720,9 +720,104 @@ web lint/tests: PASS. Targeted before that: `test_options_plan.py` 33, `test_opt
 Nothing in code. O2's builder can follow the same two-phase shape (`decide` → `finalize`) and reuse
 `plan_costs`, `plan_legs`, `lapse_expired` and the alert.
 
+## OP7 — O2 plan builder (the directional sleeve)
+
+**✅, 23 Sep 2026.** Decisions `DECISIONS-OP.md` OP7.1–OP7.8. No order is placed anywhere: a plan is
+`ISSUED`, lapses at `expires_at`, and waits for OP10's confirm. Every money flag stays false, and
+this sleeve reaches **no broker at all**.
+
+### What exists
+
+* **`packages/core/src/baskfy_core/options/plan_o2.py`** (pure) — `decide_o2(market, context,
+  snapshots, now)`: role (`NO_SESSION` off a trading day; `SKIPPED/EVENT_DAY` on an event day) →
+  clock (`NOT_READY` before 09:30) → `directional.day_filters` (`04` §4.1, every reason) →
+  `directional.find_trigger` (§4.2; `NO_TRIGGER_YET` while armed, `SKIPPED/NO_TRIGGER` once the
+  window is final, counter-trend breaks recorded and never traded) → `expiry_for_o2` →
+  `directional.build` over the **trigger minute's** snapshot (`scan.priced_view`, OP4.4) →
+  `STALE_CHAIN` → one leg with the master's symbol and depth → `plan_costs` (`04` §6.1 itemised
+  over 2 orders). `finalize_o2(decision, …)`: never-naked asserted, deterministic `plan_id`,
+  `expires_at = min(issued + 30 min, 13:30)`, `04` §4.5's exits (stop, target, invalidation level,
+  time stop, hard exit) and §4.6's gap-through worst case. `wanted_minutes` names the one snapshot
+  minute to load (the scan's idiom).
+* **`plan.py` grew three shared helpers** (OP7.1, no behaviour change): `assert_never_naked`, a
+  `Decided` protocol for `plan_id_for`, and the worker's public `leg_row` / `session_values` /
+  `write_session_row`.
+* **`services/worker/src/baskfy_worker/options/plan_o2.py`** — `build_o2_plan` (idempotent per
+  date, race-safe insert), `plan_o2_minute`, `plan_o2_gate_free`, `plan_alert`, `plan_detail`. It
+  imports no provider and no order path; `lapse_expired` is O1's, shared.
+* **Task `baskfy.options.plan_o2`**, Beat `options-plan-o2` (every minute 09:30–13:34, countdown
+  45 s, expires 55 s), gated on `BASKFY_OPTIONS_MONITOR_ENABLED` **and**
+  `BASKFY_OPTIONS_COLLECT_ENABLED` (monitor is false on the box → dark); CLI
+  `options_cli plan-o2 [--at ISO]`.
+* **`AlertName.OPTIONS_PLAN`** now covers O2 (`labels.sleeve`); runbook
+  `decile-blueprint/docs/runbooks/11-options-plan.md` gained an O2 section.
+
+### Worked example (the fixture morning — `O2_UP_BREAK`, Mon 19 Oct 2026, 10:05:45)
+
+Up-trend (prev close 25,000 over EMA20 24,810), gap 0.08 %, opening range 25,008–25,032 (0.096 %),
+VIX 14. The 10:00–10:04 bar closes 25,050, through 25,032 × 1.0005 = 25,044.52 — the trigger. The
+plan prices from the 10:05 chain (spot 25,050, ATM 25,050):
+
+| seq | leg | symbol | bid / ask | limit | delta |
+|---|---|---|---|---|---|
+| 1 | BUY 65 | NIFTY26102025000CE | 201.65 / 203.70 | 203.75 | 0.5366 |
+
+Tuesday's expiry (20 Oct), one step ITM. Premium 203.75 pts = ₹13,243.75 for 1 lot (paper, capital
+₹0); stop 142.63 (risk ₹3,973.13 = R less the ₹300 reserve; risk/lot ₹4,273.13); target 326.00
+(₹7,946.25); time stop 45 min at 224.13; invalidation a 5-minute close back below 25,032; hard exit
+15:00; **gap-through worst case ₹13,243.75**; costs ₹78.34 over two orders (brokerage 40.00, STT
+19.66, NSE 9.36, SEBI 0.03, IPFT 0.00, stamp 0.40, GST 8.89); cost share 0.0099; expires 10:35:45.
+
+### AC → test
+
+| `06` OP7 AC | Test |
+|---|---|
+| Monday fixture uses Tuesday's contract | `test_options_plan_o2.py::TestTheContract::test_the_monday_before_an_expiry_uses_tuesdays_contract`, and the whole `TestTheFixtureMorning` |
+| Tuesday fixture uses next week's | `…::test_an_expiry_tuesday_uses_next_weeks_contract` (20 Oct → the 27 Oct 25,000 CE at 471.95) |
+| a counter-trend break plans nothing | `TestTheTrigger::test_a_counter_trend_break_plans_nothing_and_is_recorded` (armed, breaks recorded) + `…test_the_window_closing_with_no_trigger_is_a_skipped_session`; on a database `…test_a_day_that_never_triggers_is_a_skipped_session` |
+| `VIX_TOO_HIGH` / `GAP_TOO_BIG` plan nothing with the reason | `TestTheDayFilters` (also `RANGE_TOO_WIDE`, `TREND_FLAT`, `VIX_UNKNOWN`, `EVENT_DAY`, holiday) |
+| a 0.45-delta "ITM" strike on a fast day → `REJECTED_DELTA` | `TestTheDelta` (0.4508 on the 25,100 CE; the fixture is OP7.7's spot/forward divergence) |
+| the gap-through worst case appears on the plan | `TestTheFixtureMorning::test_the_plan_to_the_rupee` and `…plan_o2_task.py` (`detail.gap_through_inr` = "13243.75") |
+| one leg, priced, sized, with its exits | `…test_the_exits_are_04_4_5`, `…test_the_costs_to_the_paisa_from_the_verified_rates`, `…test_the_plan_is_the_scans_candidate` |
+| idempotent per date | `…plan_o2_task.py::test_idempotent_per_date` (same `plan_id`, no second alert, one row) |
+| dark behind the flags, no broker | `TestTheGate` (both flags, the 09:30–13:34 window, no tenant, the Beat entry, `test_no_order_path_and_no_provider_in_the_builder`, `test_the_task_builds_no_kite_client`) |
+| `OPTIONS_PLAN` rendered | `…test_the_alert_renders_through_the_mail_transport` (real `Mailer`, recording transport) |
+
+### Tests (new)
+
+| File | Tests |
+|---|---|
+| `packages/core/tests/test_options_plan_o2.py` | 33 |
+| `services/worker/tests/test_options_plan_o2_task.py` (5 db-marked on `baskfy_test`) | 16 |
+| **Total** | **49** |
+
+### What is NOT done
+
+* **No O2 plan has been built from a live chain.** The Beat entry is dark (monitor flag false on
+  the box); nothing was deployed or pushed.
+* **Finding (OP7.6):** at `04`'s defaults the **premium cap and the cost test cannot bind** for
+  O2, and at the fixture's ₹4,273 risk per lot `REJECTED_BUDGET` binds until sleeve capital reaches
+  ≈ ₹8.5 lakh (≈ ₹17 lakh while the first-live multiplier halves the budget). A number for the
+  human track, not an agent's.
+* **Finding (OP7.5):** a trigger whose bar closes at or after 13:30 is never planned, and one after
+  ≈ 13:25 leaves under five minutes to confirm. Widening it is a `04` §4.2 or non-negotiable-1
+  change.
+* **Finding (OP7.7):** a low-side `REJECTED_DELTA` can only happen when the index print and the
+  chain's parity forward disagree — worth watching once real minutes exist (OP12).
+* The desk does not read O2's `op_plan` yet (OP9/OP10); `/options` shows the scan, not the plan.
+* Exits are *written on the plan*; nothing evaluates them yet (OP9 runs the monitor).
+* Mutation harness does not cover `plan_o2.py` (OP14).
+
+### What blocks OP8
+
+Nothing in code. O3's builder can follow the same three modules (`plan.py`'s shared vocabulary,
+`plan_o2.py`'s shape) and reuse `plan_costs`, `plan_legs`, `assert_never_naked`, `session_values`,
+`write_session_row`, `lapse_expired` and the alert; it adds the day's slot (`04` §8.6), the
+two-leg debit spread's sequences (§5.4) and `REJECTED_DEBIT`.
+
 ## What is NOT done
 
-Everything after OP6. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
+Everything after OP7. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
 OP3 does them first); the two full-suite baseline runs (OP0.9); the gateway gap of OP0.6 is **fixed in OP2** (OP2.1); the
 `/ops` side door of OP0.5 is **recorded, not fixed** (OP13). Every money flag is false and stays false. The paper periods begin only after OP15, and
 the longest (O1-M) takes about six months after that.

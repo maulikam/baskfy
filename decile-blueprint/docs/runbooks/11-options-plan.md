@@ -1,9 +1,11 @@
-# Runbook 11 — an O1 plan or verdict (`OPTIONS_PLAN`)
+# Runbook 11 — an options plan or verdict (`OPTIONS_PLAN`)
 
-**Verified against:** NOT YET — written from `baskfy_worker/options/plan.py` and
-`baskfy_core/options/plan.py` (OP6). The builder has run only against fixtures on `baskfy_test`; it
-has never built a plan from a live chain. Every options money flag is **false**, and nothing in this
-alert, the builder or its task can send an order.
+**Verified against:** NOT YET — written from `baskfy_worker/options/plan.py`,
+`baskfy_worker/options/plan_o2.py` and their pure cores (OP6, OP7). Neither builder has run
+against a live chain; both have run only against fixtures on `baskfy_test`. Every options money
+flag is **false**, and nothing in this alert, either builder or their tasks can send an order.
+
+One alert name covers every sleeve; `labels.sleeve` says which one (`O1M`, `O1W`, `O2`).
 
 ## What fired
 
@@ -20,6 +22,24 @@ It fires once per sleeve per day, when the session is first written:
 The plan's rows: `SELECT * FROM op_plan WHERE plan_id = '<id>';` and its legs
 `SELECT seq, role, tradingsymbol, side, quantity, limit_price FROM op_leg l JOIN op_plan p ON p.id = l.plan_id WHERE p.plan_id = '<id>' ORDER BY seq;`
 — seq 1–2 are the wings, 3–4 the shorts: the send order (never naked, `02` Track C §2).
+
+### O2 (the directional sleeve, OP7)
+
+`baskfy.options.plan_o2` (Beat `options-plan-o2`, every minute 09:30–13:34 IST mon–fri, behind the
+same two flags) decides **every** non-event trading day: the day filters at 09:30, then the first
+with-trend 5-minute break of the opening range (`04` §4.1–§4.2). It makes **no Kite call at all** —
+a long option costs its premium, so there is no margin to ask about (`DECISIONS-OP` OP7.3).
+
+| Summary begins | Meaning |
+|---|---|
+| `O2 2026-10-19: no trade — GAP_TOO_BIG.` | a day filter refused (gap, opening range, VIX, trend, event day) |
+| `O2 2026-10-19: no trade — NO_TRIGGER.` | the 13:30 window closed with no with-trend break; counter-trend breaks are in `op_session.numbers.counter_trend_breaks` and were never traded |
+| `O2 2026-10-19: no trade — REJECTED_DELTA.` | the tape broke, but the one-step-ITM contract was outside 0.50–0.75 delta, illiquid, unaffordable or cost-heavy |
+| `O2 2026-10-19 PAPER plan O2-20261019-…: BUY 65 …` | one long, `ISSUED`, with the stop, target, time stop, hard exit and the gap-through worst case; it expires 30 minutes after issue, never later than 13:30 |
+
+An O2 plan's leg is always a single `LONG_CALL` or `LONG_PUT` — there is no short leg in this
+sleeve, so `margin_required_inr` is `NULL` by design and `detail.premium_inr` is the money at risk
+in the worst case.
 
 ## What to do
 
@@ -43,4 +63,9 @@ The plan's rows: `SELECT * FROM op_plan WHERE plan_id = '<id>';` and its legs
   arrived before 10:15, there is no session — see the collector (`options-collect-chain`) and index
   bars (`options-index-bars`) in the worker log.
 * Re-running is safe: `uv run python -m baskfy_worker.options_cli plan --at 2026-10-27T10:01:00+05:30`
-  returns today's decided session unchanged (idempotent per date; no second alert).
+  returns today's decided session unchanged (idempotent per date; no second alert). For O2:
+  `uv run python -m baskfy_worker.options_cli plan-o2 --at 2026-10-19T10:06:00+05:30`.
+* **O2 specifically:** a day with no with-trend break writes nothing until 13:33, when the window
+  is final and the session is written `SKIPPED / NO_TRIGGER`. A trigger whose bar closes at or
+  after 13:30 gets no plan at all (`WINDOW_CLOSED`): a plan issued then could not outlive its own
+  issue (`DECISIONS-OP` OP7.5).

@@ -47,13 +47,14 @@ from baskfy_core.options.plan import (
     O1Plan,
     PlanLeg,
     PlanState,
+    Verdict,
     condor_config_for,
     decide_o1,
     finalize_o1,
 )
 from baskfy_core.options.session import Session as CoreSession
 from baskfy_core.options.session import SessionState, transition
-from baskfy_core.options.structures import to_json
+from baskfy_core.options.structures import Candidate, to_json
 from baskfy_providers.records import MarginLegRecord
 from baskfy_worker.alerts import Alert, AlertName, Severity
 from baskfy_worker.ops import RUNBOOKS
@@ -146,7 +147,8 @@ def plan_detail(plan: O1Plan) -> JsonObject:
     }
 
 
-def _leg_row(leg: PlanLeg, plan_pk: int, user_id: int, simulated: bool) -> dict[str, object]:
+def leg_row(leg: PlanLeg, plan_pk: int, user_id: int, simulated: bool) -> dict[str, object]:
+    """One ``op_leg`` row from a plan leg — the same shape for every sleeve (``03`` §9)."""
     return {
         "user_id": user_id,
         "plan_id": plan_pk,
@@ -306,39 +308,73 @@ def ask_margin(reader: MarginReader | None, decision: O1Decision) -> tuple[Margi
 # --- writes --------------------------------------------------------------------------------------
 
 
-def _session_values(outcome: O1Outcome, mode: Mode) -> dict[str, object]:
-    decision = outcome.decision
-    plan = outcome.plan
-    numbers: JsonObject = dict(decision.numbers)
-    if decision.candidate is not None:
-        numbers["candidate"] = to_json(decision.candidate)
-    if decision.as_of_minute is not None:
-        numbers["as_of_minute"] = decision.as_of_minute.isoformat()
-    state = SessionState.PLANNED if plan is not None else SessionState.SKIPPED
-    # The core machine says whether OBSERVING may go there; it raises otherwise.
+def session_values(  # noqa: PLR0913 - one argument per op_session column the builder fills
+    *,
+    sleeve: Sleeve,
+    trade_date: dt.date,
+    expiry: dt.date | None,
+    numbers: JsonObject,
+    candidate: Candidate | None,
+    as_of_minute: dt.datetime | None,
+    verdict: Verdict | None,
+    mode: Mode,
+    plan_id: str | None,
+    reasons: Sequence[str],
+) -> dict[str, object]:
+    """``op_session``'s columns for a decided day — shared by every sleeve's builder (OP7.1).
+
+    ``plan_id`` set means ``PLANNED``; otherwise ``SKIPPED`` with the reasons. The core machine
+    is asked whether ``OBSERVING`` may go there and raises if it may not.
+    """
+    detail: JsonObject = dict(numbers)
+    if candidate is not None:
+        detail["candidate"] = to_json(candidate)
+    if as_of_minute is not None:
+        detail["as_of_minute"] = as_of_minute.isoformat()
+    state = SessionState.PLANNED if plan_id is not None else SessionState.SKIPPED
     transition(
-        CoreSession(decision.sleeve, decision.trade_date),
+        CoreSession(sleeve, trade_date),
         state,
-        None if plan is not None else ",".join(outcome.reasons),
+        None if plan_id is not None else ",".join(reasons),
     )
     return {
-        "expiry_used": decision.expiry,
+        "expiry_used": expiry,
         "mode": mode.value,
         "state": state.value,
-        "numbers": numbers,
-        "verdict": decision.verdict.value if decision.verdict is not None else None,
-        "skip_reasons": [] if plan is not None else list(outcome.reasons),
-        "plan_id": plan.plan_id if plan is not None else None,
+        "numbers": detail,
+        "verdict": verdict.value if verdict is not None else None,
+        "skip_reasons": [] if plan_id is not None else list(reasons),
+        "plan_id": plan_id,
     }
 
 
-async def _write_session(
-    session: AsyncSession, user_id: int, outcome: O1Outcome, mode: Mode, current: OpSession | None
+def _session_values(outcome: O1Outcome, mode: Mode) -> dict[str, object]:
+    decision = outcome.decision
+    plan = outcome.plan
+    return session_values(
+        sleeve=decision.sleeve,
+        trade_date=decision.trade_date,
+        expiry=decision.expiry,
+        numbers=dict(decision.numbers),
+        candidate=decision.candidate,
+        as_of_minute=decision.as_of_minute,
+        verdict=decision.verdict,
+        mode=mode,
+        plan_id=plan.plan_id if plan is not None else None,
+        reasons=outcome.reasons,
+    )
+
+
+async def write_session_row(  # noqa: PLR0913, PLR0917 - the session, the tenant, key, values
+    session: AsyncSession,
+    user_id: int,
+    sleeve: Sleeve,
+    trade_date: dt.date,
+    values: dict[str, object],
+    current: OpSession | None,
 ) -> int | None:
     """Insert today's session (or move the ``OBSERVING`` row on); ``None`` if another builder
     wrote it first."""
-    values = _session_values(outcome, mode)
-    decision = outcome.decision
     if current is not None:
         await session.execute(update(OpSession).where(OpSession.id == current.id).values(**values))
         return int(current.id)
@@ -346,14 +382,28 @@ async def _write_session(
         insert(OpSession)
         .values(
             user_id=user_id,
-            sleeve=decision.sleeve.value,
-            trade_date=decision.trade_date,
+            sleeve=sleeve.value,
+            trade_date=trade_date,
             **values,
         )
         .on_conflict_do_nothing(constraint="uq_op_session_user_sleeve_date")
         .returning(OpSession.id)
     )
     return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def _write_session(
+    session: AsyncSession, user_id: int, outcome: O1Outcome, mode: Mode, current: OpSession | None
+) -> int | None:
+    decision = outcome.decision
+    return await write_session_row(
+        session,
+        user_id,
+        decision.sleeve,
+        decision.trade_date,
+        _session_values(outcome, mode),
+        current,
+    )
 
 
 async def _write_plan(session: AsyncSession, user_id: int, session_pk: int, plan: O1Plan) -> None:
@@ -388,7 +438,7 @@ async def _write_plan(session: AsyncSession, user_id: int, session_pk: int, plan
     await session.flush()
     simulated = plan.mode is Mode.PAPER
     await session.execute(
-        insert(OpLeg), [_leg_row(lg, int(row.id), user_id, simulated) for lg in plan.legs]
+        insert(OpLeg), [leg_row(lg, int(row.id), user_id, simulated) for lg in plan.legs]
     )
 
 

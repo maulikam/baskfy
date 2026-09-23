@@ -35,6 +35,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import StrEnum
+from typing import Protocol
 
 from baskfy_core.options import condor
 from baskfy_core.options.bars import IST, ist
@@ -439,7 +440,35 @@ def _decision(  # noqa: PLR0913, PLR0917 - the decision's identity and the rest 
     )
 
 
-def plan_id_for(user_id: int, decision: O1Decision) -> str:
+class Decided(Protocol):
+    """What :func:`plan_id_for` and :func:`assert_never_naked` need of a decision — the sleeve,
+    the date and the legs. O1's and O2's decisions both satisfy it (OP7.1)."""
+
+    @property
+    def sleeve(self) -> Sleeve: ...
+
+    @property
+    def trade_date(self) -> dt.date: ...
+
+    @property
+    def legs(self) -> tuple[PlanLeg, ...]: ...
+
+
+def assert_never_naked(legs: Sequence[PlanLeg]) -> None:
+    """Refuse a leg order that would leave the book short more than long at any prefix.
+
+    The sequence is ``execution.entry_sequence``'s, so this can only fire if a caller built the
+    legs itself; it is asserted at plan time all the same (Track C §2), for every sleeve.
+    """
+    for prefix in range(1, len(legs) + 1):
+        held: dict[LegRole, int] = {}
+        for lg in legs[:prefix]:
+            held[lg.role] = held.get(lg.role, 0) + lg.quantity
+        if not never_naked(held):
+            raise ValueError("the legs would leave the book short more than long")
+
+
+def plan_id_for(user_id: int, decision: Decided) -> str:
     """Deterministic: the same user, sleeve, date and legs mint the same id — a rebuilt plan
     can never be a second plan (idempotent per date), and the id is a valid ``client_id`` half
     (no ``:``, no whitespace — the execution package's client-id rule)."""
@@ -475,12 +504,7 @@ def finalize_o1(  # noqa: PLR0913 - the decision, the broker's answer, the book 
     candidate = decision.candidate
     if candidate is None or decision.expiry is None or decision.costs is None:
         raise ValueError("a PLANNED decision carries its candidate, expiry and costs")
-    for prefix in range(1, len(decision.legs) + 1):
-        held: dict[LegRole, int] = {}
-        for lg in decision.legs[:prefix]:
-            held[lg.role] = held.get(lg.role, 0) + lg.quantity
-        if not never_naked(held):
-            raise ValueError("the legs would leave the book short more than long")
+    assert_never_naked(decision.legs)
     warnings = list(candidate.warnings)
     check: MarginCheck | None = None
     if margin is None:

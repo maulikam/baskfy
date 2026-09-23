@@ -4,7 +4,7 @@
 (O1-M monthly condor, O1-W weekly condor, O2 directional long option, O3-A range-break and O3-B
 gap-hold debit spreads) are built end to end **on paper**: scan → plan → confirm on the desk →
 the real gateway's dry-run branch → the monitor's exits → the journal and the ledger. **Every money
-flag is false and no order was placed.** DEPLOY_LINE
+flag is false and no order was placed.** **`df6698d` is live on `staging.baskfy.com`** (23 Sep 2026, 21:50 IST): thirteen services, the new `options-monitor` idling with its flag off, alembic at `0051`.
 
 Three documents matter more than this one:
 
@@ -29,7 +29,7 @@ said.
 | Goldens for the Go lane | **47 cases**, six functions, byte-stable (two dumps, one checksum) | `ls go/testdata/golden/L1/options \| wc -l` |
 | Mutation score, the 23 options modules | **72.0 %** (1,360 mutants, 979 killed; the ten OP1 modules 86–94 %, the thirteen newer ones 35–81 %). **229 survivors are unjustified**: the first job after this run (OP15.4) | `grep 'mutation score' decile-blueprint/reconciliation/MUTANTS-options.md` |
 | Budgets | tick → mark → decision **p99 0.15 ms**; a plan-builder minute **≤ 2.3 ms** | `tools/options/budgets.py` |
-| `verify-options.sh` | dev stack **OK**; the box VERIFY_BOX | `LOCAL=1 bash tools/deploy/verify-options.sh`; `AWS_PROFILE=baskfy-poc bash tools/deploy/verify-options.sh` |
+| `verify-options.sh` | dev stack **OK**; the box **`OPTIONS OK`** (every money flag false in desk and `options-monitor`, no auto-execute, next expiry 2026-09-29, Kite authed) | `LOCAL=1 bash tools/deploy/verify-options.sh`; `AWS_PROFILE=baskfy-poc bash tools/deploy/verify-options.sh` |
 | Orders placed during any of this | **zero** | the drill's `orders_to_broker=0` per sleeve; every gateway in every test is a spy |
 
 ## Built
@@ -136,7 +136,19 @@ and the sleeve's execution flag). **LIVE is not built even then**: `execute_entr
 
 ## Deploy
 
-DEPLOY_SECTION
+```bash
+aws sso login --sso-session baskfy          # when the session has expired; it opens your browser
+bash tools/deploy/ship.sh                   # builds, pushes, ships compose, migrates, restarts, verifies
+bash tools/deploy/verify-options.sh         # also run by ship.sh from OP15-deploy on
+```
+
+`df6698d` went out at 21:43–21:50 IST on 23 Sep. The swing verify was green, and the swing and TWT
+flags were unmoved (the book is live and auto-executing, as you set). The first ship did **not**
+start `options-monitor`: `deploy-swing.sh` restarts an explicit list of services, and the new one
+was not on it. It was started by hand (`up -d options-monitor`), and `verify-options.sh` then read
+`OPTIONS OK`. The list, `ship.sh`'s count (thirteen running) and a `verify-options.sh` step are
+fixed in the commit after OP15, so the next ship does all of this itself. Rollback: the image tag
+lines in `/opt/baskfy/.env.staging.compose` back to the previous sha, then `up -d`.
 
 ## Not done
 

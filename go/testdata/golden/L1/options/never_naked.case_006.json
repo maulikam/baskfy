@@ -1,0 +1,20 @@
+{
+ "fn": "baskfy_core.options.execution.never_naked",
+ "inputs": {
+  "position": {
+   "LONG_CALL": 130,
+   "LONG_PUT": 65,
+   "SHORT_CALL": 65,
+   "SHORT_PUT": 65
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "Decimals are strings; enums are their values; datetimes carry +05:30. Config is OptionsConfig() defaults, written into the inputs. Regenerate with `uv run python ../tools/parity/golden_options.py` from decile-blueprint; packages/core/tests/test_options_goldens.py recomputes every case from these inputs.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": true
+}

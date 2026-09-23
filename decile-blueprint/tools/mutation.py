@@ -112,6 +112,20 @@ OPTIONS_TARGETS: Final[tuple[str, ...]] = (
     "options/journal.py",
     "options/execution.py",
     "options/backtest.py",
+    # OP15: the modules OP4-OP13 added, each noted "the harness does not cover it" until now.
+    "options/bars.py",
+    "options/structures.py",
+    "options/condor.py",
+    "options/directional.py",
+    "options/expiry_setups.py",
+    "options/scan.py",
+    "options/plan.py",
+    "options/plan_o2.py",
+    "options/plan_o3.py",
+    "options/exits.py",
+    "options/executor.py",
+    "options/ledger.py",
+    "options/gating.py",
 )
 
 TARGETS: Final[tuple[str, ...]] = FACTOR_TARGETS + SWING_TARGETS + OPTIONS_TARGETS
@@ -184,6 +198,20 @@ OPTIONS_TEST_SELECTION: Final[tuple[str, ...]] = (
     "packages/core/tests/test_options_backtest.py",
     "packages/core/tests/test_options_execution.py",
     "packages/core/tests/test_options_greeks.py",
+    # OP15: the suites of the modules OP4-OP13 added.
+    "packages/core/tests/test_options_bars.py",
+    "packages/core/tests/test_options_condor.py",
+    "packages/core/tests/test_options_directional.py",
+    "packages/core/tests/test_options_expiry_setups.py",
+    "packages/core/tests/test_options_scan.py",
+    "packages/core/tests/test_options_plan.py",
+    "packages/core/tests/test_options_plan_o2.py",
+    "packages/core/tests/test_options_plan_o3.py",
+    "packages/core/tests/test_options_exits.py",
+    "packages/core/tests/test_options_executor.py",
+    "packages/core/tests/test_options_ledger.py",
+    "packages/core/tests/test_options_gating.py",
+    "packages/core/tests/test_options_safety_proof.py",
     # Second for every module (see selection_for): the boundaries OP1's first run found unasserted.
     "packages/core/tests/test_options_edges.py",
 )
@@ -199,6 +227,20 @@ OPTIONS_PRIMARY_TEST: Final[dict[str, str]] = {
     "options/journal.py": "packages/core/tests/test_options_journal.py",
     "options/execution.py": "packages/core/tests/test_options_execution.py",
     "options/backtest.py": "packages/core/tests/test_options_backtest.py",
+    "options/bars.py": "packages/core/tests/test_options_bars.py",
+    # No suite of its own: sizing and leg building are asserted through each sleeve's build.
+    "options/structures.py": "packages/core/tests/test_options_condor.py",
+    "options/condor.py": "packages/core/tests/test_options_condor.py",
+    "options/directional.py": "packages/core/tests/test_options_directional.py",
+    "options/expiry_setups.py": "packages/core/tests/test_options_expiry_setups.py",
+    "options/scan.py": "packages/core/tests/test_options_scan.py",
+    "options/plan.py": "packages/core/tests/test_options_plan.py",
+    "options/plan_o2.py": "packages/core/tests/test_options_plan_o2.py",
+    "options/plan_o3.py": "packages/core/tests/test_options_plan_o3.py",
+    "options/exits.py": "packages/core/tests/test_options_exits.py",
+    "options/executor.py": "packages/core/tests/test_options_executor.py",
+    "options/ledger.py": "packages/core/tests/test_options_ledger.py",
+    "options/gating.py": "packages/core/tests/test_options_gating.py",
 }
 
 

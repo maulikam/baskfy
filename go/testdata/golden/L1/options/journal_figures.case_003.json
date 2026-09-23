@@ -1,0 +1,81 @@
+{
+ "fn": "baskfy_core.options.ledger.journal_figures",
+ "inputs": {
+  "closed_at": "2026-10-27T13:19:00+05:30",
+  "fills": [
+   {
+    "closing": false,
+    "price": "58.40",
+    "quantity": 65,
+    "side": "BUY"
+   },
+   {
+    "closing": false,
+    "price": "22.40",
+    "quantity": 65,
+    "side": "SELL"
+   },
+   {
+    "closing": true,
+    "price": "40.10",
+    "quantity": 65,
+    "side": "SELL"
+   },
+   {
+    "closing": true,
+    "price": "21.05",
+    "quantity": 65,
+    "side": "BUY"
+   }
+  ],
+  "opened_at": "2026-10-27T09:47:00+05:30",
+  "peak_points": null,
+  "quantity": 65,
+  "r_inr": "2840.00",
+  "rates": {
+   "auto_squareoff_inr": "50",
+   "brokerage_per_order_inr": "20",
+   "exchange_txn_pct": "0.03553",
+   "gst_pct": "18",
+   "ipft_per_crore_inr": "0.01",
+   "review_after_days": 90,
+   "reviewed_on": "2026-09-22",
+   "sebi_per_crore_inr": "10",
+   "stamp_buy_pct": "0.003",
+   "stt_exercise_intrinsic_pct": "0.15",
+   "stt_sell_premium_pct": "0.15",
+   "synthetic_half_spread_min_inr": "0.10",
+   "synthetic_half_spread_pct": "1.5"
+  },
+  "trough_points": "-17.30"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "Decimals are strings; enums are their values; datetimes carry +05:30. Config is OptionsConfig() defaults, written into the inputs. Regenerate with `uv run python ../tools/parity/golden_options.py` from decile-blueprint; packages/core/tests/test_options_goldens.py recomputes every case from these inputs.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "costs": {
+   "brokerage": "80.00",
+   "exchange_txn": "3.28",
+   "gst": "14.99",
+   "ipft": "0.00",
+   "orders": 4,
+   "sebi": "0.01",
+   "stamp": "0.15",
+   "stt": "6.09"
+  },
+  "entry_inr": "2340.00",
+  "exit_inr": "1238.25",
+  "gross_pnl_inr": "-1101.75",
+  "mae_r": "-0.40",
+  "mfe_r": null,
+  "minutes_held": 212,
+  "net_pnl_inr": "-1206.27",
+  "r_inr": "2840.00",
+  "r_multiple": "-0.42"
+ }
+}

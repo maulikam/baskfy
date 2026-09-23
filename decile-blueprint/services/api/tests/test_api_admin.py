@@ -340,7 +340,9 @@ class TestUserLookupAndOverrides:
                     "feature": "export_csv",
                     "effect": "grant",
                     "reason": "webhook evt_x not delivered; paid 2026-08-21",
-                    "expires_at": "2026-09-21T00:00:00Z",
+                    # Relative to now: a fixed date expired on 21 Sep 2026 and the grant, correctly,
+                    # stopped counting — the test went red on the calendar, not on the code.
+                    "expires_at": (dt.datetime.now(dt.UTC) + dt.timedelta(days=30)).isoformat(),
                 },
             )
 

@@ -193,7 +193,16 @@ RUN cat > /usr/local/bin/twt-auto-loop <<'EOF'
 set -eu
 exec python -m scripts.twt_auto_loop
 EOF
-RUN chmod 0755 /usr/local/bin/desk-entrypoint /usr/local/bin/swing-monitor-loop /usr/local/bin/desk-daily-loop /usr/local/bin/twt-auto-loop
+# OP15 (docs/options/06): the options book's session monitor. The schedule lives in
+# `scripts.options_monitor_loop` (09:14 IST weekdays, at once mid-session, again after a crash in
+# session); `app.options_monitor` exits 0 at once unless BASKFY_OPTIONS_MONITOR_ENABLED, and it
+# raises exit plans, never orders.
+RUN cat > /usr/local/bin/options-monitor-loop <<'EOF'
+#!/bin/sh
+set -eu
+exec python -m scripts.options_monitor_loop
+EOF
+RUN chmod 0755 /usr/local/bin/desk-entrypoint /usr/local/bin/swing-monitor-loop /usr/local/bin/desk-daily-loop /usr/local/bin/twt-auto-loop /usr/local/bin/options-monitor-loop
 
 WORKDIR /desk
 USER baskfy

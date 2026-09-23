@@ -1585,3 +1585,64 @@ names (one per check), since the runbook section is the same for all.
 swing, VBT and TWT books'. The gauges keep `05`'s words under the `baskfy_options_` prefix.
 Thresholds: gap and stale > 3 minutes for 2 m inside 09:20–15:30; share > 25 % for 10 m; no
 session from 10:20. They are first guesses, to be tuned on the box.
+
+## OP15.1 — The Go goldens cover six small pure functions, not the scans or the plan builders · ⚠ UNREVIEWED
+
+`06` OP15 asks for goldens in `go/testdata/golden/L1/options/`. **Choice.** Six functions, 47
+cases, in a dumper of their own (`tools/parity/golden_options.py`, reusing `golden.py`'s encoder):
+`gating.options_gates` (all 16 flag rows for O2, plus each sleeve all-on), `costs.charges`,
+`execution.simulate_fill`, `execution.never_naked`, `condor.exit_decision` (including OP13.2's
+unknown spot) and `ledger.journal_figures`. These are the money arithmetic and the safety
+predicates, the parts a port must get exactly right, and their inputs fit on a page. The scans and
+the plan builders take a whole market day (375 bars and a 120-quote chain per minute). Goldens of
+those would be megabytes of fixture rather than an answer key. They are better ported against the
+Python tests' fixture days. `packages/core/tests/test_options_goldens.py` recomputes all 47 files
+byte for byte, and two dumps give the same checksum. **Reversal.** Add cases to `cases()` and
+re-dump.
+
+## OP15.2 — Compose names every options execution flag in the desk block, and the monitor gets its own service · ⚠ UNREVIEWED
+
+Until OP15, `compose.prod.yml` named no `BASKFY_OPTIONS_*` variable, so the desk read its options
+flags from `.env.staging` through `env_file`. One line there could have flipped an execution flag
+for the process that reaches the gateway, which is the gap TW16 closed for TWT. **Choice.** The
+desk block names the four execution flags and the monitor flag, each `${…:-false}`. They can only
+be set in `.env.staging.compose`, by Maulik's hand. `OPTIONS_ENABLED` and `INTRADAY_ENABLED` stay
+pinned `"false"`, so every sleeve is PAPER whatever the execution flags say. The new
+`options-monitor` service (`<<: *desk`, `scripts/options_monitor_loop.py`) starts
+`app.options_monitor` at 09:14 on weekdays, at once when started mid-session (restart resume), and
+again after a crash inside the session. With the monitor flag false it idles.
+`tests/test_options_monitor_loop.py` pins the clock and the compose shape. **Not flipped:** the
+monitor flag stays false on the box. It is operational (PACK.11), but it starts the paper periods,
+and that is Maulik's call; `OP-FINAL-REPORT.md` asks for it. **Reversal.** Remove the service and
+the five lines.
+
+## OP15.3 — `verify-options.sh` has a dev-stack mode · ⚠ UNREVIEWED
+
+"Green against the dev stack" means this checkout and the local Docker Postgres. `LOCAL=1` asserts
+the compose pins, that no `OPTIONS…AUTO` name exists, that the desk and the worker read every switch
+safe with an empty environment, and that the local schema is at `0051`. It reports the next expiry
+(a dev database has none) and the token state (there is none locally). The box mode adds HTTPS
+401s, both containers' environments (asserted false and in agreement), Beat's nine options entries,
+the next expiry from `op_expiry`, and the desk's `authed` state. It queries Postgres through the
+container, so the laptop needs no `psql`.
+
+## OP15.4 — The mutation re-run covers all 23 modules and is reported as it came out: 72.0 %, 229 survivors not yet dealt with · ⚠ UNREVIEWED
+
+`tools/mutation.py` now targets the thirteen modules OP4–OP13 added (`bars`, `structures`,
+`condor`, `directional`, `expiry_setups`, `scan`, `plan`, `plan_o2`, `plan_o3`, `exits`,
+`executor`, `ledger`, `gating`), each scored against its own suite first. Until now each module had
+noted "the harness does not cover it".
+
+**Result:** 1,360 mutants, 979 killed, **72.0 %**. The ten OP1 modules are unchanged (89–94 %).
+The new ones range from 34.5 % (`structures`) to 81.1 % (`bars`). Of the 381 survivors, 96 are the
+equivalent `slots=True` mutant on a dataclass, justified the way swing's and factors' are.
+**229 remain unjustified**, the largest groups in `scan` (41), `condor` (35), `expiry_setups` (34),
+`directional` (23), `plan` (21), `plan_o3` (18) and `plan_o2` (16). They are listed in
+`reconciliation/MUTANTS-options.md` as **UNJUSTIFIED — needs a decision**.
+
+**Choice.** Report the number and leave the list loud. Closing it properly means writing boundary
+tests module by module, as OP1 did with `test_options_edges.py` from 74.5 % to 89.6 %. That is a
+module's worth of work, and a bulk sign-off of 229 mutants would be the false score the harness
+exists to prevent. **This is the first thing to do after the run**, before any sleeve's paper
+period ends. **Rejected.** Justifying survivors wholesale; dropping the new modules from the
+targets.

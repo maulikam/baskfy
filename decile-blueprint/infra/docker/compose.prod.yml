@@ -435,6 +435,18 @@ services:
       # deliberately not restated here, where a compose default would shadow the file's value.
       INTRADAY_ENABLED: "false"
       OPTIONS_ENABLED: "false"
+      # OP15 — the options book (docs/options/02 Track B). Each sleeve's execution flag is named
+      # here so a line in `.env.staging` cannot flip it for the process that can reach an order;
+      # only `.env.staging.compose` can, and only by Maulik's hand, and with OPTIONS_ENABLED and
+      # INTRADAY_ENABLED pinned "false" above every sleeve stays PAPER whatever these say (the
+      # four-flag AND, `options_gates`). THERE IS NO OPTIONS AUTO-EXECUTE VARIABLE and none may
+      # be added (02 Track B, PACK.3). The monitor flag is operational: it starts the session
+      # monitor and moves no money. `options-monitor` below inherits all of this via `<<: *desk`.
+      BASKFY_OPTIONS_O1M_EXECUTION_ENABLED: "${BASKFY_OPTIONS_O1M_EXECUTION_ENABLED:-false}"
+      BASKFY_OPTIONS_O1W_EXECUTION_ENABLED: "${BASKFY_OPTIONS_O1W_EXECUTION_ENABLED:-false}"
+      BASKFY_OPTIONS_O2_EXECUTION_ENABLED: "${BASKFY_OPTIONS_O2_EXECUTION_ENABLED:-false}"
+      BASKFY_OPTIONS_O3_EXECUTION_ENABLED: "${BASKFY_OPTIONS_O3_EXECUTION_ENABLED:-false}"
+      BASKFY_OPTIONS_MONITOR_ENABLED: "${BASKFY_OPTIONS_MONITOR_ENABLED:-false}"
     expose: ["8420"]
     healthcheck:
       # /status is the one route websec.py answers without the password. It reports dry_run and
@@ -469,6 +481,19 @@ services:
   twt-auto:
     <<: *desk
     command: [twt-auto-loop]
+    expose: []
+    healthcheck:
+      disable: true
+
+  # OP15 (docs/options/06) — the options book's session monitor. `options-monitor-loop`
+  # (scripts/options_monitor_loop.py) starts `python -m app.options_monitor` at 09:14 IST on a
+  # weekday, at once if the container starts mid-session (it resumes from op_position), and again
+  # if it crashes inside the session. With BASKFY_OPTIONS_MONITOR_ENABLED=false (the default above)
+  # the module exits 0 without building anything and the loop idles. It holds no gateway: it
+  # raises exit plans, and its sweep closes them through the desk's gateway under every flag.
+  options-monitor:
+    <<: *desk
+    command: [options-monitor-loop]
     expose: []
     healthcheck:
       disable: true

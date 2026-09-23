@@ -3,10 +3,10 @@
 The status page for the options run. Updated at the end of every module, loud about what is NOT
 done. A fresh session resumes from the first module not marked ✅.
 
-**Run state: OP0 🟡, OP1 ✅, OP2 ✅, OP3 🟡, OP4 ✅, OP5 ✅, OP6 ✅, OP7 ✅, OP8 ✅, OP9 ✅, OP10 ✅, OP11 ✅, OP12 ✅, OP13 ✅, OP14 ✅ (23 Sep 2026); OP15 not started.** Pack written 22 Sep 2026 on branch
+**Run state: OP0 🟡, OP1 ✅, OP2 ✅, OP3 🟡, OP4 ✅, OP5 ✅, OP6 ✅, OP7 ✅, OP8 ✅, OP9 ✅, OP10 ✅, OP11 ✅, OP12 ✅, OP13 ✅, OP14 ✅, OP15 ✅ (23 Sep 2026). The run is complete; `OP-FINAL-REPORT.md` at the root says what is true.** Pack written 22 Sep 2026 on branch
 `developer`, absorbing the never-started condor pack (`docs/condor/`) as sleeve O1. OP0-OP7 were each run alone, by instruction ("execute only OP<N>, then stop"); OP8 was run by Maulik's
 "continue the OP run from OP8" (23 Sep 2026), which also committed OP7's green work (`00cb48b`), found
-uncommitted in the tree. The next session resumes at OP15 (and the orchestrator feeds back OP3's box probe — §"What is NOT done" under OP3).
+uncommitted in the tree. The run ended at OP15 (the next work is OP15.4's mutation survivors, then FO; and the orchestrator feeds back OP3's box probe — §"What is NOT done" under OP3).
 
 ## Module ledger
 
@@ -27,7 +27,7 @@ uncommitted in the tree. The next session resumes at OP15 (and the orchestrator 
 | OP12 — Backtests: Tier 1–2 per sleeve; Tier 3 ⛁ | ✅ | pure `replay_day` (Tier 1 signals, `priced_day` = the live scan → plan builder → executor → exit rules → ledger over a `ModelChain` or `StoredChain`) + `backtest_suite` (`run_tier`, ±25 % sensitivity); worker `backtest_run` → `op_backtest_run`, task `baskfy.options.backtest` (compute queue, no Beat), `tools/options/backtest.py`; 19 new tests. Days before the master are `uncalendared` (OP12.3); full backfill and Tier 3 ⛁ |
 | OP13 — Gating and safety proof | ✅ | the side door closed in the live tree (`app/options_lab.lab_enabled()`, OP13.1); gateway refusals, the 16-row four-flag AND with a spy, no second entry (desk `test_options_safety.py`); Hypothesis never-naked/exact-close/never-overnight + repo scans (core `test_options_safety_proof.py`); `tools/options/drill.py` prints `sleeve=O1M confirms=1 fills=8 orders_to_broker=0` for every sleeve + a skip day; a condor-with-no-spot crash found and fixed (OP13.2); 31 new tests |
 | OP14 — Hardening and observability | ✅ | five `baskfy-options` Prometheus rules over API gauges (`options_health`), each firing from a synthetic series; worker checks at 09:20/10:20/hard exit+3/15:35 (`OPTIONS_CHECK_FAILED`); a refused Kite token raises every exit at once; budgets measured (tick→decision p99 0.15 ms; a plan-builder minute ≤ 2.3 ms); runbook 12; 29 new tests |
-| OP15 — Verification, goldens, deploy, final report | ⬜ | |
+| OP15 — Verification, goldens, deploy, final report | ✅ | 47 byte-stable Go goldens (six functions); mutation re-run over 23 modules **72.0 %**, 229 survivors unjustified (OP15.4, loud); `options-monitor` in compose with every money flag pinned false; `verify-options.sh` (dev stack OK); both suites green; `OP-FINAL-REPORT.md` |
 
 States: ⬜ not started · 🔄 in progress · ✅ green · ⛔ blocked · 🟡 partial · ⛁ data-blocked.
 
@@ -1303,9 +1303,52 @@ screener file.
 
 Nothing.
 
+## OP15 — Verification, goldens, deploy, final report
+
+**✅, 23 Sep 2026.** Decisions `DECISIONS-OP.md` OP15.1–OP15.4.
+
+### What exists
+
+* **`go/testdata/golden/L1/options/`**: 47 cases over `gating.options_gates`, `costs.charges`,
+  `execution.simulate_fill`, `execution.never_naked`, `condor.exit_decision` and
+  `ledger.journal_figures`, dumped by **`tools/parity/golden_options.py`**. Two dumps give the same
+  checksum, and **`packages/core/tests/test_options_goldens.py`** recomputes each byte for byte.
+  `docs/go-rewrite/REQUESTS.md` has the L1 → options line (OP15.1).
+* **`tools/mutation.py`** targets all 23 options modules; `reconciliation/MUTANTS-options.md`
+  re-rendered (OP15.4).
+* **`compose.prod.yml`**: the desk block names the four execution flags and the monitor flag
+  (`${…:-false}`), and the `options-monitor` service runs; **`Dockerfile.desk`** has
+  `options-monitor-loop`; **`scripts/options_monitor_loop.py`** (OP15.2).
+* **`tools/deploy/verify-options.sh`** (`LOCAL=1` for the dev stack; SSM/HTTPS for the box) (OP15.3).
+* **`OP-FINAL-REPORT.md`** at the root.
+
+### AC → evidence
+
+| `06` OP15 AC | Evidence |
+|---|---|
+| goldens byte-stable | two dumps, one checksum; `test_options_goldens.py` 48 passed |
+| both suites green | screener **10,842 passed**, 6 skipped, 1 xfailed, and 1 failed: `test_api_admin.py::test_an_override_changes_the_effective_entitlements` hardcoded an override expiring 21 Sep 2026, so it went red on the calendar. It is fixed to a relative expiry, and its file passes 22/22. Desk **2,317 passed**, 17 skipped |
+| `verify-options.sh` green against the dev stack | `LOCAL=1 bash tools/deploy/verify-options.sh` → `OPTIONS OK (local)` |
+| STATUS all ✅ except what the report names | OP0 and OP3 stay 🟡 for the live reads and the backfill; `OP-FINAL-REPORT.md` § "Not done" |
+
+### Tests (new)
+
+| File | Tests |
+|---|---|
+| `packages/core/tests/test_options_goldens.py` | 48 |
+| `kite-momentum-rebalancer/tests/test_options_monitor_loop.py` | 7 |
+| **Total** | **55** |
+
+### What is NOT done
+
+* **229 mutation survivors** in the thirteen newer modules (OP15.4): the first job after this run.
+* The paper periods: they start with `BASKFY_OPTIONS_MONITOR_ENABLED`, which is not flipped
+  (OP15.2) and is asked in the report.
+* Everything in `OP-FINAL-REPORT.md` § "Not done".
+
 ## What is NOT done
 
-Everything after OP14. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
+The run is complete through OP15; see `OP-FINAL-REPORT.md`. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
 OP3 does them first); the two full-suite baseline runs (OP0.9); the gateway gap of OP0.6 is **fixed in OP2** (OP2.1); the
 `/ops` side door of OP0.5 is **closed in OP13** (OP13.1). Every money flag is false and stays false. The paper periods begin only after OP15, and
 the longest (O1-M) takes about six months after that.

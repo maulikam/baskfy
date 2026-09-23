@@ -1333,3 +1333,61 @@ button and the sleeve's sentence verbatim (tested), and open positions with thei
 now**. Not yet: the four-flag status bar, the Kite token state, the mark on a stop–target bar, spot
 against the levels, and the ledger panel — the ledger is OP11's, the rest OP14's hardening. Recorded
 in STATUS as NOT done.
+
+## OP11.1 — `06`'s "four −1R O1-W weeks → `MONTHLY_R`" is tested at `04`'s own limit: four −2R weeks · ⚠ UNREVIEWED
+
+`04` §9.1 pauses a sleeve to month-end when its calendar month's realised R reaches −`monthly_loss_r`
+[8], and to the week's end at −`weekly_loss_r` [4]. Four −1R weeks sum to −4R: no monthly pause is
+possible, so the criterion as written cannot be met without changing `04`'s numbers, and `04` is the
+contract (criteria are the lowest precedence — the charter). **Choice.** Test the criterion's intent
+— that the monthly rule fires on its own, distinct from the weekly one — at the documented limits:
+four O1-W weeks of −2R each (every week above the 4R week) sum to −8R and pause O1-W to 31 Oct with
+`MONTHLY_R` and without `WEEKLY_R` (`kite-momentum-rebalancer/tests/test_options_ledger.py::
+TestMonthlyR`). **Rejected.** Lowering `monthly_loss_r` to 4 to fit the sentence (a money limit
+changed by an agent to make a test pass). **Reversal.** If Maulik meant a 4R month, change §9.1 and
+§14 and the test follows.
+
+## OP11.2 — MAE/MFE need the worst mark too: migration `0051` adds `op_position.trough_value` · ⚠ UNREVIEWED
+
+`06` OP11 asks for MAE/MFE on every journal row; `op_position` carried `peak_value` only. **Choice.**
+`0051_op_position_extremes` adds `trough_value` (nullable, `PRICE`); both columns are **marked P&L per
+unit in points, a gain positive for every structure** (`ledger.pnl_points`: a condor's credit less
+its cost to close; a long's or a spread's value less its price), kept by the monitor's mark write
+(`GREATEST`/`LEAST`, every 30 s) and turned into R at close (`ledger.journal_figures`). OP2's schema
+tests pinned the head at `0050_options`; they now pin `OPTIONS_HEAD = 0051` — the same property (the
+options schema migrates, seeds idempotently and round-trips to `0049`), which now also crosses
+`0051`'s downgrade. `03` §10 says so. **Rejected.** Reconstructing MAE from the fills (they know only
+the entry and the exit); keeping MAE null (the criterion names it). **Reversal.** Downgrade `0051`;
+`mae_r` is then null.
+
+## OP11.3 — Where the record is written and the ledger runs: the desk, at every close and on start · ⚠ UNREVIEWED
+
+The close happens on the desk (OP10's executor), so the journal row and the ledger follow it there:
+`execute_exit` → `close_position` → `options_ledger.after_close` (`op_journal` from the fills, the
+session's `pnl_inr`/`pnl_r`, then `apply_ledger`). The runner calls `morning_ledger` on start (the
+spec's 09:00: the monitor is scheduled from 09:14). The ledger reads rows of the sleeve's **current
+kind only** — paper rows while it is PAPER, real rows while LIVE — so a paper period's losses never
+pause a live sleeve and the reverse (`04` §12's never-pool, applied to the ledger). A sleeve's pause is
+written to its **config group** (O3-A's `DAILY_R` pauses O3, which is both setups — they share one
+config row, `03` §7) and never shortened; each is audited in `op_config_audit` with
+`changed_by='ledger'`. `close_now` raises an exit plan (code = the pause reason) for every position it
+covers, closed by the same sweep as any other exit. **Rejected.** A worker task for the ledger (the
+close is a desk event; a minute's lag would let a paused sleeve's next plan be confirmed).
+
+## OP11.4 — Intraday R is judged at the close, not on every mark · ⚠ UNREVIEWED
+
+§9.1's daily rule reads "today's realised + marked net"; the ledger computes exactly that, but runs at
+each close and on start rather than on every mark. An open position losing past its own budget is
+already closed by §9.2's per-trade breach (1.0 × budget, OP9's `exits.evaluate`), which fires first; a
+second open position of the same sleeve on the same day cannot exist (no re-entry, Track C §6). So an
+intraday −2R is necessarily a realised one at a close, where the rule sees it (`TestDailyR`: an O2
+trade sold 15.20 below its 35.20 entry against a ₹500 budget closes at worse than −2R and pauses O2
+today). The book's day rule does count open marks (`_open_marked_inr`). **Reversal.** Call
+`apply_ledger` from the monitor's mark pass.
+
+## OP11.5 — `OPTIONS_WEEKLY`: one line per pool, Fridays 16:30, dark behind the monitor flag · ⚠ UNREVIEWED
+
+`baskfy_worker.options.weekly` reads the week's `op_journal` rows and skipped sessions and renders
+`journal.summarize`'s pools (sleeve × paper/live × sizing mode) as one alert, the runbook being
+`11-options-plan.md` (a section added). A skipped day's sizing mode is inferred from the sleeve's
+capital (₹0 → `PAPER_ONE_LOT`). **Rejected.** A per-sleeve alert (five mails a Friday).

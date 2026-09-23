@@ -3,7 +3,8 @@
 One schema for three sleeves (PACK.4): the master, the chain, the index bars, the calendar, the
 session machine, the plan/leg/order/fill shape and the journal are shared, and a ``sleeve``
 column (the Postgres enum ``op_sleeve``: ``O1M``, ``O1W``, ``O2``, ``O3A``, ``O3B``) keeps the
-sleeves apart. ``0050_options`` creates all of them; nothing here alters an existing table.
+sleeves apart. ``0050_options`` creates all of them and ``0051_op_position_extremes`` adds
+``op_position.trough_value`` (OP11); nothing here alters a table outside the ``op_`` schema.
 
 TWO KINDS OF TABLE
 ------------------
@@ -626,7 +627,10 @@ class OpPosition(Base):
     lots: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     opened_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     hard_exit_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    #: The best marked P&L per unit, in points (a gain positive for every structure) — MFE.
     peak_value: Mapped[Decimal | None] = mapped_column(PRICE, nullable=True)
+    #: The worst marked P&L per unit, in points — MAE (``0051``, DECISIONS-OP OP11.2).
+    trough_value: Mapped[Decimal | None] = mapped_column(PRICE, nullable=True)
     last_mark_points: Mapped[Decimal | None] = mapped_column(PRICE, nullable=True)
     last_mark_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     exit_plan_id: Mapped[str | None] = mapped_column(String(64), nullable=True)

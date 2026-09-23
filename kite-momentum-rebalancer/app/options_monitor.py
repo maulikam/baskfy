@@ -39,6 +39,7 @@ from baskfy_core.options.bars import Bar
 from baskfy_core.options.config import Sleeve
 from baskfy_core.options.execution import LegRole
 from baskfy_core.options.exits import ExitVerdict, OpenLeg, OpenPosition
+from baskfy_core.options.ledger import pnl_points
 from baskfy_core.options.structures import Direction, Structure
 
 from . import config as C
@@ -203,10 +204,14 @@ class PgPositionStore:
         return exit_id
 
     def record_mark(self, tracked: TrackedPosition, value: Decimal, at: dt.datetime) -> None:
+        """The mark, and the best and worst marked P&L so far (MFE/MAE for the journal, OP11.2)."""
+        position = tracked.position
+        pnl = pnl_points(position.structure, position.entry_points, value).quantize(Decimal("0.01"))
         self.conn.execute(
-            f"UPDATE {_t(self.schema, 'op_position')} SET last_mark_points = ?, last_mark_at = ? "
-            "WHERE session_id = ?",
-            (value.quantize(Decimal("0.01")), _aware(at), tracked.session_id),
+            f"UPDATE {_t(self.schema, 'op_position')} SET last_mark_points = ?, last_mark_at = ?, "
+            "peak_value = GREATEST(COALESCE(peak_value, ?), ?), "
+            "trough_value = LEAST(COALESCE(trough_value, ?), ?) WHERE session_id = ?",
+            (value.quantize(Decimal("0.01")), _aware(at), pnl, pnl, pnl, pnl, tracked.session_id),
         )
 
     def index_minutes(self, day: dt.date, until: dt.datetime) -> list[Bar]:
@@ -276,14 +281,19 @@ def main() -> int:
                 kws.subscribe(tokens)
                 kws.set_mode(kws.MODE_FULL, tokens)
 
-            from . import options_desk, options_execute  # noqa: PLC0415 - the executor, lazily
+            from . import options_desk, options_execute, options_ledger  # noqa: PLC0415 - lazily
             book = options_execute.PgOptionsStore(conn, user_id=user_id)
+            # 09:00 (OP11): the ledger's rules before the open, so a pause a late close earned stands.
+            options_ledger.morning_ledger(
+                book, now=dt.datetime.now(tz=IST), mode_of=options_desk.mode_of
+            )
 
             async def sweep(_now: dt.datetime) -> None:
                 # The monitor raised these exits; the executor closes them under the entry's
                 # confirm (PACK.2). The monitor itself never sends anything.
                 await options_execute.run_pending_exits(
-                    book, options_desk.gateway_for, quotes=options_execute.kite_quotes(kite)
+                    book, options_desk.gateway_for, quotes=options_execute.kite_quotes(kite),
+                    mode_of=options_desk.mode_of,
                 )
 
             return await run_session(

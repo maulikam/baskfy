@@ -62,6 +62,7 @@ the rule); applying `stop_from_vol()`'s 8–12 % alone to futures (looser than t
 stop in most names, which would make the rule weaker than the method).
 
 **Reversal.** Maulik's answer replaces (a) or (b); the guard tests are re-pointed at it.
+*(Settled by M.1: (a) and (b) as written, plus a close order at a loss of 1.5 × the credit.)*
 
 ## PACK.4 — No stock derivative is held into expiry day · ⚠ UNREVIEWED
 
@@ -99,7 +100,8 @@ Also rejected: presenting OI buildup or IV rank as signals on the information pa
 flat or negative, so they are shown as facts (PACK.8).
 
 **Reversal.** A family that the re-test finds positive three quarters running is written up here
-for Maulik. Commissioning it is a new module with its own paper period.
+for Maulik. Commissioning it is a new module with its own paper period. *(Superseded in part by
+M.1: Maulik chose to build the long-only futures trend as F2, on paper.)*
 
 ## PACK.7 — F1 trades the rule as tested: no IV gate, no defensive exit · ⚠ UNREVIEWED
 
@@ -129,3 +131,31 @@ table with the latest re-test beside each (`04` §5, `05` §3).
 11 Sep lesson describes.
 
 **Reversal.** A re-test verdict change (PACK.6) is the only thing that can add a signal column.
+
+## M.1 — Maulik's answers to Q1, Q2 and Q4, and the run's order (in session, 23 Sep 2026)
+
+These are **Maulik's decisions**, not agent judgement, taken with the options and trade-offs in
+front of him. Agents build on them and do not reopen them.
+
+| Q | His answer | What it means in the pack |
+|---|---|---|
+| Q2: non-negotiable 4 for derivatives | **"Structure stop + close order"** | A defined-risk option structure gets no GTT: its max loss is fixed at entry. **In addition**, the desk closes the whole structure, shorts first, when the cost to close reaches **(1 + 1.5) × the entry credit**, a loss of 1.5× the credit (`f1_loss_close_mult`). Futures, long or short, get a broker-side GTT stop the same session. This settles PACK.3 |
+| Q1: F1 capital | **₹10 lakh** | `fo_sleeve_config.capital_inr` for F1 is seeded at ₹10,00,000 by FO2's seed, for both underlyings together. At 1.0 % risk that is ₹10,000 max loss per structure (under the ₹25,000 ceiling). Seeding it moves no money: every execution flag stays false |
+| Q4: build a rejected family anyway | **"Futures trend, long only"** | Sleeve **F2**, stock-futures breakout, long only, **paper only**. `01` §1b and `04` §10 |
+| Order vs the OP run | **"Finish OP first"** | FO0 starts only after OP15 is ✅. The pack waits |
+
+**The evidence he was shown and what it added** (run after his answers, so the pack states the
+cost of each):
+
+* **F1 with the 1.5× loss close** (`evidence/idx_stop15.txt`): n = 100, **+0.022R** (was +0.033R),
+  t = 1.01, win 83 %, worst trade **−0.73R** (was −1.02R), max drawdown −1.35R (was −1.64R). By
+  year: −0.010, −0.004, +0.078, +0.010, +0.047. At 1.0× the credit: +0.025R, worst −0.66R; at
+  2.0×: +0.023R, worst −0.95R. **So the stop costs about a third of the edge and cuts the tail by
+  about a quarter.** One consequence: 2022 turns slightly negative, so `02` §3 item 4 ("positive
+  in three of five years, *including 2022*") is **not met by Tier 2E as it stands**. That gate
+  item is Maulik's to waive in writing when the time comes, and the pack does not pre-waive it.
+* **F2 re-costed with its rolls** (`evidence/research/res_f2.py`): a live long held for about 22
+  sessions crosses an expiry on 0.96 of trades, and each roll at E−1 is another round trip.
+  n = 2,334, **+0.017R** (t = 0.71), win 39 %. By year: −0.026, **+0.455**, −0.129, −0.143,
+  −0.141. **Four of five years are negative**, and 2024–2026 lost steadily. F2 therefore carries a
+  banner on every surface (`05`), and its real-money gate cannot be met on this Tier 2E alone.

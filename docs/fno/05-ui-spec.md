@@ -15,7 +15,7 @@ routes are `/options/overnight` and `/options/fno`. `nav.test.ts` is extended, n
 **Desk.** An `F&O Overnight` tab beside `NIFTY Options`, route **`/fno`**, with a badge for open
 structures and their nearest hard-exit date, and `PAPER`/`LIVE` per sleeve from `fno_gates()`.
 
-## 2. `/options/overnight` — F1 (web, read-only)
+## 2. `/options/overnight` — F1 and F2 (web, read-only)
 
 **Header.** Per underlying: the next F1 entry date, and today's state chip (`04` §8). A red
 **"Hard exit tomorrow 15:00"** line appears when any open structure's `hard_exit_date` is the next
@@ -41,6 +41,13 @@ exit date, and the days held. *Journal*: closed structures, in R, paper and live
 **Evidence card.** The Tier 2E line from `RESEARCH.md` §B4 with its caveat verbatim (`07` §4) and
 n = 100; the latest quarterly re-test; the paper tally against `04` §9's checklist.
 
+**F2 section.** A **permanent amber banner**, not dismissible: "Built by choice against the
+research: +0.017R a trade after rolls, negative in 2022, 2024, 2025 and 2026 (`RESEARCH.md`)." Below
+it: tomorrow's F2 candidates from `fo_scan` (symbol, breakout level, stop, R per lot, what one lot
+would risk in ₹, and `REJECTED_SIZE` where the ceiling refuses it), open positions (entry, current
+trailing stop, the GTT's state, next roll date, sessions held, P&L in ₹ and R), and closed trades
+with their rolls.
+
 ## 3. `/options/fno` — Stock F&O information (web, read-only)
 
 The banner from `04` §5 ("None of these numbers predicted a profitable trade after costs in
@@ -61,8 +68,11 @@ Phone: the table collapses to symbol · IV ÷ RV · OI chg · ban, and a tap ope
   (longs first)** and the hard exit date. Then **Confirm (paper)** with the sentence: "This
   confirm also authorises the 50 % profit take and the E−1 15:00 exit of this structure. It
   places nothing else." It has a 30-minute countdown to `expires_at`.
-* **Open structures**: a live mark, the distance of the underlying to each short strike in σ, and
-  the next rule to fire.
+* **Open structures**: a live mark, the distance of the underlying to each short strike in σ, the
+  distance to the loss close (1.5 × credit) and to the profit take, and the next rule to fire.
+* **F2**: the morning candidates with Confirm (paper), each stating "This confirm also authorises
+  this position's trailing GTT stop, its E−1 rolls and its 40-session time exit"; open futures with
+  the GTT id and trigger, and a red flag on any position whose GTT is not resting.
 * **Exits** fire under the confirm and are shown as they happen. Any refusal (guard, margin,
   stale quote) is shown by name, never as a spinner.
 * No field on this page moves money except Confirm. Capital, risk % and pauses are the settings

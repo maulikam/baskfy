@@ -6,8 +6,9 @@ understood it.**
 
 This pack does something the options pack forbade: it **holds derivatives across the close**.
 Maulik chose that in session on 23 Sep 2026 ("Defined-risk overnight"; README), and this file is
-where the permission is bounded. **v1 builds one trading sleeve, F1 (NIFTY and BANKNIFTY monthly
-iron condors, paper), plus a data layer and an information page** (`01`, from `RESEARCH.md`). The
+where the permission is bounded. **v1 builds two paper sleeves: F1 (NIFTY and BANKNIFTY monthly
+iron condors) and F2 (stock-futures breakout, long only, built by Maulik's choice against the
+research, M.1), plus a data layer and an information page** (`01`). The
 rules below are written for any overnight derivative, so a sleeve commissioned later inherits them
 rather than re-arguing them. Everything the options pack's `02` says about O1–O3 stays true for
 O1–O3. Nothing here widens them.
@@ -20,7 +21,7 @@ Three facts in force today (non-negotiable 5; `docs/options/DECISIONS-OP` OP2.1)
 |---|---|---|
 | A derivative venue admits **MIS only**, and MIS needs `INTRADAY_ENABLED` | `guards.product_exchange_refusal` | **Adds one branch.** `NRML` on `NFO` is admitted only when `OPTIONS_ENABLED` **and** `BASKFY_FNO_CARRY_ENABLED` are both true **and** the order carries a `fo_plan` reference (below). Every other product/venue pair is refused exactly as today |
 | `assert_not_overnight_option` refuses any option under a carry product | `guards.py`, before any network call | **Replaced for FO orders only** by `assert_overnight_option_is_covered`. An NRML option order passes only if it is a leg of a registered `fo_plan` whose structure is defined-risk *at every prefix of its entry sequence* (`04` §2). Orders without a `fo_plan` reference, including every O1–O3 order, meet the old guard unchanged |
-| A GTT on a derivative venue is refused whatever the switches | `guards.py` (OP2.1) | **Unchanged in v1.** v1 builds no futures sleeve (`01` §4), so nothing needs a futures GTT. If a futures sleeve is ever commissioned, it adds this branch (a GTT on `NFO`/`NRML` for a future, same two flags, a `fo_plan` reference), because non-negotiable 4 requires the stop. A GTT on an option stays refused (§2.4) |
+| A GTT on a derivative venue is refused whatever the switches | `guards.py` (OP2.1) | **Adds one branch, for F2.** A GTT on `NFO`/`NRML` for a **stock future** is admitted when the same two flags are on and it carries an F2 `fo_plan` reference, because non-negotiable 4 requires the stop (M.1). A GTT on an option stays refused (§2.4) |
 
 The multi-tenant clause (the law of `packages/execution`) applies unchanged. Every FO order carries
 `user_id` + `broker_account_id`.
@@ -40,13 +41,13 @@ The multi-tenant clause (the law of `packages/execution`) applies unchanged. Eve
 3. **Every future has a resting stop the same session.** This is non-negotiable 4 read for
    futures. It applies to shorts as well as buys, because a short future is the riskier side. The
    stop is broker-side (a GTT, admitted by §1), so a desk that is down overnight does not remove
-   it. It is at least as tight as `stop_from_vol()` gives, and the sleeve's own ATR stop when that
-   is tighter (QUESTIONS Q2; not exercised in v1, which builds no futures sleeve).
-4. **An option structure's stop is its structure.** Its maximum loss is fixed at entry and shown
-   on the plan in ₹ and R. It is never placed as a GTT, because a GTT on the long leg would
-   un-hedge the short. That is why §1 keeps option GTTs refused. **This reading of
-   non-negotiable 4 for option legs is Maulik's to confirm** (QUESTIONS Q2). Until he does, it
-   stands as `DECISIONS-FO` PACK.3 ⚠ UNREVIEWED, and no FO option order leaves paper.
+   it. It is the tighter of the sleeve's own stop and `stop_from_vol()` (Maulik, M.1).
+4. **An option structure's stop is its structure, plus a close order.** Its maximum loss is fixed
+   at entry and shown on the plan in ₹ and R. It is never placed as a GTT, because a GTT on the
+   long leg would un-hedge the short; that is why §1 keeps option GTTs refused. In addition the
+   desk closes the whole structure, shorts first, when its loss reaches `f1_loss_close_mult`
+   (1.5) × the entry credit. **This is Maulik's reading of non-negotiable 4 for derivatives**
+   (in session, 23 Sep 2026; `DECISIONS-FO` M.1). Agents do not reopen it.
 
 ## Track A — build now, live for the sole user, paper only
 
@@ -73,7 +74,7 @@ The multi-tenant clause (the law of `packages/execution`) applies unchanged. Eve
 | Flag | Default | What it unlocks | Flip condition |
 |---|---|---|---|
 | `BASKFY_FNO_<SLEEVE>_EXECUTION_ENABLED` (one per sleeve in `01`) | `false` | A confirmed line of that sleeve may reach `OrderGateway.place` with `DRY_RUN=false`. With it false the execute route returns the simulated result, **regardless of `DRY_RUN`** | §3, by Maulik's hand |
-| `BASKFY_FNO_CARRY_ENABLED` | `false` | The gateway admits `NRML` on `NFO` for `fo_plan` orders only, each re-proved covered (§1) | §3; a `LOCKED_KEY`, never a form field |
+| `BASKFY_FNO_CARRY_ENABLED` | `false` | The gateway admits `NRML` on `NFO` for `fo_plan` orders only (options re-proved covered), and an F2 future's GTT stop (§1) | §3; a `LOCKED_KEY`, never a form field |
 | `OPTIONS_ENABLED` (existing) | `false` | Derivative venues pass the product gate | §3, and `docs/options/02`'s side-door test must be green first |
 | `BASKFY_FNO_SCAN_ENABLED` | `false` | The nightly scans | After FO2's bhavcopy ingest is green; operational |
 | `BASKFY_FNO_MONITOR_ENABLED` | `false` | The desk process that raises plans and runs exits | After FO7's replay test; operational, moves no money |
@@ -108,7 +109,10 @@ entries**: one confirm covers the plan's rule-driven exits (options PACK.2, carr
 4. **No web-app orders.** `apps/web` and `services/api` get no route that can reach the gateway.
    `test_fno_readonly.py` checks both sides of the wire.
 5. **No rolling, no averaging down, no adding to a loser, no converting a position**, and no
-   re-entry on the same underlying and sleeve before the next scan.
+   re-entry on the same underlying and sleeve before the next scan. **One exception, F2's
+   calendar roll**: at 15:00 on E−1, the held future is sold and the next month bought as one
+   plan under the original confirm, same quantity, stop carried (`01` §1b). It is mechanical, it
+   is not a new entry, and it is journalled as a roll with its own costs.
 6. **No sizing from margin.** Lots come from the risk budget. Margin is a ceiling the plan must fit
    under (`basket_order_margins`).
 7. **No touching the other books.** The weekly rebalancer, swing, TWT, VBT and the O-sleeves are
@@ -131,12 +135,15 @@ sleeve, each with its evidence in `FO-FINAL-REPORT.md` or a dated addendum:
 
 1. **FO11 green**, including the options pack's `OPTIONS_ENABLED` side-door test and this pack's
    covered-overnight guard tests (§1).
-2. **QUESTIONS Q1–Q2 answered in writing** (capital; the non-negotiable-4 reading for option legs).
+2. **Capital and the non-negotiable-4 reading answered in writing.** For F1 both are done (M.1:
+   ₹10 lakh; structure stop + close order). F2 still has capital ₹0.
 3. **The paper period, through the deployed desk,** with `DRY_RUN=true` and zero rule violations
    (no uncovered short at any step, no position into expiry day, no future without its resting
    stop, no journal gap). The length is per sleeve, in `04` §9.
 4. **Tier 2E (`07` §4) with positive expectancy after costs in at least three of the five sample
-   years, including 2022.** Otherwise Maulik writes that he is proceeding without it.
+   years, including 2022.** Otherwise Maulik writes that he is proceeding without it. **Neither
+   sleeve meets this today** (M.1): F1 with its loss close is −0.010R in 2022, and F2 is positive
+   only in 2023. Both therefore need his written waiver, or better forward evidence, before a flag.
 5. **Tier 3 over the paper period** with its measured slippage. If the measured slippage is worse
    than the Tier 2E assumption, the Tier 2E run is repeated at the measured number, and item 4 must
    still hold.

@@ -7,6 +7,8 @@ rebalance on any Friday; swing, TWT, VBT and the O-sleeves must run on any morni
 `STATUS.md` + (if judgement was exercised) `DECISIONS-FO.md` are updated. Criteria are proxies for
 Goals; the charter's precedence order applies.
 
+**When: after the OP run.** Maulik, 23 Sep 2026 (M.1): FO0 starts only when OP15 is ✅.
+
 **Order: data and information ship first.** FO0–FO5 end with the Stock F&O page and F1's nightly
 scan on the web. The gateway change comes after that, and it is the only module that touches
 `packages/execution`.
@@ -38,7 +40,8 @@ uncommitted in the tree, an FO module commits only its own files (never `git add
   box can read the F&O bhavcopy through `NSEProvider.fo_bhavcopy` (one day, archived); (d) the
   current F&O ban-list file on NSE and its URL shape, via the NSE provider only.
 - Re-run `RESEARCH.md`'s B4 (N = 15) from `docs/fno/evidence/research/` against the stored data
-  and record that it reproduces: n = 100, +0.033R ± 0.002.
+  and record that it reproduces: n = 100, +0.033R ± 0.002 (and +0.022R with the loss close); and
+  F2's spec (`res_f2.py`): n = 2,334, +0.017R.
 
 ### FO1 — The pure core `baskfy_core.fno`
 
@@ -83,8 +86,8 @@ knows every F&O underlying.
 
 **Goal:** after each ingest, F1's state for the next session is on the web.
 
-- `baskfy.fno.scan` writes `fo_scan` per underlying (`04` §8) from the database only, idempotent
-  per `(user, sleeve, date)`.
+- `baskfy.fno.scan` writes `fo_scan` per underlying for F1 and per candidate stock for F2 (`04` §8,
+  §10) from the database only, idempotent per `(user, sleeve, date, symbol)`.
 
 ### FO5 — API and pages
 
@@ -99,7 +102,8 @@ knows every F&O underlying.
 
 **Goal:** an FO order can be NRML only when it is covered, and nothing else changes.
 
-- `product_exchange_refusal` gains the one branch of `02` §1.
+- `product_exchange_refusal` gains the NRML branch of `02` §1, and the GTT guard its F2
+  stock-future branch (option GTTs stay refused; tested).
   `assert_overnight_option_is_covered` runs before the network. It reads the broker's positions
   and the plan's filled legs, and refuses otherwise.
 - `fno_gates(sleeve)` ANDs the four flags. The execute path consults it, and with the sleeve flag
@@ -113,15 +117,19 @@ knows every F&O underlying.
 
 **Goal:** plans are raised, exits happen, and positions carry, on paper.
 
-- 09:20 on an entry day: the plan from `fo_scan`, re-priced on live quotes, with the broker's
-  basket margin as a ceiling. During the session: the profit-take check on live mids every 60 s
-  for open structures. At 15:00 on `hard_exit_date`: the exit plan, shorts first. Nightly: a
-  `fo_mark` at the settle.
-- A **replay test** over a recorded fixture month shows entry, carry, profit take and E−1 exit.
+- F1: at 09:20 on an entry day, the plan from `fo_scan`, re-priced on live quotes, with the
+  broker's basket margin as a ceiling. During the session, the profit-take and **loss-close**
+  checks on live mids every 60 s. At 15:00 on `hard_exit_date`, the exit plan, shorts first.
+- F2: the 09:20 plans; the GTT placed in the fill's session; each evening the trail moved and the
+  GTT modified; the E−1 15:00 roll plan; the 40-session exit.
+- Nightly: a `fo_mark` at the settle.
+- **Replay tests** over recorded fixture months: F1 entry, carry, profit take, loss close and E−1
+  exit; F2 entry, trail, GTT modification, a roll, a stop-out and a time exit.
 
 ### FO8 — Desk page `/fno` and `POST /fno/execute` (paper)
 
-**Goal:** one click confirms a paper F1 plan, and the simulated fills, carry and exit all happen.
+**Goal:** one click confirms a paper F1 or F2 plan, and the simulated fills, GTT, carry, rolls and
+exits all happen.
 
 - `05` §4. The simulated fill walks the live depth (options PACK.2's simulator). The journal is
   `simulated=true`.
@@ -133,7 +141,8 @@ knows every F&O underlying.
 - `baskfy.fno.retest`: every family in `RESEARCH.md`'s tables, run through
   `baskfy_core.fno.research` on `fo_contract_daily`, into `fo_backtest_run`.
 - **A golden test**: on the 2022-01-03 → 2026-09-22 data, B4 N=15 gives n = 100 and net R within
-  ±0.002 of +0.033, and B1's N=10 top-30 row matches its table. A drift is a bug in the port, not
+  ±0.002 of +0.033 (+0.022 with the 1.5× loss close), F2's spec gives n = 2,334 and +0.017R with
+  rolls, and B1's N=10 top-30 row matches its table. A drift is a bug in the port, not
   a new finding.
 - Measured slippage replaces the assumption where FO3 has ≥ 20 sessions of it.
 

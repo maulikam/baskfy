@@ -3,7 +3,7 @@
 Updated at the end of every module, and loud about what is NOT done. A fresh session resumes from
 the first module not marked ✅.
 
-**Run state: pack written and research done (23 Sep 2026); FO0 not started.** Branch `developer`.
+**Run state: pack written, research done, Q1/Q2/Q4 answered (23 Sep 2026); FO0 waits for OP15 (Maulik, M.1).** Branch `developer`.
 The OP run is unfinished on the same branch (OP8 next, OP7 uncommitted in the tree when this pack
 was written). See `06`, "Coordination with the OP run".
 
@@ -42,14 +42,18 @@ States: ⬜ not started · 🔄 in progress · ✅ green · ⛔ blocked · 🟡 
 |---|---|---|---|
 | F1N (NIFTY) | 6 consecutive monthly cycles | 0 | 0 |
 | F1B (BANKNIFTY) | 6 consecutive monthly cycles | 0 | 0 |
-| Both together | ≥ 4 of the 12 structures actually opened | — | 0 |
+| F1 both together | ≥ 4 of the 12 structures actually opened | — | 0 |
+| F2 | 60 sessions, ≥ 15 positions closed, ≥ 3 rolls | 0 | 0 |
 
 ## What is NOT done, and must not be forgotten
 
 * **No F&O trading code exists.** No schema, no scan, no guard change, no desk page. The pack is
   design plus one provider read.
-* **QUESTIONS Q1 and Q2 are unanswered.** Q2 (non-negotiable 4 for option legs) blocks any FO
-  option order from leaving paper.
+* Q1, Q2 and Q4 are answered (M.1). **Neither sleeve meets the real-money gate's Tier 2E item
+  (`02` §3.4) as tested**: F1 with the loss close is −0.010R in 2022, and F2 is negative in four of
+  five years. A flag needs Maulik's written waiver or forward evidence.
+* F2's live sizing will refuse most names under the ₹25,000 per-trade ceiling (`04` §10), and its
+  capital is ₹0.
 * The research's slippage for stock options (3 %) is **assumed**. FO3 measures it.
 * The research's option marks are closes, not fills (`07` §2), and its lot sizes before
   8 Jul 2024 are approximations.

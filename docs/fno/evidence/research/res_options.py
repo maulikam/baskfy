@@ -23,7 +23,8 @@ R_RATE = 0.065
 SLIP_PCT, SLIP_MIN = float(os.environ.get("SLIP_PCT", "0.03")), 0.05
 TOPN = int(os.environ.get("TOPN", "0"))
 MODE = os.environ.get("MODE", "condor")
-DEFEND = os.environ.get("DEFEND", "0") == "1"  # close at the next close after a short strike is breached at a close  # condor | trend_credit
+DEFEND = os.environ.get("DEFEND", "0") == "1"
+LOSS_MULT = float(os.environ.get("LOSS_MULT", "0"))  # close when loss >= LOSS_MULT x credit (0 = off)  # close at the next close after a short strike is breached at a close  # condor | trend_credit
 
 opt = pl.scan_parquet(ROOT / "options.parquet").filter(
     pl.col("date") >= pl.col("expiry") - pl.duration(days=32))
@@ -199,9 +200,10 @@ def condor_trades(n_before: int, k_short: float, k_wing: float, symbols_filter=N
             # no-arbitrage bound: a vertical is worth between 0 and its width (closes are not
             # simultaneous, so raw marks can breach it)
             val = min(max(side_val["CE"], 0.0), wc - sc) + min(max(side_val["PE"], 0.0), sp - wp)
-            if breached or val <= (1 - pt) * credit or i == ix:
+            stopped = LOSS_MULT > 0 and val >= (1 + LOSS_MULT) * credit
+            if stopped or breached or val <= (1 - pt) * credit or i == ix:
                 exit_val, exit_d, modelled, exit_legs = val, d, mod, legpx
-                if breached or val <= (1 - pt) * credit:
+                if stopped or breached or val <= (1 - pt) * credit:
                     break
             if DEFEND and (Fdv >= sc or Fdv <= sp):
                 breached = True
@@ -241,7 +243,7 @@ if __name__ == "__main__":
     if which == "index":
         for n in (20, 15, 10):
             t = condor_trades(n, 1.0, 0.5, symbols_filter={"NIFTY", "BANKNIFTY"})
-            t.write_parquet(ROOT / f"condor_index_{n}_{SLIP_PCT}_{int(DEFEND)}.parquet"); summarise(f"INDEX condor N={n} defend={DEFEND}", t)
+            t.write_parquet(ROOT / f"condor_index_{n}_{SLIP_PCT}_{int(DEFEND)}.parquet"); summarise(f"INDEX condor N={n} defend={DEFEND} loss_mult={LOSS_MULT}", t)
     else:
         n = int(sys.argv[2]) if len(sys.argv) > 2 else 10
         k = float(sys.argv[3]) if len(sys.argv) > 3 else 1.0

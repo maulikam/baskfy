@@ -3,10 +3,10 @@
 The status page for the options run. Updated at the end of every module, loud about what is NOT
 done. A fresh session resumes from the first module not marked ✅.
 
-**Run state: OP0 🟡, OP1 ✅, OP2 ✅, OP3 🟡, OP4 ✅, OP5 ✅, OP6 ✅, OP7 ✅, OP8 ✅, OP9 ✅, OP10 ✅, OP11 ✅ (23 Sep 2026); OP12 not started.** Pack written 22 Sep 2026 on branch
+**Run state: OP0 🟡, OP1 ✅, OP2 ✅, OP3 🟡, OP4 ✅, OP5 ✅, OP6 ✅, OP7 ✅, OP8 ✅, OP9 ✅, OP10 ✅, OP11 ✅, OP12 ✅ (23 Sep 2026); OP13 not started.** Pack written 22 Sep 2026 on branch
 `developer`, absorbing the never-started condor pack (`docs/condor/`) as sleeve O1. OP0-OP7 were each run alone, by instruction ("execute only OP<N>, then stop"); OP8 was run by Maulik's
 "continue the OP run from OP8" (23 Sep 2026), which also committed OP7's green work (`00cb48b`), found
-uncommitted in the tree. The next session resumes at OP12 (and the orchestrator feeds back OP3's box probe — §"What is NOT done" under OP3).
+uncommitted in the tree. The next session resumes at OP13 (and the orchestrator feeds back OP3's box probe — §"What is NOT done" under OP3).
 
 ## Module ledger
 
@@ -24,7 +24,7 @@ uncommitted in the tree. The next session resumes at OP12 (and the orchestrator 
 | OP9 — Desk process `options_monitor` | ✅ | `baskfy_core.options.exits.evaluate` (pure) + desk `app/strategies/nifty_options.py` (marks from depth ticks, bars from index ticks reconciled to `op_index_minute`, one EXIT plan per position), `app/options_clock.py` (loop with idle evaluation, ≤ 1 quote / 5 s fallback, new legs followed), `app/options_monitor.py` (flag-first runner, `PgPositionStore`); `tools/options/replay.py` + five priced fixtures with an independent answer key; 58 new tests |
 | OP10 — Desk page + `/nifty-options/execute` (paper) | ✅ | pure `baskfy_core.options.executor` (entry/exit procedure over a venue, never-naked asserted per attempt) + desk `app/options_execute.py` (gateway-backed venue, depth-ladder paper fills, `PgOptionsStore`, LIVE refused) + `app/options_desk.py` (`/nifty-options`, `/data`, execute, close) + template; the monitor's loop sweeps raised exits; 32 new tests |
 | OP11 — Journal, ledger, pauses, first-live multiplier | ✅ | pure `ledger.journal_figures` (gross, §6.1 costs, net, R, MAE/MFE from fills) + desk `app/options_ledger.py` (journal at every close, §9.1/§9.3 pauses audited, `close_now` exits, 09:00 on start) + migration `0051` (`op_position.trough_value`) + worker `OPTIONS_WEEKLY` (one line per pool, Fridays); 17 new tests |
-| OP12 — Backtests: Tier 1–2 per sleeve; Tier 3 ⛁ | ⬜ | |
+| OP12 — Backtests: Tier 1–2 per sleeve; Tier 3 ⛁ | ✅ | pure `replay_day` (Tier 1 signals, `priced_day` = the live scan → plan builder → executor → exit rules → ledger over a `ModelChain` or `StoredChain`) + `backtest_suite` (`run_tier`, ±25 % sensitivity); worker `backtest_run` → `op_backtest_run`, task `baskfy.options.backtest` (compute queue, no Beat), `tools/options/backtest.py`; 19 new tests. Days before the master are `uncalendared` (OP12.3); full backfill and Tier 3 ⛁ |
 | OP13 — Gating and safety proof | ⬜ | |
 | OP14 — Hardening and observability | ⬜ | |
 | OP15 — Verification, goldens, deploy, final report | ⬜ | |
@@ -1096,9 +1096,73 @@ screener file.
 Nothing in code for Tiers 1–2 (they read index bars and modelled premiums); Tier 3 waits for
 collected chains (⛁).
 
+## OP12 — Backtests: Tier 1 and Tier 2 per sleeve; Tier 3 when data exists ⛁
+
+**✅, 23 Sep 2026.** Decisions `DECISIONS-OP.md` OP12.1–OP12.7. A backtest day runs the live code:
+the sleeve's scan, its plan builder, the executor over a chain, the exit rules minute by minute and
+the ledger's journal figures. So a Tier 2 or Tier 3 trade is one the paper path would have taken.
+
+### What exists
+
+* **`packages/core/src/baskfy_core/options/replay_day.py`** (pure): `tier1_day` (the sleeve's gate,
+  plus the index's MFE/MAE after the trigger), `priced_day` (decide → `run_entry` → per-minute
+  `exits.evaluate` → `run_exit` → `ledger.journal_figures`; R = the plan's risk per lot),
+  `ModelChain` (Tier 2: Black-76 at the previous VIX, §6.2 spread, OP12.1) and `StoredChain` (Tier 3).
+* **`packages/core/src/baskfy_core/options/backtest_suite.py`** (pure): `run_tier` (one sleeve, one
+  tier; the sleeve's non-days dropped), `tier1_sensitivity` (each gate threshold ×0.75 / ×1.25),
+  `THRESHOLDS`, `min_sessions`.
+* **`services/worker/src/baskfy_worker/options/backtest_run.py`**: the days from the database (the
+  live scan's readers; the master as the day saw it; Tier 3 minutes from `op_chain_snapshot`),
+  `run_backtest` → one `op_backtest_run` row (caveats verbatim, params, sensitivity, git sha).
+* Task **`baskfy.options.backtest`** (compute queue, on demand, no Beat, no broker) and
+  **`tools/options/backtest.py`** (`--fixture` with no database; `--sleeve --tier --from --to`).
+* `/options/journal`'s backtest card shows each caveat sentence on its own line (`whitespace-pre-line`);
+  API `GET /options/backtest` has read the rows since OP5.
+
+**Fixture run** (`tools/options/backtest.py --fixture`, four OP4 days): O2 Tier 2: 2 traded, E[R] 1.86
+(the extra O2 sentence says Tier 2 flatters O2); O3-A: 1 traded, 0.92R TARGET; O3-B: 1 traded,
+−0.36R STOP; O1-W: no signal (gap, not contained); O1-M Tier 2: `REJECTED_NO_SHORT_CALL` (OP12.6).
+Four days are a smoke test, not evidence.
+
+### AC → test
+
+| `06` OP12 AC | Test |
+|---|---|
+| Tier 1 over the full backfill runs end to end per sleeve | `test_options_backtest_days.py::TestTierOne` (every sleeve) + worker `TestOnADatabase::test_tier_one_writes_one_row_with_its_caveat` (stored days → row). **The full backfill is the box's run (⛁), and before the master it is `uncalendared` (OP12.3)** |
+| a planted Tier 2 day reproduces its expected R to 0.01 | `TestAPlantedDay::test_the_planted_day_reproduces_its_r_to_the_paisa` (hand-set exit minute; ₹ and R by hand) |
+| Tier 3 over fixture snapshots reproduces OP10's drill P&L to the rupee | `TestAPlantedDay::test_tier_three_over_the_planted_snapshots_is_the_same_rupees` + worker `test_tier_three_from_the_table_is_the_same_rupees` (OP12.4) |
+| the caveat text equals `07`'s verbatim | `TestTheCaveats` (reads `docs/options/07`, `docs/condor/07`, `docs/options/04`) + worker rows store it |
+| no card mixes tiers or sleeves | `TestOneSleeveOneTier`; `run_tier` takes one sleeve and one tier; one row per run |
+| ±25 % sensitivity on each threshold | `TestSensitivity` + the Tier 1 row's `params_json.sensitivity` |
+
+### Tests (new)
+
+| File | Tests |
+|---|---|
+| `packages/core/tests/test_options_backtest_days.py` | 13 |
+| `services/worker/tests/test_options_backtest_task.py` (4 on `baskfy_test`) | 6 |
+| **Total** | **19** |
+
+**Regression (Postgres + Redis up, 23 Sep 2026):** core `options`/escape-hatch/schema **1,740
+passed**; whole worker suite **1,390 passed**; API `options` **72 passed**; web
+`options` 14 passed; ruff and mypy strict clean. The desk tree is untouched by OP12.
+
+### What is NOT done
+
+* **The full-history Tier 1 and every Tier 2 on real days** are box runs (⛁): they need the index
+  minute backfill (OP3, not run) and India VIX's daily history (`index_backfill --write`, OP12.2).
+* **A historical expiry calendar** (OP12.3): days before 22 Sep 2026 are `uncalendared` until
+  `op_contract` is backfilled from the F&O bhavcopy.
+* `07` §2's bhavcopy check (OP12.7).
+* Tier 3 becomes meaningful only after weeks of collected chains.
+
+### What blocks OP13
+
+Nothing.
+
 ## What is NOT done
 
-Everything after OP11. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
+Everything after OP12. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
 OP3 does them first); the two full-suite baseline runs (OP0.9); the gateway gap of OP0.6 is **fixed in OP2** (OP2.1); the
 `/ops` side door of OP0.5 is **recorded, not fixed** (OP13). Every money flag is false and stays false. The paper periods begin only after OP15, and
 the longest (O1-M) takes about six months after that.

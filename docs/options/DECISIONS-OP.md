@@ -1391,3 +1391,78 @@ today). The book's day rule does count open marks (`_open_marked_inr`). **Revers
 `journal.summarize`'s pools (sleeve × paper/live × sizing mode) as one alert, the runbook being
 `11-options-plan.md` (a section added). A skipped day's sizing mode is inferred from the sleeve's
 capital (₹0 → `PAPER_ONE_LOT`). **Rejected.** A per-sleeve alert (five mails a Friday).
+
+## OP12.1 — Tier 2's model book is priced to the paisa toward the model, three levels deep · ⚠ UNREVIEWED
+
+`04` §13.2 prices Tier 2 by Black-76 at the previous India VIX close with §6.2's synthetic spread.
+Rounded to the exchange tick, the synthetic bid/ask of a cheap strike widened past §2.4's 3 % spread
+gate on its own rounding, and every Tier 2 day came back `REJECTED_ILLIQUID`: the model failing a
+liquidity test it has no liquidity to fail. **Choice.** `replay_day.ModelChain` rounds the bid up
+and the ask down to the paisa (never crossing), rests `depth` units (1,300) at three levels either
+side and states OI 5,000,000. §6.2's spread stays a crossing *cost* the fills pay; the liquidity
+gates stay what they are for observed chains. **Rejected.** Relaxing §2.4 in Tier 2 (a rule changed
+per tier would make a Tier 2 trade one the live code could never take). **Reversal.** Round to the
+tick in `ModelChain._build`; Tier 2 then skips most days `REJECTED_ILLIQUID`.
+
+## OP12.2 — India VIX's daily history is the existing index backfill, not a new ingest · ⚠ UNREVIEWED
+
+`06` OP12 asks for "India VIX daily history into `index_snapshot_daily`". It already has two
+writers: NSE's nightly index-close file (the dashboard snapshot, slug `india-vix`) and M31's
+`baskfy_worker.index_backfill`, which fetches every Kite `INDICES` instrument's daily candles and
+matches `INDIA VIX` to `index_def` by name. **Choice.** No third writer. The box runs
+`uv run python -m baskfy_worker.index_backfill --write` once (⛁, operator-led, the bulk lane), and
+`scan.vix_previous_close` keeps its fallback to the last stored minute bar. **Rejected.** Deriving a
+daily close from `op_index_minute` (a second source for one number, and the minute backfill begins
+later than the daily one). **Reversal.** Add a derivation in `backtest_run` if the box shows gaps.
+
+## OP12.3 — A past day is calendared by the master as it stood, and a day before the master is counted, not guessed · ⚠ UNREVIEWED
+
+Every sleeve's role comes from `calendar.role` over the day's listed contracts. `op_contract` keeps
+expired rows forever (`03` §1), so `backtest_run.market_day` gives a past day every contract with an
+expiry on or after it, minus any expiry `op_expiry` marks withdrawn. **But the master begins when the
+collector began (22 Sep 2026)**: a day before that has no listed expiry, and no role. **Choice.**
+Such a day is counted as `uncalendared` in the run's report and `params_json`, and is not a session.
+Weekday rules ("last Tuesday") are not used to invent a calendar: NSE moved NIFTY's expiry weekday in
+2025 and shifts expiries for holidays, and a guessed monthly would put a trade on a day that had none.
+So "Tier 1 over the full backfill runs end to end per sleeve" holds, but **its sessions are only
+the calendared days** until a historical calendar exists. The source for one is the F&O bhavcopy
+(`NSEProvider.fo_bhavcopy`, FO-PACK), which lists each day's traded expiries; loading it into
+`op_contract` history is follow-up work, recorded in STATUS. **Rejected.** A rule-based calendar.
+**Reversal.** Backfill `op_contract`/`op_expiry` from the bhavcopy; the runner needs no change.
+
+## OP12.4 — "Tier 3 reproduces OP10's drill P&L to the rupee", read as the same executor over the same minutes · ⚠ UNREVIEWED
+
+OP10's paper path is `executor.run_entry`/`run_exit` over the desk's `DeskVenue` (the gateway's
+dry-run branch, fills from the leg's depth). Tier 3 runs the same executor over `_SnapshotVenue`,
+which fills from the stored minute's depth the same way. **Choice.** The criterion is tested twice:
+(a) a planted O3-A day whose exit minute is set by hand, so the ₹ and R are arithmetic on those
+numbers (`test_options_backtest_days.py::TestAPlantedDay`: the 10:21 fills and the planted 10:30
+exit, §6.1's charges over the four orders, to the paisa); (b) the same stored minutes read back from
+`op_chain_snapshot` give the ₹ the in-memory minutes give (`test_options_backtest_task.py`).
+**Rejected.** Driving the desk's `DeskVenue` from the screener's tests (another tree and venv; the
+executor, the only shared part, is already one function). **Reversal.** A desk-side test that runs a
+fixture day through `execute_entry`/`execute_exit` and compares to `priced_day`.
+
+## OP12.5 — What the row's counts mean per tier · ⚠ UNREVIEWED
+
+`op_backtest_run` has `signals` and `traded`. **Choice.** Tier 1: `signals` = days the gate
+triggered, `traded` = 0 (Tier 1 has no trade, `04` §13.1). Tiers 2–3: `signals` = `traded` = days a
+position was opened; a day the plan builder rejected is in `skipped_by_reason_json` under its
+`REJECTED_*` reason. Tier 1's row also carries `params_json.sensitivity`: each gate threshold's
+signal count at ×0.75 and ×1.25 (`06` OP12). **Reversal.** Count rejections as signals in Tiers 2–3.
+
+## OP12.6 — Tier 2 skips an expiry-day O1-M when no strike is in the delta band, and that is the finding · ⚠ UNREVIEWED
+
+On the QUIET_MONTHLY fixture (the monthly expiry day, VIX 14, five hours left), the flat-VIX chain
+has no 50-point call strike with delta in [0.20, 0.25] (25,050 ≈ 0.30, 25,100 ≈ 0.12), so O1-M
+skips `REJECTED_NO_SHORT_CALL`. Real chains have skew and more IV on the day; the model does not.
+**Choice.** Record it, don't tune for it. The band is `04`'s, and Tier 2 is "a shape, not a
+number". **Reversal.** None needed. If Tier 2 on the box shows most O1-M days skipping for this
+reason, that is evidence for a `04` change that Maulik decides.
+
+## OP12.7 — `07` §2's bhavcopy check is not built in OP12 · ⚠ UNREVIEWED
+
+`06` OP12 wants Tier 2's modelled close compared with the F&O bhavcopy close for the strikes it used,
+"if OP0 found the file reachable through the NSE provider". The provider method exists (FO-PACK,
+`fo_bhavcopy`, 7 tests), but a comparison needs Tier 2 runs over days the box has data for.
+**Choice.** Deferred to the box (⛁) with Tier 2's first real run. **Reversal.** Not applicable.

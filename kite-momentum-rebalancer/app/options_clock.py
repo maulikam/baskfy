@@ -44,6 +44,17 @@ class Monitor(Protocol):
 
     def session_over(self, at: dt.datetime) -> bool: ...
 
+    def token_lost(self, now: dt.datetime) -> Any: ...
+
+
+def is_token_error(exc: BaseException) -> bool:
+    """Kite refused the access token (expired or revoked), not a network hiccup."""
+    try:
+        from kiteconnect.exceptions import TokenException  # noqa: PLC0415 - desk venv only
+    except ImportError:  # pragma: no cover - kiteconnect is a desk dependency
+        return type(exc).__name__ == "TokenException"
+    return isinstance(exc, TokenException) or type(exc).__name__ == "TokenException"
+
 
 class Bus(Protocol):
     def subscribe(self, token: int) -> asyncio.Queue: ...
@@ -70,6 +81,8 @@ class LegQuotes:
         self._last: float | None = None
         self.calls = 0
         self.failures = 0
+        #: The last poll was refused for the token (OP14): the runner raises every exit at once.
+        self.token_dead = False
 
     def poll(self, tokens: Iterable[int], now: dt.datetime) -> list[dict] | None:
         moment = self.clock()
@@ -82,10 +95,15 @@ class LegQuotes:
         self.calls += 1
         try:
             payload = self.kite.quote_raw(keys)
-        except Exception:  # a failed poll is a stale mark, and the next poll tries again
+        except Exception as exc:  # a failed poll is a stale mark, and the next poll tries again
             self.failures += 1
-            log.exception("options quote fallback failed")
+            if is_token_error(exc):
+                self.token_dead = True
+                log.error("options monitor: Kite token rejected; raising every exit (runbook 12)")
+            else:
+                log.exception("options quote fallback failed")
             return []
+        self.token_dead = False
         return [_tick_of(key, quote, now) for key, quote in payload.items() if isinstance(quote, dict)]
 
 
@@ -153,6 +171,8 @@ async def run_session(  # noqa: PLR0913 - the strategy, the bus and every seam a
             elif quotes is not None and clock() - last_tick >= QUIET_SECONDS:
                 for tick in quotes.poll(list(queues), now()) or []:
                     await strategy.on_tick(tick)
+                if quotes.token_dead:
+                    strategy.token_lost(now())
             strategy.check(now())
             if act is not None:
                 try:

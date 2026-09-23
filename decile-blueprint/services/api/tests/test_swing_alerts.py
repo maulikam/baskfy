@@ -45,7 +45,8 @@ def _rules() -> dict[str, dict[str, object]]:
 
 # --- a PromQL-subset evaluator -------------------------------------------------------------
 
-_GAUGE = re.compile(r"^(baskfy_swing_[a-z_]+)\s*(==|>|<|>=|<=)\s*(-?\d+)$")
+#: The swing rules' gauges and, since OP14, the options book's (``test_options_alerts.py``).
+_GAUGE = re.compile(r"^(baskfy_(?:swing|options)_[a-z_]+)\s*(==|>|<|>=|<=)\s*(-?\d+)$")
 _CLOCK = re.compile(r"^\(hour\(\) \* 60 \+ minute\(\)\)\s*(>=|<)\s*(\d+)$")
 _WEEKDAY = "(day_of_week() > 0 and day_of_week() < 6)"
 _OPS = {
@@ -58,7 +59,7 @@ _OPS = {
 
 
 def fires(expr: str, series: dict[str, float], at_utc: dt.datetime) -> bool:
-    """Evaluate one swing rule at one instant against one set of gauge values."""
+    """Evaluate one swing or options rule at one instant against one set of gauge values."""
     clauses = [c.strip() for c in " ".join(expr.split()).split(" and on() ")]
     minute_of_day = at_utc.hour * 60 + at_utc.minute
     # PromQL's day_of_week(): 0 = Sunday … 6 = Saturday; Python's weekday(): 0 = Monday.

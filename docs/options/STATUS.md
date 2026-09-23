@@ -3,10 +3,10 @@
 The status page for the options run. Updated at the end of every module, loud about what is NOT
 done. A fresh session resumes from the first module not marked ✅.
 
-**Run state: OP0 🟡, OP1 ✅, OP2 ✅, OP3 🟡, OP4 ✅, OP5 ✅, OP6 ✅, OP7 ✅, OP8 ✅, OP9 ✅, OP10 ✅, OP11 ✅, OP12 ✅, OP13 ✅ (23 Sep 2026); OP14 not started.** Pack written 22 Sep 2026 on branch
+**Run state: OP0 🟡, OP1 ✅, OP2 ✅, OP3 🟡, OP4 ✅, OP5 ✅, OP6 ✅, OP7 ✅, OP8 ✅, OP9 ✅, OP10 ✅, OP11 ✅, OP12 ✅, OP13 ✅, OP14 ✅ (23 Sep 2026); OP15 not started.** Pack written 22 Sep 2026 on branch
 `developer`, absorbing the never-started condor pack (`docs/condor/`) as sleeve O1. OP0-OP7 were each run alone, by instruction ("execute only OP<N>, then stop"); OP8 was run by Maulik's
 "continue the OP run from OP8" (23 Sep 2026), which also committed OP7's green work (`00cb48b`), found
-uncommitted in the tree. The next session resumes at OP14 (and the orchestrator feeds back OP3's box probe — §"What is NOT done" under OP3).
+uncommitted in the tree. The next session resumes at OP15 (and the orchestrator feeds back OP3's box probe — §"What is NOT done" under OP3).
 
 ## Module ledger
 
@@ -26,7 +26,7 @@ uncommitted in the tree. The next session resumes at OP14 (and the orchestrator 
 | OP11 — Journal, ledger, pauses, first-live multiplier | ✅ | pure `ledger.journal_figures` (gross, §6.1 costs, net, R, MAE/MFE from fills) + desk `app/options_ledger.py` (journal at every close, §9.1/§9.3 pauses audited, `close_now` exits, 09:00 on start) + migration `0051` (`op_position.trough_value`) + worker `OPTIONS_WEEKLY` (one line per pool, Fridays); 17 new tests |
 | OP12 — Backtests: Tier 1–2 per sleeve; Tier 3 ⛁ | ✅ | pure `replay_day` (Tier 1 signals, `priced_day` = the live scan → plan builder → executor → exit rules → ledger over a `ModelChain` or `StoredChain`) + `backtest_suite` (`run_tier`, ±25 % sensitivity); worker `backtest_run` → `op_backtest_run`, task `baskfy.options.backtest` (compute queue, no Beat), `tools/options/backtest.py`; 19 new tests. Days before the master are `uncalendared` (OP12.3); full backfill and Tier 3 ⛁ |
 | OP13 — Gating and safety proof | ✅ | the side door closed in the live tree (`app/options_lab.lab_enabled()`, OP13.1); gateway refusals, the 16-row four-flag AND with a spy, no second entry (desk `test_options_safety.py`); Hypothesis never-naked/exact-close/never-overnight + repo scans (core `test_options_safety_proof.py`); `tools/options/drill.py` prints `sleeve=O1M confirms=1 fills=8 orders_to_broker=0` for every sleeve + a skip day; a condor-with-no-spot crash found and fixed (OP13.2); 31 new tests |
-| OP14 — Hardening and observability | ⬜ | |
+| OP14 — Hardening and observability | ✅ | five `baskfy-options` Prometheus rules over API gauges (`options_health`), each firing from a synthetic series; worker checks at 09:20/10:20/hard exit+3/15:35 (`OPTIONS_CHECK_FAILED`); a refused Kite token raises every exit at once; budgets measured (tick→decision p99 0.15 ms; a plan-builder minute ≤ 2.3 ms); runbook 12; 29 new tests |
 | OP15 — Verification, goldens, deploy, final report | ⬜ | |
 
 States: ⬜ not started · 🔄 in progress · ✅ green · ⛔ blocked · 🟡 partial · ⛁ data-blocked.
@@ -1232,9 +1232,80 @@ screener file.
 
 Nothing.
 
+## OP14 — Hardening and observability
+
+**✅, 23 Sep 2026.** Decisions `DECISIONS-OP.md` OP14.1–OP14.5. When the options book goes
+wrong, it now pages, and the most dangerous failure (a dead token with a position open) closes
+instead of waiting.
+
+### What exists
+
+* **`services/api/src/baskfy_api/options_health.py`** + nine `baskfy_options_*` gauges refreshed on
+  every `/metrics` scrape: open after hard exit, collector gap, scan staleness, limiter share, sessions
+  today, trading day, the three operational flags.
+* **`infra/prometheus/alerts.yml` group `baskfy-options`**: `OPTIONS_OPEN_AFTER_HARD_EXIT`
+  (critical), `OPTIONS_COLLECTOR_GAP`, `OPTIONS_SCAN_STALE`, `OPTIONS_LIMITER_SHARE_HIGH`,
+  `OPTIONS_NO_SESSION_ON_TRADING_DAY`, all `AlertName`s, all pointing at runbook 12.
+* **`services/worker/src/baskfy_worker/options/checks.py`** + task `baskfy.options.checks` + Beat
+  `options-checks`: `SCAN_STARTED` 09:20, `O1_DECIDED` 10:20, `FLAT_AFTER_HARD_EXIT` 14:33/14:48/15:03,
+  `COLLECTOR_FULL_DAY` 15:35. Each failure is `OPTIONS_CHECK_FAILED`.
+* **Desk**: `options_clock.is_token_error`, `LegQuotes.token_dead`, and
+  `NiftyOptionsMonitor.token_lost`. A refused token raises `HARD_EXIT / FEED_LOST` at once (OP14.3).
+* **`docs/runbooks/12-options-health.md`**, NEEDS-MAULIK "OPT" (what the human does on token death),
+  **`tools/options/budgets.py`**.
+
+### Budgets (measured 23 Sep 2026, this Mac, `tools/options/budgets.py`)
+
+| Budget | Measured |
+|---|---|
+| tick → mark → decision (the desk's real `NiftyOptionsMonitor.on_tick` over 11,180 fixture ticks) | p50 **0.081 ms**, p99 **0.150 ms**, max 0.306 ms |
+| plan build, one Beat minute | O1-M 2.24 ms, O1-W 2.10 ms (one minute, 10:00); O2 1.09 ms/minute (39 ms over 36 minutes to its trigger); O3-A 0.14 ms/minute; O3-B 0.19 ms/minute |
+| limiter share, design | collector 1 quote call/min = **1.67 %** of the quote family; index bars 1 historical call/min = **0.56 %** |
+| limiter share with swing, TWT and VBT mornings running | **⛁ box-only**, needs those mornings against Kite (OP14.2); the `OPTIONS_LIMITER_SHARE_HIGH` rule watches it from the first live morning |
+
+All are far inside the minute the Beat tasks get and the second the monitor loop gets.
+
+### AC → test
+
+| `06` OP14 AC | Test |
+|---|---|
+| each rule fires on a synthetic series | `services/api/tests/test_options_alerts.py` (inside its window, quiet when healthy, outside the window, on a Saturday, with its switch off or on a holiday; the rules read exactly the published gauges) |
+| the checks fire on fixtures | `services/worker/tests/test_options_health_checks.py::TestTheChecks` (each fails on its fixture, passes on the healthy one, skips with its switch off) + `TestTheFacts` (each gauge's fact from real rows) + `TestTheTask` (due minutes, Beat coverage, no session when nothing is due) |
+| token death with a position open → immediate `HARD_EXIT / FEED_LOST`; NEEDS-MAULIK says what the human does | desk `tests/test_options_hardening.py::TestTokenDeath` (at 11:00, not 14:00; a network error is not a dead token; the real `kiteconnect` exception; recovery) + NEEDS-MAULIK "OPT" + runbook 12 |
+| restart resume; stale-quote and feed-loss behaviour | OP9's `TestTheRestart`, `TestTheReplays` (`o1-feed-lost`, staleness), `TestTheLoop`, re-run whole |
+| budgets in STATUS | the table above |
+
+### Tests (new)
+
+| File | Tests |
+|---|---|
+| `services/api/tests/test_options_alerts.py` | 15 |
+| `services/worker/tests/test_options_health_checks.py` (7 on `baskfy_test`) | 10 |
+| `kite-momentum-rebalancer/tests/test_options_hardening.py` | 4 |
+| **Total** | **29** |
+
+`services/api/tests/test_swing_alerts.py`'s evaluator now also accepts `baskfy_options_` gauges. The
+grammar is unchanged.
+
+**Regression (23 Sep 2026, run one at a time; they share `baskfy_test`):** whole desk suite **2,309
+passed**, 17 skipped as before; worker `options`/`ops`/`beat`/`alert`/`celery` **411 passed**; API
+`metrics`/`alerts`/`options`/`app` **230 passed**; ruff and mypy strict clean on every touched
+screener file.
+
+### What is NOT done
+
+* The measured limiter share with other mornings running (⛁, OP14.2).
+* No rule or check has fired on the box. Prometheus's rule file is loaded only where Prometheus is
+  deployed. The worker's checks need no Prometheus.
+* Thresholds are first guesses (OP14.5).
+
+### What blocks OP15
+
+Nothing.
+
 ## What is NOT done
 
-Everything after OP13. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
+Everything after OP14. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
 OP3 does them first); the two full-suite baseline runs (OP0.9); the gateway gap of OP0.6 is **fixed in OP2** (OP2.1); the
 `/ops` side door of OP0.5 is **closed in OP13** (OP13.1). Every money flag is false and stays false. The paper periods begin only after OP15, and
 the longest (O1-M) takes about six months after that.

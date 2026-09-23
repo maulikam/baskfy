@@ -59,6 +59,7 @@ __all__ = [
     "observe_request",
     "observe_step",
     "observe_swing_task",
+    "refresh_options_metrics",
     "refresh_pipeline_metrics",
     "refresh_swing_metrics",
     "render",
@@ -251,6 +252,63 @@ SWING_DETECT_RAN_FOR_PUBLISHED_DATE: Final = Gauge(
     registry=REGISTRY,
 )
 
+# --- The options book (OP14, docs/options/05 §4) ----------------------------
+#
+# Database-derived for the same reason as the swing gauges: the desk and the worker write the
+# facts, and a rule wants the row. Refreshed by :func:`refresh_options_metrics` once per scrape
+# from ``baskfy_api.options_health``. The three flags are this process's settings (MD20: one env
+# file feeds every service).
+
+OPTIONS_OPEN_AFTER_HARD_EXIT: Final = Gauge(
+    "baskfy_options_open_after_hard_exit",
+    "op_position rows still open two minutes past their sleeve's hard exit "
+    "(OPTIONS_OPEN_AFTER_HARD_EXIT). Should be impossible.",
+    registry=REGISTRY,
+)
+OPTIONS_COLLECTOR_GAP_MINUTES: Final = Gauge(
+    "baskfy_options_collector_gap_minutes",
+    "Minutes since today's newest op_chain_snapshot, inside 09:15-15:30 IST; 0 outside "
+    "(OPTIONS_COLLECTOR_GAP).",
+    registry=REGISTRY,
+)
+OPTIONS_SCAN_STALE_MINUTES: Final = Gauge(
+    "baskfy_options_scan_stale_minutes",
+    "Minutes since today's newest op_scan row, inside 09:15-15:30 IST; 0 outside "
+    "(OPTIONS_SCAN_STALE).",
+    registry=REGISTRY,
+)
+OPTIONS_LIMITER_SHARE_PCT: Final = Gauge(
+    "baskfy_options_limiter_share_pct",
+    "The collector's quote calls over the last ten minutes as a percentage of the Kite quote "
+    "family's per-minute budget, rounded up (OPTIONS_LIMITER_SHARE_HIGH).",
+    registry=REGISTRY,
+)
+OPTIONS_SESSIONS_TODAY: Final = Gauge(
+    "baskfy_options_sessions_today",
+    "op_session rows for today (IST), every sleeve (OPTIONS_NO_SESSION_ON_TRADING_DAY).",
+    registry=REGISTRY,
+)
+OPTIONS_TRADING_DAY: Final = Gauge(
+    "baskfy_options_trading_day",
+    "1 when the NSE calendar names today a trading day.",
+    registry=REGISTRY,
+)
+OPTIONS_COLLECT_ENABLED: Final = Gauge(
+    "baskfy_options_collect_enabled",
+    "1 when BASKFY_OPTIONS_COLLECT_ENABLED is true in this process's settings.",
+    registry=REGISTRY,
+)
+OPTIONS_SCAN_ENABLED: Final = Gauge(
+    "baskfy_options_scan_enabled",
+    "1 when BASKFY_OPTIONS_SCAN_ENABLED is true in this process's settings.",
+    registry=REGISTRY,
+)
+OPTIONS_MONITOR_ENABLED: Final = Gauge(
+    "baskfy_options_monitor_enabled",
+    "1 when BASKFY_OPTIONS_MONITOR_ENABLED is true in this process's settings.",
+    registry=REGISTRY,
+)
+
 SWING_TASK_DURATION: Final = Histogram(
     "baskfy_swing_task_duration_seconds",
     "Wall time of the swing jobs (detect, premarket, eod, backtest), in the worker that ran "
@@ -423,6 +481,33 @@ async def refresh_swing_metrics(
     SWING_MONITOR_RAN_TODAY.set(1 if health.monitor_ran_today else 0)
     SWING_OPEN_BUY_ORDERS_TODAY.set(health.open_buy_orders_today)
     SWING_DETECT_RAN_FOR_PUBLISHED_DATE.set(1 if health.detect_ran_for_published_date else 0)
+
+
+async def refresh_options_metrics(
+    session: AsyncSession,
+    *,
+    collect_enabled: bool,
+    scan_enabled: bool,
+    monitor_enabled: bool,
+    now: dt.datetime | None = None,
+) -> None:
+    """Re-read the options book's facts into gauges. Called once per scrape (OP14)."""
+    from baskfy_api.options_health import IST as OPTIONS_IST  # noqa: PLC0415 - avoids a cycle
+    from baskfy_api.options_health import read_options_health  # noqa: PLC0415
+    from baskfy_api.swing_health import is_session_day  # noqa: PLC0415
+
+    moment = (now or dt.datetime.now(tz=OPTIONS_IST)).astimezone(OPTIONS_IST)
+    trading = await is_session_day(session, moment.date())
+    health = await read_options_health(session, trading_day=trading, now=moment)
+    OPTIONS_OPEN_AFTER_HARD_EXIT.set(health.open_after_hard_exit)
+    OPTIONS_COLLECTOR_GAP_MINUTES.set(health.collector_gap_minutes)
+    OPTIONS_SCAN_STALE_MINUTES.set(health.scan_stale_minutes)
+    OPTIONS_LIMITER_SHARE_PCT.set(health.limiter_share_pct)
+    OPTIONS_SESSIONS_TODAY.set(health.sessions_today)
+    OPTIONS_TRADING_DAY.set(1 if health.trading_day else 0)
+    OPTIONS_COLLECT_ENABLED.set(1 if collect_enabled else 0)
+    OPTIONS_SCAN_ENABLED.set(1 if scan_enabled else 0)
+    OPTIONS_MONITOR_ENABLED.set(1 if monitor_enabled else 0)
 
 
 async def refresh_queue_depth(broker: object, queues: tuple[str, ...]) -> None:

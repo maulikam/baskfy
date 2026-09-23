@@ -2268,3 +2268,22 @@ close order at a 1.5 × credit loss; Q1 F1 capital ₹10 lakh; Q4 build the long
 as F2 on paper; FO starts after OP15. **Still yours later:** neither sleeve meets `02` §3's Tier 2E
 item as tested (F1 is −0.010R in 2022 with the loss close; F2 is negative in four of five years),
 so any flag flip needs your written waiver or forward evidence, and F2's capital is ₹0.
+
+## OPT — if the Kite token dies while an options position is open (23 Sep 2026, OP14)
+
+**Nothing to do now.** This is what the desk expects of you on the day it happens. Every options
+sleeve is paper, so today such a position is simulated. Once a sleeve is live (not built; `02` §3),
+it would be real.
+
+When the ticker goes quiet and Kite refuses the token, the options monitor raises **`HARD_EXIT /
+FEED_LOST` for every open position at once**. It does not wait for 14:00. The sweep cannot close
+anything without a quote, so the exits stay raised until a quote read works again.
+
+1. **Log in to the desk again.** The next quote poll succeeds, the sweep closes every raised exit,
+   and the journal records `FEED_LOST`.
+2. **If you cannot log in within a few minutes and a position is live:** close it in the Kite app,
+   **shorts first, then the wings** (never leave a short without its long), and note the fills on
+   the desk's session.
+3. A paper position can wait for the login.
+
+Runbook: `decile-blueprint/docs/runbooks/12-options-health.md`. Blocks nothing.

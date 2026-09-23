@@ -1536,3 +1536,52 @@ half-flipped row (sleeve flag and intraday on, `OPTIONS_ENABLED` off, `DRY_RUN=f
 the gateway with the `OPTIONS_ENABLED` reason, leg by leg. The one LIVE row is refused at
 `execute_entry` (`LIVE_NOT_BUILT`, OP10.3) before any order. The NRML/CNC refusal is an integration
 test with every switch on; its control, MIS through the same gateway, reaches the spy.
+
+## OP14.1 — "09:20 (sessions exist)" is every sleeve's scan row, because no `op_session` exists at 09:20 by design · ⚠ UNREVIEWED
+
+`06` OP14 names a 09:20 check, "sessions exist". No sleeve writes an `op_session` by 09:20. O2
+decides from 09:30, O1 at 10:00, O3-B at 09:45, O3-A from 10:19. So the literal reading would
+fail every morning. **Choice.** `SCAN_STARTED`: every sleeve has an `op_scan` row since 09:15. The
+scan is where each sleeve's day begins (its role, its state), and without it nothing downstream can
+decide. It needs the scan flag and skips without it. The Prometheus rule
+`OPTIONS_NO_SESSION_ON_TRADING_DAY` watches `op_session` itself, from 10:20. **Rejected.** A 09:20
+`op_session` check (always red). **Reversal.** Change `SCAN_STARTED_AT` and the query.
+
+## OP14.2 — The limiter share the API can see is the collector's, and the rest is measured on the box · ⚠ UNREVIEWED
+
+`baskfy_options_limiter_share_pct` counts distinct `op_chain_snapshot` minutes over the last ten
+minutes. Each is one quote batch, since OP3 caps a pick at one call. It divides by the quote
+family's own budget (`KITE_FAMILY_RATE_PER_SECOND[QUOTE]` × 60), so the rule catches a collector
+calling more than it was built to. The desk's fallback polls (at most one per 5 s, only when ticks
+stop) leave no row and are not counted. "The limiter share with swing, TWT and VBT mornings
+running" needs those mornings against Kite on the box (⛁). The design share is recorded instead:
+quote 1.67 % and historical 0.56 %. **Reversal.** Count the desk's polls in a table and add them.
+
+## OP14.3 — Token death: a refused token raises every exit at once; a network error does not · ⚠ UNREVIEWED
+
+`04` §8.5's feed rule waits until 14:00 for O1 and O3, because a quiet tape is not a dead one. A
+refused token is dead: nothing will mark the legs until a person logs in. **Choice.** When the
+ticker is quiet, `LegQuotes.poll` reads quotes. A `kiteconnect` `TokenException` sets
+`token_dead`, and the loop calls `NiftyOptionsMonitor.token_lost`, which raises `HARD_EXIT /
+FEED_LOST` for every open position without an exit plan. A successful poll clears the state. A
+network error only counts as a failure. The sweep cannot close without quotes, so the human steps
+are in runbook 12 and NEEDS-MAULIK "OPT". **Rejected.** Raising on any poll failure (a flaky
+network would close every position). **Reversal.** Remove the `token_dead` branch in `run_session`.
+
+## OP14.4 — The checks: one Beat entry, a cheap minute gate, one alert name · ⚠ UNREVIEWED
+
+`baskfy.options.checks` is on Beat at minutes {3, 20, 33, 35, 48} of hours 9–15. `due_checks`
+returns the checks due at that exact minute: 09:20, 10:20, 14:33, 14:48, 15:03 and 15:35. For
+every other matching minute the task returns before opening a database session. Each failure is
+one `OPTIONS_CHECK_FAILED` with `labels.check`. `FLAT_AFTER_HARD_EXIT` is critical and runs
+whatever the flags say, because an open position is wrong in any state. **Rejected.** Four alert
+names (one per check), since the runbook section is the same for all.
+
+## OP14.5 — The rules are named in upper case; `05` §4's lower-case names are the facts · ⚠ UNREVIEWED
+
+`05` §4 lists `options_open_after_hard_exit` and the others as Prometheus names. The alerts are
+`OPTIONS_OPEN_AFTER_HARD_EXIT`, `OPTIONS_COLLECTOR_GAP`, `OPTIONS_SCAN_STALE`,
+`OPTIONS_LIMITER_SHARE_HIGH` and `OPTIONS_NO_SESSION_ON_TRADING_DAY`, verbatim `AlertName`s like the
+swing, VBT and TWT books'. The gauges keep `05`'s words under the `baskfy_options_` prefix.
+Thresholds: gap and stale > 3 minutes for 2 m inside 09:20–15:30; share > 25 % for 10 m; no
+session from 10:20. They are first guesses, to be tuned on the box.

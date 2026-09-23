@@ -322,6 +322,7 @@ async def execute_exit(  # noqa: PLR0913 - the store, the gateway, the book, the
     reason: str,
     now: Callable[[], dt.datetime] | None = None,
     options: OptionsConfig | None = None,
+    mode: Mode = Mode.PAPER,
 ) -> ExecOutcome:
     """Close an open position shorts first (`04` §8.3). `FLAT` closes it; `PARTIAL_EXIT` leaves it
     for the next pass, never naked."""
@@ -335,11 +336,18 @@ async def execute_exit(  # noqa: PLR0913 - the store, the gateway, the book, the
     result = await asyncio.to_thread(
         run_exit, venue, position, sleeve=plan.sleeve, tick=TICK, config=cfg.execution,
     )  # fmt: skip
+    applied: list[str] = []
     if result.outcome is Outcome.FLAT:
-        store.close_position(plan.session_id, exit_plan_id, clock(), reason)
+        closed_at = clock()
+        store.close_position(plan.session_id, exit_plan_id, closed_at, reason)
+        from .options_ledger import after_close  # noqa: PLC0415 - the record, then the ledger
+
+        applied = after_close(
+            store, plan.session_id, sleeve=plan.sleeve, reason=reason, now=closed_at, mode=mode
+        )
     return ExecOutcome(plan.plan_id, plan.sleeve.value, result.outcome.value, True,
                        "CLOSED" if result.outcome is Outcome.FLAT else "OPEN", venue.orders,
-                       detail={"reason": reason})  # fmt: skip
+                       detail={"reason": reason, "pauses": applied})  # fmt: skip
 
 
 # --- the store on the op_ tables ------------------------------------------------------------------
@@ -594,6 +602,7 @@ async def run_pending_exits(  # noqa: PLR0913 - the store, the gateways, the boo
     quotes: QuoteSource,
     now: Callable[[], dt.datetime] | None = None,
     options: OptionsConfig | None = None,
+    mode_of: Callable[[Sleeve], Mode] = lambda _s: Mode.PAPER,
 ) -> list[ExecOutcome]:
     """Every open position the monitor raised an exit for, closed under its entry's confirm (PACK.2).
     A `PARTIAL_EXIT` stays open and is tried again on the next pass."""
@@ -614,7 +623,7 @@ async def run_pending_exits(  # noqa: PLR0913 - the store, the gateways, the boo
                 await execute_exit(
                     store, gateway_for(plan.sleeve), quotes=quotes, plan=plan,
                     exit_plan_id=str(row["exit_plan_id"]), reason=str(detail.get("code") or "EXIT"),
-                    now=now, options=options,
+                    now=now, options=options, mode=mode_of(plan.sleeve),
                 )  # fmt: skip
             )
         except Refused as exc:  # no quote this pass: the exit waits for the next one

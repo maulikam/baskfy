@@ -43,6 +43,10 @@ REPO_ROOT: Final = Path(__file__).resolve().parents[3]
 MONOREPO_ROOT: Final = Path(__file__).resolve().parents[4]
 API_DIR: Final = REPO_ROOT / "services" / "api"
 MIGRATION_PATH: Final = API_DIR / "alembic" / "versions" / "0050_options.py"
+#: The options schema's newest revision. `0050_options` built it; OP11's `0051` added
+#: `op_position.trough_value` on top (DECISIONS-OP OP11.2), so the round trip below also crosses
+#: 0051's downgrade. A later options migration moves this, and only this.
+OPTIONS_HEAD: Final = "0051_op_position_extremes"
 MIGRATION: Final = MIGRATION_PATH.read_text(encoding="utf-8")
 DATA_MODEL: Final = (MONOREPO_ROOT / "docs" / "options" / "03-data-model.md").read_text(
     encoding="utf-8"
@@ -326,7 +330,7 @@ class TestTheSchemaOnARealDatabase:
 class TestMigrateSeedMigrate:
     async def test_migrate_then_seed_then_migrate_is_a_no_op(self, op_url: str) -> None:
         head = _alembic(op_url, "heads").stdout.split()[0]
-        assert head == "0050_options", "one head, and it is this migration"
+        assert head == OPTIONS_HEAD, "one head, and it is the options schema's newest"
         async with _rolled_back(op_url) as session:
             user_id = await _fresh_user(session, "mseed")
             first = await seed_options(session, user_id)
@@ -347,7 +351,7 @@ class TestMigrateSeedMigrate:
             assert row is not None and row.max_lots == 1
         again = _alembic(op_url, "upgrade", "head")
         assert "Running upgrade" not in again.stderr + again.stdout
-        assert _alembic(op_url, "current").stdout.split()[0] == "0050_options"
+        assert _alembic(op_url, "current").stdout.split()[0] == OPTIONS_HEAD
 
     async def test_the_seed_writes_the_documents_defaults_and_zero_capital(
         self, op_url: str
@@ -409,4 +413,4 @@ class TestTheRoundTrip:
         finally:
             await engine.dispose()
             _alembic(op_url, "upgrade", "head")
-        assert _alembic(op_url, "current").stdout.split()[0] == "0050_options"
+        assert _alembic(op_url, "current").stdout.split()[0] == OPTIONS_HEAD

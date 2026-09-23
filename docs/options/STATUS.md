@@ -3,10 +3,10 @@
 The status page for the options run. Updated at the end of every module, loud about what is NOT
 done. A fresh session resumes from the first module not marked ✅.
 
-**Run state: OP0 🟡, OP1 ✅, OP2 ✅, OP3 🟡, OP4 ✅, OP5 ✅, OP6 ✅, OP7 ✅, OP8 ✅, OP9 ✅, OP10 ✅ (23 Sep 2026); OP11 not started.** Pack written 22 Sep 2026 on branch
+**Run state: OP0 🟡, OP1 ✅, OP2 ✅, OP3 🟡, OP4 ✅, OP5 ✅, OP6 ✅, OP7 ✅, OP8 ✅, OP9 ✅, OP10 ✅, OP11 ✅ (23 Sep 2026); OP12 not started.** Pack written 22 Sep 2026 on branch
 `developer`, absorbing the never-started condor pack (`docs/condor/`) as sleeve O1. OP0-OP7 were each run alone, by instruction ("execute only OP<N>, then stop"); OP8 was run by Maulik's
 "continue the OP run from OP8" (23 Sep 2026), which also committed OP7's green work (`00cb48b`), found
-uncommitted in the tree. The next session resumes at OP11 (and the orchestrator feeds back OP3's box probe — §"What is NOT done" under OP3).
+uncommitted in the tree. The next session resumes at OP12 (and the orchestrator feeds back OP3's box probe — §"What is NOT done" under OP3).
 
 ## Module ledger
 
@@ -23,7 +23,7 @@ uncommitted in the tree. The next session resumes at OP11 (and the orchestrator 
 | OP8 — O3 plan builder | ✅ | `baskfy_core.options.plan_o3` (pure: role → setup → one-O3-a-day → slot → `expiry_setups.build` over the decision minute → costs → margin ceiling → `plan_id`, exits) + `baskfy_worker.options.plan_o3` (O3-B then O3-A each minute, the margin calculator for the hedged basket, `OPTIONS_PLAN`); task + Beat `options-plan-o3` **dark** behind the monitor flag; 65 new tests (8 on `baskfy_test`) |
 | OP9 — Desk process `options_monitor` | ✅ | `baskfy_core.options.exits.evaluate` (pure) + desk `app/strategies/nifty_options.py` (marks from depth ticks, bars from index ticks reconciled to `op_index_minute`, one EXIT plan per position), `app/options_clock.py` (loop with idle evaluation, ≤ 1 quote / 5 s fallback, new legs followed), `app/options_monitor.py` (flag-first runner, `PgPositionStore`); `tools/options/replay.py` + five priced fixtures with an independent answer key; 58 new tests |
 | OP10 — Desk page + `/nifty-options/execute` (paper) | ✅ | pure `baskfy_core.options.executor` (entry/exit procedure over a venue, never-naked asserted per attempt) + desk `app/options_execute.py` (gateway-backed venue, depth-ladder paper fills, `PgOptionsStore`, LIVE refused) + `app/options_desk.py` (`/nifty-options`, `/data`, execute, close) + template; the monitor's loop sweeps raised exits; 32 new tests |
-| OP11 — Journal, ledger, pauses, first-live multiplier | ⬜ | |
+| OP11 — Journal, ledger, pauses, first-live multiplier | ✅ | pure `ledger.journal_figures` (gross, §6.1 costs, net, R, MAE/MFE from fills) + desk `app/options_ledger.py` (journal at every close, §9.1/§9.3 pauses audited, `close_now` exits, 09:00 on start) + migration `0051` (`op_position.trough_value`) + worker `OPTIONS_WEEKLY` (one line per pool, Fridays); 17 new tests |
 | OP12 — Backtests: Tier 1–2 per sleeve; Tier 3 ⛁ | ⬜ | |
 | OP13 — Gating and safety proof | ⬜ | |
 | OP14 — Hardening and observability | ⬜ | |
@@ -1034,9 +1034,71 @@ as before; ruff + mypy strict clean on `executor.py` and its test; pyflakes clea
 Nothing in code. Closed sessions now carry their fills; OP11 writes `op_journal` in ₹ and R from them
 and enforces the pauses and the first-live multiplier.
 
+## OP11 — Journal, ledger, pauses, first-live multiplier
+
+**✅, 23 Sep 2026.** Decisions `DECISIONS-OP.md` OP11.1–OP11.5. Every close now writes its record,
+and the record governs tomorrow: a pause is `paused_until` on the sleeve's group or the book, which
+the plan builders already read as `REJECTED_PAUSED` (§9.4, `load_context`).
+
+### What exists
+
+* **`packages/core/src/baskfy_core/options/ledger.py`** (pure) — `journal_figures` from fills (gross
+  as signed cash, entry and exit halves, `costs.charges` over every order, net, R, `r_multiple`,
+  minutes held, MAE/MFE in R) and `pnl_points` (a gain positive for every structure).
+* **Migration `0051_op_position_extremes`** — `op_position.trough_value` beside `peak_value`; the
+  monitor's mark write keeps both (`GREATEST`/`LEAST`) as P&L points (OP11.2).
+* **`kite-momentum-rebalancer/app/options_ledger.py`** — `write_journal` (idempotent on session),
+  `apply_ledger` (§9.1 per sleeve on rows of its current kind; §9.3 for the book once any capital is
+  set; pauses never shortened, audited `changed_by='ledger'`; `close_now` raises exit plans for every
+  covered position), `after_close` (called by `execute_exit` on FLAT), `morning_ledger` (runner start).
+* **`services/worker/src/baskfy_worker/options/weekly.py`** — `week_rows` + `weekly_alert`;
+  `AlertName.OPTIONS_WEEKLY`, runbook section, task `baskfy.options.weekly`, Beat `options-weekly`
+  (Fridays 16:30, dark behind the monitor flag).
+
+### AC → test
+
+| `06` OP11 AC | Test |
+|---|---|
+| close → `op_journal` with the cost breakdown and MAE/MFE | `kite-momentum-rebalancer/tests/test_options_ledger.py::TestTheJournal` (gross, `costs.charges` over the 8 fills, net, R, MAE/MFE from recorded marks) + core `test_options_ledger.py` |
+| −2R intraday on O2 → `DAILY_R`, position closed, sleeve paused today | `TestDailyR` (paused to today, audited, session `CLOSED`) — judged at the close (OP11.4) |
+| four −1R O1-W weeks → `MONTHLY_R` | `TestMonthlyR` at `04`'s limits: four −2R weeks → `MONTHLY_R`, not `WEEKLY_R`, to 31 Oct (OP11.1); a pause is never shortened |
+| a book ₹ breach closes every open position | `TestTheBook` (O2's loss breaches the ₹750 day limit; the open O1-M gets a `BOOK_DAILY_INR` exit plan and the sweep closes it; the book paused) |
+| five real rows lift `half_size` | `services/worker/tests/test_options_weekly_task.py::TestTheFirstLiveMultiplier` (4 real rows → half, 5 → full; a paper row never counts) |
+| no summary pools sleeves, simulated, or sizing modes | `TestTheWeeklyAlert` + `TestOnADatabase` (paper and live O2 are two lines) |
+| `plan.build` refuses while paused | already true since OP4/OP6 (`load_context` → `SleeveContext.paused` → `REJECTED_PAUSED`); now fed by the ledger |
+
+### Tests (new)
+
+| File | Tests |
+|---|---|
+| `packages/core/tests/test_options_ledger.py` | 5 |
+| `kite-momentum-rebalancer/tests/test_options_ledger.py` (on `baskfy_test`) | 5 |
+| `services/worker/tests/test_options_weekly_task.py` (4 on `baskfy_test`) | 7 |
+| **Total** | **17** |
+
+`packages/core/tests/test_options_schema.py`'s head pin moved from `0050_options` to `OPTIONS_HEAD =
+0051_op_position_extremes` (the same property, now crossing `0051`'s downgrade — OP11.2).
+
+**Regression (Postgres + Redis up, 23 Sep 2026):** whole desk suite **2,283 passed**, 17 skipped as
+before; core `options`/escape-hatch/schema 1,723 passed after the head pin; worker `options` +
+`ops_and_alerts` 266 passed; API `options` 72 passed; ruff and mypy strict clean on every touched
+screener file.
+
+### What is NOT done
+
+* The ledger runs at closes and on start, not on every mark (OP11.4).
+* `/options/journal` on the web reads `op_journal` since OP5; it has rows only once paper trading
+  runs. The desk page's ledger panel (`05` §3) is not built (OP10.8).
+* Nothing is deployed; the monitor, the executor and the ledger run only when the monitor flag is on.
+
+### What blocks OP12
+
+Nothing in code for Tiers 1–2 (they read index bars and modelled premiums); Tier 3 waits for
+collected chains (⛁).
+
 ## What is NOT done
 
-Everything after OP10. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
+Everything after OP11. From OP0 itself: the six live Kite reads (OP0 §4, pending a Kite session —
 OP3 does them first); the two full-suite baseline runs (OP0.9); the gateway gap of OP0.6 is **fixed in OP2** (OP2.1); the
 `/ops` side door of OP0.5 is **recorded, not fixed** (OP13). Every money flag is false and stays false. The paper periods begin only after OP15, and
 the longest (O1-M) takes about six months after that.

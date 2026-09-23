@@ -65,6 +65,7 @@ from baskfy_worker.options.plan_o2 import plan_o2_gate_free, plan_o2_minute
 from baskfy_worker.options.plan_o3 import plan_o3_gate_free, plan_o3_minute
 from baskfy_worker.options.reads import build_options_kite
 from baskfy_worker.options.scan import scan_gate_free, scan_minute_for
+from baskfy_worker.options.weekly import week_rows, weekly_alert
 from baskfy_worker.orchestrator import PipelineOutcome, run_nightly_pipeline
 from baskfy_worker.providers import build_cache, build_pipeline_dependencies, sole_user_id
 from baskfy_worker.settings import get_worker_settings
@@ -1166,6 +1167,30 @@ def options_plan_o3_task(at: str | None = None) -> JsonObject:
         await session.flush()
         report["alerts"] = [await dispatch(alert) for alert in alerts]
         return report
+
+    return run_in_session(_run)
+
+
+@shared_task(name="baskfy.options.weekly", acks_late=False)
+def options_weekly_task(at: str | None = None) -> JsonObject:
+    """OP11: the week's options journal, summarised per pool, as one ``OPTIONS_WEEKLY`` alert.
+
+    Read-only. Refused before any database session unless ``BASKFY_OPTIONS_MONITOR_ENABLED`` is
+    true and a sole tenant is configured.
+    """
+    now = _options_now(at)
+    settings = get_worker_settings()
+    user_id = sole_user_id()
+    if not settings.options_monitor_enabled:
+        return {"at": now.isoformat(), "skipped": "BASKFY_OPTIONS_MONITOR_ENABLED is false"}
+    if user_id is None:
+        return {"at": now.isoformat(), "skipped": "no BASKFY_SOLE_USER_ID configured"}
+    tenant = user_id
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        today = now.astimezone(IST).date()
+        alert = weekly_alert(await week_rows(session, tenant, today), today)
+        return {"at": now.isoformat(), "summary": alert.summary, "sent": await dispatch(alert)}
 
     return run_in_session(_run)
 

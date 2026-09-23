@@ -219,7 +219,7 @@ async def nifty_options_close(
             )
             outcome = await _execute.execute_exit(
                 store, gateway_for(plan.sleeve), quotes=quotes(), plan=plan, exit_plan_id=exit_id,
-                reason="MANUAL",
+                reason="MANUAL", mode=mode_of(plan.sleeve),
             )  # fmt: skip
     except _execute.Refused as exc:
         return _refusal(exc)

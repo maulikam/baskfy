@@ -113,6 +113,9 @@ class AlertName(StrEnum):
     # its credit, lots, costs, margin and expiry. Like TWT_EVENING it is not a failure: it is the
     # plan, delivered by the one mechanism that already tells Maulik something (DECISIONS-OP OP6.7).
     OPTIONS_PLAN = "OPTIONS_PLAN"
+    # OP11: the options book's week, one line per (sleeve, simulated, sizing mode) — never pooled
+    # (docs/options/04 §12). Read-only; like OPTIONS_PLAN it is information, not a failure.
+    OPTIONS_WEEKLY = "OPTIONS_WEEKLY"
 
 
 #: How long the webhook is given before it is abandoned. An alert that blocks the reaper for

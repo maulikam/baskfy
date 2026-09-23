@@ -64,6 +64,15 @@ An O3 plan's legs are `seq 1` the long, `seq 2` the short: the send order (never
 `margin_required_inr` is the calculator's hedged figure, or `NULL` with `MARGIN_UNKNOWN` when there
 was no Kite session.
 
+### The weekly summary (`OPTIONS_WEEKLY`, OP11)
+
+`baskfy.options.weekly` (Beat `options-weekly`, Fridays 16:30 IST, behind the monitor flag) sends one
+line per `(sleeve, paper/LIVE, sizing mode)` — traded and skipped counts, win rate, mean and worst R,
+drawdown in R — read from `op_journal` and the week's skipped sessions. It is never one pooled
+number (`docs/options/04` §12): a paper O2 week and a live O2 week are two lines. Nothing to do
+unless a line shows a pause you did not expect; pauses are in `op_sleeve_config.paused_until` /
+`op_book_config.paused_until` with their audit in `op_config_audit` (`changed_by='ledger'`).
+
 ## What to do
 
 1. **Nothing, to leave it.** A plan nobody confirms lapses at `expires_at` (the task moves it and

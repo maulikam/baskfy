@@ -159,6 +159,8 @@ today's expiry-day slot). Unique `(user_id, sleeve, trade_date)`.
 
 `session_id` PK, leg ids, `entry_points` (C for a credit, the debit for a debit, the premium for a
 long — **from fills, not the plan**), `entry_inr`, `lots`, `opened_at`, `hard_exit_at`, `peak_value`,
+`trough_value` (the best and worst marked P&L per unit in points, a gain positive whatever the
+structure — the journal's MFE and MAE; `trough_value` added by `0051`, OP11.2),
 `last_mark_points`, `last_mark_at` (persisted every 30 s so a restart resumes), `exit_plan_id`,
 `closed_at`, `simulated`.
 

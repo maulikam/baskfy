@@ -190,6 +190,14 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         "schedule": crontab(minute="*", hour="9-13", day_of_week="mon-fri"),
         "options": {"queue": QUEUE_DEFAULT, "expires": 55, "countdown": 45},
     },
+    # OP11 (docs/options/06 OP11): the options book's week — Friday 16:30, one OPTIONS_WEEKLY alert
+    # with a line per (sleeve, simulated, sizing mode), never pooled. Read-only; dark unless
+    # BASKFY_OPTIONS_MONITOR_ENABLED (with the monitor off there is no book to summarise).
+    "options-weekly": {
+        "task": "baskfy.options.weekly",
+        "schedule": crontab(hour=16, minute=30, day_of_week="fri"),
+        "options": {"queue": QUEUE_DEFAULT},
+    },
     # The same session's bars once more after the close, correcting any minute read while forming.
     "options-index-bars-eod": {
         "task": "baskfy.options.index_bars_eod",

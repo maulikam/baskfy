@@ -103,6 +103,8 @@ RUNBOOKS: Final[dict[AlertName, str]] = {
     AlertName.OPTIONS_MASTER_CHANGED: "docs/runbooks/10-options-master.md",
     # OP6: an O1 sleeve's plan or verdict (docs/options/06 OP6).
     AlertName.OPTIONS_PLAN: "docs/runbooks/11-options-plan.md",
+    # OP11: the options book's weekly summary.
+    AlertName.OPTIONS_WEEKLY: "docs/runbooks/11-options-plan.md",
 }
 
 

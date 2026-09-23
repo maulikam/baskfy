@@ -309,6 +309,32 @@ BHAVCOPY_SCHEMA: Final[dict[str, pl.DataType]] = {
 }
 
 
+#: One day's NSE F&O bhavcopy, one row per contract (docs/fno/03 §1). ``instrument`` keeps the
+#: legacy file's vocabulary (FUTSTK, OPTSTK, FUTIDX, OPTIDX) for both layouts. ``underlying`` and
+#: ``lot_size`` exist only in the UDiFF layout (8 Jul 2024 on) and are null before it — never
+#: back-filled from another day. ``open_interest`` and ``oi_change`` are in shares (units of the
+#: underlying), as NSE prints them.
+FO_BHAVCOPY_SCHEMA: Final[dict[str, pl.DataType]] = {
+    "date": pl.Date(),
+    "instrument": pl.String(),
+    "symbol": pl.String(),
+    "expiry": pl.Date(),
+    "strike": pl.Decimal(18, 4),
+    "option_type": pl.String(),
+    "open": pl.Decimal(18, 4),
+    "high": pl.Decimal(18, 4),
+    "low": pl.Decimal(18, 4),
+    "close": pl.Decimal(18, 4),
+    "settle": pl.Decimal(18, 4),
+    "underlying": pl.Decimal(18, 4),
+    "open_interest": pl.Int64(),
+    "oi_change": pl.Int64(),
+    "volume": pl.Int64(),
+    "turnover": pl.Decimal(20, 2),
+    "lot_size": pl.Int64(),
+}
+
+
 def empty_frame(schema: dict[str, pl.DataType]) -> pl.DataFrame:
     """An empty frame that still satisfies ``schema``.
 
@@ -337,6 +363,7 @@ __all__ = [
     "BAR_SOURCES",
     "BHAVCOPY_SCHEMA",
     "DAILY_BARS_SCHEMA",
+    "FO_BHAVCOPY_SCHEMA",
     "BarSource",
     "BrokerAccountRef",
     "BrokerHoldingRecord",

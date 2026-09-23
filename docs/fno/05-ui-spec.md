@@ -1,0 +1,69 @@
+# 05 — UI spec: Stock F&O on the Options tab, and the desk's `/fno`
+
+The division is the same as every sleeve's. The **desk** (Jinja, `kite-momentum-rebalancer/app`)
+is the only surface with a Confirm. The **web app** is read-only. Disclaimers are components.
+There is no new visual language: the tokens and components are `DESIGN.md` and
+`docs/PORTFOLIO-DESIGN-SYSTEM.md`. This extends `docs/options/05`, which stays authoritative for
+the O1–O3 panels.
+
+## 1. Navigation
+
+**Web.** No new top-level tab. The **Options** tab (`/options`) gains a sub-nav:
+`Intraday (NIFTY)` · `Overnight` · `Stock F&O`. The first is today's page, unchanged. The new
+routes are `/options/overnight` and `/options/fno`. `nav.test.ts` is extended, not rewritten.
+
+**Desk.** An `F&O Overnight` tab beside `NIFTY Options`, route **`/fno`**, with a badge for open
+structures and their nearest hard-exit date, and `PAPER`/`LIVE` per sleeve from `fno_gates()`.
+
+## 2. `/options/overnight` — F1 (web, read-only)
+
+**Header.** Per underlying: the next F1 entry date, and today's state chip (`04` §8). A red
+**"Hard exit tomorrow 15:00"** line appears when any open structure's `hard_exit_date` is the next
+session.
+
+**The clock, stated on the page** (CLAUDE.md's two-clock rule; FO5 adds this row to the root
+table in the same commit):
+
+| What | Clock | Label |
+|---|---|---|
+| Scan state, the proposed condor, IV/RV | The last completed session's bhavcopy (`fo_scan.trade_date`) | `As of close, Tue 22 Sep` |
+| Open structures' marks | The last session's **settle** (`fo_mark`), plus the shared `useLiveMarks` overlay on the **underlying's level only** during market hours | `Marked at settle, 22 Sep` · `NIFTY live 13:14` |
+| Journal, re-tests | closed records | dates only |
+
+The page never prices an option live. **Live leg prices exist only on the desk**, where they
+decide the plan. The page says so.
+
+**Cards.** One per underlying. *Proposed condor* (on an entry day): four strikes with IV, credit,
+widths, max loss per lot, cost share, and IV ÷ RV20 with the note "recorded, not used". *Open
+structure*: the legs, entry credit, today's mark, P&L in ₹ and R, the profit-take level, the hard
+exit date, and the days held. *Journal*: closed structures, in R, paper and live never pooled.
+
+**Evidence card.** The Tier 2E line from `RESEARCH.md` §B4 with its caveat verbatim (`07` §4) and
+n = 100; the latest quarterly re-test; the paper tally against `04` §9's checklist.
+
+## 3. `/options/fno` — Stock F&O information (web, read-only)
+
+The banner from `04` §5 ("None of these numbers predicted a profitable trade after costs in
+2022–2026", linking the research). Then the sortable table of `04` §5 over every F&O underlying,
+with a filter for the ban list. The clock label is `As of close, <date>`. The price column may
+take the shared live overlay during market hours (the four-screen-pages rule, 21 Sep 2026); every
+other column is end of day. Below the table: **"Families tested and rejected"**, which is
+`RESEARCH.md`'s verdict table with the latest re-test beside each row, and the date and number of
+sessions of measured spreads (FO3).
+
+Phone: the table collapses to symbol · IV ÷ RV · OI chg · ban, and a tap opens the row.
+
+## 4. The desk `/fno`
+
+* **Morning plan card** (09:20 on an entry day): the four legs re-priced from live quotes, with
+  bid/ask, spread %, OI, credit vs the scan's credit (a > 20 % drift is shown in amber), max loss in
+  ₹ and R, lots, the broker's basket margin vs free margin, the costs, **the entry sequence
+  (longs first)** and the hard exit date. Then **Confirm (paper)** with the sentence: "This
+  confirm also authorises the 50 % profit take and the E−1 15:00 exit of this structure. It
+  places nothing else." It has a 30-minute countdown to `expires_at`.
+* **Open structures**: a live mark, the distance of the underlying to each short strike in σ, and
+  the next rule to fire.
+* **Exits** fire under the confirm and are shown as they happen. Any refusal (guard, margin,
+  stale quote) is shown by name, never as a spinner.
+* No field on this page moves money except Confirm. Capital, risk % and pauses are the settings
+  form, audited.

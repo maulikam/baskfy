@@ -46,6 +46,7 @@ from baskfy_providers.ports import REFERENCE_CAPABILITIES, Capability, ProviderH
 from baskfy_providers.ratelimit import RateLimiter
 from baskfy_providers.records import (
     BHAVCOPY_SCHEMA,
+    FO_BHAVCOPY_SCHEMA,
     CatalystRecord,
     CorporateAction,
     EarningsDateRecord,
@@ -61,6 +62,17 @@ PROVIDER_NAME: Final = "nse"
 
 #: Archive "kinds" — the ``{kind}`` in docs/09's ``nse/{kind}/{date}.csv``.
 KIND_BHAVCOPY: Final = "bhavcopy"
+KIND_FO_BHAVCOPY: Final = "fo-bhavcopy"
+#: NSE switched the F&O bhavcopy to the UDiFF layout on this session; earlier days exist only in
+#: the legacy ``fo{DD}{MON}{YYYY}bhav.csv.zip`` file under ``content/historical/DERIVATIVES``.
+FO_UDIFF_SINCE: Final = dt.date(2024, 7, 8)
+#: UDiFF's ``FinInstrmTp`` mapped onto the legacy ``INSTRUMENT`` vocabulary.
+_FO_INSTRUMENT_TYPES: Final[Mapping[str, str]] = {
+    "STF": "FUTSTK",
+    "STO": "OPTSTK",
+    "IDF": "FUTIDX",
+    "IDO": "OPTIDX",
+}
 KIND_INDEX_SNAPSHOT: Final = "index-snapshot"
 KIND_CORPORATE_ACTIONS: Final = "corporate-actions"
 #: The windowed request is a *different question* from the un-ranged one, so it gets its own
@@ -462,6 +474,29 @@ class NSEProvider:
         )
         frame = _read_csv(_maybe_unzip(payload), context=f"bhavcopy {on.isoformat()}")
         return _bhavcopy_to_frame(frame, on)
+
+    def fo_bhavcopy(self, on: dt.date) -> pl.DataFrame:
+        """One trading day's F&O bhavcopy: every NFO contract's OHLC, settle and OI (docs/fno/07).
+
+        End-of-day only, and it keeps expired contracts — the one free source that can price a
+        position held from one close to the next across a contract that no longer exists.
+        """
+        if on >= FO_UDIFF_SINCE:
+            url = (
+                f"{self._settings.nse_archive_url}/content/fo/BhavCopy_NSE_FO_0_0_0_"
+                f"{on.strftime('%Y%m%d')}_F_0000.csv.zip"
+            )
+        else:
+            month = on.strftime("%b").upper()
+            url = (
+                f"{self._settings.nse_archive_url}/content/historical/DERIVATIVES/{on.year}/"
+                f"{month}/fo{on.strftime('%d')}{month}{on.year}bhav.csv.zip"
+            )
+        payload = self._archived(
+            KIND_FO_BHAVCOPY, on, url, extension="zip", content_type="application/zip"
+        )
+        frame = _read_csv(_maybe_unzip(payload), context=f"F&O bhavcopy {on.isoformat()}")
+        return _fo_bhavcopy_to_frame(frame, on)
 
     def equity_fundamentals(
         self,
@@ -1001,6 +1036,133 @@ def _bhavcopy_to_frame(frame: pl.DataFrame, on: dt.date) -> pl.DataFrame:
             f"bhavcopy for {on.isoformat()} contained no readable rows", provider=PROVIDER_NAME
         )
     return conform(pl.DataFrame(rows, strict=False), BHAVCOPY_SCHEMA)
+
+
+def _fo_bhavcopy_to_frame(frame: pl.DataFrame, on: dt.date) -> pl.DataFrame:
+    """Map either F&O bhavcopy layout onto ``FO_BHAVCOPY_SCHEMA``, vectorised.
+
+    A stock-options day is ~50,000 rows, so this stays in polars rather than walking rows. A
+    file stamped with another session's date is the wrong file and is refused (the SW16 rule).
+    """
+    frame = frame.rename({name: name.strip() for name in frame.columns})
+    udiff = "TckrSymb" in frame.columns
+    if udiff:
+        _require_column(frame, ("FinInstrmTp",), "F&O bhavcopy")
+        columns = {
+            "stamp": "TradDt",
+            "symbol": "TckrSymb",
+            "expiry": "XpryDt",
+            "strike": "StrkPric",
+            "option_type": "OptnTp",
+            "open": "OpnPric",
+            "high": "HghPric",
+            "low": "LwPric",
+            "close": "ClsPric",
+            "settle": "SttlmPric",
+            "open_interest": "OpnIntrst",
+            "oi_change": "ChngInOpnIntrst",
+            "volume": "TtlTradgVol",
+            "turnover": "TtlTrfVal",
+        }
+        instrument = (
+            pl.col("FinInstrmTp")
+            .cast(pl.String)
+            .str.strip_chars()
+            .replace_strict(_FO_INSTRUMENT_TYPES, default=None)
+        )
+        expiry_format = "%Y-%m-%d"
+        stamp_format = "%Y-%m-%d"
+        underlying = _fo_number(frame, "UndrlygPric")
+        lot_size = (
+            pl.col("NewBrdLotQty").cast(pl.Float64, strict=False).cast(pl.Int64, strict=False)
+            if "NewBrdLotQty" in frame.columns
+            else pl.lit(None, dtype=pl.Int64)
+        )
+        turnover_scale = 1.0
+    else:
+        _require_column(frame, ("INSTRUMENT",), "F&O bhavcopy")
+        columns = {
+            "stamp": "TIMESTAMP",
+            "symbol": "SYMBOL",
+            "expiry": "EXPIRY_DT",
+            "strike": "STRIKE_PR",
+            "option_type": "OPTION_TYP",
+            "open": "OPEN",
+            "high": "HIGH",
+            "low": "LOW",
+            "close": "CLOSE",
+            "settle": "SETTLE_PR",
+            "open_interest": "OPEN_INT",
+            "oi_change": "CHG_IN_OI",
+            "volume": "CONTRACTS",
+            "turnover": "VAL_INLAKH",
+        }
+        instrument = pl.col("INSTRUMENT").cast(pl.String).str.strip_chars()
+        expiry_format = "%d-%b-%Y"
+        stamp_format = "%d-%b-%Y"
+        underlying = pl.lit(None, dtype=pl.Float64)
+        lot_size = pl.lit(None, dtype=pl.Int64)
+        # The legacy file prints turnover in lakh.
+        turnover_scale = 100_000.0
+    for name in columns.values():
+        _require_column(frame, (name,), "F&O bhavcopy")
+
+    def number(key: str) -> pl.Expr:
+        return pl.col(columns[key]).cast(pl.Float64, strict=False)
+
+    def count(key: str) -> pl.Expr:
+        return number(key).cast(pl.Int64, strict=False)
+
+    option_type = pl.col(columns["option_type"]).cast(pl.String).str.strip_chars()
+    parsed = frame.select(
+        pl.col(columns["stamp"])
+        .cast(pl.String)
+        .str.strip_chars()
+        .str.to_date(stamp_format, strict=False)
+        .alias("stamp"),
+        pl.lit(on).alias("date"),
+        instrument.alias("instrument"),
+        pl.col(columns["symbol"]).cast(pl.String).str.strip_chars().alias("symbol"),
+        pl.col(columns["expiry"])
+        .cast(pl.String)
+        .str.strip_chars()
+        .str.to_date(expiry_format, strict=False)
+        .alias("expiry"),
+        number("strike").alias("strike"),
+        pl.when(option_type.is_in(["CE", "PE"]))
+        .then(option_type)
+        .otherwise(None)
+        .alias("option_type"),
+        number("open").alias("open"),
+        number("high").alias("high"),
+        number("low").alias("low"),
+        number("close").alias("close"),
+        number("settle").alias("settle"),
+        underlying.alias("underlying"),
+        count("open_interest").alias("open_interest"),
+        count("oi_change").alias("oi_change"),
+        count("volume").alias("volume"),
+        (number("turnover") * turnover_scale).round(2).alias("turnover"),
+        lot_size.alias("lot_size"),
+    ).filter(pl.col("instrument").is_in(list(_FO_INSTRUMENT_TYPES.values())))
+    if parsed.is_empty():
+        raise UnexpectedPayload(
+            f"F&O bhavcopy for {on.isoformat()} contained no readable rows", provider=PROVIDER_NAME
+        )
+    stamps = parsed.get_column("stamp").drop_nulls().unique().to_list()
+    if stamps and stamps != [on]:
+        raise UnexpectedPayload(
+            f"F&O bhavcopy for {on.isoformat()} is stamped {sorted(stamps)}; wrong file for this "
+            f"date",
+            provider=PROVIDER_NAME,
+        )
+    return conform(parsed.drop("stamp"), FO_BHAVCOPY_SCHEMA)
+
+
+def _fo_number(frame: pl.DataFrame, column: str) -> pl.Expr:
+    if column in frame.columns:
+        return pl.col(column).cast(pl.Float64, strict=False)
+    return pl.lit(None, dtype=pl.Float64)
 
 
 ParsedAction = tuple[str, Decimal | None, Decimal | None, Decimal | None]

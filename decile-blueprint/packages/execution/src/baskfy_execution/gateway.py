@@ -947,9 +947,19 @@ class OrderGateway:
         tenant: TenantIds,
         plan_tenant: TenantIds,
         limit_fraction: float | None = None,
+        fo_plan: FoPlanRef | None = None,
+        floor_trigger: float | None = None,
     ) -> dict:
         """Re-size one resting GTT to ``qty`` at the same ``trigger``. The ONLY way to modify
         a GTT.
+
+        ``fo_plan`` + ``floor_trigger`` (FO7, ``docs/fno/04`` §10): F2's evening trail MOVES the
+        trigger of a stock future's GTT. With ``fo_plan`` the modify meets ``fo_gtt_refusal`` —
+        the same branch ``place_gtt_stop`` rests the stop under (an F2 stock future on NFO, both
+        derivative switches on; an option GTT refused whatever the switches) — its leg stays
+        ``NRML``, and ``floor_trigger`` (the trigger it replaces) is REQUIRED: a trail is never
+        lowered, so a trigger below it is refused before anything is sent. Without ``fo_plan``
+        nothing below differs by a byte.
 
         The layers are `place_gtt_stop`'s — tenant, untouchables, "is this a stop", the kill
         switch consulted and recorded but not obeyed (a stop is protection; growing it while
@@ -1008,6 +1018,42 @@ class OrderGateway:
                 client_id=cid,
             )
             return {"symbol": symbol, "gtt_id": gtt_id, "status": "BLOCKED", "error": why}
+        leg_product: str | None = None  # None: the broker's CNC, as it always was
+        if fo_plan is not None:
+            fo_why = fo_gtt_refusal(
+                symbol,
+                exchange,
+                fo_plan,
+                options_enabled=gates.options_enabled,
+                fno_carry_enabled=gates.fno_carry_enabled,
+            )
+            if not fo_why and floor_trigger is None:
+                fo_why = (
+                    f"{symbol}: an FO stop modify must name the trigger it replaces; a trail "
+                    "is never lowered (docs/fno/04 §10)"
+                )
+            if not fo_why and floor_trigger is not None and float(trigger) < float(floor_trigger):
+                fo_why = (
+                    f"{symbol}: trigger {trigger} is below the resting {floor_trigger}; a trail "
+                    "is never lowered (docs/fno/04 §10)"
+                )
+            if fo_why:
+                self._journal(
+                    {
+                        "event": "gtt_modify_fo_block",
+                        "symbol": symbol,
+                        "gtt_id": gtt_id,
+                        "exchange": exchange,
+                        "qty": int(qty),
+                        "trigger": trigger,
+                        "floor_trigger": floor_trigger,
+                        "fo_plan": fo_plan.plan_id,
+                        "why": fo_why,
+                    },
+                    client_id=cid,
+                )
+                return {"symbol": symbol, "gtt_id": gtt_id, "status": "BLOCKED", "error": fo_why}
+            leg_product = FO_CARRY_PRODUCT
         refusal = refuse_stop(symbol=symbol, qty=qty, trigger=trigger, last_price=last_price)
         if refusal:  # GTT layer 1b: is it a stop?
             self._journal(
@@ -1049,6 +1095,15 @@ class OrderGateway:
                     "last_price": last_price,
                     "exchange": exchange,
                     "limit_fraction": fraction,
+                    **(
+                        {}
+                        if fo_plan is None
+                        else {
+                            "fo_plan": fo_plan.plan_id,
+                            "product": leg_product,
+                            "floor_trigger": floor_trigger,
+                        }
+                    ),
                 },
                 client_id=cid,
             )
@@ -1112,6 +1167,7 @@ class OrderGateway:
             trigger=trig,
             limit=limit,
             last_price=last_price,
+            product=leg_product,
         )
         try:
             await asyncio.to_thread(self.kc.modify_gtt, trigger_id=int(gtt_id), **params)

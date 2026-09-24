@@ -485,3 +485,178 @@ before any UDiFF day says so the same way.
 Outside the session and the 18:30–23:30 nightly window, and `run_retest` refuses a second run in
 the same month unless forced (`fno_cli retest --force`). Behind `BASKFY_FNO_SCAN_ENABLED` like the
 rest of the data layer. It writes one row per family per FO tenant and moves nothing else.
+
+## FO5.1 — Capital and risk % are settings on `PATCH /fno/config`, under the ceilings · ⚠ UNREVIEWED
+
+`03` §6 names "per-sleeve capital, risk %, max concurrent positions, and the book's loss pause" as
+the config, "every write through settings_audit", and `05` §4 puts "capital, risk % and pauses" on
+"the settings form, audited"; `options_settings` already carries `sleeve_capital_inr` the same way.
+"Money-free" is read as: the write cannot build, size into, confirm or place an order. The patch
+takes `capital_inr`, `risk_per_trade_pct`, `max_lots` (≤ 10), `max_open_positions` (F1 ≤ 2, one per
+underlying; F2 ≤ 10) and `paper_enabled` per group, and the book's `monthly_pause_inr`; capital ×
+risk % ≤ `BASKFY_FNO_RISK_PER_TRADE_INR_MAX`, risk % ≤ `…_RISK_PCT_MAX`, pause ≤
+`…_BOOK_MONTHLY_LOSS_INR_MAX`, each refusal naming its env var; atomic across parts; one
+`fo_config_audit` row per moved field. `paused_*` and every flag are not fields. **Rejected:**
+capital as env-only (contradicts `03` §6). **Reversal:** drop the two fields from `FnoSleevePatch`.
+
+## FO5.2 — The API lives at `/fno/*`; the pages at `/options/overnight` and `/options/fno` · ⚠ UNREVIEWED
+
+`test_options_readonly.py` pins `/api/v1/options/*` to OP5's exact list; FO routes under it would
+reopen that contract. Three paths: `GET /fno/overnight`, `GET /fno/info`, `GET|PATCH /fno/config`.
+
+## FO5.3 — The sub-nav is its own row above the intraday tabs · ⚠ UNREVIEWED
+
+`OPTIONS_SUBNAV` (`Intraday (NIFTY)` · `Overnight` · `Stock F&O`) is drawn first on every `/options`
+page; `SECTION_TABS.options` (Today | Journal | Calendar) is unchanged and still drawn on the
+intraday pages, whose routes light "Intraday (NIFTY)" by the longest-prefix rule.
+
+## FO5.4 — The 1-year IV percentile needs 200 stored sessions · ⚠ UNREVIEWED
+
+Share of the stored `iv_atm` values in the 365 days to `as_of` that are ≤ that day's value, shown
+only when ≥ 200 sessions have one; otherwise null, with the session count on the page. A
+"percentile" of a few months is a different number with the same name.
+
+## FO5.5 — No live overlay on `/options/fno` · ⚠ UNREVIEWED
+
+`05` §3 *allows* the price column the four-screen-pages overlay. `04` §5's price column is the
+**futures settle**; the shared overlay is a cash last price, and putting one in a settle column
+mislabels it. Every column stays `As of close`. **Reversal:** add a separate "last (live)" column.
+
+## FO5.6 — Research text is quoted in `fno_read`, not read from `docs/` · ⚠ UNREVIEWED
+
+The API image does not ship `docs/`. The B4 line, the loss-close line, the F2 line, `07` §4's Tier 2E
+caveat (verbatim) and the verdict table are constants; σ is written "sd" and the minus sign as "-"
+(ruff's confusables rule). B4's own 0.5 % index slippage is stated beside the verbatim caveat, which
+says 3 % (the stock-option default). The page links "the research" to its own verdict section
+(`#families`), because the web app serves no `RESEARCH.md`.
+
+## FO5.7 — The verdict rows read FO9's `fo_backtest_run.family` codes · ⚠ UNREVIEWED
+
+The codes are `baskfy_core.fno.retest.FAMILIES`' keys: B4 ↔ `B4`/`B4_LOSS_CLOSE` (the evidence card
+shows both); the long-only trend ↔ `F2`/`A0_LONG`; both sides ↔ `A0`; OI filters ↔
+`A1`/`A1R`/`A3`; then `A2`, `A4`, `B1`, `B2`, `B3`, `C1`, `C2`, `E`. The newest run of any of a
+row's codes is shown beside it, with its caveat. A family FO9 adds later needs a row here.
+
+## FO5.8 — Small reads, stated · ⚠ UNREVIEWED
+
+* The underlying's level is the index price the bhavcopy prints beside the index future (UDiFF
+  days only); the live overlay reads it as `NIFTY 50` / `NIFTY BANK`.
+* R on an open position is the settle mark's P&L ÷ `fo_position.max_loss_inr`; null (shown "—")
+  when the desk has not recorded one — F2 until FO7 writes it.
+* Days to the near monthly: calendar days from `as_of` to the first monthly strictly after it in
+  `op_expiry` (withdrawn excluded; FO3.3's rule); its lot, else the bhavcopy's futures lot.
+* The paper tally counts closed paper trades, distinct opened months (F1) and rolls (F2); rule
+  violations are `null` ("not counted yet") until FO10's ledger exists.
+* The web app gets no FO settings form; the PATCH is for the desk's settings (FO8) and by hand.
+
+## FO7.1 — The FO gateway is paper-pinned; a LIVE sleeve is refused before any order · ⚠ UNREVIEWED
+
+**Context.** FO7 builds the executor FO8 will call. A live fill has to be read back from the
+broker's order book and a live stop from its GTT book; neither is built. **Choice.**
+`fno_execute.build_fo_gateway` hands the gateway `fno_gates.product_gates(sleeve)` with `dry_run`
+forced true (in PAPER it is true already, FO6.5), and `execute_entry` answers `LIVE_NOT_BUILT`
+when all four switches are on (the options pack's OP10.3). Every leg still runs the real guards,
+the covered-overnight guard, risk, the rate limit and the journal. **Rejected.** Passing a LIVE
+gate through to a path that cannot track a real fill. **Reversal.** Drop the `replace(...,
+dry_run=True)` in `paper_gates` when the live read-back is built (and its tests say so).
+
+## FO7.2 — F1 is sent by the options pack's pure executor, with O1's rules · ⚠ UNREVIEWED
+
+`baskfy_core.options.executor.run_entry`/`run_exit` already are `04` §2's sequences (longs first;
+abandon on a short protecting leg and close the filled longs; shorts first on exit; a protecting
+long never before its short) and assert never-naked before each attempt. Its only sleeve-dependent
+rule is which close is risk-reducing (the marketable third attempt), and for a condor that is O1's
+reading. The desk's `OptionVenue` sends each attempt with a `FoPlanRef` carrying the order as its
+`step` and the plan's held legs, so the gateway re-proves every prefix too. **Rejected.** A second
+copy of the sequencing in `baskfy_core.fno`. **Reversal.** Give the executor an FO rule set.
+
+## FO7.3 — The F2 trail moves its GTT through `modify_gtt_quantity(fo_plan=, floor_trigger=)` · ⚠ UNREVIEWED
+
+FO6.4 left the trigger-moving modify to FO7. With a `fo_plan` reference the modify meets
+`fo_gtt_refusal` (the F2 stock-future branch `place_gtt_stop` rests the stop under; an option GTT
+refused whatever the switches), its leg stays `NRML`, and `floor_trigger` — the trigger it
+replaces — is **required**; a trigger below it is refused before anything is sent ("a trail is
+never lowered", `04` §10, now enforced at the gateway as well as in `monitor.f2_trail_step`).
+Without `fo_plan` the method is byte-for-byte what it was (`test_gtt_modify_and_cancel.py` green).
+**Reversal.** Remove the two keywords; `test_fno_gtt_trail_modify.py` goes with them.
+
+## FO7.4 — On paper the broker book is empty; a live reader nets the plan's fills out · ⚠ UNREVIEWED
+
+`FoPlanRef.broker_positions` is the broker's NRML option book net of the plan's own fills. On paper
+the broker holds none of the plan's legs, so there is nothing to net (and `net_of_plan` over an
+empty book would count each paper fill as a short, refusing every short leg); nor is the real
+account's NRML book cover for a simulated short. `paper_book` is therefore empty and a paper plan
+must cover itself. `live_book(raw)` is the reader a live path would pass. **Reversal.** Pass a
+different `broker_book`.
+
+## FO7.5 — A paper GTT's handle is `PAPER-<position id>`; a paper stop "fires" on the monitor's check · ⚠ UNREVIEWED
+
+The dry-run GTT has no exchange id, and the evening modify needs one (the gateway refuses a
+non-positive-integer trigger id). The paper handle is the position id, addressed as an integer to
+the dry-run branch only (the gateway is paper-pinned, FO7.1). On paper nothing rests at an
+exchange, so the monitor's 60-second check of the live last price against the stop is the GTT
+firing: an EXIT plan (`STOP`) sold through the paper gateway. A real trigger id would be deleted
+when a position closes for any other reason; a paper handle rests nowhere and is not.
+
+## FO7.6 — Plan ids are deterministic per user: `<sleeve>-<yyyymmdd>-<symbol>-u<user>` · ⚠ UNREVIEWED
+
+`fo_plan.plan_id` is unique across the table (P4.1: every row carries a user), so an id without the
+user would let one user's plan block another's. Exits are `<entry>-X`, rolls `<entry>-R<n>`. Each
+raise is a no-op when its id exists (house rule 7).
+
+## FO7.7 — A rejected plan with zero lots stores `lots = 1`; the sized count is in `detail` · ⚠ UNREVIEWED
+
+`04` §8 wants every `REJECTED_*` plan written with its reason; `fo_plan.lots > 0` is a table
+constraint. A `REJECTED_SIZE` plan is never confirmable (the confirm refuses anything not
+`ISSUED`), so `lots` is inert there and `detail.lots_sized` carries the true 0. **Reversal.** Relax
+the constraint to `lots >= 0` by migration.
+
+## FO7.8 — F2's live plan: entry at the ask, stop on the fill, the ATR and vol from the scan · ⚠ UNREVIEWED
+
+At 09:20 the plan is priced at the live ask (what a buy pays); the fill re-computes the stop
+(`entry − 3 × ATR14` at the signal close's ATR) and the GTT trigger (`max(stop, stop_from_vol)`,
+with the scan row's `rv20` as the annual vol). F2 plans are raised and expire on F1's window
+(09:20; `min(issued + 30 min, 10:30)`): `02` Track C §3 asks the same 30 minutes of every entry.
+F2 trades the **previous session's** scan only. A partially filled future is sold back at once
+(`ABANDONED_PARTIAL`): no half-sized carry.
+
+## FO7.9 — F2's trail reads the held contract's close; the stop is carried unchanged through a roll · ⚠ UNREVIEWED
+
+The research trails on the continuous series; the desk holds one contract, and within it the two
+agree. Across a roll the highest close and the stop are carried as they stand (`02` Track C §5:
+"stop carried"), not rebased by the calendar spread. The mark after a roll is the rolls' realised
+P&L plus the current contract's settle against its own entry. **Reversal.** Rebase on the roll's
+two fills.
+
+## FO7.10 — An unreadable basket margin refuses the plan (`REJECTED_MARGIN`) · ⚠ UNREVIEWED
+
+Margin is a ceiling the plan must be shown to fit under (`04` §3). If `basket_order_margins` or the
+free margin cannot be read, the plan is refused with that reason rather than issued unproven. The
+figure used is the basket's `final.total` (the hedge benefit counted) against the equity segment's
+`net`.
+
+## FO7.11 — Plan states around a position · ⚠ UNREVIEWED
+
+An EXIT plan is written `CONFIRMED` with the entry's `confirmed_at` and `parent_plan_id` (the confirm
+it runs under), then `FILLING` → `CLOSED`; the entry goes `OPEN` → `EXITING` → `CLOSED`. A ROLL plan
+is `ISSUED` → `FILLING` → `OPEN` (`04` §8). A roll that sells the held month but cannot buy the next
+leaves the position flat (`ROLL_INCOMPLETE`, alerted) — the safe side. A partial exit stays
+`FILLING` and is tried on the next pass, never naked.
+
+## FO7.12 — Where the carried state lives · ⚠ UNREVIEWED
+
+`fo_position.legs` is `{"legs": [...], "carry": {...}}`: the legs with their fills, and F1's strikes
+or F2's trail stop, highest close, ATR at entry, vol, time-exit date, rolls and realised P&L.
+Paper-checklist violations (`LATE_EXIT`, `NAKED_FUTURE`, `04` §9) append to the entry plan's
+`detail.violations` (there is no violations table and `fo_position` has no `detail`). FO10's
+journal reads both. The attempt counter behind each client id is `detail.attempts` on the plan, so
+an id is never reused across passes or restarts (the gateway would answer `DUPLICATE`).
+
+## FO7.13 — Marks fire nothing; the monitor's process runs 09:14 to 23:30 · ⚠ UNREVIEWED
+
+`04` §1: the settle is checked "for the mark", and "the exit plan fires on the live check". A night
+records whether the profit take or loss close would have hit at the settle (`fo_mark.detail`) and
+raises nothing. Because the book is marked after the 18:30 bhavcopy, `scripts/fno_monitor_loop.py`
+keeps the day's window open to 23:30 and restarts a crashed monitor inside it; compose is FO12's.
+The desk's Postgres adapter hands `numeric` back as `float`; the store re-quantizes price columns
+at their storage precision.

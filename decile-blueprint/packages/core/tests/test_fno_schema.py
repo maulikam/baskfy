@@ -7,7 +7,7 @@
 3. **The models and the migration agree on a real database** — columns, nullability, CHECKs.
 4. **``fo_contract_daily`` is partitioned by month** from Jan 2022 (the backfill's start) to
    Dec 2027, refuses a row outside every partition, and is idempotent on its key.
-5. **migrate -> seed -> migrate is a no-op**, the seed writes Maulik's F1 ₹10,00,000 (M.1) and F2
+5. **migrate -> seed -> migrate is a no-op**, the seed writes Maulik's F1 ₹25,00,000 (M.2) and F2
    ₹0 at 1.0 %, audits each row it inserts, and never resets a number a person chose.
 6. The constraints that are rules refuse: a future is ``XX`` and only a future is, a sleeve group
    is ``F1`` or ``F2``, capital is never negative, a plan cannot expire before it is issued.
@@ -428,8 +428,8 @@ class TestMigrateSeedMigrate:
                 ).scalars()
             }
             assert set(rows) == {"F1", "F2"}
-            # 01 §1 / 04 §3 / DECISIONS-FO M.1: F1 Rs 10,00,000 for both underlyings; F2 Rs 0.
-            assert rows["F1"].capital_inr == Decimal("1000000.00")
+            # 01 §1 / 04 §3 / DECISIONS-FO M.2: F1 Rs 25,00,000 for both underlyings; F2 Rs 0.
+            assert rows["F1"].capital_inr == Decimal("2500000.00")
             assert rows["F2"].capital_inr == Decimal("0.00")
             for row in rows.values():
                 assert row.risk_per_trade_pct == Decimal("1.00")  # 04 §3
@@ -437,12 +437,12 @@ class TestMigrateSeedMigrate:
                 assert row.paper_enabled is True
             # One per underlying x NIFTY and BANKNIFTY (04 §1); f2_max_open (04 §10).
             assert (rows["F1"].max_open_positions, rows["F2"].max_open_positions) == (2, 5)
-            # 1.0 % of Rs 10 lakh is Rs 10,000 per structure, under the Rs 25,000 ceiling (04 §3).
-            assert rows["F1"].capital_inr * rows["F1"].risk_per_trade_pct / 100 == Decimal("10000")
+            # 1.0 % of Rs 25 lakh is Rs 25,000 per structure, exactly the per-trade ceiling (04 §3).
+            assert rows["F1"].capital_inr * rows["F1"].risk_per_trade_pct / 100 == Decimal("25000")
             assert book is not None and book.monthly_pause_inr == 0
             assert set(audits) == {"F1", "F2"}
-            assert audits["F1"].new_value == "1000000.00" and audits["F1"].old_value is None
-            assert "M.1" in (audits["F1"].note or "")
+            assert audits["F1"].new_value == "2500000.00" and audits["F1"].old_value is None
+            assert "M.2" in (audits["F1"].note or "")
 
 
 @requires_db

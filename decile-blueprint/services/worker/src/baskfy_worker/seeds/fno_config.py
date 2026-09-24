@@ -14,8 +14,9 @@ Where each number comes from — **none is an agent's choice**:
   the options seed writes ``op_book_config``: the pause amount is a person's number, set on the
   settings form under the ₹75,000 ceiling (FO10 owns what 0 means).
 
-TODO(FO1-wire): read these from ``baskfy_core.fno.config`` once FO1 lands, as the options seed
-reads ``DEFAULT_OPTIONS_CONFIG``, so the two cannot drift; ``test_fno_seed`` pins them to ``04``.
+Risk, lots and max-open are read from ``baskfy_core.fno.config.DEFAULT_FNO_CONFIG``, as the
+options seed reads ``DEFAULT_OPTIONS_CONFIG``, so the seed and ``04`` cannot drift. The capitals
+are Maulik's numbers, not config defaults, and stay written here.
 
 Idempotent (house rule 7): ``ON CONFLICT DO NOTHING`` everywhere, so a re-seed never resets a
 number a person chose. Each sleeve row the seed does insert gets a ``fo_config_audit`` row naming
@@ -32,6 +33,7 @@ from typing import Final
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from baskfy_core.fno.config import DEFAULT_FNO_CONFIG
 from baskfy_core.models import FoBookConfig, FoConfigAudit, FoSleeveConfig
 
 SEEDED_BY: Final = "seed"
@@ -51,18 +53,19 @@ SLEEVE_SEEDS: Final[tuple[SleeveSeed, ...]] = (
     SleeveSeed(
         sleeve="F1",
         capital_inr=Decimal("1000000.00"),
-        risk_per_trade_pct=Decimal("1.00"),
-        max_lots=2,
-        max_open_positions=2,
+        risk_per_trade_pct=DEFAULT_FNO_CONFIG.f1.risk_per_trade_pct,
+        max_lots=DEFAULT_FNO_CONFIG.common.max_lots,
+        max_open_positions=DEFAULT_FNO_CONFIG.f1.max_open_per_underlying
+        * len(DEFAULT_FNO_CONFIG.f1.underlyings),
         source="Maulik, 23 Sep 2026 (DECISIONS-FO M.1, Q1): F1 capital Rs 10 lakh, both "
         "underlyings together",
     ),
     SleeveSeed(
         sleeve="F2",
         capital_inr=Decimal("0.00"),
-        risk_per_trade_pct=Decimal("1.00"),
-        max_lots=2,
-        max_open_positions=5,
+        risk_per_trade_pct=DEFAULT_FNO_CONFIG.f2.risk_per_trade_pct,
+        max_lots=DEFAULT_FNO_CONFIG.common.max_lots,
+        max_open_positions=DEFAULT_FNO_CONFIG.f2.max_open,
         source="docs/fno/01 §1b: Q1 was asked for F1 only; F2 paper one lot, live refuses "
         "NO_SLEEVE_CAPITAL",
     ),

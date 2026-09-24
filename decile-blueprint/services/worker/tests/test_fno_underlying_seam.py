@@ -1,10 +1,8 @@
 """FO2: the ``fo_underlying_daily`` seam — read ``fo_contract_daily``, derive, upsert.
 
-TODO(FO1-wire): skipped until ``baskfy_core.fno.series`` lands (FO1 is written concurrently). The
-tests below drive :func:`derive_underlying_daily` with a stand-in for the pure function, so
-wiring means replacing ``_stand_in`` with FO1's ``derive_underlying`` (or adapting the seam's
-``DeriveUnderlying`` to its signature) and removing the ``skip``. What they assert is FO2's side
-of the contract, not FO1's arithmetic: the window read ends at ``trade_date`` (no look-ahead,
+The tests below drive :func:`derive_underlying_daily` with a stand-in for the pure function
+(FO1's arithmetic is ``packages/core/tests/test_fno_underlying.py``'s). What they assert is the
+seam's side of the contract: the window read ends at ``trade_date`` (no look-ahead,
 house rule 5), the upsert is idempotent (house rule 7), and it never touches ``in_ban``.
 """
 
@@ -27,8 +25,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from baskfy_core.models import FoContractDaily, FoUnderlyingDaily
 from baskfy_worker.fno.partitions import ensure_contract_partition
 from baskfy_worker.fno.underlying import DERIVED_COLUMNS, derive_underlying_daily
-
-pytestmark = pytest.mark.skip(reason="wired after FO1")
 
 ENV_VAR: Final = "BASKFY_TEST_DATABASE_URL"
 API_DIR: Final = Path(__file__).resolve().parents[2] / "api"

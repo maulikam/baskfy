@@ -7,8 +7,7 @@ from the database without an NSE request — so the retries cost nothing after t
 
 The order matters: the bhavcopy for ``trade_date``, then the ban list NSE published for the
 session **after** it (``02`` Track C §9), stored on ``trade_date``'s rows. ``fo_underlying_daily``
-is derived after each ingest (``06`` FO2) once FO1's pure series lands (TODO(FO1-wire), see
-``baskfy_worker.fno.underlying``).
+is derived after each ingested night (``06`` FO2; ``baskfy_worker.fno.underlying``).
 """
 
 from __future__ import annotations
@@ -22,11 +21,13 @@ from baskfy_core.models import TradingDay
 from baskfy_core.models.base import JsonObject
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
 from baskfy_worker.fno.ingest import (
+    STATUS_INGESTED,
     FoBhavcopyReader,
     ingest_day,
     is_final_attempt,
     store_ban_list,
 )
+from baskfy_worker.fno.underlying import derive_for_night
 from baskfy_worker.ops import is_trading_day
 
 
@@ -66,10 +67,7 @@ async def run_night(
         out["ban_list"] = {"skipped": "the trading_day calendar has no session after this one"}
     else:
         out["ban_list"] = (await store_ban_list(session, reader, trade_date, following)).as_dict()
-    # TODO(FO1-wire): once `baskfy_core.fno.series` exists, derive fo_underlying_daily here:
-    #     if ingest.status == STATUS_INGESTED:
-    #         out["underlying_rows"] = await derive_underlying_daily(
-    #             session, trade_date, baskfy_core.fno.series.derive_underlying
-    #         )
-    out["underlying_rows"] = None
+    out["underlying_rows"] = (
+        await derive_for_night(session, trade_date) if ingest.status == STATUS_INGESTED else None
+    )
     return out

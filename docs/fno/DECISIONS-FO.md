@@ -208,3 +208,60 @@ lot-size revision across 200 stocks is not 200 emails.
 
 The rule (two nearest monthlies per underlying plus the index weeklies, non-zero OI or volume)
 is `03`'s; the estimate was not. The rule wins; `03` §1 now says the measured range.
+
+## FO1.1 — The CA flag uses the research's band: above 1.4 or below 0.7 · ⚠ UNREVIEWED
+
+`04` §4 says "`|ret| > ln(1.4)`, or below `ln(0.7)`". Read literally the first clause already
+covers every ratio below 1/1.4 ≈ 0.714, which would make "below ln(0.7)" dead text. The research
+(`cont.py`) flags a ratio > 1.4 or < 0.7, and `03` §2 says "more than 30 %". The band is the
+research's. `ca_recent` counts five sessions including the flagged one.
+
+## FO1.2 — `covered` adds the broker book, the plan's filled legs and the order; FO6 must not double-count · ⚠ UNREVIEWED
+
+`is_covered(book_after)` takes the book *after* the order. The helper adds the broker positions,
+this plan's already-filled legs, and the order. **FO6 must pass the broker book without this
+plan's own fills**, or a filled long counts twice and overstates the cover. FO6's tests assert it.
+
+## FO1.3 — F2's time exit counts entry day as session 1 · ⚠ UNREVIEWED
+
+`04` §10's "40 sessions" is counted the way `res_f2.py` counted, so the port reproduces n = 2,334.
+
+## FO1.4 — Paper at ₹0 records `lots_at_ceiling` · ⚠ UNREVIEWED
+
+`04` §3 says paper with ₹0 capital "runs one lot and records what the live size would have been".
+With no capital there is no live size, so the record is the lots the ₹25,000 ceiling alone would
+allow, named `lots_at_ceiling`.
+
+## FO1.5 — F1's plan cost estimate assumes the exit at the entry mids plus 0.5 % slippage (min ₹0.05) · ⚠ UNREVIEWED
+
+The round trip for `REJECTED_COST` needs an exit price before there is one; the entry mids with
+the research's index slippage are the neutral guess.
+
+## FO1.6 — `vol` prices options at their close with r = 0; the research used 6.5 % · ⚠ UNREVIEWED
+
+`04` §4 says `r = 0` for `iv_atm`; the research's condor used 6.5 %. Each keeps its own: the stored
+IV follows `04`, the research port stays verbatim so the golden holds.
+
+## FO1.7 — `stop_from_vol` is re-implemented pure and tested equal to `baskfy_core.score.stop_from_vol` · ⚠ UNREVIEWED
+
+The F2 GTT trigger needs it inside `baskfy_core.fno`; a test pins the two together so they cannot
+drift.
+
+## FO1.8 — The research port: A0, A1, A2, A4, B1, C1 and the basis study run and match; B2, B3, C2 are ported and not run · ⚠ UNREVIEWED
+
+B4 reproduces **trade by trade** against the stored `condor_index_15_0.005_0.parquet`: n = 100,
++0.0334R (t 1.36), +0.0221R with the 1.5× loss close (worst −0.73R); F2 n = 2,334, +0.0171R;
+`continuous` rebuilds `cont.parquet` exactly. The golden runs only with `BASKFY_FNO_RESEARCH_DIR`
+set (the data is 1.9 GB and not in the repo), and skips loudly otherwise. FO9 runs B2/B3/C2.
+
+## FO2.8 — `fo_underlying_daily`'s levels are anchored to the session's settle · ⚠ UNREVIEWED
+
+FO1's `continuous_futures` compounds from 1.0 at the window's first session: a unitless index
+whose base moves with the window. Stored at `numeric(18,2)`, an ATR of 0.03 rounds to zero, and
+two nights' rows would sit on different bases. `baskfy_core.fno.underlying.derive_underlying`
+rescales each night's window so `level_c` on the session equals the held contract's settle (ratio
+back-adjustment, in rupees). `ret`, `rv20` and every ratio a signal reads are scale-free and
+unchanged. A reader comparing levels across nights re-derives one window (the scan does).
+**Rejected:** storing the unitless index (loses precision); a fixed base date (a new listing has
+none). On the 22 Sep 2026 bhavcopy: 216 underlyings, NIFTY 23,456 with IV 10.1 % vs RV20 7.1 %,
+54 thin names with no IV (either leg did not trade — null by `04` §4).

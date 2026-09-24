@@ -52,7 +52,7 @@ import logging
 import os
 import sys
 import time
-from typing import Any
+from typing import Any, Protocol
 
 import psycopg
 import redis
@@ -101,15 +101,26 @@ def cache_key(headline: str) -> str:
 
 
 def pg_dsn() -> str:
-    """The API's SQLAlchemy URL, as psycopg wants it (`postgresql+asyncpg://` -> `postgresql://`)."""
-    url = os.environ.get("BASKFY_DATABASE_URL_PG") or os.environ["BASKFY_DATABASE_URL"]
-    return url.replace("postgresql+asyncpg://", "postgresql://", 1)
+    """The API's SQLAlchemy URL, as psycopg wants it (`postgresql+asyncpg://` -> `postgresql://`).
+
+    ``BASKFY_DATABASE_URL`` only. This used to prefer ``BASKFY_DATABASE_URL_PG``, a local-dev
+    variable that `.env.example` points at ``localhost:5433`` with the dev password; the box's
+    `.env.staging` carried that line, so the first pass on 25 Sep 2026 could not connect at all.
+    """
+    return os.environ["BASKFY_DATABASE_URL"].replace("postgresql+asyncpg://", "postgresql://", 1)
 
 
 #: The candidates, exactly as `baskfy_api.overlap` resolves them: each strategy at its own
 #: latest session (the market/breadth row is the detector's clock, C1), joined to the newest
-#: headline the feed holds for the name. Recent feed rows are included too, so a name that was
-#: a candidate yesterday and is opened from the instrument page today still has its tag.
+#: headline the feed holds for the name. Names the feed wrote for recently are included too, so a
+#: name that was a candidate yesterday and is opened from the instrument page today still has its
+#: tag.
+#:
+#: **The newest headline per name, never every headline (25 Sep 2026).** `recent` used to be
+#: every `sw_catalyst` headline created in the lookback, and NSE's announcements read returns a
+#: name's whole history (3,351 rows for RELIANCE). Eleven feed names were 4,708 headlines, which
+#: held both of the box's CPUs for the whole first pass; the overlap page's scan button would
+#: have made it tens of thousands. The page shows one headline per row, so one is what is tagged.
 CANDIDATE_HEADLINES_SQL = """
 WITH names AS (
     SELECT instrument_id FROM sw_setup_daily
@@ -129,9 +140,10 @@ newest AS (
      ORDER BY c.instrument_id, c.published_at DESC NULLS LAST, c.id DESC
 ),
 recent AS (
-    SELECT headline FROM sw_catalyst
+    SELECT DISTINCT ON (instrument_id) headline FROM sw_catalyst
      WHERE created_at >= now() - make_interval(days => %s)
        AND headline IS NOT NULL AND btrim(headline) <> ''
+     ORDER BY instrument_id, published_at DESC NULLS LAST, id DESC
 )
 SELECT headline FROM newest
 UNION
@@ -153,7 +165,13 @@ def untagged(cache: redis.Redis, headlines: list[str]) -> list[str]:
     return [h for h, hit in zip(headlines, present, strict=True) if hit is None]
 
 
-def tag_batch(agent: Any, cache: redis.Redis, headlines: list[str]) -> int:
+class Agent(Protocol):
+    """The one call this loop makes on a loaded Laya checkpoint."""
+
+    def predict_batch(self, states: list[dict[str, str]], questions: object) -> list[object]: ...
+
+
+def tag_batch(agent: Agent, cache: redis.Redis, headlines: list[str]) -> int:
     results = agent.predict_batch([{"headline": h} for h in headlines], QUESTIONS)
     written = 0
     for headline, result in zip(headlines, results, strict=True):
@@ -173,7 +191,7 @@ def tag_batch(agent: Any, cache: redis.Redis, headlines: list[str]) -> int:
     return written
 
 
-def once(agent: Any, cache: redis.Redis) -> None:
+def once(agent: Agent, cache: redis.Redis) -> None:
     with psycopg.connect(pg_dsn(), connect_timeout=10) as conn:
         headlines = candidate_headlines(conn)
     todo = untagged(cache, headlines)
@@ -199,7 +217,26 @@ def main() -> int:
             once(agent, cache)
         except (psycopg.Error, redis.RedisError) as exc:
             log.error("pass skipped: %s", exc)
-        time.sleep(INTERVAL_S)
+        sleep_until_woken(cache)
+
+
+#: Set by the overlap page's "Scan filings" task when it has written new headlines
+#: (`baskfy_api.overlap_scan.LAYA_WAKE_KEY`), so they are tagged now, not at the next pass.
+WAKE_KEY = "laya:wake"
+WAKE_POLL_S = 5
+
+
+def sleep_until_woken(cache: redis.Redis) -> None:
+    """Sleep ``INTERVAL_S``, or less if the scan button's task asks for a pass sooner."""
+    deadline = time.monotonic() + INTERVAL_S
+    while time.monotonic() < deadline:
+        time.sleep(WAKE_POLL_S)
+        try:
+            if cache.getdel(WAKE_KEY) is not None:
+                log.info("woken by a filings scan")
+                return
+        except redis.RedisError as exc:
+            log.warning("wake check failed: %s", exc)
 
 
 if __name__ == "__main__":

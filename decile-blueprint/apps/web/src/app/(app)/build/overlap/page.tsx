@@ -14,7 +14,7 @@ import { intersectionOf, membershipOf } from "@/lib/overlap/overlap";
 import { formatTradeDate } from "@/lib/format";
 import { PAGES } from "@/lib/vocabulary";
 
-import { correctTag } from "./actions";
+import { correctTag, filingsScanStatus, startFilingsScan } from "./actions";
 
 /**
  * `/build/overlap` — names that land on more than one Build scan.
@@ -23,9 +23,10 @@ import { correctTag } from "./actions";
  * screens. The named lists below it are the pairwise (and one three-way) cuts a person still
  * asks for by name.
  *
- * Read-only. Nothing here queues a scan or places an order — it only intersects what those
- * surfaces already published (plus a fresh run of each picked screen so those columns are
- * current).
+ * Nothing here places an order. It intersects what those surfaces already published (plus a
+ * fresh run of each picked screen so those columns are current). Its writes are a person's
+ * correction of a tag, and the "Scan filings with Laya" button, which reads the listed names'
+ * exchange filings into the Results and Filing cells (25 Sep 2026).
  *
  * **Today's candidates (`GET /overlap`) sits above the matrix.** The matrix was symbols only —
  * "check each name on Volume breakout, Swing, Three weeks tight, or the screen itself before
@@ -153,7 +154,12 @@ export default async function BuildOverlapPage({
         )}
       </Answer>
 
-      <CandidatesTable candidates={candidates} scope={scope} correctTag={correctTag} />
+      <CandidatesTable
+        candidates={candidates}
+        scope={scope}
+        correctTag={correctTag}
+        scanFilings={{ start: startFilingsScan, status: filingsScanStatus }}
+      />
 
       <OverlapMatrix
         membership={membership}

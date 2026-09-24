@@ -8303,3 +8303,49 @@ scripts, `infra/laya/`, and the `cache` argument to `overlap()`; the rules tag r
 **Deploy.** Migration 0053 runs in the deploy's migrate step before the api restarts; `laya` is the fourteenth service. First `laya` start installs torch-CPU and pulls the checkpoint into the `baskfy-laya` volume.
 
 **Reverse.** Downgrade 0053; delete `models/catalyst.py` and its exports, the corrections section of `overlap.py`, the three routes, `lib/overlap/write.ts`, `build/overlap/actions.ts`; revert `feed_symbols` per SW-OV4. The rules tag and Laya's answer remain.
+
+## OV5 (25 Sep 2026) — "Scan filings with Laya" on the overlap page, and Laya bounded to one CPU and one headline per name ⚠ UNREVIEWED
+
+**Context.** Maulik, on the box: "My result and fill are always showing dashes". The Overlap page's
+Results and Filing cells read `sw_catalyst`, the swing catalyst feed. The 09:17 feed reads only
+watched names, EP candidates, and (OV4) VBT and TWT signals, which is about 11 names on the box.
+Swing FLAG setups and TWT names that are only in the tight state (FERMENTA, KAPSTON) are listed on
+the page but never read, so both cells were dashes for them. NSE itself was fine: FERMENTA had 21
+filings, the newest on 24 Sep. The Results dash was also partly honest: neither stock has
+announced its next result meeting yet. His choice: "put laya scan button on overlap page".
+
+**Choice.**
+- `POST /overlap/catalyst-scan?scope=` (sole tenant) queues `baskfy.overlap.catalyst_scan`. The
+  task reads every name the page lists for that scope through the morning feed's own loop, NSE
+  limiter and upsert (`run_swing_catalyst(symbols=...)`), reports progress to Redis, and sets
+  `laya:wake`.
+- The Laya loop polls that key while it sleeps, so it tags the new headlines within seconds.
+- The web button shows progress and refreshes the table when the scan is done.
+- It refuses (409 `scan-in-flight`) while a scan holds the per-user lock, and 09:10–09:30 IST on
+  weekdays, when the limiter belongs to the 09:16 swing monitor.
+- `test_overlap_readonly.py` gains this ONE route, and asserts the route publishes only that task
+  and names no detector. The page still does not decide when the sleeves run.
+
+**Found on the box and fixed in the same change.**
+- Laya's `recent` query tagged EVERY headline created in 14 days, and NSE returns a name's whole
+  history. Eleven names were 4,708 headlines, which pegged both vCPUs (~190%) for 11+ minutes. A
+  page-wide scan would have made that tens of thousands. It now tags the newest headline per name,
+  the only one the page shows.
+- `laya` is capped at `cpus: 1.0` in compose. It shares a 2-vCPU box with the desk, swing-monitor
+  and twt-auto at 09:15.
+- `pg_dsn()` reads `BASKFY_DATABASE_URL` only. It used to prefer the local-dev `_PG` variable,
+  which pointed at `localhost:5433`.
+- The two pre-existing `ANN401` errors in `laya_loop.py`, which failed `make lint` on HEAD, are
+  replaced by an `Agent` Protocol.
+
+**Rejected.**
+- (a) Widening the 09:17 feed to every page name: about 3.5 minutes of NSE calls just as the
+  swing monitor starts.
+- (b) A fixed evening sweep: fine, but Maulik asked for a button.
+- (c) Letting Laya read the filings themselves: out of the feed's "a link, never the text" rule
+  (A3).
+
+**Reverse.**
+- Remove the two routes, the task, the route lines in both `TASK_ROUTES` tables, the button and the
+  wake poll. `run_swing_catalyst`'s two new keywords default to the old behaviour.
+- The Laya SQL bound and the CPU cap should stay regardless.

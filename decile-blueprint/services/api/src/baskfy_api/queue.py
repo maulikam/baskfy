@@ -81,6 +81,8 @@ PRODUCER_TASK_ROUTES: dict[str, dict[str, str]] = {
     # their queue from their Beat entries' `options`, and `baskfy.vbt.check_*` routes to
     # `default` on the worker, which is this table's default too — so both sides already agree.
     "baskfy.vbt.backtest": {"queue": "compute"},
+    # The overlap page's "Scan filings" button, published from `POST /overlap/catalyst-scan`.
+    "baskfy.overlap.catalyst_scan": {"queue": "compute"},
     # FO9: the quarterly re-test of every RESEARCH.md family (baskfy_worker.celery_app).
     "baskfy.fno.retest": {"queue": "compute"},
     # VB12: the desk's re-detect and the sweep that publishes it. Mirrored for the anti-drift

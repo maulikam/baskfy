@@ -47,7 +47,7 @@ from baskfy_core.models import (
 )
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
 from baskfy_providers.errors import UpstreamUnavailable
-from baskfy_providers.nse import IST
+from baskfy_providers.nse import CATALYST_SOURCE_ANNOUNCEMENT, CATALYST_SOURCE_EVENT_CALENDAR, IST
 from baskfy_providers.records import CatalystRecord, EarningsDateRecord
 from baskfy_worker.celery_app import BEAT_SCHEDULE, QUEUE_COMPUTE
 from baskfy_worker.steps import StepOutcome, StepStatus
@@ -697,3 +697,65 @@ class TestTheCeleryBinding:
         monkeypatch.delenv("BASKFY_SOLE_USER_ID", raising=False)
         outcome = swing_catalyst_task(session_date="2026-08-19")
         assert outcome == {"date": "2026-08-19", "skipped": "no BASKFY_SOLE_USER_ID configured"}
+
+
+class TestAnExplicitSymbolSetReplacesTheFeeds:
+    """The overlap page's "Scan filings" button reads the page's names through this same loop
+    (`baskfy.overlap.catalyst_scan`): an explicit set is read instead of the feed's own, and each
+    name reports progress."""
+
+    async def test_the_given_names_are_read_and_the_feeds_own_are_not(
+        self, session: AsyncSession
+    ) -> None:
+        user_id = await _user(session)
+        watched = await make_instrument(session, "WATCHED")
+        quiet = await make_instrument(session, "TWQUIET")
+        flag = await make_instrument(session, "FLAGNAME")
+        await _watch(session, user_id=user_id, instrument_id=watched)
+        stamp = dt.datetime(2026, 9, 24, 17, 5)
+        provider = FakeNSE(
+            {"TWQUIET": [_announcement("TWQUIET", stamp, "https://x/q.pdf", "Order win")]},
+            {"FLAGNAME": [_result("FLAGNAME", SESSION + dt.timedelta(days=20))]},
+        )
+        progress: list[tuple[int, int]] = []
+
+        report = await run_swing_catalyst(
+            session,
+            StepOutcome(),
+            SESSION,
+            user_id=user_id,
+            provider=provider,
+            symbols={"FLAGNAME": flag, "TWQUIET": quiet},
+            on_symbol=lambda done, total: progress.append((done, total)),
+        )
+
+        assert provider.asked == ["FLAGNAME", "TWQUIET"]
+        assert report.symbols == 2
+        assert (report.announcements, report.earnings_dates) == (1, 1)
+        assert progress == [(1, 2), (2, 2)]
+        stored = {(row.instrument_id, row.source) for row in await _catalysts(session, user_id)}
+        assert stored == {
+            (quiet, CATALYST_SOURCE_ANNOUNCEMENT),
+            (flag, CATALYST_SOURCE_EVENT_CALENDAR),
+        }
+
+    async def test_a_name_whose_read_fails_still_counts_toward_progress(
+        self, session: AsyncSession
+    ) -> None:
+        user_id = await _user(session)
+        first = await make_instrument(session, "AAA")
+        refused = await make_instrument(session, "BBB")
+        progress: list[tuple[int, int]] = []
+
+        report = await run_swing_catalyst(
+            session,
+            StepOutcome(),
+            SESSION,
+            user_id=user_id,
+            provider=FakeNSE(refuse=["BBB"]),
+            symbols={"AAA": first, "BBB": refused},
+            on_symbol=lambda done, total: progress.append((done, total)),
+        )
+
+        assert report.failed == ["BBB"]
+        assert progress == [(1, 2), (2, 2)]

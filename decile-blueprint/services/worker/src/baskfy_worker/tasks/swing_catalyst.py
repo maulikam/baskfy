@@ -40,7 +40,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
-from collections.abc import Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Final, Protocol
 
@@ -320,11 +320,20 @@ async def run_swing_catalyst(  # noqa: PLR0913 - one keyword per input the feed 
     user_id: int,
     provider: CatalystSource | None,
     now: dt.datetime | None = None,
+    symbols: Mapping[str, int] | None = None,
+    on_symbol: Callable[[int, int], None] | None = None,
 ) -> CatalystReport:
-    """The 09:10 job. Never raises a provider error; never places anything anywhere."""
+    """The 09:10 job. Never raises a provider error; never places anything anywhere.
+
+    ``symbols`` replaces the feed's own selection (:func:`feed_symbols`) with an explicit
+    ``symbol -> instrument_id`` set: the overlap page's "Scan filings" button reads every name
+    the page lists through this same loop, limiter and upsert (`baskfy.overlap.catalyst_scan`).
+    ``on_symbol(done, total)`` is called after each name, so that caller can report progress.
+    """
     del now  # the archive is keyed by `session_date`; the clock is not consulted
     report = CatalystReport(session_date=session_date)
-    symbols = await feed_symbols(session, user_id=user_id, session_date=session_date)
+    if symbols is None:
+        symbols = await feed_symbols(session, user_id=user_id, session_date=session_date)
     report.symbols = len(symbols)
     if not symbols:
         report.skipped_reason = (
@@ -338,7 +347,9 @@ async def run_swing_catalyst(  # noqa: PLR0913 - one keyword per input the feed 
         outcome.note(**report.as_detail())
         return report
 
-    for symbol, instrument_id in symbols.items():
+    for done, (symbol, instrument_id) in enumerate(symbols.items(), start=1):
+        if on_symbol is not None and done > 1:
+            on_symbol(done - 1, len(symbols))
         try:
             announcements = provider.announcements([symbol], on=session_date)
             meetings = provider.results_calendar([symbol], on=session_date)
@@ -366,6 +377,8 @@ async def run_swing_catalyst(  # noqa: PLR0913 - one keyword per input the feed 
         report.catalysts_filled += filled
         report.earnings_flagged += flagged
 
+    if on_symbol is not None:
+        on_symbol(len(symbols), len(symbols))
     outcome.rows_in = report.symbols
     outcome.rows_out = report.rows_written
     outcome.note(**report.as_detail())

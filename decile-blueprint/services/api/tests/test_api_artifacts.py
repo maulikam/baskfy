@@ -89,6 +89,9 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     # `test_overlap_readonly.py` names exactly these verbs on exactly this path.
     "/overlap/tags": {"put", "delete"},
     "/overlap/tags/export": {"get"},
+    # The "Scan filings with Laya" button (25 Sep 2026): queue one read of the listed names'
+    # filings, and its progress. docs/07a "Overlap: the filings scan".
+    "/overlap/catalyst-scan": {"get", "post"},
     # M46: the federated ⌘K search (`baskfynavrefactorreport` §F11). Documented here because a
     # route absent from this list is a surface nobody agreed to — which is the assertion below.
     "/search": {"get"},

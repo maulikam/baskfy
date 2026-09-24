@@ -278,3 +278,25 @@ content-addressed headline key and records what the rules and Laya said at that 
 `DELETE /overlap/tags?headline=` removes it; `GET /overlap/tags/export` streams every
 correction as NDJSON — the fine-tuning set. Nothing under `/overlap` reaches the gateway, and
 `services/api/tests/test_overlap_readonly.py` pins the two verbs as the whole mutating surface.
+
+### Overlap: the filings scan (25 Sep 2026)
+
+Maulik, in session: "put laya scan button on overlap page". Swing setups and TWT names that
+are only in the tight state are listed on `/overlap` but are not in the 09:17 catalyst feed. That
+feed covers watched names, EP candidates, and VBT and TWT signals, because each name costs two NSE
+reads on the 1 req/s limiter the swing monitor needs. So those rows showed dashes under Results
+and Filing. `POST /overlap/catalyst-scan?scope=actionable|all` (202) queues one
+`baskfy.overlap.catalyst_scan` for the sole tenant. The task:
+
+1. resolves the names the page lists for that scope, exactly as `GET /overlap` does;
+2. reads each one's announcements and result dates through the morning feed's own loop, limiter
+   and upsert (`run_swing_catalyst` with an explicit symbol set);
+3. sets `laya:wake`, so the sidecar tags the new headlines within seconds rather than at its next
+   five-minute pass.
+
+`GET /overlap/catalyst-scan` returns the last scan's `state` (`idle|queued|running|done|failed`)
+and progress (`done` of `total`), kept in Redis for a week. The route answers 409
+`scan-in-flight` in two cases: a scan already holds the per-user lock (20 minutes, released when
+the task ends), or it is 09:10–09:30 IST on a weekday. The scan writes `sw_catalyst` only, and
+runs no sleeve's detector. `test_overlap_readonly.py` names this POST as the surface's third
+mutating route and asserts that it publishes that one task.

@@ -223,6 +223,16 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         "schedule": crontab(minute=30, hour="18-23", day_of_week="mon-fri"),
         "options": {"queue": QUEUE_DEFAULT},
     },
+    # FO3 (docs/fno/06 FO3): the 15:00 spread sample — one Kite quote() over ATM ± 3 strikes of
+    # the near monthly of the top 30 stock underlyings by futures turnover plus NIFTY and
+    # BANKNIFTY (448 keys, one call on the shared quote clock) into fo_spread_sample, and the
+    # NSE results calendar for those stocks (QUESTIONS Q8). Behind BASKFY_FNO_SCAN_ENABLED
+    # (default false); a holiday or a box with no Kite session makes no Kite call. No money.
+    "fno-spread-sample": {
+        "task": "baskfy.fno.spread_sample",
+        "schedule": crontab(hour=15, minute=0, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_DEFAULT, "expires": 600},
+    },
     "bhavcopy-eod": {
         "task": "baskfy.pipeline.bhavcopy_ingest",
         "schedule": crontab(hour=18, minute=15, day_of_week="mon-fri"),

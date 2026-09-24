@@ -4,7 +4,7 @@ WHY
 ---
 ``RESEARCH.md`` charged stock options an **assumed** 3 % slippage. FO3 measures it: at 15:00 each
 session, one Kite ``quote()`` over the ATM ± 3 listed strikes (CE and PE) of the near monthly of
-the top 30 stock underlyings by futures turnover, plus NIFTY and BANKNIFTY. 32 × 7 × 2 = 448 keys,
+the top 30 stock underlyings by futures turnover, plus NIFTY and BANKNIFTY. 32 x 7 x 2 = 448 keys,
 inside Kite's 500 per call. The per-underlying median half-spread ÷ mid it yields replaces the
 assumption in FO9's re-test once an underlying has ≥ 20 sessions of it (``06`` FO9).
 
@@ -104,16 +104,12 @@ def _cent(value: Decimal | None) -> Decimal | None:
 # --- pure: which names, which expiry, which strikes -------------------------------------------
 
 
-def rank_by_turnover(
-    turnover: Mapping[str, Sequence[Decimal]], top: int = TOP_STOCKS
-) -> list[str]:
+def rank_by_turnover(turnover: Mapping[str, Sequence[Decimal]], top: int = TOP_STOCKS) -> list[str]:
     """The ``top`` symbols by median per-session futures turnover; ties by symbol, ascending.
 
     A symbol with no turnover in the window is not ranked.
     """
-    medians = {
-        symbol: statistics.median(values) for symbol, values in turnover.items() if values
-    }
+    medians = {symbol: statistics.median(values) for symbol, values in turnover.items() if values}
     ranked = sorted(medians, key=lambda s: (-medians[s], s))
     return ranked[:top]
 
@@ -177,9 +173,7 @@ def pick_sample(
     )
 
 
-def reference_level(
-    futures: Mapping[dt.date, Decimal], expiry: dt.date
-) -> Decimal | None:
+def reference_level(futures: Mapping[dt.date, Decimal], expiry: dt.date) -> Decimal | None:
     """The settle of ``expiry``'s future, else of the listed future nearest it (FO3.4)."""
     if expiry in futures:
         return futures[expiry]
@@ -209,9 +203,7 @@ def sample_rows(
             continue
         bid = _cent(record.bids[0].price) if record.bids else None
         ask = _cent(record.asks[0].price) if record.asks else None
-        mid = (
-            _cent((bid + ask) / 2) if bid is not None and ask is not None and ask >= bid else None
-        )
+        mid = _cent((bid + ask) / 2) if bid is not None and ask is not None and ask >= bid else None
         rows.append(
             {
                 "trade_date": trade_date,
@@ -251,7 +243,7 @@ class SpreadStat:
     """An underlying's measured half-spread ÷ mid over its last sessions (``06`` FO9)."""
 
     symbol: str
-    #: Median of (ask − bid) / (ask + bid) — the half-spread over the mid — per contract sample.
+    #: Median of (ask - bid) / (ask + bid) — the half-spread over the mid — per contract sample.
     median_half_spread_pct_of_mid: Decimal
     #: Distinct sessions with at least one two-sided quote, within the window.
     sessions: int
@@ -264,7 +256,7 @@ class SpreadStat:
 
 
 def half_spread_ratio(bid: Decimal | None, ask: Decimal | None) -> Decimal | None:
-    """(ask − bid) ÷ 2 over (ask + bid) ÷ 2, from the stored bid and ask — never the rounded
+    """(ask - bid) ÷ 2 over (ask + bid) ÷ 2, from the stored bid and ask — never the rounded
     mid. ``None`` for a one-sided, empty or crossed book."""
     if bid is None or ask is None or bid <= 0 or ask < bid:
         return None

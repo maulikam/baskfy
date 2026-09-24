@@ -265,3 +265,45 @@ unchanged. A reader comparing levels across nights re-derives one window (the sc
 **Rejected:** storing the unitless index (loses precision); a fixed base date (a new listing has
 none). On the 22 Sep 2026 bhavcopy: 216 underlyings, NIFTY 23,456 with IV 10.1 % vs RV20 7.1 %,
 54 thin names with no IV (either leg did not trade — null by `04` §4).
+
+## FO3.1 — A one-sided or crossed quote is stored, with the missing side or the mid null · ⚠ UNREVIEWED
+
+The sample exists to measure what a fill costs, and "there was no bid at 15:00" is a measurement.
+A one-sided or empty book is a row with the missing side null and a null mid. A crossed book keeps
+both prices and a null mid. A key Kite does not answer writes no row. The median statistic reads
+two-sided, uncrossed rows only.
+
+## FO3.2 — The top 30 are ranked on the median futures turnover of the last 20 ingested sessions · ⚠ UNREVIEWED
+
+Read from `fo_contract_daily` directly, so the sample does not depend on the derivation having run
+that night.
+
+## FO3.3 — "Near monthly" is the first monthly strictly after today · ⚠ UNREVIEWED
+
+On an expiry day the expiring contract's 15:00 book is an unwind, not a spread a new position would
+pay; the sample reads the next month.
+
+## FO3.4 — ATM is the strike nearest the previous session's futures settle · ⚠ UNREVIEWED
+
+`op_contract` holds options, not futures, and a futures quote per name would widen the call.
+± 3 strikes around yesterday's settle still spans today's ATM on all but a > 3-strike move.
+
+## FO3.5 — One call of ≤ 500 keys; more is split and counted · ⚠ UNREVIEWED
+
+32 names × 7 strikes × 2 types = 448 keys. A widened list is split rather than truncated, and the
+task result counts the calls.
+
+## FO3.6 — The results calendar (Q8) has no table yet · ⚠ UNREVIEWED
+
+The task reads `NSEProvider.results_calendar` forward for the sampled names; its record is the NSE
+raw archive plus the task's JSON result. A queryable table needs a migration, and FO4 (the scan,
+which reads events) owns it. **Reversal:** none needed.
+
+## FO3.7 — Outside 09:15–15:30 the task refuses · ⚠ UNREVIEWED
+
+A 15:00 Beat entry that runs late (a worker restart) must not sample a closed book as if it were
+15:00.
+
+**A note on history.** The first draft of `spreads.py` went into `418809d` (FO2's wiring commit)
+because that commit staged the worker directory whole while FO3 was being written. It is left in
+place rather than rewriting history; FO3's commit carries the finished file.

@@ -59,6 +59,8 @@ from baskfy_worker.bhavcopy_backfill import backfill_bars_from_bhavcopy
 from baskfy_worker.celery_app import IST, QUEUE_COMPUTE, QUEUES
 from baskfy_worker.db import run_checkpointed, run_in_session, session_scope
 from baskfy_worker.fno.nightly import run_night as fno_run_night
+from baskfy_worker.fno.spreads import in_session as fno_in_session
+from baskfy_worker.fno.spreads import run_spread_sample
 from baskfy_worker.options import index_bars as options_index_bars
 from baskfy_worker.options import options_ceilings
 from baskfy_worker.options.backtest_run import TIERS as OPTIONS_TIERS
@@ -962,6 +964,41 @@ def fno_ingest_bhavcopy_task(trade_date: str | None = None, at: str | None = Non
 
     async def _run(session: AsyncSession) -> JsonObject:
         return await fno_run_night(session, provider, day, now_ist=now)
+
+    return run_in_session(_run)
+
+
+FNO_SPREAD_TASK: Final = "baskfy.fno.spread_sample"
+
+
+@shared_task(name=FNO_SPREAD_TASK, acks_late=False)
+def fno_spread_sample_task(at: str | None = None) -> JsonObject:
+    """FO3: the 15:00 spread sample into ``fo_spread_sample``, and the forward results calendar.
+
+    Refuses before any database session or provider when ``BASKFY_FNO_SCAN_ENABLED`` is false
+    (the default) or the moment is outside 09:15-15:30 IST; then on a day the NSE calendar names
+    a holiday. The Kite reader is built only when a Kite session exists — without one, no Kite
+    call is made and only the NSE results calendar is read (``docs/fno/06`` FO3). One ``quote()``
+    on the box's shared 1 req/s quote clock. ``acks_late=False``: a redelivered sample would stamp
+    a later book as the 15:00 one. Moves no money.
+    """
+    now = _options_now(at)
+    if not get_worker_settings().fno_scan_enabled:
+        return {"at": now.isoformat(), "skipped": "BASKFY_FNO_SCAN_ENABLED is false"}
+    if not fno_in_session(now):
+        return {"at": now.isoformat(), "skipped": "outside 09:15-15:30 IST"}
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        if not await ops.is_trading_day(session, now.astimezone(IST).date()):
+            return {"at": now.isoformat(), "skipped": "not an NSE trading day"}
+        report = await run_spread_sample(
+            session,
+            now,
+            kite_ok=kite_session_usable,
+            quotes=lambda: build_options_kite(retry_hooks=provider_retry_hooks()).quotes,
+            results=build_nse_provider(get_provider_settings(), retry_hooks=provider_retry_hooks()),
+        )
+        return report.as_dict()
 
     return run_in_session(_run)
 

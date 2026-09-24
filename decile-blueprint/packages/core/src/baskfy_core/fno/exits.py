@@ -42,6 +42,9 @@ class ExitReason(StrEnum):
     STOP = "STOP"
     TIME_EXIT = "TIME_EXIT"
     ROLL = "ROLL"
+    #: F2's future without its resting GTT: an alert, a paper violation, and the exit at the next
+    #: check (``04`` §10; FO7).
+    NAKED_FUTURE = "NAKED_FUTURE"
 
 
 @dataclass(frozen=True, slots=True)

@@ -53,7 +53,7 @@ class SleeveSeed:
 SLEEVE_SEEDS: Final[tuple[SleeveSeed, ...]] = (
     SleeveSeed(
         sleeve="F1",
-        capital_inr=F1_SEED_CAPITAL_INR,
+        capital_inr=F1_SEED_CAPITAL_INR.quantize(Decimal("0.01")),  # round at write time
         risk_per_trade_pct=DEFAULT_FNO_CONFIG.f1.risk_per_trade_pct,
         max_lots=DEFAULT_FNO_CONFIG.common.max_lots,
         max_open_positions=DEFAULT_FNO_CONFIG.f1.max_open_per_underlying

@@ -155,6 +155,9 @@ class WorkerSettings(BaseSettings):
     # scans (FO4). ``02`` Track B: flipped "after FO2's bhavcopy ingest is green". Read once at
     # startup, never a form field. The FO money flags are the desk's (FO6) and not read here.
     fno_scan_enabled: bool = False
+    #: The desk's FO monitor switch, read here only to keep ``FNO_WEEKLY`` dark while there is no
+    #: book to summarise (FO10). Operational, moves no money, default false.
+    fno_monitor_enabled: bool = False
 
     # --- SW18: the 08:45 Kite login nudge (docs/swing/DECISIONS-SW SW18.1) ------
     #

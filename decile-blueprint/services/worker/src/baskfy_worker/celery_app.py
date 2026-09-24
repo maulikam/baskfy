@@ -240,6 +240,14 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         ),
         "options": {"queue": QUEUE_COMPUTE},
     },
+    # FO10 (docs/fno/06 FO10): the FO book's week — Friday 16:35, one FNO_WEEKLY alert per FO
+    # tenant, a line per (sleeve, simulated), never pooled. Read-only; dark unless
+    # BASKFY_FNO_MONITOR_ENABLED.
+    "fno-weekly": {
+        "task": "baskfy.fno.weekly",
+        "schedule": crontab(hour=16, minute=35, day_of_week="fri"),
+        "options": {"queue": QUEUE_DEFAULT},
+    },
     "fno-spread-sample": {
         "task": "baskfy.fno.spread_sample",
         "schedule": crontab(hour=15, minute=0, day_of_week="mon-fri"),

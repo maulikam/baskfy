@@ -941,6 +941,8 @@ async def _enter_condor(  # noqa: PLR0913 - the plan and its collaborators
     store.merge_detail(plan.plan_id, {"left_open": left, "refusals": venue.refusals})
     if left:
         alert(f"FO {plan.plan_id}: abandoned entry left {left} open; close it by hand")
+    else:
+        _journal_abandoned(store, plan, now(), alert)
     return FoOutcome(plan.plan_id, plan.sleeve.value, plan.kind,
                      PlanState.ABANDONED_PARTIAL.value, True, venue.orders,
                      detail={"left_open": left, "refusals": venue.refusals})  # fmt: skip
@@ -988,6 +990,8 @@ async def _enter_future(  # noqa: PLR0913 - the plan and its collaborators
         if refusals:
             reason += f" ({'; '.join(refusals)})"
         store.set_status(plan.plan_id, PlanState.ABANDONED_PARTIAL.value, reason)
+        if filled:
+            _journal_abandoned(store, plan, now(), alert)
         return FoOutcome(plan.plan_id, plan.sleeve.value, plan.kind,
                          PlanState.ABANDONED_PARTIAL.value, True, orders,
                          detail={"refusals": refusals})  # fmt: skip
@@ -1089,6 +1093,7 @@ async def execute_exit(  # noqa: PLR0913 - the store, the gateway, the plan and 
     if position.structure == Structure.FUTURE.value and reason != "STOP":
         for leg in plan.legs:
             await delete_future_stop(gateway, position, leg.tradingsymbol)
+    _after_close(store, position.id, now(), log.error)
     return FoOutcome(plan.plan_id, plan.sleeve.value, plan.kind, "CLOSED", True, orders,
                      position.id, {"reason": reason})  # fmt: skip
 
@@ -1146,6 +1151,7 @@ async def execute_roll(  # noqa: PLR0913 - the roll's two legs and its stop
         store.set_status(position.entry_plan_id, PlanState.CLOSED.value, only_from=("OPEN",))
         await delete_future_stop(gateway, position, old.tradingsymbol)
         alert(f"F2 {position.symbol}: {reason}; the position is flat")
+        _after_close(store, position.id, now(), alert)
         return FoOutcome(plan.plan_id, plan.sleeve.value, plan.kind, "ROLL_INCOMPLETE", True,
                          orders, position.id)  # fmt: skip
     old_leg = next((x for x in position.leg_list if x.get("tradingsymbol") == old.tradingsymbol),
@@ -1174,6 +1180,24 @@ async def execute_roll(  # noqa: PLR0913 - the roll's two legs and its stop
     )  # fmt: skip
     return FoOutcome(plan.plan_id, plan.sleeve.value, plan.kind, "OPEN", True, orders,
                      position.id, {"rolled_to": new.tradingsymbol})  # fmt: skip
+
+
+def _after_close(store: FoStore, position_id: int, at: dt.datetime,
+                 alert: Callable[[str], None]) -> None:  # fmt: skip
+    """FO10: the journal row and ``04`` §7's pauses at every close (``app.fno_ledger``)."""
+    from . import fno_ledger  # noqa: PLC0415 - fno_ledger imports this module
+
+    fno_ledger.after_close(store, position_id, now=at, alert=alert)
+
+
+def _journal_abandoned(store: FoStore, plan: FoPlanRow, at: dt.datetime,
+                       alert: Callable[[str], None]) -> None:  # fmt: skip
+    """FO10.4: an abandoned entry's filled-and-closed legs are journalled; its costs are real."""
+    from . import fno_ledger  # noqa: PLC0415 - fno_ledger imports this module
+
+    position_id = fno_ledger.journal_abandoned(store, plan, at)
+    if position_id is not None:
+        fno_ledger.after_close(store, position_id, now=at, alert=alert)
 
 
 def _fill_avg(store: FoStore, leg: FoLegRow, side: str) -> Decimal | None:

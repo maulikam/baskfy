@@ -61,8 +61,10 @@ from baskfy_worker.db import run_checkpointed, run_in_session, session_scope
 from baskfy_worker.fno.nightly import run_night as fno_run_night
 from baskfy_worker.fno.retest import run_retest as fno_run_retest
 from baskfy_worker.fno.scan import run_scan as fno_run_scan
+from baskfy_worker.fno.scan import scan_users as fno_scan_users
 from baskfy_worker.fno.spreads import in_session as fno_in_session
 from baskfy_worker.fno.spreads import run_spread_sample
+from baskfy_worker.fno.weekly import build_weekly as fno_build_weekly
 from baskfy_worker.options import index_bars as options_index_bars
 from baskfy_worker.options import options_ceilings
 from baskfy_worker.options.backtest_run import TIERS as OPTIONS_TIERS
@@ -987,6 +989,29 @@ def fno_scan_task(trade_date: str | None = None) -> JsonObject:
 
     async def _run(session: AsyncSession) -> JsonObject:
         return await fno_run_scan(session, day)
+
+    return run_in_session(_run)
+
+
+FNO_WEEKLY_TASK: Final = "baskfy.fno.weekly"
+
+
+@shared_task(name=FNO_WEEKLY_TASK, acks_late=False)
+def fno_weekly_task(at: str | None = None) -> JsonObject:
+    """FO10: the week's FO journal per ``(sleeve, simulated)``, the month per book and the pauses
+    per mode, as one ``FNO_WEEKLY`` alert per FO tenant. Read-only. Refused before any database
+    session unless ``BASKFY_FNO_MONITOR_ENABLED`` is true."""
+    now = _options_now(at)
+    if not get_worker_settings().fno_monitor_enabled:
+        return {"at": now.isoformat(), "skipped": "BASKFY_FNO_MONITOR_ENABLED is false"}
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        today = now.astimezone(IST).date()
+        sent: dict[str, object] = {}
+        for user_id in await fno_scan_users(session):
+            alert = await fno_build_weekly(session, user_id, today)
+            sent[str(user_id)] = {"summary": alert.summary, "sent": await dispatch(alert)}
+        return {"at": now.isoformat(), "users": sent}
 
     return run_in_session(_run)
 

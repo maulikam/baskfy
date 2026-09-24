@@ -370,8 +370,12 @@ class TestF1Replay:
         assert set(net.values()) == {0}
         plan = world.plan_row(plan_id)
         assert plan["status"] == "ABANDONED_PARTIAL" and "abandoned" in plan["reason"]
-        assert world.rows("SELECT count(*) AS n FROM fo_position WHERE user_id = ?",
-                          world.uid)[0]["n"] == 0  # fmt: skip
+        # Nothing is carried: no open position. The filled-and-closed legs cost real money, so
+        # FO10.4 records them as one position opened and closed on its own fills, journalled.
+        rows = world.rows("SELECT closed_at, closed_reason FROM fo_position WHERE user_id = ?",
+                          world.uid)  # fmt: skip
+        assert [(r["closed_at"] is not None, r["closed_reason"]) for r in rows] == [
+            (True, "ABANDONED_PARTIAL")]  # fmt: skip
         assert world.kc.calls == []
 
     def test_rejections_carry_their_reason(self, world: World) -> None:

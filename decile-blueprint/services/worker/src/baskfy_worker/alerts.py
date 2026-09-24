@@ -116,6 +116,9 @@ class AlertName(StrEnum):
     # OP11: the options book's week, one line per (sleeve, simulated, sizing mode) — never pooled
     # (docs/options/04 §12). Read-only; like OPTIONS_PLAN it is information, not a failure.
     OPTIONS_WEEKLY = "OPTIONS_WEEKLY"
+    # FO10 (docs/fno/06 FO10): the FO book's week, one line per (sleeve, simulated), the month
+    # per book and the 04 §7 pauses per mode — never pooled. Information, not a failure.
+    FNO_WEEKLY = "FNO_WEEKLY"
     # OP14 (docs/options/05 §4): the options book's five Prometheus rules, verbatim, and the
     # worker's in-process checks (09:20, 10:20, each hard exit + 3 min, 15:35), which raise the
     # failure the moment it is about rather than waiting for a scrape.

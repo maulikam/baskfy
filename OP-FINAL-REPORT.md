@@ -78,7 +78,7 @@ These are the ones I would most want a second opinion on:
 | § | Condition | Evidence today |
 |---|---|---|
 | 3.1 | OP13 green, including the `OPTIONS_ENABLED` side door | ✅ `test_options_safety.py` (the side door, the four-flag AND with a spy, NRML refused with every switch on), `test_options_safety_proof.py` (Hypothesis never-naked, exact close, never overnight; the repo scans), the drill |
-| 3.2 | The paper period on the live chain, through the deployed desk, `DRY_RUN=true`, zero rule violations | ⬜ **not started.** It needs `BASKFY_OPTIONS_MONITOR_ENABLED=true` on the box (worker and desk), which starts the plan builders and the monitor. **I have not flipped it; see the question at the end** |
+| 3.2 | The paper period on the live chain, through the deployed desk, in PAPER mode, zero rule violations | 🔄 **starts Fri 25 Sep 2026.** `BASKFY_OPTIONS_MONITOR_ENABLED=true` was set on the box on 24 Sep at 23:40 IST at Maulik's answer (DECISIONS-OP OP-M.1); `verify-options.sh` then read `OPTIONS OK`, the monitor waiting for 09:14 |
 | 3.3 | Tier 1 and Tier 2 on the page with caveats; Tier 3 over the paper period's chains, positive after costs, or your written waiver | ⬜ the code and the cards exist (OP12); nothing has run on the box's data. Tier 1 over history needs the calendar (OP12.3) |
 | 3.4 | Your written capital and risk decision per sleeve | ⬜ every `op_sleeve_config` capital is ₹0 (paper at one lot) |
 
@@ -101,7 +101,11 @@ The evening before, from the laptop (outside 09:15–15:30 and 18:40–21:15):
 On the morning:
 
 3. **Before 09:14**: log in to Kite through the web app (the desk reads the shared token).
-   `https://desk.staging.baskfy.com/status` must say `"authed": true, "dry_run": true`.
+   `https://desk.staging.baskfy.com/status` must say `"authed": true`. **It says `"dry_run": false`
+   on the box, and that is correct**: the desk runs with DRY_RUN false for TWT auto-execute (TW18).
+   The options book stays PAPER because LIVE needs all four switches and compose pins
+   `OPTIONS_ENABLED` and `INTRADAY_ENABLED` false (OP-M.1). An earlier version of this line said
+   `"dry_run": true`, which was wrong for the box.
 4. **09:14** `options-monitor` starts (`box.sh '… logs options-monitor'`: `options-monitor: next
    start …` then the monitor's lines). **09:15** the collector and scan run every minute.
    **09:20** the `SCAN_STARTED` check.
@@ -164,7 +168,7 @@ lines in `/opt/baskfy/.env.staging.compose` back to the previous sha, then `up -
 
 ## Needs you
 
-1. **The monitor flag** — the question below.
+1. ~~**The monitor flag**~~ — answered 24 Sep 2026: on (OP-M.1).
 2. **Each sleeve's capital and risk** — only after its paper period (`02` §3.4).
 3. **NEEDS-MAULIK "OPT"** — what to do if the token dies with a position open.
 4. **FO** (the F&O pack) starts next, per your "Finish OP first".

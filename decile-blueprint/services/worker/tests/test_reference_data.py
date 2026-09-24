@@ -676,6 +676,29 @@ class TestListings:
         await session.refresh(row)
         assert row.updated_at == first
 
+    async def test_a_symbol_in_both_registers_is_written_once_main_board_first(
+        self, session: AsyncSession
+    ) -> None:
+        """An Emerge-to-main-board migration puts one symbol in both NSE registers (PARIN,
+        24 Sep 2026). One upsert may not propose a key twice, so the nightly failed at step 1;
+        the main-board row, offered first, is the one that stands."""
+        main = ListingRecord(
+            symbol="PARIN",
+            name="PARIN FURNITURE LIMITED",
+            series="EQ",
+            isin="INE00U801010",
+            listed_on=dt.date(2026, 9, 25),
+            face_value=Decimal("10"),
+        )
+        sme = main.model_copy(update={"series": "SM", "listed_on": dt.date(2018, 10, 9)})
+        result = await store_listings(session, [main, sme])
+        assert result.rows_written == 1
+        assert result.duplicate_symbols == ["PARIN"]
+        row = (
+            await session.execute(select(Instrument).where(Instrument.symbol == "PARIN"))
+        ).scalar_one()
+        assert (row.series, row.listed_on) == ("EQ", dt.date(2026, 9, 25))
+
     async def test_a_new_symbol_is_reported(self, session: AsyncSession) -> None:
         """A first appearance in the register is a new NSE listing (docs/01 §1)."""
         await store_listings(session, self.RECORDS[:1])

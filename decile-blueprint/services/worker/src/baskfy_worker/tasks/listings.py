@@ -45,6 +45,8 @@ class ListingsResult:
     rows_in: int = 0
     rows_written: int = 0
     new_symbols: list[str] = field(default_factory=list)
+    #: Symbols offered more than once; the first record offered for each was kept.
+    duplicate_symbols: list[str] = field(default_factory=list)
 
 
 async def run_refresh_listings(
@@ -87,6 +89,7 @@ async def run_refresh_listings(
         # to show. Worth surfacing rather than silently absorbing.
         new_symbols=result.new_symbols[:50] or None,
         new_symbol_count=len(result.new_symbols),
+        duplicate_symbols=result.duplicate_symbols or None,
         sme_rows=sme_count,
         sme_error=sme_error,
     )
@@ -94,9 +97,31 @@ async def run_refresh_listings(
 
 
 async def store_listings(session: AsyncSession, records: list[ListingRecord]) -> ListingsResult:
+    """Upsert ``records`` onto ``instrument``. On a repeated symbol the FIRST record wins.
+
+    **One symbol, one row, before the statement is built (24 Sep 2026).** The upsert is a single
+    ``INSERT ... ON CONFLICT DO UPDATE``, and PostgreSQL refuses one that proposes the same key
+    twice (``CardinalityViolationError: ON CONFLICT DO UPDATE command cannot affect row a second
+    time``). The main and SME registers were assumed disjoint, and they are not while a company
+    migrates from Emerge to the main board: on 24 Sep NSE listed PARIN in both, as EQ from
+    25 Sep and as SM from 2018. That one row failed the whole nightly at step 1, and the 24 Sep
+    session did not publish.
+
+    The caller passes the main register first, so the main-board row, which is where the stock
+    now trades, is the one kept. It is also what ``refresh_instruments`` merges from the main
+    register in the same step, so the two writes agree.
+    """
     result = ListingsResult(rows_in=len(records))
     if not records:
         return result
+
+    unique: dict[str, ListingRecord] = {}
+    for record in records:
+        if record.symbol in unique:
+            result.duplicate_symbols.append(record.symbol)
+            continue
+        unique[record.symbol] = record
+    records = list(unique.values())
 
     existing = {
         row[0]

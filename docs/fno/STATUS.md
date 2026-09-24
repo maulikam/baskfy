@@ -3,9 +3,8 @@
 Updated at the end of every module, and loud about what is NOT done. A fresh session resumes from
 the first module not marked ✅.
 
-**Run state: pack written, research done, Q1/Q2/Q4 answered (23 Sep 2026); FO0 waits for OP15 (Maulik, M.1).** Branch `developer`.
-The OP run is unfinished on the same branch (OP8 next, OP7 uncommitted in the tree when this pack
-was written). See `06`, "Coordination with the OP run".
+**Run state: FO0 ✅ (24 Sep 2026); FO1 next.** Branch `developer`. The OP run is complete (OP15 ✅,
+deployed `acac17c`; the options monitor flag was turned on at Maulik's answer, DECISIONS-OP OP-M.1).
 
 ## What exists already (built with the pack, 23 Sep 2026)
 
@@ -20,7 +19,7 @@ was written). See `06`, "Coordination with the OP run".
 
 | Module | State | One line |
 |---|---|---|
-| FO0 — Baseline and facts | ⬜ | |
+| FO0 — Baseline and facts | ✅ | Baseline recorded; B4 N=15 and F2 reproduce to the digit; box reads the F&O bhavcopy, the ban list and BANKNIFTY's master (below) |
 | FO1 — Pure core `baskfy_core.fno` | ⬜ | |
 | FO2 — Schema, nightly ingest, backfill, widened master | ⬜ | |
 | FO3 — 15:00 spread sample | ⬜ | |
@@ -36,6 +35,37 @@ was written). See `06`, "Coordination with the OP run".
 
 States: ⬜ not started · 🔄 in progress · ✅ green · ⛔ blocked · 🟡 partial · ⛁ data-blocked.
 
+## FO0 — the baseline (24 Sep 2026, ~23:50 IST)
+
+**Tree.** Branch `developer`, HEAD `bcefb12` (OP-M.1) at FO0's start. Nobody else's dirty files
+except `holdings-status/` (Maulik's, untracked, not touched). Alembic head `0051_op_position_extremes`
+(repo and box). Beat: **54 entries**, nine of them `options-*`; no `fno-*` entry yet.
+
+**Flags on the box** (`/opt/baskfy/.env.staging.compose` and `.env.staging`, booleans only):
+`OPTIONS_ENABLED=false`, `INTRADAY_ENABLED=false`, desk `BASKFY_DESK_DRY_RUN=false` (TW18),
+`BASKFY_OPTIONS_{MONITOR,COLLECT,SCAN}_ENABLED=true`, every options `…_EXECUTION_ENABLED` unset
+(false), swing and TWT execution/auto-execute true (Maulik's, SW25/TW18), `BASKFY_PUBLIC_API_ENABLED=false`.
+**No `BASKFY_FNO_*` variable exists anywhere.** The OP run is finished (OP15 ✅).
+
+**Facts `04` depends on, verified:**
+
+| | Fact | Source, date |
+|---|---|---|
+| a | Zerodha's physical-delivery margin ramp for stock F&O. **Long ITM options:** E−4 10 %, E−3 25 %, E−2 45 % of VaR+ELM+adhoc; E−1 25 % of contract value; expiry day 50 % (ITM) / 25 % (OTM) of contract value; applies if an OTM position turns ITM. **Futures and short options:** on expiry day 50 % of contract value or 1.5 × NRML, whichever is lower. Zerodha may square off an unmet obligation (₹50 + GST). Reported, not asserted (07 §3); it supports PACK.4's E−1 exit | support.zerodha.com `…/policy-on-physical-settlement`, read 24 Sep 2026 |
+| b | BANKNIFTY monthlies in Kite's NFO master: **2026-09-29 Tue, 2026-10-27 Tue, 2026-11-23 Mon** (the Tuesday is a holiday, so the expiry moves back a session), **2026-12-29 Tue**; lot **30** on all four; strike step **100** (500 on the outer strikes; December lists only 27 contracts so far, step 1,500). `calendar` must read the expiry from the master, never infer a weekday | box worker, `option_contracts("BANKNIFTY")`, 24 Sep 2026 |
+| c | The box reads the F&O bhavcopy through `NSEProvider.fo_bhavcopy`: 2026-09-24, **36,933 rows, 216 underlyings**, archived by the provider on the way | box worker, 24 Sep 2026 |
+| d | The ban list: `https://nsearchives.nseindia.com/content/fo/fo_secban.csv`, text `Securities in Ban For Trade Date 25-SEP-2026:` then `n,SYMBOL` lines (KAYNES, LICHSGFIN, MANAPPURAM, SAIL). Read through the NSE provider's limiter and client. **The provider has no public method for it yet**; the probe used its fetch path, and FO2 adds `NSEProvider.fo_ban_list(for_session)` with a wrong-date refusal like SW16's | box worker, 24 Sep 2026 |
+
+**The research reproduces** (stored data, `evidence/research/*.py`, decile-blueprint venv):
+B4 N=15 **n = 100, +0.033R** (t = 1.36, 86 % win), with `LOSS_MULT=1.5` **n = 100, +0.022R**
+(t = 1.01, worst −0.73R); F2's spec **n = 2,334, +0.017R** (t = 0.71, 0.96 rolls a trade). Exactly
+the pack's numbers.
+
+**Where the research data is.** The 1,232 day files, the raw archive and the derived parquets
+(1.9 GB) were in a session scratchpad under `/tmp` and are now at **`~/baskfy-research/fno`** on the
+Mac, outside the repo. FO9's golden test reads from `BASKFY_FNO_RESEARCH_DIR` and skips loudly
+without it; FO2's backfill can seed the archive from there instead of re-fetching.
+
 ## Paper period (`04` §9); starts only after FO12 deploys
 
 | Sleeve | Needed | Done | Opened |
@@ -49,6 +79,7 @@ States: ⬜ not started · 🔄 in progress · ✅ green · ⛔ blocked · 🟡 
 
 * **No F&O trading code exists.** No schema, no scan, no guard change, no desk page. The pack is
   design plus one provider read.
+* **The ban list has no provider method** (FO0 d). Until FO2 adds one, nothing can check Track C §9.
 * Q1, Q2 and Q4 are answered (M.1). **Neither sleeve meets the real-money gate's Tier 2E item
   (`02` §3.4) as tested**: F1 with the loss close is −0.010R in 2022, and F2 is negative in four of
   five years. A flag needs Maulik's written waiver or forward evidence.

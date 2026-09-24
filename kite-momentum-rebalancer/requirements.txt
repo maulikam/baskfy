@@ -40,3 +40,10 @@ prometheus_client==0.24.1
 # one suite reports code as untested that is not: exposure/regime.py reads 39% alone and 95%
 # combined, and nothing about the code differs between those numbers.
 pytest-cov==7.0.0
+
+# --- FO11: the FO safety proof fuzzes POST /fno/execute and the flag matrix -----------------
+# Hypothesis is already in the screener's locked stack (decile-blueprint/pyproject.toml) and the
+# options pack's pure proofs use it there; FO11's fuzz needs the desk's route and its Postgres,
+# so the desk's suite needs it too. Test-only, same pin as the screener's lock
+# (DECISIONS-FO FO11.1).
+hypothesis==6.165.10

@@ -290,8 +290,13 @@ def test_only_the_post_route_calls_execute_entry() -> None:
         for p in _files(DESK / "app", DESK / "scripts")
         if p.suffix == ".py" and re.search(r"\bexecute_entry\s*\(", _code(p))
     ]
-    # options_execute defines it; options_desk's POST handler is the one caller.
+    # options_execute defines it; options_desk's POST handler is the one caller. FO7/FO8 added
+    # the FO book's own `execute_entry` (fno_execute defines it, fno_desk's POST /fno/execute is
+    # its one caller), which this scan also sees; the list stays exact for both books
+    # (DECISIONS-FO FO11.3; the FO half is test_fno_safety_proof).
     assert sorted(callers) == [
+        "kite-momentum-rebalancer/app/fno_desk.py",
+        "kite-momentum-rebalancer/app/fno_execute.py",
         "kite-momentum-rebalancer/app/options_desk.py",
         "kite-momentum-rebalancer/app/options_execute.py",
     ]

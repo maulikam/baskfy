@@ -798,3 +798,56 @@ line per `(sleeve, simulated)` for the week, the month per book, the pauses per 
 gains `fno_monitor_enabled` (default false) only to stay dark; the alert names
 `docs/runbooks/13-fno-book.md`, which FO12 extends with the book's other alerts.
 
+
+## FO11.1 — Hypothesis joins the desk's requirements, test-only, at the screener's pin · ⚠ UNREVIEWED
+
+**Context.** `06` FO11 asks for "a fuzz over the execute route". The route, its executor and the
+`fo_` tables live in the desk, whose suite had no Hypothesis; the options pack's OP13 kept its
+Hypothesis proofs in `packages/core` because they were pure. **Choice.** `hypothesis==6.165.10`
+(the screener's locked version, `decile-blueprint/pyproject.toml`) is added to
+`kite-momentum-rebalancer/requirements.txt` beside `pytest`, with a comment saying why.
+**Rejected.** A seeded `random` loop (a fuzz without shrinking); moving the route test into the
+screener's venv (it cannot import the desk). **Reversal.** Remove the line; `TestTheExecuteRouteFuzz`
+becomes a parametrized list.
+
+## FO11.2 — "No NRML order can be formed" is read as: nothing reaches a broker · ⚠ UNREVIEWED
+
+With every FO flag false a paper confirm **does** build NRML orders — through the gateway's dry-run
+branch, journalled, simulated (FO6.5, FO7.1); that is Track A's paper book. The proof therefore
+asserts what the sentence protects: a recording broker sees 0 calls, no gateway journal holds a
+broker event (`placed`, `rejected`, `error`, `gtt_placed`, `gtt_modified`, …), every `fo_fill` is
+`simulated`, every journalled order is NRML on the plan's own legs whatever product/venue/quantity
+fields are tampered into the form, and the answer is 200 exactly when `confirm == "true"`, the
+plan is the caller's own `ISSUED` entry and the clock is inside its 30 minutes.
+
+## FO11.3 — OP13's "only the POST route calls `execute_entry`" lists both books · ⚠ UNREVIEWED
+
+`test_options_safety_proof.test_only_the_post_route_calls_execute_entry` had been **red since FO7/FO8**:
+its source scan matches any `execute_entry(` in the desk, and the FO book has its own
+(`fno_execute` defines it, `fno_desk`'s `POST /fno/execute` calls it). The expected list now names
+both pairs exactly (four files), which is no weaker for the options book; FO11's own
+`test_only_the_fno_post_route_calls_the_fno_execute_entry` pins the FO pair and that the monitor
+never confirms. **Reversal.** Scope the OP scan to `options_*` files.
+
+## FO11.4 — The `place_order` scan's two allowances · ⚠ UNREVIEWED
+
+Law 2's scan (`test_fno_safety_proof`) walks the packages, services, the desk's `app`/`scripts` and
+`tools/`. `app/kite_client.py` is the broker adapter the gateway itself calls (the allowance
+`test_seven_non_negotiables` 6b already makes); `tools/friday-drill.py` calls `place_order` on its
+own recording spy to prove the spy records. Everything else is refused by name.
+
+## FO11.5 — The drill isolates the desk's database and journal before importing `app.main` · ⚠ UNREVIEWED
+
+`tools/fno/drill.py` confirms through the real `POST /fno/execute`, so it builds `app.main`, which
+migrates and reads the desk database it is configured with on import. The drill now points
+`db.DB_BACKEND`/`DB_PATH` and the order journal at its temporary directory first (the suite's
+`conftest` isolation). Its first run in this session, before that line existed, imported `app.main`
+against the local development database named in the desk's `.env` (an idempotent `migrate` and a
+settings read; nothing written by the drill itself). The `fo_` rows it writes go only to the test
+database it is given (name must contain `test`), under throwaway users it deletes.
+
+## FO11.6 — F1B's fixture is BANKNIFTY listed on NIFTY's strikes and lot · ⚠ UNREVIEWED
+
+FO7's replay master lists NIFTY only. The FO11 matrix and drill run F1B through the same monitor,
+route and gateway with a master that also lists BANKNIFTY on the fixture's strikes and lot (65),
+because what is under test is the gate and the sequence, not BANKNIFTY's contract spec.

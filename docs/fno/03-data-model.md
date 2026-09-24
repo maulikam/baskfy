@@ -125,3 +125,23 @@ positions, and the book's loss pause. Every write goes through `settings_audit`.
 * `fo_spread_sample`: the 15:00 quote sample (`01` §2), with `trade_date`, `symbol`, `expiry`,
   `strike`, `option_type`, `bid`, `ask`, `mid`, `oi` and `taken_at`. It is market data (shared)
   and append-only. The re-test reads its per-underlying median half-spread ÷ mid.
+
+## 8. Added by FO2: `fo_ingest_day`, `fo_config_audit`, and the widened master
+
+* `fo_ingest_day` (market data, shared): one row per session the nightly ingest has tried, keyed
+  on `trade_date`. `status` is `PENDING` while the 18:30–23:30 retries run, `INGESTED` once the
+  day's rows are written, `MISSING` when the 23:30 attempt finds no file (`04` §4: "`MISSING` on
+  the status page, never interpolated"). It carries `rows_in_file`, `rows_kept`, `source_key`,
+  `attempts` and `last_error`, and the ban list the same night read: `ban_for_session`,
+  `ban_symbols`, `ban_source_key`. This is the row the status page reads (FO5).
+* `fo_config_audit` (per user): every write to `fo_book_config` / `fo_sleeve_config` (§6's
+  "settings_audit"), shaped like `op_config_audit`; `scope` is `BOOK`, `F1` or `F2`. FO2's seed
+  writes one row per sleeve it inserts, naming the source of its capital.
+* `fo_sleeve_config` is keyed on the sleeve **group** (`F1`, `F2`), as `op_sleeve_config` is on the
+  options groups: F1's ₹10,00,000 is one number for NIFTY and BANKNIFTY together (M.1).
+* `in_ban` on `fo_underlying_daily` is written by the nightly from the ban list, on the
+  `trade_date` row, before (and independently of) the derivation; the derivation's upsert never
+  touches it.
+* `op_contract` and `op_expiry`: `lot_size` widened from `smallint` to `integer` in `0052_fno`,
+  because the master now holds every F&O underlying and IDEA's lot (71,475) does not fit a
+  smallint.

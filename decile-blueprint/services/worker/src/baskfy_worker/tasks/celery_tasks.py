@@ -58,13 +58,14 @@ from baskfy_worker.alerts import Alert, AlertName, Severity, dispatch
 from baskfy_worker.bhavcopy_backfill import backfill_bars_from_bhavcopy
 from baskfy_worker.celery_app import IST, QUEUE_COMPUTE, QUEUES
 from baskfy_worker.db import run_checkpointed, run_in_session, session_scope
+from baskfy_worker.fno.nightly import run_night as fno_run_night
 from baskfy_worker.options import index_bars as options_index_bars
 from baskfy_worker.options import options_ceilings
 from baskfy_worker.options.backtest_run import TIERS as OPTIONS_TIERS
 from baskfy_worker.options.backtest_run import git_sha, run_backtest
 from baskfy_worker.options.checks import Switches, check_alert, due_checks, run_checks
 from baskfy_worker.options.collector import collect_gate, collect_minute, in_session
-from baskfy_worker.options.master import EmptyMaster, master_alert, refresh_master
+from baskfy_worker.options.master import EmptyMaster, master_alert, refresh_master_all
 from baskfy_worker.options.plan import kite_margin_reader, plan_gate_free, plan_o1_minute
 from baskfy_worker.options.plan_o2 import plan_o2_gate_free, plan_o2_minute
 from baskfy_worker.options.plan_o3 import plan_o3_gate_free, plan_o3_minute
@@ -907,13 +908,15 @@ def vbt_detect_task(trade_date: str | None = None) -> JsonObject:
 
 @shared_task(name="baskfy.options.refresh_master", acks_late=True)
 def options_refresh_master_task(as_of: str | None = None) -> JsonObject:
-    """OP2: tonight's NIFTY options master into ``op_contract`` and ``op_expiry``.
+    """OP2, widened by FO2: tonight's NFO options master into ``op_contract`` and ``op_expiry``.
 
-    One read-only Kite call (``instruments("NFO")``) on the bulk lane, then an idempotent upsert:
-    contracts are never deleted, the calendar is rebuilt from the master and never from a weekday
-    rule (``docs/options/04`` §1.1). A lot-size change, a kind change or a withdrawn future expiry
-    raises ``OPTIONS_MASTER_CHANGED``. No Kite session → skipped, not failed: the calendar keeps
-    last night's rows. An empty dump is refused rather than applied.
+    One read-only Kite call (``instruments("NFO")``) on the bulk lane, then an idempotent upsert
+    for **every** F&O underlying (``docs/fno/06`` FO2; it was NIFTY only). Contracts are never
+    deleted, each underlying's calendar is rebuilt from the master and never from a weekday rule
+    (``docs/options/04`` §1.1). The O-sleeves still read NIFTY only: every one of their reads
+    filters on the underlying. A lot-size change, a kind change or a withdrawn future expiry on
+    NIFTY raises ``OPTIONS_MASTER_CHANGED``; the other underlyings' changes are in the result. No
+    Kite session → skipped, not failed. A dump without NIFTY is refused rather than applied.
     """
     day = dt.date.fromisoformat(as_of) if as_of else dt.datetime.now(tz=IST).date()
     if not kite_session_usable():
@@ -921,18 +924,44 @@ def options_refresh_master_task(as_of: str | None = None) -> JsonObject:
     provider = build_kite_provider(
         get_provider_settings(), provider_retry_hooks(), lane=KiteLane.BULK
     )
-    records = provider.option_contracts("NIFTY")
+    records = provider.fno_option_contracts()
 
     async def _run(session: AsyncSession) -> JsonObject:
         try:
-            report = await refresh_master(session, records, as_of=day)
+            reports = await refresh_master_all(session, records, as_of=day)
         except EmptyMaster as exc:
             return {"date": day.isoformat(), "refused": str(exc)}
-        alert = master_alert(report)
-        out = report.as_dict()
+        nifty = reports.nifty
+        alert = master_alert(nifty)
+        out = {**nifty.as_dict(), **reports.summary()}
         if alert is not None:
             out["alert"] = await dispatch(alert)
         return out
+
+    return run_in_session(_run)
+
+
+FNO_INGEST_TASK: Final = "baskfy.fno.ingest_bhavcopy"
+
+
+@shared_task(name=FNO_INGEST_TASK, acks_late=True)
+def fno_ingest_bhavcopy_task(trade_date: str | None = None, at: str | None = None) -> JsonObject:
+    """FO2: one session's F&O bhavcopy into ``fo_contract_daily``, and the next session's ban list.
+
+    Beat fires it at 18:30 and hourly to 23:30 on weekdays (``docs/fno/04`` §4). Refuses, before
+    any NSE request, when ``BASKFY_FNO_SCAN_ENABLED`` is false (the default) or the day is not a
+    session. A day already ``INGESTED`` with its ban list stored is answered from the database, so
+    the later retries cost nothing. A day with no file at the 23:30 attempt is ``MISSING`` in
+    ``fo_ingest_day``, never interpolated. Reads NSE only; moves no money.
+    """
+    now = _options_now(at)
+    day = dt.date.fromisoformat(trade_date) if trade_date else now.date()
+    if not get_worker_settings().fno_scan_enabled:
+        return {"trade_date": day.isoformat(), "skipped": "BASKFY_FNO_SCAN_ENABLED is false"}
+    provider = build_nse_provider(get_provider_settings(), retry_hooks=provider_retry_hooks())
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        return await fno_run_night(session, provider, day, now_ist=now)
 
     return run_in_session(_run)
 

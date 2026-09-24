@@ -45,8 +45,10 @@ API_DIR: Final = REPO_ROOT / "services" / "api"
 MIGRATION_PATH: Final = API_DIR / "alembic" / "versions" / "0050_options.py"
 #: The options schema's newest revision. `0050_options` built it; OP11's `0051` added
 #: `op_position.trough_value` on top (DECISIONS-OP OP11.2), so the round trip below also crosses
-#: 0051's downgrade. A later options migration moves this, and only this.
-OPTIONS_HEAD: Final = "0051_op_position_extremes"
+#: 0051's downgrade. A later options migration moves this, and only this. FO2's `0052_fno` is one:
+#: it widens `op_contract.lot_size` / `op_expiry.lot_size` to integer for the all-underlyings
+#: master, so the head these tests migrate to and assert is now 0052 (DECISIONS-FO FO2).
+OPTIONS_HEAD: Final = "0052_fno"
 MIGRATION: Final = MIGRATION_PATH.read_text(encoding="utf-8")
 DATA_MODEL: Final = (MONOREPO_ROOT / "docs" / "options" / "03-data-model.md").read_text(
     encoding="utf-8"

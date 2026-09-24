@@ -370,6 +370,24 @@ class KiteProvider:
                 out.append(record)
         return sorted(out, key=lambda r: r.instrument_token)
 
+    def fno_option_contracts(self) -> list[OptionContractRecord]:
+        """Every listed CE/PE contract on **every** F&O underlying, from one NFO dump (FO2).
+
+        :meth:`option_contracts` asks the same question for one underlying; FO2 widens the nightly
+        master to all of them (``docs/fno/06`` FO2), and asking per underlying would cost ~216
+        dumps of the same file. One HTTP call on the same rate-limited path. Each row's
+        underlying is its own ``name``; a row missing a fact the calendar needs is skipped by the
+        same rule. Sorted by token (house rule 7). Read-only.
+        """
+        raw = self._call(lambda client: client.instruments("NFO"))
+        out: list[OptionContractRecord] = []
+        for row in raw:
+            name = (_text(row.get("name")) or "").upper()
+            record = _to_option_contract(row, name) if name else None
+            if record is not None:
+                out.append(record)
+        return sorted(out, key=lambda r: r.instrument_token)
+
     def daily_bars(self, token: int, start: dt.date, end: dt.date) -> pl.DataFrame:
         """Raw daily candles for one instrument, chunked to respect the day-interval cap.
 

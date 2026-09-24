@@ -220,6 +220,24 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     "op_position": ("session_id",),
     "op_journal": ("session_id",),
     "op_backtest_run": ("id",),
+    # The FO run — docs/fno/03-data-model.md (FO2, migration 0052). Fifteen tables: four market
+    # data (no user_id), eleven per user. `fo_contract_daily` is RANGE-partitioned by month on
+    # trade_date; its partitions are not models. `fo_ingest_day` and `fo_config_audit` are 03 §8.
+    "fo_contract_daily": ("trade_date", "symbol", "expiry", "strike", "option_type"),
+    "fo_underlying_daily": ("trade_date", "symbol"),
+    "fo_ingest_day": ("trade_date",),
+    "fo_spread_sample": ("id",),
+    "fo_scan": ("id",),
+    "fo_plan": ("id",),
+    "fo_leg": ("id",),
+    "fo_position": ("id",),
+    "fo_fill": ("id",),
+    "fo_mark": ("position_id", "trade_date"),
+    "fo_journal": ("position_id",),
+    "fo_book_config": ("user_id",),
+    "fo_sleeve_config": ("user_id", "sleeve"),
+    "fo_config_audit": ("id",),
+    "fo_backtest_run": ("id",),
     # AF lane I (migration 0045): the Stocks watchlist and the goal composer's saved answers.
     # Neither is a curated basket, so neither belongs with the `cb_` tables — a watched
     # *instrument* is a bookmark on a symbol, and the preferences row is what `/discover`
@@ -421,6 +439,13 @@ def test_options_tables_are_recorded_in_docs() -> None:
         "op_backtest_run",
     ):
         assert table in model, f"{table} is not described in docs/options/03"
+
+
+def test_fno_tables_are_recorded_in_docs() -> None:
+    """FO2 tables live in docs/fno/03, by the same rule as every sleeve's above."""
+    model = (MONOREPO_ROOT / "docs" / "fno" / "03-data-model.md").read_text(encoding="utf-8")
+    for table in sorted(t for t in DOCUMENTED_TABLES if t.startswith("fo_")):
+        assert f"`{table}`" in model, f"{table} is not described in docs/fno/03"
 
 
 #: Every column `docs/twt/03` names in prose, table by table. The point is not coverage for its

@@ -476,6 +476,28 @@ class Settings(BaseSettings):
     #: ``op_sleeve_config.hard_exit_time`` may not be later than this (``02`` Track C §1).
     options_hard_exit_latest: dt.time = dt.time(15, 0)
 
+    # --- The FO run (docs/fno/02 Track B, FO5) ---------------------------------
+    #
+    # Read here only to *report* them (the overnight page's PAPER/LIVE per sleeve) and to bound the
+    # settings PATCH. The API places nothing and has no FO execute route (``02`` Track C §4). Every
+    # money flag defaults false; no agent flips one. There is no FO auto-execute flag and none may
+    # be added (``02`` Track B).
+    fno_f1_execution_enabled: bool = False
+    fno_f2_execution_enabled: bool = False
+    fno_carry_enabled: bool = False
+    fno_scan_enabled: bool = False
+    fno_monitor_enabled: bool = False
+    #: Every FO plan's max loss in ₹; a sleeve's capital x risk % may not exceed it.
+    fno_risk_per_trade_inr_max: Decimal = Field(default=Decimal("25000"), gt=0)
+    #: ``fo_sleeve_config.risk_per_trade_pct`` may not exceed this.
+    fno_risk_pct_max: Decimal = Field(default=Decimal("1.0"), gt=0, le=100)
+    #: ``fo_sleeve_config.max_open_positions`` may not exceed this.
+    fno_max_open_positions_max: int = Field(default=10, gt=0, le=100)
+    #: Open FO positions on one underlying across sleeves (reported; no setting reaches it).
+    fno_max_per_underlying_max: int = Field(default=1, gt=0, le=10)
+    #: ``fo_book_config.monthly_pause_inr`` may not exceed this.
+    fno_book_monthly_loss_inr_max: Decimal = Field(default=Decimal("75000"), gt=0)
+
     # --- Rate limits (docs/07 §Conventions) ----------------------------------
     rate_limit_anonymous_per_minute: int = Field(default=10, gt=0)
     rate_limit_authenticated_per_minute: int = Field(default=60, gt=0)

@@ -131,6 +131,16 @@ export const PAGES = {
     title: "Calendar · NIFTY options",
     blurb: "The year's NIFTY expiries and the days no options strategy trades.",
   },
+  /* —— The FO run's two pages on the Options tab (FO5, docs/fno/05 §1-§3). Read-only: the desk's
+     F&O page is the only surface with a Confirm (docs/fno/02 Track C §4). —— */
+  "/options/overnight": {
+    title: "Overnight · Options",
+    blurb: "The monthly index condor on paper, and the stock-futures breakout built against the research.",
+  },
+  "/options/fno": {
+    title: "Stock F&O · Options",
+    blurb: "Facts about every F&O stock after the close — none of them a signal.",
+  },
   "/me/options": {
     title: "Options settings",
     blurb: "The options account's money limits, the server's ceilings, and every rule read-only.",

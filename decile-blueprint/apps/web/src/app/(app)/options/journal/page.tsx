@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { FnoRiskCaveat, ScanOnly } from "@/components/options/caveats";
 import { PageHeader } from "@/components/shell/page-header";
-import { SectionTabs } from "@/components/shell/section-tabs";
+import { OptionsSubNav, SectionTabs } from "@/components/shell/section-tabs";
 import { formatTradeDate } from "@/lib/format";
 import { fetchOptionsBacktest, fetchOptionsJournal } from "@/lib/options/fetch";
 import type {
@@ -176,6 +176,7 @@ export default async function OptionsJournalPage() {
         blurb={PAGES["/options/journal"].blurb}
         meta={<ScanOnly />}
       />
+      <OptionsSubNav />
       <SectionTabs section="options" />
       <FnoRiskCaveat />
 

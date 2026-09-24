@@ -136,7 +136,7 @@ sleeve, each with its evidence in `FO-FINAL-REPORT.md` or a dated addendum:
 1. **FO11 green**, including the options pack's `OPTIONS_ENABLED` side-door test and this pack's
    covered-overnight guard tests (§1).
 2. **Capital and the non-negotiable-4 reading answered in writing.** For F1 both are done (M.1:
-   ₹10 lakh; structure stop + close order). F2 still has capital ₹0.
+   ₹25 lakh, M.2; structure stop + close order). F2 still has capital ₹0.
 3. **The paper period, through the deployed desk,** with `DRY_RUN=true` and zero rule violations
    (no uncovered short at any step, no position into expiry day, no future without its resting
    stop, no journal gap). The length is per sleeve, in `04` §9.

@@ -424,10 +424,23 @@ class TestF1:
             assert row.cost_share is not None and row.cost_share < 25
             assert detail["lots"] == 1
 
-    async def test_ten_lakh_cannot_carry_one_nifty_lot_and_says_so(self, fo_url: str) -> None:
+    async def test_the_seeded_25_lakh_carries_a_nifty_lot_and_10_lakh_would_not(
+        self, fo_url: str
+    ) -> None:
+        """M.2: at M.1's Rs 10 lakh (Rs 10,000 at 1 %) no NIFTY lot fits and the scan says so by
+        name; at the seeded Rs 25 lakh (Rs 25,000) the same condor is a CANDIDATE."""
         async with _rolled_back(fo_url) as session:
             await _market(session)
-            user = await _user(session)  # seeded F1 capital: Rs 10 lakh, Rs 10,000 at 1 %
+            user = await _user(session)
+            await run_scan(session, T, user_ids=[user])
+            row = (await _rows(session, user, "F1N"))["NIFTY"]
+            assert row.state == "CANDIDATE", row.reasons
+            assert row.detail["lots"] >= 1
+            await session.execute(
+                sa.update(FoSleeveConfig)
+                .where(FoSleeveConfig.user_id == user, FoSleeveConfig.sleeve == "F1")
+                .values(capital_inr=Decimal("1000000.00"))
+            )
             await run_scan(session, T, user_ids=[user])
             row = (await _rows(session, user, "F1N"))["NIFTY"]
             assert row.state == "REJECTED_SIZE"

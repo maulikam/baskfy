@@ -2,9 +2,10 @@
 
 Where each number comes from — **none is an agent's choice**:
 
-* **F1 capital ₹10,00,000**, for NIFTY and BANKNIFTY together — Maulik, in session, 23 Sep 2026
-  (``docs/fno/DECISIONS-FO.md`` M.1, Q1; ``01`` §1 "Size"; ``04`` §3). At 1.0 % that is ₹10,000
-  max loss per structure. Seeding it moves no money: every FO execution flag stays false.
+* **F1 capital ₹25,00,000**, for NIFTY and BANKNIFTY together — Maulik, in session, 25 Sep 2026
+  (``docs/fno/DECISIONS-FO.md`` M.2, raising M.1's ₹10 lakh; ``01`` §1 "Size"; ``04`` §3). At
+  1.0 % that is ₹25,000 max loss per structure, the per-trade ceiling. Seeding it moves no
+  money: every FO execution flag stays false.
 * **F2 capital ₹0** — Q1 was asked for F1 only (``01`` §1b "Size"): paper runs one lot and live
   refuses ``NO_SLEEVE_CAPITAL``.
 * **Risk 1.0 %** per trade for both (``04`` §3), **max lots 2** (``04`` §3 ``fo_max_lots``).
@@ -33,7 +34,7 @@ from typing import Final
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from baskfy_core.fno.config import DEFAULT_FNO_CONFIG
+from baskfy_core.fno.config import DEFAULT_FNO_CONFIG, F1_SEED_CAPITAL_INR
 from baskfy_core.models import FoBookConfig, FoConfigAudit, FoSleeveConfig
 
 SEEDED_BY: Final = "seed"
@@ -52,12 +53,12 @@ class SleeveSeed:
 SLEEVE_SEEDS: Final[tuple[SleeveSeed, ...]] = (
     SleeveSeed(
         sleeve="F1",
-        capital_inr=Decimal("1000000.00"),
+        capital_inr=F1_SEED_CAPITAL_INR,
         risk_per_trade_pct=DEFAULT_FNO_CONFIG.f1.risk_per_trade_pct,
         max_lots=DEFAULT_FNO_CONFIG.common.max_lots,
         max_open_positions=DEFAULT_FNO_CONFIG.f1.max_open_per_underlying
         * len(DEFAULT_FNO_CONFIG.f1.underlyings),
-        source="Maulik, 23 Sep 2026 (DECISIONS-FO M.1, Q1): F1 capital Rs 10 lakh, both "
+        source="Maulik, 25 Sep 2026 (DECISIONS-FO M.2): F1 capital Rs 25 lakh, both "
         "underlyings together",
     ),
     SleeveSeed(

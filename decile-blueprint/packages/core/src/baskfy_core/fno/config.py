@@ -30,8 +30,9 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Final
 
-#: F1's capital (Maulik, M.1; ``04`` §3), seeded into ``fo_sleeve_config`` by FO2.
-F1_SEED_CAPITAL_INR: Final = Decimal("1000000")
+#: F1's capital (Maulik, M.2, 25 Sep 2026, raising M.1's ₹10 lakh: at 1 % that was ₹10,000, below
+#: every NIFTY and BANKNIFTY lot's max loss in the last year; ``04`` §3), seeded by FO2.
+F1_SEED_CAPITAL_INR: Final = Decimal("2500000")
 #: F2's capital (``01`` §1b: Q1 was asked for F1 only). Paper runs one lot; live refuses.
 F2_SEED_CAPITAL_INR: Final = Decimal("0")
 #: The first UDiFF bhavcopy session: the file carries the underlying's price from here (``04`` §4).

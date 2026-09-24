@@ -54,7 +54,7 @@ class TestDefaultsAre04:
         assert CFG.common.max_lots_ceiling == 10
         assert CFG.f1.risk_per_trade_pct == Decimal("1.0")
         assert CFG.f1.max_cost_share_pct == Decimal(25)
-        assert Decimal(1_000_000) == F1_SEED_CAPITAL_INR
+        assert Decimal(2_500_000) == F1_SEED_CAPITAL_INR  # Maulik, M.2
         assert Decimal(0) == F2_SEED_CAPITAL_INR
 
     def test_section_7(self) -> None:

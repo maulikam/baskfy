@@ -138,7 +138,7 @@ positions, and the book's loss pause. Every write goes through `settings_audit`.
   "settings_audit"), shaped like `op_config_audit`; `scope` is `BOOK`, `F1` or `F2`. FO2's seed
   writes one row per sleeve it inserts, naming the source of its capital.
 * `fo_sleeve_config` is keyed on the sleeve **group** (`F1`, `F2`), as `op_sleeve_config` is on the
-  options groups: F1's ₹10,00,000 is one number for NIFTY and BANKNIFTY together (M.1).
+  options groups: F1's ₹25,00,000 (M.2) is one number for NIFTY and BANKNIFTY together (M.1).
 * `in_ban` on `fo_underlying_daily` is written by the nightly from the ban list, on the
   `trade_date` row, before (and independently of) the derivation; the derivation's upsert never
   touches it.

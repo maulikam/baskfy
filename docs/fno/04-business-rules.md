@@ -53,7 +53,7 @@ already filled are longs only, so they are closed at once (`ABANDONED_PARTIAL`).
 
 `lots = floor(min(risk_budget_inr, BASKFY_FNO_RISK_PER_TRADE_INR_MAX) ÷ (max_loss_per_unit × lot_size))`,
 capped at `fo_max_lots` (2; ceiling 10). `risk_budget_inr = sleeve_capital × risk_per_trade_pct`
-(1.0 %). **F1's capital is ₹10,00,000** (Maulik, M.1), seeded by FO2, so ₹10,000 per structure,
+(1.0 %). **F1's capital is ₹25,00,000** (Maulik, M.2, raising M.1's ₹10 lakh), seeded by FO2, so ₹25,000 per structure,
 and paper sizes exactly as live would. A sleeve at ₹0 (F2) runs one lot on paper, and live refuses
 `NO_SLEEVE_CAPITAL`. Zero lots is `REJECTED_SIZE`, never rounded up to one. The broker's
 `basket_order_margins` for the plan's legs must be ≤ free margin, or `REJECTED_MARGIN`. **Margin never sizes** (Track C §6).

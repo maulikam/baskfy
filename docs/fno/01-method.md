@@ -35,7 +35,7 @@ exists to find out whether it was luck.
 | Structure | Iron condor on the monthly: shorts at the listed strikes nearest F·(1 ± 1.0·IV·√T), wings a further 0.5σ out, equal quantity. **Longs enter first**; the covered-overnight guard re-proves every prefix (`02` §2.1) |
 | Manage | Checked by the monitor during the session and at each close. **Take profit** when the structure can be bought back for ≤ 50 % of the credit. **Loss close** (Maulik, M.1): when the cost to close reaches 2.5 × the credit (a loss of 1.5 × the credit), close the whole structure, shorts first. **No defensive exit on a breached short strike**: it was tested and cut expectancy to +0.018R while barely moving the tail (`RESEARCH.md` §B4). The wings bound the loss if the loss close cannot fill (a gap overnight) |
 | Exit | Otherwise at **E−1, 15:00**, never into expiry day (`02` §2.2) |
-| Size | Capital **₹10 lakh** for F1 (Maulik, M.1) × 1.0 % = ₹10,000 risk per structure, ÷ the structure's max loss per lot (credit subtracted), floored, max `fo_max_lots`. Margin from `basket_order_margins` is a ceiling only. Paper sizes exactly as live would, journalled `simulated=true` |
+| Size | Capital **₹25 lakh** for F1 (Maulik, M.2, raising M.1's ₹10 lakh) × 1.0 % = ₹25,000 risk per structure, ÷ the structure's max loss per lot (credit subtracted), floored, max `fo_max_lots`. Margin from `basket_order_margins` is a ceiling only. Paper sizes exactly as live would, journalled `simulated=true` |
 
 ## §1b — F2: stock-futures breakout, long only, carried overnight (paper, by Maulik's choice)
 

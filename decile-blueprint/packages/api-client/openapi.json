@@ -12044,6 +12044,334 @@
         "title": "OptionsWeekROut",
         "type": "object"
       },
+      "OverlapCatalystOut": {
+        "description": "SW11B (A3): the swing feed's newest link and the earnings date — never the filing.",
+        "properties": {
+          "earnings_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Earnings Date"
+          },
+          "headline": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headline"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "required": [
+          "headline",
+          "published_at",
+          "url",
+          "earnings_date"
+        ],
+        "title": "OverlapCatalystOut",
+        "type": "object"
+      },
+      "OverlapOut": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/OverlapRowOut"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "scope": {
+            "enum": [
+              "actionable",
+              "all"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "screens_checked": {
+            "title": "Screens Checked",
+            "type": "integer"
+          },
+          "sessions": {
+            "$ref": "#/components/schemas/OverlapSessionsOut"
+          },
+          "strategies_read": {
+            "title": "Strategies Read",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "sessions",
+          "scope",
+          "strategies_read",
+          "screens_checked",
+          "data"
+        ],
+        "title": "OverlapOut",
+        "type": "object"
+      },
+      "OverlapRowOut": {
+        "properties": {
+          "actionable": {
+            "title": "Actionable",
+            "type": "boolean"
+          },
+          "catalyst": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OverlapCatalystOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "close": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close"
+          },
+          "instrument_id": {
+            "title": "Instrument Id",
+            "type": "integer"
+          },
+          "last_price": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Price"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "screens": {
+            "items": {
+              "$ref": "#/components/schemas/OverlapScreenOut"
+            },
+            "title": "Screens",
+            "type": "array"
+          },
+          "strategies": {
+            "items": {
+              "$ref": "#/components/schemas/OverlapStrategyOut"
+            },
+            "title": "Strategies",
+            "type": "array"
+          },
+          "strategy_count": {
+            "title": "Strategy Count",
+            "type": "integer"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "instrument_id",
+          "symbol",
+          "name",
+          "close",
+          "last_price",
+          "strategy_count",
+          "actionable",
+          "strategies",
+          "screens",
+          "catalyst"
+        ],
+        "title": "OverlapRowOut",
+        "type": "object"
+      },
+      "OverlapScreenOut": {
+        "properties": {
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "definition_changed": {
+            "title": "Definition Changed",
+            "type": "boolean"
+          },
+          "is_template": {
+            "title": "Is Template",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "of": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Of"
+          },
+          "public_id": {
+            "title": "Public Id",
+            "type": "string"
+          },
+          "rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rank"
+          }
+        },
+        "required": [
+          "name",
+          "public_id",
+          "is_template",
+          "as_of",
+          "rank",
+          "of",
+          "definition_changed"
+        ],
+        "title": "OverlapScreenOut",
+        "type": "object"
+      },
+      "OverlapSessionsOut": {
+        "properties": {
+          "swing": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Swing"
+          },
+          "three_weeks_tight": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Three Weeks Tight"
+          },
+          "volume_breakout": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Volume Breakout"
+          }
+        },
+        "required": [
+          "swing",
+          "volume_breakout",
+          "three_weeks_tight"
+        ],
+        "title": "OverlapSessionsOut",
+        "type": "object"
+      },
+      "OverlapStrategyOut": {
+        "description": "One strategy's fact about the row, in that strategy's own words.",
+        "properties": {
+          "actionable": {
+            "title": "Actionable",
+            "type": "boolean"
+          },
+          "as_of": {
+            "format": "date",
+            "title": "As Of",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          },
+          "strategy": {
+            "$ref": "#/components/schemas/Strategy"
+          }
+        },
+        "required": [
+          "strategy",
+          "name",
+          "ref",
+          "as_of",
+          "detail",
+          "actionable"
+        ],
+        "title": "OverlapStrategyOut",
+        "type": "object"
+      },
       "OverviewOut": {
         "description": "§6, in one response. The two timestamps §6.1 requires are separate fields, deliberately.\n\nA price date and a sync date answer different questions — \"how old is the market data\" and\n\"how old is our copy of what you own\" — and a single \"last updated\" that quietly reports the\nolder of the two is how a user comes to believe a stale holdings list is a stale price. They\nare two fields with two labels and they are never merged.\n\n``holdings_synced_on`` is a **date**, not a wall-clock time, because a date is the finest\ntruth the schema holds: ``broker_cash.as_of`` records the day a balance is true for, and\nnothing records the instant a sync ran. Rendering a fabricated time would be the page\nclaiming a precision the data does not have. When a sync timestamp column exists, this field\nbecomes a datetime and its label stops saying \"close of\".",
         "properties": {
@@ -18262,6 +18590,15 @@
           "OPENING_RANGE_LOW"
         ],
         "title": "StopMode",
+        "type": "string"
+      },
+      "Strategy": {
+        "enum": [
+          "swing",
+          "volume_breakout",
+          "three_weeks_tight"
+        ],
+        "title": "Strategy",
         "type": "string"
       },
       "SubtreeHoldingOut": {
@@ -42394,6 +42731,136 @@
         "summary": "The tab: roles, scans, book",
         "tags": [
           "options"
+        ]
+      }
+    },
+    "/api/v1/overlap": {
+      "get": {
+        "description": "Read-only, and nothing is re-run. See the module docstring for whose scans and which day.",
+        "operationId": "getOverlap",
+        "parameters": [
+          {
+            "description": "rows a strategy could act on (default), or every row the scans wrote",
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "default": "actionable",
+              "description": "rows a strategy could act on (default), or every row the scans wrote",
+              "enum": [
+                "actionable",
+                "all"
+              ],
+              "title": "Scope",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverlapOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Today's candidates across the sleeves",
+        "tags": [
+          "overlap"
         ]
       }
     },

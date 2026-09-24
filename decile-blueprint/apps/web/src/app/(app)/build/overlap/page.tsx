@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 
+import { CandidatesTable } from "@/components/overlap/candidates-table";
 import { OverlapMatrix } from "@/components/overlap/overlap-matrix";
 import { OverlapPanel } from "@/components/overlap/overlap-panel";
 import { ScreenPicker } from "@/components/overlap/screen-picker";
 import { Answer, Mark } from "@/components/shell/answer";
 import { PageHeader } from "@/components/shell/page-header";
 import { SectionTabs } from "@/components/shell/section-tabs";
+import type { OverlapScope } from "@/lib/overlap/candidates";
+import { fetchCandidates } from "@/lib/overlap/fetch-candidates";
 import { fetchOverlapSources } from "@/lib/overlap/fetch-overlap";
 import { intersectionOf, membershipOf } from "@/lib/overlap/overlap";
 import { formatTradeDate } from "@/lib/format";
@@ -21,6 +24,13 @@ import { PAGES } from "@/lib/vocabulary";
  * Read-only. Nothing here queues a scan or places an order — it only intersects what those
  * surfaces already published (plus a fresh run of each picked screen so those columns are
  * current).
+ *
+ * **Today's candidates (`GET /overlap`) sits above the matrix.** The matrix was symbols only —
+ * "check each name on Volume breakout, Swing, Three weeks tight, or the screen itself before
+ * acting" — and the table is that check, served from the same stored rows: each strategy's own
+ * word on the name, whether it could act, the exchange filing and result date the swing feed
+ * linked, and the live mark. It adds no number the strategies did not write; `?scope=all` widens
+ * it from rows a strategy could act on to every row the scans wrote.
  */
 
 export const dynamic = "force-dynamic";
@@ -30,6 +40,10 @@ export const metadata: Metadata = {
   description: PAGES["/build/overlap"].blurb,
   robots: { index: false, follow: false },
 };
+
+function scopeParam(value: string | string[] | undefined): OverlapScope {
+  return value === "all" ? "all" : "actionable";
+}
 
 function screenParams(value: string | string[] | undefined): string[] {
   if (value === undefined) return [];
@@ -44,7 +58,11 @@ export default async function BuildOverlapPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const sources = await fetchOverlapSources(screenParams(params.screen));
+  const scope = scopeParam(params.scope);
+  const [sources, candidates] = await Promise.all([
+    fetchOverlapSources(screenParams(params.screen)),
+    fetchCandidates(scope),
+  ]);
   const selectedScreens = sources.selectedScreens;
   const primaryScreen = selectedScreens[0];
 
@@ -101,7 +119,7 @@ export default async function BuildOverlapPage({
       <SectionTabs section="build" />
 
       <Answer
-        footnote="Symbols only — check each name on Volume breakout, Swing, Three weeks tight, or the screen itself before acting."
+        footnote="Each strategy's own word on a name is restated below, not re-scored — confirm it on that strategy's page before acting."
       >
         {!membership.available ? (
           <>
@@ -132,6 +150,8 @@ export default async function BuildOverlapPage({
           </>
         )}
       </Answer>
+
+      <CandidatesTable candidates={candidates} scope={scope} />
 
       <OverlapMatrix
         membership={membership}

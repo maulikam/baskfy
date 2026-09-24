@@ -2572,6 +2572,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/overlap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Today's candidates across the sleeves
+         * @description Read-only, and nothing is re-run. See the module docstring for whose scans and which day.
+         */
+        get: operations["getOverlap"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/plans": {
         parameters: {
             query?: never;
@@ -8751,6 +8771,106 @@ export interface components {
             trades: number;
         };
         /**
+         * OverlapCatalystOut
+         * @description SW11B (A3): the swing feed's newest link and the earnings date — never the filing.
+         */
+        OverlapCatalystOut: {
+            /** Earnings Date */
+            earnings_date: string | null;
+            /** Headline */
+            headline: string | null;
+            /** Published At */
+            published_at: string | null;
+            /** Url */
+            url: string | null;
+        };
+        /** OverlapOut */
+        OverlapOut: {
+            /** Data */
+            data: components["schemas"]["OverlapRowOut"][];
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "actionable" | "all";
+            /** Screens Checked */
+            screens_checked: number;
+            sessions: components["schemas"]["OverlapSessionsOut"];
+            /** Strategies Read */
+            strategies_read: boolean;
+        };
+        /** OverlapRowOut */
+        OverlapRowOut: {
+            /** Actionable */
+            actionable: boolean;
+            catalyst: components["schemas"]["OverlapCatalystOut"] | null;
+            /** Close */
+            close: string | null;
+            /** Instrument Id */
+            instrument_id: number;
+            /** Last Price */
+            last_price: string | null;
+            /** Name */
+            name: string;
+            /** Screens */
+            screens: components["schemas"]["OverlapScreenOut"][];
+            /** Strategies */
+            strategies: components["schemas"]["OverlapStrategyOut"][];
+            /** Strategy Count */
+            strategy_count: number;
+            /** Symbol */
+            symbol: string;
+        };
+        /** OverlapScreenOut */
+        OverlapScreenOut: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Definition Changed */
+            definition_changed: boolean;
+            /** Is Template */
+            is_template: boolean;
+            /** Name */
+            name: string;
+            /** Of */
+            of: number | null;
+            /** Public Id */
+            public_id: string;
+            /** Rank */
+            rank: number | null;
+        };
+        /** OverlapSessionsOut */
+        OverlapSessionsOut: {
+            /** Swing */
+            swing: string | null;
+            /** Three Weeks Tight */
+            three_weeks_tight: string | null;
+            /** Volume Breakout */
+            volume_breakout: string | null;
+        };
+        /**
+         * OverlapStrategyOut
+         * @description One strategy's fact about the row, in that strategy's own words.
+         */
+        OverlapStrategyOut: {
+            /** Actionable */
+            actionable: boolean;
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Detail */
+            detail: string;
+            /** Name */
+            name: string;
+            /** Ref */
+            ref: string;
+            strategy: components["schemas"]["Strategy"];
+        };
+        /**
          * OverviewOut
          * @description §6, in one response. The two timestamps §6.1 requires are separate fields, deliberately.
          *
@@ -11144,6 +11264,11 @@ export interface components {
          * @enum {string}
          */
         StopMode: "LOW_OF_DAY" | "OPENING_RANGE_LOW";
+        /**
+         * Strategy
+         * @enum {string}
+         */
+        Strategy: "swing" | "volume_breakout" | "three_weeks_tight";
         /**
          * SubtreeHoldingOut
          * @description One holding row inside the subtree, with the portfolio and account it belongs to.
@@ -27444,6 +27569,110 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OptionsTodayOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getOverlap: {
+        parameters: {
+            query?: {
+                /** @description rows a strategy could act on (default), or every row the scans wrote */
+                scope?: "actionable" | "all";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverlapOut"];
                 };
             };
             /** @description Bad request */

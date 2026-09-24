@@ -660,3 +660,44 @@ raises nothing. Because the book is marked after the 18:30 bhavcopy, `scripts/fn
 keeps the day's window open to 23:30 and restarts a crashed monitor inside it; compose is FO12's.
 The desk's Postgres adapter hands `numeric` back as `float`; the store re-quantizes price columns
 at their storage precision.
+
+## FO8.1 — The plan card overlays the live book when the desk has a Kite session · ⚠ UNREVIEWED
+
+`05` §4 asks for the legs "re-priced from live quotes" with bid/ask, spread % and OI. The plan's
+stored bid/ask are the monitor's 09:20 read (`fo_leg`); `fo_leg` has no OI column. `GET /fno`
+therefore overlays `kite_quotes` (bid, ask, OI, live credit on mids) when the desk is signed in,
+and otherwise shows the 09:20 figures with the reason ("no Kite session; legs show the 09:20
+pricing"). OI is live-only. The overlay reads; it moves nothing. **Reversal.** Drop `view_sources`.
+
+## FO8.2 — "Max loss in R" and "free margin" are read from what FO7 stores · ⚠ UNREVIEWED
+
+R on the card is `max_loss_inr ÷ risk_budget_inr` (how many sleeve risk budgets the structure can
+lose). Free margin is not a column: the card shows the monitor's `margin_check` sentence
+("₹X within free ₹Y") beside `margin_required_inr`. **Reversal.** Store `free_inr` on the plan.
+
+## FO8.3 — The nav badge: open positions and the nearest hard-exit date, cached a minute · ⚠ UNREVIEWED
+
+The date is the earliest of F1's `hard_exit_date` and F2's `time_exit_date` (an F2 `E - 1` roll
+carries the position and is not an exit). `fno_desk.nav_badge` is a Jinja global read by every
+desk page, cached 60 s, and never raises (the modes alone show if the book cannot be read). The
+tab's tooltip names each sleeve's PAPER/LIVE from `fno_gates()`; a LIVE sleeve turns the tab's
+chip red. The desk nav had no `NIFTY Options` tab, so it gains one beside `F&O Overnight`.
+
+## FO8.4 — A missing confirm is refused by name; the POST answers JSON · ⚠ UNREVIEWED
+
+`confirm` and `plan_id` default to `""`, so a missing confirm is `400 CONFIRM_REQUIRED` before any
+read (not FastAPI's anonymous 422), and an unknown plan `404 UNKNOWN_PLAN` before a gateway is
+built. The answer is JSON, as `/nifty-options/execute`'s; the page's script shows the outcome or
+the refusal code inline, never a spinner. A non-`OPEN` outcome carries `code` (the outcome) and
+`detail` (the gateway's refusals, e.g. `RISK_BLOCKED KILL SWITCH: ...`). The client id is FO7's
+`plan_id:tradingsymbol` (a retry `:R<n>`), so `plan_id:leg` is the leg's tradingsymbol; a second
+post is `409 NOT_ISSUED` from the atomic `ISSUED → CONFIRMED` update.
+
+## FO8.5 — F1's confirm sentence is `05` §4's verbatim, and it omits the loss close · ⚠ UNREVIEWED — needs Maulik's wording
+
+"This confirm also authorises the 50 % profit take and the E−1 15:00 exit of this structure. It
+places nothing else." FO7's monitor also fires the **1.5 × credit loss close** (and `LATE_EXIT`)
+under the same confirm (`04` §1), so "It places nothing else" understates what the click
+authorises. The page renders the spec's sentence unchanged (an agent does not rewrite a sentence
+the operator confirms under); the fix is a one-line change to `fno_desk.CONFIRM_SENTENCES` and
+`test_fno_desk.F1_SENTENCE` once the wording is decided.

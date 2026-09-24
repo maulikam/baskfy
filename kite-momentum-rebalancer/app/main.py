@@ -154,6 +154,14 @@ app.include_router(twt_desk.router)
 from . import options_desk                                           # noqa: E402
 app.include_router(options_desk.router)
 
+# FO8: the F&O Overnight operator page and its one confirm route. Mounted here for the same reason
+# as the four above: the desk console is the only place an FO plan becomes an order (docs/fno/02
+# Track C §3). The nav tab's badge (open structures, nearest hard-exit date, PAPER/LIVE per
+# sleeve) is read through `fno_badge`, which never raises (docs/fno/05 §1).
+from . import fno_desk                                               # noqa: E402
+app.include_router(fno_desk.router)
+templates.env.globals["fno_badge"] = fno_desk.nav_badge
+
 PLANS: dict[str, dict] = {}          # plan_id -> plan (in-memory, session-scoped)
 _kite: Kite | None = None
 _gateway: OrderGateway | None = None

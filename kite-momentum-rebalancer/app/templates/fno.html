@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block title %}Momentum Desk — F&amp;O Overnight{% endblock %}
+
+{% block heading %}F&amp;O Overnight{% endblock %}
+{% block heading_aside %}
+  {#- docs/fno/05 §1: PAPER/LIVE per sleeve, from fno_gates(). -#}
+  {% for s, m in v.modes.items() %}
+  <span class="pill {{ 'bad' if m == 'LIVE' else 'warn' }}" id="fnoMode{{ s }}">{{ s }} {{ m }}</span>
+  {% endfor %}
+{% endblock %}
+
+{% macro inr(x) -%}{% if x is none %}—{% else %}₹{{ x }}{% endif %}{%- endmacro %}
+{% macro d(x) -%}{% if x is none %}—{% else %}{{ x }}{% endif %}{%- endmacro %}
+
+{% block content %}
+{% if not v.ok %}
+  <p class="muted" id="fnoUnavailable">Unavailable: {{ v.error }}</p>
+{% endif %}
+{% if v.live_note %}<p class="muted" id="fnoLiveNote">{{ v.live_note }}</p>{% endif %}
+<p class="muted">Paper only: every leg goes through the gateway's dry-run branch and is filled by
+walking the live depth (simulated). Nothing on this page moves anything except <b>Confirm (paper)</b>;
+capital, risk and pauses are the settings form's.</p>
+
+{#- ============================== the morning plans ============================== -#}
+<section id="fnoPlans">
+  <h2>Plans today</h2>
+  {% if not v.plans %}<p class="muted">No FO plan has been issued today.</p>{% endif %}
+  {% for p in v.plans %}
+  <article class="card" data-plan-id="{{ p.plan_id }}">
+    <h3>{{ p.sleeve }} · {{ p.symbol }} · {{ p.structure }} ·
+      <span class="pill {{ 'ok' if p.status in ('OPEN', 'CLOSED') else ('warn' if p.status in ('ISSUED', 'CONFIRMED', 'FILLING', 'EXITING') else 'bad') }}">{{ p.status }}</span>
+      {% if p.paper %}<span class="pill warn">PAPER</span>{% endif %}
+    </h3>
+    {% if p.reason %}<p class="fno-reason" data-status="{{ p.status }}"><b>{{ p.status }}</b>: {{ p.reason }}</p>{% endif %}
+    <table>
+      <thead><tr><th>#</th><th>Leg</th><th>Contract</th><th>Side</th><th>Qty</th>
+        <th>Bid</th><th>Ask</th><th>Spread %</th><th>OI</th><th>Fill</th></tr></thead>
+      <tbody>
+      {% for lg in p.legs %}
+        <tr><td>{{ lg.seq }}</td><td>{{ lg.role }}</td><td>{{ lg.symbol }}</td>
+            <td>{{ lg.side }}</td><td>{{ lg.quantity }}</td>
+            <td>{{ d(lg.bid) }}</td><td>{{ d(lg.ask) }}</td><td>{{ d(lg.spread_pct) }}</td>
+            <td>{{ d(lg.oi) }}{% if not lg.live %} <span class="muted">(09:20)</span>{% endif %}</td>
+            <td>{% if lg.filled %}{{ lg.filled }} @ {{ d(lg.avg_price) }}{% else %}—{% endif %}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <dl class="fno-facts">
+      {% if p.group == 'F1' %}
+      <dt>Credit</dt><dd>{{ d(p.credit) }} pts (priced 09:20){% if p.live_credit %} · now {{ p.live_credit }}{% endif %}
+        · scan {{ d(p.scan_credit) }}
+        {% if p.credit_drift_pct is not none %}
+        <span class="pill {{ 'warn' if p.credit_drift_amber else 'ok' }}" id="fnoDrift-{{ p.plan_id }}">drift {{ p.credit_drift_pct }} %</span>
+        {% endif %}</dd>
+      <dt>Width</dt><dd>{{ d(p.width) }} pts · profit take at {{ d(p.profit_take) }} · loss close at {{ d(p.loss_close) }}</dd>
+      {% else %}
+      <dt>Entry</dt><dd>{{ d(p.entry_reference) }} (the ask at 09:20) · stop {{ d(p.stop) }} · GTT trigger {{ d(p.gtt_trigger) }}</dd>
+      <dt>Roll / time exit</dt><dd>{{ d(p.roll_date) }} / {{ d(p.time_exit_date) }}</dd>
+      {% endif %}
+      <dt>Max loss</dt><dd>{{ inr(p.max_loss_inr) }}{% if p.max_loss_r is not none %} = {{ p.max_loss_r }} R of the {{ inr(p.risk_budget_inr) }} budget{% endif %}</dd>
+      <dt>Lots</dt><dd>{{ p.lots }} × {{ p.lot_size }}{% if p.lots_sized is not none and p.lots_sized != p.lots %} (sized {{ p.lots_sized }}){% endif %}{% if p.lots_at_ceiling is not none %} · {{ p.lots_at_ceiling }} at the ceiling{% endif %}</dd>
+      <dt>Margin</dt><dd>basket {{ inr(p.margin_required_inr) }}{% if p.margin_message %} · {{ p.margin_message }}{% endif %}</dd>
+      <dt>Costs</dt><dd>{{ inr(p.cost_inr) }}{% if p.cost_share_pct is not none %} · {{ p.cost_share_pct }} of the credit{% endif %}</dd>
+      <dt>Entry sequence</dt><dd>{{ p.entry_sequence }} (longs first)</dd>
+      <dt>Hard exit</dt><dd>{{ d(p.hard_exit_date) }}</dd>
+    </dl>
+    {#- ONE form per plan: exactly one plan_id, exactly one confirm. -#}
+    {% if p.confirmable %}
+    <form method="post" action="/fno/execute" class="fno-confirm" data-plan-id="{{ p.plan_id }}">
+      <input type="hidden" name="plan_id" value="{{ p.plan_id }}">
+      <input type="hidden" name="confirm" value="true">
+      <button type="submit">{{ 'Confirm (paper)' if p.paper else 'Confirm' }}</button>
+      <span class="muted fno-countdown" data-expires="{{ p.expires_epoch_ms }}">lapses {{ p.expires_at }} ({{ p.seconds_left // 60 }} min left)</span>
+    </form>
+    <p class="fno-sentence">{{ p.sentence }}</p>
+    {% endif %}
+    <div class="fno-outcome" data-outcome-for="{{ p.plan_id }}" aria-live="polite"></div>
+  </article>
+  {% endfor %}
+</section>
+
+{#- ============================== open F1 structures ============================== -#}
+<section id="fnoStructures">
+  <h2>Open structures</h2>
+  {% if not v.structures %}<p class="muted">No condor is open.</p>{% endif %}
+  {% for s in v.structures %}
+  <article class="card" data-position-id="{{ s.id }}">
+    <h3>{{ s.sleeve }} · {{ s.symbol }} · {{ s.lots }} × {{ s.lot_size }}{% if s.simulated %} <span class="pill warn">PAPER</span>{% endif %}</h3>
+    <p>Credit {{ d(s.entry_credit) }} · cost to close now {{ d(s.live_close_cost) }} · P&amp;L {{ inr(s.live_pnl_inr) }}
+      {% if s.last_mark %}· settle {{ s.last_mark.trade_date }}: {{ s.last_mark.mark_points }} ({{ inr(s.last_mark.pnl_inr) }}){% endif %}</p>
+    <p>To the profit take ({{ d(s.profit_take) }}): {{ d(s.to_profit_take) }} · to the loss close ({{ d(s.loss_close) }}): {{ d(s.to_loss_close) }}
+      · {{ s.symbol }} {{ d(s.spot) }}{% for role, sg in s.short_sigma.items() %} · {{ role|replace('_', ' ')|lower }} {{ d(sg) }} σ{% endfor %}</p>
+    <p class="muted">Next: {{ s.next_rule }}</p>
+  </article>
+  {% endfor %}
+</section>
+
+{#- ============================== open F2 futures ============================== -#}
+<section id="fnoFutures">
+  <h2>Open futures</h2>
+  {% if not v.futures %}<p class="muted">No future is open.</p>{% endif %}
+  {% for f in v.futures %}
+  <article class="card" data-position-id="{{ f.id }}">
+    <h3>{{ f.symbol }} · {{ f.contract }} · {{ f.lots }} × {{ f.lot_size }}{% if f.simulated %} <span class="pill warn">PAPER</span>{% endif %}</h3>
+    <p>Entry {{ d(f.entry_price) }} · last {{ d(f.last) }} · P&amp;L {{ inr(f.live_pnl_inr) }} · rolls {{ d(f.rolls) }}</p>
+    {% if f.gtt_resting %}
+    <p class="fno-gtt">GTT <code>{{ f.gtt_id }}</code> · trigger {{ d(f.gtt_trigger) }} · trail stop {{ d(f.trail_stop) }}</p>
+    {% else %}
+    <p class="fno-gtt pill bad" id="fnoNaked-{{ f.id }}">NO RESTING GTT — the monitor exits this future at its next check (NAKED_FUTURE)</p>
+    {% endif %}
+    <p class="muted">Next: {{ f.next_rule }}</p>
+  </article>
+  {% endfor %}
+</section>
+
+{#- ============================== exits and rolls under a confirm ============================== -#}
+<section id="fnoActions">
+  <h2>Exits and rolls</h2>
+  {% if not v.actions %}<p class="muted">None today.</p>{% endif %}
+  {% if v.actions %}
+  <table>
+    <thead><tr><th>Plan</th><th>Under</th><th>Kind</th><th>Rule</th><th>Status</th><th>Why</th></tr></thead>
+    <tbody>
+    {% for a in v.actions %}
+      <tr><td>{{ a.plan_id }}</td><td>{{ d(a.parent_plan_id) }}</td><td>{{ a.kind }}</td>
+          <td>{{ d(a.code) }}</td><td>{{ a.status }}</td><td>{{ a.message or a.reason or '' }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+  {% if v.violations %}
+  <h3>Paper-checklist violations</h3>
+  <ul>{% for x in v.violations %}<li><b>{{ x.code }}</b> · {{ x.symbol }}: {{ x.message }}</li>{% endfor %}</ul>
+  {% endif %}
+</section>
+
+<script>
+// One form, one plan, one inline answer — the refusal by its name, never a spinner.
+document.querySelectorAll('form.fno-confirm').forEach(function (form) {
+  form.addEventListener('submit', async function (event) {
+    event.preventDefault();
+    var button = form.querySelector('button');
+    var target = document.querySelector('[data-outcome-for="' + form.dataset.planId + '"]');
+    button.disabled = true;
+    try {
+      var response = await fetch('/fno/execute', { method: 'POST', body: new FormData(form) });
+      var body = await response.json();
+      if (response.ok && body.outcome === 'OPEN') {
+        target.textContent = 'OPEN (simulated) — ' + body.orders + ' orders';
+        setTimeout(function () { window.location.reload(); }, 1500);
+      } else {
+        target.textContent = (body.code || body.outcome || response.status) + (body.detail ? ' — ' + body.detail : '');
+      }
+    } catch (error) {
+      target.textContent = 'the request failed: ' + error;
+      button.disabled = false;
+    }
+  });
+});
+// The 30-minute countdown to expires_at; past it the button goes and the plan says so.
+function fnoTick() {
+  document.querySelectorAll('.fno-countdown').forEach(function (el) {
+    var left = Math.floor((Number(el.dataset.expires) - Date.now()) / 1000);
+    if (left <= 0) {
+      el.textContent = 'PLAN_EXPIRED — the 30-minute window has passed';
+      var b = el.parentElement.querySelector('button'); if (b) { b.disabled = true; }
+    } else {
+      el.textContent = 'lapses in ' + Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0');
+    }
+  });
+}
+fnoTick(); setInterval(fnoTick, 1000);
+</script>
+{% endblock %}

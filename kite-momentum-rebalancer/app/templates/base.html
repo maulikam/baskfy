@@ -34,10 +34,20 @@
       {% for href, label in [
            ('/', 'Desk'), ('/indices', 'Indices'), ('/performance', 'Performance'), ('/regime', 'Regime'),
            ('/regime/backtest', 'Backtest'), ('/tradebook', 'Tradebook'),
-           ('/stops', 'Stops'), ('/reconcile', 'Reconcile'), ('/swing', 'Swing')]
+           ('/stops', 'Stops'), ('/reconcile', 'Reconcile'), ('/swing', 'Swing'),
+           ('/nifty-options', 'NIFTY Options'), ('/fno', 'F&O Overnight')]
            + ([('/options', 'Options')] if options_enabled else [])
            + [('/ops', 'Operations'), ('/settings', 'Settings')] %}
+        {%- if href == '/fno' and fno_badge is defined %}{% set fb = fno_badge() %}
+        {#- FO8 (docs/fno/05 §1): open structures and their nearest hard-exit date, and each
+            sleeve's PAPER/LIVE from fno_gates(). The badge reads the book; it never moves it. -#}
+        <a href="/fno" id="navFno"{% if here == href %} aria-current="page"{% endif %}
+           title="{% for s, m in fb.modes.items() %}{{ s }} {{ m }}{% if not loop.last %} · {% endif %}{% endfor %}">{{ label }}
+          {%- if fb.open %} <span class="sc-badge sc-badge--info" id="navFnoBadge">{{ fb.open }} open{% if fb.nearest %} · exit {{ fb.nearest }}{% endif %}</span>{% endif %}
+          {%- if 'LIVE' in fb.modes.values() %} <span class="sc-badge sc-badge--bad">LIVE</span>{% else %} <span class="sc-badge sc-badge--mute">PAPER</span>{% endif %}</a>
+        {%- else %}
         <a href="{{ href }}"{% if here == href %} aria-current="page"{% endif %}>{{ label }}</a>
+        {%- endif %}
       {% endfor %}
     </nav>
     <div class="ml-3 flex shrink-0 items-center gap-2">

@@ -202,7 +202,15 @@ RUN cat > /usr/local/bin/options-monitor-loop <<'EOF'
 set -eu
 exec python -m scripts.options_monitor_loop
 EOF
-RUN chmod 0755 /usr/local/bin/desk-entrypoint /usr/local/bin/swing-monitor-loop /usr/local/bin/desk-daily-loop /usr/local/bin/twt-auto-loop /usr/local/bin/options-monitor-loop
+# FO12 (docs/fno/06): the F&O book's monitor. The schedule lives in `scripts.fno_monitor_loop`
+# (09:14 IST weekdays, at once inside the 09:14-23:30 window, again after a crash in it);
+# `app.fno_monitor` exits 0 at once unless BASKFY_FNO_MONITOR_ENABLED; it never confirms an entry.
+RUN cat > /usr/local/bin/fno-monitor-loop <<'EOF'
+#!/bin/sh
+set -eu
+exec python -m scripts.fno_monitor_loop
+EOF
+RUN chmod 0755 /usr/local/bin/desk-entrypoint /usr/local/bin/swing-monitor-loop /usr/local/bin/desk-daily-loop /usr/local/bin/twt-auto-loop /usr/local/bin/options-monitor-loop /usr/local/bin/fno-monitor-loop
 
 WORKDIR /desk
 USER baskfy

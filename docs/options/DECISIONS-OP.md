@@ -1646,3 +1646,26 @@ module's worth of work, and a bulk sign-off of 229 mutants would be the false sc
 exists to prevent. **This is the first thing to do after the run**, before any sleeve's paper
 period ends. **Rejected.** Justifying survivors wholesale; dropping the new modules from the
 targets.
+
+## OP-M.1 — The monitor flag is on on the box (Maulik, 24 Sep 2026)
+
+**Context.** OP15 deployed the book dark; `02` §3.2's paper period needs
+`BASKFY_OPTIONS_MONITOR_ENABLED=true` for the worker's plan builders and the desk's monitor.
+Asked in session with options, Maulik chose **"Turn it on now"**.
+
+**Done.** 24 Sep 2026, 23:40 IST: both `/opt/baskfy/.env.staging.compose` and
+`/opt/baskfy/.env.staging` gained `BASKFY_OPTIONS_MONITOR_ENABLED=true` (each backed up beside
+itself as `.bak-20260924-*`), and `worker beat desk options-monitor` were recreated.
+`verify-options.sh` read **OPTIONS OK**: the four `…_EXECUTION_ENABLED` flags, `OPTIONS_ENABLED` and
+`INTRADAY_ENABLED` false in desk and monitor, no auto-execute name, the monitor waiting for
+Fri 25 Sep 09:14.
+
+**A correction this decision carries.** The desk on the box runs with `DRY_RUN=false`
+(`BASKFY_DESK_DRY_RUN=false`, for TWT auto-execute, TW18). The question as asked said "DRY_RUN
+stays true"; for the desk that was wrong. What keeps the options book on paper is
+`baskfy_core.options.gating.options_gates`: LIVE needs DRY_RUN false **and** `OPTIONS_ENABLED`
+**and** `INTRADAY_ENABLED` **and** the sleeve's execution flag, and compose pins the middle two to
+`"false"`. Every other combination is PAPER with `dry_run=True` handed to the gateway.
+
+**Reversal.** Delete the line from both files and `up -d worker beat desk options-monitor`; the
+monitor idles and no plan is built.

@@ -25,6 +25,25 @@ options with a margin cap: he chose defined risk.
 **Reversal.** Delete `docs/fno/`. Nothing in force changed: no gateway code was edited by the pack,
 and every FO flag defaults false.
 
+## M.2 — F1's capital is ₹25 lakh (Maulik, in session, 25 Sep 2026)
+
+**Context.** FO4's scan found M.1's ₹10 lakh sizes F1 to **zero lots every month**: at 1 % (the
+`BASKFY_FNO_RISK_PCT_MAX` ceiling) the budget is ₹10,000, and over the last 12 months of the
+research's condors one lot's max loss was ₹15,792–26,234 on NIFTY (lot 65, median ₹18,763) and
+₹17,122–46,599 on BANKNIFTY (lot 30, median ₹22,080). Sizing never rounds up (`04` §3), so every
+plan would be `REJECTED_SIZE` and the paper period (`04` §9, ≥ 4 opened) could never complete.
+
+**Asked with options** — paper one lot with live unchanged (recommended), ₹25 lakh, or keep ₹10
+lakh and never open — **Maulik chose ₹25 lakh.** At 1 % that is ₹25,000, exactly the per-trade
+ceiling, so paper sizes exactly as live would. One lot fits in most months (both medians are
+under it); a BANKNIFTY month above ₹25,000 (the year's max was ₹46,599) is still `REJECTED_SIZE`,
+by design.
+
+**Changed.** `F1_SEED_CAPITAL_INR` = ₹25,00,000, read by the seed; `01`, `02`, `03`, `04`,
+README. The sizing arithmetic tests now name a ₹10 lakh sleeve explicitly and a new test pins the
+seeded budget to the ceiling; the scan test proves both sides (₹25 lakh → CANDIDATE, ₹10 lakh →
+`REJECTED_SIZE` "0 lots"). **Moves no money**: every FO execution flag stays false.
+
 ## PACK.2 — The F&O bhavcopy is read through `NSEProvider`, not a new provider · ⚠ UNREVIEWED
 
 **Context.** The research needed every contract's end-of-day price for 2022–2026, including

@@ -72,7 +72,7 @@ it is not a claim of profitability.
 
 * **Stop rule for derivatives:** a defined-risk option structure is its own stop, **plus** a close
   order at a loss of 1.5 × the credit. Futures get a GTT.
-* **F1 capital:** ₹10 lakh.
+* **F1 capital:** ₹25 lakh (M.2, 25 Sep 2026; M.1 had said ₹10 lakh).
 * **Build F2 anyway:** stock-futures breakout, long only, paper. The research says +0.017R after
   rolls, negative in four of five years. It is built faithfully and labelled honestly.
 * **Order:** the OP run finishes first. FO0 starts after OP15.

@@ -13,7 +13,6 @@ from baskfy_core.fno.condor import LegRole
 from baskfy_core.fno.config import (
     DEFAULT_FNO_CEILINGS,
     DEFAULT_FNO_CONFIG,
-    F1_SEED_CAPITAL_INR,
     PlanState,
     SeriesConfig,
 )
@@ -31,6 +30,10 @@ from baskfy_core.options.config import CostRates, OptionType, SizingMode
 CFG = DEFAULT_FNO_CONFIG
 SERIES = SeriesConfig()
 EXPIRY = dt.date(2030, 12, 26)
+
+#: A ₹10 lakh sleeve: ₹10,000 at 1 %. The arithmetic below is written against it; the seeded
+#: F1 capital is ₹25 lakh (M.2) and is pinned in test_fno_config.
+TEN_LAKH = Decimal(1_000_000)
 
 
 def _sessions(start: dt.date, n: int) -> list[dt.date]:
@@ -194,7 +197,7 @@ def _condor(
         put_strikes=STRIKES,
         prints=prints,
         lot_size=lot_size,
-        capital_inr=F1_SEED_CAPITAL_INR,
+        capital_inr=TEN_LAKH,
         config=CFG,
         rates=CostRates(),
         ceilings=DEFAULT_FNO_CEILINGS,
@@ -250,7 +253,7 @@ class TestProposeCondor:
             put_strikes=STRIKES,
             prints=_chain(GOOD),
             lot_size=25,
-            capital_inr=F1_SEED_CAPITAL_INR,
+            capital_inr=TEN_LAKH,
             config=CFG,
             rates=CostRates(),
             ceilings=DEFAULT_FNO_CEILINGS,

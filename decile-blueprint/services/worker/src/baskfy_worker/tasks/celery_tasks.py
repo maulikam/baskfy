@@ -59,6 +59,7 @@ from baskfy_worker.bhavcopy_backfill import backfill_bars_from_bhavcopy
 from baskfy_worker.celery_app import IST, QUEUE_COMPUTE, QUEUES
 from baskfy_worker.db import run_checkpointed, run_in_session, session_scope
 from baskfy_worker.fno.nightly import run_night as fno_run_night
+from baskfy_worker.fno.retest import run_retest as fno_run_retest
 from baskfy_worker.fno.scan import run_scan as fno_run_scan
 from baskfy_worker.fno.spreads import in_session as fno_in_session
 from baskfy_worker.fno.spreads import run_spread_sample
@@ -986,6 +987,28 @@ def fno_scan_task(trade_date: str | None = None) -> JsonObject:
 
     async def _run(session: AsyncSession) -> JsonObject:
         return await fno_run_scan(session, day)
+
+    return run_in_session(_run)
+
+
+FNO_RETEST_TASK: Final = "baskfy.fno.retest"
+
+
+@shared_task(name=FNO_RETEST_TASK, acks_late=True)
+def fno_retest_task(families: list[str] | None = None, force: bool = False) -> JsonObject:
+    """FO9: every ``RESEARCH.md`` family over ``fo_contract_daily`` into ``fo_backtest_run``.
+
+    Beat fires it on the first Saturday of January, April, July and October (``docs/fno/04``
+    §6); ``run_retest`` refuses a second run in one month unless ``force``. Behind
+    ``BASKFY_FNO_SCAN_ENABLED`` like the rest of the data layer. Reads no network; moves no
+    money; a positive family becomes a decision for Maulik, never a flag.
+    """
+    today = dt.datetime.now(tz=IST).date()
+    if not get_worker_settings().fno_scan_enabled:
+        return {"skipped": "BASKFY_FNO_SCAN_ENABLED is false"}
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        return await fno_run_retest(session, today=today, force=force, families=families)
 
     return run_in_session(_run)
 

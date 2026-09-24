@@ -28,7 +28,7 @@ deployed `acac17c`; the options monitor flag was turned on at Maulik's answer, D
 | FO6 — Gateway: NRML branch, covered-overnight guard, `fno_gates()` | ✅ | NRML on NFO only with `OPTIONS_ENABLED` + `BASKFY_FNO_CARRY_ENABLED` + a `fo_plan` reference; `assert_overnight_option_is_covered` fail-closed (no rule wired → refused); F2 stock-future GTT only, option GTTs refused always; `fno_gates` four-flag AND; desk flags all false. Orders without `fo_plan` unchanged byte for byte. **Nothing calls it yet** (FO8); GTT modify for the trail is FO7's |
 | FO7 — Desk `fno_monitor` | ⬜ | |
 | FO8 — Desk `/fno` + paper execute | ⬜ | |
-| FO9 — Re-test engine + golden | ⬜ | |
+| FO9 — Re-test engine + golden | ✅ | `baskfy_core.fno.retest`: 15 families from `RESEARCH.md`'s table, panels rebuilt exactly from the day files, **every family reproduces** (golden gate with `BASKFY_FNO_RESEARCH_DIR`); worker pages options a batch of symbols at a time (2.8 GB → 1.6 GB peak, FO9.3); quarterly Beat on the compute queue, `fno_cli retest`; measured slippage once FO3 has 20 sessions. **Not run on the box** (needs the backfill) |
 | FO10 — Journal, ledger, pauses | ⬜ | |
 | FO11 — Gating and safety proof | ⬜ | |
 | FO12 — Hardening, deploy, report | ⬜ | |

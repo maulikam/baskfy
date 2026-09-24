@@ -159,3 +159,52 @@ cost of each):
   n = 2,334, **+0.017R** (t = 0.71), win 39 %. By year: −0.026, **+0.455**, −0.129, −0.143,
   −0.141. **Four of five years are negative**, and 2024–2026 lost steadily. F2 therefore carries a
   banner on every surface (`05`), and its real-money gate cannot be met on this Tier 2E alone.
+
+## FO2.1 — One OP test constant moves: `OPTIONS_HEAD` is now `0052_fno` · ⚠ UNREVIEWED
+
+`test_options_schema.py` migrates to and asserts the options schema's head. `0052_fno` alters two
+`op_` columns (FO2.2), so it *is* an options migration, and the constant the file says "a later
+options migration moves this, and only this" moved. No assertion was weakened. **Rejected:** a
+separate `0053` for the widening so 0052 touches no `op_` table — a split for its own sake.
+**Reversal:** none needed; the constant follows the head.
+
+## FO2.2 — `op_contract.lot_size` and `op_expiry.lot_size` widen to integer · ⚠ UNREVIEWED
+
+The widened master holds every stock underlying, and IDEA's lot (71,475) overflows `smallint`.
+The O-sleeves read NIFTY only (proved by `test_fno_master_widened.py`), so nothing they compute
+changes. **Reversal:** the downgrade narrows them back after deleting non-NIFTY rows.
+
+## FO2.3 — `fo_ingest_day` holds each night's ingest state and the ban list; `fo_config_audit` is added · ⚠ UNREVIEWED
+
+`04` §4 wants a day with no file by 23:30 shown `MISSING`, never interpolated, and `03` puts
+`in_ban` on `fo_underlying_daily`, which is derived later. A small `fo_ingest_day` row
+(`PENDING`/`INGESTED`/`MISSING`, the ban list for the next session) is what the status page and the
+scan read; `in_ban` is copied from it when the series is derived. `fo_config_audit` mirrors
+`op_config_audit`. **Rejected:** a `pipeline_run` row (that table is the screener's publication
+contract). **Reversal:** drop the table; the ingest still writes `fo_contract_daily`.
+
+## FO2.4 — `fo_sleeve_config` is keyed by flag group (F1, F2), not by sleeve code · ⚠ UNREVIEWED
+
+M.1 gave F1 ₹10 lakh as one sleeve covering NIFTY and BANKNIFTY. Keying capital by `F1N`/`F1B`
+would split or double it. The seed writes F1 ₹10,00,000, F2 ₹0, risk 1.0 %, max open F1 = 2 (one
+per underlying), F2 = 5, one audit row per inserted sleeve. Positions, plans and journals still
+carry the sleeve code (`F1N`, `F1B`, `F2`). **Reversal:** re-key with a migration.
+
+## FO2.5 — The ban list is archived under the date it names, and a wrong-date file is refused · ⚠ UNREVIEWED
+
+`NSEProvider.fo_ban_list(for_session)` reads `fo_secban.csv` through the NSE limiter and client and
+refuses a file whose "Trade Date" is not `for_session` (SW16's rule); the nightly asks again next
+hour. The file has no historical archive at NSE, so the ban list exists from the first night the
+ingest runs, never backfilled.
+
+## FO2.6 — A master dump with no NIFTY is refused whole; the change alert stays NIFTY-only · ⚠ UNREVIEWED
+
+The widened refresh writes every underlying, but a dump missing NIFTY means the dump is wrong, not
+that NIFTY delisted, and writing it would starve the O-sleeves. `OPTIONS_MASTER_CHANGED` keeps
+alerting on NIFTY alone; other underlyings' changes are counted in the task result, so a
+lot-size revision across 200 stocks is not 200 emails.
+
+## FO2.7 — Retention keeps 10k–24k option rows a day, above `03`'s ~13,000 estimate · ⚠ UNREVIEWED
+
+The rule (two nearest monthlies per underlying plus the index weeklies, non-zero OI or volume)
+is `03`'s; the estimate was not. The rule wins; `03` §1 now says the measured range.

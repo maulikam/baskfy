@@ -149,6 +149,13 @@ class WorkerSettings(BaseSettings):
     #: No hard exit later than this (``02`` Track C §1). Never later than 15:00 in v1.
     options_hard_exit_latest: dt.time = dt.time(15, 0)
 
+    # --- The FO run (docs/fno/02 Track B, FO2) -----------------------------------
+    #
+    # Operational, moves no money: the nightly F&O bhavcopy ingest (FO2) and, later, the nightly
+    # scans (FO4). ``02`` Track B: flipped "after FO2's bhavcopy ingest is green". Read once at
+    # startup, never a form field. The FO money flags are the desk's (FO6) and not read here.
+    fno_scan_enabled: bool = False
+
     # --- SW18: the 08:45 Kite login nudge (docs/swing/DECISIONS-SW SW18.1) ------
     #
     # Kite kills the access token every morning and nothing on this box may hold a Zerodha

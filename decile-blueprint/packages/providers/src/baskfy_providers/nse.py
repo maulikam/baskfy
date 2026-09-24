@@ -73,6 +73,15 @@ _FO_INSTRUMENT_TYPES: Final[Mapping[str, str]] = {
     "IDF": "FUTIDX",
     "IDO": "OPTIDX",
 }
+#: FO2: the F&O ban list (Track C §9). NSE publishes one file, always at the same URL, naming the
+#: session it applies to in its first line; the archive keys it by *that* session.
+KIND_FO_BAN_LIST: Final = "fo-ban-list"
+FO_BAN_LIST_PATH: Final = "/content/fo/fo_secban.csv"
+_FO_BAN_HEADER: Final = re.compile(
+    r"Securities\s+in\s+Ban\s+For\s+Trade\s+Date\s+(\d{1,2}-[A-Za-z]{3}-\d{4})\s*:?(.*)$",
+    re.IGNORECASE,
+)
+_FO_BAN_ROW: Final = re.compile(r"^\s*\d+\s*,\s*([A-Za-z0-9&\-_.]+)\s*,?\s*$")
 KIND_INDEX_SNAPSHOT: Final = "index-snapshot"
 KIND_CORPORATE_ACTIONS: Final = "corporate-actions"
 #: The windowed request is a *different question* from the un-ranged one, so it gets its own
@@ -497,6 +506,48 @@ class NSEProvider:
         )
         frame = _read_csv(_maybe_unzip(payload), context=f"F&O bhavcopy {on.isoformat()}")
         return _fo_bhavcopy_to_frame(frame, on)
+
+    def fo_ban_list(self, for_session: dt.date) -> list[str]:
+        """The F&O ban list for ``for_session``: symbols over 95 % of their market-wide limit.
+
+        ``fo_secban.csv`` has no date in its URL; its first line names the session it is for
+        (``Securities in Ban For Trade Date 25-SEP-2026:``), then one ``n,SYMBOL`` line per
+        security. Archive-then-parse (docs/09), keyed by the session the file *says* it is for:
+
+        * an archived file for ``for_session`` is parsed without asking NSE again;
+        * otherwise the file is fetched (limiter, cookie discipline, retry, like every NSE read)
+          and archived under its **own** stamped session, then read back;
+        * a file stamped with another session is **refused** (the SW16 rule): it is most often
+          today's list served before NSE has published tomorrow's, and applying it to tomorrow
+          would name the wrong securities. It stays archived under its own date, which is true,
+          and the caller may ask again later.
+
+        Sorted and de-duplicated, so a re-run writes identical rows (house rule 7). An empty list
+        is a real answer (no security in ban), not a failure.
+        """
+        if self._archive is None:
+            raise ProviderUnavailable(
+                "no raw-file archive configured. docs/09 requires every NSE file to be archived "
+                "before it is parsed, so parsing is reproducible without refetching.",
+                provider=self.name,
+            )
+        wanted_key = archive_key(KIND_FO_BAN_LIST, for_session, "csv")
+        if self._archive.exists(wanted_key):
+            stamped, symbols = parse_fo_ban_list(self._archive.get(wanted_key))
+        else:
+            fetched = self._fetch(f"{self._settings.nse_archive_url}{FO_BAN_LIST_PATH}")
+            stamped, _ = parse_fo_ban_list(fetched)
+            key = archive_key(KIND_FO_BAN_LIST, stamped, "csv")
+            stamped, symbols = parse_fo_ban_list(
+                fetch_and_archive(self._archive, key, lambda: fetched)
+            )
+        if stamped != for_session:
+            raise UnexpectedPayload(
+                f"F&O ban list for {for_session.isoformat()} is stamped {stamped.isoformat()}; "
+                f"wrong file for this session",
+                provider=PROVIDER_NAME,
+            )
+        return symbols
 
     def equity_fundamentals(
         self,
@@ -1157,6 +1208,42 @@ def _fo_bhavcopy_to_frame(frame: pl.DataFrame, on: dt.date) -> pl.DataFrame:
             provider=PROVIDER_NAME,
         )
     return conform(parsed.drop("stamp"), FO_BHAVCOPY_SCHEMA)
+
+
+def parse_fo_ban_list(payload: bytes) -> tuple[dt.date, list[str]]:
+    """``fo_secban.csv`` as ``(the session it is for, the symbols in ban)``.
+
+    Raises :class:`UnexpectedPayload` when the header naming the session is missing or its date
+    unreadable, or when a line is neither blank nor ``n,SYMBOL``: a list that cannot be read in
+    full is refused rather than read in part, because a missed symbol is a trade in a banned
+    stock. ``NIL`` after the header, or no rows, is an empty ban list.
+    """
+    try:
+        text = payload.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise UnexpectedPayload(
+            f"F&O ban list is not UTF-8 text: {exc}", provider=PROVIDER_NAME
+        ) from exc
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    header = _FO_BAN_HEADER.match(lines[0]) if lines else None
+    stamped = _date(header.group(1)) if header is not None else None
+    if header is None or stamped is None:
+        raise UnexpectedPayload(
+            "F&O ban list has no 'Securities in Ban For Trade Date' header; not the ban file",
+            provider=PROVIDER_NAME,
+        )
+    symbols: set[str] = set()
+    for line in lines[1:]:
+        row = _FO_BAN_ROW.match(line)
+        if row is None:
+            if line.strip(" ,").upper() == "NIL":
+                continue
+            raise UnexpectedPayload(
+                f"F&O ban list for {stamped.isoformat()} has an unreadable line {line!r}",
+                provider=PROVIDER_NAME,
+            )
+        symbols.add(row.group(1).upper())
+    return stamped, sorted(symbols)
 
 
 def _fo_number(frame: pl.DataFrame, column: str) -> pl.Expr:

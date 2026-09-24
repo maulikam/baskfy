@@ -213,6 +213,16 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         "schedule": crontab(hour=15, minute=45, day_of_week="mon-fri"),
         "options": {"queue": QUEUE_DEFAULT},
     },
+    # FO2 (docs/fno/04 §4): the F&O bhavcopy into fo_contract_daily, and the ban list NSE
+    # publishes for the next session. 18:30 and hourly to 23:30 on weekdays: the task records
+    # PENDING on a failed attempt and MISSING on the 23:30 one, and a night already ingested (with
+    # its ban list stored) answers from the database with no NSE request. Behind
+    # BASKFY_FNO_SCAN_ENABLED (default false); reads NSE only, moves no money.
+    "fno-bhavcopy": {
+        "task": "baskfy.fno.ingest_bhavcopy",
+        "schedule": crontab(minute=30, hour="18-23", day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_DEFAULT},
+    },
     "bhavcopy-eod": {
         "task": "baskfy.pipeline.bhavcopy_ingest",
         "schedule": crontab(hour=18, minute=15, day_of_week="mon-fri"),

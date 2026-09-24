@@ -177,7 +177,7 @@ class OpContract(Base):
     expiry: Mapped[dt.date] = mapped_column(Date, nullable=False)
     strike: Mapped[Decimal] = mapped_column(PRICE, nullable=False)
     option_type: Mapped[str] = mapped_column(String(2), nullable=False)
-    lot_size: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    lot_size: Mapped[int] = mapped_column(Integer, nullable=False)
     tick_size: Mapped[Decimal] = mapped_column(Numeric(8, 2), nullable=False)
     first_seen: Mapped[dt.date] = mapped_column(Date, nullable=False)
     last_seen: Mapped[dt.date] = mapped_column(Date, nullable=False)
@@ -199,7 +199,7 @@ class OpExpiry(Base):
     underlying: Mapped[str] = mapped_column(String(16), nullable=False)
     expiry_date: Mapped[dt.date] = mapped_column(Date, nullable=False)
     kind: Mapped[str] = mapped_column(String(8), nullable=False)
-    lot_size: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    lot_size: Mapped[int] = mapped_column(Integer, nullable=False)
     first_seen: Mapped[dt.date] = mapped_column(Date, nullable=False)
     #: The last night this expiry was in the master.
     seen_on: Mapped[dt.date] = mapped_column(Date, nullable=False)

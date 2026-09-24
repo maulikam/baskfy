@@ -47,7 +47,12 @@ from baskfy_worker.celery_app import IST
 from baskfy_worker.db import checkpointed_session, session_scope
 from baskfy_worker.options import index_bars
 from baskfy_worker.options.collector import collect_gate, collect_minute
-from baskfy_worker.options.master import EmptyMaster, master_alert, refresh_master, to_contract
+from baskfy_worker.options.master import (
+    EmptyMaster,
+    master_alert,
+    refresh_master_all,
+    to_contract,
+)
 from baskfy_worker.options.plan import kite_margin_reader, plan_o1_minute
 from baskfy_worker.options.plan_o2 import plan_o2_minute
 from baskfy_worker.options.plan_o3 import plan_o3_minute
@@ -67,14 +72,16 @@ async def _seed() -> JsonObject:
 
 
 async def _refresh(day: dt.date) -> JsonObject:
+    """FO2 widened the master to every F&O underlying; the output leads with NIFTY's report."""
     provider = build_kite_provider(get_provider_settings(), lane=KiteLane.BULK)
-    records = provider.option_contracts("NIFTY")
+    records = provider.fno_option_contracts()
     async with session_scope() as session:
         try:
-            report = await refresh_master(session, records, as_of=day)
+            reports = await refresh_master_all(session, records, as_of=day)
         except EmptyMaster as exc:
             return {"refused": str(exc)}
-    out = report.as_dict()
+    report = reports.nifty
+    out = {**report.as_dict(), **reports.summary()}
     alert = master_alert(report)
     if alert is not None:
         out["alert_summary"] = alert.summary

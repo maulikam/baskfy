@@ -140,6 +140,80 @@ async def refresh_master(
     return report
 
 
+@dataclass(slots=True)
+class MasterReports:
+    """Tonight's master for every underlying (FO2). ``nifty`` is the O-sleeves' report."""
+
+    as_of: dt.date
+    by_underlying: dict[str, MasterReport] = field(default_factory=dict)
+    #: Underlyings with live contracts last night and none tonight, now marked expired.
+    delisted: list[str] = field(default_factory=list)
+
+    @property
+    def nifty(self) -> MasterReport:
+        return self.by_underlying[UNDERLYING]
+
+    def summary(self) -> JsonObject:
+        """The whole night in a few numbers, and every non-NIFTY change named."""
+        changed: JsonObject = {
+            name: [c.as_dict() for c in report.changes]
+            for name, report in sorted(self.by_underlying.items())
+            if report.changes and name != UNDERLYING
+        }
+        return {
+            "underlyings": len(self.by_underlying),
+            "contracts_seen_all": sum(r.contracts_seen for r in self.by_underlying.values()),
+            "contracts_new_all": sum(r.contracts_new for r in self.by_underlying.values()),
+            "other_underlying_changes": changed,
+            "delisted_underlyings": list(self.delisted),
+        }
+
+
+async def refresh_master_all(
+    session: AsyncSession, records: Sequence[OptionContractRecord], *, as_of: dt.date
+) -> MasterReports:
+    """FO2: apply tonight's dump for **every** F&O underlying (``docs/fno/06`` FO2).
+
+    Each underlying goes through :func:`refresh_master` exactly as NIFTY always has — upsert,
+    never delete, its own ``op_expiry`` rebuilt from its own contracts. A dump with **no NIFTY
+    option** is refused whole (:class:`EmptyMaster`) and writes nothing: that is the shape of a
+    failed or truncated read, and applying it would expire every other underlying's contracts on
+    the strength of it. An underlying with live contracts last night and none tonight (dropped
+    from F&O) has them marked expired, never deleted. The O-sleeves' reads are unaffected: every
+    one filters on ``underlying = 'NIFTY'``.
+    """
+    grouped: dict[str, list[OptionContractRecord]] = defaultdict(list)
+    for record in records:
+        grouped[record.underlying].append(record)
+    if not grouped.get(UNDERLYING):
+        raise EmptyMaster(
+            f"the NFO dump held no {UNDERLYING} option on {as_of.isoformat()}; refusing the whole "
+            f"dump ({len(records)} rows) rather than expiring every other underlying"
+        )
+    out = MasterReports(as_of=as_of)
+    for underlying in sorted(grouped):
+        out.by_underlying[underlying] = await refresh_master(
+            session, grouped[underlying], as_of=as_of, underlying=underlying
+        )
+    live = set(
+        (
+            await session.execute(
+                select(OpContract.underlying).where(OpContract.expired.is_(False)).distinct()
+            )
+        ).scalars()
+    )
+    gone = sorted(live - set(grouped))
+    if gone:
+        await session.execute(
+            update(OpContract)
+            .where(OpContract.underlying.in_(gone), OpContract.expired.is_(False))
+            .values(expired=True)
+        )
+        out.delisted = gone
+    await session.flush()
+    return out
+
+
 async def _write_contracts(
     session: AsyncSession,
     tonight: Sequence[OptionContractRecord],

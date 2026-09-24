@@ -18,3 +18,11 @@ filings pages call them:
 The headline values are invented; the company names are real only to keep the shape honest.
 Re-record against the live site when a run has a session that may make network calls, and
 replace this note with the capture date.
+
+# The F&O ban list (FO2)
+
+- `fo_secban-2026-09-25.csv` — `GET https://nsearchives.nseindia.com/content/fo/fo_secban.csv`.
+  **Transcribed, not captured**: the header line and the four `n,SYMBOL` rows are exactly what
+  FO0 read on the box through the NSE provider on 24 Sep 2026 (`docs/fno/STATUS.md` FO0 (d):
+  KAYNES, LICHSGFIN, MANAPPURAM, SAIL for trade date 25-SEP-2026). Replace with the raw bytes
+  from the box's archive (`nse/fo-ban-list/2026-09-25.csv`) when one is to hand.

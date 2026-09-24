@@ -4,6 +4,7 @@
     python -m baskfy_worker.fno_cli backfill --from 2022-01-03 [--to 2026-09-24] \
         [--seed-archive ~/baskfy-research/fno/archive]
     python -m baskfy_worker.fno_cli ingest [--date 2026-09-24]
+    python -m baskfy_worker.fno_cli scan [--date 2026-09-24]
 
 ``seed`` writes the sole user's ``fo_sleeve_config`` (F1 ₹10,00,000 by Maulik's M.1, F2 ₹0, risk
 1.0 %) and ``fo_book_config`` rows; idempotent, never resets a number a person chose.
@@ -15,6 +16,10 @@ on disk into the provider's archive first, so NSE is not asked for them again.
 ``ingest`` runs one night by hand — the bhavcopy and the next session's ban list — exactly as the
 18:30 task does, but without the ``BASKFY_FNO_SCAN_ENABLED`` gate: a person at a terminal is the
 gate. Every command is read-only toward the broker; none can reach an order path.
+
+``scan`` re-runs FO4's nightly scan for one session from the database alone (no network):
+``fo_scan`` for the session after ``--date``, for every user with ``fo_sleeve_config`` rows.
+Idempotent.
 """
 
 from __future__ import annotations
@@ -33,8 +38,10 @@ from baskfy_providers.factory import build_archive, build_nse_provider
 from baskfy_providers.settings import get_provider_settings
 from baskfy_worker.celery_app import IST
 from baskfy_worker.db import checkpointed_session, session_scope
-from baskfy_worker.fno.backfill import BACKFILL_START, backfill_days, trading_days
+from baskfy_worker.fno.backfill import BACKFILL_START, backfill_days
 from baskfy_worker.fno.nightly import run_night
+from baskfy_worker.fno.scan import run_scan
+from baskfy_worker.fno.underlying import trading_days
 from baskfy_worker.providers import sole_user_id
 from baskfy_worker.seeds.fno_config import seed_fno
 from baskfy_worker.telemetry import provider_retry_hooks
@@ -72,9 +79,14 @@ async def _ingest(day: dt.date) -> JsonObject:
         return await run_night(session, provider, day, now_ist=dt.datetime.now(tz=IST))
 
 
+async def _scan(day: dt.date) -> JsonObject:
+    async with session_scope() as session:
+        return await run_scan(session, day)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="fno_cli", description=__doc__)
-    parser.add_argument("command", choices=("seed", "backfill", "ingest"))
+    parser.add_argument("command", choices=("seed", "backfill", "ingest", "scan"))
     parser.add_argument(
         "--from", dest="start", help=f"backfill: first session (default {BACKFILL_START})"
     )
@@ -84,7 +96,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         dest="seed_archive",
         help="backfill: a directory of already-downloaded raw zips (nse/fo-bhavcopy/DATE.zip)",
     )
-    parser.add_argument("--date", help="ingest: the session (default: today)")
+    parser.add_argument("--date", help="ingest/scan: the session (default: today)")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, stream=sys.stderr)
     today = dt.datetime.now(tz=IST).date()
@@ -100,6 +112,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         if seed_dir is not None and not seed_dir.is_dir():
             parser.error(f"--seed-archive {seed_dir} is not a directory")
         result = asyncio.run(_backfill(start, end, seed_dir))
+    elif args.command == "scan":
+        day = dt.date.fromisoformat(args.date) if args.date else today
+        result = asyncio.run(_scan(day))
     else:
         day = dt.date.fromisoformat(args.date) if args.date else today
         result = asyncio.run(_ingest(day))

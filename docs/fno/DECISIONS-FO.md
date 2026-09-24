@@ -352,3 +352,76 @@ derivative switches true (a paper confirm runs the real gateway path, simulated 
 says); with it on but not all four, the real `OPTIONS_ENABLED`/`BASKFY_FNO_CARRY_ENABLED` pass
 through so the gateway refuses a half-flip. `INTRADAY_ENABLED` is never read, so no FO gate ever
 admits MIS. The desk's weekly gateway (`_gates_from_config`) does not read the carry flag (tested).
+
+## FO4.1 — A proposal that fails a pure check is written with the plan's `REJECTED_*` name; no CHECK, no 0053 · ⚠ UNREVIEWED
+
+`04` §8's scan vocabulary has no word for "entry day, but the structure the bhavcopy proposes
+would be refused". Writing `CANDIDATE` would misstate it, so the scan writes the `PlanState` the
+plan would reach (`REJECTED_STRUCTURE`, `REJECTED_LIQUIDITY`, `REJECTED_SIZE`, `REJECTED_COST`)
+with every reason by name. `fo_scan.state` stays plain text as FO2 left it: no CHECK and no
+migration, so no schema head constant moves. **Reversal:** a later migration may CHECK the union.
+
+## FO4.2 — The scan runs for every user with `fo_sleeve_config` rows, chained in `run_night` inside a savepoint · ⚠ UNREVIEWED
+
+The FO run's tenants are the users the seed wrote. `run_night` calls the scan after each
+`INGESTED` night (so the hourly retries re-run it idempotently); a scan that raises is logged and
+returned in the result, and the ingest is kept. `baskfy.fno.scan` exists for a re-run by hand
+behind `BASKFY_FNO_SCAN_ENABLED` and has no Beat entry; `fno_cli scan --date` is the operator's.
+**Rejected:** a separate 23:45 Beat entry — a second clock for one fact.
+
+## FO4.3 — When F2 cannot be evaluated at all, one row with symbol `*` says why · ⚠ UNREVIEWED
+
+A night not ingested, or a window with no series, has no per-stock answer. One `NO_DATA` row for
+the sleeve, reason in words, rather than no rows (which reads as "nothing signalled").
+
+## FO4.4 — F2 writes a row for every universe name, `NO_SIGNAL` included; names outside the universe write none · ⚠ UNREVIEWED
+
+~130 rows a night is small, and "why is X not a candidate" is the question the page gets. A name
+inside the corporate-action exclusion is `NO_SIGNAL` with that reason; a window too short to
+answer is `NO_DATA`. Open F2 positions always get an `OPEN_POSITION` row.
+
+## FO4.5 — "NSE industry" is the narrowest NSE sector index the cash instrument is in · ⚠ UNREVIEWED
+
+`instrument` carries no industry. The scan reads `index_member_daily` on the latest date ≤ the
+scanned session over `SECTOR_INDEX_SLUGS`, narrowest index wins (the swing book's rule). A name in
+no sector index is capped only by `f2_max_open`. Candidates are admitted in order of 20-session
+median futures turnover. **Reversal:** store NSE's industry on `instrument` and read it instead.
+
+## FO4.6 — No results-calendar table: F1 reads `op_event_day`, F2 has no results skip · ⚠ UNREVIEWED
+
+FO3.6 handed the table to FO4. It is not added: `01` §1b and `04` §10 give F2 no event rule, the
+tested rule (`res_f2.py`) had none, a 40-session hold contains a results date for nearly every
+name, and FO3 collects the calendar for the top 30 only, so a skip would be partial. Q8's answer
+stays open for FO5 to show a name's next results date. F1's event window is entry session through
+hard-exit session, inclusive; the proposal is still written on `SKIPPED_EVENT` so it can be
+accepted on the plan (`01` §1).
+
+## FO4.7 — F1's proposal is priced on the scanned session's bhavcopy · ⚠ UNREVIEWED
+
+`F` = the target monthly future's settle; `σ` = `atm_iv` on that monthly at the session's closes;
+`T` = calendar days from the entry session to expiry; credit from the legs' settles. Listed
+strikes from `op_contract`, else the bhavcopy's. Liquidity is what a closing file proves: each leg
+printed, each short's OI ≥ 500 lots (OI in units ÷ lot), each wing traded; the live spread and the
+basket margin stay with the 09:20 plan (FO7). Sizing is `Mode.PAPER` because F1 paper sizes
+exactly as live. On the seeded ₹10 lakh a NIFTY lot (75) with a ~250-point max loss is
+`REJECTED_SIZE` — the ceiling working, as `04` §10 says of F2.
+
+## FO4.8 — F2's candidate numbers · ⚠ UNREVIEWED
+
+Entry reference = the chosen contract's settle on the scanned session; ATR14 in rupees by FO2.8's
+rescale on the held settle; the GTT's `ann_vol` = RV20; the cost prices the exit at the entry (the
+FO1.5 analogue); `cost_share` = round trip ÷ one lot's R, in percent. With capital > 0 a zero-lot
+size is `REJECTED_SIZE` and takes no capacity; at ₹0 the row is `CANDIDATE` (paper, one lot) and
+says when live would be `REJECTED_SIZE` (`lots_at_ceiling` 0). A ban list not yet stored for the
+next session leaves candidates standing with that reason; the 09:20 plan re-checks.
+
+## FO4.9 — Pauses read `fo_journal` for both modes; the month is the next session's; a book amount of 0 is "not set" · ⚠ UNREVIEWED
+
+The paper period tests the rules as live would apply them, so paper trades count. `04` §7's
+"calendar month" is that of the session the rows describe. `fo_book_config.monthly_pause_inr` is
+seeded 0 and FO10 owns what 0 means; until then the book pause fires only on an amount set.
+
+## FO4.10 — `fno_cli` imported `trading_days` from a module that never defined it · ⚠ UNREVIEWED
+
+At `29483a3` `python -m baskfy_worker.fno_cli` failed on import (`backfill.trading_days` does not
+exist). It now imports it from `baskfy_worker.fno.underlying`, and a test runs the CLI's `scan`.

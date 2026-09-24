@@ -59,6 +59,7 @@ from baskfy_worker.bhavcopy_backfill import backfill_bars_from_bhavcopy
 from baskfy_worker.celery_app import IST, QUEUE_COMPUTE, QUEUES
 from baskfy_worker.db import run_checkpointed, run_in_session, session_scope
 from baskfy_worker.fno.nightly import run_night as fno_run_night
+from baskfy_worker.fno.scan import run_scan as fno_run_scan
 from baskfy_worker.fno.spreads import in_session as fno_in_session
 from baskfy_worker.fno.spreads import run_spread_sample
 from baskfy_worker.options import index_bars as options_index_bars
@@ -964,6 +965,27 @@ def fno_ingest_bhavcopy_task(trade_date: str | None = None, at: str | None = Non
 
     async def _run(session: AsyncSession) -> JsonObject:
         return await fno_run_night(session, provider, day, now_ist=now)
+
+    return run_in_session(_run)
+
+
+FNO_SCAN_TASK: Final = "baskfy.fno.scan"
+
+
+@shared_task(name=FNO_SCAN_TASK, acks_late=True)
+def fno_scan_task(trade_date: str | None = None) -> JsonObject:
+    """FO4: ``fo_scan`` for the session after ``trade_date``, from the database alone.
+
+    The nightly chains the same scan after each ingested night (``run_night``), so this task has
+    no Beat entry: it is the re-run by hand. Refuses when ``BASKFY_FNO_SCAN_ENABLED`` is false
+    (the default). Reads no network; moves no money.
+    """
+    day = dt.date.fromisoformat(trade_date) if trade_date else dt.datetime.now(tz=IST).date()
+    if not get_worker_settings().fno_scan_enabled:
+        return {"trade_date": day.isoformat(), "skipped": "BASKFY_FNO_SCAN_ENABLED is false"}
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        return await fno_run_scan(session, day)
 
     return run_in_session(_run)
 

@@ -69,7 +69,7 @@ capital, risk and pauses are the settings form's.</p>
     <form method="post" action="/fno/execute" class="fno-confirm" data-plan-id="{{ p.plan_id }}">
       <input type="hidden" name="plan_id" value="{{ p.plan_id }}">
       <input type="hidden" name="confirm" value="true">
-      <button type="submit">{{ 'Confirm (paper)' if p.paper else 'Confirm' }}</button>
+      <button type="submit" class="{{ 'btn-saffron' if p.paper else 'btn-danger' }}">{{ 'Confirm (paper)' if p.paper else 'Confirm' }}</button>
       <span class="muted fno-countdown" data-expires="{{ p.expires_epoch_ms }}">lapses {{ p.expires_at }} ({{ p.seconds_left // 60 }} min left)</span>
     </form>
     <p class="fno-sentence">{{ p.sentence }}</p>

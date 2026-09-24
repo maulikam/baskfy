@@ -114,6 +114,10 @@
 
   /* --- metrics ---------------------------------------------------------- */
   .sc-metrics { @apply grid gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-3; }
+  /* FO8: the /fno plan card's facts, label beside value (docs/fno/05 §4). */
+  .fno-facts { @apply my-3 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-1.5 text-[13px]; }
+  .fno-facts dt { @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-3; }
+  .fno-facts dd { @apply text-ink; }
   .sc-metric__k { @apply text-[12px] font-medium text-ink-3; }
   .sc-metric__v { @apply mt-1 text-[20px] font-semibold tracking-tight text-ink; }
   .sc-metric__s { @apply mt-0.5 text-[12px] text-ink-3; }

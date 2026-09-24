@@ -579,6 +579,50 @@ services:
       timeout: 5s
       retries: 10
 
+  # The Laya sidecar (25 Sep 2026, Maulik: "let use laya use as soon as possible"). The scan
+  # candidates' newest exchange headlines go to Laya (`convaiinnovations/laya`, Apache 2.0) for
+  # its opinion on what each filing announces; the answer lands in Redis and `GET /overlap`
+  # resolves it against the rules baseline (`baskfy_core.catalyst_tags`). Display context only:
+  # nothing on any rank, size or order path reads it, and with this service down the page shows
+  # the rules tag and nothing breaks.
+  #
+  # Its own container on the stock python image, NOT `baskfy-py`: torch and a 421M-parameter
+  # checkpoint stay out of the api/worker/desk images and out of `uv.lock` (house rule 1;
+  # `docs/02-tech-stack-adr.md`, "Laya sidecar"). The first start pip-installs into the
+  # `baskfy-laya` volume and pulls the checkpoint from Hugging Face into the same volume, so a
+  # restart is warm; `mem_limit` keeps a CPU model from taking the box with it — the API only
+  # ever reads a cache, so an OOM here is a missing chip, not an outage. The loop script is
+  # shipped beside this file by `tools/deploy/deploy-swing.sh`.
+  laya:
+    image: python:3.12-slim
+    restart: unless-stopped
+    env_file: [.env.staging]
+    environment:
+      TZ: Asia/Kolkata
+      HF_HOME: /models/hf
+      PIP_CACHE_DIR: /models/pip
+      LAYA_INTERVAL_SECONDS: "${LAYA_INTERVAL_SECONDS:-300}"
+      BASKFY_REDIS_URL: "${BASKFY_REDIS_URL:-redis://redis:6379/0}"
+    volumes:
+      - baskfy-laya:/models
+      - ./laya_loop.py:/app/laya_loop.py:ro
+    command:
+      - bash
+      - -lc
+      - >-
+        test -x /models/venv/bin/python || python -m venv /models/venv;
+        /models/venv/bin/pip install -q --extra-index-url https://download.pytorch.org/whl/cpu
+        "laya==0.3.20" "psycopg[binary]>=3.1" "redis>=5" &&
+        exec /models/venv/bin/python /app/laya_loop.py
+    mem_limit: 3g
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -598,6 +642,7 @@ volumes:
   desk-data: {}
   baskfy-pgdata:
   baskfy-redisdata:
+  baskfy-laya: {}
   baskfy-beat:
   caddy-data:
   caddy-config:

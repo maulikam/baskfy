@@ -71,7 +71,14 @@ const payload = parseCandidates({
         published_at: "2026-09-11T13:02:00+00:00",
         url: "https://nsearchives.nseindia.com/corporate/BOTH.pdf",
         earnings_date: "2026-09-15",
-        tag: { event_type: "order", review_priority: "high", matched: ["order"], source: "rules" },
+        tag: {
+          event_type: "order",
+          review_priority: "high",
+          matched: [],
+          source: "laya",
+          confidence: 0.9834,
+          disagrees_with: null,
+        },
       },
     },
     {
@@ -132,16 +139,48 @@ describe("CandidatesTable", () => {
     const tag = within(both).getByTestId("overlap-candidate-tag");
     expect(tag).toHaveTextContent("Order win");
     expect(tag).toHaveAttribute("data-priority", "high");
-    expect(tag).toHaveAttribute("data-source", "rules");
-    expect(tag).toHaveAttribute("title", expect.stringContaining("matched: order"));
+    expect(tag).toHaveAttribute("data-source", "laya");
+    expect(within(tag).getByTestId("overlap-candidate-tag-confidence")).toHaveTextContent("98%");
+    expect(tag).toHaveAttribute("title", expect.stringContaining("Laya read the headline at 98%"));
     expect(tag).toHaveAttribute("title", expect.stringContaining("not used in any rank"));
-    expect(screen.getByTestId("overlap-candidates-tag-note")).toHaveTextContent("fixed rules");
+    expect(screen.getByTestId("overlap-candidates-tag-note")).toHaveTextContent("by Laya");
 
     /* A name the feed does not cover has no result date and no filing — dashes, not blanks. */
     const quiet = rows[1]!;
     expect(within(quiet).queryByTestId("overlap-candidate-earnings")).toBeNull();
     expect(within(quiet).queryByTestId("overlap-candidate-filing")).toBeNull();
     expect(within(quiet).queryByTestId("overlap-candidate-tag")).toBeNull();
+  });
+
+  it("shows the rules tag without a percentage and marks a disagreement", () => {
+    const disagreeing: OverlapCandidates = {
+      ...payload,
+      data: [
+        {
+          ...payload.data[0]!,
+          catalyst: {
+            ...payload.data[0]!.catalyst!,
+            tag: {
+              event_type: "governance",
+              review_priority: "medium",
+              matched: ["sebi order"],
+              source: "rules",
+              confidence: null,
+              disagrees_with: "laya:corporate_action",
+            },
+          },
+        },
+      ],
+    };
+    render(<CandidatesTable candidates={disagreeing} scope="actionable" />);
+    const tag = screen.getByTestId("overlap-candidate-tag");
+    expect(tag).toHaveTextContent("Governance");
+    expect(tag).toHaveAttribute("data-source", "rules");
+    expect(screen.queryByTestId("overlap-candidate-tag-confidence")).toBeNull();
+    expect(tag).toHaveAttribute("data-disagrees-with", "laya:corporate_action");
+    expect(tag).toHaveAttribute("title", expect.stringContaining("matched: sebi order"));
+    expect(tag).toHaveAttribute("title", expect.stringContaining("(laya) said corporate_action"));
+    expect(within(tag).getByLabelText("the two readers disagree")).toBeInTheDocument();
   });
 
   it("names each sleeve's session and says when they differ", () => {

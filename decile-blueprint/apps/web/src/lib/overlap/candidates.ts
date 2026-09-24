@@ -43,7 +43,12 @@ export interface OverlapTag {
   review_priority: "high" | "medium" | "low";
   /** The phrases that decided the type — the "why", shown on hover. */
   matched: readonly string[];
+  /** `rules` for the keyword baseline, `laya` for the model's answer when it was sure. */
   source: string;
+  /** The model's probability for its choice; null for the rules. */
+  confidence: number | null;
+  /** `"<source>:<event_type>"` of the other reader when the two read the headline differently. */
+  disagrees_with: string | null;
 }
 
 export interface OverlapCatalyst {

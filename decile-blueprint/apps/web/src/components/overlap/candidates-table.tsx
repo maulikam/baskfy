@@ -114,9 +114,10 @@ export function CandidatesTable({
         <LiveMarksProvider symbols={rows.map((row) => row.symbol)}>
           <LiveStatus asOf={latest} />
           <p className="text-xs text-muted-foreground" data-testid="overlap-candidates-tag-note">
-            The small tag under a filing is read from its headline by fixed rules — the subject
-            the exchange named, nothing more. It is context for which filing to open first and is
-            not used in any rank, size or order.
+            The small tag under a filing is read from its headline — by Laya, with its
+            confidence, when the model is sure, and by fixed rules otherwise; a &ldquo;?&rdquo; means
+            the two disagreed. It is the subject the exchange named, nothing more: context for
+            which filing to open first, not used in any rank, size or order.
           </p>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[56rem] text-sm" data-testid="overlap-candidates-table">
@@ -254,7 +255,14 @@ const EVENT_WORDS: Record<OverlapTag["event_type"], string> = {
 
 function TagChip({ tag }: { tag: OverlapTag }) {
   const why =
-    tag.matched.length > 0 ? `matched: ${tag.matched.join(", ")}` : "no subject in the headline";
+    tag.source === "laya"
+      ? `Laya read the headline at ${Math.round((tag.confidence ?? 0) * 100)}% confidence`
+      : tag.matched.length > 0
+        ? `matched: ${tag.matched.join(", ")}`
+        : "no subject in the headline";
+  const [otherSource, otherType] = tag.disagrees_with?.split(":") ?? [];
+  const disagreement =
+    otherSource && otherType ? ` The other reader (${otherSource}) said ${otherType}.` : "";
   return (
     <span
       className={cn(
@@ -269,7 +277,9 @@ function TagChip({ tag }: { tag: OverlapTag }) {
       data-event={tag.event_type}
       data-priority={tag.review_priority}
       data-source={tag.source}
-      title={`Read from the headline by ${tag.source} (${why}). Context only — not used in any rank, size or order.`}
+      data-confidence={tag.confidence ?? undefined}
+      data-disagrees-with={tag.disagrees_with ?? undefined}
+      title={`Read from the headline by ${tag.source} (${why}).${disagreement} Context only — not used in any rank, size or order.`}
     >
       <span
         aria-hidden="true"
@@ -283,6 +293,16 @@ function TagChip({ tag }: { tag: OverlapTag }) {
         )}
       />
       {EVENT_WORDS[tag.event_type]}
+      {tag.source === "laya" && tag.confidence !== null ? (
+        <span className="text-muted-foreground" data-testid="overlap-candidate-tag-confidence">
+          {Math.round(tag.confidence * 100)}%
+        </span>
+      ) : null}
+      {tag.disagrees_with ? (
+        <span aria-label="the two readers disagree" className="text-muted-foreground" title={disagreement.trim()}>
+          ?
+        </span>
+      ) : null}
     </span>
   );
 }

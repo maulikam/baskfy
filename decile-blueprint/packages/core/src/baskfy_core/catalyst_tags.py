@@ -29,6 +29,7 @@ readers see the same priority on the same headline.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import dataclass
 from enum import StrEnum
@@ -279,6 +280,10 @@ class CatalystTag:
     #: The phrases that decided it, in the order they matched — so a reader can see why.
     matched: tuple[str, ...]
     source: str = SOURCE_RULES
+    #: A model's probability for its choice; ``None`` for the rules, which have no such number.
+    confidence: float | None = None
+    #: ``"<source>:<event_type>"`` of the other reader when it read the headline differently.
+    disagrees_with: str | None = None
 
 
 def _compile(phrase: str) -> re.Pattern[str]:
@@ -305,3 +310,117 @@ def tag_headline(headline: str | None) -> CatalystTag:
         if hits:
             return CatalystTag(event_type, PRIORITY_OF[event_type], hits)
     return CatalystTag(EventType.OTHER, ReviewPriority.LOW, ())
+
+
+# --- Laya: the model column, resolved against the rules ------------------------------------
+#
+# Maulik, 25 Sep 2026: "let use laya use as soon as possible and complete it". Measured before
+# wiring (this workspace, CPU, `convaiinnovations/laya` 0.3.20 zero-shot on fourteen NSE-style
+# headlines): the unambiguous ones — an order win, USFDA, results, a directorate change — come
+# back right at 0.90 to 0.99; the ambiguous ones do not ("SEBI order" → corporate_action 0.86,
+# "Resignation of CFO" → corporate_action 0.38 over governance 0.37, "commencement of commercial
+# production" → other 0.35). So the model is used **where it is sure and the rules where it is
+# not**: `resolve_tag` takes Laya's answer when its confidence clears `LAYA_CONFIDENCE_FLOOR`,
+# otherwise the rules tag, and either way records the other source's word when they disagree —
+# that disagreement list is the correction seed for the fine-tune. The `noul` "is this
+# material" question was tried and dropped: it answered 0.001 on the ₹840 crore order.
+
+#: Laya's own name for its source on the wire; the rules keep `SOURCE_RULES`.
+SOURCE_LAYA: Final = "laya"
+
+#: Below this Laya's answer is not shown as the tag; the rules are. 0.60 sits above every wrong
+#: answer and below every right one in the fourteen-headline check — a number to revisit with
+#: the corrected corpus, not a constant of nature.
+LAYA_CONFIDENCE_FLOOR: Final = 0.60
+
+#: The one question, in Laya's typed-question schema. A `choice` over the eight types with the
+#: exchange's own subject vocabulary as criteria; the state is `{"headline": ...}` and nothing
+#: else — no price, no setup, no filing — so the model can only ever read what the rules read.
+LAYA_QUESTIONS: Final[dict[str, dict[str, object]]] = {
+    "event_type": {
+        "type": "choice",
+        "instructions": (
+            "What kind of corporate event does the exchange filing `headline` announce?"
+        ),
+        "criteria": {
+            EventType.EARNINGS.value: "quarterly or annual financial results, or guidance",
+            EventType.ORDER.value: "winning an order, contract, tender or letter of award",
+            EventType.APPROVAL.value: "a regulatory approval, licence, certification or patent",
+            EventType.FUNDRAISING.value: (
+                "raising capital: QIP, preferential issue, rights issue, warrants, debentures"
+            ),
+            EventType.GOVERNANCE.value: (
+                "a director, auditor or KMP change, a credit rating, or a regulatory or court order"
+            ),
+            EventType.CORPORATE_ACTION.value: (
+                "dividend, buyback, bonus, split, merger, acquisition, stake, JV, "
+                "capacity expansion"
+            ),
+            EventType.ROUTINE.value: (
+                "a routine compliance notice: trading window, certificates, meetings, publications"
+            ),
+            EventType.OTHER.value: "the headline does not say what the event is",
+        },
+    }
+}
+
+
+def laya_state(headline: str) -> dict[str, str]:
+    """The state Laya is shown: the headline, and only the headline."""
+    return {"headline": headline}
+
+
+def cache_key(headline: str) -> str:
+    """Where a model tag for this exact headline lives in the cache — content-addressed, so the
+    same headline on two names or two days is tagged once and served identically."""
+    return "catalyst_tag:v1:" + hashlib.sha256(headline.strip().casefold().encode()).hexdigest()
+
+
+def tag_from_laya(answer: object) -> CatalystTag | None:
+    """Laya's `event_type` answer as a tag, or ``None`` when the answer is not one.
+
+    Reads the shape `Agent.predict` returns — ``{"choice": "<type>", "confidence": 0.98, ...}``
+    — and nothing that is not in the eight-type vocabulary becomes a tag. ``matched`` is empty:
+    a model has no phrase to point at, and the wire says so rather than inventing one.
+    """
+    if not isinstance(answer, dict):
+        return None
+    choice = answer.get("choice")
+    confidence = answer.get("confidence")
+    if not isinstance(choice, str) or not isinstance(confidence, int | float):
+        return None
+    try:
+        event_type = EventType(choice)
+    except ValueError:
+        return None
+    return CatalystTag(
+        event_type,
+        PRIORITY_OF[event_type],
+        (),
+        source=SOURCE_LAYA,
+        confidence=round(float(confidence), 4),
+    )
+
+
+def resolve_tag(rules: CatalystTag, laya: CatalystTag | None) -> CatalystTag:
+    """The tag the page shows: Laya when it is sure, the rules when it is not — and the other
+    source's word carried as ``disagrees_with`` whenever the two read the headline differently.
+
+    Pure and total: with no model answer the rules tag comes back as it was.
+    """
+    if laya is None:
+        return rules
+    if laya.confidence is not None and laya.confidence >= LAYA_CONFIDENCE_FLOOR:
+        chosen, other = laya, rules
+    else:
+        chosen, other = rules, laya
+    if other.event_type is chosen.event_type:
+        return chosen
+    return CatalystTag(
+        chosen.event_type,
+        chosen.review_priority,
+        chosen.matched,
+        source=chosen.source,
+        confidence=chosen.confidence,
+        disagrees_with=f"{other.source}:{other.event_type.value}",
+    )

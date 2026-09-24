@@ -9442,6 +9442,10 @@ export interface components {
          *     shape does not change. ``matched`` is why: the phrases that decided the type.
          */
         OverlapTagOut: {
+            /** Confidence */
+            confidence: number | null;
+            /** Disagrees With */
+            disagrees_with: string | null;
             event_type: components["schemas"]["EventType"];
             /** Matched */
             matched: string[];

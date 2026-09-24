@@ -142,3 +142,35 @@ That is what makes the factor math unit-testable and the backtest engine reusabl
    fetch types.
 6. **Money and disclaimers are first-class.** The "not a SEBI registered investment adviser"
    disclaimer is a component rendered on every analytics surface, not a footer afterthought.
+
+## Laya sidecar (25 Sep 2026) — out of the locked stack, and kept out of it
+
+**What.** `convaiinnovations/laya` (Apache 2.0; PyPI `laya` 0.3.20; torch 2.14 CPU, transformers
+5.x, a 421M-parameter ModernBERT checkpoint) reads the newest exchange headline of each scan
+candidate and answers one typed `choice` question — what kind of corporate event the filing
+announces — with a calibrated probability. `baskfy_core.catalyst_tags` resolves that answer
+against the rules baseline and `GET /overlap` serves the result as display context on
+`/build/overlap`. Maulik asked for it in session ("let use laya use as soon as possible").
+
+**Why it is not a dependency of this stack.** House rule 1 locks the stack for the reasons §"Why
+this" gives; torch alone is larger than every other wheel in `uv.lock` together, and a model
+checkpoint is not a package. So the sidecar is **its own container on the stock `python:3.12`
+image** (`infra/docker/compose.prod.yml`, service `laya`; loop in `infra/laya/laya_loop.py`)
+with three runtime dependencies and no import from `packages/` or `services/`. The product's
+whole contract with it is a Redis key and a JSON shape, both defined in
+`baskfy_core.catalyst_tags` (`cache_key`, `tag_from_laya`) and restated in the loop. Nothing in
+`uv.lock`, `pyproject.toml` or any image changes.
+
+**Boundaries.** Read-only over `sw_catalyst`; writes only to Redis with a 30-day TTL; reads by
+`baskfy_api.overlap` only; never by any rank, filter, size or order path
+(`services/api/tests/test_overlap_readonly.py`). With the service down or the cache cold the
+page shows the rules tag. `mem_limit: 3g` so a CPU model cannot take the box with it.
+
+**Measured before adoption** (this checkpoint, zero-shot, CPU): event type right at 0.90–0.99 on
+unambiguous headlines, wrong or below 0.60 on ambiguous ones — hence `LAYA_CONFIDENCE_FLOOR`
+and the rules fallback. The "does this filing explain the pattern?" question answered
+`probably_unrelated` at 0.21 on a ₹840 crore order under a gap and is not asked until a
+fine-tuned checkpoint exists. About 1.3 s per headline on this CPU, batched.
+
+**Reverse.** Remove the `laya` service and volume from compose, the two `laya` tokens in
+`tools/deploy/{deploy-swing,ship}.sh`, `infra/laya/`; the API then serves the rules tag alone.

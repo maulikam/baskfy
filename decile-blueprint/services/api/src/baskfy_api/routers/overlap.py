@@ -35,8 +35,9 @@ import datetime as dt
 from decimal import Decimal
 from typing import Annotated, Final, Literal
 
-from fastapi import APIRouter, Query, Response
+from fastapi import APIRouter, Query, Request, Response
 from pydantic import BaseModel
+from redis.asyncio import Redis
 
 from baskfy_api import overlap as overlap_service
 from baskfy_api.auth import AuthenticatedDep
@@ -96,6 +97,10 @@ class OverlapTagOut(BaseModel):
     review_priority: ReviewPriority
     matched: list[str]
     source: str
+    #: The model's probability for its choice; null for the rules.
+    confidence: float | None
+    #: ``"<source>:<event_type>"`` of the other reader when the two disagreed — the correction seed.
+    disagrees_with: str | None
 
 
 class OverlapCatalystOut(BaseModel):
@@ -138,8 +143,15 @@ class OverlapOut(BaseModel):
     data: list[OverlapRowOut]
 
 
+def _cache(request: Request) -> Redis | None:
+    """The process-wide Redis client, or ``None`` when this deployment has none."""
+    client = getattr(request.app.state, "cache", None)
+    return client if isinstance(client, Redis) else None
+
+
 @router.get("", response_model=OverlapOut, summary="Today's candidates across the sleeves")
 async def get_overlap(
+    request: Request,
     session: SessionDep,
     principal: AuthenticatedDep,
     scope: Annotated[
@@ -154,7 +166,7 @@ async def get_overlap(
     except Problem:
         sole = None
     view = await overlap_service.overlap(
-        session, user_id=user_id, strategies_user_id=sole, scope=scope
+        session, user_id=user_id, strategies_user_id=sole, scope=scope, cache=_cache(request)
     )
     marks = await live_marks_for_symbols([row.symbol for row in view.rows])
     return _json(
@@ -215,6 +227,8 @@ async def get_overlap(
                                     review_priority=row.catalyst_tag.review_priority,
                                     matched=list(row.catalyst_tag.matched),
                                     source=row.catalyst_tag.source,
+                                    confidence=row.catalyst_tag.confidence,
+                                    disagrees_with=row.catalyst_tag.disagrees_with,
                                 )
                             ),
                         )

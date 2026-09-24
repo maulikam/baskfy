@@ -9,15 +9,18 @@ shown an empty morning.
 from __future__ import annotations
 
 import datetime as dt
+import json
 from decimal import Decimal
 
 import pytest
 from api_helpers import api_settings, bearer, make_user, running_app, url
+from redis.asyncio import Redis
 from screener_helpers import requires_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.overlap import Strategy, overlap
 from baskfy_api.settings import Settings
+from baskfy_core.catalyst_tags import cache_key
 from baskfy_core.models import (
     Instrument,
     SwCatalyst,
@@ -344,6 +347,63 @@ class TestTheReadModel:
         assert all(day is None for day in view.sessions.values())
 
 
+class TestTheModelColumn:
+    """The sidecar's cached answer, resolved against the rules, on the wire."""
+
+    async def test_a_sure_model_answer_is_served_with_its_number_and_the_rules_kept_on_disagreement(
+        self, screener_session: AsyncSession, screen_cache: Redis
+    ) -> None:
+        user_id, _ = await make_user(screener_session, "overlap-laya@example.com")
+        await _a_morning(screener_session, user_id)
+        headline = "Press Release - BOTH wins a multi-year order"
+        # What `infra/laya/laya_loop.py` writes — measured shape, a deliberately different answer.
+        await screen_cache.set(
+            cache_key(headline),
+            json.dumps(
+                {"choice": "corporate_action", "confidence": 0.91, "model": "laya-rl-agent"}
+            ),
+        )
+        try:
+            view = await overlap(
+                screener_session, user_id=user_id, strategies_user_id=user_id, cache=screen_cache
+            )
+        finally:
+            await screen_cache.delete(cache_key(headline))
+        tag = view.rows[0].catalyst_tag
+        assert tag is not None
+        assert (tag.source, tag.event_type, tag.confidence, tag.disagrees_with) == (
+            "laya",
+            "corporate_action",
+            0.91,
+            "rules:order",
+        )
+
+    async def test_an_unsure_answer_a_miss_and_no_cache_all_mean_the_rules(
+        self, screener_session: AsyncSession, screen_cache: Redis
+    ) -> None:
+        user_id, _ = await make_user(screener_session, "overlap-laya2@example.com")
+        await _a_morning(screener_session, user_id)
+        headline = "Press Release - BOTH wins a multi-year order"
+        await screen_cache.set(
+            cache_key(headline), json.dumps({"choice": "routine", "confidence": 0.31})
+        )
+        try:
+            unsure = await overlap(
+                screener_session, user_id=user_id, strategies_user_id=user_id, cache=screen_cache
+            )
+        finally:
+            await screen_cache.delete(cache_key(headline))
+        miss = await overlap(
+            screener_session, user_id=user_id, strategies_user_id=user_id, cache=screen_cache
+        )
+        none = await overlap(screener_session, user_id=user_id, strategies_user_id=user_id)
+        for view, disagreement in ((unsure, "laya:routine"), (miss, None), (none, None)):
+            tag = view.rows[0].catalyst_tag
+            assert tag is not None
+            assert (tag.source, tag.event_type, tag.confidence) == ("rules", "order", None)
+            assert tag.disagrees_with == disagreement
+
+
 class TestTheRoute:
     @pytest.fixture
     def settings(self, seeded_url: str) -> Settings:
@@ -390,6 +450,8 @@ class TestTheRoute:
             "review_priority": "high",
             "matched": ["order"],
             "source": "rules",
+            "confidence": None,
+            "disagrees_with": None,
         }
         assert both["last_price"] is None
         assert len(everything.json()["data"]) == 4

@@ -294,7 +294,7 @@ class TestThePage:
         plan_id = raise_f1(desk, credit="70.00")  # 93.50 on live mids: a 33.57 % drift
         page = desk.page()
         assert plan_id in page
-        assert '<button type="submit">Confirm (paper)</button>' in page
+        assert '<button type="submit" class="btn-saffron">Confirm (paper)</button>' in page
         assert F1_SENTENCE.replace("'", "&#39;") in page
         for sleeve in ("F1N", "F1B", "F2"):
             assert f'id="fnoMode{sleeve}">{sleeve} PAPER<' in page
@@ -312,7 +312,7 @@ class TestThePage:
         raise_f1(desk)
         desk.now = at(F1_ENTRY, 9, 50)
         page = desk.page()
-        assert '<button type="submit">Confirm (paper)</button>' not in page
+        assert '<button type="submit" class="btn-saffron">Confirm (paper)</button>' not in page
         assert 'class="fno-confirm"' not in page
 
     def test_f2_sentence_the_gtt_and_the_red_flag(self, desk: Desk) -> None:

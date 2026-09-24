@@ -20,6 +20,11 @@ F2, per F&O stock in the universe plus each open position: ``OPEN_POSITION`` →
 window is too short to answer) → ``BLOCKED_REGIME`` → ``PAUSED`` → ``NO_DATA`` (no contract or
 ATR) → ``REJECTED_SIZE`` (with capital only) → ``BLOCKED_CAPACITY`` → ``CANDIDATE``. When the
 sleeve cannot be evaluated at all one row with symbol ``*`` says why (FO4.3).
+
+``PAUSED`` reads ``04`` §7 through ``baskfy_core.fno.ledger.evaluate_pauses`` over the **paper**
+journal only (``ledger.ENTRIES_SIMULATED``: every entry is paper while FO7.1 stands) — paper and
+live are never pooled (DECISIONS-FO FO10.1, correcting FO4.9) — plus the stored pauses that bind
+this mode (a hand-set one binds both).
 """
 
 from __future__ import annotations
@@ -53,7 +58,7 @@ from baskfy_core.fno.config import (
     ScanState,
     f1_sleeve_for,
 )
-from baskfy_core.fno.exits import book_paused, f1_paused, f2_month_paused
+from baskfy_core.fno.ledger import FoPause, column_pause_applies, evaluate_pauses, pauses_for
 from baskfy_core.fno.scan import (
     REGIME_UNDERLYING,
     CondorProposal,
@@ -70,7 +75,6 @@ from baskfy_core.models import (
     FoBookConfig,
     FoContractDaily,
     FoIngestDay,
-    FoJournal,
     FoPosition,
     FoScan,
     FoSleeveConfig,
@@ -86,6 +90,7 @@ from baskfy_core.options.config import CostRates, OptionType
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
 from baskfy_core.universes import SECTOR_INDEX_SLUGS
 from baskfy_worker.fno.ingest import STATUS_INGESTED
+from baskfy_worker.fno.ledger import ENTRIES_SIMULATED, load_lifts, load_trades
 from baskfy_worker.fno.underlying import trading_days
 
 log = logging.getLogger("baskfy_worker.fno.scan")
@@ -331,61 +336,64 @@ async def load_market(session: AsyncSession, trade_date: dt.date, config: FnoCon
 class UserBook:
     user_id: int
     capital: dict[str, Decimal]
+    #: Stored pauses (``fo_sleeve_config`` by group), in words: hand-set, or ledger-written for
+    #: this mode (FO10.1).
     sleeve_pause: dict[str, str]
     book_pause: str | None
     open_positions: dict[str, list[FoPosition]]
-    #: Closed R per sleeve, in close order.
-    closed_r: dict[str, list[Decimal]]
-    month_r: dict[str, list[Decimal]]
+    #: ``04`` §7 over the journal, paper rows only, for the session the rows describe (FO10.1).
+    auto_pauses: tuple[FoPause, ...]
     events: list[tuple[dt.date, str]]
 
 
-async def load_user(session: AsyncSession, user_id: int, market: Market) -> UserBook:
+async def load_user(
+    session: AsyncSession,
+    user_id: int,
+    market: Market,
+    *,
+    config: FnoConfig = DEFAULT_FNO_CONFIG,
+    ceilings: FnoCeilings = DEFAULT_FNO_CEILINGS,
+) -> UserBook:
     after = market.next_session or market.trade_date
+    simulated = ENTRIES_SIMULATED
     capital: dict[str, Decimal] = {}
     sleeve_pause: dict[str, str] = {}
     for row in (
         await session.execute(select(FoSleeveConfig).where(FoSleeveConfig.user_id == user_id))
     ).scalars():
         capital[row.sleeve] = row.capital_inr
-        if row.paused_until is not None and row.paused_until >= after:
+        if (
+            column_pause_applies(
+                row.paused_until, row.paused_reason, simulated=simulated, day=after
+            )
+            and row.paused_until is not None
+        ):
             sleeve_pause[row.sleeve] = (
                 f"sleeve {row.sleeve} is paused until {row.paused_until.isoformat()}"
                 f" ({row.paused_reason or 'no reason recorded'})"
             )
-    month_start = after.replace(day=1)
-    journal = (
-        (
-            await session.execute(
-                select(FoJournal)
-                .where(FoJournal.user_id == user_id)
-                .order_by(FoJournal.closed_on, FoJournal.position_id)
-            )
-        )
-        .scalars()
-        .all()
-    )
-    closed_r: dict[str, list[Decimal]] = {}
-    month_r: dict[str, list[Decimal]] = {}
-    month_inr = Decimal(0)
-    for trade in journal:
-        closed_r.setdefault(trade.sleeve, []).append(trade.r_multiple)
-        if month_start <= trade.closed_on <= after:
-            month_r.setdefault(trade.sleeve, []).append(trade.r_multiple)
-            month_inr += trade.net_pnl_inr
     book_pause: str | None = None
     book = await session.get(FoBookConfig, user_id)
-    if book is not None:
-        if book.paused_until is not None and book.paused_until >= after:
-            book_pause = (
-                f"the FO book is paused until {book.paused_until.isoformat()}"
-                f" ({book.paused_reason or 'no reason recorded'})"
-            )
-        elif book.monthly_pause_inr > 0 and book_paused(month_inr, book.monthly_pause_inr):
-            book_pause = (
-                f"the month's realised FO result ₹{month_inr} has reached the ₹"
-                f"{book.monthly_pause_inr} book pause (04 §7)"
-            )
+    if (
+        book is not None
+        and book.paused_until is not None
+        and column_pause_applies(
+            book.paused_until, book.paused_reason, simulated=simulated, day=after
+        )
+    ):
+        book_pause = (
+            f"the FO book is paused until {book.paused_until.isoformat()}"
+            f" ({book.paused_reason or 'no reason recorded'})"
+        )
+    auto_pauses = evaluate_pauses(
+        await load_trades(session, user_id),
+        simulated=simulated,
+        as_of=after,
+        monthly_pause_inr=Decimal(0) if book is None else Decimal(book.monthly_pause_inr),
+        lifted_after=await load_lifts(session, user_id),
+        config=config,
+        ceilings=ceilings,
+    )
     positions: dict[str, list[FoPosition]] = {}
     for position in (
         await session.execute(
@@ -401,9 +409,7 @@ async def load_user(session: AsyncSession, user_id: int, market: Market) -> User
             .order_by(OpEventDay.date)
         )
     ]
-    return UserBook(
-        user_id, capital, sleeve_pause, book_pause, positions, closed_r, month_r, events
-    )
+    return UserBook(user_id, capital, sleeve_pause, book_pause, positions, auto_pauses, events)
 
 
 # --- F1 -------------------------------------------------------------------------------------------
@@ -458,19 +464,13 @@ async def _listed_strikes(
     return out
 
 
-def _f1_pauses(book: UserBook, sleeve: FoSleeve, config: FnoConfig) -> list[str]:
+def _f1_pauses(book: UserBook, sleeve: FoSleeve) -> list[str]:
     found: list[str] = []
     if book.book_pause is not None:
         found.append(book.book_pause)
     if "F1" in book.sleeve_pause:
         found.append(book.sleeve_pause["F1"])
-    history = book.closed_r.get(sleeve.value, [])
-    if f1_paused(history, config.f1):
-        tail = ", ".join(f"{r}R" for r in history[-config.f1.pause_consecutive :])
-        found.append(
-            f"the last {config.f1.pause_consecutive} closed {sleeve.value} trades were each ≤ "
-            f"{config.f1.pause_loss_r}R ({tail}); new entries pause (04 §7)"
-        )
+    found.extend(p.message for p in pauses_for(book.auto_pauses, sleeve))
     return found
 
 
@@ -571,7 +571,7 @@ async def _f1_row(  # noqa: PLR0911, PLR0913 - one return per state of 04 §8, i
         )
     entry, expiry = found
     base = {**base, "next_entry_date": entry.isoformat(), "expiry": expiry.isoformat()}
-    pauses = _f1_pauses(book, sleeve, config)
+    pauses = _f1_pauses(book, sleeve)
     if pauses:
         return ScanRow(underlying, ScanState.PAUSED.value, pauses, base)
     if entry != s1:
@@ -734,18 +734,13 @@ def _rv20(market: Market, symbol: str) -> float | None:
 # --- F2 -------------------------------------------------------------------------------------------
 
 
-def _f2_pauses(book: UserBook, config: FnoConfig) -> list[str]:
+def _f2_pauses(book: UserBook) -> list[str]:
     found: list[str] = []
     if book.book_pause is not None:
         found.append(book.book_pause)
     if "F2" in book.sleeve_pause:
         found.append(book.sleeve_pause["F2"])
-    month = book.month_r.get(FoSleeve.F2.value, [])
-    if month and f2_month_paused(month, config.f2):
-        found.append(
-            f"the month's closed F2 trades total {sum(month, Decimal(0))}R ≤ "
-            f"{config.f2.month_pause_r}R; new entries pause for the rest of the month (04 §7)"
-        )
+    found.extend(p.message for p in pauses_for(book.auto_pauses, FoSleeve.F2))
     return found
 
 
@@ -833,7 +828,7 @@ def _f2_rows(  # noqa: PLR0912, PLR0915 - the ordered states of 04 §8 for one s
             "nifty_average": str(_money(_f(n_row["average_inr"]))),
             "nifty_up": regime,
         }
-    pauses = _f2_pauses(book, config)
+    pauses = _f2_pauses(book)
     capital = book.capital.get("F2", Decimal(0))
     ban_note = (
         None
@@ -1127,7 +1122,7 @@ async def run_scan(
     }
     per_user: dict[str, object] = {}
     for user_id in users:
-        book = await load_user(session, user_id, market)
+        book = await load_user(session, user_id, market, config=config, ceilings=ceilings)
         written: dict[str, dict[str, int]] = {}
         for underlying in config.f1.underlyings:
             row = await _f1_row(

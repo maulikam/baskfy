@@ -371,6 +371,39 @@ async def _open_position(session: AsyncSession, user_id: int, sleeve: str, symbo
     return int(position.id)
 
 
+def _loss(  # noqa: PLR0913, PLR0917 - one journal row
+    pid: int,
+    user: int,
+    sleeve: str,
+    symbol: str,
+    r: str,
+    closed_on: dt.date,
+    *,
+    net: Decimal = Decimal(-1600),
+    simulated: bool = True,
+) -> FoJournal:
+    return FoJournal(
+        position_id=pid,
+        user_id=user,
+        sleeve=sleeve,
+        symbol=symbol,
+        structure="IRON_CONDOR",
+        opened_on=closed_on - dt.timedelta(days=20),
+        closed_on=closed_on,
+        entry_inr=Decimal(1000),
+        exit_inr=Decimal(2500),
+        gross_pnl_inr=net,
+        costs_inr=Decimal(0),
+        net_pnl_inr=net,
+        risk_budget_inr=Decimal(25000),
+        r_multiple=Decimal(r),
+        closed_reason="LOSS_CLOSE",
+        sessions_held=10,
+        simulated=simulated,
+        sizing_mode="BUDGET",
+    )
+
+
 async def _rows(session: AsyncSession, user_id: int, sleeve: str) -> dict[str, FoScan]:
     session.expire_all()
     found = await session.execute(
@@ -514,6 +547,48 @@ class TestF1:
             nifty = (await _rows(session, user, "F1N"))["NIFTY"]
             assert nifty.state == ScanState.PAUSED.value
             assert "last 3 closed F1N trades" in nifty.reasons[0]
+
+    async def test_live_losses_never_pause_the_paper_scan(self, fo_url: str) -> None:
+        """FO10.1 (correcting FO4.9): the scan reads the paper journal only; three live loss
+        closes are another pool."""
+        async with _rolled_back(fo_url) as session:
+            await _market(session)
+            user = await _user(session)
+            for n, r in enumerate(("-0.73", "-0.65", "-0.61")):
+                pid = await _open_position(session, user, "F1N", "NIFTY")
+                await session.execute(
+                    sa.update(FoPosition)
+                    .where(FoPosition.id == pid)
+                    .values(closed_at=dt.datetime(2030, 7, 1 + n, 15, tzinfo=IST), simulated=False)
+                )
+                session.add(
+                    _loss(pid, user, "F1N", "NIFTY", r, dt.date(2030, 7, 1 + n), simulated=False)
+                )
+            await session.flush()
+            await run_scan(session, T, user_ids=[user])
+            nifty = (await _rows(session, user, "F1N"))["NIFTY"]
+            assert nifty.state != ScanState.PAUSED.value, nifty.reasons
+
+    async def test_a_book_amount_of_0_is_the_75000_ceiling(self, fo_url: str) -> None:
+        """FO10.5: the seed's 0 is "not set", which is the ceiling, not "off"."""
+        async with _rolled_back(fo_url) as session:
+            await _market(session)
+            user = await _user(session)
+            pid = await _open_position(session, user, "F1B", "BANKNIFTY")
+            month_day = S1.replace(day=1)
+            await session.execute(
+                sa.update(FoPosition)
+                .where(FoPosition.id == pid)
+                .values(closed_at=dt.datetime.combine(month_day, dt.time(15), tzinfo=IST))
+            )
+            session.add(
+                _loss(pid, user, "F1B", "BANKNIFTY", "-3", month_day, net=Decimal("-75000"))
+            )
+            await session.flush()
+            await run_scan(session, T, user_ids=[user])
+            nifty = (await _rows(session, user, "F1N"))["NIFTY"]
+            assert nifty.state == ScanState.PAUSED.value
+            assert any("₹75000 book pause" in r for r in nifty.reasons), nifty.reasons
 
 
 # --- F2 -------------------------------------------------------------------------------------------

@@ -113,6 +113,9 @@ class PlanState(StrEnum):
     REJECTED_MARGIN = "REJECTED_MARGIN"
     REJECTED_COST = "REJECTED_COST"
     NO_SLEEVE_CAPITAL = "NO_SLEEVE_CAPITAL"
+    #: ``04`` §7: a pause stops new entries; the desk writes the refused plan with its reason
+    #: (FO10.7) so the paper checklist sees a skip, not a cycle the desk missed.
+    REJECTED_PAUSED = "REJECTED_PAUSED"
     ABANDONED_PARTIAL = "ABANDONED_PARTIAL"
 
 

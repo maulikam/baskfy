@@ -16,7 +16,8 @@ WHAT A TICK DOES (every 60 s, 09:15-15:30; ``app.fno_clock``):
   F1 (``F1N``/``F1B``) on its entry session, re-priced on live quotes, sized under the budget, the
   broker's basket margin a ceiling (``REJECTED_MARGIN``), the cost share ≤ 25 % (``REJECTED_COST``);
   F2 from the previous session's scan, one lot on paper with ``lots_at_ceiling`` recorded. Legs go
-  in ``entry_seq`` order, longs first; ``expires_at = min(issued + 30 min, 10:30)``;
+  in ``entry_seq`` order, longs first; ``expires_at = min(issued + 30 min, 10:30)``. A sleeve
+  ``04`` §7 has paused in its own mode is written ``REJECTED_PAUSED`` instead (FO10.7);
 * for every open position, on live marks: F1's loss close (cost to close ≥ 2.5 x credit), profit
   take (≤ 50 %), the 15:00 hard exit on ``E - 1`` and ``LATE_EXIT`` at the next open; F2's stop,
   the 40-session time exit, the ``E - 1`` 15:00 roll, a passed roll date (``LATE_EXIT``) and a
@@ -27,7 +28,8 @@ WHAT A TICK DOES (every 60 s, 09:15-15:30; ``app.fno_clock``):
 WHAT A NIGHT DOES (after the close, retried until the bhavcopy lands): one ``fo_mark`` per open
 position per session at the settle (``fo_contract_daily``; a session whose ingest has not landed is
 marked on a later pass, idempotently), and F2's trail — the stop moved up, never lower, and the GTT
-modified through the gateway.
+modified through the gateway; then ``04`` §7's pauses for each mode (``app.fno_ledger``, FO10).
+Every close also writes its ``fo_journal`` row and re-evaluates the pauses (``fno_execute``).
 
 NEVER AN ENTRY. Nothing here confirms a plan or sends an entry leg: an entry needs
 ``fno_execute.execute_entry(..., confirm=True)``, FO8's route. There is no auto-execute flag and
@@ -88,6 +90,7 @@ from baskfy_core.options.config import CostRates, Mode
 
 from . import config as C
 from . import fno_execute as X
+from . import fno_ledger as L
 
 log = logging.getLogger("desk.fno_monitor")
 
@@ -183,6 +186,8 @@ class NightReport:
     marked: int = 0
     trailed: list[str] = field(default_factory=list)
     missing: list[str] = field(default_factory=list)
+    #: ``04`` §7's pauses in force after the night (FO10), ``<mode>:<code>:<scope>``.
+    pauses: list[str] = field(default_factory=list)
 
 
 # --- reading the scan and the sleeve config ------------------------------------------------------
@@ -288,6 +293,10 @@ class FnoMonitor:
                 continue
             if any(p.symbol == row.symbol for p in open_positions):
                 continue  # one F1 structure per underlying; the next waits for the exit
+            paused = self._paused(row, now)
+            if paused is not None:
+                raised.append(paused)
+                continue
             plan_id = self._raise_f1(row, now)
             if plan_id:
                 raised.append(plan_id)
@@ -299,11 +308,40 @@ class FnoMonitor:
                 continue  # F2 trades the previous session's signal only
             if len(held) >= self.config.f2.max_open:
                 break
+            paused = self._paused(row, now)
+            if paused is not None:
+                raised.append(paused)
+                continue
             plan_id = self._raise_f2(row, now, sessions)
             if plan_id:
                 raised.append(plan_id)
                 held.add(row.symbol)
         return raised
+
+    def _paused(self, row: ScanRow, now: dt.datetime) -> str | None:
+        """``04`` §7 in the mode this sleeve trades now (FO10.1): a paused entry is written
+        ``REJECTED_PAUSED`` with its reasons (FO10.7) and nothing else happens. ``None`` when
+        the entry may be raised."""
+        sleeve = FoSleeve(row.sleeve)
+        day = now.astimezone(IST).date()
+        plan_id = entry_plan_id(sleeve, day, row.symbol, self.store.user_id)
+        if self.store.plan(plan_id) is not None:
+            return None  # raised (or refused) already this session
+        reasons = L.entry_block(self.store, sleeve, day=day,
+                                simulated=self.mode_of(sleeve) is Mode.PAPER,
+                                config=self.config, ceilings=self.ceilings)  # fmt: skip
+        if not reasons:
+            return None
+        structure = Structure.FUTURE if sleeve is FoSleeve.F2 else Structure.IRON_CONDOR
+        expires = plan_expires_at(now, self.config.f1, self.config.common)
+        head = self._head(
+            plan_id, sleeve, row.symbol, day, structure, now, expires, lots=1,
+            lot_size=int(row.detail.get("lot_size") or 1),
+            status=PlanState.REJECTED_PAUSED.value, reason="; ".join(reasons),
+            detail={"scan_id": row.id, "scan_date": row.trade_date, "reasons": reasons,
+                    "violations": []},
+        )  # fmt: skip
+        return plan_id if self.store.insert_plan(head, []) else None
 
     def _margin(self, legs: Sequence[MarginLeg]) -> tuple[PlanState | None, str, Decimal | None]:
         quote = self.margins(legs)
@@ -694,6 +732,9 @@ class FnoMonitor:
                     report.marked += 1
                 else:
                     report.missing.append(f"{position.id}@{session.isoformat()}")
+        # FO10: 04 §7 each night too, each mode over its own rows, so a pause a close earned
+        # stands at the next open even if the close's own pass failed.
+        report.pauses = [f"{p.reason}:{p.scope}" for p in L.nightly_pauses(self.store, today=day)]
         return report
 
     def _mark_f1(self, position: X.PositionRow, day: dt.date) -> bool:

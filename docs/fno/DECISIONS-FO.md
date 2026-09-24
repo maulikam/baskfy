@@ -449,6 +449,10 @@ The paper period tests the rules as live would apply them, so paper trades count
 "calendar month" is that of the session the rows describe. `fo_book_config.monthly_pause_inr` is
 seeded 0 and FO10 owns what 0 means; until then the book pause fires only on an amount set.
 
+**Corrected by FO10 (25 Sep 2026).** Pooling paper and live broke `03` §6 ("never pooling
+`(sleeve, simulated)`"): the scan now reads the paper journal only (FO10.1), and 0 means the
+₹75,000 ceiling, not "not set" (FO10.5). The month rule stands.
+
 ## FO4.10 — `fno_cli` imported `trading_days` from a module that never defined it · ⚠ UNREVIEWED
 
 At `29483a3` `python -m baskfy_worker.fno_cli` failed on import (`backfill.trading_days` does not
@@ -710,3 +714,87 @@ under the same confirm (`04` §1), so "It places nothing else" understates what 
 authorises. The page renders the spec's sentence unchanged (an agent does not rewrite a sentence
 the operator confirms under); the fix is a one-line change to `fno_desk.CONFIRM_SENTENCES` and
 `test_fno_desk.F1_SENTENCE` once the wording is decided.
+
+## FO10.1 — Pauses and ledgers are per `(sleeve, simulated)`; a stored pause names its mode · ⚠ UNREVIEWED
+
+**Context.** FO4.9 counted paper and live journal rows together for `04` §7; `03` §6 says the
+journal never pools `(sleeve, simulated)`. **Choice.** `baskfy_core.fno.ledger.evaluate_pauses`
+takes a `simulated` and reads that mode's rows only; `build_ledger` returns one line per
+`(sleeve, underlying, simulated)` and one book per mode; `figures` raises `PooledRows` on mixed
+rows. A pause the ledger writes carries its mode in `paused_reason` (`PAPER:F2_MONTH_R`,
+`LIVE:BOOK_MONTH_INR`) and binds that mode only; a reason without a mode prefix is hand-set and
+binds both (`column_pause_applies`). The worker's scan evaluates **paper**
+(`baskfy_worker.fno.ledger.ENTRIES_SIMULATED = True`: every entry is paper while FO7.1 stands); the
+desk's monitor evaluates the mode `fno_gates` gives the sleeve now. **Rejected.** A per-mode column
+(needs 0053 under `services/api`, which another session holds). **Reversal.** Flip
+`ENTRIES_SIMULATED` (or read the desk's switches) when the live read-back is built.
+
+## FO10.2 — F1's pause is per underlying, stands until Maulik lifts it, and lives in the audit trail · ⚠ UNREVIEWED
+
+`04` §7 gives F2's pause an end (the month) and F1's none, so F1's stands until lifted: only closes
+after the latest `fo_config_audit` row `lift:F1N` / `lift:F1B` count toward the next run
+(`baskfy_worker.fno.ledger.lift_f1_pause`, for FO5's settings form). `fo_sleeve_config` is keyed by
+the group `F1` (FO2.4), so writing `paused_until` there would pause BANKNIFTY for NIFTY's losses;
+the desk records the pause as one audit row `pause:F1N` (`new_value = PAPER:F1_LOSS_RUN`) per run
+and enforces it from the journal (scan and monitor). **Rejected.** An automatic end (a cycle,
+a month): not in `04`, and three max-ish losses in a row are a reason to look. **Reversal.** Give
+`FoPause.paused_until` a date for F1 in `evaluate_pauses`.
+
+## FO10.3 — One journal row per structure; each roll's costs itemised inside it; R is the planned max loss · ⚠ UNREVIEWED
+
+`fo_journal` is keyed on `position_id` (`03` §6: "one row per structure"), and an F2 roll carries
+the position (FO7.9), so a roll is not its own row: `detail.costs.rolls[]` holds each roll's plan,
+day, sold and bought turnover and **its own** two-order costs, and `rolls` counts them. Costs are
+from the fills: F1 legs pay `docs/options/04` §6.1 (`options.costs.charges`), futures `04` §10's
+per-order charges **with the slippage line at zero**, because a paper fill walks the depth and a
+live one pays the spread — the 0.03 % is already in the price. R is `fo_position.max_loss_inr`
+(the condor's max loss on the credit taken, the future's entry-to-trigger risk; `RESEARCH.md`
+"P&L ÷ the planned maximum loss"), falling back to the entry plan's. `r_multiple` is rounded half
+up to the column's two places at write (house rule 8), so −0.605R is stored and paused as −0.61R.
+
+## FO10.4 — An abandoned entry that filled is journalled through a closed position · ⚠ UNREVIEWED
+
+An `ABANDONED_PARTIAL` entry whose longs filled and were sold back cost real money, and
+`fo_journal.position_id` is a non-null key. The desk writes one `fo_position` opened at the first
+fill and closed at once (`closed_reason = ABANDONED_PARTIAL`), attaches the fills, and journals it.
+It is never "opened" on the paper checklist and neither counts toward nor breaks F1's loss run; it
+counts in the book's rupees and F2's month R. FO7's replay asserted "no `fo_position` row"; it now
+asserts no **open** position and one closed `ABANDONED_PARTIAL` row (`test_fno_monitor.py`). An
+abandon that left a leg open is not journalled (it is not flat; FO7 alerts it). **Reversal.** Drop
+`_journal_abandoned` in `fno_execute` and restore the assertion.
+
+## FO10.5 — `fo_book_config.monthly_pause_inr = 0` means the ₹75,000 ceiling · ⚠ UNREVIEWED
+
+The seed writes 0 (FO2) and FO4.9 left the meaning to FO10. `04` §7 calls the amount a ceiling-bound
+limit; "0 = off" would let the seed disable the book's loss limit, which a ceiling exists to
+prevent. So 0 (not set) is `BASKFY_FNO_BOOK_MONTHLY_LOSS_INR_MAX` (₹75,000), and an amount above
+the ceiling is held to it (`ledger.book_pause_limit`). **Rejected.** 0 = off (the looser boundary).
+**Reversal.** One line in `book_pause_limit`.
+
+## FO10.6 — The paper checklist is derived; a violation restarts the count; no 0053 · ⚠ UNREVIEWED
+
+No violations table (it would need 0053 under `services/api`): `baskfy_worker.fno.ledger.read_checklist`
+derives each `04` §9 violation from the tables — `UNCOVERED_SHORT` by replaying a condor's fills in
+order, `INTO_EXPIRY` from the legs' expiry against the close, `JOURNAL_GAP` for a closed position
+without its row **and** for a landed session an open position has no `fo_mark` for, `MISSED_CYCLE`
+for an F1 `CANDIDATE` scan with no plan raised (a lapsed or refused plan is a skip) — plus the
+desk's recorded `LATE_EXIT` / `NAKED_FUTURE` (`fo_plan.detail.violations`, FO7.12). Paper rows only.
+"Consecutive" and "zero violations" read together: a group's cycles and sessions count from the
+day after its latest violation (`checklist.paper_checklist`). F2's period starts at its first
+entry plan's day. **Reversal.** Count from the first day and report violations beside it.
+
+## FO10.7 — A paused entry is written `REJECTED_PAUSED` · ⚠ UNREVIEWED
+
+`04` §8's `REJECTED_*` family gains `PlanState.REJECTED_PAUSED` (the options pack's name). At 09:20
+the monitor asks `fno_ledger.entry_block` (the journal's pauses for the sleeve's mode, and the
+stored pauses that bind it) and, paused, writes the entry plan with its reasons and no legs —
+never confirmable — so the checklist sees a skip rather than a missed cycle. The scan's `PAUSED`
+row still says it the night before. `fo_plan.status` has no CHECK, so no migration.
+
+## FO10.8 — `FNO_WEEKLY`, dark behind `BASKFY_FNO_MONITOR_ENABLED` · ⚠ UNREVIEWED
+
+The options pack's OP11 precedent: Beat `fno-weekly` Friday 16:35 IST, one alert per FO tenant, a
+line per `(sleeve, simulated)` for the week, the month per book, the pauses per mode. The worker
+gains `fno_monitor_enabled` (default false) only to stay dark; the alert names
+`docs/runbooks/13-fno-book.md`, which FO12 extends with the book's other alerts.
+

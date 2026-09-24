@@ -444,3 +444,44 @@ seeded 0 and FO10 owns what 0 means; until then the book pause fires only on an 
 
 At `29483a3` `python -m baskfy_worker.fno_cli` failed on import (`backfill.trading_days` does not
 exist). It now imports it from `baskfy_worker.fno.underlying`, and a test runs the CLI's `scan`.
+
+## FO9.1 — The re-test registry is `RESEARCH.md`'s table plus F1 and F2 · ⚠ UNREVIEWED
+
+Fifteen families: B4, B4 with the loss close (F1), B1, B2, B3, C1, C2, F2, A0, A1, A1R, A2, A3,
+A4 and E, each with the parameters of the script call that produced its `RESEARCH.md` row
+(`res_futures.py` names each futures family's horizon and ATR multiple; the stock option rows are
+the stored parquets' names). Rebuilt from the raw day files through the worker's own panel
+function, every one reproduces: B4 n = 100 +0.0334R, loss close +0.0221R, F2 n = 2,334 +0.0171R,
+B1 −0.0318R (gross +0.027), B2 −0.042, B3 −0.055, C1 −0.236, C2 −0.105, A0 −0.023, A1 −0.051,
+A2 −0.004, A4 −0.059, E median carry 5.6 % a.y. with 0.7 % of stock-days clearing 7 % net. The
+panels equal `futures.parquet` and `options.parquet` exactly. The golden is a test gate
+(`test_fno_retest.py`), run with `BASKFY_FNO_RESEARCH_DIR`.
+
+## FO9.2 — How measured spreads become one number per family · ⚠ UNREVIEWED
+
+The research ran one slippage per family, so the measured replacement is one number too. Index
+families take the **worse** of NIFTY's and BANKNIFTY's medians, and only when both have 20
+sessions. Stock option families take the median of the per-name medians once 20 names have 20
+sessions (FO3 samples the top 30). Futures families and the carry study stay `ASSUMED`: FO3
+samples options only. **Rejected:** per-name slippage inside the port (it changes the research's
+code, and the golden would no longer pin it).
+
+## FO9.3 — Stock option families run a batch of symbols at a time · ⚠ UNREVIEWED
+
+B1 over the whole option panel peaks at **2.8 GB**. The box has 7.8 GB, about 3.8 GB free, and no
+swap, and it has been taken down by memory once (NEEDS-MAULIK §35). Every family's state is per
+symbol, so running ten symbols at a time gives **exactly** the whole panel's trades (tested: a
+batch of 7 equals the whole panel to the fourth decimal), at 1.6 GB peak on the Mac for the whole
+suite including the futures panel. The worker pages each batch out of Postgres from a thread.
+
+## FO9.4 — A family with no trades stores n = 0 and a null expectancy · ⚠ UNREVIEWED
+
+The first quarters after a partial backfill will have families with nothing to trade. "0.0R" would
+read as a measured zero. The row says n = 0 with net and gross R null, and the carry study
+before any UDiFF day says so the same way.
+
+## FO9.5 — The quarterly run is the first Saturday of Jan/Apr/Jul/Oct at 06:00, on the compute queue · ⚠ UNREVIEWED
+
+Outside the session and the 18:30–23:30 nightly window, and `run_retest` refuses a second run in
+the same month unless forced (`fno_cli retest --force`). Behind `BASKFY_FNO_SCAN_ENABLED` like the
+rest of the data layer. It writes one row per family per FO tenant and moves nothing else.

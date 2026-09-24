@@ -72,6 +72,8 @@ TASK_ROUTES: Final[dict[str, dict[str, str]]] = {
     # VB9: the backtest is a compute job — minutes of Polars and NumPy over nine years of bars —
     # so it takes the compute queue like the detectors, not the default one the checks use.
     "baskfy.vbt.backtest": {"queue": QUEUE_COMPUTE},
+    # FO9: the quarterly re-test reads four years of the F&O bhavcopy.
+    "baskfy.fno.retest": {"queue": QUEUE_COMPUTE},
     # VB12: the re-detect itself is compute (it reads the whole universe); the sweep that
     # publishes it is one indexed SELECT and takes the default queue, like the checks.
     "baskfy.vbt.rescan": {"queue": QUEUE_COMPUTE},
@@ -228,6 +230,16 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
     # BANKNIFTY (448 keys, one call on the shared quote clock) into fo_spread_sample, and the
     # NSE results calendar for those stocks (QUESTIONS Q8). Behind BASKFY_FNO_SCAN_ENABLED
     # (default false); a holiday or a box with no Kite session makes no Kite call. No money.
+    # FO9 (docs/fno/04 §6): the quarterly re-test of every RESEARCH.md family. The first Saturday
+    # of January, April, July and October at 06:00, outside the session and the nightly window;
+    # run_retest refuses a second run in the same month. Compute queue: minutes of Polars.
+    "fno-retest": {
+        "task": "baskfy.fno.retest",
+        "schedule": crontab(
+            hour=6, minute=0, day_of_week="sat", day_of_month="1-7", month_of_year="1,4,7,10"
+        ),
+        "options": {"queue": QUEUE_COMPUTE},
+    },
     "fno-spread-sample": {
         "task": "baskfy.fno.spread_sample",
         "schedule": crontab(hour=15, minute=0, day_of_week="mon-fri"),

@@ -40,6 +40,7 @@ from baskfy_worker.celery_app import IST
 from baskfy_worker.db import checkpointed_session, session_scope
 from baskfy_worker.fno.backfill import BACKFILL_START, backfill_days
 from baskfy_worker.fno.nightly import run_night
+from baskfy_worker.fno.retest import run_retest
 from baskfy_worker.fno.scan import run_scan
 from baskfy_worker.fno.underlying import trading_days
 from baskfy_worker.providers import sole_user_id
@@ -84,9 +85,14 @@ async def _scan(day: dt.date) -> JsonObject:
         return await run_scan(session, day)
 
 
+async def _retest(today: dt.date, families: list[str] | None, force: bool) -> JsonObject:
+    async with session_scope() as session:
+        return await run_retest(session, today=today, force=force, families=families)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="fno_cli", description=__doc__)
-    parser.add_argument("command", choices=("seed", "backfill", "ingest", "scan"))
+    parser.add_argument("command", choices=("seed", "backfill", "ingest", "scan", "retest"))
     parser.add_argument(
         "--from", dest="start", help=f"backfill: first session (default {BACKFILL_START})"
     )
@@ -97,6 +103,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="backfill: a directory of already-downloaded raw zips (nse/fo-bhavcopy/DATE.zip)",
     )
     parser.add_argument("--date", help="ingest/scan: the session (default: today)")
+    parser.add_argument(
+        "--families", help="retest: comma-separated family keys (default: every family)"
+    )
+    parser.add_argument(
+        "--force", action="store_true", help="retest: run outside Jan/Apr/Jul/Oct or again"
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, stream=sys.stderr)
     today = dt.datetime.now(tz=IST).date()
@@ -112,6 +124,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         if seed_dir is not None and not seed_dir.is_dir():
             parser.error(f"--seed-archive {seed_dir} is not a directory")
         result = asyncio.run(_backfill(start, end, seed_dir))
+    elif args.command == "retest":
+        families = [f.strip() for f in args.families.split(",")] if args.families else None
+        result = asyncio.run(_retest(today, families, args.force))
     elif args.command == "scan":
         day = dt.date.fromisoformat(args.date) if args.date else today
         result = asyncio.run(_scan(day))

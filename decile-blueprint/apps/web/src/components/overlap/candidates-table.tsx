@@ -7,11 +7,13 @@ import { useSearchParams } from "next/navigation";
 import { useState, useTransition, type ReactNode } from "react";
 
 import { InstrumentLink } from "@/components/instrument/instrument-link";
+import { FilingsScanButton } from "@/components/overlap/filings-scan-button";
 import { LiveMarksProvider, LivePrice, LiveStatus } from "@/components/screens/live-price";
 import { formatTradeDate } from "@/lib/format";
 import {
   OVERLAP_EVENT_TYPES,
   type CorrectTagAction,
+  type FilingsScanActions,
   type OverlapCandidate,
   type OverlapCandidates,
   type OverlapEventType,
@@ -49,11 +51,14 @@ export function CandidatesTable({
   candidates,
   scope,
   correctTag,
+  scanFilings,
 }: {
   candidates: OverlapCandidates | null;
   scope: OverlapScope;
   /** Absent in a render that cannot write (a test, a preview): the chip then has no select. */
   correctTag?: CorrectTagAction;
+  /** The "Scan filings with Laya" button's actions; absent where the page cannot write. */
+  scanFilings?: FilingsScanActions;
 }) {
   const rows = candidates?.data ?? [];
   const sessions = candidates?.sessions ?? null;
@@ -84,14 +89,19 @@ export function CandidatesTable({
             name — a count, not a score.
           </p>
         </div>
-        <nav aria-label="Which rows to show" className="flex gap-2">
-          <ScopeChip current={scope} value="actionable">
-            A strategy could act
-          </ScopeChip>
-          <ScopeChip current={scope} value="all">
-            Every row the scans wrote
-          </ScopeChip>
-        </nav>
+        <div className="flex flex-col items-end gap-2">
+          <nav aria-label="Which rows to show" className="flex gap-2">
+            <ScopeChip current={scope} value="actionable">
+              A strategy could act
+            </ScopeChip>
+            <ScopeChip current={scope} value="all">
+              Every row the scans wrote
+            </ScopeChip>
+          </nav>
+          {scanFilings && candidates?.strategies_read ? (
+            <FilingsScanButton scope={scope} actions={scanFilings} />
+          ) : null}
+        </div>
       </div>
 
       {sessions ? (

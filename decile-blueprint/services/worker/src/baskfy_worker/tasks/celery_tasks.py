@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import json
 import logging
 import os
 from collections.abc import Awaitable, Callable, Sequence
@@ -23,9 +24,12 @@ from pathlib import Path
 from typing import Final
 
 from celery import Task, shared_task
+from redis import Redis as SyncRedis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from baskfy_api import overlap as overlap_service
+from baskfy_api import overlap_scan
 from baskfy_api.broker_oauth import (
     KiteLoginUrl,
     kite_login_url,
@@ -2327,6 +2331,77 @@ def swing_catalyst_task(session_date: str | None = None) -> JsonObject:
         return {"date": day.isoformat(), **report.as_detail()}
 
     return run_in_session(_run)
+
+
+@shared_task(name=overlap_scan.SCAN_TASK, acks_late=False)
+def overlap_catalyst_scan_task(user_id: int, scope: str = "actionable") -> JsonObject:
+    """The overlap page's "Scan filings" button (`baskfy_api.overlap_scan`).
+
+    Resolves the names `/build/overlap` lists for ``scope`` exactly as the page does, reads each
+    one's filings and result dates through the morning feed's own loop (`run_swing_catalyst`
+    with an explicit symbol set), then wakes the Laya sidecar so the new headlines are tagged
+    now. Progress goes to Redis after every name; the lock the API took is released at the end,
+    whatever happened. ``acks_late=False``: a redelivered scan would read NSE twice for nothing.
+    """
+    cache = SyncRedis.from_url(get_worker_settings().redis_url)
+    key = overlap_scan.status_key(user_id)
+    status: dict[str, object] = {
+        "state": "running",
+        "scope": scope,
+        "started_at": dt.datetime.now(tz=dt.UTC).isoformat(),
+        "total": None,
+        "done": 0,
+    }
+
+    def _save() -> None:
+        cache.set(key, json.dumps(status), ex=overlap_scan.STATUS_TTL_SECONDS)
+
+    def _progress(done: int, total: int) -> None:
+        status["done"] = done
+        status["total"] = total
+        _save()
+
+    _save()
+    day = dt.datetime.now(tz=IST).date()
+    provider = build_nse_provider(get_provider_settings(), retry_hooks=provider_retry_hooks())
+    view_scope: overlap_service.Scope = "all" if scope == "all" else "actionable"
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        view = await overlap_service.overlap(
+            session, user_id=user_id, strategies_user_id=user_id, scope=view_scope
+        )
+        symbols = dict(sorted({row.symbol: row.instrument_id for row in view.rows}.items()))
+        _progress(0, len(symbols))
+        report = await run_swing_catalyst(
+            session,
+            StepOutcome(),
+            day,
+            user_id=user_id,
+            provider=provider,
+            symbols=symbols,
+            on_symbol=_progress,
+        )
+        return report.as_detail()
+
+    try:
+        detail = run_in_session(_run)
+    except Exception as exc:
+        status.update(state="failed", error=f"{type(exc).__name__}: {exc}"[:500])
+        raise
+    else:
+        status.update(
+            state="done",
+            announcements=detail.get("announcements"),
+            earnings_dates=detail.get("earnings_dates"),
+            rows_written=detail.get("rows_written"),
+            failed=detail.get("failed") or [],
+        )
+        cache.set(overlap_scan.LAYA_WAKE_KEY, "1", ex=3600)
+        return {"user_id": user_id, "scope": scope, **detail}
+    finally:
+        status["finished_at"] = dt.datetime.now(tz=dt.UTC).isoformat()
+        _save()
+        cache.delete(overlap_scan.lock_key(user_id))
 
 
 # --- SW18: the 08:45 Kite login nudge (docs/swing/DECISIONS-SW SW18.1) -------------------------

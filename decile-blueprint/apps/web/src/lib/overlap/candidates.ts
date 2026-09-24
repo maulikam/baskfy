@@ -1,4 +1,4 @@
-import type { OverlapOut } from "@baskfy/api-client";
+import type { OverlapOut, OverlapScanOut } from "@baskfy/api-client";
 
 /**
  * The shape `/build/overlap` renders from `GET /overlap`, and the one place the wire is
@@ -52,6 +52,20 @@ export const OVERLAP_EVENT_TYPES: readonly OverlapEventType[] = [
 export type CorrectTagResult =
   | { readonly ok: true }
   | { readonly ok: false; readonly error: string };
+
+/** The last filings scan, as `GET /overlap/catalyst-scan` answers it. */
+export type FilingsScan = OverlapScanOut;
+
+/** What the scan actions answer: the scan's status, or this app's sentence for a refusal. */
+export type FilingsScanResult =
+  | { readonly ok: true; readonly scan: FilingsScan }
+  | { readonly ok: false; readonly error: string };
+
+/** The two server actions behind the "Scan filings with Laya" button. */
+export type FilingsScanActions = {
+  readonly start: (scope: OverlapScope) => Promise<FilingsScanResult>;
+  readonly status: () => Promise<FilingsScanResult>;
+};
 
 /** The server action a chip's select calls: a word on the headline, or `null` to take it back. */
 export type CorrectTagAction = (

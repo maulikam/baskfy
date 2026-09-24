@@ -5,12 +5,17 @@ import { revalidatePath } from "next/cache";
 import {
   OVERLAP_EVENT_TYPES,
   type CorrectTagResult,
+  type FilingsScan,
+  type FilingsScanResult,
   type OverlapEventType,
+  type OverlapScope,
 } from "@/lib/overlap/candidates";
 import { overlapWrite } from "@/lib/overlap/write";
 
 /**
- * `/build/overlap`'s server actions — **one**, and it records a person's word on a headline.
+ * `/build/overlap`'s server actions — a person's word on a headline, and (25 Sep 2026) the
+ * "Scan filings with Laya" button's two: queue one read of the listed names' filings, and read
+ * its progress. The scan fills the Results and Filing cells and nothing else.
  *
  * The tag under a filing is read from the headline by fixed rules and by Laya; the order settled
  * for that tag (`baskfy_core.catalyst_tags`) is a baseline first, corrections collected against
@@ -20,7 +25,8 @@ import { overlapWrite } from "@/lib/overlap/write";
  *
  * **A correction is money-free by construction.** It changes what the chip says and what the
  * corrections export contains. It changes no rank, no filter, no size and no order, because the
- * tag it corrects never entered one. This page still queues no scan and places nothing.
+ * tag it corrects never entered one. The filings scan is display context the same way, and this
+ * page still places nothing.
  */
 
 const PAGE = "/build/overlap";
@@ -65,4 +71,45 @@ export async function correctTag(
   }
   revalidatePath(PAGE);
   return { ok: true };
+}
+
+function isFilingsScan(body: unknown): body is FilingsScan {
+  return typeof body === "object" && body !== null && "state" in body;
+}
+
+function scanRefusal(status: number): string {
+  switch (status) {
+    case 0:
+      return "The service could not be reached; no scan was started.";
+    case 401:
+      return "Sign in again to scan filings.";
+    case 404:
+      return "Filings scans belong to the account that runs the scans, and this is not that account.";
+    case 409:
+      return "A filings scan is already running, or it is 09:10–09:30 IST, when the exchange's feed belongs to the swing monitor. Try again after 09:30.";
+    default:
+      return "The filings scan could not be started.";
+  }
+}
+
+/** Queue one read of every listed name's filings and result dates; Laya tags what it finds. */
+export async function startFilingsScan(scope: OverlapScope): Promise<FilingsScanResult> {
+  const outcome = await overlapWrite("/overlap/catalyst-scan", {
+    method: "POST",
+    query: { scope: scope === "all" ? "all" : "actionable" },
+  });
+  if (!outcome.ok || !isFilingsScan(outcome.body)) {
+    return { ok: false, error: scanRefusal(outcome.status) };
+  }
+  return { ok: true, scan: outcome.body };
+}
+
+/** The last filings scan's progress. The page is revalidated once it has finished. */
+export async function filingsScanStatus(): Promise<FilingsScanResult> {
+  const outcome = await overlapWrite("/overlap/catalyst-scan", { method: "GET" });
+  if (!outcome.ok || !isFilingsScan(outcome.body)) {
+    return { ok: false, error: "The scan's progress could not be read." };
+  }
+  if (outcome.body.state === "done") revalidatePath(PAGE);
+  return { ok: true, scan: outcome.body };
 }

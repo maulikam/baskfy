@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+from collections.abc import Sequence
 from decimal import Decimal
 
 import pytest
@@ -19,6 +20,7 @@ from screener_helpers import requires_db
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from baskfy_api import overlap_scan
 from baskfy_api.curated_tenant import SOLE_TENANT_REFUSED
 from baskfy_api.overlap import Strategy, overlap
 from baskfy_api.problems import STATUS_FOR, ProblemType
@@ -737,3 +739,82 @@ class TestTheCorrection:
         assert merger.status_code == 400, merger.text
         assert blank.status_code == 400, blank.text
         assert await _correction_count(screener_session, user_id) == 0
+
+
+SCAN = url("/overlap/catalyst-scan")
+
+
+class _RecordingQueue:
+    """Stands in for the Celery producer. Records what would have been published."""
+
+    def __init__(self) -> None:
+        self.sent: list[tuple[str, list[object]]] = []
+
+    def send_task(self, name: str, args: Sequence[object]) -> object:
+        self.sent.append((name, list(args)))
+        return f"task-{len(self.sent)}"
+
+
+class TestTheFilingsScan:
+    """The "Scan filings with Laya" button: one queued read of the listed names' filings."""
+
+    @pytest.fixture
+    def settings(self, seeded_url: str) -> Settings:
+        return api_settings(seeded_url)
+
+    @pytest.fixture(autouse=True)
+    def _outside_the_morning_window(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The route reads the wall clock; these tests are about the queue, not the time."""
+        monkeypatch.setattr(overlap_scan, "in_busy_window", lambda _now: False)
+
+    async def test_it_queues_one_scan_reports_it_and_refuses_a_second_while_it_runs(
+        self,
+        settings: Settings,
+        screener_session: AsyncSession,
+        screen_cache: Redis,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        user_id, public_id = await make_user(screener_session, "overlap-scan@example.com")
+        monkeypatch.setenv("BASKFY_SOLE_USER_ID", str(user_id))
+        queue = _RecordingQueue()
+        keys = (overlap_scan.status_key(user_id), overlap_scan.lock_key(user_id))
+        await screen_cache.delete(*keys)
+        try:
+            async with running_app(settings, screener_session, task_queue=queue) as client:
+                idle = await client.get(SCAN, headers=bearer(public_id))
+                first = await client.post(SCAN, headers=bearer(public_id), params={"scope": "all"})
+                second = await client.post(SCAN, headers=bearer(public_id))
+                progress = await client.get(SCAN, headers=bearer(public_id))
+        finally:
+            await screen_cache.delete(*keys)
+
+        assert idle.status_code == 200, idle.text
+        assert idle.json()["state"] == "idle"
+        assert first.status_code == 202, first.text
+        assert first.json()["state"] == "queued"
+        assert first.json()["scope"] == "all"
+        assert queue.sent == [(overlap_scan.SCAN_TASK, [user_id, "all"])]
+        assert second.status_code == STATUS_FOR[ProblemType.SCAN_IN_FLIGHT], second.text
+        assert progress.json()["state"] == "queued"
+
+    async def test_a_caller_who_is_not_the_sole_tenant_cannot_start_or_read_a_scan(
+        self,
+        settings: Settings,
+        screener_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        sole_id, _ = await make_user(screener_session, "scanowner@example.com")
+        monkeypatch.setenv("BASKFY_SOLE_USER_ID", str(sole_id))
+        _, guest = await make_user(screener_session, "scanguest@example.com")
+        queue = _RecordingQueue()
+
+        async with running_app(settings, screener_session, task_queue=queue) as client:
+            post = await client.post(SCAN, headers=bearer(guest))
+            status = await client.get(SCAN, headers=bearer(guest))
+            anonymous = await client.post(SCAN)
+
+        assert anonymous.status_code == 401
+        for response in (post, status):
+            assert response.status_code == STATUS_FOR[ProblemType.NOT_FOUND], response.text
+            assert problem(response)["reason"] == SOLE_TENANT_REFUSED
+        assert queue.sent == []

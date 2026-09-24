@@ -642,6 +642,10 @@ services:
         "laya==0.3.20" "psycopg[binary]>=3.1" "redis>=5" &&
         exec /models/venv/bin/python /app/laya_loop.py
     mem_limit: 3g
+    # One of the box's two vCPUs, never both (25 Sep 2026). Its first pass held both at ~190%
+    # for eleven minutes on the box where the desk, the swing monitor and twt-auto trade at
+    # 09:15; a display-only tagger must never be able to slow an order path.
+    cpus: 1.0
     depends_on:
       postgres:
         condition: service_healthy

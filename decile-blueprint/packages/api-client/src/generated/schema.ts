@@ -2655,6 +2655,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/overlap/catalyst-scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The filings scan's progress
+         * @description ``state: idle`` when no scan has run; otherwise the last one's progress. Sole tenant only.
+         */
+        get: operations["getCatalystScan"];
+        put?: never;
+        /**
+         * Read every listed name's filings now
+         * @description Queue one scan of the names the page lists; Laya tags what it finds. Sole tenant only.
+         *
+         *     Refused (409) while one is running and during 09:10-09:30 IST, when the NSE limiter belongs
+         *     to the swing monitor. Reads filings and result dates into the catalyst feed: display context,
+         *     never a rank, a size or an order.
+         */
+        post: operations["postCatalystScan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/overlap/tags": {
         parameters: {
             query?: never;
@@ -9430,6 +9458,42 @@ export interface components {
             strategy_count: number;
             /** Symbol */
             symbol: string;
+        };
+        /**
+         * OverlapScanOut
+         * @description The last filings scan (`baskfy_api.overlap_scan`): queued, running, done or failed.
+         */
+        OverlapScanOut: {
+            /** Announcements */
+            announcements?: number | null;
+            /**
+             * Done
+             * @default 0
+             */
+            done: number;
+            /** Earnings Dates */
+            earnings_dates?: number | null;
+            /** Error */
+            error?: string | null;
+            /** Failed */
+            failed?: string[];
+            /** Finished At */
+            finished_at?: string | null;
+            /** Queued At */
+            queued_at?: string | null;
+            /** Rows Written */
+            rows_written?: number | null;
+            /** Scope */
+            scope?: ("actionable" | "all") | null;
+            /** Started At */
+            started_at?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "idle" | "queued" | "running" | "done" | "failed";
+            /** Total */
+            total?: number | null;
         };
         /** OverlapScreenOut */
         OverlapScreenOut: {
@@ -28749,6 +28813,211 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OverlapOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getCatalystScan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverlapScanOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    postCatalystScan: {
+        parameters: {
+            query?: {
+                /** @description the rows the page is showing */
+                scope?: "actionable" | "all";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverlapScanOut"];
                 };
             };
             /** @description Bad request */

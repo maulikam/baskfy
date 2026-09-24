@@ -6,16 +6,22 @@ import { auth } from "@/lib/auth";
 import type { OverlapEventType } from "@/lib/overlap/candidates";
 
 /**
- * The one write `/build/overlap` has — a person's correction of a headline's tag, and its
- * removal. Nothing else, ever.
+ * The writes `/build/overlap` has — a person's correction of a headline's tag and its removal,
+ * and (25 Sep 2026, Maulik: "put laya scan button on overlap page") the "Scan filings with
+ * Laya" button, which queues one read of the listed names' exchange filings and reads its
+ * progress back. The scan fills display context only; it never reaches a rank, size or order.
  *
  * `fetch-candidates.ts` next door is the read, and this file sits beside it rather than inside
  * it for the reason `lib/twt/write.ts` gives for the same split: a page whose only writer is
  * the narrowest thing that can work is a page whose writes can be read in one sitting.
  *
- *  - **one path, as a closed union type rather than a pattern.** `/overlap/tags` and nothing
- *    else. A pattern would admit a route this application must never name; the type is the guard.
- *  - **two methods.** PUT stores the person's word; DELETE removes it. There is no POST.
+ *  - **two paths, as a closed union type rather than a pattern.** `/overlap/tags` and
+ *    `/overlap/catalyst-scan`, nothing else. A pattern would admit a route this application must
+ *    never name; the type is the guard.
+ *  - **each path its own methods, paired by the type.** On `/overlap/tags`, PUT stores the
+ *    person's word and DELETE removes it. On `/overlap/catalyst-scan`, POST queues one scan and
+ *    GET reads its progress. The overloads pair them, so a POST to the tags path does not
+ *    compile.
  *  - **the bearer never leaves the server.** The token comes from the session here, so no action
  *    and no component ever holds one.
  *  - **it never throws.** A control gets a result either way, because a select that silently
@@ -25,8 +31,8 @@ import type { OverlapEventType } from "@/lib/overlap/candidates";
  * and `test_overlap_readonly.py` on the API side asserts the route it reaches writes one table.
  */
 
-/** The only path this application may write to under `/overlap`. Widening it is a deliberate act. */
-export type OverlapWritePath = "/overlap/tags";
+/** The only paths this application may write to under `/overlap`. Widening it is a deliberate act. */
+export type OverlapWritePath = "/overlap/tags" | "/overlap/catalyst-scan";
 
 /** What the action gets back. The sentence is chosen by this app's copy, never by the wire. */
 export type OverlapWriteOutcome =
@@ -38,7 +44,9 @@ export type OverlapWriteRequest =
       readonly method: "PUT";
       readonly body: { headline: string; event_type: OverlapEventType; note: string | null };
     }
-  | { readonly method: "DELETE"; readonly query: { headline: string } };
+  | { readonly method: "DELETE"; readonly query: { headline: string } }
+  | { readonly method: "POST"; readonly query: { scope: "actionable" | "all" } }
+  | { readonly method: "GET" };
 
 function timeoutMs(): number {
   const parsed = Number.parseInt(process.env.BASKFY_SERVER_FETCH_TIMEOUT_MS?.trim() || "2500", 10);
@@ -46,6 +54,14 @@ function timeoutMs(): number {
 }
 
 /** One request, with the session's bearer. Never throws: the caller gets a result either way. */
+export async function overlapWrite(
+  path: "/overlap/tags",
+  request: Extract<OverlapWriteRequest, { method: "PUT" | "DELETE" }>,
+): Promise<OverlapWriteOutcome>;
+export async function overlapWrite(
+  path: "/overlap/catalyst-scan",
+  request: Extract<OverlapWriteRequest, { method: "POST" | "GET" }>,
+): Promise<OverlapWriteOutcome>;
 export async function overlapWrite(
   path: OverlapWritePath,
   request: OverlapWriteRequest,
@@ -55,6 +71,7 @@ export async function overlapWrite(
   if (!token) return { ok: false, status: 401 };
   const url = new URL(`${serverApiOrigin()}/api/v1${path}`);
   if (request.method === "DELETE") url.searchParams.set("headline", request.query.headline);
+  if (request.method === "POST") url.searchParams.set("scope", request.query.scope);
   try {
     const response = await fetch(url, {
       method: request.method,

@@ -72,6 +72,9 @@ TASK_ROUTES: Final[dict[str, dict[str, str]]] = {
     # VB9: the backtest is a compute job — minutes of Polars and NumPy over nine years of bars —
     # so it takes the compute queue like the detectors, not the default one the checks use.
     "baskfy.vbt.backtest": {"queue": QUEUE_COMPUTE},
+    # The overlap page's "Scan filings" button (`baskfy_api.overlap_scan`): minutes of NSE reads
+    # under the shared limiter, so compute, beside the 09:17 catalyst feed it borrows its loop from.
+    "baskfy.overlap.catalyst_scan": {"queue": QUEUE_COMPUTE},
     # FO9: the quarterly re-test reads four years of the F&O bhavcopy.
     "baskfy.fno.retest": {"queue": QUEUE_COMPUTE},
     # VB12: the re-detect itself is compute (it reads the whole universe); the sweep that

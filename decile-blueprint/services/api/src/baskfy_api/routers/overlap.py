@@ -7,6 +7,8 @@
     PUT    /overlap/tags                  a person's correction of a headline's tag
     DELETE /overlap/tags?headline=        the correction removed; the readers' word shows again
     GET    /overlap/tags/export           every correction, as NDJSON — the fine-tuning set
+    POST   /overlap/catalyst-scan         read every listed name's filings now, then wake Laya
+    GET    /overlap/catalyst-scan         that scan's progress
 
 ONE READ, AND A CORRECTION THAT MOVES NOTHING
 ---------------------------------------------
@@ -52,6 +54,7 @@ from pydantic import BaseModel, Field
 from redis.asyncio import Redis
 
 from baskfy_api import overlap as overlap_service
+from baskfy_api import overlap_scan
 from baskfy_api.auth import AuthenticatedDep
 from baskfy_api.curated_tenant import scoped_sole_user_id
 from baskfy_api.db import SessionDep
@@ -351,3 +354,72 @@ async def get_tags_export(session: SessionDep, principal: AuthenticatedDep) -> R
         for record in records
     ]
     return Response(content="".join(f"{line}\n" for line in lines), media_type=NDJSON_MEDIA_TYPE)
+
+
+# --- Scan filings (the page's Laya scan button) ------------------------------------------------
+
+
+class OverlapScanOut(BaseModel):
+    """The last filings scan (`baskfy_api.overlap_scan`): queued, running, done or failed."""
+
+    state: overlap_scan.ScanState
+    scope: Literal["actionable", "all"] | None = None
+    #: Names the scan reads, known once the worker has resolved the page; then how many are done.
+    total: int | None = None
+    done: int = 0
+    announcements: int | None = None
+    earnings_dates: int | None = None
+    rows_written: int | None = None
+    #: Names whose NSE read failed; skipped, counted, named — the feed's fail-soft rule.
+    failed: list[str] = Field(default_factory=list)
+    error: str | None = None
+    queued_at: str | None = None
+    started_at: str | None = None
+    finished_at: str | None = None
+
+
+def _scan_out(status_payload: dict[str, object]) -> Response:
+    return _json(OverlapScanOut.model_validate(status_payload))
+
+
+@router.post(
+    "/catalyst-scan",
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=OverlapScanOut,
+    summary="Read every listed name's filings now",
+)
+async def post_catalyst_scan(
+    request: Request,
+    session: SessionDep,
+    principal: AuthenticatedDep,
+    scope: Annotated[
+        Literal["actionable", "all"], Query(description="the rows the page is showing")
+    ] = "actionable",
+) -> Response:
+    """Queue one scan of the names the page lists; Laya tags what it finds. Sole tenant only.
+
+    Refused (409) while one is running and during 09:10-09:30 IST, when the NSE limiter belongs
+    to the swing monitor. Reads filings and result dates into the catalyst feed: display context,
+    never a rank, a size or an order.
+    """
+    user_id = await scoped_sole_user_id(session, principal.require_user(), surface="corrections")
+    queued = await overlap_scan.start_scan(
+        _cache(request),
+        getattr(request.app.state, "task_queue", None),
+        user_id=user_id,
+        scope=scope,
+        now=dt.datetime.now(tz=dt.UTC),
+    )
+    queued.pop("task_id", None)
+    response = _scan_out(queued)
+    response.status_code = status.HTTP_202_ACCEPTED
+    return response
+
+
+@router.get("/catalyst-scan", response_model=OverlapScanOut, summary="The filings scan's progress")
+async def get_catalyst_scan(
+    request: Request, session: SessionDep, principal: AuthenticatedDep
+) -> Response:
+    """``state: idle`` when no scan has run; otherwise the last one's progress. Sole tenant only."""
+    user_id = await scoped_sole_user_id(session, principal.require_user(), surface="corrections")
+    return _scan_out(await overlap_scan.read_status(_cache(request), user_id))

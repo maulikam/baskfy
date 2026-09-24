@@ -23,6 +23,15 @@ disagree with. So the surface has two writes on one path — a correction and it
 they are the whole of what may be written: one table, `catalyst_tag_correction`, holding a label
 on display context that never reached a rank, a size or an order. `DELIBERATE_MUTATING_ROUTES`
 below is an exact equality, so a third verb or a second path is a second decision.
+
+WHY THERE IS A FILINGS SCAN, AND WHY IT IS STILL NOT A "SCAN NOW" (25 Sep 2026)
+------------------------------------------------------------------------------
+Maulik, in session: "put laya scan button on overlap page". `POST /overlap/catalyst-scan` was
+that second decision. It queues ONE task, `baskfy.overlap.catalyst_scan`, which reads the listed
+names' exchange filings and result dates into the catalyst feed (`sw_catalyst`) and wakes Laya.
+It runs no sleeve's detector, so the page still does not decide when the sleeves run — the
+reason above stands, and `test_the_filings_scan_publishes_one_task_and_runs_no_detector` pins
+it. What it writes is display context: the Results and Filing cells.
 """
 
 from __future__ import annotations
@@ -32,7 +41,7 @@ import typing
 
 import pytest
 
-from baskfy_api import instrument_appearances
+from baskfy_api import instrument_appearances, overlap_scan
 from baskfy_api import overlap as overlap_service
 from baskfy_api.app import create_app
 from baskfy_api.routers import overlap as overlap_router
@@ -45,6 +54,8 @@ OpenApiSpec = dict[str, dict[str, dict[str, object]]]
 #: `test_every_route_is_a_get_except_the_documented_writes` the moment it is added.
 DELIBERATE_MUTATING_ROUTES: dict[str, set[str]] = {
     "/api/v1/overlap/tags": {"put", "delete"},
+    # The "Scan filings with Laya" button: queues the filings read, never a detector.
+    "/api/v1/overlap/catalyst-scan": {"post"},
 }
 
 #: The read model: everything that serves `GET /overlap`. These are scanned for a write verb;
@@ -71,21 +82,23 @@ def _overlap_paths(spec: OpenApiSpec) -> list[str]:
 
 
 class TestTheSurfaceIsRegisteredAndReadOnly:
-    def test_the_three_routes_exist(self, spec: OpenApiSpec) -> None:
+    def test_the_four_routes_exist(self, spec: OpenApiSpec) -> None:
         assert _overlap_paths(spec) == [
             "/api/v1/overlap",
+            "/api/v1/overlap/catalyst-scan",
             "/api/v1/overlap/tags",
             "/api/v1/overlap/tags/export",
         ]
         assert set(spec["paths"]["/api/v1/overlap"]) == {"get"}
         assert set(spec["paths"]["/api/v1/overlap/tags/export"]) == {"get"}
+        assert set(spec["paths"]["/api/v1/overlap/catalyst-scan"]) == {"get", "post"}
 
     def test_every_route_is_a_get_except_the_documented_writes(self, spec: OpenApiSpec) -> None:
         for path in _overlap_paths(spec):
             allowed = {"get"} | DELIBERATE_MUTATING_ROUTES.get(path, set())
             assert set(spec["paths"][path]) <= allowed, (
                 f"{path} exposes {sorted(spec['paths'][path])}; /overlap is read-only apart from "
-                f"a headline-tag correction"
+                f"a headline-tag correction and the filings scan"
             )
 
     def test_the_exemption_is_still_a_real_route(self, spec: OpenApiSpec) -> None:
@@ -94,7 +107,7 @@ class TestTheSurfaceIsRegisteredAndReadOnly:
             assert path in spec["paths"], f"{path} is exempted but no longer served"
             assert verbs <= set(spec["paths"][path])
 
-    def test_the_mutating_routes_are_the_correction_and_nothing_else(
+    def test_the_mutating_routes_are_the_correction_and_the_scan_and_nothing_else(
         self, spec: OpenApiSpec
     ) -> None:
         """Exact equality, not a subset: a third verb or a second path would be a second
@@ -111,7 +124,7 @@ class TestTheSurfaceIsRegisteredAndReadOnly:
         source = inspect.getsource(overlap_router)
         assert source.count("@router.put(") == 1, "the correction, and nothing else"
         assert source.count("@router.delete(") == 1, "its removal, and nothing else"
-        assert "@router.post(" not in source, "routers/overlap.py declares a POST"
+        assert source.count("@router.post(") == 1, "the filings scan, and nothing else"
         assert "@router.patch(" not in source, "routers/overlap.py declares a PATCH"
 
     def test_the_scope_query_admits_the_two_documented_values_only(self, spec: OpenApiSpec) -> None:
@@ -182,9 +195,9 @@ class TestTheSurfaceIsRegisteredAndReadOnly:
             for name, value in vars(overlap_router).items()
             if callable(value)
             and getattr(value, "__module__", "") == overlap_router.__name__
-            and name.startswith(("get_", "put_", "delete_"))
+            and name.startswith(("get_", "put_", "delete_", "post_"))
         ]
-        assert len(handlers) == 4, f"found {len(handlers)} route handlers, expected four"
+        assert len(handlers) == 6, f"found {len(handlers)} route handlers, expected six"
         for handler in handlers:
             hints = typing.get_type_hints(handler, include_extras=True)
             assert "principal" in hints, f"{handler.__name__} takes no principal"
@@ -194,18 +207,39 @@ class TestTheSurfaceIsRegisteredAndReadOnly:
         sole tenant and passes ``None`` for anyone else rather than trusting the principal;
         the writes and the export refuse anyone else outright, the way `/swing`'s do."""
         source = inspect.getsource(overlap_router)
-        assert source.count("scoped_sole_user_id(") == 4
+        assert source.count("scoped_sole_user_id(") == 6
         assert "strategies_user_id=sole" in source
         for handler in (
             overlap_router.put_tag,
             overlap_router.delete_tag,
             overlap_router.get_tags_export,
+            overlap_router.post_catalyst_scan,
+            overlap_router.get_catalyst_scan,
         ):
             handler_source = inspect.getsource(handler)
             assert "user_id = await scoped_sole_user_id(" in handler_source
             assert "except Problem" not in handler_source, (
                 f"{handler.__name__} swallows the refusal"
             )
+
+    def test_the_filings_scan_publishes_one_task_and_runs_no_detector(self) -> None:
+        """The button reads filings; it must never become the page that runs the sleeves."""
+        assert overlap_scan.SCAN_TASK == "baskfy.overlap.catalyst_scan"
+        source = inspect.getsource(overlap_scan) + inspect.getsource(
+            overlap_router.post_catalyst_scan
+        )
+        assert source.count("send_task(") == 1
+        assert "send_task(SCAN_TASK" in source
+        for forbidden in (
+            "baskfy.swing.",
+            "baskfy.vbt.",
+            "baskfy.twt.",
+            "baskfy.pipeline.",
+            "scan_now",
+            "request_scan",
+            "detect",
+        ):
+            assert forbidden not in source, f"the filings scan names {forbidden}"
 
 
 class TestActionableIsTheStrategysOwnWord:

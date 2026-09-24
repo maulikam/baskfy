@@ -266,6 +266,25 @@ OPTIONS_BOOK_DAILY_LOSS_INR_MAX = os.getenv("BASKFY_OPTIONS_BOOK_DAILY_LOSS_INR_
 OPTIONS_BOOK_MONTHLY_LOSS_INR_MAX = os.getenv("BASKFY_OPTIONS_BOOK_MONTHLY_LOSS_INR_MAX", "75000")
 OPTIONS_HARD_EXIT_LATEST = os.getenv("BASKFY_OPTIONS_HARD_EXIT_LATEST", "15:00")
 
+# ---- The FO run (docs/fno/02 Track B, FO6) -----------------------------------------------
+# F1 (NIFTY/BANKNIFTY monthly iron condors) and F2 (stock-futures breakout, long only), PAPER
+# ONLY. A real FO order needs FOUR switches at once for its sleeve — DRY_RUN off, OPTIONS_ENABLED,
+# BASKFY_FNO_CARRY_ENABLED, and the sleeve's own flag below — and `app/fno_gates.py` ANDs them
+# through `baskfy_core.fno.gating.fno_gates`. INTRADAY_ENABLED is NOT one of them: an FO order is
+# NRML, never MIS. With the sleeve's flag false the sleeve is PAPER and journals simulated=true
+# whatever DRY_RUN says. Flipping any of them is Maulik's hand alone after docs/fno/02 §3; nothing
+# is pre-delegated. Read once, here; never a form field.
+#
+# THERE IS NO AUTO-EXECUTE FLAG FOR ANY FO SLEEVE, and none may be added (docs/fno/02 Track B;
+# FO11 scans for one). The swing and TWT exceptions above are Maulik's for those books only.
+FNO_CARRY_ENABLED = os.getenv("BASKFY_FNO_CARRY_ENABLED", "false").lower() == "true"
+FNO_F1_EXECUTION_ENABLED = (
+    os.getenv("BASKFY_FNO_F1_EXECUTION_ENABLED", "false").lower() == "true")
+FNO_F2_EXECUTION_ENABLED = (
+    os.getenv("BASKFY_FNO_F2_EXECUTION_ENABLED", "false").lower() == "true")
+# Operational — the desk process that raises plans and runs exits (FO7). Moves no money.
+FNO_MONITOR_ENABLED = os.getenv("BASKFY_FNO_MONITOR_ENABLED", "false").lower() == "true"
+
 # ---- The swing book's notifier (SW11, STANDING-ANSWERS A2) -------------------------------
 # One-way. A TRIGGERED signal for a daily-focus name is emailed with the whole line; nothing
 # that comes back — a reply, a tap — can reach an order. The desk does not import the data

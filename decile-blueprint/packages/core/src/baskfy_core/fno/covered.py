@@ -85,6 +85,28 @@ def book_after(
     return (*broker_positions, *plan_filled, step)
 
 
+def net_of_plan(
+    broker_raw: Iterable[OptionPosition], plan_filled: Iterable[OptionPosition]
+) -> tuple[OptionPosition, ...]:
+    """The broker's book with this plan's filled legs taken out (FO1.2's caller contract, FO6).
+
+    Kite reports a net quantity per contract, not per plan, so a book read after a leg filled
+    already holds that leg. Subtracting it here is what lets :func:`book_after` add it back
+    exactly once. If the broker has not yet reflected a fill, the subtraction leaves a negative
+    (short) residue, which can only make the guard stricter — the safe direction.
+    """
+    net: dict[tuple[str, dt.date, OptionType, Decimal], int] = defaultdict(int)
+    for row in broker_raw:
+        net[(row.underlying, row.expiry, row.option_type, row.strike)] += row.quantity
+    for row in plan_filled:
+        net[(row.underlying, row.expiry, row.option_type, row.strike)] -= row.quantity
+    return tuple(
+        OptionPosition(underlying, expiry, kind, strike, qty)
+        for (underlying, expiry, kind, strike), qty in net.items()
+        if qty != 0
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class StepVerdict:
     covered: bool

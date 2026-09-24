@@ -307,3 +307,48 @@ A 15:00 Beat entry that runs late (a worker restart) must not sample a closed bo
 **A note on history.** The first draft of `spreads.py` went into `418809d` (FO2's wiring commit)
 because that commit staged the worker directory whole while FO3 was being written. It is left in
 place rather than rewriting history; FO3's commit carries the finished file.
+
+## FO6.1 — The covered predicate is injected into the gateway, fail closed · ⚠ UNREVIEWED
+
+**Context.** `packages/execution` does not import `baskfy_core` (`tenancy.py`, `gtt.py`), and FO1's
+`covered.uncovered` must not be re-coded. **Choice.** `OrderGateway(coverage=...)` takes the
+predicate as a callable (the same pattern as `ProductGates`); the FO gateway wires
+`baskfy_core.fno.covered.uncovered`. With nothing wired, every option order carrying a `fo_plan`
+reference is refused. The gateway itself composes broker + plan fills + order. **Rejected.** Making
+execution depend on core (breaks a stated layering); a copy of the predicate (two rules that could
+drift). **Reversal.** Import `uncovered` in `guards.py` and drop the parameter.
+
+## FO6.2 — The `fo_plan` reference must describe the order it rides on · ⚠ UNREVIEWED
+
+`FoPlanRef(plan_id, sleeve, step, broker_positions, plan_filled)`. The gateway refuses a reference
+with no plan id, an unknown sleeve, a venue other than NFO, an F1 reference on a non-option or an F2
+reference on a non-future, and an option order whose `step` is not that order (signed quantity,
+underlying, strike, type, and an exact expiry code between them, so `NIFTY` cannot match
+`NIFTYNXT50` and strike 25000 cannot match 125000). Stricter than `02` §1 states; nothing in force
+sends a `fo_plan` yet. A `fo_plan` option under MIS still meets the cover rule.
+
+## FO6.3 — `covered.net_of_plan` is the FO1.2 contract as a function · ⚠ UNREVIEWED
+
+Kite reports net quantity per contract, not per plan. `net_of_plan(raw, plan_filled)` removes the
+plan's fills so `book_after` adds them once (tested: the naive composition would admit a short twice
+its cover; the gateway refuses it). A broker book lagging a fill leaves a short residue, which only
+makes the guard stricter. `broker_positions` is documented as the NRML option book: an MIS long from
+another book is squared off at the close and must not count as overnight cover (FO7/FO8 owe this
+filter when they read `positions()`).
+
+## FO6.4 — The F2 GTT branch: stock futures only, leg NRML · ⚠ UNREVIEWED
+
+A GTT with a `fo_plan` reference is admitted only for an F2 reference, on NFO, for a future whose
+underlying is not an index (`INDEX_UNDERLYINGS`), with `OPTIONS_ENABLED` and
+`BASKFY_FNO_CARRY_ENABLED`; its leg is `NRML` (`gtt_order_leg(product=...)`, default CNC unchanged).
+An option GTT is refused before the reference is even read, under every switch and every plan.
+`modify_gtt_quantity` and `delete_gtt` are unchanged; F2's evening trail (FO7) needs a
+trigger-moving modify that keeps the NRML leg, which does not exist yet.
+
+## FO6.5 — `fno_gates` hands the gateway `intraday_enabled=False` in every row · ⚠ UNREVIEWED
+
+Mirrors OP2.3 otherwise: with the sleeve's flag off the gate is PAPER with `dry_run=True` and both
+derivative switches true (a paper confirm runs the real gateway path, simulated whatever `DRY_RUN`
+says); with it on but not all four, the real `OPTIONS_ENABLED`/`BASKFY_FNO_CARRY_ENABLED` pass
+through so the gateway refuses a half-flip. `INTRADAY_ENABLED` is never read, so no FO gate ever
+admits MIS. The desk's weekly gateway (`_gates_from_config`) does not read the carry flag (tested).

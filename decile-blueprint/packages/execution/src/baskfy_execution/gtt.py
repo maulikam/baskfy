@@ -311,12 +311,16 @@ def gtt_order_leg(
     exchange: str,
     qty: int,
     limit: float,
+    product: str | None = None,
 ) -> dict[str, object]:
     """The single SELL leg a stop trigger fires.
 
     Verbatim from `kite_client.py:265-269`: CNC, LIMIT, the held quantity, at a price just
     under the trigger. Taking the broker's own constants off the client rather than hard-coding
     the strings, exactly as the desk did.
+
+    ``product`` is ``None`` for every caller but one: an F2 stock future's stop (FO6) is ``NRML``,
+    the product the gateway's guard admitted. ``None`` is the client's CNC, byte for byte.
     """
     return {
         "exchange": exchange,
@@ -324,7 +328,7 @@ def gtt_order_leg(
         "transaction_type": kc.TRANSACTION_TYPE_SELL,
         "quantity": int(qty),
         "order_type": kc.ORDER_TYPE_LIMIT,
-        "product": kc.PRODUCT_CNC,
+        "product": kc.PRODUCT_CNC if product is None else product,
         "price": limit,
     }
 
@@ -338,10 +342,11 @@ def gtt_params(
     trigger: float,
     limit: float,
     last_price: float,
+    product: str | None = None,
 ) -> dict[str, object]:
     """Everything `kc.place_gtt` is called with. `kite_client.py:261-269`."""
     orders: Sequence[dict[str, object]] = [
-        gtt_order_leg(kc, symbol=symbol, exchange=exchange, qty=qty, limit=limit)
+        gtt_order_leg(kc, symbol=symbol, exchange=exchange, qty=qty, limit=limit, product=product)
     ]
     return {
         "trigger_type": kc.GTT_TYPE_SINGLE,

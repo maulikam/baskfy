@@ -3,7 +3,7 @@
 Updated at the end of every module, and loud about what is NOT done. A fresh session resumes from
 the first module not marked ✅.
 
-**Run state: FO0 ✅, FO2 🟡 (25 Sep 2026; derivation wired after FO1); FO1 in progress.** Branch `developer`. The OP run is complete (OP15 ✅,
+**Run state: FO0 ✅, FO1 ✅, FO2 ✅ (25 Sep 2026); FO3 in progress.** Branch `developer`. The OP run is complete (OP15 ✅,
 deployed `acac17c`; the options monitor flag was turned on at Maulik's answer, DECISIONS-OP OP-M.1).
 
 ## What exists already (built with the pack, 23 Sep 2026)
@@ -20,8 +20,8 @@ deployed `acac17c`; the options monitor flag was turned on at Maulik's answer, D
 | Module | State | One line |
 |---|---|---|
 | FO0 — Baseline and facts | ✅ | Baseline recorded; B4 N=15 and F2 reproduce to the digit; box reads the F&O bhavcopy, the ban list and BANKNIFTY's master (below) |
-| FO1 — Pure core `baskfy_core.fno` | ⬜ | |
-| FO2 — Schema, nightly ingest, backfill, widened master | 🟡 | `0052_fno` (15 `fo_` tables + `fo_ingest_day`), `fo_ban_list`, the 18:30–23:30 ingest behind `BASKFY_FNO_SCAN_ENABLED`, the resumable backfill CLI with `--seed-archive`, the seed (F1 ₹10 L, F2 ₹0), the master widened with O-sleeve reads proved NIFTY-only. **Not yet:** `fo_underlying_daily` derivation (waits for FO1's `series`), the backfill not run |
+| FO1 — Pure core `baskfy_core.fno` | ✅ | Every `04` number a pure function (211 tests); `covered` property-tested over every prefix/partial fill; the research port reproduces B4 trade by trade and F2 (golden runs with `BASKFY_FNO_RESEARCH_DIR`) |
+| FO2 — Schema, nightly ingest, backfill, widened master | ✅ | `0052_fno` (15 `fo_` tables + `fo_ingest_day`), `fo_ban_list`, the 18:30–23:30 ingest behind `BASKFY_FNO_SCAN_ENABLED`, the resumable backfill CLI with `--seed-archive`, the seed (F1 ₹10 L, F2 ₹0), the master widened with O-sleeve reads proved NIFTY-only. `fo_underlying_daily` derived each ingested night, levels anchored to the settle (FO2.8). **The backfill has not run** on the box (FO12) |
 | FO3 — 15:00 spread sample | ⬜ | |
 | FO4 — Nightly scan | ⬜ | |
 | FO5 — API + `/options/overnight`, `/options/fno` | ⬜ | |

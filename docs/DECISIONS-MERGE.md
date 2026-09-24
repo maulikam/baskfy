@@ -8224,3 +8224,31 @@ are context on a strategy row here, not a fourth strategy; the screens' own top-
 `CandidatesTable` mount in `/build/overlap/page.tsx`, the `/overlap` entry in
 `test_api_artifacts.py`, and re-run `make openapi client`. No schema, no migration, no stored
 data, no flag.
+
+## Overlap: a rules-based tag on the filing headline, the baseline a model must beat (25 Sep 2026) · ⚠ UNREVIEWED
+
+**Context.** The step after OV1, in the order settled in session: keyword baseline in
+production first, corrections next, a fine-tuned model shadowed against the baseline last.
+
+**Choice.** `baskfy_core.catalyst_tags.tag_headline` (pure) reads the swing feed's headline and
+returns one of eight event types (`earnings | order | approval | fundraising | governance |
+corporate_action | routine | other`), a priority fixed per type (order/earnings/approval high;
+fundraising/corporate action/governance medium; routine/other low), the phrases that decided
+it, and `source: "rules"`. A bare "Disclosure under Regulation 30" is `other` — the feed stores
+the headline, never the filing, so a subject the headline does not state is not invented. The
+tag rides the `catalyst` object on `GET /overlap` and renders as a small chip under the filing
+link on `/build/overlap`, with the source and the "why" on hover and a note that it is context
+for which filing to open first and is not used in any rank, size or order.
+`test_overlap_readonly.py` pins that the tag is computed from the headline alone.
+
+**Rejected.** (a) `setup_relationship` in the baseline — without the filing body it would be
+"unclear" on nearly every row; it waits for the corrected corpus. (b) Correction controls in
+this commit — they need a table (a migration), and the FO run was mid-flight on the same
+Alembic chain; a second head would have broken its deploy. Next commit, once FO's migrations
+settle: `catalyst_tag_correction(user_id, catalyst_id, event_type, note)` written through the
+existing money-free note path, read back beside the rules tag, and exported as the fine-tuning
+set. (c) A model now — no corpus, near-chance zero-shot.
+
+**Reverse.** Delete `catalyst_tags.py` and its test, drop `catalyst_tag` from `overlap.py`,
+`OverlapTagOut` from the router and the `TagChip` from the table, and re-run `make openapi
+client`. No schema, no data, no flag.

@@ -44,6 +44,7 @@ from baskfy_api.curated_tenant import scoped_sole_user_id
 from baskfy_api.db import SessionDep
 from baskfy_api.live_prices import live_marks_for_symbols
 from baskfy_api.problems import Problem
+from baskfy_core.catalyst_tags import EventType, ReviewPriority
 from baskfy_core.screener import canonical_json
 
 router = APIRouter(prefix="/overlap", tags=["overlap"])
@@ -82,6 +83,21 @@ class OverlapScreenOut(BaseModel):
     definition_changed: bool
 
 
+class OverlapTagOut(BaseModel):
+    """The rules baseline's word on the headline (`baskfy_core.catalyst_tags`).
+
+    Display context on a candidate row and nothing more: it is not read by any rank, filter,
+    size or order path, and the page labels it so. ``source`` names what produced it — ``rules``
+    today; a model, when one is fine-tuned and shadowed, writes its own name here and the wire
+    shape does not change. ``matched`` is why: the phrases that decided the type.
+    """
+
+    event_type: EventType
+    review_priority: ReviewPriority
+    matched: list[str]
+    source: str
+
+
 class OverlapCatalystOut(BaseModel):
     """SW11B (A3): the swing feed's newest link and the earnings date — never the filing."""
 
@@ -89,6 +105,8 @@ class OverlapCatalystOut(BaseModel):
     published_at: dt.datetime | None
     url: str | None
     earnings_date: dt.date | None
+    #: Present exactly when there is a headline to read.
+    tag: OverlapTagOut | None
 
 
 class OverlapRowOut(BaseModel):
@@ -189,6 +207,16 @@ async def get_overlap(
                             published_at=row.catalyst.published_at,
                             url=row.catalyst.url,
                             earnings_date=row.catalyst.earnings_date,
+                            tag=(
+                                None
+                                if row.catalyst_tag is None
+                                else OverlapTagOut(
+                                    event_type=row.catalyst_tag.event_type,
+                                    review_priority=row.catalyst_tag.review_priority,
+                                    matched=list(row.catalyst_tag.matched),
+                                    source=row.catalyst_tag.source,
+                                )
+                            ),
                         )
                     ),
                 )

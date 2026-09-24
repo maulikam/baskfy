@@ -14,6 +14,7 @@ import type {
   OverlapCandidates,
   OverlapScope,
   OverlapStrategy,
+  OverlapTag,
 } from "@/lib/overlap/candidates";
 import { cn } from "@/lib/utils";
 
@@ -28,8 +29,10 @@ import { cn } from "@/lib/utils";
  * a strategy could act, then by symbol, and the header says so.
  *
  * **The link out is the filing, never the text.** A catalyst is a headline and the exchange's
- * own URL, opened in a new tab. Nothing is reproduced and nothing is classified: whether the
- * filing explains the move is the reader's judgement, on the exchange's page.
+ * own URL, opened in a new tab. Nothing is reproduced. The small tag beside it is the rules
+ * baseline's reading of the *headline* (`baskfy_core.catalyst_tags` — an order, a result, a
+ * routine notice), labelled with its source and never read by any rank or order path; whether
+ * the filing explains the move is still the reader's judgement, on the exchange's page.
  *
  * **Nothing here can place an order**, queue a scan, or change a setting. The table reads one
  * GET and renders it; the sleeve pages it links to are where a person acts.
@@ -110,6 +113,11 @@ export function CandidatesTable({
       ) : (
         <LiveMarksProvider symbols={rows.map((row) => row.symbol)}>
           <LiveStatus asOf={latest} />
+          <p className="text-xs text-muted-foreground" data-testid="overlap-candidates-tag-note">
+            The small tag under a filing is read from its headline by fixed rules — the subject
+            the exchange named, nothing more. It is context for which filing to open first and is
+            not used in any rank, size or order.
+          </p>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[56rem] text-sm" data-testid="overlap-candidates-table">
               <thead>
@@ -194,9 +202,12 @@ function CandidateRow({ row }: { row: OverlapCandidate }) {
         ) : (
           <span className="text-muted-foreground/70">—</span>
         )}
-        {row.catalyst?.published_at ? (
-          <span className="block text-xs text-muted-foreground">
-            {formatTradeDate(row.catalyst.published_at.slice(0, 10))}
+        {row.catalyst?.published_at || row.catalyst?.tag ? (
+          <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+            {row.catalyst?.tag ? <TagChip tag={row.catalyst.tag} /> : null}
+            {row.catalyst?.published_at ? (
+              <span>{formatTradeDate(row.catalyst.published_at.slice(0, 10))}</span>
+            ) : null}
           </span>
         ) : null}
       </td>
@@ -226,6 +237,53 @@ function CandidateRow({ row }: { row: OverlapCandidate }) {
         )}
       </td>
     </tr>
+  );
+}
+
+/** The reader's word for each event type — the wire keeps the snake_case, the page does not. */
+const EVENT_WORDS: Record<OverlapTag["event_type"], string> = {
+  earnings: "Results",
+  order: "Order win",
+  approval: "Approval",
+  fundraising: "Fund raise",
+  governance: "Governance",
+  corporate_action: "Corporate action",
+  routine: "Routine notice",
+  other: "Unclear",
+};
+
+function TagChip({ tag }: { tag: OverlapTag }) {
+  const why =
+    tag.matched.length > 0 ? `matched: ${tag.matched.join(", ")}` : "no subject in the headline";
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5",
+        tag.review_priority === "high"
+          ? "border-primary/40 text-foreground"
+          : tag.review_priority === "medium"
+            ? "border-border text-foreground/80"
+            : "border-border/60 text-muted-foreground",
+      )}
+      data-testid="overlap-candidate-tag"
+      data-event={tag.event_type}
+      data-priority={tag.review_priority}
+      data-source={tag.source}
+      title={`Read from the headline by ${tag.source} (${why}). Context only — not used in any rank, size or order.`}
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          "inline-block size-1.5 rounded-full",
+          tag.review_priority === "high"
+            ? "bg-primary"
+            : tag.review_priority === "medium"
+              ? "bg-foreground/50"
+              : "bg-muted-foreground/40",
+        )}
+      />
+      {EVENT_WORDS[tag.event_type]}
+    </span>
   );
 }
 

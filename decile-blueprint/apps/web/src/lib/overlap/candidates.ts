@@ -26,11 +26,33 @@ export interface OverlapScreen {
   definition_changed: boolean;
 }
 
+/**
+ * The rules baseline's word on the headline. Display context only — never an input to a rank,
+ * a filter, a size or an order — and `source` says what produced it (`rules` today).
+ */
+export interface OverlapTag {
+  event_type:
+    | "earnings"
+    | "order"
+    | "approval"
+    | "fundraising"
+    | "governance"
+    | "corporate_action"
+    | "routine"
+    | "other";
+  review_priority: "high" | "medium" | "low";
+  /** The phrases that decided the type — the "why", shown on hover. */
+  matched: readonly string[];
+  source: string;
+}
+
 export interface OverlapCatalyst {
   headline: string | null;
   published_at: string | null;
   url: string | null;
   earnings_date: string | null;
+  /** Present exactly when there is a headline to read. */
+  tag: OverlapTag | null;
 }
 
 export interface OverlapCandidate {

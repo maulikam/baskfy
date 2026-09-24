@@ -270,7 +270,16 @@ class TestTheReadModel:
         assert both.catalyst is not None
         assert both.catalyst.headline == "Press Release - BOTH wins a multi-year order"
         assert both.catalyst.earnings_date == dt.date(2026, 9, 15)
+        # The rules baseline read the headline: an order, high priority, and it says why.
+        assert both.catalyst_tag is not None
+        assert (both.catalyst_tag.event_type, both.catalyst_tag.review_priority) == (
+            "order",
+            "high",
+        )
+        assert both.catalyst_tag.matched == ("order",)
+        assert both.catalyst_tag.source == "rules"
         assert view.rows[1].catalyst is None
+        assert view.rows[1].catalyst_tag is None
 
     async def test_scope_all_keeps_every_row_the_scans_wrote_and_says_which_is_which(
         self, screener_session: AsyncSession
@@ -376,6 +385,12 @@ class TestTheRoute:
         assert both["strategies"][0]["ref"] == "/swing"
         assert both["catalyst"]["earnings_date"] == "2026-09-15"
         assert both["catalyst"]["url"].startswith("https://nsearchives.nseindia.com/")
+        assert both["catalyst"]["tag"] == {
+            "event_type": "order",
+            "review_priority": "high",
+            "matched": ["order"],
+            "source": "rules",
+        }
         assert both["last_price"] is None
         assert len(everything.json()["data"]) == 4
 

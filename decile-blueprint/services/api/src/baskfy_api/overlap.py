@@ -44,6 +44,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.swing import latest_detected_date
 from baskfy_api.swing_catalyst import CatalystView, latest_for
+from baskfy_core.catalyst_tags import CatalystTag, tag_headline
 from baskfy_core.models import (
     Instrument,
     Screen,
@@ -131,6 +132,9 @@ class CandidateRow:
     screens: tuple[ScreenHit, ...]
     #: The swing feed's newest announcement and earnings date, when the feed has the name.
     catalyst: CatalystView | None
+    #: The rules baseline's word on that headline (`baskfy_core.catalyst_tags`): display context,
+    #: never an input. ``None`` exactly when there is no headline to read.
+    catalyst_tag: CatalystTag | None = None
 
     @property
     def strategy_count(self) -> int:
@@ -328,6 +332,18 @@ async def _screens(
     return dict(hits), len(screens)
 
 
+def _tag(view: CatalystView | None) -> CatalystTag | None:
+    """The baseline tag for the feed's newest headline; nothing when there is no headline.
+
+    The tag reads the headline and nothing else — none of the row's numbers, and never the
+    filing — so the same string tags the same on every row it appears on. Whether the filing
+    explains the move stays the reader's call, on the exchange's page.
+    """
+    if view is None or view.headline is None or not view.headline.strip():
+        return None
+    return tag_headline(view.headline)
+
+
 async def overlap(
     session: AsyncSession,
     *,
@@ -378,6 +394,7 @@ async def overlap(
             strategies=tuple(found),
             screens=tuple(screens.get(instrument_id, ())),
             catalyst=catalysts.get(instrument_id),
+            catalyst_tag=_tag(catalysts.get(instrument_id)),
         )
         for instrument_id, found in kept.items()
     ]

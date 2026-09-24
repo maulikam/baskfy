@@ -53,7 +53,7 @@ The agent's calls worth reading first (all ⚠ UNREVIEWED in `DECISIONS-FO.md`):
   cannot fire for about 50 sessions, and the re-test and the 1-year IV percentile stay thin until
   `fno_cli backfill` runs (~90 minutes at the NSE limiter, outside market hours).
 * **No live FO path.** FO7.1 pins the gateway to dry run, and nothing reads fills back from Kite.
-* **No browser or phone check** of `/options/overnight`, `/options/fno` or the desk's `/fno`.
+* **Browser check done on desktop (25 Sep, ~05:00 IST)**: `/options/overnight` and `/options/fno` on staging, and the desk's `/fno` rendered with a live F1 plan through FO8's harness (the desk's basic auth was not entered). It found the API still reporting the scan off until `api` was recreated with the new flag, and the plan card unstyled; both are fixed and deployed (`cdc8707`). **Not checked: phone widths.** The overnight page's paper tally says "rule violations are not counted yet": the API does not read FO10's checklist.
 * **No web settings form**; the PATCH exists in the API only.
 * The results calendar (Q8) has no table (FO3.6); F2 has no results-day skip (FO4.6).
 * The `ROLL_INCOMPLETE` journal path is wired and untested (FO10).

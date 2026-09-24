@@ -44,6 +44,15 @@ README. The sizing arithmetic tests now name a ₹10 lakh sleeve explicitly and 
 seeded budget to the ceiling; the scan test proves both sides (₹25 lakh → CANDIDATE, ₹10 lakh →
 `REJECTED_SIZE` "0 lots"). **Moves no money**: every FO execution flag stays false.
 
+## M.3 — The F1 confirm sentence names the loss close (Maulik, in session, 25 Sep 2026)
+
+FO8.5 found that `05` §4's sentence ("…the 50 % profit take and the E−1 15:00 exit of this
+structure. It places nothing else.") predates M.1's loss close, which also fires under the
+confirm, so the sentence understated what the click authorises. Asked with options, Maulik chose to
+name it: **"This confirm also authorises this structure's 50 % profit take, its loss close at 1.5×
+the credit (shorts first), and its E−1 15:00 exit. It places nothing else."** `05` §4, the desk's
+`CONFIRM_SENTENCES` and the page test carry it.
+
 ## PACK.2 — The F&O bhavcopy is read through `NSEProvider`, not a new provider · ⚠ UNREVIEWED
 
 **Context.** The research needed every contract's end-of-day price for 2022–2026, including

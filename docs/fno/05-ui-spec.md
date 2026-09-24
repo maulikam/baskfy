@@ -66,8 +66,9 @@ Phone: the table collapses to symbol · IV ÷ RV · OI chg · ban, and a tap ope
   bid/ask, spread %, OI, credit vs the scan's credit (a > 20 % drift is shown in amber), max loss in
   ₹ and R, lots, the broker's basket margin vs free margin, the costs, **the entry sequence
   (longs first)** and the hard exit date. Then **Confirm (paper)** with the sentence: "This
-  confirm also authorises the 50 % profit take and the E−1 15:00 exit of this structure. It
-  places nothing else." It has a 30-minute countdown to `expires_at`.
+  confirm also authorises this structure's 50 % profit take, its loss close at 1.5× the credit
+  (shorts first), and its E−1 15:00 exit. It places nothing else." (Maulik, M.3: the loss close
+  of M.1 fires under the same confirm, so the sentence names it.) It has a 30-minute countdown to `expires_at`.
 * **Open structures**: a live mark, the distance of the underlying to each short strike in σ, the
   distance to the loss close (1.5 × credit) and to the profit take, and the next rule to fire.
 * **F2**: the morning candidates with Confirm (paper), each stating "This confirm also authorises

@@ -59,8 +59,8 @@ SPOT_NAMES: dict[str, str] = {"NIFTY": "NIFTY 50", "BANKNIFTY": "NIFTY BANK"}
 #: `05` §4, verbatim, under each sleeve's Confirm (paper).
 CONFIRM_SENTENCES: dict[str, str] = {
     "F1": (
-        "This confirm also authorises the 50 % profit take and the E−1 15:00 exit of this "  # noqa: RUF001 - 05 §4 verbatim
-        "structure. It places nothing else."
+        "This confirm also authorises this structure's 50 % profit take, its loss close at "
+        "1.5× the credit (shorts first), and its E−1 15:00 exit. It places nothing else."  # noqa: RUF001 - 05 §4 verbatim (Maulik, M.3)
     ),
     "F2": (
         "This confirm also authorises this position's trailing GTT stop, its E−1 rolls and its "  # noqa: RUF001 - 05 §4 verbatim

@@ -62,8 +62,9 @@ from test_fno_monitor import (  # noqa: F401 - the FO7 replay harness and its fi
 
 #: `05` §4 verbatim: the minus in "E-1" is U+2212, as the spec prints it.
 E_MINUS_1 = "E\u22121"
-F1_SENTENCE = (f"This confirm also authorises the 50 % profit take and the {E_MINUS_1} 15:00 exit "
-               "of this structure. It places nothing else.")  # fmt: skip
+F1_SENTENCE = ("This confirm also authorises this structure's 50 % profit take, its loss close at "
+               f"1.5\u00d7 the credit (shorts first), and its {E_MINUS_1} 15:00 exit. It places "
+               "nothing else.")  # fmt: skip - Maulik, DECISIONS-FO M.3
 F2_SENTENCE = (f"This confirm also authorises this position's trailing GTT stop, its {E_MINUS_1} "
                "rolls and its 40-session time exit")  # fmt: skip
 FO_FLAGS = ("OPTIONS_ENABLED", "FNO_CARRY_ENABLED", "FNO_F1_EXECUTION_ENABLED",

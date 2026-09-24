@@ -519,7 +519,10 @@ class TestTheNight:
             ban = out["ban_list"]
             assert isinstance(ingest, dict) and ingest["status"] == "INGESTED"
             assert isinstance(ban, dict) and ban["symbols"] == ["KAYNES"]
-            assert out["underlying_rows"] is None, "TODO(FO1-wire): derivation not wired yet"
+            rows = out["underlying_rows"]
+            # The derivation ran. It writes nothing on the first session there is: the held contract
+            # is the nearest expiry after the *previous* session (04 §4), and there is none.
+            assert rows == 0
             asked = len(client.file_requests())
             second = await run_night(session, provider, DAY, now_ist=now)
             assert len(client.file_requests()) == asked, "a finished night asks NSE nothing"

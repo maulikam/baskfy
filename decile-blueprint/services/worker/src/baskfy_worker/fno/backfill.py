@@ -21,12 +21,9 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from baskfy_core.models import TradingDay
 from baskfy_core.models.base import JsonObject
-from baskfy_core.seed_data import NSE_EXCHANGE_ID
 from baskfy_providers.archive import RawArchive, archive_key
 from baskfy_providers.nse import KIND_FO_BHAVCOPY
 from baskfy_worker.celery_app import IST
@@ -65,21 +62,6 @@ class BackfillReport:
             "seeded_from_archive": self.seeded_from_archive,
             "rows_kept": self.rows_kept,
         }
-
-
-async def trading_days(session: AsyncSession, start: dt.date, end: dt.date) -> list[dt.date]:
-    """NSE sessions in ``[start, end]`` from the ``trading_day`` calendar, oldest first."""
-    rows = await session.execute(
-        select(TradingDay.date)
-        .where(
-            TradingDay.exchange_id == NSE_EXCHANGE_ID,
-            TradingDay.is_trading_day.is_(True),
-            TradingDay.date >= start,
-            TradingDay.date <= end,
-        )
-        .order_by(TradingDay.date)
-    )
-    return [row[0] for row in rows]
 
 
 def seed_archive_day(archive: RawArchive, seed_dir: Path, day: dt.date) -> bool:

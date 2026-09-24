@@ -6,13 +6,9 @@ ending at ``trade_date``, hands it to the pure function, and upserts that sessio
 **without touching ``in_ban``**, which the nightly writes from the ban list before the derivation
 may have run (``baskfy_worker.fno.ingest.store_ban_list``).
 
-TODO(FO1-wire): the pure function is passed in rather than imported, so this module builds and
-type-checks before ``baskfy_core.fno.series`` exists. Wiring it means (a) confirming or adapting
-:class:`DeriveUnderlying` to FO1's real signature, (b) passing
-``baskfy_core.fno.series.derive_underlying`` from ``baskfy_worker.fno.nightly.run_night`` (which
-carries the same marker, and serves both the Beat task and ``fno_cli ingest``), and (c) removing
-the ``skip`` on ``test_fno_underlying.py``. Until then nothing calls
-:func:`derive_underlying_daily`.
+The pure function is passed in (:data:`DeriveUnderlying`), so the tests can drive the seam with a
+stand-in; the nightly passes :func:`derive_for_night`'s binding of
+``baskfy_core.fno.underlying.derive_underlying`` to the exchange calendar.
 """
 
 from __future__ import annotations
@@ -26,12 +22,19 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from baskfy_core.models import FoContractDaily, FoUnderlyingDaily
+from baskfy_core.fno.config import SeriesConfig
+from baskfy_core.fno.underlying import derive_underlying
+from baskfy_core.models import FoContractDaily, FoUnderlyingDaily, TradingDay
+from baskfy_core.seed_data import NSE_EXCHANGE_ID
 
 #: Sessions of history the derivation reads: ATR14, RV20 and the 20-session turnover median need
 #: 20, the 5-session corporate-action exclusion and the previous session's held expiry a few more.
-#: Calendar days, generous: ~60 sessions. TODO(FO1-wire): take FO1's own lookback if it names one.
-LOOKBACK_DAYS: Final = 90
+#: Calendar days: ~80 sessions, enough for F2's 50-session average (``04`` §10) to be read from a
+#: re-derived window as well.
+LOOKBACK_DAYS: Final = 120
+#: Calendar days of future calendar ``iv_atm`` needs (the nearest monthly with >= 8 sessions
+#: left can be two expiries out).
+CALENDAR_AHEAD_DAYS: Final = 100
 
 #: The derived columns :func:`derive_underlying_daily` writes (``03`` §2), ``in_ban`` excluded.
 DERIVED_COLUMNS: Final[tuple[str, ...]] = (
@@ -53,7 +56,7 @@ DERIVED_COLUMNS: Final[tuple[str, ...]] = (
 #: The contract ``derive_underlying_daily`` assumes of FO1's pure function: ``fo_contract_daily``
 #: rows (column names as the table's) for a window ending at ``trade_date`` in, one row per
 #: underlying for ``trade_date`` out, with ``symbol`` and the :data:`DERIVED_COLUMNS`, already
-#: rounded to their storage precision (house rule 8). TODO(FO1-wire): confirm against FO1.
+#: rounded to their storage precision (house rule 8).
 DeriveUnderlying = Callable[[pl.DataFrame, dt.date], pl.DataFrame]
 
 
@@ -103,3 +106,33 @@ async def derive_underlying_daily(
     )
     await session.flush()
     return len(rows)
+
+
+async def trading_days(session: AsyncSession, start: dt.date, end: dt.date) -> list[dt.date]:
+    """NSE sessions in ``[start, end]`` from the ``trading_day`` calendar, oldest first."""
+    rows = await session.execute(
+        select(TradingDay.date)
+        .where(
+            TradingDay.exchange_id == NSE_EXCHANGE_ID,
+            TradingDay.is_trading_day.is_(True),
+            TradingDay.date >= start,
+            TradingDay.date <= end,
+        )
+        .order_by(TradingDay.date)
+    )
+    return [row[0] for row in rows]
+
+
+async def derive_for_night(session: AsyncSession, trade_date: dt.date) -> int:
+    """The nightly's call: bind the pure derivation to the calendar and upsert ``trade_date``."""
+    sessions = await trading_days(
+        session,
+        trade_date - dt.timedelta(days=LOOKBACK_DAYS),
+        trade_date + dt.timedelta(days=CALENDAR_AHEAD_DAYS),
+    )
+    config = SeriesConfig()
+
+    def derive(window: pl.DataFrame, day: dt.date) -> pl.DataFrame:
+        return derive_underlying(window, day, sessions, config)
+
+    return await derive_underlying_daily(session, trade_date, derive)

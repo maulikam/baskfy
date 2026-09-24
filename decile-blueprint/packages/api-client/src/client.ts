@@ -367,3 +367,4 @@ export type OverlapRowOut = Schemas["OverlapRowOut"];
 export type OverlapStrategyOut = Schemas["OverlapStrategyOut"];
 export type OverlapScreenOut = Schemas["OverlapScreenOut"];
 export type OverlapCatalystOut = Schemas["OverlapCatalystOut"];
+export type OverlapTagOut = Schemas["OverlapTagOut"];

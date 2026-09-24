@@ -71,6 +71,7 @@ const payload = parseCandidates({
         published_at: "2026-09-11T13:02:00+00:00",
         url: "https://nsearchives.nseindia.com/corporate/BOTH.pdf",
         earnings_date: "2026-09-15",
+        tag: { event_type: "order", review_priority: "high", matched: ["order"], source: "rules" },
       },
     },
     {
@@ -127,11 +128,20 @@ describe("CandidatesTable", () => {
     expect(within(both).getByTestId("overlap-candidate-screen")).toHaveTextContent(
       "Investing 001 #3 of 40",
     );
+    /* The baseline's tag: the reader's word, the priority, the source and the why — as context. */
+    const tag = within(both).getByTestId("overlap-candidate-tag");
+    expect(tag).toHaveTextContent("Order win");
+    expect(tag).toHaveAttribute("data-priority", "high");
+    expect(tag).toHaveAttribute("data-source", "rules");
+    expect(tag).toHaveAttribute("title", expect.stringContaining("matched: order"));
+    expect(tag).toHaveAttribute("title", expect.stringContaining("not used in any rank"));
+    expect(screen.getByTestId("overlap-candidates-tag-note")).toHaveTextContent("fixed rules");
 
     /* A name the feed does not cover has no result date and no filing — dashes, not blanks. */
     const quiet = rows[1]!;
     expect(within(quiet).queryByTestId("overlap-candidate-earnings")).toBeNull();
     expect(within(quiet).queryByTestId("overlap-candidate-filing")).toBeNull();
+    expect(within(quiet).queryByTestId("overlap-candidate-tag")).toBeNull();
   });
 
   it("names each sleeve's session and says when they differ", () => {

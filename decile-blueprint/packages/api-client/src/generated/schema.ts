@@ -6522,6 +6522,11 @@ export interface components {
             /** Turnover */
             turnover: string;
         };
+        /**
+         * EventType
+         * @enum {string}
+         */
+        EventType: "earnings" | "order" | "approval" | "fundraising" | "governance" | "corporate_action" | "routine" | "other";
         /** ExitBody */
         ExitBody: {
             /** Holdings */
@@ -8781,6 +8786,7 @@ export interface components {
             headline: string | null;
             /** Published At */
             published_at: string | null;
+            tag: components["schemas"]["OverlapTagOut"] | null;
             /** Url */
             url: string | null;
         };
@@ -8869,6 +8875,23 @@ export interface components {
             /** Ref */
             ref: string;
             strategy: components["schemas"]["Strategy"];
+        };
+        /**
+         * OverlapTagOut
+         * @description The rules baseline's word on the headline (`baskfy_core.catalyst_tags`).
+         *
+         *     Display context on a candidate row and nothing more: it is not read by any rank, filter,
+         *     size or order path, and the page labels it so. ``source`` names what produced it — ``rules``
+         *     today; a model, when one is fine-tuned and shadowed, writes its own name here and the wire
+         *     shape does not change. ``matched`` is why: the phrases that decided the type.
+         */
+        OverlapTagOut: {
+            event_type: components["schemas"]["EventType"];
+            /** Matched */
+            matched: string[];
+            review_priority: components["schemas"]["ReviewPriority"];
+            /** Source */
+            source: string;
         };
         /**
          * OverviewOut
@@ -10277,6 +10300,11 @@ export interface components {
             /** Unset */
             unset: boolean;
         };
+        /**
+         * ReviewPriority
+         * @enum {string}
+         */
+        ReviewPriority: "high" | "medium" | "low";
         /**
          * RiskOverlay
          * @description docs/10: ``{"enabled": false, "rule": "index_above_200dma"}``.

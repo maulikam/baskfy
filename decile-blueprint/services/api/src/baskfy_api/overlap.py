@@ -33,18 +33,27 @@ display flag. No order path reads this module, and `test_overlap_readonly.py` ke
 from __future__ import annotations
 
 import datetime as dt
+import json
 from collections import defaultdict
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
 from typing import Literal
 
+from redis.asyncio import Redis
+from redis.exceptions import RedisError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.swing import latest_detected_date
 from baskfy_api.swing_catalyst import CatalystView, latest_for
-from baskfy_core.catalyst_tags import CatalystTag, tag_headline
+from baskfy_core.catalyst_tags import (
+    CatalystTag,
+    cache_key,
+    resolve_tag,
+    tag_from_laya,
+    tag_headline,
+)
 from baskfy_core.models import (
     Instrument,
     Screen,
@@ -332,16 +341,40 @@ async def _screens(
     return dict(hits), len(screens)
 
 
-def _tag(view: CatalystView | None) -> CatalystTag | None:
-    """The baseline tag for the feed's newest headline; nothing when there is no headline.
+def _tag(view: CatalystView | None, laya_answer: object = None) -> CatalystTag | None:
+    """The tag for the feed's newest headline; nothing when there is no headline.
 
-    The tag reads the headline and nothing else — none of the row's numbers, and never the
-    filing — so the same string tags the same on every row it appears on. Whether the filing
-    explains the move stays the reader's call, on the exchange's page.
+    The rules read the headline; Laya's cached answer for that same headline, when the sidecar
+    has written one (`infra/laya/laya_loop.py`), is resolved against them by
+    `baskfy_core.catalyst_tags.resolve_tag` — the model where it is sure, the rules where it is
+    not, the other's word kept as a disagreement. Neither reads any of the row's numbers, and
+    neither reads the filing, so the same string tags the same on every row it appears on.
+    Whether the filing explains the move stays the reader's call, on the exchange's page.
     """
     if view is None or view.headline is None or not view.headline.strip():
         return None
-    return tag_headline(view.headline)
+    return resolve_tag(tag_headline(view.headline), tag_from_laya(laya_answer))
+
+
+async def laya_answers(cache: Redis | None, headlines: list[str]) -> dict[str, object]:
+    """The sidecar's cached answer per headline, keyed by the headline; empty without a cache,
+    on a miss, or when Redis is unreachable — every one of which means "the rules tag"."""
+    if cache is None or not headlines:
+        return {}
+    keys = [cache_key(headline) for headline in headlines]
+    try:
+        raw = await cache.mget(keys)
+    except RedisError:
+        return {}
+    found: dict[str, object] = {}
+    for headline, value in zip(headlines, raw, strict=True):
+        if value is None:
+            continue
+        try:
+            found[headline] = json.loads(value)
+        except ValueError:
+            continue
+    return found
 
 
 async def overlap(
@@ -350,6 +383,7 @@ async def overlap(
     user_id: int,
     strategies_user_id: int | None,
     scope: Scope = "actionable",
+    cache: Redis | None = None,
 ) -> OverlapView:
     """Every stock on any strategy's latest session, with what each strategy said about it.
 
@@ -384,6 +418,10 @@ async def overlap(
     catalysts: dict[int, CatalystView] = {}
     if strategies_user_id is not None and kept:
         catalysts = await latest_for(session, user_id=strategies_user_id, instrument_ids=list(kept))
+    answers = await laya_answers(
+        cache,
+        sorted({v.headline for v in catalysts.values() if v.headline and v.headline.strip()}),
+    )
 
     rows = [
         CandidateRow(
@@ -394,7 +432,10 @@ async def overlap(
             strategies=tuple(found),
             screens=tuple(screens.get(instrument_id, ())),
             catalyst=catalysts.get(instrument_id),
-            catalyst_tag=_tag(catalysts.get(instrument_id)),
+            catalyst_tag=_tag(
+                catalysts.get(instrument_id),
+                answers.get(getattr(catalysts.get(instrument_id), "headline", None) or ""),
+            ),
         )
         for instrument_id, found in kept.items()
     ]

@@ -14091,6 +14091,28 @@
       "OverlapTagOut": {
         "description": "The rules baseline's word on the headline (`baskfy_core.catalyst_tags`).\n\nDisplay context on a candidate row and nothing more: it is not read by any rank, filter,\nsize or order path, and the page labels it so. ``source`` names what produced it — ``rules``\ntoday; a model, when one is fine-tuned and shadowed, writes its own name here and the wire\nshape does not change. ``matched`` is why: the phrases that decided the type.",
         "properties": {
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "disagrees_with": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disagrees With"
+          },
           "event_type": {
             "$ref": "#/components/schemas/EventType"
           },
@@ -14113,7 +14135,9 @@
           "event_type",
           "review_priority",
           "matched",
-          "source"
+          "source",
+          "confidence",
+          "disagrees_with"
         ],
         "title": "OverlapTagOut",
         "type": "object"

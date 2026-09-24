@@ -8252,3 +8252,42 @@ set. (c) A model now — no corpus, near-chance zero-shot.
 **Reverse.** Delete `catalyst_tags.py` and its test, drop `catalyst_tag` from `overlap.py`,
 `OverlapTagOut` from the router and the `TagChip` from the table, and re-run `make openapi
 client`. No schema, no data, no flag.
+
+## Overlap: Laya reads the scan candidates' filings, resolved against the rules (25 Sep 2026) · ⚠ UNREVIEWED
+
+**Context.** Maulik: "let use laya use as soon as possible and complete it", and, mid-run: the
+stocks the scans curate should be "passing on to Laya for its opinions". Measured first, on
+the base checkpoint zero-shot, CPU: the event-type question is right at 0.90–0.99 on
+unambiguous headlines (order win, USFDA, results, a directorate change) and wrong or under 0.60
+on ambiguous ones (SEBI order → corporate_action 0.86; CFO resignation → 0.38/0.37 split).
+The question a trader wants — "does this filing explain this pattern?" — answered
+`probably_unrelated` at 0.21 on a ₹840 crore defence order under an EP gap; ≤0.34 on eight
+rows. The `noul` "is this material" answered 0.001 on the same order.
+
+**Choice.** A sidecar (`infra/laya/laya_loop.py`, compose service `laya` on the stock
+python image with its own venv in a volume — torch never enters `uv.lock` or any product
+image; ADR §"Laya sidecar") takes **the scan candidates** — every name on swing, VBT and TWT at
+their latest sessions, the `/build/overlap` rows — and for each with a filing on record asks
+Laya what the filing announces, caching the answer in Redis by headline (30 days).
+`baskfy_core.catalyst_tags.resolve_tag` shows Laya's answer when its confidence clears 0.60
+and the rules' otherwise, and records the other reader's word (`disagrees_with`) whenever they
+differ — the correction seed. The chip on `/build/overlap` shows the source, Laya's percentage,
+and a "?" on disagreement. A candidate with no filing on record is not sent and the page says
+so; the relationship question waits for a fine-tuned checkpoint. Proven end to end here:
+loop → Postgres candidates → Laya → Redis → `GET /overlap` (17 API tests, 26 core tests).
+
+**Rejected.** (a) `laya serve` + a request-time call — ~1.3 s per headline on CPU in a read
+path. (b) Building a fourth image — a new registry push and pin for a sidecar; the venv-in-a-
+volume start is the fast path and is recorded as such. (c) Feeding the row's numbers to the
+model — a text classifier given RSI/rvol would learn nothing and muddy "context only".
+(d) Widening the catalyst feed to VBT/TWT names so more candidates carry a filing — that is
+the 09:17 NSE read (A3) and a DECISIONS-SW matter; it is the obvious next step and is not
+taken here.
+
+**Deploy.** `ship.sh` now expects fourteen services; `deploy-swing.sh` ships `laya_loop.py`
+beside compose and restarts `laya`. First start pip-installs torch CPU and pulls the
+checkpoint (~2 GB into the `baskfy-laya` volume); `mem_limit: 3g`. If the box cannot afford
+it, `docker compose stop laya` and the page shows the rules tag.
+
+**Reverse.** Remove the `laya` service and volume, the two `laya` tokens in the deploy
+scripts, `infra/laya/`, and the `cache` argument to `overlap()`; the rules tag remains.

@@ -15,12 +15,19 @@ import pytest
 
 from baskfy_core import catalyst_tags
 from baskfy_core.catalyst_tags import (
+    LAYA_CONFIDENCE_FLOOR,
+    LAYA_QUESTIONS,
     PRIORITY_OF,
     RULES,
+    SOURCE_LAYA,
     SOURCE_RULES,
     CatalystTag,
     EventType,
     ReviewPriority,
+    cache_key,
+    laya_state,
+    resolve_tag,
+    tag_from_laya,
     tag_headline,
 )
 
@@ -125,4 +132,75 @@ class TestItStaysPure:
                 imported.update(alias.name for alias in node.names)
             elif isinstance(node, ast.ImportFrom):
                 imported.add(node.module or "")
-        assert imported <= {"__future__", "re", "dataclasses", "enum", "typing"}
+        assert imported <= {"__future__", "hashlib", "re", "dataclasses", "enum", "typing"}
+
+
+class TestTheModelColumn:
+    """Laya's answer resolved against the rules: sure wins, unsure defers, disagreement is kept."""
+
+    def test_the_question_shows_the_model_the_headline_and_nothing_else(self) -> None:
+
+        assert laya_state("Receipt of order") == {"headline": "Receipt of order"}
+        [(name, question)] = LAYA_QUESTIONS.items()
+        assert name == "event_type"
+        assert question["type"] == "choice"
+        criteria = question["criteria"]
+        assert isinstance(criteria, dict)
+        assert set(criteria) == {t.value for t in EventType}
+
+    def test_a_confident_model_answer_is_the_tag_and_carries_its_number(self) -> None:
+
+        # Measured 25 Sep 2026: "Receipt of order worth Rs 840 crore ..." zero-shot.
+        laya = tag_from_laya({"type": "choice", "choice": "order", "confidence": 0.9861})
+        assert laya == CatalystTag(
+            EventType.ORDER, ReviewPriority.HIGH, (), source=SOURCE_LAYA, confidence=0.9861
+        )
+        rules = tag_headline("Receipt of order worth Rs 840 crore from Ministry of Defence")
+        chosen = resolve_tag(rules, laya)
+        assert (chosen.source, chosen.event_type, chosen.confidence, chosen.disagrees_with) == (
+            SOURCE_LAYA,
+            EventType.ORDER,
+            0.9861,
+            None,
+        )
+
+    def test_an_unsure_model_defers_to_the_rules_and_the_disagreement_is_kept(self) -> None:
+
+        # Measured: "Resignation of Chief Financial Officer" -> corporate_action at 0.3301.
+        laya = tag_from_laya({"choice": "corporate_action", "confidence": 0.3301})
+        assert laya is not None and laya.confidence is not None
+        assert laya.confidence < LAYA_CONFIDENCE_FLOOR
+        rules = tag_headline("Resignation of Chief Financial Officer")
+        chosen = resolve_tag(rules, laya)
+        assert (chosen.source, chosen.event_type) == (SOURCE_RULES, EventType.GOVERNANCE)
+        assert chosen.disagrees_with == "laya:corporate_action"
+
+    def test_a_sure_but_different_model_answer_still_records_what_the_rules_said(self) -> None:
+
+        # Measured: "SEBI order against the company" -> corporate_action at 0.6959 (wrong, sure).
+        laya = tag_from_laya({"choice": "corporate_action", "confidence": 0.6959})
+        chosen = resolve_tag(tag_headline("SEBI order against the company"), laya)
+        assert (chosen.source, chosen.event_type) == ("laya", EventType.CORPORATE_ACTION)
+        assert chosen.disagrees_with == "rules:governance"
+
+    def test_agreement_carries_no_disagreement_and_no_answer_returns_the_rules_untouched(
+        self,
+    ) -> None:
+
+        rules = tag_headline("USFDA approval for ANDA")
+        laya = tag_from_laya({"choice": "approval", "confidence": 0.9943})
+        assert resolve_tag(rules, laya).disagrees_with is None
+        assert resolve_tag(rules, None) == rules
+
+    def test_an_answer_outside_the_vocabulary_is_not_a_tag(self) -> None:
+
+        assert tag_from_laya({"choice": "merger", "confidence": 0.9}) is None
+        assert tag_from_laya({"choice": "order"}) is None
+        assert tag_from_laya("order") is None
+        assert tag_from_laya(None) is None
+
+    def test_the_cache_key_is_content_addressed_and_case_blind(self) -> None:
+
+        assert cache_key("Receipt of Order") == cache_key("  receipt of order ")
+        assert cache_key("Receipt of Order") != cache_key("Receipt of Orders")
+        assert cache_key("x").startswith("catalyst_tag:v1:")

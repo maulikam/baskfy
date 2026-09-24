@@ -107,8 +107,11 @@ class TestActionableIsTheStrategysOwnWord:
     def test_the_tag_is_read_from_the_headline_alone(self) -> None:
         """The baseline sees a string. Not the setup, not the price, not the filing — so it can
         never become a feature of the row it sits on, and `docs` can call it context truthfully."""
-        source = inspect.getsource(overlap_service._tag)
+        source = inspect.getsource(overlap_service._tag) + inspect.getsource(
+            overlap_service.laya_answers
+        )
         assert "tag_headline(view.headline)" in source
+        assert "cache_key(headline)" in source
         for forbidden in ("close", "score", "rvol", "gap_pct", "setup", "state"):
             assert forbidden not in source, f"the tag must not read {forbidden}"
 

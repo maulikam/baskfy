@@ -10,8 +10,16 @@ WHAT RUNS AT 09:10
 ------------------
 1. The symbols: every WATCHING `sw_watch` row (the funnel's top 20 flags + every EP, the live
    gaps the 09:09 scan just added, and Maulik's MANUAL names) plus the last session's EP rows
-   in `sw_setup_daily` — the day's EP candidates, whether or not they were watched. Nothing
-   wider: the limiter is 1 req/s and the monitor starts at 09:16.
+   in `sw_setup_daily` — the day's EP candidates, whether or not they were watched. That was
+   the whole set until OV4 (25 Sep 2026, Maulik): the scan candidates go to Laya for its
+   opinion (`GET /overlap`, `infra/laya/laya_loop.py`) — a candidate without a filing on
+   record has nothing to be read. So the set widened, for the same user, to the latest
+   session's volume-breakout SIGNAL names (`vb_signal_daily` at the newest `vb_breadth_daily`
+   date) and the latest session's three-weeks-tight SIGNAL names (`tw_signal_daily` at the
+   newest `tw_breadth_daily` date). SIGNAL rows only — not the `SCAN_ONLY` rejects and not
+   the ~50 in-state `tw_state_daily` names — and nothing wider: the limiter is 1 req/s, each
+   symbol costs two requests, and the monitor starts at 09:16. A name on two sleeves is
+   fetched once.
 2. Per symbol, `announcements` and `results_calendar` through the NSE provider — the cookie
    prime, the limiter, archive-then-parse. **Per symbol, not per batch**, so one name NSE
    refuses does not cost the other twenty their links.
@@ -40,9 +48,17 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from baskfy_core.models import Instrument
+from baskfy_core.models import (
+    Instrument,
+    TwBreadthDaily,
+    TwSignalDaily,
+    VbBreadthDaily,
+    VbSignalDaily,
+)
 from baskfy_core.models.swing import SwCatalyst, SwSetupDaily, SwWatch
 from baskfy_core.swing.config import Setup
+from baskfy_core.twt.config import SignalState as TwSignalState
+from baskfy_core.vbt.config import SignalState as VbSignalState
 from baskfy_providers.errors import ProviderError
 from baskfy_providers.nse import CATALYST_SOURCE_ANNOUNCEMENT, CATALYST_SOURCE_EVENT_CALENDAR
 from baskfy_providers.records import CatalystRecord, EarningsDateRecord
@@ -100,7 +116,23 @@ class CatalystReport:
 async def feed_symbols(
     session: AsyncSession, *, user_id: int, session_date: dt.date
 ) -> dict[str, int]:
-    """``symbol -> instrument_id`` for the WATCHING rows and the last session's EP candidates."""
+    """``symbol -> instrument_id`` for the names the feed reads filings for, sorted, each once.
+
+    Four selects, one dict: the WATCHING ``sw_watch`` rows, the last session's EP rows in
+    ``sw_setup_daily``, and — since OV4 (25 Sep 2026) — the latest session's SIGNAL rows in
+    ``vb_signal_daily`` and ``tw_signal_daily``. "Latest session" for each of those two is the
+    newest ``vb_breadth_daily`` / ``tw_breadth_daily`` row for the user: that table's newest row
+    is the detector's clock (the rule ``baskfy_api.vbt._latest_breadth`` and the overlap page
+    already use), so the feed reads the same session the pages call today. A sleeve with no
+    breadth row yet contributes nothing.
+
+    **SIGNAL rows only** — ~2 to 5 names a day per sleeve. Not the ``SCAN_ONLY`` rejects (an
+    event the filters turned down is not a candidate) and not the ~50 in-state
+    ``tw_state_daily`` names (a base is not a signal). The budget is real: the NSE limiter is
+    1 req/s, every symbol here costs two requests (announcements + results calendar), and the
+    09:16 monitor needs the provider back. A name on two sleeves is fetched once
+    (``setdefault``).
+    """
     watched = await session.execute(
         select(Instrument.symbol, Instrument.id)
         .join(SwWatch, SwWatch.instrument_id == Instrument.id)
@@ -120,6 +152,48 @@ async def feed_symbols(
             )
         )
         for symbol, instrument_id in candidates:
+            symbols.setdefault(str(symbol), int(instrument_id))
+
+    vb_day = (
+        await session.execute(
+            select(VbBreadthDaily.date)
+            .where(VbBreadthDaily.user_id == user_id)
+            .order_by(VbBreadthDaily.date.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if vb_day is not None:
+        vb_signals = await session.execute(
+            select(Instrument.symbol, Instrument.id)
+            .join(VbSignalDaily, VbSignalDaily.instrument_id == Instrument.id)
+            .where(
+                VbSignalDaily.user_id == user_id,
+                VbSignalDaily.date == vb_day,
+                VbSignalDaily.state == VbSignalState.SIGNAL.value,
+            )
+        )
+        for symbol, instrument_id in vb_signals:
+            symbols.setdefault(str(symbol), int(instrument_id))
+
+    tw_day = (
+        await session.execute(
+            select(TwBreadthDaily.date)
+            .where(TwBreadthDaily.user_id == user_id)
+            .order_by(TwBreadthDaily.date.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if tw_day is not None:
+        tw_signals = await session.execute(
+            select(Instrument.symbol, Instrument.id)
+            .join(TwSignalDaily, TwSignalDaily.instrument_id == Instrument.id)
+            .where(
+                TwSignalDaily.user_id == user_id,
+                TwSignalDaily.date == tw_day,
+                TwSignalDaily.state == TwSignalState.SIGNAL.value,
+            )
+        )
+        for symbol, instrument_id in tw_signals:
             symbols.setdefault(str(symbol), int(instrument_id))
     return dict(sorted(symbols.items()))
 
@@ -253,7 +327,10 @@ async def run_swing_catalyst(  # noqa: PLR0913 - one keyword per input the feed 
     symbols = await feed_symbols(session, user_id=user_id, session_date=session_date)
     report.symbols = len(symbols)
     if not symbols:
-        report.skipped_reason = "nothing watched and no EP candidate for the last session"
+        report.skipped_reason = (
+            "nothing watched, no EP candidate for the last session, "
+            "and no VBT or TWT signal at the latest session"
+        )
         outcome.note(**report.as_detail())
         return report
     if provider is None:

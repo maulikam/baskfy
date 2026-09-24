@@ -2655,6 +2655,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/overlap/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Correct a headline's tag
+         * @description Store the person's word on a headline and answer with the tag the page now shows.
+         *
+         *     Idempotent on the headline: a second correction updates the one row. What the rules and Laya
+         *     said is recorded beside it at this moment — the training signal. Sole tenant only.
+         */
+        put: operations["putTag"];
+        post?: never;
+        /**
+         * Remove a headline's correction
+         * @description The readers' word shows again. 404 when there was no correction to remove.
+         */
+        delete: operations["deleteTag"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/overlap/tags/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every correction, as NDJSON
+         * @description The fine-tuning set: one line per corrected headline, oldest first — the headline, the
+         *     person's label, what each reader said at the time, the note, and when. Sole tenant only.
+         */
+        get: operations["getTagsExport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/plans": {
         parameters: {
             query?: never;
@@ -9433,17 +9481,31 @@ export interface components {
             strategy: components["schemas"]["Strategy"];
         };
         /**
+         * OverlapTagCorrectionIn
+         * @description A person's word on one headline. The headline is the key: the correction applies to
+         *     that exact text wherever it appears, not to one row.
+         */
+        OverlapTagCorrectionIn: {
+            event_type: components["schemas"]["EventType"];
+            /** Headline */
+            headline: string;
+            /** Note */
+            note?: string | null;
+        };
+        /**
          * OverlapTagOut
-         * @description The rules baseline's word on the headline (`baskfy_core.catalyst_tags`).
+         * @description The word on the headline (`baskfy_core.catalyst_tags`).
          *
          *     Display context on a candidate row and nothing more: it is not read by any rank, filter,
          *     size or order path, and the page labels it so. ``source`` names what produced it — ``rules``
-         *     today; a model, when one is fine-tuned and shadowed, writes its own name here and the wire
-         *     shape does not change. ``matched`` is why: the phrases that decided the type.
+         *     for the keyword baseline, ``laya`` for the model when it was sure, ``corrected`` for a
+         *     person's word, which wins over both. ``matched`` is why: the phrases that decided the type.
          */
         OverlapTagOut: {
             /** Confidence */
             confidence: number | null;
+            /** Corrected */
+            corrected: boolean;
             /** Disagrees With */
             disagrees_with: string | null;
             event_type: components["schemas"]["EventType"];
@@ -28687,6 +28749,314 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OverlapOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    putTag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OverlapTagCorrectionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverlapTagOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    deleteTag: {
+        parameters: {
+            query: {
+                /** @description the headline, exactly as shown */
+                headline: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getTagsExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/x-ndjson": unknown;
                 };
             };
             /** @description Bad request */

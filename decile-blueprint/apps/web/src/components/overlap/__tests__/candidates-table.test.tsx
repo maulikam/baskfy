@@ -1,8 +1,12 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CandidatesTable } from "@/components/overlap/candidates-table";
-import { parseCandidates, type OverlapCandidates } from "@/lib/overlap/candidates";
+import {
+  parseCandidates,
+  type CorrectTagAction,
+  type OverlapCandidates,
+} from "@/lib/overlap/candidates";
 import type * as LiveMarksModule from "@/lib/screens/live-marks";
 import { EMPTY_LIVE_MARKS } from "@/lib/screens/live-marks";
 
@@ -78,6 +82,7 @@ const payload = parseCandidates({
           source: "laya",
           confidence: 0.9834,
           disagrees_with: null,
+          corrected: false,
         },
       },
     },
@@ -167,6 +172,7 @@ describe("CandidatesTable", () => {
               source: "rules",
               confidence: null,
               disagrees_with: "laya:corporate_action",
+              corrected: false,
             },
           },
         },
@@ -181,6 +187,107 @@ describe("CandidatesTable", () => {
     expect(tag).toHaveAttribute("title", expect.stringContaining("matched: sebi order"));
     expect(tag).toHaveAttribute("title", expect.stringContaining("(laya) said corporate_action"));
     expect(within(tag).getByLabelText("the two readers disagree")).toBeInTheDocument();
+  });
+
+  it("offers the eight words and a clear option when it can write, and nothing when it cannot", () => {
+    render(<CandidatesTable candidates={payload} scope="actionable" />);
+    expect(screen.queryByTestId("overlap-candidate-tag-correct")).toBeNull();
+    cleanup();
+
+    const correctTag: CorrectTagAction = vi.fn(() => Promise.resolve({ ok: true as const }));
+    render(<CandidatesTable candidates={payload} scope="actionable" correctTag={correctTag} />);
+    const select = screen.getByTestId("overlap-candidate-tag-correct");
+    expect(select).toHaveAttribute(
+      "aria-label",
+      "Correct the tag on “Press Release - BOTH wins a multi-year order”",
+    );
+    const options = within(select).getAllByRole("option");
+    /* A placeholder, the eight words in the wire's order, and the clear option. */
+    expect(options.map((option) => option.getAttribute("value"))).toEqual([
+      "",
+      "earnings",
+      "order",
+      "approval",
+      "fundraising",
+      "governance",
+      "corporate_action",
+      "routine",
+      "other",
+      "__clear",
+    ]);
+    expect(options.slice(1, 9).map((option) => option.textContent)).toEqual([
+      "Results",
+      "Order win",
+      "Approval",
+      "Fund raise",
+      "Governance",
+      "Corporate action",
+      "Routine notice",
+      "Unclear",
+    ]);
+    expect(within(select).getByRole("option", { name: "Clear correction" })).toBeDisabled();
+    /* Laya's word stands: nothing is selected until a person chooses. */
+    expect(select).toHaveValue("");
+  });
+
+  it("calls the action with the headline and the chosen word", async () => {
+    const correctTag: CorrectTagAction = vi.fn(() => Promise.resolve({ ok: true as const }));
+    render(<CandidatesTable candidates={payload} scope="actionable" correctTag={correctTag} />);
+    fireEvent.change(screen.getByTestId("overlap-candidate-tag-correct"), {
+      target: { value: "order" },
+    });
+    await waitFor(() =>
+      expect(correctTag).toHaveBeenCalledWith("Press Release - BOTH wins a multi-year order", "order"),
+    );
+    expect(correctTag).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId("overlap-candidate-tag-error")).toBeNull();
+  });
+
+  it("renders a corrected tag as the person's word, without a percentage, and can clear it", async () => {
+    const corrected: OverlapCandidates = {
+      ...payload,
+      data: [
+        {
+          ...payload.data[0]!,
+          catalyst: {
+            ...payload.data[0]!.catalyst!,
+            tag: {
+              event_type: "governance",
+              review_priority: "medium",
+              matched: [],
+              source: "corrected",
+              confidence: null,
+              disagrees_with: "laya:order",
+              corrected: true,
+            },
+          },
+        },
+      ],
+    };
+    const correctTag: CorrectTagAction = vi.fn(() =>
+      Promise.resolve({ ok: false as const, error: "The correction was not saved." }),
+    );
+    render(<CandidatesTable candidates={corrected} scope="actionable" correctTag={correctTag} />);
+    const tag = screen.getByTestId("overlap-candidate-tag");
+    expect(tag).toHaveAttribute("data-source", "corrected");
+    expect(tag).toHaveAttribute("data-corrected", "true");
+    expect(tag).toHaveTextContent("Governance");
+    expect(within(tag).getByTestId("overlap-candidate-tag-source")).toHaveTextContent("corrected");
+    expect(within(tag).queryByTestId("overlap-candidate-tag-confidence")).toBeNull();
+    expect(tag).toHaveAttribute("title", expect.stringContaining("Corrected by you"));
+    expect(tag).toHaveAttribute("title", expect.stringContaining("overrules laya, which said order"));
+
+    const select = screen.getByTestId("overlap-candidate-tag-correct");
+    expect(select).toHaveValue("governance");
+    expect(within(select).getByRole("option", { name: "Clear correction" })).toBeEnabled();
+    fireEvent.change(select, { target: { value: "__clear" } });
+    await waitFor(() =>
+      expect(correctTag).toHaveBeenCalledWith("Press Release - BOTH wins a multi-year order", null),
+    );
+    /* A refusal is said on the chip, in this app's words. */
+    expect(await screen.findByTestId("overlap-candidate-tag-error")).toHaveTextContent(
+      "The correction was not saved.",
+    );
   });
 
   it("names each sleeve's session and says when they differ", () => {

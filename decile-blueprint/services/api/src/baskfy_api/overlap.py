@@ -28,6 +28,10 @@ never widened for this page. Nothing here reproduces a filing: it is a link out 
 EP setup for swing (`TRADEABLE_SETUPS`; PARABOLIC_SHORT is detect-only), a ``SIGNAL`` for the
 other two (``SCAN_ONLY`` failed a filter, an in-state tight name has no entry event). It is a
 display flag. No order path reads this module, and `test_overlap_readonly.py` keeps it so.
+
+**The one write is a person's correction of a headline tag** (the section at the bottom): a
+label on display context, stored so the chip shows the person's word and the corrections export
+as the fine-tuning set. It reaches one table and no number the strategies wrote.
 """
 
 from __future__ import annotations
@@ -49,12 +53,14 @@ from baskfy_api.swing import latest_detected_date
 from baskfy_api.swing_catalyst import CatalystView, latest_for
 from baskfy_core.catalyst_tags import (
     CatalystTag,
+    EventType,
     cache_key,
     resolve_tag,
     tag_from_laya,
     tag_headline,
 )
 from baskfy_core.models import (
+    CatalystTagCorrection,
     Instrument,
     Screen,
     ScreenRun,
@@ -141,8 +147,9 @@ class CandidateRow:
     screens: tuple[ScreenHit, ...]
     #: The swing feed's newest announcement and earnings date, when the feed has the name.
     catalyst: CatalystView | None
-    #: The rules baseline's word on that headline (`baskfy_core.catalyst_tags`): display context,
-    #: never an input. ``None`` exactly when there is no headline to read.
+    #: The word on that headline (`baskfy_core.catalyst_tags`): a person's correction when there
+    #: is one, else Laya's answer or the rules' — display context, never an input. ``None``
+    #: exactly when there is no headline to read.
     catalyst_tag: CatalystTag | None = None
 
     @property
@@ -341,19 +348,22 @@ async def _screens(
     return dict(hits), len(screens)
 
 
-def _tag(view: CatalystView | None, laya_answer: object = None) -> CatalystTag | None:
+def _tag(
+    view: CatalystView | None, laya_answer: object = None, corrected: EventType | None = None
+) -> CatalystTag | None:
     """The tag for the feed's newest headline; nothing when there is no headline.
 
     The rules read the headline; Laya's cached answer for that same headline, when the sidecar
     has written one (`infra/laya/laya_loop.py`), is resolved against them by
     `baskfy_core.catalyst_tags.resolve_tag` — the model where it is sure, the rules where it is
-    not, the other's word kept as a disagreement. Neither reads any of the row's numbers, and
-    neither reads the filing, so the same string tags the same on every row it appears on.
+    not, the other's word kept as a disagreement — and a person's correction of that headline,
+    when one is stored, wins over both. None of the three reads any of the row's numbers, and
+    none reads the filing, so the same string tags the same on every row it appears on.
     Whether the filing explains the move stays the reader's call, on the exchange's page.
     """
     if view is None or view.headline is None or not view.headline.strip():
         return None
-    return resolve_tag(tag_headline(view.headline), tag_from_laya(laya_answer))
+    return resolve_tag(tag_headline(view.headline), tag_from_laya(laya_answer), corrected)
 
 
 async def laya_answers(cache: Redis | None, headlines: list[str]) -> dict[str, object]:
@@ -375,6 +385,33 @@ async def laya_answers(cache: Redis | None, headlines: list[str]) -> dict[str, o
         except ValueError:
             continue
     return found
+
+
+async def corrections_for(
+    session: AsyncSession, *, user_id: int, headlines: list[str]
+) -> dict[str, EventType]:
+    """The person's stored corrections for these headlines, keyed by the headline — one query
+    over the content-addressed key, so the page pays for its corrections once, not per row."""
+    if not headlines:
+        return {}
+    # Two spellings of one headline share a key (the key is case- and space-blind), and both
+    # take the correction.
+    by_key: dict[str, list[str]] = defaultdict(list)
+    for headline in headlines:
+        by_key[cache_key(headline)].append(headline)
+    found = (
+        await session.execute(
+            select(CatalystTagCorrection.headline_key, CatalystTagCorrection.event_type).where(
+                CatalystTagCorrection.user_id == user_id,
+                CatalystTagCorrection.headline_key.in_(list(by_key)),
+            )
+        )
+    ).all()
+    return {
+        headline: EventType(event_type)
+        for key, event_type in found
+        for headline in by_key.get(key, ())
+    }
 
 
 async def overlap(
@@ -418,10 +455,11 @@ async def overlap(
     catalysts: dict[int, CatalystView] = {}
     if strategies_user_id is not None and kept:
         catalysts = await latest_for(session, user_id=strategies_user_id, instrument_ids=list(kept))
-    answers = await laya_answers(
-        cache,
-        sorted({v.headline for v in catalysts.values() if v.headline and v.headline.strip()}),
+    headlines = sorted(
+        {v.headline for v in catalysts.values() if v.headline and v.headline.strip()}
     )
+    answers = await laya_answers(cache, headlines)
+    corrections = await corrections_for(session, user_id=user_id, headlines=headlines)
 
     rows = [
         CandidateRow(
@@ -435,6 +473,7 @@ async def overlap(
             catalyst_tag=_tag(
                 catalysts.get(instrument_id),
                 answers.get(getattr(catalysts.get(instrument_id), "headline", None) or ""),
+                corrections.get(getattr(catalysts.get(instrument_id), "headline", None) or ""),
             ),
         )
         for instrument_id, found in kept.items()
@@ -446,3 +485,116 @@ async def overlap(
         strategies_read=strategies_user_id is not None,
         screens_checked=screens_checked,
     )
+
+
+# --- Corrections: the one thing this page writes ----------------------------------------------
+#
+# Everything above is a read over stored rows, and `test_overlap_readonly.py` scans those
+# functions for a write verb. This section is the exception it names: a person's correction of
+# a headline tag — the label the fine-tune will train on — written to `catalyst_tag_correction`
+# and nowhere else. A correction changes what the chip says and what the export contains; it
+# changes no rank, no filter, no size and no order, because the tag it corrects never reached
+# one either. The table is content-addressed on the headline (`cache_key`), so a correction made
+# on one row applies to every row that carries the same headline.
+
+
+@dataclass(frozen=True, slots=True)
+class CorrectionRecord:
+    """One export line: the input text, the person's label, and what the two readers said."""
+
+    headline: str
+    event_type: EventType
+    rules_event_type: EventType | None
+    laya_event_type: EventType | None
+    laya_confidence: Decimal | None
+    note: str | None
+    corrected_at: dt.datetime
+
+
+def _confidence(tag: CatalystTag | None) -> Decimal | None:
+    """Laya's probability as the column stores it — four decimals, never a float on the wire."""
+    if tag is None or tag.confidence is None:
+        return None
+    return Decimal(f"{tag.confidence:.4f}")
+
+
+async def correct_tag(  # noqa: PLR0913 - the headline, the label, the note and the model answer are all inputs
+    session: AsyncSession,
+    *,
+    user_id: int,
+    headline: str,
+    event_type: EventType,
+    note: str | None,
+    laya_answer: object = None,
+) -> CatalystTag:
+    """Store a person's word on a headline — one row per ``(user, headline_key)``, updated in
+    place on a second correction — and return the tag the page now shows for it.
+
+    What the rules and Laya said is recorded at this moment, from the same reads the page uses,
+    because that disagreement is the training signal and neither reader stands still.
+    """
+    rules = tag_headline(headline)
+    laya = tag_from_laya(laya_answer)
+    key = cache_key(headline)
+    row = (
+        await session.scalars(
+            select(CatalystTagCorrection).where(
+                CatalystTagCorrection.user_id == user_id,
+                CatalystTagCorrection.headline_key == key,
+            )
+        )
+    ).one_or_none()
+    if row is None:
+        row = CatalystTagCorrection(user_id=user_id, headline_key=key, headline=headline)
+        session.add(row)
+    row.headline = headline
+    row.event_type = event_type.value
+    row.note = note
+    row.rules_event_type = rules.event_type.value
+    row.laya_event_type = None if laya is None else laya.event_type.value
+    row.laya_confidence = _confidence(laya)
+    await session.flush()
+    return resolve_tag(rules, laya, event_type)
+
+
+async def clear_correction(session: AsyncSession, *, user_id: int, headline: str) -> bool:
+    """Remove the person's word on a headline, so the readers' resolution shows again.
+    ``False`` when there was none to remove."""
+    row = (
+        await session.scalars(
+            select(CatalystTagCorrection).where(
+                CatalystTagCorrection.user_id == user_id,
+                CatalystTagCorrection.headline_key == cache_key(headline),
+            )
+        )
+    ).one_or_none()
+    if row is None:
+        return False
+    await session.delete(row)
+    await session.flush()
+    return True
+
+
+async def corrections_export(session: AsyncSession, *, user_id: int) -> list[CorrectionRecord]:
+    """Every correction the person has made, oldest first — the fine-tuning set."""
+    rows = (
+        await session.scalars(
+            select(CatalystTagCorrection)
+            .where(CatalystTagCorrection.user_id == user_id)
+            .order_by(CatalystTagCorrection.created_at, CatalystTagCorrection.id)
+        )
+    ).all()
+    return [
+        CorrectionRecord(
+            headline=row.headline,
+            event_type=EventType(row.event_type),
+            rules_event_type=(
+                None if row.rules_event_type is None else EventType(row.rules_event_type)
+            ),
+            laya_event_type=None if row.laya_event_type is None else EventType(row.laya_event_type),
+            laya_confidence=row.laya_confidence,
+            note=row.note,
+            corrected_at=row.updated_at,
+        )
+        for row in rows
+    ]

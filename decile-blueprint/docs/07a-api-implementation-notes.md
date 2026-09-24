@@ -264,3 +264,17 @@ upload for the past, and a same-day capture from Kite going forward.
   never overwritten. With no cash assigned, the consolidated XIRR is solved from the trades of the
   holdings that add up, labelled with how many of the holdings it covers. Per-portfolio returns
   are unchanged: a slice of a position filed across portfolios has no trades of its own.
+
+## 17. `/overlap` — today's candidates across the sleeves, with a tagged filing (25 Sep 2026)
+
+Not in `docs/07`; added under DECISIONS-MERGE "Overlap" (OV1–OV4). `GET /overlap?scope` is the
+inverse of `/instruments/{symbol}/appearances`: one row per stock on any strategy's latest
+session, each strategy's own fact, the screens it is on, the swing feed's newest filing and
+result date, the live mark — and a **tag** on the filing headline: the rules baseline
+(`baskfy_core.catalyst_tags`) resolved against Laya's cached answer (the `laya` compose
+sidecar) and, above both, the person's own correction. Two money-free writes and one export,
+sole tenant only: `PUT /overlap/tags` {headline, event_type, note} upserts a correction on the
+content-addressed headline key and records what the rules and Laya said at that moment;
+`DELETE /overlap/tags?headline=` removes it; `GET /overlap/tags/export` streams every
+correction as NDJSON — the fine-tuning set. Nothing under `/overlap` reaches the gateway, and
+`services/api/tests/test_overlap_readonly.py` pins the two verbs as the whole mutating surface.

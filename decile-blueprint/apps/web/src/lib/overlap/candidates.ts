@@ -26,29 +26,60 @@ export interface OverlapScreen {
   definition_changed: boolean;
 }
 
+/** The eight words a headline can be tagged with — the wire's vocabulary, verbatim. */
+export type OverlapEventType =
+  | "earnings"
+  | "order"
+  | "approval"
+  | "fundraising"
+  | "governance"
+  | "corporate_action"
+  | "routine"
+  | "other";
+
+export const OVERLAP_EVENT_TYPES: readonly OverlapEventType[] = [
+  "earnings",
+  "order",
+  "approval",
+  "fundraising",
+  "governance",
+  "corporate_action",
+  "routine",
+  "other",
+];
+
+/** What the correction action answers. The sentence is this app's copy, never the wire's. */
+export type CorrectTagResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly error: string };
+
+/** The server action a chip's select calls: a word on the headline, or `null` to take it back. */
+export type CorrectTagAction = (
+  headline: string,
+  eventType: OverlapEventType | null,
+) => Promise<CorrectTagResult>;
+
 /**
- * The rules baseline's word on the headline. Display context only — never an input to a rank,
- * a filter, a size or an order — and `source` says what produced it (`rules` today).
+ * The word on the headline. Display context only — never an input to a rank, a filter, a size
+ * or an order — and `source` says what produced it: `rules` for the keyword baseline, `laya`
+ * for the model when it was sure, `corrected` for a person's word, which wins over both.
  */
 export interface OverlapTag {
-  event_type:
-    | "earnings"
-    | "order"
-    | "approval"
-    | "fundraising"
-    | "governance"
-    | "corporate_action"
-    | "routine"
-    | "other";
+  event_type: OverlapEventType;
   review_priority: "high" | "medium" | "low";
   /** The phrases that decided the type — the "why", shown on hover. */
   matched: readonly string[];
-  /** `rules` for the keyword baseline, `laya` for the model's answer when it was sure. */
+  /** `rules` for the keyword baseline, `laya` for the model's answer when it was sure, `corrected` for a person's. */
   source: string;
-  /** The model's probability for its choice; null for the rules. */
+  /** The model's probability for its choice; null for the rules and for a correction. */
   confidence: number | null;
-  /** `"<source>:<event_type>"` of the other reader when the two read the headline differently. */
+  /**
+   * `"<source>:<event_type>"` of the other reader when the two read the headline differently —
+   * or, on a corrected tag, of the reader the person overruled.
+   */
   disagrees_with: string | null;
+  /** `source === "corrected"`: a person's word, not a reader's. */
+  corrected: boolean;
 }
 
 export interface OverlapCatalyst {

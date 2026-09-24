@@ -402,12 +402,41 @@ def tag_from_laya(answer: object) -> CatalystTag | None:
     )
 
 
-def resolve_tag(rules: CatalystTag, laya: CatalystTag | None) -> CatalystTag:
-    """The tag the page shows: Laya when it is sure, the rules when it is not — and the other
-    source's word carried as ``disagrees_with`` whenever the two read the headline differently.
+#: A person's word, written over both readers on `/build/overlap`. The correction is the label
+#: the fine-tune trains on, so it wins on the page — a corpus whose labels the page contradicts
+#: is a corpus nobody trusts.
+SOURCE_CORRECTED: Final = "corrected"
 
-    Pure and total: with no model answer the rules tag comes back as it was.
+
+def resolve_tag(
+    rules: CatalystTag, laya: CatalystTag | None, corrected: EventType | None = None
+) -> CatalystTag:
+    """The tag the page shows: a person's correction when there is one; else Laya when it is
+    sure, the rules when it is not — and the other source's word carried as ``disagrees_with``
+    whenever the two read the headline differently.
+
+    A correction has no phrase to point at and no probability, so ``matched`` is empty and
+    ``confidence`` is ``None``; ``disagrees_with`` names what it overruled — the model's word
+    when the model read it differently, otherwise the rules' when they did, otherwise nothing.
+
+    Pure and total: with no model answer and no correction the rules tag comes back as it was.
     """
+    if corrected is not None:
+        overruled: CatalystTag | None = None
+        if laya is not None and laya.event_type is not corrected:
+            overruled = laya
+        elif rules.event_type is not corrected:
+            overruled = rules
+        return CatalystTag(
+            corrected,
+            PRIORITY_OF[corrected],
+            (),
+            source=SOURCE_CORRECTED,
+            confidence=None,
+            disagrees_with=(
+                None if overruled is None else f"{overruled.source}:{overruled.event_type.value}"
+            ),
+        )
     if laya is None:
         return rules
     if laya.confidence is not None and laya.confidence >= LAYA_CONFIDENCE_FLOOR:

@@ -368,3 +368,5 @@ export type OverlapStrategyOut = Schemas["OverlapStrategyOut"];
 export type OverlapScreenOut = Schemas["OverlapScreenOut"];
 export type OverlapCatalystOut = Schemas["OverlapCatalystOut"];
 export type OverlapTagOut = Schemas["OverlapTagOut"];
+/** `PUT /overlap/tags` — a person's correction of a headline's tag; the answer is the corrected `OverlapTagOut`. */
+export type OverlapTagCorrectionIn = Schemas["OverlapTagCorrectionIn"];

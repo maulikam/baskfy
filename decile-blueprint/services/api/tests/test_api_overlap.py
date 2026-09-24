@@ -13,15 +13,19 @@ import json
 from decimal import Decimal
 
 import pytest
-from api_helpers import api_settings, bearer, make_user, running_app, url
+from api_helpers import api_settings, bearer, make_user, problem, running_app, url
 from redis.asyncio import Redis
 from screener_helpers import requires_db
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from baskfy_api.curated_tenant import SOLE_TENANT_REFUSED
 from baskfy_api.overlap import Strategy, overlap
+from baskfy_api.problems import STATUS_FOR, ProblemType
 from baskfy_api.settings import Settings
 from baskfy_core.catalyst_tags import cache_key
 from baskfy_core.models import (
+    CatalystTagCorrection,
     Instrument,
     SwCatalyst,
     SwMarketDaily,
@@ -452,6 +456,7 @@ class TestTheRoute:
             "source": "rules",
             "confidence": None,
             "disagrees_with": None,
+            "corrected": False,
         }
         assert both["last_price"] is None
         assert len(everything.json()["data"]) == 4
@@ -474,3 +479,261 @@ class TestTheRoute:
         body = response.json()
         assert body["strategies_read"] is False
         assert body["data"] == []
+
+
+HEADLINE = "Press Release - BOTH wins a multi-year order"
+TAGS = url("/overlap/tags")
+
+
+async def _correction_count(session: AsyncSession, user_id: int) -> int:
+    return int(
+        (
+            await session.execute(
+                select(func.count())
+                .select_from(CatalystTagCorrection)
+                .where(CatalystTagCorrection.user_id == user_id)
+            )
+        ).scalar_one()
+    )
+
+
+class TestTheCorrection:
+    """A person's word wins on the page, is one row per headline, and exports as the set."""
+
+    @pytest.fixture
+    def settings(self, seeded_url: str) -> Settings:
+        return api_settings(seeded_url)
+
+    async def test_a_correction_wins_over_a_sure_model_and_names_what_it_overruled(
+        self,
+        settings: Settings,
+        screener_session: AsyncSession,
+        screen_cache: Redis,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        user_id, public_id = await make_user(screener_session, "overlap-correct@example.com")
+        monkeypatch.setenv("BASKFY_SOLE_USER_ID", str(user_id))
+        await _a_morning(screener_session, user_id)
+        # Laya, sure and wrong (measured shape); the rules say order; the person says order.
+        await screen_cache.set(
+            cache_key(HEADLINE), json.dumps({"choice": "corporate_action", "confidence": 0.91})
+        )
+        try:
+            async with running_app(settings, screener_session) as client:
+                before = await client.get(url("/overlap"), headers=bearer(public_id))
+                put = await client.put(
+                    TAGS,
+                    headers=bearer(public_id),
+                    json={"headline": HEADLINE, "event_type": "order", "note": None},
+                )
+                after = await client.get(url("/overlap"), headers=bearer(public_id))
+        finally:
+            await screen_cache.delete(cache_key(HEADLINE))
+
+        assert before.json()["data"][0]["catalyst"]["tag"]["source"] == "laya"
+        assert put.status_code == 200, put.text
+        corrected: dict[str, object] = {
+            "event_type": "order",
+            "review_priority": "high",
+            "matched": [],
+            "source": "corrected",
+            "confidence": None,
+            "disagrees_with": "laya:corporate_action",
+            "corrected": True,
+        }
+        assert put.json() == corrected
+        assert after.json()["data"][0]["catalyst"]["tag"] == corrected
+        # What the two readers said at correction time is the row's training signal.
+        row = (
+            await screener_session.scalars(
+                select(CatalystTagCorrection).where(CatalystTagCorrection.user_id == user_id)
+            )
+        ).one()
+        assert (row.headline_key, row.headline, row.event_type) == (
+            cache_key(HEADLINE),
+            HEADLINE,
+            "order",
+        )
+        assert (row.rules_event_type, row.laya_event_type, row.laya_confidence) == (
+            "order",
+            "corporate_action",
+            Decimal("0.9100"),
+        )
+
+    async def test_a_second_correction_updates_the_one_row(
+        self,
+        settings: Settings,
+        screener_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        user_id, public_id = await make_user(screener_session, "overlap-again@example.com")
+        monkeypatch.setenv("BASKFY_SOLE_USER_ID", str(user_id))
+        await _a_morning(screener_session, user_id)
+
+        async with running_app(settings, screener_session) as client:
+            first = await client.put(
+                TAGS,
+                headers=bearer(public_id),
+                json={"headline": HEADLINE, "event_type": "routine", "note": "not material"},
+            )
+            # The same headline, differently spaced and cased, is the same key.
+            second = await client.put(
+                TAGS,
+                headers=bearer(public_id),
+                json={"headline": f"  {HEADLINE.upper()} ", "event_type": "governance"},
+            )
+            page = await client.get(url("/overlap"), headers=bearer(public_id))
+
+        assert first.status_code == 200, first.text
+        assert first.json()["event_type"] == "routine"
+        assert first.json()["disagrees_with"] == "rules:order"
+        assert second.status_code == 200, second.text
+        assert second.json()["event_type"] == "governance"
+        assert await _correction_count(screener_session, user_id) == 1
+        tag = page.json()["data"][0]["catalyst"]["tag"]
+        assert (tag["event_type"], tag["source"], tag["review_priority"]) == (
+            "governance",
+            "corrected",
+            "medium",
+        )
+        row = (
+            await screener_session.scalars(
+                select(CatalystTagCorrection).where(CatalystTagCorrection.user_id == user_id)
+            )
+        ).one()
+        assert row.note is None, "the second correction carried no note, so the row has none"
+
+    async def test_removing_the_correction_restores_the_readers_word(
+        self,
+        settings: Settings,
+        screener_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        user_id, public_id = await make_user(screener_session, "overlap-clear@example.com")
+        monkeypatch.setenv("BASKFY_SOLE_USER_ID", str(user_id))
+        await _a_morning(screener_session, user_id)
+
+        async with running_app(settings, screener_session) as client:
+            await client.put(
+                TAGS, headers=bearer(public_id), json={"headline": HEADLINE, "event_type": "other"}
+            )
+            removed = await client.delete(
+                TAGS, headers=bearer(public_id), params={"headline": HEADLINE}
+            )
+            again = await client.delete(
+                TAGS, headers=bearer(public_id), params={"headline": HEADLINE}
+            )
+            page = await client.get(url("/overlap"), headers=bearer(public_id))
+
+        assert removed.status_code == 204, removed.text
+        assert again.status_code == 404, again.text
+        assert await _correction_count(screener_session, user_id) == 0
+        tag = page.json()["data"][0]["catalyst"]["tag"]
+        assert (tag["source"], tag["event_type"], tag["corrected"], tag["disagrees_with"]) == (
+            "rules",
+            "order",
+            False,
+            None,
+        )
+
+    async def test_the_export_is_one_ndjson_line_per_correction_oldest_first(
+        self,
+        settings: Settings,
+        screener_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        user_id, public_id = await make_user(screener_session, "overlap-export@example.com")
+        monkeypatch.setenv("BASKFY_SOLE_USER_ID", str(user_id))
+        await _a_morning(screener_session, user_id)
+
+        async with running_app(settings, screener_session) as client:
+            empty = await client.get(url("/overlap/tags/export"), headers=bearer(public_id))
+            await client.put(
+                TAGS,
+                headers=bearer(public_id),
+                json={"headline": HEADLINE, "event_type": "order", "note": "a real order win"},
+            )
+            await client.put(
+                TAGS,
+                headers=bearer(public_id),
+                json={"headline": "Closure of Trading Window", "event_type": "routine"},
+            )
+            export = await client.get(url("/overlap/tags/export"), headers=bearer(public_id))
+
+        assert empty.status_code == 200 and empty.text == ""
+        assert export.status_code == 200, export.text
+        assert export.headers["content-type"].startswith("application/x-ndjson")
+        lines = [json.loads(line) for line in export.text.splitlines()]
+        assert len(lines) == 2
+        assert export.text.endswith("\n")
+        first, second = lines
+        assert set(first) == {
+            "headline",
+            "event_type",
+            "rules_event_type",
+            "laya_event_type",
+            "laya_confidence",
+            "note",
+            "corrected_at",
+        }
+        assert (first["headline"], first["event_type"], first["rules_event_type"]) == (
+            HEADLINE,
+            "order",
+            "order",
+        )
+        assert (first["laya_event_type"], first["laya_confidence"]) == (None, None)
+        assert first["note"] == "a real order win"
+        assert dt.datetime.fromisoformat(first["corrected_at"]).tzinfo is not None
+        assert (second["headline"], second["event_type"], second["note"]) == (
+            "Closure of Trading Window",
+            "routine",
+            None,
+        )
+
+    async def test_a_caller_who_is_not_the_sole_tenant_is_refused_the_writes_and_the_export(
+        self,
+        settings: Settings,
+        screener_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """The same refusal `/swing`'s writes give: `scoped_sole_user_id` raises a not-found
+        problem, so a second account learns nothing about whose labels these are."""
+        sole_id, _ = await make_user(screener_session, "overlap-labels@example.com")
+        monkeypatch.setenv("BASKFY_SOLE_USER_ID", str(sole_id))
+        _, guest = await make_user(screener_session, "overlap-stranger@example.com")
+        refused = STATUS_FOR[ProblemType.NOT_FOUND]
+
+        async with running_app(settings, screener_session) as client:
+            put = await client.put(
+                TAGS, headers=bearer(guest), json={"headline": HEADLINE, "event_type": "order"}
+            )
+            delete = await client.delete(TAGS, headers=bearer(guest), params={"headline": HEADLINE})
+            export = await client.get(url("/overlap/tags/export"), headers=bearer(guest))
+            anonymous = await client.put(TAGS, json={"headline": HEADLINE, "event_type": "order"})
+
+        assert anonymous.status_code == 401
+        for response in (put, delete, export):
+            assert response.status_code == refused, response.text
+            assert problem(response)["reason"] == SOLE_TENANT_REFUSED
+        assert await _correction_count(screener_session, sole_id) == 0
+
+    async def test_a_word_outside_the_vocabulary_or_a_blank_headline_is_refused(
+        self,
+        settings: Settings,
+        screener_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        user_id, public_id = await make_user(screener_session, "overlap-bad@example.com")
+        monkeypatch.setenv("BASKFY_SOLE_USER_ID", str(user_id))
+
+        async with running_app(settings, screener_session) as client:
+            merger = await client.put(
+                TAGS, headers=bearer(public_id), json={"headline": HEADLINE, "event_type": "merger"}
+            )
+            blank = await client.put(
+                TAGS, headers=bearer(public_id), json={"headline": "   ", "event_type": "order"}
+            )
+
+        assert merger.status_code == 400, merger.text
+        assert blank.status_code == 400, blank.text
+        assert await _correction_count(screener_session, user_id) == 0

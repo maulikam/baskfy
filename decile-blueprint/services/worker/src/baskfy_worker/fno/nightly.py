@@ -7,12 +7,16 @@ from the database without an NSE request — so the retries cost nothing after t
 
 The order matters: the bhavcopy for ``trade_date``, then the ban list NSE published for the
 session **after** it (``02`` Track C §9), stored on ``trade_date``'s rows. ``fo_underlying_daily``
-is derived after each ingested night (``06`` FO2; ``baskfy_worker.fno.underlying``).
+is derived after each ingested night (``06`` FO2; ``baskfy_worker.fno.underlying``), and the scan
+(``06`` FO4; ``baskfy_worker.fno.scan``) writes ``fo_scan`` for the next session from it. The scan
+runs in a savepoint: a scan that raises is reported in the result and logged, and the night's
+ingest is kept rather than rolled back with it — the retry an hour later re-runs the scan.
 """
 
 from __future__ import annotations
 
 import datetime as dt
+import logging
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,8 +31,11 @@ from baskfy_worker.fno.ingest import (
     is_final_attempt,
     store_ban_list,
 )
+from baskfy_worker.fno.scan import run_scan
 from baskfy_worker.fno.underlying import derive_for_night
 from baskfy_worker.ops import is_trading_day
+
+log = logging.getLogger("baskfy_worker.fno.nightly")
 
 
 async def next_session(session: AsyncSession, after: dt.date) -> dt.date | None:
@@ -70,4 +77,20 @@ async def run_night(
     out["underlying_rows"] = (
         await derive_for_night(session, trade_date) if ingest.status == STATUS_INGESTED else None
     )
+    if ingest.status == STATUS_INGESTED:
+        out["scan"] = await scan_in_savepoint(session, trade_date)
     return out
+
+
+async def scan_in_savepoint(session: AsyncSession, trade_date: dt.date) -> JsonObject:
+    """``run_scan`` inside a savepoint, so its failure never takes the ingest down with it.
+
+    The failure is not swallowed: it is logged with its traceback and returned in the result,
+    which the task's JSON and the operator's CLI both print.
+    """
+    try:
+        async with session.begin_nested():
+            return await run_scan(session, trade_date)
+    except Exception as exc:
+        log.exception("fo_scan for %s failed; the ingest is kept", trade_date.isoformat())
+        return {"error": f"{type(exc).__name__}: {exc}"}

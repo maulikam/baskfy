@@ -2287,3 +2287,15 @@ anything without a quote, so the exits stay raised until a quote read works agai
 3. A paper position can wait for the login.
 
 Runbook: `decile-blueprint/docs/runbooks/12-options-health.md`. Blocks nothing.
+
+## F&O — the FO run is built and deployed; paper only (25 Sep 2026)
+
+`FO-FINAL-REPORT.md` has the full account. Deployed `7c1124b`, `verify-fno.sh` **FNO OK**; the
+scan and the monitor are on (M.4), every FO money flag false, and the FO gateway is locked to dry
+run in code (FO7.1). **Yours, when you want them:**
+1. **The real-money gate is not met by either sleeve** (Tier 2E: F1 −0.010R in 2022 with the loss
+   close; F2 negative in four of five years). A flag needs your written waiver or forward evidence,
+   the paper period, and the live path, which is not built.
+2. **F2's capital** is ₹0 (paper one lot; live refuses).
+3. **The 2022→ backfill** (`fno_cli backfill`, ~90 min at the NSE limiter), skipped by M.4.
+4. **A Kite login every trading day an F1 structure is open**; a missed cycle is a paper violation.

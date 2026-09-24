@@ -53,6 +53,19 @@ name it: **"This confirm also authorises this structure's 50 % profit take, its 
 the credit (shorts first), and its E−1 15:00 exit. It places nothing else."** `05` §4, the desk's
 `CONFIRM_SENTENCES` and the page test carry it.
 
+## M.4 — The scan and the monitor are on on the box; no backfill yet (Maulik, in session, 25 Sep 2026)
+
+After FO12 deployed, asked with options, Maulik chose first "scan off, monitor on". The monitor
+raises plans only from `fo_scan` and marks from the ingested bhavcopy, both behind
+`BASKFY_FNO_SCAN_ENABLED`, so that pair would idle; asked again, he chose **both on, no
+backfill**. Done 25 Sep 2026 ~03:55 IST: `.env.staging` gained `BASKFY_FNO_SCAN_ENABLED=true` and
+`BASKFY_FNO_MONITOR_ENABLED=true`, `.env.staging.compose` gained `BASKFY_FNO_MONITOR_ENABLED=true`
+(both backed up beside themselves), `fno_cli seed` wrote F1 ₹25,00,000 / F2 ₹0 for user 1, and
+`verify-fno.sh` read **FNO OK**. Every FO money flag is unset (false). History starts with the
+25 Sep bhavcopy: F2's 50-session signal needs ~50 nights before it can fire, and the re-test and
+the IV percentile stay thin until a backfill runs (`fno_cli backfill`, ~90 min at the NSE limiter).
+**Reversal:** delete the lines and `up -d worker ingest-worker beat desk fno-monitor`.
+
 ## PACK.2 — The F&O bhavcopy is read through `NSEProvider`, not a new provider · ⚠ UNREVIEWED
 
 **Context.** The research needed every contract's end-of-day price for 2022–2026, including

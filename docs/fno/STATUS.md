@@ -3,7 +3,7 @@
 Updated at the end of every module, and loud about what is NOT done. A fresh session resumes from
 the first module not marked ✅.
 
-**Run state: FO0 ✅, FO1 ✅, FO2 ✅, FO3 ✅ (25 Sep 2026); FO4 next.** Branch `developer`. The OP run is complete (OP15 ✅,
+**Run state: FO0 ✅, FO1 ✅, FO2 ✅, FO3 ✅, FO6 ✅ (25 Sep 2026); FO4 in progress.** Branch `developer`. The OP run is complete (OP15 ✅,
 deployed `acac17c`; the options monitor flag was turned on at Maulik's answer, DECISIONS-OP OP-M.1).
 
 ## What exists already (built with the pack, 23 Sep 2026)
@@ -25,7 +25,7 @@ deployed `acac17c`; the options monitor flag was turned on at Maulik's answer, D
 | FO3 — 15:00 spread sample | ✅ | `baskfy.fno.spread_sample` at 15:00 behind `BASKFY_FNO_SCAN_ENABLED`: one Kite quote (448 keys) over ATM ± 3 of the top 30 names + NIFTY/BANKNIFTY into `fo_spread_sample`; the median half-spread statistic for FO9; the forward results calendar (no table yet, FO3.6). **Not run on the box** |
 | FO4 — Nightly scan | ⬜ | |
 | FO5 — API + `/options/overnight`, `/options/fno` | ⬜ | |
-| FO6 — Gateway: NRML branch, covered-overnight guard, `fno_gates()` | ⬜ | |
+| FO6 — Gateway: NRML branch, covered-overnight guard, `fno_gates()` | ✅ | NRML on NFO only with `OPTIONS_ENABLED` + `BASKFY_FNO_CARRY_ENABLED` + a `fo_plan` reference; `assert_overnight_option_is_covered` fail-closed (no rule wired → refused); F2 stock-future GTT only, option GTTs refused always; `fno_gates` four-flag AND; desk flags all false. Orders without `fo_plan` unchanged byte for byte. **Nothing calls it yet** (FO8); GTT modify for the trail is FO7's |
 | FO7 — Desk `fno_monitor` | ⬜ | |
 | FO8 — Desk `/fno` + paper execute | ⬜ | |
 | FO9 — Re-test engine + golden | ⬜ | |

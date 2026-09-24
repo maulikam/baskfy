@@ -26,7 +26,14 @@ from baskfy_core.fno.condor import (
     option_type_of,
     sign_of,
 )
-from baskfy_core.fno.covered import OptionPosition, assess_step, is_covered, uncovered
+from baskfy_core.fno.covered import (
+    OptionPosition,
+    assess_step,
+    book_after,
+    is_covered,
+    net_of_plan,
+    uncovered,
+)
 from baskfy_core.options.config import OptionType
 
 EXPIRY = dt.date(2026, 11, 24)
@@ -277,3 +284,17 @@ def test_an_uncovered_outside_book_is_never_made_to_look_covered(
         return
     book = Book(list(outside), [])
     run_sequence(strikes, qty, ENTRY_SEQUENCE, [qty] * 4, book, opening=True)
+
+
+class TestNetOfPlan:
+    """FO1.2 / FO6: the broker book handed to the guard is net of this plan's own fills."""
+
+    def test_a_fill_the_broker_already_shows_is_removed_once(self) -> None:
+        long_call = pos(CE, 25500, 75)
+        other = pos(PE, 23000, 75)
+        net = net_of_plan([long_call, other], [long_call])
+        assert net == (other,)
+        assert not is_covered(book_after(net, [long_call], pos(CE, 25000, -150)))
+
+    def test_a_fill_the_broker_has_not_shown_leaves_a_short_residue(self) -> None:
+        assert net_of_plan([], [pos(CE, 25500, 75)]) == (pos(CE, 25500, -75),)

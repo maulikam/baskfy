@@ -7,10 +7,16 @@ import asyncio, json, math, os, time, uuid, logging
 from dataclasses import dataclass
 from typing import Callable
 from .guards import (
+    FO_CARRY_PRODUCT,
+    CoverageRule,
+    FoPlanRef,
     OvernightOptionError,
     UntouchableInstrumentError,
     assert_not_overnight_option,
+    assert_overnight_option_is_covered,
     assert_tradeable,
+    fo_gtt_refusal,
+    fo_order_refusal,
     product_exchange_refusal,
 )
 from .gtt import (
@@ -62,6 +68,9 @@ class ProductGates:
     dry_run: bool = True
     intraday_enabled: bool = False
     options_enabled: bool = False
+    #: ``BASKFY_FNO_CARRY_ENABLED`` (``docs/fno/02`` §1, FO6): with ``options_enabled``, admits
+    #: NRML on NFO for an order that carries a ``fo_plan`` reference — nothing else. Fails closed.
+    fno_carry_enabled: bool = False
 
 
 # Statuses that mean the order did NOT reach the exchange, and say why. The circuit
@@ -96,6 +105,7 @@ class OrderGateway:
         gates: Callable[[], ProductGates] = ProductGates,
         journal_path: str = JOURNAL,
         stop_band: StopBand | None = None,
+        coverage: CoverageRule | None = None,
     ):
         self.kc, self.risk, self.limits = kc, risk, KiteLimits()
         self._sent: dict[str, str] = {}  # client_id -> broker order_id (idempotency)
@@ -116,6 +126,10 @@ class OrderGateway:
         # the next order rather than the next restart. Capturing the gates at construction
         # would have quietly changed that.
         self._gates = gates
+        # The covered-overnight predicate (docs/fno/04 §2), INJECTED because execution does not
+        # import baskfy_core: wire `baskfy_core.fno.covered.uncovered`. None fails closed — every
+        # option order carrying a fo_plan reference is refused (DECISIONS-FO FO6.1).
+        self._coverage = coverage
         self._journal_path = journal_path
         os.makedirs(os.path.dirname(journal_path) or ".", exist_ok=True)
         self._replay_journal()
@@ -187,8 +201,14 @@ class OrderGateway:
         reference_price: float | None = None,
         tenant: TenantIds,
         plan_tenant: TenantIds,
+        fo_plan: FoPlanRef | None = None,
     ) -> dict:
         """Place one order through the four layers. See `market_protection` below.
+
+        ``fo_plan`` marks an FO-run order (``docs/fno/02`` §1, FO6). Without it — every order
+        before the FO run, every O1-O3 leg — nothing below differs by a byte. With it, the
+        overnight-option guard is replaced by ``assert_overnight_option_is_covered`` and the
+        product gate may admit NRML on NFO when ``fno_carry_enabled`` is also on.
 
         ``market_protection`` is Kite's own: on a MARKET order the exchange fills at best up to
         this percentage past the last traded price and refuses beyond it. Sent only with MARKET
@@ -229,20 +249,49 @@ class OrderGateway:
         # Same layer: an option under a carry product would still be open tomorrow morning.
         # Returned as BLOCKED rather than raised so one refused leg cannot abort a batch
         # that has already placed real orders.
-        try:
-            assert_not_overnight_option(symbol, exchange, product)
-        except OvernightOptionError as exc:
-            self._journal(
-                {
-                    "event": "overnight_option_block",
-                    "symbol": symbol,
-                    "product": product,
-                    "side": side,
-                    "exchange": exchange,
-                },
-                client_id=cid,
-            )
-            return {"symbol": symbol, "status": "BLOCKED", "error": str(exc)}
+        #
+        # FO6: an order carrying a fo_plan reference meets the covered-overnight guard INSTEAD
+        # (docs/fno/02 §1); every other order meets the old guard, unchanged. Both run here,
+        # before the risk layer, the rate limiter and any network call.
+        if fo_plan is None:
+            try:
+                assert_not_overnight_option(symbol, exchange, product)
+            except OvernightOptionError as exc:
+                self._journal(
+                    {
+                        "event": "overnight_option_block",
+                        "symbol": symbol,
+                        "product": product,
+                        "side": side,
+                        "exchange": exchange,
+                    },
+                    client_id=cid,
+                )
+                return {"symbol": symbol, "status": "BLOCKED", "error": str(exc)}
+        else:
+            fo_why = fo_order_refusal(symbol, exchange, fo_plan)
+            if not fo_why:
+                try:
+                    assert_overnight_option_is_covered(
+                        symbol, qty, side, fo_plan=fo_plan, coverage=self._coverage
+                    )
+                except OvernightOptionError as exc:
+                    fo_why = str(exc)
+            if fo_why:
+                self._journal(
+                    {
+                        "event": "fo_uncovered_block",
+                        "symbol": symbol,
+                        "product": product,
+                        "side": side,
+                        "qty": qty,
+                        "exchange": exchange,
+                        "fo_plan": fo_plan.plan_id,
+                        "why": fo_why,
+                    },
+                    client_id=cid,
+                )
+                return {"symbol": symbol, "status": "BLOCKED", "error": fo_why}
         # Allow-list (AF 0.7): CNC on NSE/BSE; MIS needs intraday; any DERIVATIVE_EXCHANGES
         # venue needs options_enabled. The old NFO/BFO deny-list let MCX/NRML through.
         gate_why = product_exchange_refusal(
@@ -250,6 +299,8 @@ class OrderGateway:
             exchange,
             intraday_enabled=gates.intraday_enabled,
             options_enabled=gates.options_enabled,
+            fno_carry_enabled=gates.fno_carry_enabled,
+            fo_plan=fo_plan is not None,
         )
         if gate_why:
             return {"symbol": symbol, "status": "BLOCKED", "error": gate_why}
@@ -325,6 +376,7 @@ class OrderGateway:
                     "order_type": order_type,
                     "market_protection": market_protection,
                     "reference_price": reference_price,
+                    **({} if fo_plan is None else {"fo_plan": fo_plan.plan_id}),
                 },
                 client_id=cid,
             )
@@ -441,6 +493,7 @@ class OrderGateway:
         tenant: TenantIds,
         plan_tenant: TenantIds,
         limit_fraction: float | None = None,
+        fo_plan: FoPlanRef | None = None,
     ) -> dict:
         """Rest a vol-scaled stop-loss at the exchange. The ONLY way to create a GTT.
 
@@ -460,6 +513,11 @@ class OrderGateway:
         stop the method uses. Additive: the default keeps every existing expectation byte for
         byte. A fraction outside (0, 1] is a caller bug — a limit *above* a sell trigger cannot
         fill on the way down — and is refused before anything is journalled or sent.
+
+        ``fo_plan`` (FO6, ``docs/fno/02`` §1): the one derivative GTT this gateway rests — an F2
+        STOCK future on NFO, its leg NRML, with ``options_enabled`` and ``fno_carry_enabled``
+        both on. An option GTT stays refused whatever the switches and whatever the plan.
+        Without ``fo_plan`` nothing below differs by a byte.
         """
         if limit_fraction is not None and not 0.0 < limit_fraction <= 1.0:
             raise ValueError(
@@ -493,28 +551,55 @@ class OrderGateway:
         # intended to be holding one. Checked against the leg's OWN product, which is CNC.
         # (`kite_client.py:247-251`.) Returned as BLOCKED rather than raised, matching
         # `place()`, so one refused leg cannot abandon the rest of the book unprotected.
-        try:
-            assert_not_overnight_option(symbol, exchange, "CNC")
-        except OvernightOptionError as exc:
-            self._journal(
-                {
-                    "event": "gtt_overnight_option_block",
-                    "symbol": symbol,
-                    "exchange": exchange,
-                    "qty": int(qty),
-                    "trigger": trigger,
-                },
-                client_id=cid,
+        leg_product: str | None = None  # None: the broker's CNC, as it always was
+        if fo_plan is None:
+            try:
+                assert_not_overnight_option(symbol, exchange, "CNC")
+            except OvernightOptionError as exc:
+                self._journal(
+                    {
+                        "event": "gtt_overnight_option_block",
+                        "symbol": symbol,
+                        "exchange": exchange,
+                        "qty": int(qty),
+                        "trigger": trigger,
+                    },
+                    client_id=cid,
+                )
+                return {"symbol": symbol, "status": "BLOCKED", "error": str(exc)}
+            gate_why = product_exchange_refusal(
+                "CNC",
+                exchange,
+                intraday_enabled=gates.intraday_enabled,
+                options_enabled=gates.options_enabled,
             )
-            return {"symbol": symbol, "status": "BLOCKED", "error": str(exc)}
-        gate_why = product_exchange_refusal(
-            "CNC",
-            exchange,
-            intraday_enabled=gates.intraday_enabled,
-            options_enabled=gates.options_enabled,
-        )
-        if gate_why:
-            return {"symbol": symbol, "status": "BLOCKED", "error": gate_why}
+            if gate_why:
+                return {"symbol": symbol, "status": "BLOCKED", "error": gate_why}
+        else:
+            # FO6: the F2 stock-future branch (docs/fno/02 §1, M.1), checked where the
+            # overnight-option guard sits for every other GTT, before any network call.
+            fo_why = fo_gtt_refusal(
+                symbol,
+                exchange,
+                fo_plan,
+                options_enabled=gates.options_enabled,
+                fno_carry_enabled=gates.fno_carry_enabled,
+            )
+            if fo_why:
+                self._journal(
+                    {
+                        "event": "gtt_fo_block",
+                        "symbol": symbol,
+                        "exchange": exchange,
+                        "qty": int(qty),
+                        "trigger": trigger,
+                        "fo_plan": fo_plan.plan_id,
+                        "why": fo_why,
+                    },
+                    client_id=cid,
+                )
+                return {"symbol": symbol, "status": "BLOCKED", "error": fo_why}
+            leg_product = FO_CARRY_PRODUCT
         # GTT layer 1b: is this actually a stop? The desk never asked, because its own planner
         # cannot produce a bad one. Nothing enforced that, and the gateway is where it belongs.
         refusal = refuse_stop(symbol=symbol, qty=qty, trigger=trigger, last_price=last_price)
@@ -588,6 +673,11 @@ class OrderGateway:
                     "last_price": last_price,
                     "exchange": exchange,
                     "limit_fraction": fraction,
+                    **(
+                        {}
+                        if fo_plan is None
+                        else {"fo_plan": fo_plan.plan_id, "product": leg_product}
+                    ),
                 },
                 client_id=cid,
             )
@@ -641,6 +731,7 @@ class OrderGateway:
             trigger=trig,
             limit=limit,
             last_price=last_price,
+            product=leg_product,
         )
         # ONLY the broker call is inside the try. Reading `trigger_id` out of the response used
         # to sit here too, and that is the shape of a genuinely dangerous bug: a call that

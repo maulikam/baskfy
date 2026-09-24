@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { sectionTabIsActive } from "@/components/shell/section-tab-active";
 import { useIsStaff } from "@/components/shell/staff-context";
 import {
+  OPTIONS_SUBNAV,
   buildSectionTabs,
   isSleeveSection,
   type SectionKey,
@@ -50,6 +51,19 @@ export function SectionTabs({
           testId="section-tabs"
         />
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * The Options tab's own sub-nav (FO5, `docs/fno/05` §1): Intraday (NIFTY) · Overnight · Stock F&O.
+ * Every page under `/options` draws it first; the intraday pages keep their section row below it.
+ */
+export function OptionsSubNav() {
+  const pathname = usePathname();
+  return (
+    <div className="mb-2">
+      <TabRow label="Options" tabs={OPTIONS_SUBNAV} pathname={pathname} testId="options-subnav" />
     </div>
   );
 }

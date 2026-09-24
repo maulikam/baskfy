@@ -1681,6 +1681,69 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/fno/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** FO settings, ceilings, audit */
+        get: operations["getFnoConfig"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change the FO settings
+         * @description The one mutation. A value above its ceiling is a 422 naming the ceiling and its env var;
+         *     ``paused_*`` and the execution flags are not fields. **Atomic across the request**: every
+         *     part's bounds are checked before any row changes.
+         */
+        patch: operations["patchFnoConfig"];
+        trace?: never;
+    };
+    "/api/v1/fno/info": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The Stock F&O information table
+         * @description ``04`` §5 and ``05`` §3: facts per F&O underlying, never a candidate (PACK.8).
+         */
+        get: operations["getFnoInfo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/fno/overnight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * F1 and F2, read-only
+         * @description ``05`` §2 in one call: the header, the F1 cards, the evidence card and the F2 section.
+         */
+        get: operations["getFnoOvernight"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/indices/dashboard": {
         parameters: {
             query?: never;
@@ -6772,6 +6835,496 @@ export interface components {
             /** Subscriptions Enabled */
             subscriptions_enabled: boolean;
         };
+        /** FnoAuditOut */
+        FnoAuditOut: {
+            /**
+             * Changed At
+             * Format: date-time
+             */
+            changed_at: string;
+            /** Changed By */
+            changed_by: string;
+            /** Key */
+            key: string;
+            /** New Value */
+            new_value: string | null;
+            /** Old Value */
+            old_value: string | null;
+            /** Scope */
+            scope: string;
+        };
+        /**
+         * FnoBacktestOut
+         * @description One ``fo_backtest_run`` row, caveat on the row (``07`` §4).
+         */
+        FnoBacktestOut: {
+            /** Caveat */
+            caveat: string;
+            /** Family */
+            family: string;
+            /** Gross R */
+            gross_r: string | null;
+            /** N */
+            n: number;
+            /** Net R */
+            net_r: string | null;
+            per_year: components["schemas"]["JsonObject"];
+            /**
+             * Run At
+             * Format: date-time
+             */
+            run_at: string;
+            /**
+             * Sample From
+             * Format: date
+             */
+            sample_from: string;
+            /**
+             * Sample To
+             * Format: date
+             */
+            sample_to: string;
+            /** Slippage Source */
+            slippage_source: string;
+            /** Tier */
+            tier: string;
+        };
+        /** FnoBookOut */
+        FnoBookOut: {
+            /** Monthly Pause Inr */
+            monthly_pause_inr: string;
+            /** Paused Reason */
+            paused_reason: string | null;
+            /** Paused Until */
+            paused_until: string | null;
+        };
+        /**
+         * FnoBookPatch
+         * @description A partial update of ``fo_book_config``.
+         */
+        FnoBookPatch: {
+            /** Monthly Pause Inr */
+            monthly_pause_inr?: number | string | null;
+        };
+        /** FnoCeilingsOut */
+        FnoCeilingsOut: {
+            /** Book Monthly Loss Inr Max */
+            book_monthly_loss_inr_max: string;
+            /** Max Open Positions Max */
+            max_open_positions_max: number;
+            /** Max Per Underlying Max */
+            max_per_underlying_max: number;
+            /** Risk Pct Max */
+            risk_pct_max: string;
+            /** Risk Per Trade Inr Max */
+            risk_per_trade_inr_max: string;
+        };
+        /** FnoConfigOut */
+        FnoConfigOut: {
+            /** Audit */
+            audit: components["schemas"]["FnoAuditOut"][];
+            book: components["schemas"]["FnoBookOut"] | null;
+            ceilings: components["schemas"]["FnoCeilingsOut"];
+            /** Gates */
+            gates: components["schemas"]["FnoGateOut"][];
+            /** Seeded */
+            seeded: boolean;
+            /** Sleeves */
+            sleeves: components["schemas"]["FnoSleeveConfigOut"][];
+        };
+        /**
+         * FnoConfigPatch
+         * @description The whole settings patch: the book, and any of the two sleeve groups.
+         */
+        FnoConfigPatch: {
+            book?: components["schemas"]["FnoBookPatch"] | null;
+            /** Sleeves */
+            sleeves?: {
+                [key: string]: components["schemas"]["FnoSleevePatch"];
+            };
+        };
+        /** FnoEvidenceOut */
+        FnoEvidenceOut: {
+            /** Backtests */
+            backtests: components["schemas"]["FnoBacktestOut"][];
+            /** Caveat */
+            caveat: string;
+            /** Line */
+            line: string;
+            /** Loss Close Line */
+            loss_close_line: string;
+            /** N */
+            n: number;
+            /**
+             * Run Date
+             * Format: date
+             */
+            run_date: string;
+            /** Sample */
+            sample: string;
+            /** Slippage Note */
+            slippage_note: string;
+            /** Tally */
+            tally: components["schemas"]["FnoTallyOut"][];
+            /** Tier */
+            tier: string;
+            /** Why Paper */
+            why_paper: string[];
+        };
+        /** FnoF2Out */
+        FnoF2Out: {
+            /** Candidates */
+            candidates: components["schemas"]["FnoScanOut"][];
+            /** Closed */
+            closed: components["schemas"]["FnoJournalOut"][];
+            /** Open */
+            open: components["schemas"]["FnoPositionOut"][];
+            /** Research Line */
+            research_line: string;
+            /** Scan Date */
+            scan_date: string | null;
+            sleeve_row: components["schemas"]["FnoScanOut"] | null;
+            /** State Counts */
+            state_counts: {
+                [key: string]: number;
+            };
+        };
+        /** FnoFamilyOut */
+        FnoFamilyOut: {
+            latest_retest: components["schemas"]["FnoBacktestOut"] | null;
+            verdict: components["schemas"]["VerdictRow"];
+        };
+        /** FnoGateOut */
+        FnoGateOut: {
+            /** Group */
+            group: string;
+            /** Mode */
+            mode: string;
+        };
+        /** FnoInfoOut */
+        FnoInfoOut: {
+            /** As Of */
+            as_of: string | null;
+            /** Families */
+            families: components["schemas"]["FnoFamilyOut"][];
+            ingest: components["schemas"]["FnoIngestOut"];
+            /**
+             * Research Run Date
+             * Format: date
+             */
+            research_run_date: string;
+            /** Research Sample */
+            research_sample: string;
+            /** Rows */
+            rows: components["schemas"]["FnoInfoRowOut"][];
+            spread_sample: components["schemas"]["FnoSpreadOut"];
+        };
+        /**
+         * FnoInfoRowOut
+         * @description ``04`` §5's columns. No field is named or computed as a signal.
+         */
+        FnoInfoRowOut: {
+            /** Basis Ann */
+            basis_ann: string | null;
+            /** Days To Near Monthly */
+            days_to_near_monthly: number | null;
+            /** Fut Settle */
+            fut_settle: string | null;
+            /** Fut Turnover 20D */
+            fut_turnover_20d: string | null;
+            /** In Ban */
+            in_ban: boolean;
+            /** Iv */
+            iv: string | null;
+            /** Iv Pct 1Y */
+            iv_pct_1y: string | null;
+            /** Iv Rv */
+            iv_rv: string | null;
+            /** Iv Sessions 1Y */
+            iv_sessions_1y: number;
+            /** Lot Size */
+            lot_size: number | null;
+            /** Near Monthly */
+            near_monthly: string | null;
+            /** Oi Change 5D Pct */
+            oi_change_5d_pct: string | null;
+            /** Rv20 */
+            rv20: string | null;
+            /** Symbol */
+            symbol: string;
+        };
+        /** FnoIngestOut */
+        FnoIngestOut: {
+            /** Ban For Session */
+            ban_for_session: string | null;
+            /** Ban Symbols */
+            ban_symbols: string[];
+            /** Latest Date */
+            latest_date: string | null;
+            /** Latest Status */
+            latest_status: string | null;
+            /** Missing Days */
+            missing_days: string[];
+        };
+        /** FnoJournalOut */
+        FnoJournalOut: {
+            /**
+             * Closed On
+             * Format: date
+             */
+            closed_on: string;
+            /** Closed Reason */
+            closed_reason: string;
+            /** Costs Inr */
+            costs_inr: string;
+            /** Net Pnl Inr */
+            net_pnl_inr: string;
+            /**
+             * Opened On
+             * Format: date
+             */
+            opened_on: string;
+            /** Position Id */
+            position_id: number;
+            /** R Multiple */
+            r_multiple: string;
+            /** Rolls */
+            rolls: number;
+            /** Sessions Held */
+            sessions_held: number;
+            /** Simulated */
+            simulated: boolean;
+            /** Sizing Mode */
+            sizing_mode: string;
+            /** Sleeve */
+            sleeve: string;
+            /** Structure */
+            structure: string;
+            /** Symbol */
+            symbol: string;
+        };
+        /**
+         * FnoLevelOut
+         * @description The underlying's level from the session's bhavcopy (the file's ``underlying`` column),
+         *     and the symbol the shared live overlay knows it by.
+         */
+        FnoLevelOut: {
+            /** Close Of */
+            close_of: string | null;
+            /** Level */
+            level: string | null;
+            /** Live Symbol */
+            live_symbol: string;
+        };
+        /** FnoMarkOut */
+        FnoMarkOut: {
+            detail: components["schemas"]["JsonObject"];
+            /** Mark Points */
+            mark_points: string;
+            /** Pnl Inr */
+            pnl_inr: string;
+            /** Pnl R */
+            pnl_r: string | null;
+            /** Stop Price */
+            stop_price: string | null;
+            /**
+             * Trade Date
+             * Format: date
+             */
+            trade_date: string;
+        };
+        /** FnoOvernightOut */
+        FnoOvernightOut: {
+            /** Empty Reason */
+            empty_reason: string | null;
+            evidence: components["schemas"]["FnoEvidenceOut"];
+            f2: components["schemas"]["FnoF2Out"];
+            /** Gates */
+            gates: components["schemas"]["FnoGateOut"][];
+            /** Hard Exit Tomorrow */
+            hard_exit_tomorrow: components["schemas"]["FnoPositionOut"][];
+            /** Journal */
+            journal: components["schemas"]["FnoJournalOut"][];
+            /** Monitor Enabled */
+            monitor_enabled: boolean;
+            /** Next Session */
+            next_session: string | null;
+            /** Open Structures */
+            open_structures: components["schemas"]["FnoPositionOut"][];
+            /** Scan Date */
+            scan_date: string | null;
+            /** Scan Enabled */
+            scan_enabled: boolean;
+            /**
+             * Today
+             * Format: date
+             */
+            today: string;
+            /** Underlyings */
+            underlyings: components["schemas"]["FnoUnderlyingOut"][];
+        };
+        /** FnoPositionOut */
+        FnoPositionOut: {
+            /** Entry Credit */
+            entry_credit: string | null;
+            /** Entry Plan Id */
+            entry_plan_id: string;
+            /** Entry Price */
+            entry_price: string | null;
+            /** Gtt Id */
+            gtt_id: string | null;
+            /** Hard Exit Date */
+            hard_exit_date: string | null;
+            /** Id */
+            id: number;
+            legs: components["schemas"]["JsonObject"];
+            /** Loss Close Points */
+            loss_close_points: string | null;
+            /** Lot Size */
+            lot_size: number;
+            /** Lots */
+            lots: number;
+            mark: components["schemas"]["FnoMarkOut"] | null;
+            /** Max Loss Inr */
+            max_loss_inr: string | null;
+            /** Next Roll Date */
+            next_roll_date: string | null;
+            /**
+             * Opened On
+             * Format: date
+             */
+            opened_on: string;
+            /** Profit Take Points */
+            profit_take_points: string | null;
+            /** Sessions Held */
+            sessions_held: number | null;
+            /** Simulated */
+            simulated: boolean;
+            /** Sleeve */
+            sleeve: string;
+            /** Stop Price */
+            stop_price: string | null;
+            /** Structure */
+            structure: string;
+            /** Symbol */
+            symbol: string;
+        };
+        /**
+         * FnoScanOut
+         * @description One ``fo_scan`` row. ``detail`` is the worker's JSONB passed through: its money figures are
+         *     already decimal strings (FO4), and re-rendering them here would round a second time.
+         */
+        FnoScanOut: {
+            /** Cost Share */
+            cost_share: string | null;
+            /** Credit */
+            credit: string | null;
+            detail: components["schemas"]["JsonObject"];
+            /** Iv */
+            iv: string | null;
+            /** Iv Rv */
+            iv_rv: string | null;
+            /** Max Loss Per Lot */
+            max_loss_per_lot: string | null;
+            /** Reasons */
+            reasons: string[];
+            /** Rv20 */
+            rv20: string | null;
+            /** Sleeve */
+            sleeve: string;
+            /** State */
+            state: string;
+            /** Symbol */
+            symbol: string;
+            /**
+             * Trade Date
+             * Format: date
+             */
+            trade_date: string;
+        };
+        /** FnoSleeveConfigOut */
+        FnoSleeveConfigOut: {
+            /** Capital Inr */
+            capital_inr: string;
+            /** Max Lots */
+            max_lots: number;
+            /** Max Open Positions */
+            max_open_positions: number;
+            /** Paper Enabled */
+            paper_enabled: boolean;
+            /** Paused Reason */
+            paused_reason: string | null;
+            /** Paused Until */
+            paused_until: string | null;
+            /** Risk Per Trade Pct */
+            risk_per_trade_pct: string;
+            /** Sleeve */
+            sleeve: string;
+        };
+        /**
+         * FnoSleevePatch
+         * @description A partial update of one ``fo_sleeve_config`` row (a sleeve group).
+         */
+        FnoSleevePatch: {
+            /** Capital Inr */
+            capital_inr?: number | string | null;
+            /** Max Lots */
+            max_lots?: number | null;
+            /** Max Open Positions */
+            max_open_positions?: number | null;
+            /** Paper Enabled */
+            paper_enabled?: boolean | null;
+            /** Risk Per Trade Pct */
+            risk_per_trade_pct?: number | string | null;
+        };
+        /** FnoSpreadOut */
+        FnoSpreadOut: {
+            /** First */
+            first: string | null;
+            /** Last */
+            last: string | null;
+            /** Sessions */
+            sessions: number;
+            /** Symbols */
+            symbols: number;
+        };
+        /**
+         * FnoTallyOut
+         * @description ``04`` §9 against the paper record. Violations are FO10's ledger; until then ``None``.
+         */
+        FnoTallyOut: {
+            /** Closed */
+            closed: number;
+            /** First Opened */
+            first_opened: string | null;
+            /** Opened Cycles */
+            opened_cycles: number;
+            /** Rolls */
+            rolls: number;
+            /** Sleeve */
+            sleeve: string;
+            /** Target */
+            target: string;
+            /** Violations */
+            violations: number | null;
+        };
+        /** FnoUnderlyingOut */
+        FnoUnderlyingOut: {
+            level: components["schemas"]["FnoLevelOut"];
+            /** Next Entry Date */
+            next_entry_date: string | null;
+            scan: components["schemas"]["FnoScanOut"] | null;
+            /** Sleeve */
+            sleeve: string;
+            /** Symbol */
+            symbol: string;
+        };
+        /**
+         * FoSleeveGroup
+         * @description How flags group the sleeves (``01`` §4): ``F1N`` and ``F1B`` are one flag, ``F1``.
+         * @enum {string}
+         */
+        FoSleeveGroup: "F1" | "F2";
         /**
          * FragilityRunOut
          * @description docs/10 §"honesty features": one of the five runs in the fragility readout.
@@ -7575,6 +8128,9 @@ export interface components {
             data: components["schemas"]["InvoiceOut"][];
             /** Next Cursor */
             next_cursor?: string | null;
+        };
+        JsonObject: {
+            [key: string]: unknown;
         };
         JsonValue: unknown;
         /**
@@ -13434,6 +13990,24 @@ export interface components {
             value_inr: string;
             /** Working From */
             working_from: string | null;
+        };
+        /**
+         * VerdictRow
+         * @description One row of ``RESEARCH.md``'s verdict table.
+         */
+        VerdictRow: {
+            /** Best Variant */
+            best_variant: string;
+            /** Family */
+            family: string;
+            /** Net R */
+            net_r: string;
+            /** Retest Families */
+            retest_families: string[];
+            /** Robust */
+            robust: string;
+            /** Verdict */
+            verdict: string;
         };
         /** VersionDiffOut */
         VersionDiffOut: {
@@ -22627,6 +23201,414 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VersionDiffOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getFnoConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FnoConfigOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    patchFnoConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FnoConfigPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FnoConfigOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getFnoInfo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FnoInfoOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getFnoOvernight: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FnoOvernightOut"];
                 };
             };
             /** @description Bad request */

@@ -8,7 +8,7 @@ import { SleeveCard } from "@/components/options/sleeve-card";
 import { ToneBadge } from "@/components/options/state-chip";
 import { Answer, Mark } from "@/components/shell/answer";
 import { PageHeader } from "@/components/shell/page-header";
-import { SectionTabs } from "@/components/shell/section-tabs";
+import { OptionsSubNav, SectionTabs } from "@/components/shell/section-tabs";
 import { fetchOptionsChain, fetchOptionsToday } from "@/lib/options/fetch";
 import type {
   OptionsScan,
@@ -112,6 +112,7 @@ export default async function OptionsPage() {
           </span>
         }
       />
+      <OptionsSubNav />
       <SectionTabs section="options" />
 
       <FnoRiskCaveat />

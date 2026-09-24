@@ -316,6 +316,18 @@ export type SectionKey = keyof typeof SECTION_TABS;
 
 export type SectionTab = { readonly href: Route; readonly label: string };
 
+/**
+ * The Options tab's sub-nav (FO5, `docs/fno/05` §1): "`Intraday (NIFTY)` · `Overnight` ·
+ * `Stock F&O`". It sits above the intraday page's own Today | Journal | Calendar row, which stays
+ * as it was — `/options/journal` and `/options/calendar` light "Intraday (NIFTY)" by the
+ * longest-prefix rule. No new top-level tab.
+ */
+export const OPTIONS_SUBNAV: readonly SectionTab[] = [
+  { href: "/options", label: "Intraday (NIFTY)" },
+  { href: "/options/overnight" as Route, label: "Overnight" },
+  { href: "/options/fno" as Route, label: "Stock F&O" },
+];
+
 /** Vocabulary titles for VBT / TWT are too long for the tab row; keep these short. */
 const STAFF_BUILD_TABS: readonly SectionTab[] = [
   { href: "/swing", label: "Swing" },

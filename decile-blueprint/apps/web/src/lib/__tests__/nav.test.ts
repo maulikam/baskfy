@@ -6,6 +6,7 @@ import {
   LEGACY_REDIRECTS,
   NAV_GROUPS,
   NAV_ITEMS,
+  OPTIONS_SUBNAV,
   PRIMARY_NAV,
   primarySection,
   SECTION_LABEL,
@@ -387,5 +388,37 @@ describe("the sidebar's words", () => {
     for (const item of NAV_ITEMS) {
       expect(item.blurb.length, `${item.label}'s blurb is an essay`).toBeLessThanOrEqual(96);
     }
+  });
+});
+
+/* FO5, `docs/fno/05` §1: "The Options tab (`/options`) gains a sub-nav: `Intraday (NIFTY)` ·
+   `Overnight` · `Stock F&O`. The first is today's page, unchanged." No new top-level tab. */
+describe("the Options tab's sub-nav (FO5)", () => {
+  it("is exactly the three pages, in order, each with a page record", () => {
+    expect(OPTIONS_SUBNAV.map((t) => t.label)).toEqual(["Intraday (NIFTY)", "Overnight", "Stock F&O"]);
+    expect(OPTIONS_SUBNAV.map((t) => t.href)).toEqual([
+      "/options",
+      "/options/overnight",
+      "/options/fno",
+    ]);
+    for (const tab of OPTIONS_SUBNAV) {
+      expect(PAGES[tab.href as keyof typeof PAGES], `${tab.href} has no page record`).toBeDefined();
+    }
+  });
+
+  it("leaves the intraday page's own tabs and the primary nav alone", () => {
+    expect(SECTION_TABS.options.map((t) => t.href)).toEqual([
+      "/options",
+      "/options/journal",
+      "/options/calendar",
+    ]);
+    const hrefs = [...PRIMARY_NAV, ...NAV_ITEMS].map((item) => item.href as string);
+    expect(hrefs).not.toContain("/options/overnight");
+    expect(hrefs).not.toContain("/options/fno");
+  });
+
+  it("lights the Options section on both new routes", () => {
+    expect(primarySection("/options/overnight")).toBe("options");
+    expect(primarySection("/options/fno")).toBe("options");
   });
 });

@@ -1,0 +1,300 @@
+import type { FnoInfo, FnoOvernight } from "../types";
+
+/** Fixtures written to the API's shapes (`services/api` `fno_read.py`, `test_api_fno.py`). */
+
+const CAVEAT =
+  "End-of-day closes, not fills. Slippage is an assumed 3 % of premium per leg per crossing " +
+  "(0.03 % for futures), not measured. `n` legs were modelled because they did not trade.";
+
+const EVIDENCE: FnoOvernight["evidence"] = {
+  tier: "2E",
+  line:
+    "B4 Index monthly iron condor, entered 15 sessions before expiry (NIFTY + BANKNIFTY): " +
+    "+0.033R a trade (t = 1.36, n = 100, 86 % win, max DD -1.64R)",
+  loss_close_line:
+    "With Maulik's loss close at 1.5 x the credit (F1 as built): +0.022R",
+  slippage_note: "B4 itself assumed 0.5 % of premium per leg per crossing",
+  caveat: CAVEAT,
+  n: 100,
+  run_date: "2026-09-23",
+  sample: "3 Jan 2022 to 22 Sep 2026",
+  why_paper: ["t = 1.36 on 100 trades is not significant"],
+  backtests: [],
+  tally: [
+    {
+      sleeve: "F1N",
+      target: "6 consecutive monthly cycles, ≥ 4 opened across F1",
+      closed: 0,
+      opened_cycles: 0,
+      rolls: 0,
+      first_opened: null,
+      violations: null,
+    },
+  ],
+};
+
+export const scanOff: FnoOvernight = {
+  today: "2026-09-23",
+  next_session: "2026-09-24",
+  scan_date: null,
+  empty_reason: "scan_off",
+  scan_enabled: false,
+  monitor_enabled: false,
+  gates: [
+    { group: "F1", mode: "PAPER" },
+    { group: "F2", mode: "PAPER" },
+  ],
+  underlyings: [
+    {
+      symbol: "NIFTY",
+      sleeve: "F1N",
+      level: { level: null, close_of: null, live_symbol: "NIFTY 50" },
+      scan: null,
+      next_entry_date: null,
+    },
+    {
+      symbol: "BANKNIFTY",
+      sleeve: "F1B",
+      level: { level: null, close_of: null, live_symbol: "NIFTY BANK" },
+      scan: null,
+      next_entry_date: null,
+    },
+  ],
+  hard_exit_tomorrow: [],
+  open_structures: [],
+  journal: [],
+  evidence: EVIDENCE,
+  f2: {
+    research_line:
+      "F2, the long-only chandelier, re-costed with its rolls: +0.017R",
+    scan_date: null,
+    candidates: [],
+    sleeve_row: null,
+    state_counts: {},
+    open: [],
+    closed: [],
+  },
+};
+
+const OPEN = {
+  id: 7,
+  sleeve: "F1N",
+  symbol: "NIFTY",
+  structure: "IRON_CONDOR",
+  entry_plan_id: "F1N-2026-09-03",
+  legs: {},
+  lots: 1,
+  lot_size: 65,
+  entry_price: null,
+  entry_credit: "98.40",
+  max_loss_inr: "20000.00",
+  profit_take_points: "49.20",
+  loss_close_points: null,
+  stop_price: null,
+  gtt_id: null,
+  hard_exit_date: "2026-09-24",
+  next_roll_date: null,
+  opened_on: "2026-09-03",
+  sessions_held: 14,
+  simulated: true,
+  mark: {
+    trade_date: "2026-09-22",
+    mark_points: "80.00",
+    pnl_inr: "1196.00",
+    pnl_r: "0.060",
+    stop_price: null,
+    detail: {},
+  },
+};
+
+export const scanned: FnoOvernight = {
+  ...scanOff,
+  scan_date: "2026-09-22",
+  empty_reason: null,
+  scan_enabled: true,
+  underlyings: [
+    {
+      symbol: "NIFTY",
+      sleeve: "F1N",
+      level: {
+        level: "25100.50",
+        close_of: "2026-09-22",
+        live_symbol: "NIFTY 50",
+      },
+      scan: {
+        sleeve: "F1N",
+        trade_date: "2026-09-22",
+        symbol: "NIFTY",
+        state: "OPEN_POSITION",
+        reasons: ["an F1 structure on NIFTY is open"],
+        detail: {},
+        credit: null,
+        max_loss_per_lot: null,
+        cost_share: null,
+        iv: null,
+        rv20: null,
+        iv_rv: null,
+      },
+      next_entry_date: null,
+    },
+    {
+      symbol: "BANKNIFTY",
+      sleeve: "F1B",
+      level: { level: null, close_of: null, live_symbol: "NIFTY BANK" },
+      scan: {
+        sleeve: "F1B",
+        trade_date: "2026-09-22",
+        symbol: "BANKNIFTY",
+        state: "CANDIDATE",
+        reasons: ["1 lot at ₹25,000"],
+        detail: {
+          entry_session: "2026-09-23",
+          legs: [
+            {
+              role: "LONG_PUT",
+              strike: "51000",
+              option_type: "PE",
+              settle: "40.10",
+            },
+            {
+              role: "LONG_CALL",
+              strike: "56500",
+              option_type: "CE",
+              settle: "35.00",
+            },
+            {
+              role: "SHORT_PUT",
+              strike: "52000",
+              option_type: "PE",
+              settle: "150.20",
+            },
+            {
+              role: "SHORT_CALL",
+              strike: "55500",
+              option_type: "CE",
+              settle: "137.25",
+            },
+          ],
+          credit_points: "212.35",
+          max_loss_per_lot_inr: "23629.50",
+          cost: { cost_share_pct: "4.1000" },
+          iv_rv: "1.2345",
+        },
+        credit: "212.35",
+        max_loss_per_lot: "23629.50",
+        cost_share: "4.1000",
+        iv: "0.131000",
+        rv20: "0.106000",
+        iv_rv: "1.2345",
+      },
+      next_entry_date: "2026-09-23",
+    },
+  ],
+  hard_exit_tomorrow: [OPEN],
+  open_structures: [OPEN],
+  f2: {
+    ...scanOff.f2,
+    scan_date: "2026-09-22",
+    candidates: [
+      {
+        sleeve: "F2",
+        trade_date: "2026-09-22",
+        symbol: "RELIANCE",
+        state: "CANDIDATE",
+        reasons: [],
+        detail: {
+          breakout_level: "1450.00",
+          stop: "1380.10",
+          risk_per_unit: "72.20",
+          risk_per_lot_inr: "36100.00",
+          lots_at_ceiling: 0,
+        },
+        credit: null,
+        max_loss_per_lot: null,
+        cost_share: null,
+        iv: null,
+        rv20: null,
+        iv_rv: null,
+      },
+    ],
+    state_counts: { CANDIDATE: 1, NO_SIGNAL: 120 },
+  },
+};
+
+export const info: FnoInfo = {
+  as_of: "2026-09-22",
+  rows: [
+    {
+      symbol: "TCS",
+      lot_size: 175,
+      near_monthly: "2026-09-29",
+      days_to_near_monthly: 7,
+      fut_settle: "3120.00",
+      basis_ann: null,
+      oi_change_5d_pct: "-2.10",
+      iv: null,
+      rv20: "0.180000",
+      iv_rv: null,
+      iv_pct_1y: null,
+      iv_sessions_1y: 0,
+      in_ban: true,
+      fut_turnover_20d: "100",
+    },
+    {
+      symbol: "RELIANCE",
+      lot_size: 500,
+      near_monthly: "2026-09-29",
+      days_to_near_monthly: 7,
+      fut_settle: "1452.30",
+      basis_ann: "0.061000",
+      oi_change_5d_pct: "1.64",
+      iv: "0.245000",
+      rv20: "0.200000",
+      iv_rv: "1.23",
+      iv_pct_1y: "52.4",
+      iv_sessions_1y: 210,
+      in_ban: false,
+      fut_turnover_20d: "9000000000",
+    },
+  ],
+  families: [
+    {
+      verdict: {
+        family: "C1 Debit spreads on the breakout signal",
+        best_variant: "ATM / +0.5 sd, 10 sessions",
+        net_r: "-0.236 (t = -20.8)",
+        robust: "—",
+        verdict: "Rejected",
+        retest_families: ["C1"],
+      },
+      latest_retest: {
+        family: "C1",
+        tier: "2E",
+        caveat: CAVEAT,
+        sample_from: "2022-01-03",
+        sample_to: "2026-09-30",
+        n: 500,
+        net_r: "-0.2100",
+        gross_r: null,
+        per_year: {},
+        slippage_source: "ASSUMED",
+        run_at: "2026-10-01T00:00:00Z",
+      },
+    },
+  ],
+  research_run_date: "2026-09-23",
+  research_sample: "3 Jan 2022 to 22 Sep 2026",
+  spread_sample: {
+    sessions: 2,
+    first: "2026-09-21",
+    last: "2026-09-22",
+    symbols: 1,
+  },
+  ingest: {
+    latest_date: "2026-09-22",
+    latest_status: "INGESTED",
+    missing_days: ["2026-09-18"],
+    ban_for_session: "2026-09-23",
+    ban_symbols: ["TCS"],
+  },
+};

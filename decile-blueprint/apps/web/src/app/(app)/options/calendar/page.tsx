@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { FnoRiskCaveat } from "@/components/options/caveats";
 import { PageHeader } from "@/components/shell/page-header";
-import { SectionTabs } from "@/components/shell/section-tabs";
+import { OptionsSubNav, SectionTabs } from "@/components/shell/section-tabs";
 import { Button } from "@/components/ui/button";
 import { formatTradeDate } from "@/lib/format";
 import { fetchOptionsCalendar } from "@/lib/options/fetch";
@@ -33,6 +33,7 @@ export default async function OptionsCalendarPage() {
         title={PAGES["/options/calendar"].title}
         blurb={PAGES["/options/calendar"].blurb}
       />
+      <OptionsSubNav />
       <SectionTabs section="options" />
       <FnoRiskCaveat />
 

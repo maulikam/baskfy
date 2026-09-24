@@ -6067,6 +6067,1693 @@
         "title": "FlagStateOut",
         "type": "object"
       },
+      "FnoAuditOut": {
+        "properties": {
+          "changed_at": {
+            "format": "date-time",
+            "title": "Changed At",
+            "type": "string"
+          },
+          "changed_by": {
+            "title": "Changed By",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "new_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Value"
+          },
+          "old_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Old Value"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "key",
+          "old_value",
+          "new_value",
+          "changed_at",
+          "changed_by"
+        ],
+        "title": "FnoAuditOut",
+        "type": "object"
+      },
+      "FnoBacktestOut": {
+        "description": "One ``fo_backtest_run`` row, caveat on the row (``07`` §4).",
+        "properties": {
+          "caveat": {
+            "title": "Caveat",
+            "type": "string"
+          },
+          "family": {
+            "title": "Family",
+            "type": "string"
+          },
+          "gross_r": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gross R"
+          },
+          "n": {
+            "title": "N",
+            "type": "integer"
+          },
+          "net_r": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Net R"
+          },
+          "per_year": {
+            "$ref": "#/components/schemas/JsonObject"
+          },
+          "run_at": {
+            "format": "date-time",
+            "title": "Run At",
+            "type": "string"
+          },
+          "sample_from": {
+            "format": "date",
+            "title": "Sample From",
+            "type": "string"
+          },
+          "sample_to": {
+            "format": "date",
+            "title": "Sample To",
+            "type": "string"
+          },
+          "slippage_source": {
+            "title": "Slippage Source",
+            "type": "string"
+          },
+          "tier": {
+            "title": "Tier",
+            "type": "string"
+          }
+        },
+        "required": [
+          "family",
+          "tier",
+          "caveat",
+          "sample_from",
+          "sample_to",
+          "n",
+          "net_r",
+          "gross_r",
+          "per_year",
+          "slippage_source",
+          "run_at"
+        ],
+        "title": "FnoBacktestOut",
+        "type": "object"
+      },
+      "FnoBookOut": {
+        "properties": {
+          "monthly_pause_inr": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Monthly Pause Inr",
+            "type": "string"
+          },
+          "paused_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paused Reason"
+          },
+          "paused_until": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paused Until"
+          }
+        },
+        "required": [
+          "monthly_pause_inr",
+          "paused_until",
+          "paused_reason"
+        ],
+        "title": "FnoBookOut",
+        "type": "object"
+      },
+      "FnoBookPatch": {
+        "additionalProperties": false,
+        "description": "A partial update of ``fo_book_config``.",
+        "properties": {
+          "monthly_pause_inr": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Pause Inr"
+          }
+        },
+        "title": "FnoBookPatch",
+        "type": "object"
+      },
+      "FnoCeilingsOut": {
+        "properties": {
+          "book_monthly_loss_inr_max": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Book Monthly Loss Inr Max",
+            "type": "string"
+          },
+          "max_open_positions_max": {
+            "title": "Max Open Positions Max",
+            "type": "integer"
+          },
+          "max_per_underlying_max": {
+            "title": "Max Per Underlying Max",
+            "type": "integer"
+          },
+          "risk_pct_max": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Risk Pct Max",
+            "type": "string"
+          },
+          "risk_per_trade_inr_max": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Risk Per Trade Inr Max",
+            "type": "string"
+          }
+        },
+        "required": [
+          "risk_per_trade_inr_max",
+          "risk_pct_max",
+          "max_open_positions_max",
+          "max_per_underlying_max",
+          "book_monthly_loss_inr_max"
+        ],
+        "title": "FnoCeilingsOut",
+        "type": "object"
+      },
+      "FnoConfigOut": {
+        "properties": {
+          "audit": {
+            "items": {
+              "$ref": "#/components/schemas/FnoAuditOut"
+            },
+            "title": "Audit",
+            "type": "array"
+          },
+          "book": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FnoBookOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ceilings": {
+            "$ref": "#/components/schemas/FnoCeilingsOut"
+          },
+          "gates": {
+            "items": {
+              "$ref": "#/components/schemas/FnoGateOut"
+            },
+            "title": "Gates",
+            "type": "array"
+          },
+          "seeded": {
+            "title": "Seeded",
+            "type": "boolean"
+          },
+          "sleeves": {
+            "items": {
+              "$ref": "#/components/schemas/FnoSleeveConfigOut"
+            },
+            "title": "Sleeves",
+            "type": "array"
+          }
+        },
+        "required": [
+          "seeded",
+          "book",
+          "sleeves",
+          "ceilings",
+          "gates",
+          "audit"
+        ],
+        "title": "FnoConfigOut",
+        "type": "object"
+      },
+      "FnoConfigPatch": {
+        "additionalProperties": false,
+        "description": "The whole settings patch: the book, and any of the two sleeve groups.",
+        "properties": {
+          "book": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FnoBookPatch"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sleeves": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/FnoSleevePatch"
+            },
+            "propertyNames": {
+              "$ref": "#/components/schemas/FoSleeveGroup"
+            },
+            "title": "Sleeves",
+            "type": "object"
+          }
+        },
+        "title": "FnoConfigPatch",
+        "type": "object"
+      },
+      "FnoEvidenceOut": {
+        "properties": {
+          "backtests": {
+            "items": {
+              "$ref": "#/components/schemas/FnoBacktestOut"
+            },
+            "title": "Backtests",
+            "type": "array"
+          },
+          "caveat": {
+            "title": "Caveat",
+            "type": "string"
+          },
+          "line": {
+            "title": "Line",
+            "type": "string"
+          },
+          "loss_close_line": {
+            "title": "Loss Close Line",
+            "type": "string"
+          },
+          "n": {
+            "title": "N",
+            "type": "integer"
+          },
+          "run_date": {
+            "format": "date",
+            "title": "Run Date",
+            "type": "string"
+          },
+          "sample": {
+            "title": "Sample",
+            "type": "string"
+          },
+          "slippage_note": {
+            "title": "Slippage Note",
+            "type": "string"
+          },
+          "tally": {
+            "items": {
+              "$ref": "#/components/schemas/FnoTallyOut"
+            },
+            "title": "Tally",
+            "type": "array"
+          },
+          "tier": {
+            "title": "Tier",
+            "type": "string"
+          },
+          "why_paper": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Why Paper",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tier",
+          "line",
+          "loss_close_line",
+          "slippage_note",
+          "caveat",
+          "n",
+          "run_date",
+          "sample",
+          "why_paper",
+          "backtests",
+          "tally"
+        ],
+        "title": "FnoEvidenceOut",
+        "type": "object"
+      },
+      "FnoF2Out": {
+        "properties": {
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/FnoScanOut"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "closed": {
+            "items": {
+              "$ref": "#/components/schemas/FnoJournalOut"
+            },
+            "title": "Closed",
+            "type": "array"
+          },
+          "open": {
+            "items": {
+              "$ref": "#/components/schemas/FnoPositionOut"
+            },
+            "title": "Open",
+            "type": "array"
+          },
+          "research_line": {
+            "title": "Research Line",
+            "type": "string"
+          },
+          "scan_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scan Date"
+          },
+          "sleeve_row": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FnoScanOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "State Counts",
+            "type": "object"
+          }
+        },
+        "required": [
+          "research_line",
+          "scan_date",
+          "candidates",
+          "sleeve_row",
+          "state_counts",
+          "open",
+          "closed"
+        ],
+        "title": "FnoF2Out",
+        "type": "object"
+      },
+      "FnoFamilyOut": {
+        "properties": {
+          "latest_retest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FnoBacktestOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/VerdictRow"
+          }
+        },
+        "required": [
+          "verdict",
+          "latest_retest"
+        ],
+        "title": "FnoFamilyOut",
+        "type": "object"
+      },
+      "FnoGateOut": {
+        "properties": {
+          "group": {
+            "title": "Group",
+            "type": "string"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "group",
+          "mode"
+        ],
+        "title": "FnoGateOut",
+        "type": "object"
+      },
+      "FnoInfoOut": {
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "families": {
+            "items": {
+              "$ref": "#/components/schemas/FnoFamilyOut"
+            },
+            "title": "Families",
+            "type": "array"
+          },
+          "ingest": {
+            "$ref": "#/components/schemas/FnoIngestOut"
+          },
+          "research_run_date": {
+            "format": "date",
+            "title": "Research Run Date",
+            "type": "string"
+          },
+          "research_sample": {
+            "title": "Research Sample",
+            "type": "string"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/FnoInfoRowOut"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "spread_sample": {
+            "$ref": "#/components/schemas/FnoSpreadOut"
+          }
+        },
+        "required": [
+          "as_of",
+          "rows",
+          "families",
+          "research_run_date",
+          "research_sample",
+          "spread_sample",
+          "ingest"
+        ],
+        "title": "FnoInfoOut",
+        "type": "object"
+      },
+      "FnoInfoRowOut": {
+        "description": "``04`` §5's columns. No field is named or computed as a signal.",
+        "properties": {
+          "basis_ann": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis Ann"
+          },
+          "days_to_near_monthly": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days To Near Monthly"
+          },
+          "fut_settle": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fut Settle"
+          },
+          "fut_turnover_20d": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fut Turnover 20D"
+          },
+          "in_ban": {
+            "title": "In Ban",
+            "type": "boolean"
+          },
+          "iv": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iv"
+          },
+          "iv_pct_1y": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iv Pct 1Y"
+          },
+          "iv_rv": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iv Rv"
+          },
+          "iv_sessions_1y": {
+            "title": "Iv Sessions 1Y",
+            "type": "integer"
+          },
+          "lot_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lot Size"
+          },
+          "near_monthly": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Near Monthly"
+          },
+          "oi_change_5d_pct": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oi Change 5D Pct"
+          },
+          "rv20": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rv20"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "lot_size",
+          "near_monthly",
+          "days_to_near_monthly",
+          "fut_settle",
+          "basis_ann",
+          "oi_change_5d_pct",
+          "iv",
+          "rv20",
+          "iv_rv",
+          "iv_pct_1y",
+          "iv_sessions_1y",
+          "in_ban",
+          "fut_turnover_20d"
+        ],
+        "title": "FnoInfoRowOut",
+        "type": "object"
+      },
+      "FnoIngestOut": {
+        "properties": {
+          "ban_for_session": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ban For Session"
+          },
+          "ban_symbols": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Ban Symbols",
+            "type": "array"
+          },
+          "latest_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Date"
+          },
+          "latest_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Status"
+          },
+          "missing_days": {
+            "items": {
+              "format": "date",
+              "type": "string"
+            },
+            "title": "Missing Days",
+            "type": "array"
+          }
+        },
+        "required": [
+          "latest_date",
+          "latest_status",
+          "missing_days",
+          "ban_for_session",
+          "ban_symbols"
+        ],
+        "title": "FnoIngestOut",
+        "type": "object"
+      },
+      "FnoJournalOut": {
+        "properties": {
+          "closed_on": {
+            "format": "date",
+            "title": "Closed On",
+            "type": "string"
+          },
+          "closed_reason": {
+            "title": "Closed Reason",
+            "type": "string"
+          },
+          "costs_inr": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Costs Inr",
+            "type": "string"
+          },
+          "net_pnl_inr": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Net Pnl Inr",
+            "type": "string"
+          },
+          "opened_on": {
+            "format": "date",
+            "title": "Opened On",
+            "type": "string"
+          },
+          "position_id": {
+            "title": "Position Id",
+            "type": "integer"
+          },
+          "r_multiple": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "R Multiple",
+            "type": "string"
+          },
+          "rolls": {
+            "title": "Rolls",
+            "type": "integer"
+          },
+          "sessions_held": {
+            "title": "Sessions Held",
+            "type": "integer"
+          },
+          "simulated": {
+            "title": "Simulated",
+            "type": "boolean"
+          },
+          "sizing_mode": {
+            "title": "Sizing Mode",
+            "type": "string"
+          },
+          "sleeve": {
+            "title": "Sleeve",
+            "type": "string"
+          },
+          "structure": {
+            "title": "Structure",
+            "type": "string"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "position_id",
+          "sleeve",
+          "symbol",
+          "structure",
+          "opened_on",
+          "closed_on",
+          "net_pnl_inr",
+          "costs_inr",
+          "r_multiple",
+          "closed_reason",
+          "sessions_held",
+          "rolls",
+          "simulated",
+          "sizing_mode"
+        ],
+        "title": "FnoJournalOut",
+        "type": "object"
+      },
+      "FnoLevelOut": {
+        "description": "The underlying's level from the session's bhavcopy (the file's ``underlying`` column),\nand the symbol the shared live overlay knows it by.",
+        "properties": {
+          "close_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close Of"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          },
+          "live_symbol": {
+            "title": "Live Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "level",
+          "close_of",
+          "live_symbol"
+        ],
+        "title": "FnoLevelOut",
+        "type": "object"
+      },
+      "FnoMarkOut": {
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/JsonObject"
+          },
+          "mark_points": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Mark Points",
+            "type": "string"
+          },
+          "pnl_inr": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Pnl Inr",
+            "type": "string"
+          },
+          "pnl_r": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pnl R"
+          },
+          "stop_price": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop Price"
+          },
+          "trade_date": {
+            "format": "date",
+            "title": "Trade Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "trade_date",
+          "mark_points",
+          "pnl_inr",
+          "pnl_r",
+          "stop_price",
+          "detail"
+        ],
+        "title": "FnoMarkOut",
+        "type": "object"
+      },
+      "FnoOvernightOut": {
+        "properties": {
+          "empty_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Empty Reason"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/FnoEvidenceOut"
+          },
+          "f2": {
+            "$ref": "#/components/schemas/FnoF2Out"
+          },
+          "gates": {
+            "items": {
+              "$ref": "#/components/schemas/FnoGateOut"
+            },
+            "title": "Gates",
+            "type": "array"
+          },
+          "hard_exit_tomorrow": {
+            "items": {
+              "$ref": "#/components/schemas/FnoPositionOut"
+            },
+            "title": "Hard Exit Tomorrow",
+            "type": "array"
+          },
+          "journal": {
+            "items": {
+              "$ref": "#/components/schemas/FnoJournalOut"
+            },
+            "title": "Journal",
+            "type": "array"
+          },
+          "monitor_enabled": {
+            "title": "Monitor Enabled",
+            "type": "boolean"
+          },
+          "next_session": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Session"
+          },
+          "open_structures": {
+            "items": {
+              "$ref": "#/components/schemas/FnoPositionOut"
+            },
+            "title": "Open Structures",
+            "type": "array"
+          },
+          "scan_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scan Date"
+          },
+          "scan_enabled": {
+            "title": "Scan Enabled",
+            "type": "boolean"
+          },
+          "today": {
+            "format": "date",
+            "title": "Today",
+            "type": "string"
+          },
+          "underlyings": {
+            "items": {
+              "$ref": "#/components/schemas/FnoUnderlyingOut"
+            },
+            "title": "Underlyings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "today",
+          "next_session",
+          "scan_date",
+          "empty_reason",
+          "scan_enabled",
+          "monitor_enabled",
+          "gates",
+          "underlyings",
+          "hard_exit_tomorrow",
+          "open_structures",
+          "journal",
+          "evidence",
+          "f2"
+        ],
+        "title": "FnoOvernightOut",
+        "type": "object"
+      },
+      "FnoPositionOut": {
+        "properties": {
+          "entry_credit": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Credit"
+          },
+          "entry_plan_id": {
+            "title": "Entry Plan Id",
+            "type": "string"
+          },
+          "entry_price": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Price"
+          },
+          "gtt_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gtt Id"
+          },
+          "hard_exit_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hard Exit Date"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "legs": {
+            "$ref": "#/components/schemas/JsonObject"
+          },
+          "loss_close_points": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loss Close Points"
+          },
+          "lot_size": {
+            "title": "Lot Size",
+            "type": "integer"
+          },
+          "lots": {
+            "title": "Lots",
+            "type": "integer"
+          },
+          "mark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FnoMarkOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "max_loss_inr": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Loss Inr"
+          },
+          "next_roll_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Roll Date"
+          },
+          "opened_on": {
+            "format": "date",
+            "title": "Opened On",
+            "type": "string"
+          },
+          "profit_take_points": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profit Take Points"
+          },
+          "sessions_held": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sessions Held"
+          },
+          "simulated": {
+            "title": "Simulated",
+            "type": "boolean"
+          },
+          "sleeve": {
+            "title": "Sleeve",
+            "type": "string"
+          },
+          "stop_price": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop Price"
+          },
+          "structure": {
+            "title": "Structure",
+            "type": "string"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "sleeve",
+          "symbol",
+          "structure",
+          "entry_plan_id",
+          "legs",
+          "lots",
+          "lot_size",
+          "entry_price",
+          "entry_credit",
+          "max_loss_inr",
+          "profit_take_points",
+          "loss_close_points",
+          "stop_price",
+          "gtt_id",
+          "hard_exit_date",
+          "next_roll_date",
+          "opened_on",
+          "sessions_held",
+          "simulated",
+          "mark"
+        ],
+        "title": "FnoPositionOut",
+        "type": "object"
+      },
+      "FnoScanOut": {
+        "description": "One ``fo_scan`` row. ``detail`` is the worker's JSONB passed through: its money figures are\nalready decimal strings (FO4), and re-rendering them here would round a second time.",
+        "properties": {
+          "cost_share": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Share"
+          },
+          "credit": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credit"
+          },
+          "detail": {
+            "$ref": "#/components/schemas/JsonObject"
+          },
+          "iv": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iv"
+          },
+          "iv_rv": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iv Rv"
+          },
+          "max_loss_per_lot": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Loss Per Lot"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "rv20": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rv20"
+          },
+          "sleeve": {
+            "title": "Sleeve",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "trade_date": {
+            "format": "date",
+            "title": "Trade Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sleeve",
+          "trade_date",
+          "symbol",
+          "state",
+          "reasons",
+          "detail",
+          "credit",
+          "max_loss_per_lot",
+          "cost_share",
+          "iv",
+          "rv20",
+          "iv_rv"
+        ],
+        "title": "FnoScanOut",
+        "type": "object"
+      },
+      "FnoSleeveConfigOut": {
+        "properties": {
+          "capital_inr": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Capital Inr",
+            "type": "string"
+          },
+          "max_lots": {
+            "title": "Max Lots",
+            "type": "integer"
+          },
+          "max_open_positions": {
+            "title": "Max Open Positions",
+            "type": "integer"
+          },
+          "paper_enabled": {
+            "title": "Paper Enabled",
+            "type": "boolean"
+          },
+          "paused_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paused Reason"
+          },
+          "paused_until": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paused Until"
+          },
+          "risk_per_trade_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Risk Per Trade Pct",
+            "type": "string"
+          },
+          "sleeve": {
+            "title": "Sleeve",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sleeve",
+          "capital_inr",
+          "risk_per_trade_pct",
+          "max_lots",
+          "max_open_positions",
+          "paper_enabled",
+          "paused_until",
+          "paused_reason"
+        ],
+        "title": "FnoSleeveConfigOut",
+        "type": "object"
+      },
+      "FnoSleevePatch": {
+        "additionalProperties": false,
+        "description": "A partial update of one ``fo_sleeve_config`` row (a sleeve group).",
+        "properties": {
+          "capital_inr": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capital Inr"
+          },
+          "max_lots": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 10.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Lots"
+          },
+          "max_open_positions": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Open Positions"
+          },
+          "paper_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paper Enabled"
+          },
+          "risk_per_trade_pct": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Per Trade Pct"
+          }
+        },
+        "title": "FnoSleevePatch",
+        "type": "object"
+      },
+      "FnoSpreadOut": {
+        "properties": {
+          "first": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First"
+          },
+          "last": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last"
+          },
+          "sessions": {
+            "title": "Sessions",
+            "type": "integer"
+          },
+          "symbols": {
+            "title": "Symbols",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sessions",
+          "first",
+          "last",
+          "symbols"
+        ],
+        "title": "FnoSpreadOut",
+        "type": "object"
+      },
+      "FnoTallyOut": {
+        "description": "``04`` §9 against the paper record. Violations are FO10's ledger; until then ``None``.",
+        "properties": {
+          "closed": {
+            "title": "Closed",
+            "type": "integer"
+          },
+          "first_opened": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Opened"
+          },
+          "opened_cycles": {
+            "title": "Opened Cycles",
+            "type": "integer"
+          },
+          "rolls": {
+            "title": "Rolls",
+            "type": "integer"
+          },
+          "sleeve": {
+            "title": "Sleeve",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          },
+          "violations": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Violations"
+          }
+        },
+        "required": [
+          "sleeve",
+          "target",
+          "closed",
+          "opened_cycles",
+          "rolls",
+          "first_opened",
+          "violations"
+        ],
+        "title": "FnoTallyOut",
+        "type": "object"
+      },
+      "FnoUnderlyingOut": {
+        "properties": {
+          "level": {
+            "$ref": "#/components/schemas/FnoLevelOut"
+          },
+          "next_entry_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Entry Date"
+          },
+          "scan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FnoScanOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sleeve": {
+            "title": "Sleeve",
+            "type": "string"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "sleeve",
+          "level",
+          "scan",
+          "next_entry_date"
+        ],
+        "title": "FnoUnderlyingOut",
+        "type": "object"
+      },
+      "FoSleeveGroup": {
+        "description": "How flags group the sleeves (``01`` §4): ``F1N`` and ``F1B`` are one flag, ``F1``.",
+        "enum": [
+          "F1",
+          "F2"
+        ],
+        "title": "FoSleeveGroup",
+        "type": "string"
+      },
       "FragilityRunOut": {
         "additionalProperties": false,
         "description": "docs/10 §\"honesty features\": one of the five runs in the fragility readout.",
@@ -8442,6 +10129,10 @@
           "data"
         ],
         "title": "InvoicePage",
+        "type": "object"
+      },
+      "JsonObject": {
+        "additionalProperties": true,
         "type": "object"
       },
       "JsonValue": {},
@@ -24699,6 +26390,48 @@
         "title": "VbtWorkingOut",
         "type": "object"
       },
+      "VerdictRow": {
+        "description": "One row of ``RESEARCH.md``'s verdict table.",
+        "properties": {
+          "best_variant": {
+            "title": "Best Variant",
+            "type": "string"
+          },
+          "family": {
+            "title": "Family",
+            "type": "string"
+          },
+          "net_r": {
+            "title": "Net R",
+            "type": "string"
+          },
+          "retest_families": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Retest Families",
+            "type": "array"
+          },
+          "robust": {
+            "title": "Robust",
+            "type": "string"
+          },
+          "verdict": {
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "family",
+          "best_variant",
+          "net_r",
+          "robust",
+          "verdict",
+          "retest_families"
+        ],
+        "title": "VerdictRow",
+        "type": "object"
+      },
       "VersionDiffOut": {
         "properties": {
           "added": {
@@ -36650,6 +38383,461 @@
         "tags": [
           "explore",
           "explore"
+        ]
+      }
+    },
+    "/api/v1/fno/config": {
+      "get": {
+        "operationId": "getFnoConfig",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FnoConfigOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "FO settings, ceilings, audit",
+        "tags": [
+          "fno"
+        ]
+      },
+      "patch": {
+        "description": "The one mutation. A value above its ceiling is a 422 naming the ceiling and its env var;\n``paused_*`` and the execution flags are not fields. **Atomic across the request**: every\npart's bounds are checked before any row changes.",
+        "operationId": "patchFnoConfig",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FnoConfigPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FnoConfigOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Change the FO settings",
+        "tags": [
+          "fno"
+        ]
+      }
+    },
+    "/api/v1/fno/info": {
+      "get": {
+        "description": "``04`` §5 and ``05`` §3: facts per F&O underlying, never a candidate (PACK.8).",
+        "operationId": "getFnoInfo",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FnoInfoOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "The Stock F&O information table",
+        "tags": [
+          "fno"
+        ]
+      }
+    },
+    "/api/v1/fno/overnight": {
+      "get": {
+        "description": "``05`` §2 in one call: the header, the F1 cards, the evidence card and the F2 section.",
+        "operationId": "getFnoOvernight",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FnoOvernightOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "F1 and F2, read-only",
+        "tags": [
+          "fno"
         ]
       }
     },

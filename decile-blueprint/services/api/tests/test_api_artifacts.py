@@ -385,6 +385,11 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     "/options/calendar": {"get"},
     "/options/event-day": {"post", "delete"},
     "/options/config": {"get", "patch"},
+    # FO5 (docs/fno/06): the FO run's read surface and its one money-free write. No execute
+    # route (docs/fno/02 Track C §4); `test_fno_readonly.py` pins it.
+    "/fno/overnight": {"get"},
+    "/fno/info": {"get"},
+    "/fno/config": {"get", "patch"},
     # VB15 (docs/vbt/DECISIONS-VB): the same button for the volume-breakout sleeve. Leaf 3 built
     # the routes and leaf 4 documented its own beside them, so these two were the last pair left
     # out of `EXPECTED_PATHS` and this set-equality stayed red until they landed — which is the

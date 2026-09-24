@@ -107,6 +107,12 @@ RUNBOOKS: Final[dict[AlertName, str]] = {
     AlertName.OPTIONS_WEEKLY: "docs/runbooks/11-options-plan.md",
     # FO10: the FO book's weekly summary (FO12 adds the FO book's other alerts to this runbook).
     AlertName.FNO_WEEKLY: "docs/runbooks/13-fno-book.md",
+    # FO12: the FO book's events, the same runbook.
+    AlertName.FNO_PLAN: "docs/runbooks/13-fno-book.md",
+    AlertName.FNO_EXIT: "docs/runbooks/13-fno-book.md",
+    AlertName.FNO_HARD_EXIT_TOMORROW: "docs/runbooks/13-fno-book.md",
+    AlertName.FNO_LATE_EXIT: "docs/runbooks/13-fno-book.md",
+    AlertName.FNO_BHAVCOPY_MISSING: "docs/runbooks/13-fno-book.md",
     # OP14: the options book's health — the five rules and the in-process checks.
     AlertName.OPTIONS_OPEN_AFTER_HARD_EXIT: "docs/runbooks/12-options-health.md",
     AlertName.OPTIONS_COLLECTOR_GAP: "docs/runbooks/12-options-health.md",

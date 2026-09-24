@@ -58,6 +58,9 @@ from baskfy_worker.alerts import Alert, AlertName, Severity, dispatch
 from baskfy_worker.bhavcopy_backfill import backfill_bars_from_bhavcopy
 from baskfy_worker.celery_app import IST, QUEUE_COMPUTE, QUEUES
 from baskfy_worker.db import run_checkpointed, run_in_session, session_scope
+from baskfy_worker.fno.alerts import RedisMarkers as FnoRedisMarkers
+from baskfy_worker.fno.alerts import bhavcopy_missing_alert as fno_bhavcopy_missing_alert
+from baskfy_worker.fno.alerts import run_fno_alerts as fno_run_alerts
 from baskfy_worker.fno.nightly import run_night as fno_run_night
 from baskfy_worker.fno.retest import run_retest as fno_run_retest
 from baskfy_worker.fno.scan import run_scan as fno_run_scan
@@ -967,7 +970,13 @@ def fno_ingest_bhavcopy_task(trade_date: str | None = None, at: str | None = Non
     provider = build_nse_provider(get_provider_settings(), retry_hooks=provider_retry_hooks())
 
     async def _run(session: AsyncSession) -> JsonObject:
-        return await fno_run_night(session, provider, day, now_ist=now)
+        out = await fno_run_night(session, provider, day, now_ist=now)
+        # FO12: the 23:30 attempt that records MISSING raises FNO_BHAVCOPY_MISSING, here, from
+        # the result. Every earlier attempt is PENDING and says nothing; the retry is the schedule.
+        missing = fno_bhavcopy_missing_alert(out)
+        if missing is not None:
+            out["alert"] = await dispatch(missing)
+        return out
 
     return run_in_session(_run)
 
@@ -1012,6 +1021,31 @@ def fno_weekly_task(at: str | None = None) -> JsonObject:
             alert = await fno_build_weekly(session, user_id, today)
             sent[str(user_id)] = {"summary": alert.summary, "sent": await dispatch(alert)}
         return {"at": now.isoformat(), "users": sent}
+
+    return run_in_session(_run)
+
+
+FNO_ALERTS_TASK: Final = "baskfy.fno.alerts"
+
+
+@shared_task(name=FNO_ALERTS_TASK, acks_late=False)
+def fno_alerts_task(at: str | None = None) -> JsonObject:
+    """FO12: today's FO events — a plan issued, an exit done, a hard exit tomorrow (from 18:00), a
+    ``LATE_EXIT`` — raised once each (a Redis marker per event) from what the desk wrote.
+    Read-only; reaches no broker. Refused before any database session unless
+    ``BASKFY_FNO_MONITOR_ENABLED`` is true (with the monitor off the desk writes no plan)."""
+    now = _options_now(at)
+    if not get_worker_settings().fno_monitor_enabled:
+        return {"at": now.isoformat(), "skipped": "BASKFY_FNO_MONITOR_ENABLED is false"}
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        cache = build_cache()
+        try:
+            markers = None if cache is None else FnoRedisMarkers(cache)
+            return await fno_run_alerts(session, await fno_scan_users(session), markers, now)
+        finally:
+            if cache is not None:
+                await cache.aclose()
 
     return run_in_session(_run)
 

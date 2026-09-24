@@ -56,6 +56,8 @@ step "4. verify"
 bash tools/deploy/verify-swing.sh || die "verify-swing failed -- the box is up but not right."
 # OP15: the options book — every money flag false in desk and options-monitor, no auto-execute.
 bash tools/deploy/verify-options.sh || die "verify-options failed -- the box is up but not right."
+# FO12: the F&O book — every FO money flag false in desk and fno-monitor, no auto-execute name.
+bash tools/deploy/verify-fno.sh || die "verify-fno failed -- the box is up but not right."
 OUT="$(bash tools/deploy/verify-pc-deploy.sh "$TAG")"
 echo "   $OUT"
 # THE TWT SLEEVE IS LIVE SINCE 18 Sep 2026, SO THIS NO LONGER ASSERTS ITS FLAG IS FALSE.
@@ -63,11 +65,11 @@ echo "   $OUT"
 # It used to die unless the box read `twt_execution_true=0`. Maulik funded the sleeve (₹25 lakh)
 # and instructed the flip in session that morning — `docs/twt/DECISIONS-TW.md` TW16. Leaving the
 # assertion would have killed every deploy from then on, and the honest fix is to check what this
-# script is actually for (the three images are pinned and the fourteen services are up — twt-auto joined 22 Sep 2026, options-monitor 23 Sep 2026, laya 25 Sep 2026) and to
+# script is actually for (the three images are pinned and the fifteen services are up — twt-auto joined 22 Sep 2026, options-monitor 23 Sep 2026, laya 25 Sep 2026, fno-monitor 25 Sep 2026) and to
 # PRINT the sleeve's state rather than demand one value of it. A flag that changed without a
 # decision is still visible — it is on the line below, every deploy.
 case "$OUT" in
-  *"pins=3"*"running=14"*) ;;
+  *"pins=3"*"running=15"*) ;;
   *) die "post-deploy check failed: $OUT" ;;
 esac
 case "$OUT" in
@@ -79,5 +81,5 @@ case "$OUT" in
   *) TWT_STATE="$TWT_STATE; TWT auto-execute off" ;;
 esac
 
-printf '\n\033[32m✓ DEPLOYED %s\033[0m — all three images pinned, fourteen services up (desk-daily joined 13 Sep 2026, twt-auto 22 Sep 2026, options-monitor 23 Sep 2026, laya 25 Sep 2026), swing flags unmoved; %s.\n' "$TAG" "$TWT_STATE"
+printf '\n\033[32m✓ DEPLOYED %s\033[0m — all three images pinned, fifteen services up (desk-daily joined 13 Sep 2026, twt-auto 22 Sep 2026, options-monitor 23 Sep 2026, laya 25 Sep 2026, fno-monitor 25 Sep 2026), swing flags unmoved; %s.\n' "$TAG" "$TWT_STATE"
 echo "  rollback: the tag lines in /opt/baskfy/.env.staging.compose back to the previous sha, then 'up -d'."

@@ -447,6 +447,19 @@ services:
       BASKFY_OPTIONS_O2_EXECUTION_ENABLED: "${BASKFY_OPTIONS_O2_EXECUTION_ENABLED:-false}"
       BASKFY_OPTIONS_O3_EXECUTION_ENABLED: "${BASKFY_OPTIONS_O3_EXECUTION_ENABLED:-false}"
       BASKFY_OPTIONS_MONITOR_ENABLED: "${BASKFY_OPTIONS_MONITOR_ENABLED:-false}"
+      # FO12 — the F&O book (docs/fno/02 Track B). A real FO order needs FOUR switches for its
+      # sleeve: DRY_RUN false, OPTIONS_ENABLED (pinned "false" above), BASKFY_FNO_CARRY_ENABLED and
+      # the sleeve's own execution flag (`app/fno_gates.py`). Each is named here, default false,
+      # so a line in `.env.staging` cannot flip it for the process that reaches the gateway; only
+      # `.env.staging.compose` can, by Maulik's hand after 02 §3. INTRADAY_ENABLED is not one of
+      # them (an FO order is NRML). THERE IS NO FNO AUTO-EXECUTE VARIABLE and none may be added
+      # (02 Track B; FO11 scans for one). The monitor flag is operational: it starts the FO
+      # monitor, which raises plans and runs exits under an entry's confirm, and moves no money on
+      # its own. `fno-monitor` below inherits all of this via `<<: *desk`.
+      BASKFY_FNO_CARRY_ENABLED: "${BASKFY_FNO_CARRY_ENABLED:-false}"
+      BASKFY_FNO_F1_EXECUTION_ENABLED: "${BASKFY_FNO_F1_EXECUTION_ENABLED:-false}"
+      BASKFY_FNO_F2_EXECUTION_ENABLED: "${BASKFY_FNO_F2_EXECUTION_ENABLED:-false}"
+      BASKFY_FNO_MONITOR_ENABLED: "${BASKFY_FNO_MONITOR_ENABLED:-false}"
     expose: ["8420"]
     healthcheck:
       # /status is the one route websec.py answers without the password. It reports dry_run and
@@ -494,6 +507,20 @@ services:
   options-monitor:
     <<: *desk
     command: [options-monitor-loop]
+    expose: []
+    healthcheck:
+      disable: true
+
+  # FO12 (docs/fno/06) — the F&O book's monitor. `fno-monitor-loop` (scripts/fno_monitor_loop.py)
+  # starts `python -m app.fno_monitor` at 09:14 IST on a weekday, at once if the container starts
+  # inside the day's window (09:14-23:30: the book is marked after the F&O bhavcopy), and again if
+  # it crashes inside it (restart resume from fo_position). With BASKFY_FNO_MONITOR_ENABLED=false
+  # (the default above) the module exits 0 without building anything and the loop idles. It never
+  # confirms an entry; its exits and rolls run under the entry's confirm through the FO gateway,
+  # which stays PAPER while OPTIONS_ENABLED is pinned "false".
+  fno-monitor:
+    <<: *desk
+    command: [fno-monitor-loop]
     expose: []
     healthcheck:
       disable: true

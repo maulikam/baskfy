@@ -248,6 +248,16 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         "schedule": crontab(hour=16, minute=35, day_of_week="fri"),
         "options": {"queue": QUEUE_DEFAULT},
     },
+    # FO12 (docs/fno/06 FO12): the FO book's events — a plan issued, an exit done, a hard exit
+    # tomorrow (from 18:00), a LATE_EXIT the desk recorded — each raised once (a Redis marker per
+    # event). Every five minutes from 09:00 to 23:55 on weekdays: an entry plan lives 30 minutes,
+    # and the book is marked after the F&O bhavcopy. Read-only; dark unless
+    # BASKFY_FNO_MONITOR_ENABLED. The missing-bhavcopy alert rides `fno-bhavcopy`'s 23:30 run.
+    "fno-alerts": {
+        "task": "baskfy.fno.alerts",
+        "schedule": crontab(minute="*/5", hour="9-23", day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_DEFAULT, "expires": 240},
+    },
     "fno-spread-sample": {
         "task": "baskfy.fno.spread_sample",
         "schedule": crontab(hour=15, minute=0, day_of_week="mon-fri"),

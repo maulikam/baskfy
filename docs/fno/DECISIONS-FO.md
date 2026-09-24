@@ -851,3 +851,31 @@ database it is given (name must contain `test`), under throwaway users it delete
 FO7's replay master lists NIFTY only. The FO11 matrix and drill run F1B through the same monitor,
 route and gateway with a master that also lists BANKNIFTY on the fixture's strikes and lot (65),
 because what is under test is the gate and the sequence, not BANKNIFTY's contract spec.
+
+## FO12.1 — The worker raises the desk's F&O alerts from the rows the desk writes · ⚠ UNREVIEWED
+
+The desk cannot reach the worker's alert sinks. `baskfy.fno.alerts` (Beat `fno-alerts`, every 5
+minutes) reads `fo_plan`, `fo_journal` and `fo_position` and raises `FNO_PLAN`, `FNO_EXIT`,
+`FNO_HARD_EXIT_TOMORROW` and `FNO_LATE_EXIT` once each, deduplicated by a Redis marker. If Redis is
+down it sends rather than stays silent (a duplicate email beats a missing hard-exit warning).
+`FNO_BHAVCOPY_MISSING` is raised by the ingest's final 23:30 attempt. Only today's events alert, so
+the first run after a deploy does not resend history.
+
+## FO12.2 — Each alert is dark behind its operational flag · ⚠ UNREVIEWED
+
+The four desk alerts need `BASKFY_FNO_MONITOR_ENABLED`; the missing-bhavcopy alert needs
+`BASKFY_FNO_SCAN_ENABLED`, like the ingest itself. The worker reads the monitor flag from
+`.env.staging` and the desk from `.env.staging.compose`, so both files carry it (OP15's lesson).
+
+## FO12.3 — "Hard exit tomorrow" goes out from 18:00 and covers F2's time exit · ⚠ UNREVIEWED
+
+The same rule as the desk's nav badge (FO8.3): the earliest of F1's hard-exit date and F2's
+40-session exit, when it is the next session.
+
+## FO12.4 — `fno-monitor` joins compose with every FO money flag pinned false · ⚠ UNREVIEWED
+
+The desk block names `BASKFY_FNO_CARRY_ENABLED`, `BASKFY_FNO_F1_EXECUTION_ENABLED`,
+`BASKFY_FNO_F2_EXECUTION_ENABLED` and `BASKFY_FNO_MONITOR_ENABLED`, each `${…:-false}`; the
+`fno-monitor` service runs FO7's loop and idles with the monitor flag false. `deploy-swing.sh`
+restarts it, `ship.sh` expects fifteen running services and runs `verify-fno.sh` after
+`verify-options.sh`. The verify asserts the money flags false and reports the operational ones.

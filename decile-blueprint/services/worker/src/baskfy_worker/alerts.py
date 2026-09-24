@@ -119,6 +119,14 @@ class AlertName(StrEnum):
     # FO10 (docs/fno/06 FO10): the FO book's week, one line per (sleeve, simulated), the month
     # per book and the 04 §7 pauses per mode — never pooled. Information, not a failure.
     FNO_WEEKLY = "FNO_WEEKLY"
+    # FO12 (docs/fno/06 FO12): the FO book's events — a plan to confirm, an exit done, a hard exit
+    # tomorrow, a LATE_EXIT the desk recorded, and a night's F&O bhavcopy MISSING at 23:30. The
+    # desk writes the rows; the worker reads them and raises each once (baskfy_worker.fno.alerts).
+    FNO_PLAN = "FNO_PLAN"
+    FNO_EXIT = "FNO_EXIT"
+    FNO_HARD_EXIT_TOMORROW = "FNO_HARD_EXIT_TOMORROW"
+    FNO_LATE_EXIT = "FNO_LATE_EXIT"
+    FNO_BHAVCOPY_MISSING = "FNO_BHAVCOPY_MISSING"
     # OP14 (docs/options/05 §4): the options book's five Prometheus rules, verbatim, and the
     # worker's in-process checks (09:20, 10:20, each hard exit + 3 min, 15:35), which raise the
     # failure the moment it is about rather than waiting for a scrape.

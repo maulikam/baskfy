@@ -468,7 +468,8 @@ class TestF1:
             await run_scan(session, T, user_ids=[user])
             row = (await _rows(session, user, "F1N"))["NIFTY"]
             assert row.state == "CANDIDATE", row.reasons
-            assert row.detail["lots"] >= 1
+            lots = row.detail["lots"]
+            assert isinstance(lots, int) and lots >= 1
             await session.execute(
                 sa.update(FoSleeveConfig)
                 .where(FoSleeveConfig.user_id == user, FoSleeveConfig.sleeve == "F1")

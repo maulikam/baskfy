@@ -8187,3 +8187,40 @@ whole night, which is the defect being fixed.
 
 **Reverse.** Remove the de-duplication loop in `store_listings`. No schema change and no data
 migration.
+
+## Overlap: today's candidates across the sleeves, served, not re-scored (25 Sep 2026) · ⚠ UNREVIEWED
+
+**Context.** Maulik evaluated Laya (a non-autoregressive typed-decision classifier) for Baskfy
+and settled on "post-scan enrichment only — never in rank, sizing or execution", then chose to
+build the deterministic cross-strategy page *first*. That page already existed: `/build/overlap`
+computed a symbols-only membership in the web app from three separate hub reads and told the
+reader to "check each name on Volume breakout, Swing, Three weeks tight, or the screen itself
+before acting". The check was the missing half.
+
+**Choice.** One read, `GET /overlap?scope=actionable|all` (`baskfy_api.overlap`, the inverse of
+`instrument_appearances`): every stock on any strategy's latest session, with each strategy's
+own fact about it (`EP · GAP_DAY`, `signal`, `tight 4 sessions · signal`), whether that
+strategy's plan builder could take the row (`TRADEABLE_SETUPS` for swing; `SIGNAL` for the other
+two), the screens it is on (newest stored run, inverted), the swing feed's catalyst link and
+earnings date on loan (`sw_catalyst`, SW11B/A3 — the feed was not widened), and the shared live
+mark. `strategy_count` is arithmetic over those facts; rows sort by count, actionable first,
+then symbol. Sessions are named per strategy because they differ on a skipped night. A caller
+who is not the sole tenant gets `strategies_read: false`, not an empty morning. The page renders
+it as a "Today's candidates" table above the existing matrix; the matrix and the named
+intersections are unchanged. `test_overlap_readonly.py` pins one GET, no execution names, no
+writes in the read model, and the same vocabulary as the instrument page.
+
+**Rejected.** (a) A combined score or cross-strategy rank — the combined-sleeves study
+(`research/combined/COMBINED.md`) found confluence is a filter and every filter cost; a count is
+a fact, a score would be a new strategy nobody backtested. (b) Widening the catalyst feed to VBT
+and TWT names — that widens the 09:17 NSE read (A3's symbol set) and is a DECISIONS-SW matter,
+not a page's. (c) Any Laya/classifier column now — the base checkpoint is near chance zero-shot
+(0.36) and the labelled corpus does not exist; the enrichment slot is the `catalyst` object on
+this payload, additive when it comes. (d) Momentum-screen rows as a candidate source — screens
+are context on a strategy row here, not a fourth strategy; the screens' own top-N is `/build`.
+
+**Reverse.** Delete `baskfy_api/overlap.py`, `routers/overlap.py`, the `include_router` line,
+`lib/overlap/{candidates,fetch-candidates}.ts`, `components/overlap/candidates-table.tsx`, the
+`CandidatesTable` mount in `/build/overlap/page.tsx`, the `/overlap` entry in
+`test_api_artifacts.py`, and re-run `make openapi client`. No schema, no migration, no stored
+data, no flag.

@@ -86,6 +86,7 @@ from baskfy_api.routers import (
     market_data,
     meta,
     options,
+    overlap,
     portfolio_overview,
     portfolios,
     public,
@@ -545,6 +546,9 @@ def _mount_routers(versioned: APIRouter) -> None:
     versioned.include_router(meta.router)
     versioned.include_router(screens.router)
     versioned.include_router(instruments.router)
+    # The day's candidates across the sleeves, one row per stock, from the same stored tables
+    # the instrument page's `/appearances` reads. Read-only; `test_overlap_readonly.py`.
+    versioned.include_router(overlap.router)
     # M46: the federated ⌘K search. Mounted next to `instruments` because it supersedes
     # that router's typeahead as the palette's entry point (`baskfynavrefactorreport` F11).
     versioned.include_router(search.router)

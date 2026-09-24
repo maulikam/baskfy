@@ -360,3 +360,10 @@ export function isProblem(value: unknown): value is ProblemOut {
   const candidate = value as Record<string, unknown>;
   return typeof candidate.type === "string" && typeof candidate.status === "number";
 }
+
+/** `GET /overlap` — the day's candidates across the sleeves, one row per stock (`/build/overlap`). */
+export type OverlapOut = Schemas["OverlapOut"];
+export type OverlapRowOut = Schemas["OverlapRowOut"];
+export type OverlapStrategyOut = Schemas["OverlapStrategyOut"];
+export type OverlapScreenOut = Schemas["OverlapScreenOut"];
+export type OverlapCatalystOut = Schemas["OverlapCatalystOut"];

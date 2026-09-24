@@ -81,6 +81,9 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     "/instruments/{symbol}/rank-history": {"get"},
     # 14 Sep 2026: which screens and strategy scans name this stock, from stored results.
     "/instruments/{symbol}/appearances": {"get"},
+    # 25 Sep 2026: the inverse read — the day's candidates across the sleeves, one row per stock,
+    # from the same stored tables. Read-only; `test_overlap_readonly.py`.
+    "/overlap": {"get"},
     # M46: the federated ⌘K search (`baskfynavrefactorreport` §F11). Documented here because a
     # route absent from this list is a surface nobody agreed to — which is the assertion below.
     "/search": {"get"},

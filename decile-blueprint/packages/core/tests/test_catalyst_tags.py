@@ -19,6 +19,7 @@ from baskfy_core.catalyst_tags import (
     LAYA_QUESTIONS,
     PRIORITY_OF,
     RULES,
+    SOURCE_CORRECTED,
     SOURCE_LAYA,
     SOURCE_RULES,
     CatalystTag,
@@ -204,3 +205,69 @@ class TestTheModelColumn:
         assert cache_key("Receipt of Order") == cache_key("  receipt of order ")
         assert cache_key("Receipt of Order") != cache_key("Receipt of Orders")
         assert cache_key("x").startswith("catalyst_tag:v1:")
+
+
+class TestTheCorrection:
+    """A person's word wins over both readers, and what it overruled is kept as the signal."""
+
+    def test_a_correction_wins_over_a_sure_model_and_names_the_model_s_word(self) -> None:
+        # Measured shape: the rules say order, Laya says corporate_action at 0.91 (sure, wrong),
+        # and the person says order. The correction is the tag; the model's word is what it
+        # overruled.
+        rules = tag_headline("Press Release - BOTH wins a multi-year order")
+        laya = tag_from_laya({"choice": "corporate_action", "confidence": 0.91})
+        chosen = resolve_tag(rules, laya, EventType.ORDER)
+        assert chosen == CatalystTag(
+            EventType.ORDER,
+            ReviewPriority.HIGH,
+            (),
+            source=SOURCE_CORRECTED,
+            confidence=None,
+            disagrees_with="laya:corporate_action",
+        )
+
+    def test_a_correction_over_the_rules_alone_names_the_rules_word(self) -> None:
+        rules = tag_headline("SEBI order against the company")
+        assert rules.event_type is EventType.GOVERNANCE
+        chosen = resolve_tag(rules, None, EventType.OTHER)
+        assert (chosen.source, chosen.event_type, chosen.review_priority) == (
+            SOURCE_CORRECTED,
+            EventType.OTHER,
+            ReviewPriority.LOW,
+        )
+        assert chosen.disagrees_with == "rules:governance"
+
+    def test_the_model_s_word_is_named_before_the_rules_when_both_differed(self) -> None:
+        rules = tag_headline("Resignation of Chief Financial Officer")
+        laya = tag_from_laya({"choice": "corporate_action", "confidence": 0.33})
+        chosen = resolve_tag(rules, laya, EventType.ROUTINE)
+        assert chosen.disagrees_with == "laya:corporate_action"
+
+    def test_a_correction_that_agrees_with_the_model_still_names_the_rules_if_they_differed(
+        self,
+    ) -> None:
+        rules = tag_headline("SEBI order against the company")  # governance
+        laya = tag_from_laya({"choice": "corporate_action", "confidence": 0.6959})
+        chosen = resolve_tag(rules, laya, EventType.CORPORATE_ACTION)
+        assert (chosen.source, chosen.disagrees_with) == (SOURCE_CORRECTED, "rules:governance")
+
+    def test_a_correction_that_agrees_with_everyone_carries_no_disagreement(self) -> None:
+        rules = tag_headline("USFDA approval for ANDA")
+        laya = tag_from_laya({"choice": "approval", "confidence": 0.9943})
+        chosen = resolve_tag(rules, laya, EventType.APPROVAL)
+        assert (chosen.source, chosen.confidence, chosen.matched, chosen.disagrees_with) == (
+            SOURCE_CORRECTED,
+            None,
+            (),
+            None,
+        )
+
+    def test_no_correction_leaves_the_resolution_as_it_was(self) -> None:
+        rules = tag_headline("USFDA approval for ANDA")
+        laya = tag_from_laya({"choice": "approval", "confidence": 0.9943})
+        assert resolve_tag(rules, laya, None) == resolve_tag(rules, laya)
+        assert resolve_tag(rules, None, None) == rules
+
+    def test_the_three_sources_are_distinct_words(self) -> None:
+        assert len({SOURCE_RULES, SOURCE_LAYA, SOURCE_CORRECTED}) == 3
+        assert SOURCE_CORRECTED == "corrected"

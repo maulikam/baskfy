@@ -2,9 +2,12 @@
 
 `docs/swing/STANDING-ANSWERS.md` A3, asserted clause by clause:
 
-* **watchlist + EP-candidate symbols only** — the provider is handed the WATCHING names and the
-  last session's EP rows, and nothing else (a dismissed name, a FLAG candidate, a name whose
-  watch row TRIGGERED are all outside the feed);
+* **watchlist + EP-candidate symbols + the latest session's VBT and TWT SIGNAL names** — the
+  provider is handed the WATCHING names, the last session's EP rows and, since OV4 (25 Sep
+  2026), the SIGNAL rows of `vb_signal_daily` / `tw_signal_daily` at each detector's newest
+  breadth date, and nothing else (a dismissed name, a FLAG candidate, a name whose watch row
+  TRIGGERED, a `SCAN_ONLY` reject, a name merely in the tight state, a signal at an older
+  breadth date are all outside the feed); a name on two lists is asked once;
 * **store headline + timestamp + filing URL** — one `sw_catalyst` row per filing, idempotent on
   the URL: a second morning rewrites the same rows;
 * **auto-fill `sw_watch.catalyst`** — with the newest headline, only while empty; a typed note
@@ -29,7 +32,19 @@ from celery.schedules import crontab
 from helpers import make_instrument, requires_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from baskfy_core.models import AppUser, SwCatalyst, SwConfig, SwSetupDaily, SwWatch, TradingDay
+from baskfy_core.models import (
+    AppUser,
+    SwCatalyst,
+    SwConfig,
+    SwSetupDaily,
+    SwWatch,
+    TradingDay,
+    TwBreadthDaily,
+    TwSignalDaily,
+    TwStateDaily,
+    VbBreadthDaily,
+    VbSignalDaily,
+)
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
 from baskfy_providers.errors import UpstreamUnavailable
 from baskfy_providers.nse import IST
@@ -114,6 +129,111 @@ async def _ep_candidate(
             adj_factor=Decimal("1"),
             locked_upper_circuit=False,
             listed_within_2y=False,
+        )
+    )
+    await session.flush()
+
+
+async def _vbt_breadth(session: AsyncSession, *, user_id: int, on: dt.date) -> None:
+    """The volume-breakout detector's clock: its newest breadth row is "the latest session"."""
+    session.add(
+        VbBreadthDaily(
+            user_id=user_id,
+            date=on,
+            universe_count=10,
+            measured_count=10,
+            above_count=5,
+            pct_above_dma=Decimal("50"),
+            gate="OPEN",
+        )
+    )
+    await session.flush()
+
+
+async def _vbt_signal(
+    session: AsyncSession, *, user_id: int, instrument_id: int, on: dt.date, state: str = "SIGNAL"
+) -> None:
+    session.add(
+        VbSignalDaily(
+            user_id=user_id,
+            date=on,
+            instrument_id=instrument_id,
+            state=state,
+            close=Decimal("100"),
+            close_raw=Decimal("100.50"),
+            limit_price=Decimal("101"),
+            stop_price=Decimal("95"),
+        )
+    )
+    await session.flush()
+
+
+async def _twt_breadth(session: AsyncSession, *, user_id: int, on: dt.date) -> None:
+    """The three-weeks-tight detector's clock, same rule as the volume sleeve's."""
+    session.add(
+        TwBreadthDaily(
+            user_id=user_id,
+            date=on,
+            universe_count=3_413,
+            measured_count=1_769,
+            above_count=905,
+            pct_above_dma=Decimal("51.1588"),
+            gate="OPEN",
+            dma_bars=200,
+            thin_session=False,
+            detail=None,
+        )
+    )
+    await session.flush()
+
+
+async def _twt_state(
+    session: AsyncSession, *, user_id: int, instrument_id: int, on: dt.date
+) -> None:
+    """A name in the tight state — a base, not a signal. There are ~50 of these a day."""
+    session.add(
+        TwStateDaily(
+            user_id=user_id,
+            date=on,
+            instrument_id=instrument_id,
+            close=Decimal("149.60"),
+            close_raw=Decimal("149.60"),
+            adj_factor=Decimal(1),
+            week_close_0=Decimal("149.60"),
+            week_close_1=Decimal("148.90"),
+            week_close_2=Decimal("147.50"),
+            week_range_pct=Decimal("1.4237"),
+            month_low_3=Decimal("100.00"),
+            month_low_ratio=Decimal("1.4960"),
+            vol_sma_50=250_000,
+            volume=310_000,
+            turnover_inr=500_000_000,
+            turnover_avg_20=500_000_000,
+            sma_dma=Decimal("120.00"),
+            sessions_in_state=4,
+            bars_in_window=260,
+            locked_upper_circuit=False,
+        )
+    )
+    await session.flush()
+
+
+async def _twt_signal(
+    session: AsyncSession, *, user_id: int, instrument_id: int, on: dt.date, state: str = "SIGNAL"
+) -> None:
+    await _twt_state(session, user_id=user_id, instrument_id=instrument_id, on=on)
+    session.add(
+        TwSignalDaily(
+            user_id=user_id,
+            date=on,
+            instrument_id=instrument_id,
+            state=state,
+            failed_filters=[] if state == "SIGNAL" else ["TURNOVER"],
+            entry_reference_close=Decimal("149.60"),
+            stop_preview=Decimal("119.68"),
+            sessions_out_before=7,
+            rank_key=500_000_000,
+            turnover_avg_20=500_000_000,
         )
     )
     await session.flush()
@@ -245,6 +365,95 @@ class TestTheSymbolsTheFeedServes:
         assert provider.asked == []
         assert outcome.status is StepStatus.SUCCEEDED
         assert "nothing watched" in str(outcome.detail["skipped_reason"])
+
+
+class TestTheScanCandidatesAreOnTheFeed:
+    """OV4 (25 Sep 2026, Maulik): the scan candidates go to Laya for its opinion, and a candidate
+    without a filing on record has nothing to be read. The feed widened to the latest session's
+    VBT and TWT SIGNAL names — and no wider, the limiter being 1 req/s, each symbol two requests,
+    the monitor at 09:16."""
+
+    async def test_a_volume_breakout_signal_at_the_latest_breadth_date_is_on_the_feed(
+        self, session: AsyncSession
+    ) -> None:
+        user_id = await _user(session)
+        last = await _last_session(session, SESSION)
+        signal = await make_instrument(session, "VBSIG")
+        await _vbt_breadth(session, user_id=user_id, on=last)
+        await _vbt_signal(session, user_id=user_id, instrument_id=signal, on=last)
+
+        assert await feed_symbols(session, user_id=user_id, session_date=SESSION) == {
+            "VBSIG": signal
+        }
+
+    async def test_a_volume_breakout_signal_at_an_older_breadth_date_is_not(
+        self, session: AsyncSession
+    ) -> None:
+        """The detector's clock is its newest breadth row; yesterday's signal is yesterday's."""
+        user_id = await _user(session)
+        last = await _last_session(session, SESSION)
+        older = await _last_session(session, last)
+        stale = await make_instrument(session, "VBSTALE")
+        await _vbt_breadth(session, user_id=user_id, on=older)
+        await _vbt_breadth(session, user_id=user_id, on=last)
+        await _vbt_signal(session, user_id=user_id, instrument_id=stale, on=older)
+
+        assert await feed_symbols(session, user_id=user_id, session_date=SESSION) == {}
+
+    async def test_a_scan_only_reject_is_not(self, session: AsyncSession) -> None:
+        """A name the filters turned down is stored (PACK.6) but is not a candidate."""
+        user_id = await _user(session)
+        last = await _last_session(session, SESSION)
+        reject = await make_instrument(session, "VBREJECT")
+        await _vbt_breadth(session, user_id=user_id, on=last)
+        await _vbt_signal(
+            session, user_id=user_id, instrument_id=reject, on=last, state="SCAN_ONLY"
+        )
+
+        assert await feed_symbols(session, user_id=user_id, session_date=SESSION) == {}
+
+    async def test_a_three_weeks_tight_signal_at_the_latest_breadth_date_is_on_the_feed(
+        self, session: AsyncSession
+    ) -> None:
+        user_id = await _user(session)
+        last = await _last_session(session, SESSION)
+        signal = await make_instrument(session, "TWSIG")
+        await _twt_breadth(session, user_id=user_id, on=last)
+        await _twt_signal(session, user_id=user_id, instrument_id=signal, on=last)
+
+        assert await feed_symbols(session, user_id=user_id, session_date=SESSION) == {
+            "TWSIG": signal
+        }
+
+    async def test_a_name_merely_in_the_tight_state_is_not(self, session: AsyncSession) -> None:
+        """~50 names sit in `tw_state_daily` on a normal day; a base is not a signal, and the
+        budget does not stretch to them."""
+        user_id = await _user(session)
+        last = await _last_session(session, SESSION)
+        quiet = await make_instrument(session, "TWQUIET")
+        await _twt_breadth(session, user_id=user_id, on=last)
+        await _twt_state(session, user_id=user_id, instrument_id=quiet, on=last)
+
+        assert await feed_symbols(session, user_id=user_id, session_date=SESSION) == {}
+
+    async def test_a_name_both_watched_and_on_the_volume_sleeve_is_asked_once(
+        self, session: AsyncSession
+    ) -> None:
+        """Every symbol costs two requests; a name on two lists must not cost four."""
+        user_id = await _user(session)
+        last = await _last_session(session, SESSION)
+        both = await make_instrument(session, "BOTH")
+        await _watch(session, user_id=user_id, instrument_id=both)
+        await _vbt_breadth(session, user_id=user_id, on=last)
+        await _vbt_signal(session, user_id=user_id, instrument_id=both, on=last)
+        provider = FakeNSE()
+
+        symbols = await feed_symbols(session, user_id=user_id, session_date=SESSION)
+        outcome = await _run(session, user_id, provider)
+
+        assert symbols == {"BOTH": both}
+        assert provider.asked == ["BOTH"]
+        assert outcome.detail["symbols"] == 1
 
 
 class TestAnnouncementsAreStoredAsLinks:

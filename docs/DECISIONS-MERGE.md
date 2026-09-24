@@ -8291,3 +8291,15 @@ it, `docker compose stop laya` and the page shows the rules tag.
 
 **Reverse.** Remove the `laya` service and volume, the two `laya` tokens in the deploy
 scripts, `infra/laya/`, and the `cache` argument to `overlap()`; the rules tag remains.
+
+## Overlap: the loop is closed — corrections, export, and every candidate's filing (25 Sep 2026) · ⚠ UNREVIEWED
+
+**Context.** Maulik: "What are the things which are remaining? … complete it … use orchestration … deploy it." After OV3 three things remained: only swing-feed names carried a filing for Laya to read; a tag could not be corrected; there was no fine-tuning set. Two lanes ran in parallel with strict file ownership and the orchestrator integrated.
+
+**Choice.** (A) The 09:10 catalyst feed's symbol set widens to the latest session's VBT and TWT **SIGNAL** names (DECISIONS-SW SW-OV4; STANDING-ANSWERS A3 amended) — not the ~50 in-state tight names, not the VBT rejects; the 1 req/s limiter and the 09:16 monitor are the budget. (B) `catalyst_tag_correction` (migration 0053): a person's word on a headline, content-addressed by `cache_key(headline)` so it applies wherever the headline appears, with what the rules and Laya said at that moment stored beside it. `resolve_tag` puts a correction above both readers (`source: corrected`, `disagrees_with` names the overruled one). `PUT /overlap/tags`, `DELETE /overlap/tags?headline=`, `GET /overlap/tags/export` (NDJSON, the fine-tuning set) — sole tenant only, no gateway; `test_overlap_readonly.py` pins the two verbs as the whole mutating surface. The chip on `/build/overlap` gains a "Correct…" select and a "Clear correction". Recorded in `docs/07a` §17.
+
+**Rejected.** A shared book, score or filter from any of this — the tag stays context. Sending the row's numbers to the model. Asking the relationship question before a fine-tuned checkpoint exists.
+
+**Deploy.** Migration 0053 runs in the deploy's migrate step before the api restarts; `laya` is the fourteenth service. First `laya` start installs torch-CPU and pulls the checkpoint into the `baskfy-laya` volume.
+
+**Reverse.** Downgrade 0053; delete `models/catalyst.py` and its exports, the corrections section of `overlap.py`, the three routes, `lib/overlap/write.ts`, `build/overlap/actions.ts`; revert `feed_symbols` per SW-OV4. The rules tag and Laya's answer remain.

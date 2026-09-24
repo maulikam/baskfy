@@ -44,6 +44,7 @@ from baskfy_core.models.billing import (
     InvoiceCounter,
     WebhookEvent,
 )
+from baskfy_core.models.catalyst import CATALYST_EVENT_TYPES, CatalystTagCorrection
 from baskfy_core.models.curated_baskets import (
     BASKET_ACCESS,
     BASKET_SOURCES,
@@ -265,6 +266,7 @@ __all__ = [
     "BASKET_SOURCES",
     "BASKET_TYPES",
     "BASKET_VISIBILITY",
+    "CATALYST_EVENT_TYPES",
     "CB_PLAN_DURATIONS",
     "CB_SUBSCRIPTION_STATUSES",
     "CONSENT_KINDS",
@@ -361,6 +363,7 @@ __all__ = [
     "BasketSnapshot",
     "BrokerAccount",
     "BrokerTrade",
+    "CatalystTagCorrection",
     "CbBasket",
     "CbBasketVersion",
     "CbCollection",

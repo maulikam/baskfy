@@ -84,6 +84,11 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     # 25 Sep 2026: the inverse read — the day's candidates across the sleeves, one row per stock,
     # from the same stored tables. Read-only; `test_overlap_readonly.py`.
     "/overlap": {"get"},
+    # 25 Sep 2026: a person's correction of a headline's tag — the label the fine-tune trains on
+    # — and the corrections as NDJSON. Two money-free writes on one table, sole tenant only;
+    # `test_overlap_readonly.py` names exactly these verbs on exactly this path.
+    "/overlap/tags": {"put", "delete"},
+    "/overlap/tags/export": {"get"},
     # M46: the federated ⌘K search (`baskfynavrefactorreport` §F11). Documented here because a
     # route absent from this list is a surface nobody agreed to — which is the assertion below.
     "/search": {"get"},

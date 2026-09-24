@@ -4,17 +4,20 @@ import { ExternalLink } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import type { ReactNode } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 
 import { InstrumentLink } from "@/components/instrument/instrument-link";
 import { LiveMarksProvider, LivePrice, LiveStatus } from "@/components/screens/live-price";
 import { formatTradeDate } from "@/lib/format";
-import type {
-  OverlapCandidate,
-  OverlapCandidates,
-  OverlapScope,
-  OverlapStrategy,
-  OverlapTag,
+import {
+  OVERLAP_EVENT_TYPES,
+  type CorrectTagAction,
+  type OverlapCandidate,
+  type OverlapCandidates,
+  type OverlapEventType,
+  type OverlapScope,
+  type OverlapStrategy,
+  type OverlapTag,
 } from "@/lib/overlap/candidates";
 import { cn } from "@/lib/utils";
 
@@ -29,10 +32,15 @@ import { cn } from "@/lib/utils";
  * a strategy could act, then by symbol, and the header says so.
  *
  * **The link out is the filing, never the text.** A catalyst is a headline and the exchange's
- * own URL, opened in a new tab. Nothing is reproduced. The small tag beside it is the rules
- * baseline's reading of the *headline* (`baskfy_core.catalyst_tags` — an order, a result, a
- * routine notice), labelled with its source and never read by any rank or order path; whether
+ * own URL, opened in a new tab. Nothing is reproduced. The small tag beside it is a reading of
+ * the *headline* (`baskfy_core.catalyst_tags` — an order, a result, a routine notice) by fixed
+ * rules or by Laya, labelled with its source and never read by any rank or order path; whether
  * the filing explains the move is still the reader's judgement, on the exchange's page.
+ *
+ * **The one thing a person can change here is that tag.** The select on the chip records their
+ * word on the headline (`correctTag`, a server action): it wins on the page, and the corrections
+ * are the set the model is fine-tuned on. A correction is a label on display context — it
+ * reaches one table and no rank, size or order.
  *
  * **Nothing here can place an order**, queue a scan, or change a setting. The table reads one
  * GET and renders it; the sleeve pages it links to are where a person acts.
@@ -40,9 +48,12 @@ import { cn } from "@/lib/utils";
 export function CandidatesTable({
   candidates,
   scope,
+  correctTag,
 }: {
   candidates: OverlapCandidates | null;
   scope: OverlapScope;
+  /** Absent in a render that cannot write (a test, a preview): the chip then has no select. */
+  correctTag?: CorrectTagAction;
 }) {
   const rows = candidates?.data ?? [];
   const sessions = candidates?.sessions ?? null;
@@ -117,7 +128,8 @@ export function CandidatesTable({
             The small tag under a filing is read from its headline — by Laya, with its
             confidence, when the model is sure, and by fixed rules otherwise; a &ldquo;?&rdquo; means
             the two disagreed. It is the subject the exchange named, nothing more: context for
-            which filing to open first, not used in any rank, size or order.
+            which filing to open first, not used in any rank, size or order. If it is wrong,
+            correct it: your word wins on the page and is what the model is trained on next.
           </p>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[56rem] text-sm" data-testid="overlap-candidates-table">
@@ -134,7 +146,7 @@ export function CandidatesTable({
               </thead>
               <tbody>
                 {rows.map((row) => (
-                  <CandidateRow key={row.instrument_id} row={row} />
+                  <CandidateRow key={row.instrument_id} row={row} correctTag={correctTag} />
                 ))}
               </tbody>
             </table>
@@ -145,7 +157,13 @@ export function CandidatesTable({
   );
 }
 
-function CandidateRow({ row }: { row: OverlapCandidate }) {
+function CandidateRow({
+  row,
+  correctTag,
+}: {
+  row: OverlapCandidate;
+  correctTag: CorrectTagAction | undefined;
+}) {
   return (
     <tr
       className={cn("border-b border-border/40", !row.actionable && "text-muted-foreground")}
@@ -205,7 +223,13 @@ function CandidateRow({ row }: { row: OverlapCandidate }) {
         )}
         {row.catalyst?.published_at || row.catalyst?.tag ? (
           <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-            {row.catalyst?.tag ? <TagChip tag={row.catalyst.tag} /> : null}
+            {row.catalyst?.tag ? (
+              <TagChip
+                tag={row.catalyst.tag}
+                headline={row.catalyst.headline}
+                correctTag={correctTag}
+              />
+            ) : null}
             {row.catalyst?.published_at ? (
               <span>{formatTradeDate(row.catalyst.published_at.slice(0, 10))}</span>
             ) : null}
@@ -253,16 +277,51 @@ const EVENT_WORDS: Record<OverlapTag["event_type"], string> = {
   other: "Unclear",
 };
 
-function TagChip({ tag }: { tag: OverlapTag }) {
+/** The `<option>` value that takes a correction back — never one of the eight words. */
+const CLEAR_CORRECTION = "__clear";
+
+function TagChip({
+  tag,
+  headline,
+  correctTag,
+}: {
+  tag: OverlapTag;
+  headline: string | null;
+  correctTag: CorrectTagAction | undefined;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
   const why =
-    tag.source === "laya"
-      ? `Laya read the headline at ${Math.round((tag.confidence ?? 0) * 100)}% confidence`
-      : tag.matched.length > 0
-        ? `matched: ${tag.matched.join(", ")}`
-        : "no subject in the headline";
+    tag.corrected
+      ? "you corrected it"
+      : tag.source === "laya"
+        ? `Laya read the headline at ${Math.round((tag.confidence ?? 0) * 100)}% confidence`
+        : tag.matched.length > 0
+          ? `matched: ${tag.matched.join(", ")}`
+          : "no subject in the headline";
   const [otherSource, otherType] = tag.disagrees_with?.split(":") ?? [];
   const disagreement =
-    otherSource && otherType ? ` The other reader (${otherSource}) said ${otherType}.` : "";
+    otherSource && otherType
+      ? tag.corrected
+        ? ` It overrules ${otherSource}, which said ${otherType}.`
+        : ` The other reader (${otherSource}) said ${otherType}.`
+      : "";
+  const by = tag.corrected ? "Corrected by you" : `Read from the headline by ${tag.source}`;
+
+  const onChange = (value: string) => {
+    if (!correctTag || !headline) return;
+    const next: OverlapEventType | null =
+      value === CLEAR_CORRECTION
+        ? null
+        : (OVERLAP_EVENT_TYPES.find((eventType) => eventType === value) ?? null);
+    if (next === null && value !== CLEAR_CORRECTION) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await correctTag(headline, next);
+      if (!result.ok) setError(result.error);
+    });
+  };
+
   return (
     <span
       className={cn(
@@ -272,6 +331,7 @@ function TagChip({ tag }: { tag: OverlapTag }) {
           : tag.review_priority === "medium"
             ? "border-border text-foreground/80"
             : "border-border/60 text-muted-foreground",
+        tag.corrected && "border-dashed",
       )}
       data-testid="overlap-candidate-tag"
       data-event={tag.event_type}
@@ -279,7 +339,8 @@ function TagChip({ tag }: { tag: OverlapTag }) {
       data-source={tag.source}
       data-confidence={tag.confidence ?? undefined}
       data-disagrees-with={tag.disagrees_with ?? undefined}
-      title={`Read from the headline by ${tag.source} (${why}).${disagreement} Context only — not used in any rank, size or order.`}
+      data-corrected={tag.corrected ? "true" : undefined}
+      title={`${by} (${why}).${disagreement} Context only — not used in any rank, size or order.`}
     >
       <span
         aria-hidden="true"
@@ -293,7 +354,11 @@ function TagChip({ tag }: { tag: OverlapTag }) {
         )}
       />
       {EVENT_WORDS[tag.event_type]}
-      {tag.source === "laya" && tag.confidence !== null ? (
+      {tag.corrected ? (
+        <span className="text-muted-foreground" data-testid="overlap-candidate-tag-source">
+          corrected
+        </span>
+      ) : tag.source === "laya" && tag.confidence !== null ? (
         <span className="text-muted-foreground" data-testid="overlap-candidate-tag-confidence">
           {Math.round(tag.confidence * 100)}%
         </span>
@@ -302,6 +367,35 @@ function TagChip({ tag }: { tag: OverlapTag }) {
         <span aria-label="the two readers disagree" className="text-muted-foreground" title={disagreement.trim()}>
           ?
         </span>
+      ) : null}
+      {correctTag && headline ? (
+        <>
+          <select
+            aria-label={`Correct the tag on “${headline}”`}
+            className="ml-0.5 max-w-[9rem] rounded border border-border/70 bg-background px-1 py-0 text-xs text-foreground"
+            data-testid="overlap-candidate-tag-correct"
+            disabled={pending}
+            value={tag.corrected ? tag.event_type : ""}
+            onChange={(event) => onChange(event.target.value)}
+          >
+            <option value="" disabled>
+              Correct…
+            </option>
+            {OVERLAP_EVENT_TYPES.map((eventType) => (
+              <option key={eventType} value={eventType}>
+                {EVENT_WORDS[eventType]}
+              </option>
+            ))}
+            <option value={CLEAR_CORRECTION} disabled={!tag.corrected}>
+              Clear correction
+            </option>
+          </select>
+          {error ? (
+            <span role="alert" className="text-destructive" data-testid="overlap-candidate-tag-error">
+              {error}
+            </span>
+          ) : null}
+        </>
       ) : null}
     </span>
   );

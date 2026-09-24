@@ -2795,3 +2795,30 @@ something, which is a different and still-useful question. The monitor's own clo
 
 **Reversal.** Point `setups()` back at `latest_setup_date`. Full record and runnable checks:
 `gates/sleeve-contract-fixes.md` F1, and `docs/DECISIONS-MERGE.md` SRC-F.
+
+### SW-OV4 — the feed's symbol set widened to VBT and TWT SIGNAL names (25 Sep 2026) ⚠ UNREVIEWED
+
+- **Context.** Maulik (25 Sep 2026) put Laya on the scan candidates' filings (`GET /overlap`,
+  `infra/laya/laya_loop.py`): the scan candidates go to Laya for its opinion, and a candidate
+  without a filing on record has nothing to be read. The 09:10 catalyst feed (A3) read filings
+  for the watchlist and the last session's EP candidates only, so on the overlap page only the
+  swing-feed names carried a filing; a volume-breakout or three-weeks-tight signal arrived at
+  Laya blank.
+- **Choice.** `feed_symbols` (`services/worker/src/baskfy_worker/tasks/swing_catalyst.py`)
+  adds, for the same `user_id`, the `vb_signal_daily` rows with `state = SIGNAL` at the newest
+  `vb_breadth_daily.date` and the `tw_signal_daily` rows with `state = SIGNAL` at the newest
+  `tw_breadth_daily.date` — each detector's newest breadth row is its clock, the same rule
+  `baskfy_api.vbt._latest_breadth` and `instrument_appearances` use, so the feed reads the
+  session the pages call today. All four selects merge into one `symbol -> instrument_id` dict
+  (`setdefault`, sorted): a name on two sleeves is fetched once. A sleeve with no breadth row
+  contributes nothing. The skip note for an empty set now names all four sources.
+- **Rejected.** Widening to every in-state `tw_state_daily` name (~50 a day; a base is not a
+  signal) or to the VBT `SCAN_ONLY` rejects (stored on purpose per PACK.6, but an event the
+  filters turned down is not a candidate). The NSE limiter is 1 req/s, every symbol costs two
+  requests (announcements + results calendar), and the 09:16 gap monitor needs the provider
+  back; SIGNAL rows are ~2–5 names a day per sleeve and fit; the rest do not.
+- **Reverse.** Delete the two selects (`vb_day` / `vb_signals`, `tw_day` / `tw_signals`) in
+  `feed_symbols`, their four model imports and the two `SignalState` imports, restore the skip
+  note's old text, and drop `TestTheScanCandidatesAreOnTheFeed` from
+  `services/worker/tests/test_swing_catalyst.py`. No migration, no config, no schedule change.
+

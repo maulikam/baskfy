@@ -1,12 +1,15 @@
 """``/overlap`` — the day's candidates across the sleeves, one row per stock.
 
-    GET /overlap?scope=actionable|all     every name on any strategy's latest session, with
+    GET    /overlap?scope=actionable|all  every name on any strategy's latest session, with
                                           each strategy's own fact about it, the screens it is
                                           on, the swing feed's catalyst link and earnings date,
                                           and the live mark
+    PUT    /overlap/tags                  a person's correction of a headline's tag
+    DELETE /overlap/tags?headline=        the correction removed; the readers' word shows again
+    GET    /overlap/tags/export           every correction, as NDJSON — the fine-tuning set
 
-ONE ROUTE, ONE VERB, AND IT MOVES NOTHING
------------------------------------------
+ONE READ, AND A CORRECTION THAT MOVES NOTHING
+---------------------------------------------
 `/build/overlap` computed its membership in the web app from three separate page reads and
 showed symbols only. This route serves the same membership from the same stored tables in one
 read, with the facts the page used to send a person away for. It intersects; it does not scan,
@@ -14,12 +17,21 @@ rank, size or order. ``baskfy_api.overlap`` names no broker, no plan and no flag
 ``services/api/tests/test_overlap_readonly.py`` asserts that over the source and the OpenAPI
 document, the way the sleeves' own read-only suites do.
 
+The two writes are the one money-free thing this page was always going to need
+(`baskfy_core.catalyst_tags`: "corrections collected against [the baseline], and only then a
+fine-tuned model"). A correction is a label on the tag — display context that never reached a
+rank, a size or an order — stored in one table (`catalyst_tag_correction`) so the chip shows the
+person's word and the export can train on it. `test_overlap_readonly.py` names exactly these two
+verbs on exactly this path and nothing else.
+
 WHOSE SCANS THEY ARE
 --------------------
-The strategy tables are the sole tenant's. A caller who is not the sole tenant is not refused —
-their screens are still theirs — but the strategies are not read for them and the payload says
-so (``strategies_read: false``), rather than answering an empty page that reads as "no
-candidates today". The instrument page's ``/appearances`` makes the same choice.
+The strategy tables are the sole tenant's. A caller who is not the sole tenant is not refused
+the read — their screens are still theirs — but the strategies are not read for them and the
+payload says so (``strategies_read: false``), rather than answering an empty page that reads as
+"no candidates today". The instrument page's ``/appearances`` makes the same choice. The writes
+and the export **are** refused to anyone but the sole tenant, the way `/swing`'s are: the
+corrections are one person's labels.
 
 WHICH DAY
 ---------
@@ -35,8 +47,8 @@ import datetime as dt
 from decimal import Decimal
 from typing import Annotated, Final, Literal
 
-from fastapi import APIRouter, Query, Request, Response
-from pydantic import BaseModel
+from fastapi import APIRouter, Query, Request, Response, status
+from pydantic import BaseModel, Field
 from redis.asyncio import Redis
 
 from baskfy_api import overlap as overlap_service
@@ -44,13 +56,15 @@ from baskfy_api.auth import AuthenticatedDep
 from baskfy_api.curated_tenant import scoped_sole_user_id
 from baskfy_api.db import SessionDep
 from baskfy_api.live_prices import live_marks_for_symbols
-from baskfy_api.problems import Problem
-from baskfy_core.catalyst_tags import EventType, ReviewPriority
+from baskfy_api.problems import Problem, ProblemType, not_found
+from baskfy_core.catalyst_tags import SOURCE_CORRECTED, CatalystTag, EventType, ReviewPriority
 from baskfy_core.screener import canonical_json
 
 router = APIRouter(prefix="/overlap", tags=["overlap"])
 
 JSON_MEDIA_TYPE: Final = "application/json"
+#: The export: one JSON document per line, the shape fine-tuning loaders read directly.
+NDJSON_MEDIA_TYPE: Final = "application/x-ndjson"
 
 
 def _json(model: BaseModel) -> Response:
@@ -85,22 +99,46 @@ class OverlapScreenOut(BaseModel):
 
 
 class OverlapTagOut(BaseModel):
-    """The rules baseline's word on the headline (`baskfy_core.catalyst_tags`).
+    """The word on the headline (`baskfy_core.catalyst_tags`).
 
     Display context on a candidate row and nothing more: it is not read by any rank, filter,
     size or order path, and the page labels it so. ``source`` names what produced it — ``rules``
-    today; a model, when one is fine-tuned and shadowed, writes its own name here and the wire
-    shape does not change. ``matched`` is why: the phrases that decided the type.
+    for the keyword baseline, ``laya`` for the model when it was sure, ``corrected`` for a
+    person's word, which wins over both. ``matched`` is why: the phrases that decided the type.
     """
 
     event_type: EventType
     review_priority: ReviewPriority
     matched: list[str]
     source: str
-    #: The model's probability for its choice; null for the rules.
+    #: The model's probability for its choice; null for the rules and for a correction.
     confidence: float | None
-    #: ``"<source>:<event_type>"`` of the other reader when the two disagreed — the correction seed.
+    #: ``"<source>:<event_type>"`` of the other reader when the two disagreed — the correction
+    #: seed — or, on a corrected tag, of the reader the person overruled.
     disagrees_with: str | None
+    #: ``source == "corrected"``: a person's word, not a reader's.
+    corrected: bool
+
+
+def _tag_out(tag: CatalystTag) -> OverlapTagOut:
+    return OverlapTagOut(
+        event_type=tag.event_type,
+        review_priority=tag.review_priority,
+        matched=list(tag.matched),
+        source=tag.source,
+        confidence=tag.confidence,
+        disagrees_with=tag.disagrees_with,
+        corrected=tag.source == SOURCE_CORRECTED,
+    )
+
+
+class OverlapTagCorrectionIn(BaseModel):
+    """A person's word on one headline. The headline is the key: the correction applies to
+    that exact text wherever it appears, not to one row."""
+
+    headline: str = Field(min_length=1, max_length=2000)
+    event_type: EventType
+    note: str | None = Field(default=None, max_length=2000)
 
 
 class OverlapCatalystOut(BaseModel):
@@ -219,18 +257,7 @@ async def get_overlap(
                             published_at=row.catalyst.published_at,
                             url=row.catalyst.url,
                             earnings_date=row.catalyst.earnings_date,
-                            tag=(
-                                None
-                                if row.catalyst_tag is None
-                                else OverlapTagOut(
-                                    event_type=row.catalyst_tag.event_type,
-                                    review_priority=row.catalyst_tag.review_priority,
-                                    matched=list(row.catalyst_tag.matched),
-                                    source=row.catalyst_tag.source,
-                                    confidence=row.catalyst_tag.confidence,
-                                    disagrees_with=row.catalyst_tag.disagrees_with,
-                                )
-                            ),
+                            tag=None if row.catalyst_tag is None else _tag_out(row.catalyst_tag),
                         )
                     ),
                 )
@@ -238,3 +265,89 @@ async def get_overlap(
             ],
         )
     )
+
+
+# --- Corrections ------------------------------------------------------------------------------
+
+
+async def _laya_answer(request: Request, headline: str) -> object:
+    answers = await overlap_service.laya_answers(_cache(request), [headline])
+    return answers.get(headline)
+
+
+@router.put("/tags", response_model=OverlapTagOut, summary="Correct a headline's tag")
+async def put_tag(
+    request: Request,
+    session: SessionDep,
+    principal: AuthenticatedDep,
+    payload: OverlapTagCorrectionIn,
+) -> Response:
+    """Store the person's word on a headline and answer with the tag the page now shows.
+
+    Idempotent on the headline: a second correction updates the one row. What the rules and Laya
+    said is recorded beside it at this moment — the training signal. Sole tenant only.
+    """
+    user_id = await scoped_sole_user_id(session, principal.require_user(), surface="corrections")
+    headline = payload.headline.strip()
+    if not headline:
+        raise Problem(
+            ProblemType.BAD_REQUEST,
+            "A correction needs a headline to correct.",
+            errors=[{"field": "headline", "message": "blank"}],
+        )
+    tag = await overlap_service.correct_tag(
+        session,
+        user_id=user_id,
+        headline=headline,
+        event_type=payload.event_type,
+        note=(payload.note or "").strip() or None,
+        laya_answer=await _laya_answer(request, headline),
+    )
+    return _json(_tag_out(tag))
+
+
+@router.delete(
+    "/tags", status_code=status.HTTP_204_NO_CONTENT, summary="Remove a headline's correction"
+)
+async def delete_tag(
+    session: SessionDep,
+    principal: AuthenticatedDep,
+    headline: Annotated[str, Query(min_length=1, description="the headline, exactly as shown")],
+) -> Response:
+    """The readers' word shows again. 404 when there was no correction to remove."""
+    user_id = await scoped_sole_user_id(session, principal.require_user(), surface="corrections")
+    if not await overlap_service.clear_correction(session, user_id=user_id, headline=headline):
+        raise not_found("correction", headline)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/tags/export",
+    summary="Every correction, as NDJSON",
+    response_class=Response,
+    responses={200: {"content": {NDJSON_MEDIA_TYPE: {}}}},
+)
+async def get_tags_export(session: SessionDep, principal: AuthenticatedDep) -> Response:
+    """The fine-tuning set: one line per corrected headline, oldest first — the headline, the
+    person's label, what each reader said at the time, the note, and when. Sole tenant only."""
+    user_id = await scoped_sole_user_id(session, principal.require_user(), surface="corrections")
+    records = await overlap_service.corrections_export(session, user_id=user_id)
+    lines = [
+        canonical_json(
+            {
+                "headline": record.headline,
+                "event_type": record.event_type.value,
+                "rules_event_type": (
+                    None if record.rules_event_type is None else record.rules_event_type.value
+                ),
+                "laya_event_type": (
+                    None if record.laya_event_type is None else record.laya_event_type.value
+                ),
+                "laya_confidence": record.laya_confidence,
+                "note": record.note,
+                "corrected_at": record.corrected_at.isoformat(),
+            }
+        )
+        for record in records
+    ]
+    return Response(content="".join(f"{line}\n" for line in lines), media_type=NDJSON_MEDIA_TYPE)

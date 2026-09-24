@@ -14,6 +14,8 @@ import { intersectionOf, membershipOf } from "@/lib/overlap/overlap";
 import { formatTradeDate } from "@/lib/format";
 import { PAGES } from "@/lib/vocabulary";
 
+import { correctTag } from "./actions";
+
 /**
  * `/build/overlap` — names that land on more than one Build scan.
  *
@@ -151,7 +153,7 @@ export default async function BuildOverlapPage({
         )}
       </Answer>
 
-      <CandidatesTable candidates={candidates} scope={scope} />
+      <CandidatesTable candidates={candidates} scope={scope} correctTag={correctTag} />
 
       <OverlapMatrix
         membership={membership}

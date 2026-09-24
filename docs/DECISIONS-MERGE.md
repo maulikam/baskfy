@@ -8164,3 +8164,26 @@ a silent close — that line is the diagnosis if it appears during market hours.
 **Reverse.** Drop the `LiveMarksProvider`/`LivePrice`/`LiveStatus` wrappers from the four pages
 (they fall back to the close they showed before) and restore `get_live_marks` to call
 `live_marks_for_symbols` without the market-hours gate. No schema, no migration, no stored data.
+
+## Nightly fix (25 Sep 2026) — a symbol in both NSE registers is written once, main board first ⚠ UNREVIEWED
+
+**What broke.** The 24 Sep nightly (run 63) failed at step 1, `refresh_instruments`, and so did
+the 00:39 catch-up (run 64). The error was `CardinalityViolationError: ON CONFLICT DO UPDATE
+command cannot affect row a second time`. PARIN is migrating from NSE Emerge to the main board,
+and on 24 Sep NSE listed it in both registers: `EQ`, listed 2026-09-25, and `SM`, listed
+2018-10-09. `run_refresh_listings` appends the SME register to the main one, and `store_listings`
+upserted the combined list in one statement, so the key `(NSE, PARIN)` was proposed twice. The
+chain rolls back as one transaction, so the 24 Sep session never published.
+
+**Choice.** `store_listings` keeps the first record offered for each symbol. The caller offers the
+main register first, so the main-board row wins, and that is where the stock now trades. It also
+matches what `refresh_instruments` merges from the main register in the same step. Dropped
+duplicates go in the step note (`duplicate_symbols`), so they are visible and not silent.
+
+**Rejected.** (a) SME wins, or the earliest `listed_on` wins. That would keep `series = SM` for a
+stock that now trades as EQ, and it would disagree with the instrument merge a moment earlier in
+the same step. (b) Failing the step on a duplicate. A routine NSE migration would then stop the
+whole night, which is the defect being fixed.
+
+**Reverse.** Remove the de-duplication loop in `store_listings`. No schema change and no data
+migration.

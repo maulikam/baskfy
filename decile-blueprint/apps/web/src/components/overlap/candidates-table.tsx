@@ -148,9 +148,10 @@ export function CandidatesTable({
           </p>
           <p className="text-xs text-muted-foreground" data-testid="overlap-candidates-tag-note">
             The Laya column is the model&rsquo;s view of the whole row &mdash; the scan&rsquo;s
-            numbers said in words, plus the filing &mdash; as attention, never a trade: shown only
-            when it is sure, &ldquo;not sure&rdquo; otherwise. Your own word on a row wins there,
-            and the rows you label are what the model is trained on next. The small tag under a filing is read
+            numbers said in words, plus the filing &mdash; as attention, never a trade. Laya&rsquo;s
+            word with its confidence when the model is sure; otherwise the word fixed rules give from
+            the same facts, marked &ldquo;rules&rdquo;, with the reason on hover. Your own word on a
+            row wins over both, and the rows you label are what the model is trained on next. The small tag under a filing is read
             from its headline — by Laya, with its
             confidence, when the model is sure, and by fixed rules otherwise; a &ldquo;?&rdquo; means
             the two disagreed. It is the subject the exchange named, nothing more: context for
@@ -312,12 +313,13 @@ const CLEAR_LABEL = "__clear";
 
 /**
  * The opinion on the whole row — the scans' technicals in words plus the filing — as attention,
- * never a trade. Laya's is shown as a word with its percentage when the model cleared the
- * floor; "not sure" otherwise, with the guess on hover so a person labelling the row can see
- * what the model thought. A person's own label wins: the word with "labelled" beside it, no
- * percentage. The select records that label (`labelRow`, a server action) or takes it back;
- * the labelled rows are the set the row question's fine-tune trains on. None of it is read by
- * any rank, size or order path.
+ * never a trade, resolved the way the Filing tag is. A person's own label wins: the word with
+ * "labelled" beside it. Laya's word carries its percentage when the model cleared the floor.
+ * Otherwise the rules baseline: the word with "rules" beside it and the reason on hover, so the
+ * column always says something a person can check. "not sure" is kept only for an opinion the
+ * server neither showed nor explained, which the current API never sends. The select records a
+ * label (`labelRow`, a server action) or takes it back; the labelled rows are the set the row
+ * question's fine-tune trains on. None of it is read by any rank, size or order path.
  */
 function OpinionCell({
   opinion,
@@ -403,6 +405,29 @@ function OpinionCell({
         {OPINION_WORDS[opinion.label]}
         <span className="text-muted-foreground" data-testid="overlap-candidate-opinion-source">
           labelled
+        </span>
+      </span>
+    );
+  } else if (opinion.source === "rules") {
+    word = (
+      <span
+        className={cn(
+          "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5",
+          opinion.label === "look_first"
+            ? "border-primary/40 text-foreground"
+            : opinion.label === "worth_a_look"
+              ? "border-border text-foreground/80"
+              : "border-border/60 text-muted-foreground",
+        )}
+        data-testid="overlap-candidate-opinion"
+        data-state="shown"
+        data-source="rules"
+        data-label={opinion.label}
+        title={`${OPINION_WORDS[opinion.label]} by the rules: ${opinion.reason ?? "from the facts on the row"}. Laya was not sure enough to overrule them. Attention, never a trade — not used in any rank, size or order.`}
+      >
+        {OPINION_WORDS[opinion.label]}
+        <span className="text-muted-foreground" data-testid="overlap-candidate-opinion-source">
+          rules
         </span>
       </span>
     );

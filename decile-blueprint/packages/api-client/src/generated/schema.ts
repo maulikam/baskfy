@@ -9489,11 +9489,11 @@ export interface components {
         /**
          * OverlapOpinionOut
          * @description The opinion on the row — the technicals in words plus the filing — as attention, never a
-         *     trade. ``source`` names whose: ``laya`` for the model, ``labelled`` for a person's word,
-         *     which wins and is always shown. For the model, ``shown`` is false below the confidence
-         *     floor, and the page then says "not sure" rather than printing a guess with a percentage;
-         *     ``label`` and ``confidence`` are served regardless so a person can see what the model
-         *     thought when labelling the row.
+         *     trade. ``source`` names whose, resolved the same way as the filing tag: ``labelled`` for a
+         *     person's word, which wins; ``laya`` for the model, served only at or above the confidence
+         *     floor; ``rules`` for the baseline from facts already on the row, which always has a word
+         *     and a ``reason`` the page can show. ``shown`` is therefore always true on the wire and is
+         *     kept for the client that gates on it.
          */
         OverlapOpinionOut: {
             /** Confidence */
@@ -9503,6 +9503,8 @@ export interface components {
             label: components["schemas"]["ReviewLabel"];
             /** Labelled */
             labelled: boolean;
+            /** Reason */
+            reason?: string | null;
             /** Shown */
             shown: boolean;
             /** Source */

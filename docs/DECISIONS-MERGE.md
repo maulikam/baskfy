@@ -8383,3 +8383,15 @@ announced its next result meeting yet. His choice: "put laya scan button on over
 **Note.** Existing labels were keyed on the OV7 state; the key changed with the state, so any label placed in the hour between the two deploys does not apply to the new key. There were none yet.
 
 **Reverse.** Restore the OV7 `numbers` dicts and drop `RowContext` / `_gates` / `_context`.
+
+## Overlap: the Laya column always has a word — a rules baseline under the model (25 Sep 2026) · ⚠ UNREVIEWED
+
+**Context.** Maulik, on the staging page with fourteen live rows all reading "not sure": "Everything is not sure here. What's the issue?" The issue was the design, not a fault: the base checkpoint's answers to the row question were 3–12%, under the 0.60 floor on every row, so the column said nothing on any of them. The Filing tag column beside it never has that problem because the rules give it a word and Laya only overrules them when sure.
+
+**Choice.** The opinion is resolved the same way as the filing tag, three tiers: a person's label wins; else Laya's cached answer at or above the floor; else `baskfy_core.candidate_review.rules_opinion`, from facts already on the row — **skip** when no strategy could act (a rejected scan, a base with no entry), the filing is adverse (governance with a regulatory phrase: order passed, penalty, default, resignation…), the acting strategy's gate is shut, or the name is locked in the upper circuit; **look first** when a strategy could act and the filing is material (high priority: order win, results, approval); **worth a look** otherwise. Served as `source: "rules"`, `confidence: 1`, with a one-sentence `reason` on the wire (new optional field on `OverlapOpinionOut`; openapi.json and the TS client regenerated). The page shows the word with "rules" beside it and the reason on hover, no percentage; Laya's word still carries its percentage when it was sure; a label still wins. `shown` is therefore always true on the wire and the "not sure" rendering is unreachable from this API. An unsure model answer never reaches the page but is still what a label records as overruled (`laya_label`, `laya_confidence`), so the fine-tuning export is unchanged.
+
+**Why not a score.** The baseline is the same three words the model answers with, from the same facts, and every branch says why — it is the explainable floor the model has to beat, not a ranking. Nothing reads it downstream; `test_overlap_readonly` is untouched.
+
+**Tests.** 14 core (`TestTheRulesBaseline` on every branch), 38 API across `test_api_overlap` and `test_api_artifacts` (opinion resolution before and after the sidecar answers; a label over the baseline; the unsure answer still recorded), 15 web component tests (rules word with reason, a rules skip stays labellable, no "not sure" on the page). ruff, mypy, tsc, eslint clean.
+
+**Reverse.** Drop `rules_opinion` and `ReviewOpinion.reason`, and have `_opinion` return the cached answer or `None`.

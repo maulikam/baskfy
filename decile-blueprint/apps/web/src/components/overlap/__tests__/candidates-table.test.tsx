@@ -68,6 +68,7 @@ const payload = parseCandidates({
         shown: true,
         floor: 0.6,
         labelled: false,
+        reason: null,
       },
       screens: [
         {
@@ -116,13 +117,15 @@ const payload = parseCandidates({
       ],
       screens: [],
       catalyst: null,
+      /* Laya was unsure here, so the server served the rules baseline with its reason. */
       opinion: {
-        label: "skip",
-        confidence: 0.34,
-        source: "laya",
-        shown: false,
+        label: "worth_a_look",
+        confidence: 1,
+        source: "rules",
+        shown: true,
         floor: 0.6,
         labelled: false,
+        reason: "a strategy could act; no filing on record",
       },
     },
   ],
@@ -339,15 +342,56 @@ describe("CandidatesTable", () => {
     );
   });
 
-  it("shows Laya's opinion on the row only when it is sure, and never as a trade", () => {
+  it("shows Laya's word with its percentage when it was sure, the rules' word with its reason otherwise, and never a trade", () => {
     render(<CandidatesTable candidates={payload} scope="all" />);
-    const [sure, unsure] = screen.getAllByTestId("overlap-candidate-opinion");
+    const [sure, rules] = screen.getAllByTestId("overlap-candidate-opinion");
     expect(sure).toHaveTextContent("Look first82%");
     expect(sure).toHaveAttribute("data-state", "shown");
+    expect(sure).toHaveAttribute("data-source", "laya");
     expect(sure).toHaveAttribute("title", expect.stringContaining("never a trade"));
-    expect(unsure).toHaveTextContent("not sure");
-    expect(unsure).toHaveAttribute("title", expect.stringContaining("Skip at 34%, below its 60% floor"));
+    /* The column always has a word: no "not sure", no "—", no percentage on the rules. */
+    expect(rules).toHaveTextContent("Worth a lookrules");
+    expect(rules).not.toHaveTextContent("%");
+    expect(rules).toHaveAttribute("data-state", "shown");
+    expect(rules).toHaveAttribute("data-source", "rules");
+    expect(rules).toHaveAttribute(
+      "title",
+      expect.stringContaining("by the rules: a strategy could act; no filing on record"),
+    );
+    expect(rules).toHaveAttribute("title", expect.stringContaining("never a trade"));
+    expect(screen.queryByText("not sure")).toBeNull();
     expect(screen.getByRole("columnheader", { name: "Laya" })).toBeInTheDocument();
+  });
+
+  it("says why the rules said skip, and keeps the row labellable", () => {
+    const skipped: OverlapCandidates = {
+      ...payload,
+      data: [
+        {
+          ...payload.data[1]!,
+          opinion: {
+            label: "skip",
+            confidence: 1,
+            source: "rules",
+            shown: true,
+            floor: 0.6,
+            labelled: false,
+            reason: "the filing is adverse; Swing gate shut",
+          },
+        },
+      ],
+    };
+    const labelRow: LabelRowAction = vi.fn(() => Promise.resolve({ ok: true as const }));
+    render(<CandidatesTable candidates={skipped} scope="all" labelRow={labelRow} />);
+    const opinion = screen.getByTestId("overlap-candidate-opinion");
+    expect(opinion).toHaveTextContent("Skiprules");
+    expect(opinion).toHaveAttribute("data-label", "skip");
+    expect(opinion).toHaveAttribute(
+      "title",
+      expect.stringContaining("Skip by the rules: the filing is adverse; Swing gate shut"),
+    );
+    /* A person can still overrule the baseline — the select is empty, not the rules' word. */
+    expect(screen.getByTestId("overlap-candidate-opinion-label")).toHaveValue("");
   });
 
   it("offers the three words and a clear option on the Laya cell when it can write, and nothing when it cannot", () => {
@@ -405,6 +449,7 @@ describe("CandidatesTable", () => {
             shown: true,
             floor: 0.6,
             labelled: true,
+            reason: null,
           },
         },
       ],

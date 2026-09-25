@@ -55,6 +55,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from baskfy_api.swing import latest_detected_date
 from baskfy_api.swing_catalyst import ANNOUNCEMENT, CatalystView, latest_for
 from baskfy_core.candidate_review import (
+    REVIEW_CONFIDENCE_FLOOR,
     SOURCE_LABELLED,
     Number,
     ReviewLabel,
@@ -64,6 +65,7 @@ from baskfy_core.candidate_review import (
     opinion_from_laya,
     review_key,
     review_state,
+    rules_opinion,
 )
 from baskfy_core.catalyst_tags import (
     PRIORITY_OF,
@@ -748,11 +750,27 @@ async def labels_for(
     return {key: ReviewLabel(label) for key, label in found}
 
 
-def _opinion(laya: ReviewOpinion | None, label: ReviewLabel | None) -> ReviewOpinion | None:
-    """A person's label wins over the model's opinion; without one, the model's stands."""
-    if label is None:
+def _opinion(
+    laya: ReviewOpinion | None, label: ReviewLabel | None, rules: ReviewOpinion
+) -> ReviewOpinion:
+    """A person's label wins; then the model when it is sure; then the rules, which always
+    have a word (25 Sep 2026 — a page of "not sure" said nothing)."""
+    if label is not None:
+        return ReviewOpinion(label, 0.0, source=SOURCE_LABELLED)
+    if laya is not None and laya.confidence >= REVIEW_CONFIDENCE_FLOOR:
         return laya
-    return ReviewOpinion(label, 0.0, source=SOURCE_LABELLED)
+    return rules
+
+
+def _rules_opinion(row: CandidateRow) -> ReviewOpinion:
+    tag = row.catalyst_tag
+    return rules_opinion(
+        row.facts(),
+        None if tag is None else tag.event_type.value,
+        () if tag is None else tag.matched,
+        None if tag is None else tag.review_priority.value,
+        row.context,
+    )
 
 
 async def _gates(
@@ -902,7 +920,7 @@ async def overlap(
     opinions = await review_opinions(cache, states)
     labels = await labels_for(session, user_id=user_id, keys=keys)
     rows = [
-        replace(row, opinion=_opinion(opinions.get(key), labels.get(key)))
+        replace(row, opinion=_opinion(opinions.get(key), labels.get(key), _rules_opinion(row)))
         for row, key in zip(rows, keys, strict=True)
     ]
     return OverlapView(

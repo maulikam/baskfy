@@ -283,9 +283,9 @@ correction as NDJSON — the fine-tuning set. Nothing under `/overlap` reaches t
 
 Each row also carries an **opinion** — Laya's answer to "how much does this row deserve a look"
 over the row's technicals in words plus its filing (`baskfy_core.candidate_review`), served as
-`opinion: {label, confidence, source, shown, floor, labelled}`. Measured on the base checkpoint
-that opinion is a coin flip, so the labels a person puts on rows are what the fine-tune trains
-on. The same shape as the tag correction, on `/overlap/reviews`, sole tenant only:
+`opinion: {label, confidence, source, shown, floor, labelled, reason}`. Measured on the base
+checkpoint that opinion is a coin flip, so the labels a person puts on rows are what the
+fine-tune trains on. The same shape as the tag correction, on `/overlap/reviews`, sole tenant only:
 
 * `PUT /overlap/reviews` {instrument_id, label: look_first|worth_a_look|skip, note} — the server
   re-reads the row through `overlap()` (scope `all`; 404 when the name is not on today's list),
@@ -298,8 +298,15 @@ on. The same shape as the tag correction, on `/overlap/reviews`, sole tenant onl
 * `GET /overlap/reviews/export` — NDJSON, oldest first: `{symbol, state, label, laya_label,
   laya_confidence, note, labelled_at}`.
 
-On `GET /overlap` a stored label for a row's state wins over the cached opinion. Table
-`candidate_review_label` (migration 0054); display context only.
+On `GET /overlap` the opinion is resolved the way the filing tag is (25 Sep 2026, after a
+staging page that read "not sure" on all fourteen rows): a stored label for the row's state
+wins; else Laya's cached answer when it is at or above the floor; else the **rules baseline**
+(`baskfy_core.candidate_review.rules_opinion`) — skip when no strategy could act, the filing is
+adverse, the acting gate is shut or the name is locked in the upper circuit; look first when a
+strategy could act and the filing is material; worth a look otherwise — served as
+`source: "rules"`, `confidence: 1`, with a one-sentence `reason`. `shown` is therefore always
+true on the wire. An unsure model answer never reaches the page, but is still what a label
+records as overruled. Table `candidate_review_label` (migration 0054); display context only.
 
 ### Overlap: the filings scan (25 Sep 2026)
 

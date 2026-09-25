@@ -78,7 +78,42 @@ RULES: Final[tuple[tuple[EventType, tuple[str, ...]], ...]] = (
     # are not one, and a reader wants them above everything else on the row.
     (
         EventType.GOVERNANCE,
-        ("sebi order", "nclt", "court order", "insolvency", "penalty", "default"),
+        (
+            "sebi order",
+            "nclt",
+            "court order",
+            "insolvency",
+            "penalty",
+            "default",
+            # NSE's own subject for regulatory action: "Action(s) taken or orders passed" —
+            # a demand order, a show-cause, a tax notice. Not an order win (25 Sep 2026, seen on
+            # the box: "orders passed regarding receipt of Demand Order under Section 156").
+            "orders passed",
+            "action(s) taken",
+            "actions taken",
+            "demand order",
+            "show cause",
+            "show-cause",
+        ),
+    ),
+    # Holdings disclosures under SAST / PIT are routine paperwork, whatever the subject line
+    # says around them; they come before every material type because "acquisition" appears in
+    # the regulation's own name (25 Sep 2026, the box).
+    (
+        EventType.ROUTINE,
+        (
+            "sebi takeover regulations",
+            "sast",
+            "regulation 29",
+            "regulation 31",
+            "regulation 7(2)",
+            "prohibition of insider trading",
+            "shareholders meeting",
+            "annual general meeting",
+            "scrutinizer",
+            "scrutinizers",
+            "srutinizer",
+        ),
     ),
     (
         EventType.EARNINGS,
@@ -112,6 +147,9 @@ RULES: Final[tuple[tuple[EventType, tuple[str, ...]], ...]] = (
             "tender",
             "bagging",
             "bagged",
+            "bagging/receiving of orders/contracts",
+            "receipt of orders",
+            "receipt of order",
             "project win",
             "supply agreement",
         ),
@@ -296,19 +334,52 @@ _COMPILED: Final[tuple[tuple[EventType, tuple[tuple[str, re.Pattern[str]], ...]]
 )
 
 
-def tag_headline(headline: str | None) -> CatalystTag:
-    """The tag for one exchange headline. Deterministic: the same string always tags the same.
+#: The feed writes NSE's own subject line first, then the exchange's sentence about it:
+#: ``"Bagging/Receiving of orders/contracts — Bharat Electronics Limited has informed the
+#: Exchange regarding Receipt of orders worth Rs. 840 crores"``. The subject is the exchange's
+#: category, and it is what a person scans; the sentence repeats the company's name and a
+#: boilerplate clause that says nothing about the event.
+SUBJECT_SEPARATOR: Final = " — "
 
-    A blank or absent headline is ``other`` at low priority with nothing matched — there is
-    nothing to read, and the tag says so rather than inventing a subject.
-    """
-    text = (headline or "").casefold()
-    if not text.strip():
-        return CatalystTag(EventType.OTHER, ReviewPriority.LOW, ())
+
+def split_subject(headline: str) -> tuple[str, str]:
+    """``(subject, rest)`` of an NSE headline; ``(headline, "")`` when it carries no subject."""
+    subject, separator, rest = headline.partition(SUBJECT_SEPARATOR)
+    if not separator:
+        return headline.strip(), ""
+    return subject.strip(), rest.strip()
+
+
+def _first_hit(text: str) -> CatalystTag | None:
     for event_type, phrases in _COMPILED:
         hits = tuple(phrase for phrase, pattern in phrases if pattern.search(text))
         if hits:
             return CatalystTag(event_type, PRIORITY_OF[event_type], hits)
+    return None
+
+
+def tag_headline(headline: str | None) -> CatalystTag:
+    """The tag for one exchange headline. Deterministic: the same string always tags the same.
+
+    **The subject line is read first** (25 Sep 2026, the box): NSE's category — "Financial
+    Results", "Copy of Newspaper Publication", "General Updates" — decides when it names an
+    event, and only a subject that names nothing ("General Updates", "Updates") lets the rest of
+    the headline decide. Reading the whole string at once let the boilerplate win: a "Shareholders
+    meeting" notice that mentions a quarter tagged as a result.
+
+    A blank or absent headline is ``other`` at low priority with nothing matched — there is
+    nothing to read, and the tag says so rather than inventing a subject.
+    """
+    if headline is None or not headline.strip():
+        return CatalystTag(EventType.OTHER, ReviewPriority.LOW, ())
+    subject, rest = split_subject(headline)
+    tagged = _first_hit(subject.casefold())
+    if tagged is not None:
+        return tagged
+    if rest:
+        tagged = _first_hit(rest.casefold())
+        if tagged is not None:
+            return tagged
     return CatalystTag(EventType.OTHER, ReviewPriority.LOW, ())
 
 

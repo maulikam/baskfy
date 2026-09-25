@@ -191,18 +191,67 @@ def tag_batch(agent: Agent, cache: redis.Redis, headlines: list[str]) -> int:
     return written
 
 
+#: The headlines the overlap page is showing and does not have a tag for yet, written by the
+#: API on every read (`baskfy_api.overlap.WANTED_KEY`). Since the page shows the *material*
+#: filing per name rather than the newest (25 Sep 2026), the newest-per-name query above is not
+#: enough on its own: the rules may pick a result or an order win from last week, and that is
+#: the headline Laya's opinion is wanted on. Members are dropped once tagged.
+WANTED_KEY = "catalyst_tag:wanted"
+
+
+def wanted_headlines(cache: redis.Redis) -> list[str]:
+    raw = cache.smembers(WANTED_KEY)
+    return sorted(
+        member.decode() if isinstance(member, bytes) else str(member) for member in raw if member
+    )
+
+
+#: Written after every pass so the page can say when Laya last looked and how much it tagged
+#: (`baskfy_api.overlap` reads it as `laya.last_pass_at`). "Laya has not run" and "Laya ran and
+#: was unsure" are different answers to "is Laya working", and only this key tells them apart.
+HEARTBEAT_KEY = "catalyst_tag:heartbeat"
+HEARTBEAT_TTL_S = 2 * 24 * 3600
+
+
+def heartbeat(cache: redis.Redis, *, candidates: int, tagged: int, seconds: float) -> None:
+    cache.set(
+        HEARTBEAT_KEY,
+        json.dumps(
+            {
+                "at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                "model": MODEL_ID,
+                "candidates": candidates,
+                "tagged": tagged,
+                "seconds": round(seconds, 1),
+            }
+        ),
+        ex=HEARTBEAT_TTL_S,
+    )
+
+
 def once(agent: Agent, cache: redis.Redis) -> None:
     with psycopg.connect(pg_dsn(), connect_timeout=10) as conn:
         headlines = candidate_headlines(conn)
+    wanted = wanted_headlines(cache)
+    headlines = sorted(set(headlines) | set(wanted))
     todo = untagged(cache, headlines)
+    if wanted:
+        # Whatever is cached now is no longer wanted; what this pass tags is dropped below.
+        already = [h for h in wanted if h not in todo]
+        if already:
+            cache.srem(WANTED_KEY, *already)
     if not todo:
         log.info("nothing to tag (%d candidate headlines, all cached)", len(headlines))
+        heartbeat(cache, candidates=len(headlines), tagged=0, seconds=0.0)
         return
     started = time.time()
     written = 0
     for i in range(0, len(todo), BATCH):
         written += tag_batch(agent, cache, todo[i : i + BATCH])
+    if wanted:
+        cache.srem(WANTED_KEY, *[h for h in wanted if h in todo])
     log.info("tagged %d of %d new headlines in %.1fs", written, len(todo), time.time() - started)
+    heartbeat(cache, candidates=len(headlines), tagged=written, seconds=time.time() - started)
 
 
 def main() -> int:

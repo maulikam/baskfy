@@ -372,3 +372,4 @@ export type OverlapTagOut = Schemas["OverlapTagOut"];
 export type OverlapScanOut = Schemas["OverlapScanOut"];
 /** `PUT /overlap/tags` — a person's correction of a headline's tag; the answer is the corrected `OverlapTagOut`. */
 export type OverlapTagCorrectionIn = Schemas["OverlapTagCorrectionIn"];
+export type OverlapLayaOut = Schemas["OverlapLayaOut"];

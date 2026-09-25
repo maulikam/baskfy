@@ -104,12 +104,21 @@ export async function startFilingsScan(scope: OverlapScope): Promise<FilingsScan
   return { ok: true, scan: outcome.body };
 }
 
-/** The last filings scan's progress. The page is revalidated once it has finished. */
+/**
+ * The last filings scan's progress. A read, and nothing else.
+ *
+ * It used to `revalidatePath` whenever the last scan's state was `done` — which is the state
+ * every scan ends in and stays in, so **every mount of the button re-rendered the page**: the
+ * table appeared, the status read came back, the page rendered a second time, and when that
+ * second `GET /overlap` lost the race against the three screen re-runs (2.5 s budget) the table
+ * was replaced by "could not be read" over the old symbol matrix (Maulik, 25 Sep 2026: "the newer
+ * version loads first, and then the older version comes back"). The refresh a finished scan
+ * needs is the button's own `router.refresh()`, on the running→done edge it observes.
+ */
 export async function filingsScanStatus(): Promise<FilingsScanResult> {
   const outcome = await overlapWrite("/overlap/catalyst-scan", { method: "GET" });
   if (!outcome.ok || !isFilingsScan(outcome.body)) {
     return { ok: false, error: "The scan's progress could not be read." };
   }
-  if (outcome.body.state === "done") revalidatePath(PAGE);
   return { ok: true, scan: outcome.body };
 }

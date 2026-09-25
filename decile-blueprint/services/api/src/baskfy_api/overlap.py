@@ -38,11 +38,13 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import logging
 from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
-from typing import Literal
+from typing import Final, Literal
 
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
@@ -50,10 +52,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.swing import latest_detected_date
-from baskfy_api.swing_catalyst import CatalystView, latest_for
+from baskfy_api.swing_catalyst import ANNOUNCEMENT, CatalystView, latest_for
 from baskfy_core.catalyst_tags import (
+    PRIORITY_OF,
     CatalystTag,
     EventType,
+    ReviewPriority,
     cache_key,
     resolve_tag,
     tag_from_laya,
@@ -64,6 +68,7 @@ from baskfy_core.models import (
     Instrument,
     Screen,
     ScreenRun,
+    SwCatalyst,
     SwSetupDaily,
     TwBreadthDaily,
     TwSignalDaily,
@@ -73,6 +78,8 @@ from baskfy_core.models import (
 )
 from baskfy_core.screen_definition import ScreenDefinition
 from baskfy_core.swing.config import TRADEABLE_SETUPS
+
+log = logging.getLogger(__name__)
 
 Scope = Literal["actionable", "all"]
 
@@ -366,6 +373,159 @@ def _tag(
     return resolve_tag(tag_headline(view.headline), tag_from_laya(laya_answer), corrected)
 
 
+#: How far back the page looks for a filing worth opening. A material filing older than this is
+#: history, not a catalyst; beyond it the newest filing of any age stands, so a name is never
+#: blank while the feed holds something.
+MATERIAL_WINDOW_DAYS: Final = 45
+#: Filings read per name when choosing: the feed can hold hundreds after a manual scan, and the
+#: newest forty cover the window on any name that files daily.
+FILINGS_PER_NAME: Final = 40
+
+_PRIORITY_RANK: Final[dict[ReviewPriority, int]] = {
+    ReviewPriority.HIGH: 2,
+    ReviewPriority.MEDIUM: 1,
+    ReviewPriority.LOW: 0,
+}
+
+
+async def best_catalyst_for(
+    session: AsyncSession,
+    *,
+    user_id: int,
+    instrument_ids: Sequence[int],
+    today: dt.date | None = None,
+) -> dict[int, CatalystView]:
+    """The filing worth opening per name, not merely the newest one (25 Sep 2026, the box).
+
+    After a manual scan the feed holds every filing of the last fortnight, and the newest is
+    almost always paperwork — an investor-meet schedule, a newspaper cutting, a SAST
+    disclosure — so a page showing "the newest filing" showed a routine notice on every row and
+    Laya, which is sure only on material headlines, had nothing worth reading. Here each
+    name's filings inside `MATERIAL_WINDOW_DAYS` are tagged by the rules and the **highest
+    priority wins, newest first within it**; with nothing in the window, the newest filing of
+    any age stands. The earnings date is the calendar's, unchanged (`latest_for`).
+
+    Deterministic and rules-only: the choice is never the model's, so the model's answer on the
+    chosen headline is an opinion about a filing the rules picked, not a filing the model chose.
+    """
+    wanted = sorted({int(instrument_id) for instrument_id in instrument_ids})
+    if not wanted:
+        return {}
+    calendar = await latest_for(session, user_id=user_id, instrument_ids=wanted)
+    rows = (
+        await session.execute(
+            select(SwCatalyst)
+            .where(
+                SwCatalyst.user_id == user_id,
+                SwCatalyst.instrument_id.in_(wanted),
+                SwCatalyst.source == ANNOUNCEMENT,
+            )
+            .order_by(
+                SwCatalyst.instrument_id,
+                SwCatalyst.published_at.desc().nulls_last(),
+                SwCatalyst.id.desc(),
+            )
+        )
+    ).scalars()
+    per_name: dict[int, list[SwCatalyst]] = defaultdict(list)
+    for row in rows:
+        if len(per_name[row.instrument_id]) < FILINGS_PER_NAME:
+            per_name[row.instrument_id].append(row)
+    horizon = (today or dt.datetime.now(dt.UTC).date()) - dt.timedelta(days=MATERIAL_WINDOW_DAYS)
+    chosen: dict[int, CatalystView] = {}
+    for instrument_id in wanted:
+        filings = per_name.get(instrument_id, [])
+        earnings_date = calendar[instrument_id].earnings_date if instrument_id in calendar else None
+        if not filings:
+            if earnings_date is not None:
+                chosen[instrument_id] = CatalystView(None, None, None, earnings_date)
+            continue
+        recent = [
+            f for f in filings if f.published_at is not None and f.published_at.date() >= horizon
+        ]
+        best = (
+            max(
+                recent,
+                key=lambda f: (
+                    _PRIORITY_RANK[PRIORITY_OF[tag_headline(f.headline).event_type]],
+                    f.published_at or dt.datetime.min.replace(tzinfo=dt.UTC),
+                    f.id,
+                ),
+            )
+            if recent
+            else filings[0]
+        )
+        chosen[instrument_id] = CatalystView(
+            headline=best.headline,
+            published_at=best.published_at,
+            url=best.url,
+            earnings_date=earnings_date,
+        )
+    return chosen
+
+
+#: Where the API tells the sidecar which headlines the page is showing, so Laya reads the
+#: filing the rules chose and not only the newest one per name (`infra/laya/laya_loop.py`).
+WANTED_KEY: Final = "catalyst_tag:wanted"
+WANTED_TTL_S: Final = 3 * 24 * 3600
+
+
+#: The sidecar's last pass (`infra/laya/laya_loop.py` `HEARTBEAT_KEY`).
+HEARTBEAT_KEY: Final = "catalyst_tag:heartbeat"
+
+
+@dataclass(frozen=True, slots=True)
+class LayaStatus:
+    """Whether Laya has looked, and at how much of what the page shows — so "no percentages"
+    reads as "Laya was unsure" or "Laya has not run", never as a page that quietly broke."""
+
+    last_pass_at: dt.datetime | None
+    #: Rows whose filing Laya answered on, whichever reader the page shows.
+    answered: int
+    #: Rows whose shown tag is Laya's.
+    shown: int
+    #: Rows with a filing at all.
+    of: int
+
+
+async def laya_last_pass(cache: Redis | None) -> dt.datetime | None:
+    if cache is None:
+        return None
+    try:
+        raw = await cache.get(HEARTBEAT_KEY)
+    except RedisError:
+        return None
+    if raw is None:
+        return None
+    try:
+        payload = json.loads(raw)
+        at = payload.get("at") if isinstance(payload, dict) else None
+        return dt.datetime.strptime(at, "%Y-%m-%dT%H:%M:%S%z") if isinstance(at, str) else None
+    except (ValueError, TypeError):
+        return None
+
+
+def laya_status(rows: Sequence[CandidateRow], last_pass_at: dt.datetime | None) -> LayaStatus:
+    with_filing = [row for row in rows if row.catalyst is not None and row.catalyst.headline]
+    answered = sum(
+        1
+        for row in with_filing
+        if row.catalyst_tag is not None
+        and (
+            row.catalyst_tag.source == "laya"
+            or (row.catalyst_tag.disagrees_with or "").startswith("laya:")
+        )
+    )
+    shown = sum(
+        1
+        for row in with_filing
+        if row.catalyst_tag is not None and row.catalyst_tag.source == "laya"
+    )
+    return LayaStatus(
+        last_pass_at=last_pass_at, answered=answered, shown=shown, of=len(with_filing)
+    )
+
+
 async def laya_answers(cache: Redis | None, headlines: list[str]) -> dict[str, object]:
     """The sidecar's cached answer per headline, keyed by the headline; empty without a cache,
     on a miss, or when Redis is unreachable — every one of which means "the rules tag"."""
@@ -377,13 +537,27 @@ async def laya_answers(cache: Redis | None, headlines: list[str]) -> dict[str, o
     except RedisError:
         return {}
     found: dict[str, object] = {}
+    missing: list[str] = []
     for headline, value in zip(headlines, raw, strict=True):
         if value is None:
+            missing.append(headline)
             continue
         try:
             found[headline] = json.loads(value)
         except ValueError:
             continue
+    if missing:
+        # Ask the sidecar for what the page is showing and does not have yet. A set write on a
+        # read path, bounded by a TTL; never a model call, never a wait.
+        try:
+            pipe = cache.pipeline()
+            pipe.sadd(WANTED_KEY, *missing)
+            pipe.expire(WANTED_KEY, WANTED_TTL_S)
+            await pipe.execute()
+        except RedisError as exc:
+            # The page is not the sidecar's keeper: a cache that will not take the note costs
+            # the note, not the read. Logged, so a silent Redis is still visible somewhere.
+            log.warning("could not note wanted headlines for the sidecar: %s", exc)
     return found
 
 
@@ -454,7 +628,9 @@ async def overlap(
     screens, screens_checked = await _screens(session, user_id=user_id, instrument_ids=set(kept))
     catalysts: dict[int, CatalystView] = {}
     if strategies_user_id is not None and kept:
-        catalysts = await latest_for(session, user_id=strategies_user_id, instrument_ids=list(kept))
+        catalysts = await best_catalyst_for(
+            session, user_id=strategies_user_id, instrument_ids=list(kept)
+        )
     headlines = sorted(
         {v.headline for v in catalysts.values() if v.headline and v.headline.strip()}
     )

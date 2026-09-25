@@ -130,7 +130,39 @@ export interface OverlapCandidates {
   /** False for a caller who is not the sole tenant: the sleeves are one person's scans. */
   strategies_read: boolean;
   screens_checked: number;
+  /** Is Laya working: the sidecar's last pass, and how many of these filings it spoke on. */
+  laya: OverlapLayaStatus;
   data: readonly OverlapCandidate[];
+}
+
+export interface OverlapLayaStatus {
+  /** ISO timestamp of the sidecar's last pass; null when it has never run (or its note expired). */
+  last_pass_at: string | null;
+  /** Rows whose filing Laya answered on, whichever reader the page shows. */
+  answered: number;
+  /** Rows whose shown tag is Laya's (it was sure). */
+  shown: number;
+  /** Rows with a filing at all. */
+  of: number;
+}
+
+/** The one line that says whether Laya is working, in a reader's words. */
+export function layaStatusLine(status: OverlapLayaStatus, formatWhen: (iso: string) => string): string {
+  if (status.of === 0) return "No filings on this page for Laya to read.";
+  if (status.last_pass_at === null) {
+    return "Laya has not read these filings yet — its sidecar has not reported a pass.";
+  }
+  const when = formatWhen(status.last_pass_at);
+  if (status.answered === 0) {
+    return `Laya last passed ${when} and has not read these ${status.of} filings yet.`;
+  }
+  const sure =
+    status.shown === 0
+      ? "was not sure on any, so the rules stand"
+      : status.shown === status.answered
+        ? "is shown on every one"
+        : `is shown on ${status.shown}; on the rest it was not sure, so the rules stand`;
+  return `Laya read ${status.answered} of ${status.of} filings (last pass ${when}) and ${sure}.`;
 }
 
 /**
@@ -150,6 +182,7 @@ export function parseCandidates(payload: OverlapOut): OverlapCandidates {
     scope: payload.scope,
     strategies_read: payload.strategies_read,
     screens_checked: payload.screens_checked,
+    laya: payload.laya,
     data: payload.data.map((row) => ({
       instrument_id: row.instrument_id,
       symbol: row.symbol,

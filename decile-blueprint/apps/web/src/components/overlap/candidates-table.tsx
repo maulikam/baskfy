@@ -9,9 +9,10 @@ import { useState, useTransition, type ReactNode } from "react";
 import { InstrumentLink } from "@/components/instrument/instrument-link";
 import { FilingsScanButton } from "@/components/overlap/filings-scan-button";
 import { LiveMarksProvider, LivePrice, LiveStatus } from "@/components/screens/live-price";
-import { formatTradeDate } from "@/lib/format";
+import { formatDateTimeIST, formatTradeDate } from "@/lib/format";
 import {
   OVERLAP_EVENT_TYPES,
+  layaStatusLine,
   type CorrectTagAction,
   type FilingsScanActions,
   type OverlapCandidate,
@@ -134,6 +135,9 @@ export function CandidatesTable({
       ) : (
         <LiveMarksProvider symbols={rows.map((row) => row.symbol)}>
           <LiveStatus asOf={latest} />
+          <p className="text-xs text-muted-foreground" data-testid="overlap-candidates-laya">
+            {layaStatusLine(candidates.laya, formatDateTimeIST)}
+          </p>
           <p className="text-xs text-muted-foreground" data-testid="overlap-candidates-tag-note">
             The small tag under a filing is read from its headline — by Laya, with its
             confidence, when the model is sure, and by fixed rules otherwise; a &ldquo;?&rdquo; means
@@ -373,8 +377,16 @@ function TagChip({
           {Math.round(tag.confidence * 100)}%
         </span>
       ) : null}
-      {tag.disagrees_with ? (
-        <span aria-label="the two readers disagree" className="text-muted-foreground" title={disagreement.trim()}>
+      {/* The mark shows only when the disagreement is worth a look: a confident Laya overruling
+          the rules, or a correction overruling a reader. When the rules stand because Laya was
+          unsure, its guess is on hover and not on every row — on staging it was on every row
+          (25 Sep 2026), which read as "Laya is broken" rather than "Laya was not sure". */}
+      {tag.disagrees_with && tag.source !== "rules" ? (
+        <span
+          aria-label="the two readers disagree"
+          className="text-muted-foreground"
+          title={disagreement.trim()}
+        >
           ?
         </span>
       ) : null}

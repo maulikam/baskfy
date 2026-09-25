@@ -28,6 +28,7 @@ from baskfy_core.catalyst_tags import (
     cache_key,
     laya_state,
     resolve_tag,
+    split_subject,
     tag_from_laya,
     tag_headline,
 )
@@ -271,3 +272,80 @@ class TestTheCorrection:
     def test_the_three_sources_are_distinct_words(self) -> None:
         assert len({SOURCE_RULES, SOURCE_LAYA, SOURCE_CORRECTED}) == 3
         assert SOURCE_CORRECTED == "corrected"
+
+
+class TestTheExchangeSubjectLine:
+    """NSE writes `Subject — Company has informed the Exchange …`; the subject decides."""
+
+    @pytest.mark.parametrize(
+        ("headline", "event_type"),
+        [
+            (
+                "Bagging/Receiving of orders/contracts — Bharat Electronics Limited has informed "
+                "the Exchange regarding Receipt of orders worth Rs. 840 crores",
+                EventType.ORDER,
+            ),
+            (
+                "Financial Results — Cubex Tubings Limited has informed the Exchange regarding "
+                "Unaudited Financial Results for the quarter ended June 30, 2026",
+                EventType.EARNINGS,
+            ),
+            (
+                "Shareholders meeting — Kapston Services Limited has informed the Exchange "
+                "regarding Proceedings of Annual General Meeting held on September 24, 2026",
+                EventType.ROUTINE,
+            ),
+            (
+                "Action(s) taken or orders passed — Anuh Pharma Limited has informed the Exchange "
+                "about orders passed regarding receipt of Demand Order under Section 156",
+                EventType.GOVERNANCE,
+            ),
+            (
+                "Disclosure under SEBI Takeover Regulations — S.A.L. Steel Limited has submitted "
+                "a copy of Disclosure under Regulation 29(1) of SEBI (SAST) Regulations",
+                EventType.ROUTINE,
+            ),
+            (
+                "General Updates — Disclosure under Regulation 29(2) of the SEBI SAST Regulations",
+                EventType.ROUTINE,
+            ),
+            (
+                "Copy of Newspaper Publication — Kiri Industries Limited has informed the "
+                "Exchange about Copy of Newspaper Publication for Corrigendum",
+                EventType.ROUTINE,
+            ),
+            (
+                "General Updates — Bluspring Enterprises Limited has informed the Exchange "
+                "regarding Authorisation to Key Managerial Personnel",
+                EventType.GOVERNANCE,
+            ),
+            (
+                "General Updates — Premier Polyfilm Limited has informed the Exchange about "
+                "General Updates",
+                EventType.OTHER,
+            ),
+        ],
+    )
+    def test_real_headlines_from_the_box_land_on_their_type(
+        self, headline: str, event_type: EventType
+    ) -> None:
+        assert tag_headline(headline).event_type is event_type
+
+    def test_the_subject_wins_over_the_sentence_after_it(self) -> None:
+        """A meeting notice that mentions a quarter is a meeting notice: the rest of the headline
+        is read only when the subject names nothing."""
+        headline = (
+            "Shareholders meeting — X Limited has informed the Exchange regarding results of "
+            "voting at the meeting for the quarter"
+        )
+        assert tag_headline(headline).event_type is EventType.ROUTINE
+        assert split_subject(headline)[0] == "Shareholders meeting"
+        assert split_subject("Receipt of order worth Rs 840 crore") == (
+            "Receipt of order worth Rs 840 crore",
+            "",
+        )
+
+    def test_a_regulatory_order_is_never_an_order_win(self) -> None:
+        assert tag_headline("Action(s) taken or orders passed — demand order").event_type is (
+            EventType.GOVERNANCE
+        )

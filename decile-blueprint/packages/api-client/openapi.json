@@ -13857,7 +13857,7 @@
         "type": "object"
       },
       "OverlapOpinionOut": {
-        "description": "The opinion on the row — the technicals in words plus the filing — as attention, never a\ntrade. ``source`` names whose: ``laya`` for the model, ``labelled`` for a person's word,\nwhich wins and is always shown. For the model, ``shown`` is false below the confidence\nfloor, and the page then says \"not sure\" rather than printing a guess with a percentage;\n``label`` and ``confidence`` are served regardless so a person can see what the model\nthought when labelling the row.",
+        "description": "The opinion on the row — the technicals in words plus the filing — as attention, never a\ntrade. ``source`` names whose, resolved the same way as the filing tag: ``labelled`` for a\nperson's word, which wins; ``laya`` for the model, served only at or above the confidence\nfloor; ``rules`` for the baseline from facts already on the row, which always has a word\nand a ``reason`` the page can show. ``shown`` is therefore always true on the wire and is\nkept for the client that gates on it.",
         "properties": {
           "confidence": {
             "title": "Confidence",
@@ -13873,6 +13873,17 @@
           "labelled": {
             "title": "Labelled",
             "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
           },
           "shown": {
             "title": "Shown",

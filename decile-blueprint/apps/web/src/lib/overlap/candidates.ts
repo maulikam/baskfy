@@ -129,7 +129,7 @@ export interface OverlapCandidate {
   strategies: readonly OverlapStrategy[];
   screens: readonly OverlapScreen[];
   catalyst: OverlapCatalyst | null;
-  /** Laya's opinion on the row — technicals in words plus the filing. Absent until answered. */
+  /** The opinion on the row — a label, Laya when sure, else the rules. Null only off-wire. */
   opinion: OverlapOpinion | null;
 }
 
@@ -140,10 +140,11 @@ export const OPINION_LABELS: readonly OverlapOpinionLabel[] = ["look_first", "wo
 
 /**
  * Attention, never a trade: `look_first | worth_a_look | skip` answers "how much does this row
- * deserve a look before the others". `source` says whose word it is: `laya` for the model,
- * `labelled` for a person's, which wins and is always shown. For the model, `shown` is false
- * below the confidence floor and the page then says "not sure" — measured on the base
- * checkpoint, that is most rows today.
+ * deserve a look before the others". `source` says whose word it is, resolved like the filing
+ * tag: `labelled` for a person's, which wins; `laya` for the model, only when it cleared the
+ * confidence floor; `rules` for the baseline from the facts already on the row, which always
+ * has a word and a `reason`. The column therefore never reads "not sure" — measured on the base
+ * checkpoint, the model clears the floor on almost no row today, so the rules carry it.
  */
 export interface OverlapOpinion {
   label: OverlapOpinionLabel;
@@ -153,6 +154,8 @@ export interface OverlapOpinion {
   floor: number;
   /** `source === "labelled"`: a person's word, not the model's. */
   labelled: boolean;
+  /** `source === "rules"`: why, in a sentence. Null for the model and a label. */
+  reason: string | null;
 }
 
 export const OPINION_WORDS: Record<OverlapOpinionLabel, string> = {
@@ -235,7 +238,7 @@ export function parseCandidates(payload: OverlapOut): OverlapCandidates {
       strategies: row.strategies,
       screens: row.screens,
       catalyst: row.catalyst,
-      opinion: row.opinion,
+      opinion: row.opinion === null ? null : { ...row.opinion, reason: row.opinion.reason ?? null },
     })),
   };
 }

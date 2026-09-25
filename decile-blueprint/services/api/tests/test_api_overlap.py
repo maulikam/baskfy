@@ -462,7 +462,13 @@ class TestTheOpinion:
                 screener_session, user_id=user_id, strategies_user_id=user_id, cache=screen_cache
             )
             both = first.rows[0]
-            assert both.opinion is None
+            # Before the sidecar has answered, the column already has a word: the rules
+            # baseline, with its reason, so no row ever reads "not sure".
+            assert both.opinion is not None and both.opinion.source == "rules"
+            assert both.opinion.label == "look_first"
+            assert both.opinion.reason == (
+                "a strategy could act and the filing is material (order)"
+            )
             state = both.state()
             # The words the sidecar will be shown: every number the scans stored, said plainly;
             # the day's context; and the filing.
@@ -498,9 +504,16 @@ class TestTheOpinion:
         finally:
             await screen_cache.delete(REVIEW_WANTED_KEY, *keys)
         sure, unsure = second.rows[0].opinion, second.rows[1].opinion
-        assert sure is not None and (sure.label, sure.confidence) == ("look_first", 0.82)
-        assert unsure is not None and unsure.confidence == 0.34
-        assert shown(sure) and not shown(unsure)
+        assert sure is not None and (sure.label, sure.confidence, sure.source) == (
+            "look_first",
+            0.82,
+            "laya",
+        )
+        assert shown(sure)
+        # An unsure answer never reaches the page: the rules baseline stands in for it.
+        assert unsure is not None and (unsure.label, unsure.source) == ("worth_a_look", "rules")
+        assert unsure.reason == "a strategy could act; no filing on record"
+        assert shown(unsure)
 
 
 class TestTheModelColumn:
@@ -929,7 +942,8 @@ class TestTheLabel:
         view = await overlap(screener_session, user_id=user_id, strategies_user_id=user_id)
         both = view.rows[0]
         state = both.state()
-        # Laya, unsure (measured shape): the page says "not sure". The person says skip.
+        # Laya, unsure (measured shape): the page shows the rules baseline instead, and the
+        # unsure answer is still what the label records as overruled. The person says skip.
         await screen_cache.set(
             review_key(state), json.dumps({"choice": "look_first", "confidence": 0.41})
         )
@@ -947,11 +961,12 @@ class TestTheLabel:
 
         assert before.json()["data"][0]["opinion"] == {
             "label": "look_first",
-            "confidence": 0.41,
-            "source": "laya",
-            "shown": False,
+            "confidence": 1.0,
+            "source": "rules",
+            "shown": True,
             "floor": 0.6,
             "labelled": False,
+            "reason": "a strategy could act and the filing is material (order)",
         }
         assert put.status_code == 200, put.text
         labelled: dict[str, object] = {
@@ -961,11 +976,20 @@ class TestTheLabel:
             "shown": True,
             "floor": 0.6,
             "labelled": True,
+            "reason": None,
         }
         assert put.json() == labelled
         assert after.json()["data"][0]["opinion"] == labelled
-        # The other row is untouched: no label, and no cached answer, so no opinion.
-        assert after.json()["data"][1]["opinion"] is None
+        # The other row is untouched: no label, no cached answer, so the rules baseline.
+        assert after.json()["data"][1]["opinion"] == {
+            "label": "worth_a_look",
+            "confidence": 1.0,
+            "source": "rules",
+            "shown": True,
+            "floor": 0.6,
+            "labelled": False,
+            "reason": "a strategy could act; no filing on record",
+        }
         # The state stored is exactly what the page showed the model, keyed the same way.
         row = (
             await screener_session.scalars(

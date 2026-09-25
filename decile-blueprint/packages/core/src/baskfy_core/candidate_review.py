@@ -50,6 +50,30 @@ Number = Decimal | int | str | bool | None
 
 SOURCE_LAYA: Final = "laya"
 SOURCE_LABELLED: Final = "labelled"
+SOURCE_RULES: Final = "rules"
+
+#: The filing subjects that make a row one to skip whatever the pattern says — the same
+#: phrases `catalyst_tags` files under governance as adverse or regulatory.
+ADVERSE_PHRASES: Final[frozenset[str]] = frozenset(
+    {
+        "sebi order",
+        "nclt",
+        "court order",
+        "insolvency",
+        "penalty",
+        "default",
+        "orders passed",
+        "action(s) taken",
+        "actions taken",
+        "demand order",
+        "show cause",
+        "show-cause",
+        "resignation",
+        "resigns",
+    }
+)
+#: Gate words that mean the strategy may not enter today.
+SHUT_GATES: Final[frozenset[str]] = frozenset({"RED", "SHUT", "CLOSED", "OFF"})
 
 #: Below this the opinion is "not sure" on the page. The same bar the headline tag uses.
 REVIEW_CONFIDENCE_FLOOR: Final = 0.60
@@ -131,6 +155,8 @@ class ReviewOpinion:
     label: ReviewLabel
     confidence: float
     source: str = SOURCE_LAYA
+    #: The rules' reasons, in words, when the rules answered; a person's note when labelled.
+    reason: str | None = None
 
 
 def _num(n: dict[str, Number], key: str) -> Decimal | None:
@@ -387,5 +413,73 @@ def opinion_from_laya(answer: object) -> ReviewOpinion | None:
 def shown(opinion: ReviewOpinion | None) -> bool:
     """Whether the page shows the opinion as a word rather than "not sure"."""
     return opinion is not None and (
-        opinion.source == SOURCE_LABELLED or opinion.confidence >= REVIEW_CONFIDENCE_FLOOR
+        opinion.source in {SOURCE_LABELLED, SOURCE_RULES}
+        or opinion.confidence >= REVIEW_CONFIDENCE_FLOOR
+    )
+
+
+def rules_opinion(
+    facts: list[RowFacts] | tuple[RowFacts, ...],
+    filing_event: str | None,
+    filing_matched: tuple[str, ...] | list[str],
+    filing_priority: str | None,
+    context: RowContext | None = None,
+) -> ReviewOpinion:
+    """The attention baseline, from facts already on the row — the same idea as the headline
+    tag's rules: always a word, always explainable, and the model or a person overrules it.
+
+    Maulik, 25 Sep 2026, on a page that read "not sure" on every row: the base checkpoint's
+    answers were 3-12% on fourteen live rows, so the column said nothing. This says something
+    a person can check:
+
+    * **skip** — no strategy could act on the row (a rejected scan, a base with no entry), or
+      the filing is adverse (a regulatory order, a penalty, a default, a resignation), or the
+      acting strategy's gate is shut, or the name is locked in the upper circuit;
+    * **look first** — a strategy could act and the filing is material (an order win, a
+      result, an approval);
+    * **worth a look** — a strategy could act and the filing is routine, unknown or absent.
+
+    It is display context, not a score: nothing reads it downstream, and the reasons are on
+    the wire so the page can say why.
+    """
+    reasons: list[str] = []
+    actionable = [f for f in facts if f.actionable]
+    adverse = filing_event == "governance" and any(
+        phrase in ADVERSE_PHRASES for phrase in filing_matched
+    )
+    locked = any(f.numbers.get("locked_upper_circuit") is True for f in facts)
+    gates = context.gates if context is not None else {}
+    acting_names = {
+        {
+            "swing": "Swing",
+            "volume_breakout": "Volume breakout",
+            "three_weeks_tight": "Three weeks tight",
+        }.get(f.strategy, f.strategy)
+        for f in actionable
+    }
+    shut = [name for name in acting_names if gates.get(name, "").upper() in SHUT_GATES]
+    if not actionable:
+        reasons.append("no strategy could act on the row as it stands")
+    if adverse:
+        reasons.append("the filing is adverse")
+    if locked:
+        reasons.append("locked in the upper circuit")
+    if shut:
+        reasons.append(f"{', '.join(sorted(shut))} gate shut")
+    if reasons:
+        return ReviewOpinion(ReviewLabel.SKIP, 1.0, SOURCE_RULES, "; ".join(reasons))
+    if filing_priority == "high":
+        return ReviewOpinion(
+            ReviewLabel.LOOK_FIRST,
+            1.0,
+            SOURCE_RULES,
+            f"a strategy could act and the filing is material ({filing_event})",
+        )
+    what = (
+        "no filing on record"
+        if filing_event is None
+        else f"the filing is {filing_event.replace('_', ' ')}"
+    )
+    return ReviewOpinion(
+        ReviewLabel.WORTH_A_LOOK, 1.0, SOURCE_RULES, f"a strategy could act; {what}"
     )

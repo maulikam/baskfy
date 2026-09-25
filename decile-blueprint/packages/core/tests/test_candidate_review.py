@@ -16,6 +16,7 @@ from baskfy_core.candidate_review import (
     opinion_from_laya,
     review_key,
     review_state,
+    rules_opinion,
     shown,
 )
 
@@ -221,3 +222,44 @@ class TestEveryStoredNumberIsSaid:
         assert set(with_context) == {"setup", "filing", "context"}
         assert review_key(bare) != review_key(with_context)
         assert describe_context(None) == "" and describe_context(RowContext()) == ""
+
+
+class TestTheRulesBaseline:
+    """Always a word, always a reason, and the model or a person overrules it."""
+
+    def test_an_actionable_row_with_a_material_filing_is_look_first(self) -> None:
+        opinion = rules_opinion([EP], "order", ("order",), "high")
+        assert (opinion.label, opinion.source) == (ReviewLabel.LOOK_FIRST, "rules")
+        assert opinion.reason == "a strategy could act and the filing is material (order)"
+        assert shown(opinion)
+
+    def test_an_actionable_row_with_a_routine_or_missing_filing_is_worth_a_look(self) -> None:
+        assert rules_opinion([VBT], "routine", ("newspaper publication",), "low").label is (
+            ReviewLabel.WORTH_A_LOOK
+        )
+        none = rules_opinion([VBT], None, (), None)
+        assert none.label is ReviewLabel.WORTH_A_LOOK
+        assert none.reason == "a strategy could act; no filing on record"
+
+    def test_the_skips_name_their_reason(self) -> None:
+        # Merely in the tight state: no strategy could act.
+        assert rules_opinion([TWT], "order", ("order",), "high").reason == (
+            "no strategy could act on the row as it stands"
+        )
+        # A regulatory order is adverse even under a strong setup.
+        adverse = rules_opinion([EP], "governance", ("orders passed", "demand order"), "medium")
+        assert (adverse.label, adverse.reason) == (ReviewLabel.SKIP, "the filing is adverse")
+        # A governance filing that is not adverse (a credit rating) is not a skip.
+        rating = rules_opinion([EP], "governance", ("credit rating", "rating"), "medium")
+        assert rating.label is ReviewLabel.WORTH_A_LOOK
+        # The acting strategy's gate is shut.
+        shut = rules_opinion([EP], None, (), None, RowContext(gates={"Swing": "RED"}))
+        assert (shut.label, shut.reason) == (ReviewLabel.SKIP, "Swing gate shut")
+        # Another strategy's gate being shut does not touch this row.
+        other = rules_opinion([EP], None, (), None, RowContext(gates={"Volume breakout": "SHUT"}))
+        assert other.label is ReviewLabel.WORTH_A_LOOK
+        # Locked in the upper circuit.
+        locked = RowFacts("swing", "EP · GAP_DAY", True, {"locked_upper_circuit": True})
+        assert rules_opinion([locked], "order", ("order",), "high").reason == (
+            "locked in the upper circuit"
+        )

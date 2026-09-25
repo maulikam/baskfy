@@ -8395,3 +8395,13 @@ announced its next result meeting yet. His choice: "put laya scan button on over
 **Tests.** 14 core (`TestTheRulesBaseline` on every branch), 38 API across `test_api_overlap` and `test_api_artifacts` (opinion resolution before and after the sidecar answers; a label over the baseline; the unsure answer still recorded), 15 web component tests (rules word with reason, a rules skip stays labellable, no "not sure" on the page). ruff, mypy, tsc, eslint clean.
 
 **Reverse.** Drop `rules_opinion` and `ReviewOpinion.reason`, and have `_opinion` return the cached answer or `None`.
+
+## Overlap: Laya's own percentage is always visible on the row (25 Sep 2026) · ⚠ UNREVIEWED
+
+**Context.** Maulik, after OV9: "implement such that I can see % which Laya suggests." With the rules carrying the column, the model's answer was only on the export, and a person labelling rows wants to see the model's word and how sure it was, floor or no floor.
+
+**Choice.** `OverlapOpinionOut.laya: {label, confidence} | null` — what the sidecar answered on the row's state, served beside whichever opinion stands (label, sure Laya, or rules), null until it has answered. The page prints it as a muted aside — "Laya: Skip 34%" — on rules and labelled rows (on a Laya row the percentage is already on the chip), with the floor named on hover when the answer is under it, and "Laya: not read yet" when there is no answer. The floor itself is unchanged: the aside is information, not a promotion of an unsure answer to the shown word. Nothing downstream reads it.
+
+**Tests.** API: the raw answer is on the row for both a sure and an unsure answer and null before one; the label route returns it. Web: the aside on a rules row and on a labelled row, absent on a Laya row, "not read yet" on a row with no answer. openapi.json and the TS client regenerated; docs/07a §17.
+
+**Reverse.** Drop `CandidateRow.laya`, `OverlapLayaAnswerOut` and the aside.

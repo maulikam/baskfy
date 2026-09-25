@@ -9473,6 +9473,15 @@ export interface components {
             url: string | null;
         };
         /**
+         * OverlapLayaAnswerOut
+         * @description What Laya answered on a row's state: its word and the probability it gave that word.
+         */
+        OverlapLayaAnswerOut: {
+            /** Confidence */
+            confidence: number;
+            label: components["schemas"]["ReviewLabel"];
+        };
+        /**
          * OverlapLayaOut
          * @description Is Laya working: when the sidecar last passed, and on how many of these filings it spoke.
          */
@@ -9503,6 +9512,7 @@ export interface components {
             label: components["schemas"]["ReviewLabel"];
             /** Labelled */
             labelled: boolean;
+            laya?: components["schemas"]["OverlapLayaAnswerOut"] | null;
             /** Reason */
             reason?: string | null;
             /** Shown */

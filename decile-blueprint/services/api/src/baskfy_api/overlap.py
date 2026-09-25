@@ -182,6 +182,11 @@ class CandidateRow:
     #: filing — when the sidecar has answered; `candidate_review.shown` says whether the page
     #: shows it as a word.
     opinion: ReviewOpinion | None = None
+    #: What Laya answered on this row's state, whatever tier ``opinion`` came from — ``None``
+    #: until the sidecar has answered. Served beside the opinion so the page can show the
+    #: model's word and percentage even when the rules or a label stand (Maulik, 25 Sep 2026:
+    #: "implement such that I can see % which Laya suggests").
+    laya: ReviewOpinion | None = None
 
     def facts(self) -> tuple[RowFacts, ...]:
         return tuple(
@@ -920,7 +925,11 @@ async def overlap(
     opinions = await review_opinions(cache, states)
     labels = await labels_for(session, user_id=user_id, keys=keys)
     rows = [
-        replace(row, opinion=_opinion(opinions.get(key), labels.get(key), _rules_opinion(row)))
+        replace(
+            row,
+            opinion=_opinion(opinions.get(key), labels.get(key), _rules_opinion(row)),
+            laya=opinions.get(key),
+        )
         for row, key in zip(rows, keys, strict=True)
     ]
     return OverlapView(

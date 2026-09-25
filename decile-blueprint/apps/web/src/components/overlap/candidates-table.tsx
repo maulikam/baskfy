@@ -465,9 +465,29 @@ function OpinionCell({
     );
   }
 
+  /* The model's own word and percentage, whichever source stands. When Laya's word is the one
+     shown its percentage is already on the chip; otherwise it goes here, muted, so a person can
+     see what the model thought and how sure it was (Maulik, 25 Sep 2026: "I can see % which
+     Laya suggests"). Under the floor by design — never a trade, never read downstream. */
+  const laya =
+    opinion !== null && opinion.laya !== null && opinion.source !== "laya" ? (
+      <span
+        className="text-[11px] text-muted-foreground/80"
+        data-testid="overlap-candidate-opinion-laya"
+        title={`Laya's own answer on this row: ${OPINION_WORDS[opinion.laya.label]} at ${Math.round(opinion.laya.confidence * 100)}%${opinion.laya.confidence < opinion.floor ? `, under its ${Math.round(opinion.floor * 100)}% floor, so it does not stand on its own` : ""}. Context only — never a trade.`}
+      >
+        Laya: {OPINION_WORDS[opinion.laya.label]} {Math.round(opinion.laya.confidence * 100)}%
+      </span>
+    ) : opinion !== null && opinion.laya === null && opinion.source !== "laya" ? (
+      <span className="text-[11px] text-muted-foreground/60" data-testid="overlap-candidate-opinion-laya">
+        Laya: not read yet
+      </span>
+    ) : null;
+
   return (
     <span className="flex flex-wrap items-center gap-1.5">
       {word}
+      {laya}
       {select}
     </span>
   );

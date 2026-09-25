@@ -13819,6 +13819,24 @@
         "title": "OverlapCatalystOut",
         "type": "object"
       },
+      "OverlapLayaAnswerOut": {
+        "description": "What Laya answered on a row's state: its word and the probability it gave that word.",
+        "properties": {
+          "confidence": {
+            "title": "Confidence",
+            "type": "number"
+          },
+          "label": {
+            "$ref": "#/components/schemas/ReviewLabel"
+          }
+        },
+        "required": [
+          "label",
+          "confidence"
+        ],
+        "title": "OverlapLayaAnswerOut",
+        "type": "object"
+      },
       "OverlapLayaOut": {
         "description": "Is Laya working: when the sidecar last passed, and on how many of these filings it spoke.",
         "properties": {
@@ -13873,6 +13891,16 @@
           "labelled": {
             "title": "Labelled",
             "type": "boolean"
+          },
+          "laya": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OverlapLayaAnswerOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "reason": {
             "anyOf": [

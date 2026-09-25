@@ -514,6 +514,12 @@ class TestTheOpinion:
         assert unsure is not None and (unsure.label, unsure.source) == ("worth_a_look", "rules")
         assert unsure.reason == "a strategy could act; no filing on record"
         assert shown(unsure)
+        # What the model said is still on the row, beside the opinion, so the page can show
+        # its word and percentage whichever source stands.
+        assert second.rows[0].laya is not None and second.rows[0].laya.confidence == 0.82
+        flag = second.rows[1].laya
+        assert flag is not None and (flag.label, flag.confidence) == ("skip", 0.34)
+        assert first.rows[0].laya is None
 
 
 class TestTheModelColumn:
@@ -967,6 +973,7 @@ class TestTheLabel:
             "floor": 0.6,
             "labelled": False,
             "reason": "a strategy could act and the filing is material (order)",
+            "laya": {"label": "look_first", "confidence": 0.41},
         }
         assert put.status_code == 200, put.text
         labelled: dict[str, object] = {
@@ -977,6 +984,7 @@ class TestTheLabel:
             "floor": 0.6,
             "labelled": True,
             "reason": None,
+            "laya": {"label": "look_first", "confidence": 0.41},
         }
         assert put.json() == labelled
         assert after.json()["data"][0]["opinion"] == labelled
@@ -989,6 +997,7 @@ class TestTheLabel:
             "floor": 0.6,
             "labelled": False,
             "reason": "a strategy could act; no filing on record",
+            "laya": None,
         }
         # The state stored is exactly what the page showed the model, keyed the same way.
         row = (

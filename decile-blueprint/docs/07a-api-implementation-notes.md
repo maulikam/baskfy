@@ -283,7 +283,9 @@ correction as NDJSON — the fine-tuning set. Nothing under `/overlap` reaches t
 
 Each row also carries an **opinion** — Laya's answer to "how much does this row deserve a look"
 over the row's technicals in words plus its filing (`baskfy_core.candidate_review`), served as
-`opinion: {label, confidence, source, shown, floor, labelled, reason}`. Measured on the base
+`opinion: {label, confidence, source, shown, floor, labelled, reason, laya}` — `laya`
+being `{label, confidence}` as the model answered it, whichever source stands, or null until
+the sidecar has answered, so the page can always show the model's percentage. Measured on the base
 checkpoint that opinion is a coin flip, so the labels a person puts on rows are what the
 fine-tune trains on. The same shape as the tag correction, on `/overlap/reviews`, sole tenant only:
 

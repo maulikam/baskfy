@@ -69,6 +69,7 @@ const payload = parseCandidates({
         floor: 0.6,
         labelled: false,
         reason: null,
+        laya: { label: "look_first", confidence: 0.82 },
       },
       screens: [
         {
@@ -126,6 +127,7 @@ const payload = parseCandidates({
         floor: 0.6,
         labelled: false,
         reason: "a strategy could act; no filing on record",
+        laya: { label: "skip", confidence: 0.34 },
       },
     },
   ],
@@ -361,6 +363,11 @@ describe("CandidatesTable", () => {
     expect(rules).toHaveAttribute("title", expect.stringContaining("never a trade"));
     expect(screen.queryByText("not sure")).toBeNull();
     expect(screen.getByRole("columnheader", { name: "Laya" })).toBeInTheDocument();
+    /* The model's own percentage is visible on the rules row, and not repeated on Laya's own. */
+    const [asides] = screen.getAllByTestId("overlap-candidate-opinion-laya");
+    expect(screen.getAllByTestId("overlap-candidate-opinion-laya")).toHaveLength(1);
+    expect(asides).toHaveTextContent("Laya: Skip 34%");
+    expect(asides).toHaveAttribute("title", expect.stringContaining("under its 60% floor"));
   });
 
   it("says why the rules said skip, and keeps the row labellable", () => {
@@ -377,6 +384,7 @@ describe("CandidatesTable", () => {
             floor: 0.6,
             labelled: false,
             reason: "the filing is adverse; Swing gate shut",
+            laya: null,
           },
         },
       ],
@@ -392,6 +400,8 @@ describe("CandidatesTable", () => {
     );
     /* A person can still overrule the baseline — the select is empty, not the rules' word. */
     expect(screen.getByTestId("overlap-candidate-opinion-label")).toHaveValue("");
+    /* No answer from the sidecar yet: said, not hidden. */
+    expect(screen.getByTestId("overlap-candidate-opinion-laya")).toHaveTextContent("Laya: not read yet");
   });
 
   it("offers the three words and a clear option on the Laya cell when it can write, and nothing when it cannot", () => {
@@ -450,6 +460,7 @@ describe("CandidatesTable", () => {
             floor: 0.6,
             labelled: true,
             reason: null,
+            laya: { label: "look_first", confidence: 0.41 },
           },
         },
       ],
@@ -467,6 +478,8 @@ describe("CandidatesTable", () => {
     expect(within(opinion).getByTestId("overlap-candidate-opinion-source")).toHaveTextContent("labelled");
     expect(opinion).toHaveAttribute("title", expect.stringContaining("Labelled by you"));
     expect(opinion).toHaveAttribute("title", expect.stringContaining("never a trade"));
+    /* What the model said stays visible beside the person's word — the disagreement is the point. */
+    expect(screen.getByTestId("overlap-candidate-opinion-laya")).toHaveTextContent("Laya: Look first 41%");
 
     const select = screen.getByTestId("overlap-candidate-opinion-label");
     expect(select).toHaveValue("skip");

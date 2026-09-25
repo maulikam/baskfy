@@ -156,6 +156,17 @@ export interface OverlapOpinion {
   labelled: boolean;
   /** `source === "rules"`: why, in a sentence. Null for the model and a label. */
   reason: string | null;
+  /**
+   * What Laya answered on this row's state, whichever source is shown — its word and the
+   * probability it gave it. Null until the sidecar has answered. Served under the floor too, so
+   * the page can show the model's percentage beside the rules' word or a label.
+   */
+  laya: OverlapLayaAnswer | null;
+}
+
+export interface OverlapLayaAnswer {
+  label: OverlapOpinionLabel;
+  confidence: number;
 }
 
 export const OPINION_WORDS: Record<OverlapOpinionLabel, string> = {
@@ -238,7 +249,10 @@ export function parseCandidates(payload: OverlapOut): OverlapCandidates {
       strategies: row.strategies,
       screens: row.screens,
       catalyst: row.catalyst,
-      opinion: row.opinion === null ? null : { ...row.opinion, reason: row.opinion.reason ?? null },
+      opinion:
+        row.opinion === null
+          ? null
+          : { ...row.opinion, reason: row.opinion.reason ?? null, laya: row.opinion.laya ?? null },
     })),
   };
 }

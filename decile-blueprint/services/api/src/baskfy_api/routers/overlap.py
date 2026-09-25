@@ -168,6 +168,13 @@ class OverlapCatalystOut(BaseModel):
     tag: OverlapTagOut | None
 
 
+class OverlapLayaAnswerOut(BaseModel):
+    """What Laya answered on a row's state: its word and the probability it gave that word."""
+
+    label: ReviewLabel
+    confidence: float
+
+
 class OverlapOpinionOut(BaseModel):
     """The opinion on the row — the technicals in words plus the filing — as attention, never a
     trade. ``source`` names whose, resolved the same way as the filing tag: ``labelled`` for a
@@ -185,9 +192,13 @@ class OverlapOpinionOut(BaseModel):
     labelled: bool
     #: ``source == "rules"``: why, in a sentence. ``None`` for the model and a label.
     reason: str | None = None
+    #: What Laya answered on this row's state, whichever source is shown: its word and the
+    #: probability it gave that word. ``None`` until the sidecar has answered. Under the floor
+    #: it is still served here so a person can see what the model thought and how sure it was.
+    laya: OverlapLayaAnswerOut | None = None
 
 
-def _opinion_out(opinion: ReviewOpinion) -> OverlapOpinionOut:
+def _opinion_out(opinion: ReviewOpinion, laya: ReviewOpinion | None) -> OverlapOpinionOut:
     return OverlapOpinionOut(
         label=opinion.label,
         confidence=opinion.confidence,
@@ -196,6 +207,9 @@ def _opinion_out(opinion: ReviewOpinion) -> OverlapOpinionOut:
         floor=REVIEW_CONFIDENCE_FLOOR,
         labelled=opinion.source == SOURCE_LABELLED,
         reason=opinion.reason,
+        laya=None
+        if laya is None
+        else OverlapLayaAnswerOut(label=laya.label, confidence=laya.confidence),
     )
 
 
@@ -326,7 +340,7 @@ async def get_overlap(
                         )
                         for screen in row.screens
                     ],
-                    opinion=None if row.opinion is None else _opinion_out(row.opinion),
+                    opinion=None if row.opinion is None else _opinion_out(row.opinion, row.laya),
                     catalyst=(
                         None
                         if row.catalyst is None or row.catalyst.empty
@@ -465,15 +479,16 @@ async def put_review(
     row = await _row_on_the_list(request, session, user_id, payload.instrument_id)
     state = row.state()
     cached = await overlap_service.review_opinions(_cache(request), {review_key(state): state})
+    laya = cached.get(review_key(state))
     opinion = await overlap_service.label_row(
         session,
         user_id=user_id,
         row=row,
         label=payload.label,
         note=(payload.note or "").strip() or None,
-        laya_opinion=cached.get(review_key(state)),
+        laya_opinion=laya,
     )
-    return _json(_opinion_out(opinion))
+    return _json(_opinion_out(opinion, laya))
 
 
 @router.delete("/reviews", status_code=status.HTTP_204_NO_CONTENT, summary="Remove a row's label")

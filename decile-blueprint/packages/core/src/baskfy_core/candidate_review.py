@@ -46,6 +46,8 @@ class ReviewLabel(StrEnum):
 _TOP_TENTH: Final = 9
 _UPPER_HALF: Final = 5
 
+Number = Decimal | int | str | bool | None
+
 SOURCE_LAYA: Final = "laya"
 SOURCE_LABELLED: Final = "labelled"
 
@@ -85,7 +87,43 @@ class RowFacts:
     strategy: str
     detail: str
     actionable: bool
-    numbers: dict[str, Decimal | int | None] = field(default_factory=dict)
+    numbers: dict[str, Number] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class RowContext:
+    """The day around the row — the strategies' own gates and breadth, the sector, the screens
+    the name ranks on. Closed-session facts only: nothing that moves during the day, so the
+    state (and its key) holds still until the next session."""
+
+    #: Per strategy name, its gate word that session ("GREEN", "OPEN", "SHUT" …), when known.
+    gates: dict[str, str] = field(default_factory=dict)
+    #: Per strategy name, its breadth reading in percent, when known.
+    breadth_pct: dict[str, Decimal] = field(default_factory=dict)
+    sector: str | None = None
+    #: ``(screen name, rank, of)`` for each screen the name is on.
+    screens: tuple[tuple[str, int | None, int | None], ...] = ()
+
+
+def describe_context(context: RowContext | None) -> str:
+    if context is None:
+        return ""
+    parts: list[str] = []
+    for name, gate in context.gates.items():
+        breadth = context.breadth_pct.get(name)
+        line = f"{name} gate {gate.lower()}"
+        if breadth is not None:
+            line += f" with {Decimal(breadth):.0f}% of the universe above its long average"
+        parts.append(line)
+    if context.sector:
+        parts.append(f"sector {context.sector.replace('-', ' ')}")
+    if context.screens:
+        named = [
+            f"{name} #{rank} of {of}" if rank is not None and of is not None else name
+            for name, rank, of in context.screens
+        ]
+        parts.append("on screens " + ", ".join(named))
+    return ("; ".join(parts) + ".") if parts else ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,16 +133,61 @@ class ReviewOpinion:
     source: str = SOURCE_LAYA
 
 
-def _pct(value: Decimal | int | None, places: int = 0) -> str | None:
-    if value is None:
+def _num(n: dict[str, Number], key: str) -> Decimal | None:
+    """The stored number as a Decimal, or None — a flag or a word under that key is not a number."""
+    value = n.get(key)
+    if value is None or isinstance(value, bool | str):
         return None
-    return f"{Decimal(value):.{places}f}%"
+    return Decimal(value)
 
 
-def _times(value: Decimal | int | None) -> str | None:
+def _pct(value: Decimal | None, places: int = 0) -> str | None:
+    return None if value is None else f"{value:.{places}f}%"
+
+
+def _signed_pct(value: Decimal) -> str:
+    """``"4% above"`` / ``"3% below"`` — a distance a person would say."""
+    return f"{abs(value):.0f}% {'above' if value >= 0 else 'below'}"
+
+
+def _times(value: Decimal | None) -> str | None:
     if value is None:
         return None
-    return f"{Decimal(value):.1f} times".replace(".0 times", " times")
+    return f"{value:.1f} times".replace(".0 times", " times")
+
+
+def _crore(value: Decimal) -> str:
+    return f"average turnover Rs {value / 10_000_000:.1f} crore a day"
+
+
+def _distance(n: dict[str, Number], key: str, what: str) -> str | None:
+    close, level = _num(n, "close"), _num(n, key)
+    if close is None or level is None or level <= 0:
+        return None
+    return f"{_signed_pct((close / level - 1) * 100)} {what}"
+
+
+def _stop_below(n: dict[str, Number], entry_key: str, stop_key: str, what: str) -> str | None:
+    entry, stop = _num(n, entry_key), _num(n, stop_key)
+    if entry is None or stop is None or entry <= 0:
+        return None
+    return f"{what} {entry:.2f} with the stop {((entry - stop) / entry * 100):.1f}% below it"
+
+
+def _flags(n: dict[str, Number]) -> list[str]:
+    parts: list[str] = []
+    if n.get("locked_upper_circuit") is True:
+        parts.append("locked in the upper circuit")
+    if n.get("listed_within_2y") is True:
+        parts.append("listed within the last two years")
+    failed = n.get("failed_filters")
+    if isinstance(failed, str) and failed:
+        parts.append(f"failed the {failed.lower().replace('_', ' ')} filter(s)")
+    return parts
+
+
+def _said(pieces: list[str | None]) -> list[str]:
+    return [piece for piece in pieces if piece]
 
 
 def _swing_words(facts: RowFacts) -> str:
@@ -121,20 +204,45 @@ def _swing_words(facts: RowFacts) -> str:
         "SETTING_UP": "still setting up below the pivot",
         "TRIGGERED": "triggered",
     }.get(status, status.lower().replace("_", " "))
-    parts = [f"Swing {what}, {where}"]
-    if (gap := _pct(n.get("gap_pct"))) is not None:
-        parts.append(f"gapped {gap}")
-    if (rvol := _times(n.get("rvol"))) is not None:
-        parts.append(f"volume {rvol} its average")
-    if (depth := _pct(n.get("base_depth_pct"))) is not None:
-        parts.append(f"base {depth} deep")
-    if (prior := _pct(n.get("prior_move_pct"))) is not None:
-        parts.append(f"up {prior} in the prior move")
-    if (adr := _pct(n.get("adr_pct"), 1)) is not None:
-        parts.append(f"average daily range {adr}")
-    if (bars := n.get("base_bars")) is not None:
-        parts.append(f"base {int(bars)} sessions long")
-    return ": ".join([parts[0], "; ".join(parts[1:])]) if len(parts) > 1 else parts[0]
+    head = f"Swing {what}, {where}"
+    score, gap, rvol = _num(n, "score"), _pct(_num(n, "gap_pct")), _times(_num(n, "rvol"))
+    depth, bars, tight = (
+        _pct(_num(n, "base_depth_pct")),
+        _num(n, "base_bars"),
+        _num(n, "tightness_adr"),
+    )
+    dry, prior, adr = (
+        _num(n, "dryup_ratio"),
+        _pct(_num(n, "prior_move_pct")),
+        _pct(_num(n, "adr_pct"), 1),
+    )
+    fast, slow, streak = (
+        _num(n, "dist_ma_fast_pct"),
+        _num(n, "dist_ma_slow_pct"),
+        _num(n, "up_streak"),
+    )
+    turnover = _num(n, "turnover_avg")
+    parts = _said(
+        [
+            None if score is None else f"setup score {score:.0f} of 100",
+            None if gap is None else f"gapped {gap}",
+            None if rvol is None else f"volume {rvol} its average",
+            None if depth is None else f"base {depth} deep",
+            None if bars is None else f"base {int(bars)} sessions long",
+            None if tight is None else f"base tightness {tight:.1f} ADRs",
+            None if dry is None else f"volume dried up to {dry:.2f} of its base average",
+            None if prior is None else f"up {prior} in the prior move",
+            None if adr is None else f"average daily range {adr}",
+            None if fast is None else f"{_signed_pct(fast)} the fast moving average",
+            None if slow is None else f"{_signed_pct(slow)} the slow moving average",
+            None if streak is None or streak <= 0 else f"{int(streak)} up sessions in a row",
+            _stop_below(n, "trigger", "stop_ref", "trigger"),
+            _distance(n, "pivot_high", "the pivot"),
+            None if turnover is None else _crore(turnover),
+            *_flags(n),
+        ]
+    )
+    return f"{head}: {'; '.join(parts)}" if parts else head
 
 
 def _vbt_words(facts: RowFacts) -> str:
@@ -144,23 +252,36 @@ def _vbt_words(facts: RowFacts) -> str:
         if facts.actionable
         else "Volume breakout scanned but rejected by the filters"
     )
-    parts: list[str] = []
-    if (rvol := _times(n.get("rvol"))) is not None:
-        parts.append(f"volume {rvol} its 50-day average")
-    if (chg := n.get("change_pct")) is not None:
-        parts.append(f"closed {'up' if Decimal(chg) >= 0 else 'down'} {abs(Decimal(chg)):.0f}%")
-    if (pos := n.get("close_position")) is not None:
-        tenth = min(int(Decimal(pos) * 10), 9)
-        parts.append(
-            "in the top tenth of the day's range"
+    rvol, chg, pos, ret = (
+        _times(_num(n, "rvol")),
+        _num(n, "change_pct"),
+        _num(n, "close_position"),
+        _num(n, "ret_20_pct"),
+    )
+    tenth = None if pos is None else min(int(pos * 10), 9)
+    turnover = _num(n, "turnover_avg_20")
+    parts = _said(
+        [
+            None if rvol is None else f"volume {rvol} its 50-day average",
+            None if chg is None else f"closed {'up' if chg >= 0 else 'down'} {abs(chg):.0f}%",
+            None
+            if tenth is None
+            else "in the top tenth of the day's range"
             if tenth >= _TOP_TENTH
             else "in the upper half of the day's range"
             if tenth >= _UPPER_HALF
-            else "in the lower half of the day's range"
-        )
-    if (ret := n.get("ret_20_pct")) is not None:
-        direction = "up" if Decimal(ret) >= 0 else "down"
-        parts.append(f"{direction} {abs(Decimal(ret)):.0f}% over the last 20 sessions")
+            else "in the lower half of the day's range",
+            None
+            if ret is None
+            else f"{'up' if ret >= 0 else 'down'} {abs(ret):.0f}% over the last 20 sessions",
+            _distance(n, "sma_200", "its 200-day average"),
+            _distance(n, "ema_21", "its 21-day average"),
+            _distance(n, "high_20_prior", "the prior 20-day high"),
+            _stop_below(n, "limit_price", "stop_price", "entry limit"),
+            None if turnover is None else _crore(turnover),
+            *_flags(n),
+        ]
+    )
     return f"{head}: {'; '.join(parts)}" if parts else head
 
 
@@ -169,13 +290,44 @@ def _twt_words(facts: RowFacts) -> str:
     head = (
         "Three weeks tight, entry today" if facts.actionable else "Three weeks tight, in the state"
     )
-    parts: list[str] = []
-    if (rng := _pct(n.get("week_range_pct"), 1)) is not None:
-        parts.append(f"three weekly closes within {rng} of each other")
-    if (sessions := n.get("sessions_in_state")) is not None:
-        parts.append(f"{int(sessions)} session{'' if int(sessions) == 1 else 's'} in the state")
-    if (ratio := n.get("month_low_ratio")) is not None:
-        parts.append(f"{(Decimal(ratio) - 1) * 100:.0f}% above its three-month low")
+    rng = _pct(_num(n, "week_range_pct"), 1)
+    closes = [_num(n, "week_close_2"), _num(n, "week_close_1"), _num(n, "week_close_0")]
+    sessions, out, ratio = (
+        _num(n, "sessions_in_state"),
+        _num(n, "sessions_out_before"),
+        _num(n, "month_low_ratio"),
+    )
+    vol, avg, turnover, stop, close = (
+        _num(n, "volume"),
+        _num(n, "vol_sma_50"),
+        _num(n, "turnover_avg_20"),
+        _num(n, "stop_preview"),
+        _num(n, "close"),
+    )
+    parts = _said(
+        [
+            None if rng is None else f"three weekly closes within {rng} of each other",
+            None
+            if any(c is None for c in closes)
+            else "weekly closes "
+            + ", ".join(f"{c:.2f}" for c in closes if c is not None)
+            + " oldest first",
+            None
+            if sessions is None
+            else f"{int(sessions)} session{'' if int(sessions) == 1 else 's'} in the state",
+            None if out is None else f"{int(out)} sessions out of the state before this entry",
+            None if ratio is None else f"{(ratio - 1) * 100:.0f}% above its three-month low",
+            _distance(n, "sma_dma", "its 200-day average"),
+            None
+            if vol is None or avg is None or avg <= 0
+            else f"volume {_times(vol / avg)} its 50-day average",
+            None if turnover is None else _crore(turnover),
+            None
+            if stop is None or close is None or close <= 0
+            else f"stop {((close - stop) / close * 100):.0f}% below the close",
+            *_flags(n),
+        ]
+    )
     return f"{head}: {'; '.join(parts)}" if parts else head
 
 
@@ -193,14 +345,23 @@ def describe_row(facts: list[RowFacts] | tuple[RowFacts, ...]) -> str:
 
 
 def review_state(
-    facts: list[RowFacts] | tuple[RowFacts, ...], filing: str | None
+    facts: list[RowFacts] | tuple[RowFacts, ...],
+    filing: str | None,
+    context: RowContext | None = None,
 ) -> dict[str, str]:
-    """What Laya is shown: the technicals in words and the filing headline. Nothing else —
-    no symbol, no price, no rank — so two names with the same facts get the same opinion."""
-    return {
+    """What Laya is shown: every number the scans stored about the row, said in words; the
+    day's context (gates, breadth, sector, screens); and the filing headline. No symbol and no
+    live price, so the state holds still within a session and the same facts get the same
+    opinion. (Maulik, 25 Sep 2026: "all the parameters which swing has noticed, including the
+    other parameters which we might have" — this is that set.)"""
+    state = {
         "setup": describe_row(facts),
         "filing": filing.strip() if filing and filing.strip() else "No filing on record.",
     }
+    words = describe_context(context)
+    if words:
+        state["context"] = words
+    return state
 
 
 def review_key(state: dict[str, str]) -> str:

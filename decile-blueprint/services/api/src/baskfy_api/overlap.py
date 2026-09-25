@@ -56,8 +56,10 @@ from baskfy_api.swing import latest_detected_date
 from baskfy_api.swing_catalyst import ANNOUNCEMENT, CatalystView, latest_for
 from baskfy_core.candidate_review import (
     SOURCE_LABELLED,
+    Number,
     ReviewLabel,
     ReviewOpinion,
+    RowContext,
     RowFacts,
     opinion_from_laya,
     review_key,
@@ -80,6 +82,7 @@ from baskfy_core.models import (
     Screen,
     ScreenRun,
     SwCatalyst,
+    SwMarketDaily,
     SwSetupDaily,
     TwBreadthDaily,
     TwSignalDaily,
@@ -131,7 +134,7 @@ class StrategyHit:
     close: Decimal | None
     #: The scan's own numbers about the row — the ones `baskfy_core.candidate_review` says in
     #: words for Laya. Stored facts restated, never computed here.
-    numbers: dict[str, Decimal | int | None] = field(default_factory=dict)
+    numbers: dict[str, Number] = field(default_factory=dict)
 
     @property
     def name(self) -> str:
@@ -184,9 +187,14 @@ class CandidateRow:
             for hit in self.strategies
         )
 
+    #: The day around the row: the strategies' gates and breadth, the sector, the screens.
+    context: RowContext | None = None
+
     def state(self) -> dict[str, str]:
         """What Laya is shown for this row — and what a label is keyed on."""
-        return review_state(self.facts(), self.catalyst.headline if self.catalyst else None)
+        return review_state(
+            self.facts(), self.catalyst.headline if self.catalyst else None, self.context
+        )
 
     @property
     def strategy_count(self) -> int:
@@ -236,13 +244,29 @@ async def _swing(
                     detail=_detail_swing(row),
                     actionable=row.setup in {setup.value for setup in TRADEABLE_SETUPS},
                     close=row.close,
+                    # Every column the detector wrote (Maulik, 25 Sep 2026: "all the parameters
+                    # which swing has noticed"); `candidate_review` says each one in words.
                     numbers={
+                        "score": row.score,
+                        "close": row.close,
+                        "trigger": row.trigger,
+                        "stop_ref": row.stop_ref,
+                        "pivot_high": row.pivot_high,
                         "gap_pct": row.gap_pct,
                         "rvol": row.rvol,
                         "base_depth_pct": row.base_depth_pct,
+                        "base_bars": row.base_bars,
+                        "tightness_adr": row.tightness_adr,
+                        "dryup_ratio": row.dryup_ratio,
                         "prior_move_pct": row.prior_move_pct,
                         "adr_pct": row.adr_pct,
-                        "base_bars": row.base_bars,
+                        "dist_ma_fast_pct": row.dist_ma_fast_pct,
+                        "dist_ma_slow_pct": row.dist_ma_slow_pct,
+                        "up_streak": row.up_streak,
+                        "turnover_avg": row.turnover_avg,
+                        "locked_upper_circuit": row.locked_upper_circuit,
+                        "listed_within_2y": row.listed_within_2y,
+                        "sector_slug": row.sector_slug,
                     },
                 ),
             )
@@ -281,10 +305,21 @@ async def _volume_breakout(
                 actionable=row.state == "SIGNAL",
                 close=row.close_raw,
                 numbers={
+                    "close": row.close_raw,
                     "rvol": row.rvol,
                     "change_pct": row.change_pct,
                     "close_position": row.close_position,
                     "ret_20_pct": row.ret_20_pct,
+                    "volume": row.volume,
+                    "vol_sma_50": row.vol_sma_50,
+                    "turnover_avg_20": row.turnover_avg_20,
+                    "sma_200": row.sma_200,
+                    "ema_21": row.ema_21,
+                    "high_20_prior": row.high_20_prior,
+                    "limit_price": row.limit_price,
+                    "stop_price": row.stop_price,
+                    "locked_upper_circuit": row.locked_upper_circuit,
+                    "failed_filters": ", ".join(row.failed_filters) if row.failed_filters else None,
                 },
             ),
         )
@@ -307,7 +342,7 @@ async def _three_weeks_tight(
         return None, []
     found = (
         await session.execute(
-            select(TwStateDaily, Instrument, TwSignalDaily.state)
+            select(TwStateDaily, Instrument, TwSignalDaily)
             .join(Instrument, Instrument.id == TwStateDaily.instrument_id)
             .outerjoin(
                 TwSignalDaily,
@@ -320,7 +355,13 @@ async def _three_weeks_tight(
         )
     ).all()
     hits: list[tuple[Instrument, StrategyHit]] = []
-    for row, instrument, signal in found:
+    for row, instrument, event in found:
+        signal = event.state if event is not None else None
+        sessions_out = event.sessions_out_before if event is not None else None
+        stop_preview = event.stop_preview if event is not None else None
+        failed = (
+            ", ".join(event.failed_filters) if event is not None and event.failed_filters else None
+        )
         sessions = row.sessions_in_state
         detail = f"tight {sessions} session{'' if sessions == 1 else 's'}"
         if signal:
@@ -335,9 +376,21 @@ async def _three_weeks_tight(
                     actionable=signal == "SIGNAL",
                     close=row.close_raw,
                     numbers={
+                        "close": row.close_raw,
                         "week_range_pct": row.week_range_pct,
+                        "week_close_0": row.week_close_0,
+                        "week_close_1": row.week_close_1,
+                        "week_close_2": row.week_close_2,
                         "sessions_in_state": row.sessions_in_state,
                         "month_low_ratio": row.month_low_ratio,
+                        "sma_dma": row.sma_dma,
+                        "volume": row.volume,
+                        "vol_sma_50": row.vol_sma_50,
+                        "turnover_avg_20": row.turnover_avg_20,
+                        "locked_upper_circuit": row.locked_upper_circuit,
+                        "sessions_out_before": sessions_out,
+                        "stop_preview": stop_preview,
+                        "failed_filters": failed,
                     },
                 ),
             )
@@ -702,6 +755,70 @@ def _opinion(laya: ReviewOpinion | None, label: ReviewLabel | None) -> ReviewOpi
     return ReviewOpinion(label, 0.0, source=SOURCE_LABELLED)
 
 
+async def _gates(
+    session: AsyncSession, *, user_id: int, sessions: dict[Strategy, dt.date | None]
+) -> tuple[dict[str, str], dict[str, Decimal]]:
+    """Each strategy's own gate word and breadth on its latest session — the day's context every
+    row on the page shares. Read once, not per row."""
+    gates: dict[str, str] = {}
+    breadth: dict[str, Decimal] = {}
+    if (day := sessions.get(Strategy.SWING)) is not None:
+        market = (
+            await session.execute(
+                select(SwMarketDaily.gate).where(
+                    SwMarketDaily.user_id == user_id, SwMarketDaily.date == day
+                )
+            )
+        ).scalar_one_or_none()
+        if market:
+            gates[STRATEGY_NAMES[Strategy.SWING]] = str(market)
+    if (day := sessions.get(Strategy.VOLUME_BREAKOUT)) is not None:
+        vb = (
+            await session.execute(
+                select(VbBreadthDaily.gate, VbBreadthDaily.pct_above_dma).where(
+                    VbBreadthDaily.user_id == user_id, VbBreadthDaily.date == day
+                )
+            )
+        ).one_or_none()
+        if vb is not None:
+            gates[STRATEGY_NAMES[Strategy.VOLUME_BREAKOUT]] = str(vb[0])
+            if vb[1] is not None:
+                breadth[STRATEGY_NAMES[Strategy.VOLUME_BREAKOUT]] = vb[1]
+    if (day := sessions.get(Strategy.THREE_WEEKS_TIGHT)) is not None:
+        tw = (
+            await session.execute(
+                select(TwBreadthDaily.gate, TwBreadthDaily.pct_above_dma).where(
+                    TwBreadthDaily.user_id == user_id, TwBreadthDaily.date == day
+                )
+            )
+        ).one_or_none()
+        if tw is not None:
+            gates[STRATEGY_NAMES[Strategy.THREE_WEEKS_TIGHT]] = str(tw[0])
+            if tw[1] is not None:
+                breadth[STRATEGY_NAMES[Strategy.THREE_WEEKS_TIGHT]] = tw[1]
+    return gates, breadth
+
+
+def _context(row: CandidateRow, gates: dict[str, str], breadth: dict[str, Decimal]) -> RowContext:
+    """The day's context for one row: only the gates of the strategies that raised it, the
+    sector the swing detector recorded, and the screens the name is on."""
+    names = {hit.name for hit in row.strategies}
+    sector = next(
+        (
+            str(hit.numbers["sector_slug"])
+            for hit in row.strategies
+            if isinstance(hit.numbers.get("sector_slug"), str)
+        ),
+        None,
+    )
+    return RowContext(
+        gates={name: gate for name, gate in gates.items() if name in names},
+        breadth_pct={name: pct for name, pct in breadth.items() if name in names},
+        sector=sector,
+        screens=tuple((screen.name, screen.rank, screen.of) for screen in row.screens),
+    )
+
+
 async def overlap(
     session: AsyncSession,
     *,
@@ -769,6 +886,12 @@ async def overlap(
         for instrument_id, found in kept.items()
     ]
     rows.sort(key=lambda row: (-row.strategy_count, not row.actionable, row.symbol))
+    gates, breadth = (
+        await _gates(session, user_id=strategies_user_id, sessions=sessions)
+        if strategies_user_id is not None
+        else ({}, {})
+    )
+    rows = [replace(row, context=_context(row, gates, breadth)) for row in rows]
     states: dict[str, dict[str, str]] = {}
     keys: list[str] = []
     for row in rows:

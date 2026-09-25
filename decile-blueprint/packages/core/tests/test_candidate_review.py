@@ -9,7 +9,9 @@ from baskfy_core.candidate_review import (
     REVIEW_QUESTIONS,
     ReviewLabel,
     ReviewOpinion,
+    RowContext,
     RowFacts,
+    describe_context,
     describe_row,
     opinion_from_laya,
     review_key,
@@ -101,3 +103,121 @@ class TestTheQuestionAndTheAnswer:
 
     def test_a_person_s_label_is_always_shown(self) -> None:
         assert shown(ReviewOpinion(ReviewLabel.SKIP, 0.0, source="labelled"))
+
+
+class TestEveryStoredNumberIsSaid:
+    """Maulik, 25 Sep 2026: "all the parameters which swing has noticed, including the other
+    parameters which we might have" — the sentence carries the whole row, and the day around it."""
+
+    def test_the_swing_row_says_every_column_the_detector_wrote(self) -> None:
+        full = RowFacts(
+            "swing",
+            "FLAG · BREAKOUT_TODAY",
+            True,
+            {
+                "score": Decimal("71.20"),
+                "gap_pct": Decimal("2.10"),
+                "rvol": Decimal("3.4"),
+                "base_depth_pct": Decimal("6.2"),
+                "base_bars": 35,
+                "tightness_adr": Decimal("1.8"),
+                "dryup_ratio": Decimal("0.55"),
+                "prior_move_pct": Decimal("62"),
+                "adr_pct": Decimal("5.1"),
+                "dist_ma_fast_pct": Decimal("3.2"),
+                "dist_ma_slow_pct": Decimal("-1.5"),
+                "up_streak": 3,
+                "trigger": Decimal("149.60"),
+                "stop_ref": Decimal("141.86"),
+                "pivot_high": Decimal("149.60"),
+                "close": Decimal("144.75"),
+                "turnover_avg": 112_734_212,
+                "locked_upper_circuit": False,
+                "listed_within_2y": True,
+            },
+        )
+        words = describe_row([full])
+        assert words == (
+            "Swing flag, breakout today above the pivot: setup score 71 of 100; gapped 2%; "
+            "volume 3.4 times its average; base 6% deep; base 35 sessions long; base tightness "
+            "1.8 ADRs; volume dried up to 0.55 of its base average; up 62% in the prior move; "
+            "average daily range 5.1%; 3% above the fast moving average; 2% below the slow "
+            "moving average; 3 up sessions in a row; trigger 149.60 with the stop 5.2% below it; "
+            "3% below the pivot; average turnover Rs 11.3 crore a day; listed within the last "
+            "two years."
+        )
+        assert "locked" not in words
+
+    def test_the_volume_and_tight_rows_say_their_levels_and_filters(self) -> None:
+        vbt = RowFacts(
+            "volume_breakout",
+            "scanned, did not pass the filters",
+            False,
+            {
+                "rvol": Decimal("3.1"),
+                "change_pct": Decimal("4.4"),
+                "close_position": Decimal("0.7"),
+                "ret_20_pct": Decimal("28"),
+                "close": Decimal("210"),
+                "sma_200": Decimal("180"),
+                "ema_21": Decimal("200"),
+                "high_20_prior": Decimal("205"),
+                "limit_price": Decimal("210"),
+                "stop_price": Decimal("184.8"),
+                "turnover_avg_20": 250_000_000,
+                "failed_filters": "RET20",
+                "locked_upper_circuit": True,
+            },
+        )
+        assert describe_row([vbt]) == (
+            "Volume breakout scanned but rejected by the filters: volume 3.1 times its 50-day "
+            "average; closed up 4%; in the upper half of the day's range; up 28% over the last "
+            "20 sessions; 17% above its 200-day average; 5% above its 21-day average; 2% above "
+            "the prior 20-day high; entry limit 210.00 with the stop 12.0% below it; average "
+            "turnover Rs 25.0 crore a day; locked in the upper circuit; failed the ret20 filter(s)."
+        )
+        twt = RowFacts(
+            "three_weeks_tight",
+            "tight 4 sessions · signal",
+            True,
+            {
+                "week_range_pct": Decimal("1.4237"),
+                "week_close_0": Decimal("149.60"),
+                "week_close_1": Decimal("148.90"),
+                "week_close_2": Decimal("147.50"),
+                "sessions_in_state": 4,
+                "sessions_out_before": 7,
+                "month_low_ratio": Decimal("1.4960"),
+                "close": Decimal("149.60"),
+                "sma_dma": Decimal("120"),
+                "volume": 310_000,
+                "vol_sma_50": 250_000,
+                "turnover_avg_20": 500_000_000,
+                "stop_preview": Decimal("119.68"),
+            },
+        )
+        assert describe_row([twt]) == (
+            "Three weeks tight, entry today: three weekly closes within 1.4% of each other; "
+            "weekly closes 147.50, 148.90, 149.60 oldest first; 4 sessions in the state; 7 "
+            "sessions out of the state before this entry; 50% above its three-month low; 25% "
+            "above its 200-day average; volume 1.2 times its 50-day average; average turnover Rs "
+            "50.0 crore a day; stop 20% below the close."
+        )
+
+    def test_the_day_s_context_is_a_third_field_and_changes_the_key(self) -> None:
+        context = RowContext(
+            gates={"Swing": "GREEN", "Three weeks tight": "OPEN"},
+            breadth_pct={"Three weeks tight": Decimal("51.1588")},
+            sector="nifty-it",
+            screens=(("RSI Scan", 128, 2317), ("Trend Stack", None, None)),
+        )
+        assert describe_context(context) == (
+            "Swing gate green; Three weeks tight gate open with 51% of the universe above its "
+            "long average; sector nifty it; on screens RSI Scan #128 of 2317, Trend Stack."
+        )
+        bare = review_state([EP], "x")
+        with_context = review_state([EP], "x", context)
+        assert set(bare) == {"setup", "filing"}
+        assert set(with_context) == {"setup", "filing", "context"}
+        assert review_key(bare) != review_key(with_context)
+        assert describe_context(None) == "" and describe_context(RowContext()) == ""

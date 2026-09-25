@@ -8371,3 +8371,15 @@ announced its next result meeting yet. His choice: "put laya scan button on over
 **What changes the picture.** A checkpoint fine-tuned on these labels drops in under the same key and floor. Until then the column is honest: mostly "not sure".
 
 **Reverse.** Downgrade 0054; delete `candidate_review.py`, `models/candidate_review.py`, the review section of `overlap.py`, the three routes, the `OpinionCell`, and `review_rows` in the sidecar.
+
+## Overlap: every stored parameter reaches Laya, and the day around the row (25 Sep 2026) · ⚠ UNREVIEWED
+
+**Context.** Maulik: "all the parameters which swing has noticed, including the other parameters which we might have, we should provide to Laya." OV7 sent about 40% of what the detectors store.
+
+**Choice.** `candidate_review.describe_row` now says every column the three detectors wrote — swing: score, gap, rvol, base depth/length/tightness, dry-up, prior move, ADR, distance to both MAs, up-streak, trigger with the stop's distance, distance to the pivot, turnover, circuit lock, listed-within-2y; VBT: rvol, day change, close position, 20-session return, distance to the 200-SMA / 21-EMA / prior 20-day high, entry limit with the stop's distance, turnover, circuit lock, failed filters; TWT: week range, the three weekly closes, sessions in state, sessions out before entry, distance to the 3-month low and 200-DMA, volume vs 50-day, turnover, stop preview, failed filters — and a third field, `context`: the gates and breadth of the strategies that raised the row on their latest session, the sector, and the screens the name ranks on. All closed-session facts, so the state (and its key) holds still within a session. Words, not numbers, as before.
+
+**Measured again on the base checkpoint**, a strong EP (score 88, 9% gap, 6.2× volume, ₹840 cr order) versus a weak flag (score 41, 0.8× volume, newspaper notice): `look_first` 0.38 / `skip` 0.21 against 0.32 / 0.35 — the fuller sentence nudges the right way and is still nowhere near the 0.60 floor. The column stays "not sure"; the labels carry the full state now, which is what the fine-tune needs.
+
+**Note.** Existing labels were keyed on the OV7 state; the key changed with the state, so any label placed in the hour between the two deploys does not apply to the new key. There were none yet.
+
+**Reverse.** Restore the OV7 `numbers` dicts and drop `RowContext` / `_gates` / `_context`.

@@ -463,11 +463,21 @@ class TestTheOpinion:
             )
             both = first.rows[0]
             assert both.opinion is None
-            state = review_state(both.facts(), both.catalyst.headline if both.catalyst else None)
-            # The words the sidecar will be shown: the scans' numbers, said plainly, and the filing.
-            assert state["setup"].startswith("Swing episodic pivot, gap day")
-            assert "Three weeks tight, entry today" in state["setup"]
+            state = both.state()
+            # The words the sidecar will be shown: every number the scans stored, said plainly;
+            # the day's context; and the filing.
+            assert state["setup"].startswith("Swing episodic pivot, gap day: setup score 62 of 100")
+            assert "trigger 149.60 with the stop 5.2% below it" in state["setup"]
+            assert (
+                "Three weeks tight, entry today: three weekly closes within 1.4%" in state["setup"]
+            )
+            assert "stop 20% below the close" in state["setup"]
             assert state["filing"] == "Press Release - BOTH wins a multi-year order"
+            assert state["context"].startswith("Swing gate green; Three weeks tight gate open")
+            assert "51% of the universe above its long average" in state["context"]
+            assert state == review_state(
+                both.facts(), both.catalyst.headline if both.catalyst else None, both.context
+            )
             pipe = screen_cache.pipeline()
             pipe.hgetall(REVIEW_WANTED_KEY)
             [queued] = await pipe.execute()
@@ -479,11 +489,8 @@ class TestTheOpinion:
                 review_key(state), json.dumps({"choice": "look_first", "confidence": 0.82})
             )
             flagco = first.rows[1]
-            flag_state = review_state(
-                flagco.facts(), flagco.catalyst.headline if flagco.catalyst else None
-            )
             await screen_cache.set(
-                review_key(flag_state), json.dumps({"choice": "skip", "confidence": 0.34})
+                review_key(flagco.state()), json.dumps({"choice": "skip", "confidence": 0.34})
             )
             second = await overlap(
                 screener_session, user_id=user_id, strategies_user_id=user_id, cache=screen_cache

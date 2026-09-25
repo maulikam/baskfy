@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api import overlap_scan
 from baskfy_api.curated_tenant import SOLE_TENANT_REFUSED
-from baskfy_api.overlap import Strategy, overlap
+from baskfy_api.overlap import WANTED_KEY, Strategy, best_catalyst_for, overlap
 from baskfy_api.problems import STATUS_FOR, ProblemType
 from baskfy_api.settings import Settings
 from baskfy_core.catalyst_tags import cache_key
@@ -353,6 +353,92 @@ class TestTheReadModel:
         assert all(day is None for day in view.sessions.values())
 
 
+class TestTheFilingWorthOpening:
+    """The row shows the material filing, not merely the newest (25 Sep 2026, the box)."""
+
+    async def test_a_material_filing_beats_a_newer_routine_notice(
+        self, screener_session: AsyncSession
+    ) -> None:
+        user_id, _ = await make_user(screener_session, "overlap-best@example.com")
+        ids = await _a_morning(screener_session, user_id)
+        # Two newer routine notices on BOTH, above the order win the fixture already stores.
+        for hours, headline in (
+            (1, "Copy of Newspaper Publication — BOTH has informed"),
+            (2, "Analysts/Institutional Investor Meet/Con. Call Updates — BOTH"),
+        ):
+            screener_session.add(
+                SwCatalyst(
+                    user_id=user_id,
+                    instrument_id=ids["BOTH"],
+                    headline=headline,
+                    published_at=dt.datetime(2026, 9, 12, hours, 0, tzinfo=IST),
+                    url=f"https://nsearchives.nseindia.com/corporate/BOTH_{hours}.pdf",
+                    source="NSE_ANNOUNCEMENT",
+                )
+            )
+        await screener_session.flush()
+
+        view = await overlap(screener_session, user_id=user_id, strategies_user_id=user_id)
+        both = view.rows[0]
+        assert both.symbol == "BOTH"
+        assert both.catalyst is not None
+        assert both.catalyst.headline == "Press Release - BOTH wins a multi-year order"
+        assert both.catalyst.earnings_date == dt.date(2026, 9, 15)
+        assert both.catalyst_tag is not None and both.catalyst_tag.event_type == "order"
+
+    async def test_outside_the_window_the_newest_filing_stands(
+        self, screener_session: AsyncSession
+    ) -> None:
+        user_id, _ = await make_user(screener_session, "overlap-window@example.com")
+        ids = await _a_morning(screener_session, user_id)
+        screener_session.add(
+            SwCatalyst(
+                user_id=user_id,
+                instrument_id=ids["BOTH"],
+                headline="Copy of Newspaper Publication — BOTH has informed",
+                published_at=dt.datetime(2026, 9, 12, 9, 0, tzinfo=IST),
+                url="https://nsearchives.nseindia.com/corporate/BOTH_np.pdf",
+                source="NSE_ANNOUNCEMENT",
+            )
+        )
+        await screener_session.flush()
+        # Asked as of a day far past the window, nothing is "recent": the newest filing stands.
+        far = await best_catalyst_for(
+            screener_session,
+            user_id=user_id,
+            instrument_ids=[ids["BOTH"]],
+            today=dt.date(2027, 1, 1),
+        )
+        assert far[ids["BOTH"]].headline == "Copy of Newspaper Publication — BOTH has informed"
+        # Asked inside the window, the order win wins over the newer notice.
+        near = await best_catalyst_for(
+            screener_session,
+            user_id=user_id,
+            instrument_ids=[ids["BOTH"]],
+            today=dt.date(2026, 9, 25),
+        )
+        assert near[ids["BOTH"]].headline == "Press Release - BOTH wins a multi-year order"
+
+    async def test_a_miss_in_the_cache_asks_the_sidecar_for_that_headline(
+        self, screener_session: AsyncSession, screen_cache: Redis
+    ) -> None:
+        user_id, _ = await make_user(screener_session, "overlap-wanted@example.com")
+        await _a_morning(screener_session, user_id)
+        await screen_cache.delete(WANTED_KEY)
+        try:
+            await overlap(
+                screener_session, user_id=user_id, strategies_user_id=user_id, cache=screen_cache
+            )
+            pipe = screen_cache.pipeline()
+            pipe.smembers(WANTED_KEY)
+            [members] = await pipe.execute()
+            wanted = {(m.decode() if isinstance(m, bytes) else str(m)) for m in members}
+            assert "Press Release - BOTH wins a multi-year order" in wanted
+            assert await screen_cache.ttl(WANTED_KEY) > 0
+        finally:
+            await screen_cache.delete(WANTED_KEY)
+
+
 class TestTheModelColumn:
     """The sidecar's cached answer, resolved against the rules, on the wire."""
 
@@ -437,6 +523,8 @@ class TestTheRoute:
         body = signed.json()
         assert body["strategies_read"] is True
         assert body["scope"] == "actionable"
+        # No sidecar pass in this database: the page can say so rather than show a blank.
+        assert body["laya"] == {"last_pass_at": None, "answered": 0, "shown": 0, "of": 1}
         assert body["sessions"] == {
             "swing": SWING_DAY.isoformat(),
             "volume_breakout": OTHER_DAY.isoformat(),

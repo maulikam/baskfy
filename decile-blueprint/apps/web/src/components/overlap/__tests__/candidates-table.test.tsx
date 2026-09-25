@@ -32,6 +32,7 @@ const payload = parseCandidates({
   scope: "actionable",
   strategies_read: true,
   screens_checked: 6,
+  laya: { last_pass_at: "2026-09-25T06:12:31+05:30", answered: 1, shown: 1, of: 1 },
   data: [
     {
       instrument_id: 1,
@@ -186,7 +187,8 @@ describe("CandidatesTable", () => {
     expect(tag).toHaveAttribute("data-disagrees-with", "laya:corporate_action");
     expect(tag).toHaveAttribute("title", expect.stringContaining("matched: sebi order"));
     expect(tag).toHaveAttribute("title", expect.stringContaining("(laya) said corporate_action"));
-    expect(within(tag).getByLabelText("the two readers disagree")).toBeInTheDocument();
+    /* The rules stood because Laya was unsure: the guess is on hover, not a mark on the row. */
+    expect(within(tag).queryByLabelText("the two readers disagree")).toBeNull();
   });
 
   it("offers the eight words and a clear option when it can write, and nothing when it cannot", () => {
@@ -287,6 +289,52 @@ describe("CandidatesTable", () => {
     /* A refusal is said on the chip, in this app's words. */
     expect(await screen.findByTestId("overlap-candidate-tag-error")).toHaveTextContent(
       "The correction was not saved.",
+    );
+  });
+
+  it("marks a disagreement only when a confident Laya overruled the rules", () => {
+    const overruled: OverlapCandidates = {
+      ...payload,
+      data: [
+        {
+          ...payload.data[0]!,
+          catalyst: {
+            ...payload.data[0]!.catalyst!,
+            tag: {
+              event_type: "corporate_action",
+              review_priority: "medium",
+              matched: [],
+              source: "laya",
+              confidence: 0.91,
+              disagrees_with: "rules:order",
+              corrected: false,
+            },
+          },
+        },
+      ],
+    };
+    render(<CandidatesTable candidates={overruled} scope="actionable" />);
+    const tag = screen.getByTestId("overlap-candidate-tag");
+    expect(tag).toHaveAttribute("data-source", "laya");
+    expect(within(tag).getByLabelText("the two readers disagree")).toHaveAttribute(
+      "title",
+      "The other reader (rules) said order.",
+    );
+  });
+
+  it("says whether Laya is working, in one line", () => {
+    render(<CandidatesTable candidates={payload} scope="all" />);
+    expect(screen.getByTestId("overlap-candidates-laya")).toHaveTextContent(
+      /Laya read 1 of 1 filings \(last pass .*IST\) and is shown on every one\./,
+    );
+    cleanup();
+    const never: OverlapCandidates = {
+      ...payload,
+      laya: { last_pass_at: null, answered: 0, shown: 0, of: 1 },
+    };
+    render(<CandidatesTable candidates={never} scope="all" />);
+    expect(screen.getByTestId("overlap-candidates-laya")).toHaveTextContent(
+      "Laya has not read these filings yet",
     );
   });
 

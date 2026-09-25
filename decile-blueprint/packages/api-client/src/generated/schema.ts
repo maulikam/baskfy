@@ -9422,10 +9422,25 @@ export interface components {
             /** Url */
             url: string | null;
         };
+        /**
+         * OverlapLayaOut
+         * @description Is Laya working: when the sidecar last passed, and on how many of these filings it spoke.
+         */
+        OverlapLayaOut: {
+            /** Answered */
+            answered: number;
+            /** Last Pass At */
+            last_pass_at: string | null;
+            /** Of */
+            of: number;
+            /** Shown */
+            shown: number;
+        };
         /** OverlapOut */
         OverlapOut: {
             /** Data */
             data: components["schemas"]["OverlapRowOut"][];
+            laya: components["schemas"]["OverlapLayaOut"];
             /**
              * Scope
              * @enum {string}

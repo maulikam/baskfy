@@ -13819,6 +13819,43 @@
         "title": "OverlapCatalystOut",
         "type": "object"
       },
+      "OverlapLayaOut": {
+        "description": "Is Laya working: when the sidecar last passed, and on how many of these filings it spoke.",
+        "properties": {
+          "answered": {
+            "title": "Answered",
+            "type": "integer"
+          },
+          "last_pass_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Pass At"
+          },
+          "of": {
+            "title": "Of",
+            "type": "integer"
+          },
+          "shown": {
+            "title": "Shown",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "last_pass_at",
+          "answered",
+          "shown",
+          "of"
+        ],
+        "title": "OverlapLayaOut",
+        "type": "object"
+      },
       "OverlapOut": {
         "properties": {
           "data": {
@@ -13827,6 +13864,9 @@
             },
             "title": "Data",
             "type": "array"
+          },
+          "laya": {
+            "$ref": "#/components/schemas/OverlapLayaOut"
           },
           "scope": {
             "enum": [
@@ -13853,6 +13893,7 @@
           "scope",
           "strategies_read",
           "screens_checked",
+          "laya",
           "data"
         ],
         "title": "OverlapOut",

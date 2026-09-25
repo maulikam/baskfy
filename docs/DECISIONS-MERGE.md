@@ -8349,3 +8349,13 @@ announced its next result meeting yet. His choice: "put laya scan button on over
 - Remove the two routes, the task, the route lines in both `TASK_ROUTES` tables, the button and the
   wake poll. `run_swing_catalyst`'s two new keywords default to the old behaviour.
 - The Laya SQL bound and the CPU cap should stay regardless.
+
+## Overlap: the page shows the filing worth opening, and says whether Laya is working (25 Sep 2026) · ⚠ UNREVIEWED
+
+**Context.** Maulik on staging: "Laya is not working properly", and "the newer version loads first, and then the older version comes back." Read on the box through the API: every row's *newest* filing was paperwork — investor-meet schedules, newspaper cuttings, SAST disclosures — because the manual scan had fetched each name's whole fortnight; Laya is sure only on material headlines, so the rules stood on every row with a "?" beside each, which read as broken. The flicker was `filingsScanStatus` calling `revalidatePath` whenever the last scan's state was `done` — the state every scan ends in — so every mount re-rendered the page, and the second `GET /overlap` lost the race against the three screen re-runs under the 2.5 s hop budget.
+
+**Choice.** (1) `best_catalyst_for`: per name, the filings of the last 45 days are tagged by the rules and the highest priority wins, newest first; nothing in the window → the newest filing stands. Deterministic, rules-only, so Laya's answer is an opinion on a filing the rules picked. (2) `tag_headline` reads NSE's subject line first (`Subject — Company has informed the Exchange…`), the rest only when the subject names nothing; "Action(s) taken or orders passed", SAST/PIT disclosures and shareholders' meetings tag as what they are. (3) The API notes headlines it shows but has no Laya answer for in `catalyst_tag:wanted`; the sidecar tags that set as well as the newest per name, and writes a heartbeat the API serves as `laya.last_pass_at / answered / shown / of`, rendered as one line on the page. (4) The "?" shows only when a confident Laya overruled the rules or a correction overruled a reader; an unsure Laya's guess stays on hover. (5) `filingsScanStatus` is a read; the running→done edge in the button is what refreshes. `fetchCandidates` gets its own 8 s budget.
+
+**Rejected.** Stripping the exchange boilerplate before Laya — measured: no better (0.34 vs 0.46 on a meeting notice). Lowering the confidence floor. Feeding Laya the row.
+
+**Reverse.** `latest_for` in place of `best_catalyst_for`; drop the wanted/heartbeat keys; restore the `?` condition; put `revalidatePath` back (do not).

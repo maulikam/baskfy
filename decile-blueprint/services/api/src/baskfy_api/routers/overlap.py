@@ -176,11 +176,21 @@ class OverlapSessionsOut(BaseModel):
     three_weeks_tight: dt.date | None
 
 
+class OverlapLayaOut(BaseModel):
+    """Is Laya working: when the sidecar last passed, and on how many of these filings it spoke."""
+
+    last_pass_at: dt.datetime | None
+    answered: int
+    shown: int
+    of: int
+
+
 class OverlapOut(BaseModel):
     sessions: OverlapSessionsOut
     scope: Literal["actionable", "all"]
     strategies_read: bool
     screens_checked: int
+    laya: OverlapLayaOut
     data: list[OverlapRowOut]
 
 
@@ -210,6 +220,9 @@ async def get_overlap(
         session, user_id=user_id, strategies_user_id=sole, scope=scope, cache=_cache(request)
     )
     marks = await live_marks_for_symbols([row.symbol for row in view.rows])
+    status = overlap_service.laya_status(
+        view.rows, await overlap_service.laya_last_pass(_cache(request))
+    )
     return _json(
         OverlapOut(
             sessions=OverlapSessionsOut(
@@ -220,6 +233,12 @@ async def get_overlap(
             scope=scope,
             strategies_read=view.strategies_read,
             screens_checked=view.screens_checked,
+            laya=OverlapLayaOut(
+                last_pass_at=status.last_pass_at,
+                answered=status.answered,
+                shown=status.shown,
+                of=status.of,
+            ),
             data=[
                 OverlapRowOut(
                     instrument_id=row.instrument_id,

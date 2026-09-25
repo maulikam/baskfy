@@ -373,3 +373,7 @@ export type OverlapScanOut = Schemas["OverlapScanOut"];
 /** `PUT /overlap/tags` — a person's correction of a headline's tag; the answer is the corrected `OverlapTagOut`. */
 export type OverlapTagCorrectionIn = Schemas["OverlapTagCorrectionIn"];
 export type OverlapLayaOut = Schemas["OverlapLayaOut"];
+/** The opinion on a row: Laya's, or a person's label (`source: "labelled"`, always shown). */
+export type OverlapOpinionOut = Schemas["OverlapOpinionOut"];
+/** `PUT /overlap/reviews` — a person's label on a row's opinion; the answer is the labelled `OverlapOpinionOut`. */
+export type OverlapReviewLabelIn = Schemas["OverlapReviewLabelIn"];

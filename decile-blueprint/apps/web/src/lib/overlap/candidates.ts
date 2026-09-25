@@ -73,6 +73,17 @@ export type CorrectTagAction = (
   eventType: OverlapEventType | null,
 ) => Promise<CorrectTagResult>;
 
+/** What the label action answers. The sentence is this app's copy, never the wire's. */
+export type LabelRowResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly error: string };
+
+/** The server action the Laya cell's select calls: a word on the row, or `null` to take it back. */
+export type LabelRowAction = (
+  instrumentId: number,
+  label: OverlapOpinionLabel | null,
+) => Promise<LabelRowResult>;
+
 /**
  * The word on the headline. Display context only — never an input to a rank, a filter, a size
  * or an order — and `source` says what produced it: `rules` for the keyword baseline, `laya`
@@ -118,7 +129,37 @@ export interface OverlapCandidate {
   strategies: readonly OverlapStrategy[];
   screens: readonly OverlapScreen[];
   catalyst: OverlapCatalyst | null;
+  /** Laya's opinion on the row — technicals in words plus the filing. Absent until answered. */
+  opinion: OverlapOpinion | null;
 }
+
+/** The three words a row's opinion can be — the wire's vocabulary, verbatim. */
+export type OverlapOpinionLabel = "look_first" | "worth_a_look" | "skip";
+
+export const OPINION_LABELS: readonly OverlapOpinionLabel[] = ["look_first", "worth_a_look", "skip"];
+
+/**
+ * Attention, never a trade: `look_first | worth_a_look | skip` answers "how much does this row
+ * deserve a look before the others". `source` says whose word it is: `laya` for the model,
+ * `labelled` for a person's, which wins and is always shown. For the model, `shown` is false
+ * below the confidence floor and the page then says "not sure" — measured on the base
+ * checkpoint, that is most rows today.
+ */
+export interface OverlapOpinion {
+  label: OverlapOpinionLabel;
+  confidence: number;
+  source: string;
+  shown: boolean;
+  floor: number;
+  /** `source === "labelled"`: a person's word, not the model's. */
+  labelled: boolean;
+}
+
+export const OPINION_WORDS: Record<OverlapOpinionLabel, string> = {
+  look_first: "Look first",
+  worth_a_look: "Worth a look",
+  skip: "Skip",
+};
 
 export interface OverlapCandidates {
   sessions: {
@@ -194,6 +235,7 @@ export function parseCandidates(payload: OverlapOut): OverlapCandidates {
       strategies: row.strategies,
       screens: row.screens,
       catalyst: row.catalyst,
+      opinion: row.opinion,
     })),
   };
 }

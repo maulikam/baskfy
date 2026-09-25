@@ -7,6 +7,9 @@
     PUT    /overlap/tags                  a person's correction of a headline's tag
     DELETE /overlap/tags?headline=        the correction removed; the readers' word shows again
     GET    /overlap/tags/export           every correction, as NDJSON — the fine-tuning set
+    PUT    /overlap/reviews               a person's label on a row's attention opinion
+    DELETE /overlap/reviews?instrument_id= the label removed; the model's opinion shows again
+    GET    /overlap/reviews/export        every label, as NDJSON — the row question's set
     POST   /overlap/catalyst-scan         read every listed name's filings now, then wake Laya
     GET    /overlap/catalyst-scan         that scan's progress
 
@@ -19,12 +22,14 @@ rank, size or order. ``baskfy_api.overlap`` names no broker, no plan and no flag
 ``services/api/tests/test_overlap_readonly.py`` asserts that over the source and the OpenAPI
 document, the way the sleeves' own read-only suites do.
 
-The two writes are the one money-free thing this page was always going to need
+The writes are the one money-free thing this page was always going to need
 (`baskfy_core.catalyst_tags`: "corrections collected against [the baseline], and only then a
-fine-tuned model"). A correction is a label on the tag — display context that never reached a
-rank, a size or an order — stored in one table (`catalyst_tag_correction`) so the chip shows the
-person's word and the export can train on it. `test_overlap_readonly.py` names exactly these two
-verbs on exactly this path and nothing else.
+fine-tuned model"; `baskfy_core.candidate_review`: "the labels a person puts on rows are what
+the fine-tune trains on"). A correction is a label on the tag and a review label is a word on
+the row's opinion — display context that never reached a rank, a size or an order — each stored
+in one table (`catalyst_tag_correction`, `candidate_review_label`) so the page shows the
+person's word and the export can train on it. `test_overlap_readonly.py` names exactly these
+verbs on exactly these paths and nothing else.
 
 WHOSE SCANS THEY ARE
 --------------------
@@ -60,6 +65,14 @@ from baskfy_api.curated_tenant import scoped_sole_user_id
 from baskfy_api.db import SessionDep
 from baskfy_api.live_prices import live_marks_for_symbols
 from baskfy_api.problems import Problem, ProblemType, not_found
+from baskfy_core.candidate_review import (
+    REVIEW_CONFIDENCE_FLOOR,
+    SOURCE_LABELLED,
+    ReviewLabel,
+    ReviewOpinion,
+    review_key,
+    shown,
+)
 from baskfy_core.catalyst_tags import SOURCE_CORRECTED, CatalystTag, EventType, ReviewPriority
 from baskfy_core.screener import canonical_json
 
@@ -155,6 +168,43 @@ class OverlapCatalystOut(BaseModel):
     tag: OverlapTagOut | None
 
 
+class OverlapOpinionOut(BaseModel):
+    """The opinion on the row — the technicals in words plus the filing — as attention, never a
+    trade. ``source`` names whose: ``laya`` for the model, ``labelled`` for a person's word,
+    which wins and is always shown. For the model, ``shown`` is false below the confidence
+    floor, and the page then says "not sure" rather than printing a guess with a percentage;
+    ``label`` and ``confidence`` are served regardless so a person can see what the model
+    thought when labelling the row."""
+
+    label: ReviewLabel
+    confidence: float
+    source: str
+    shown: bool
+    floor: float
+    #: ``source == "labelled"``: a person's word, not the model's.
+    labelled: bool
+
+
+def _opinion_out(opinion: ReviewOpinion) -> OverlapOpinionOut:
+    return OverlapOpinionOut(
+        label=opinion.label,
+        confidence=opinion.confidence,
+        source=opinion.source,
+        shown=shown(opinion),
+        floor=REVIEW_CONFIDENCE_FLOOR,
+        labelled=opinion.source == SOURCE_LABELLED,
+    )
+
+
+class OverlapReviewLabelIn(BaseModel):
+    """A person's word on one row's opinion. The row is named by instrument; the server takes
+    the state from the row as the page shows it, so the label is keyed on exactly those words."""
+
+    instrument_id: int
+    label: ReviewLabel
+    note: str | None = Field(default=None, max_length=2000)
+
+
 class OverlapRowOut(BaseModel):
     instrument_id: int
     symbol: str
@@ -168,6 +218,8 @@ class OverlapRowOut(BaseModel):
     strategies: list[OverlapStrategyOut]
     screens: list[OverlapScreenOut]
     catalyst: OverlapCatalystOut | None
+    #: Absent until the sidecar has answered on this row's state.
+    opinion: OverlapOpinionOut | None
 
 
 class OverlapSessionsOut(BaseModel):
@@ -271,6 +323,7 @@ async def get_overlap(
                         )
                         for screen in row.screens
                     ],
+                    opinion=None if row.opinion is None else _opinion_out(row.opinion),
                     catalyst=(
                         None
                         if row.catalyst is None or row.catalyst.empty
@@ -368,6 +421,96 @@ async def get_tags_export(session: SessionDep, principal: AuthenticatedDep) -> R
                 "laya_confidence": record.laya_confidence,
                 "note": record.note,
                 "corrected_at": record.corrected_at.isoformat(),
+            }
+        )
+        for record in records
+    ]
+    return Response(content="".join(f"{line}\n" for line in lines), media_type=NDJSON_MEDIA_TYPE)
+
+
+# --- Labels: a person's word on a row's opinion ------------------------------------------------
+
+
+async def _row_on_the_list(
+    request: Request, session: SessionDep, user_id: int, instrument_id: int
+) -> overlap_service.CandidateRow:
+    """The row as the page shows it, re-read through the same view — so the state a label is
+    keyed on is exactly what the person was looking at. 404 when the name is not on today's list
+    (either scope), which is the one case where there is no state to label."""
+    view = await overlap_service.overlap(
+        session, user_id=user_id, strategies_user_id=user_id, scope="all", cache=_cache(request)
+    )
+    for row in view.rows:
+        if row.instrument_id == instrument_id:
+            return row
+    raise not_found("candidate", str(instrument_id))
+
+
+@router.put("/reviews", response_model=OverlapOpinionOut, summary="Label a row's opinion")
+async def put_review(
+    request: Request,
+    session: SessionDep,
+    principal: AuthenticatedDep,
+    payload: OverlapReviewLabelIn,
+) -> Response:
+    """Store the person's word on a row and answer with the opinion the page now shows.
+
+    Idempotent on the row's state: a second label updates the one row. What Laya had cached for
+    that state is recorded beside it at this moment — the training signal. Sole tenant only.
+    """
+    user_id = await scoped_sole_user_id(session, principal.require_user(), surface="corrections")
+    row = await _row_on_the_list(request, session, user_id, payload.instrument_id)
+    state = row.state()
+    cached = await overlap_service.review_opinions(_cache(request), {review_key(state): state})
+    opinion = await overlap_service.label_row(
+        session,
+        user_id=user_id,
+        row=row,
+        label=payload.label,
+        note=(payload.note or "").strip() or None,
+        laya_opinion=cached.get(review_key(state)),
+    )
+    return _json(_opinion_out(opinion))
+
+
+@router.delete("/reviews", status_code=status.HTTP_204_NO_CONTENT, summary="Remove a row's label")
+async def delete_review(
+    request: Request,
+    session: SessionDep,
+    principal: AuthenticatedDep,
+    instrument_id: Annotated[int, Query(description="the row, as the page names it")],
+) -> Response:
+    """The model's opinion shows again. 404 when the name is not on today's list or there was
+    no label to remove."""
+    user_id = await scoped_sole_user_id(session, principal.require_user(), surface="corrections")
+    row = await _row_on_the_list(request, session, user_id, instrument_id)
+    if not await overlap_service.clear_label(session, user_id=user_id, row=row):
+        raise not_found("label", str(instrument_id))
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get(
+    "/reviews/export",
+    summary="Every row label, as NDJSON",
+    response_class=Response,
+    responses={200: {"content": {NDJSON_MEDIA_TYPE: {}}}},
+)
+async def get_reviews_export(session: SessionDep, principal: AuthenticatedDep) -> Response:
+    """The fine-tuning set for the row question: one line per labelled state, oldest first —
+    the symbol, the words the model saw, the person's label, what the model said at the time,
+    the note, and when. Sole tenant only."""
+    user_id = await scoped_sole_user_id(session, principal.require_user(), surface="corrections")
+    records = await overlap_service.labels_export(session, user_id=user_id)
+    lines = [
+        canonical_json(
+            {
+                "symbol": record.symbol,
+                "state": record.state,
+                "label": record.label.value,
+                "laya_label": None if record.laya_label is None else record.laya_label.value,
+                "laya_confidence": record.laya_confidence,
+                "note": record.note,
+                "labelled_at": record.labelled_at.isoformat(),
             }
         )
         for record in records

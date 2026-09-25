@@ -44,6 +44,7 @@ from baskfy_core.models.billing import (
     InvoiceCounter,
     WebhookEvent,
 )
+from baskfy_core.models.candidate_review import REVIEW_LABELS, CandidateReviewLabel
 from baskfy_core.models.catalyst import CATALYST_EVENT_TYPES, CatalystTagCorrection
 from baskfy_core.models.curated_baskets import (
     BASKET_ACCESS,
@@ -291,6 +292,7 @@ __all__ = [
     "RAZORPAY_PROVIDER",
     "REBALANCE_FREQUENCIES",
     "REBALANCE_STATES",
+    "REVIEW_LABELS",
     "SIP_MODES",
     "SIP_STATUSES",
     "SW_CLOSE_REASONS",
@@ -363,6 +365,7 @@ __all__ = [
     "BasketSnapshot",
     "BrokerAccount",
     "BrokerTrade",
+    "CandidateReviewLabel",
     "CatalystTagCorrection",
     "CbBasket",
     "CbBasketVersion",

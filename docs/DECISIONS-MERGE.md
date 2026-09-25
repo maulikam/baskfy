@@ -8359,3 +8359,15 @@ announced its next result meeting yet. His choice: "put laya scan button on over
 **Rejected.** Stripping the exchange boilerplate before Laya — measured: no better (0.34 vs 0.46 on a meeting notice). Lowering the confidence floor. Feeding Laya the row.
 
 **Reverse.** `latest_for` in place of `best_catalyst_for`; drop the wanted/heartbeat keys; restore the `?` condition; put `revalidatePath` back (do not).
+
+## Overlap: the technicals go to Laya beside the filing, as attention, never a trade (25 Sep 2026) · ⚠ UNREVIEWED
+
+**Context.** Maulik: "let's keep text and technical both" — the technicals each scan shortlisted a stock on should reach Laya so it can classify better. Measured first, zero-shot on the base checkpoint, on eight rows built exactly as this commit builds them (the numbers said in words): every answer was near a third each way (confidence 0.00–0.16) and the row with a 9% gap on six times its volume under a ₹840 crore order was a coin flip.
+
+**Choice.** `baskfy_core.candidate_review`: each strategy's stored numbers become the sentence a person would say (`describe_row` — "Swing episodic pivot, gap day: gapped 9%; volume 6.2 times its average; base 3% deep."), the state is that sentence plus the filing headline and nothing else, and the one question is attention — `look_first | worth_a_look | skip` — never buy. The API queues each row's state for the sidecar (`candidate_review:wanted`, a hash of key → words) and serves the cached opinion; the page shows it as a word with its percentage only above the 0.60 floor and says "not sure" otherwise, with the guess on hover. A person labels rows on the page (`candidate_review_label`, migration 0054; `PUT/DELETE /overlap/reviews`, `GET /overlap/reviews/export` NDJSON) and the label wins; those labels are the fine-tuning set for the row question. Nothing here is read by any rank, size or order path; `test_overlap_readonly.py` pins the two new verbs as the whole widening.
+
+**Rejected.** Raw numbers in the state (tokens, not quantities). A "buy / not buy" question (a recommendation one click from the gateway; D3 human-track). Showing the opinion below the floor (a percentage on noise reads as knowledge). A learned score over entry features as a filter — `research/tight-close/SELECTION.md` measured that at 6.8% vs 20.9%.
+
+**What changes the picture.** A checkpoint fine-tuned on these labels drops in under the same key and floor. Until then the column is honest: mostly "not sure".
+
+**Reverse.** Downgrade 0054; delete `candidate_review.py`, `models/candidate_review.py`, the review section of `overlap.py`, the three routes, the `OpinionCell`, and `review_rows` in the sidecar.

@@ -29,9 +29,10 @@ EP setup for swing (`TRADEABLE_SETUPS`; PARABOLIC_SHORT is detect-only), a ``SIG
 other two (``SCAN_ONLY`` failed a filter, an in-state tight name has no entry event). It is a
 display flag. No order path reads this module, and `test_overlap_readonly.py` keeps it so.
 
-**The one write is a person's correction of a headline tag** (the section at the bottom): a
-label on display context, stored so the chip shows the person's word and the corrections export
-as the fine-tuning set. It reaches one table and no number the strategies wrote.
+**The writes are a person's correction of a headline tag and a person's label on a row's
+attention opinion** (the section at the bottom): labels on display context, stored so the page
+shows the person's word and the labels export as the fine-tuning sets. Each reaches one table
+and no number the strategies wrote.
 """
 
 from __future__ import annotations
@@ -41,7 +42,7 @@ import json
 import logging
 from collections import defaultdict
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from enum import StrEnum
 from typing import Final, Literal
@@ -53,6 +54,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.swing import latest_detected_date
 from baskfy_api.swing_catalyst import ANNOUNCEMENT, CatalystView, latest_for
+from baskfy_core.candidate_review import (
+    SOURCE_LABELLED,
+    ReviewLabel,
+    ReviewOpinion,
+    RowFacts,
+    opinion_from_laya,
+    review_key,
+    review_state,
+)
 from baskfy_core.catalyst_tags import (
     PRIORITY_OF,
     CatalystTag,
@@ -64,6 +74,7 @@ from baskfy_core.catalyst_tags import (
     tag_headline,
 )
 from baskfy_core.models import (
+    CandidateReviewLabel,
     CatalystTagCorrection,
     Instrument,
     Screen,
@@ -118,6 +129,9 @@ class StrategyHit:
     actionable: bool
     #: The exchange print the row was computed from (``close_raw``; swing serves its own).
     close: Decimal | None
+    #: The scan's own numbers about the row — the ones `baskfy_core.candidate_review` says in
+    #: words for Laya. Stored facts restated, never computed here.
+    numbers: dict[str, Decimal | int | None] = field(default_factory=dict)
 
     @property
     def name(self) -> str:
@@ -158,6 +172,21 @@ class CandidateRow:
     #: is one, else Laya's answer or the rules' — display context, never an input. ``None``
     #: exactly when there is no headline to read.
     catalyst_tag: CatalystTag | None = None
+    #: The opinion on the row: a person's label when one is stored for this row's state
+    #: (``source == "labelled"``, always shown), else Laya's — the technicals in words plus the
+    #: filing — when the sidecar has answered; `candidate_review.shown` says whether the page
+    #: shows it as a word.
+    opinion: ReviewOpinion | None = None
+
+    def facts(self) -> tuple[RowFacts, ...]:
+        return tuple(
+            RowFacts(hit.strategy.value, hit.detail, hit.actionable, dict(hit.numbers))
+            for hit in self.strategies
+        )
+
+    def state(self) -> dict[str, str]:
+        """What Laya is shown for this row — and what a label is keyed on."""
+        return review_state(self.facts(), self.catalyst.headline if self.catalyst else None)
 
     @property
     def strategy_count(self) -> int:
@@ -207,6 +236,14 @@ async def _swing(
                     detail=_detail_swing(row),
                     actionable=row.setup in {setup.value for setup in TRADEABLE_SETUPS},
                     close=row.close,
+                    numbers={
+                        "gap_pct": row.gap_pct,
+                        "rvol": row.rvol,
+                        "base_depth_pct": row.base_depth_pct,
+                        "prior_move_pct": row.prior_move_pct,
+                        "adr_pct": row.adr_pct,
+                        "base_bars": row.base_bars,
+                    },
                 ),
             )
         )
@@ -243,6 +280,12 @@ async def _volume_breakout(
                 detail=_VBT_STATE.get(row.state, row.state.lower().replace("_", " ")),
                 actionable=row.state == "SIGNAL",
                 close=row.close_raw,
+                numbers={
+                    "rvol": row.rvol,
+                    "change_pct": row.change_pct,
+                    "close_position": row.close_position,
+                    "ret_20_pct": row.ret_20_pct,
+                },
             ),
         )
         for row, instrument in found
@@ -291,6 +334,11 @@ async def _three_weeks_tight(
                     detail=detail,
                     actionable=signal == "SIGNAL",
                     close=row.close_raw,
+                    numbers={
+                        "week_range_pct": row.week_range_pct,
+                        "sessions_in_state": row.sessions_in_state,
+                        "month_low_ratio": row.month_low_ratio,
+                    },
                 ),
             )
         )
@@ -526,6 +574,47 @@ def laya_status(rows: Sequence[CandidateRow], last_pass_at: dt.datetime | None) 
     )
 
 
+#: The row states the page is showing and has no opinion for yet: a hash of key -> state JSON,
+#: read and cleared by the sidecar (`infra/laya/laya_loop.py`). A hash, not a set, because the
+#: sidecar needs the words, and only the API can say them (it holds the rows).
+REVIEW_WANTED_KEY: Final = "candidate_review:wanted"
+
+
+async def review_opinions(
+    cache: Redis | None, states: dict[str, dict[str, str]]
+) -> dict[str, ReviewOpinion]:
+    """The sidecar's cached opinion per row key; the misses are queued for it. Empty without a
+    cache or when Redis is unreachable — which means "not sure" on the page, never an error."""
+    if cache is None or not states:
+        return {}
+    keys = list(states)
+    try:
+        raw = await cache.mget(keys)
+    except RedisError:
+        return {}
+    found: dict[str, ReviewOpinion] = {}
+    missing: dict[str, str] = {}
+    for key, value in zip(keys, raw, strict=True):
+        if value is None:
+            missing[key] = json.dumps(states[key], sort_keys=True, ensure_ascii=False)
+            continue
+        try:
+            opinion = opinion_from_laya(json.loads(value))
+        except ValueError:
+            opinion = None
+        if opinion is not None:
+            found[key] = opinion
+    if missing:
+        try:
+            pipe = cache.pipeline()
+            pipe.hset(REVIEW_WANTED_KEY, mapping=missing)
+            pipe.expire(REVIEW_WANTED_KEY, WANTED_TTL_S)
+            await pipe.execute()
+        except RedisError as exc:
+            log.warning("could not queue row states for the sidecar: %s", exc)
+    return found
+
+
 async def laya_answers(cache: Redis | None, headlines: list[str]) -> dict[str, object]:
     """The sidecar's cached answer per headline, keyed by the headline; empty without a cache,
     on a miss, or when Redis is unreachable — every one of which means "the rules tag"."""
@@ -586,6 +675,31 @@ async def corrections_for(
         for key, event_type in found
         for headline in by_key.get(key, ())
     }
+
+
+async def labels_for(
+    session: AsyncSession, *, user_id: int, keys: Sequence[str]
+) -> dict[str, ReviewLabel]:
+    """The person's stored labels for these row states, keyed by the review key — one query
+    over the content-addressed key, so the page pays for its labels once, not per row."""
+    if not keys:
+        return {}
+    found = (
+        await session.execute(
+            select(CandidateReviewLabel.review_key, CandidateReviewLabel.label).where(
+                CandidateReviewLabel.user_id == user_id,
+                CandidateReviewLabel.review_key.in_(sorted(set(keys))),
+            )
+        )
+    ).all()
+    return {key: ReviewLabel(label) for key, label in found}
+
+
+def _opinion(laya: ReviewOpinion | None, label: ReviewLabel | None) -> ReviewOpinion | None:
+    """A person's label wins over the model's opinion; without one, the model's stands."""
+    if label is None:
+        return laya
+    return ReviewOpinion(label, 0.0, source=SOURCE_LABELLED)
 
 
 async def overlap(
@@ -655,6 +769,19 @@ async def overlap(
         for instrument_id, found in kept.items()
     ]
     rows.sort(key=lambda row: (-row.strategy_count, not row.actionable, row.symbol))
+    states: dict[str, dict[str, str]] = {}
+    keys: list[str] = []
+    for row in rows:
+        state = row.state()
+        key = review_key(state)
+        states[key] = state
+        keys.append(key)
+    opinions = await review_opinions(cache, states)
+    labels = await labels_for(session, user_id=user_id, keys=keys)
+    rows = [
+        replace(row, opinion=_opinion(opinions.get(key), labels.get(key)))
+        for row, key in zip(rows, keys, strict=True)
+    ]
     return OverlapView(
         sessions=sessions,
         rows=tuple(rows),
@@ -663,15 +790,16 @@ async def overlap(
     )
 
 
-# --- Corrections: the one thing this page writes ----------------------------------------------
+# --- Corrections and labels: the two things this page writes ----------------------------------
 #
 # Everything above is a read over stored rows, and `test_overlap_readonly.py` scans those
 # functions for a write verb. This section is the exception it names: a person's correction of
-# a headline tag — the label the fine-tune will train on — written to `catalyst_tag_correction`
-# and nowhere else. A correction changes what the chip says and what the export contains; it
-# changes no rank, no filter, no size and no order, because the tag it corrects never reached
-# one either. The table is content-addressed on the headline (`cache_key`), so a correction made
-# on one row applies to every row that carries the same headline.
+# a headline tag — written to `catalyst_tag_correction` — and a person's label on a row's
+# attention opinion — written to `candidate_review_label` — the two sets the fine-tunes will
+# train on, and nowhere else. Either changes what the page says and what its export contains; it
+# changes no rank, no filter, no size and no order, because neither the tag nor the opinion ever
+# reached one. Both tables are content-addressed (`cache_key` on the headline, `review_key` on
+# the row state), so a word given on one row applies to every row that carries the same text.
 
 
 @dataclass(frozen=True, slots=True)
@@ -773,4 +901,114 @@ async def corrections_export(session: AsyncSession, *, user_id: int) -> list[Cor
             corrected_at=row.updated_at,
         )
         for row in rows
+    ]
+
+
+# --- Labels: a person's word on a row's attention opinion -------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class LabelRecord:
+    """One export line: the words the model saw, the person's label, and what the model said."""
+
+    symbol: str
+    state: dict[str, object]
+    label: ReviewLabel
+    laya_label: ReviewLabel | None
+    laya_confidence: Decimal | None
+    note: str | None
+    labelled_at: dt.datetime
+
+
+def _opinion_confidence(opinion: ReviewOpinion | None) -> Decimal | None:
+    """Laya's probability as the column stores it — four decimals, never a float on the wire."""
+    if opinion is None:
+        return None
+    return Decimal(f"{opinion.confidence:.4f}")
+
+
+async def label_row(  # noqa: PLR0913 - the row, the label, the note and the model answer are all inputs
+    session: AsyncSession,
+    *,
+    user_id: int,
+    row: CandidateRow,
+    label: ReviewLabel,
+    note: str | None,
+    laya_opinion: ReviewOpinion | None = None,
+) -> ReviewOpinion:
+    """Store a person's word on a row's state — one row per ``(user, review_key)``, updated in
+    place on a second label — and return the opinion the page now shows for it.
+
+    The state stored is the row's own, as `overlap` computed it, so it is exactly what the page
+    showed and what the model was asked about. What Laya had cached is recorded at this moment
+    because that agreement or disagreement is the training signal and the checkpoint moves.
+    """
+    state = row.state()
+    key = review_key(state)
+    stored = (
+        await session.scalars(
+            select(CandidateReviewLabel).where(
+                CandidateReviewLabel.user_id == user_id,
+                CandidateReviewLabel.review_key == key,
+            )
+        )
+    ).one_or_none()
+    if stored is None:
+        stored = CandidateReviewLabel(
+            user_id=user_id,
+            review_key=key,
+            state=dict(state),
+            instrument_id=row.instrument_id,
+            symbol=row.symbol,
+        )
+        session.add(stored)
+    stored.state = dict(state)
+    stored.instrument_id = row.instrument_id
+    stored.symbol = row.symbol
+    stored.label = label.value
+    stored.note = note
+    stored.laya_label = None if laya_opinion is None else laya_opinion.label.value
+    stored.laya_confidence = _opinion_confidence(laya_opinion)
+    await session.flush()
+    return ReviewOpinion(label, 0.0, source=SOURCE_LABELLED)
+
+
+async def clear_label(session: AsyncSession, *, user_id: int, row: CandidateRow) -> bool:
+    """Remove the person's word on a row's state, so the model's opinion shows again.
+    ``False`` when there was none to remove."""
+    stored = (
+        await session.scalars(
+            select(CandidateReviewLabel).where(
+                CandidateReviewLabel.user_id == user_id,
+                CandidateReviewLabel.review_key == review_key(row.state()),
+            )
+        )
+    ).one_or_none()
+    if stored is None:
+        return False
+    await session.delete(stored)
+    await session.flush()
+    return True
+
+
+async def labels_export(session: AsyncSession, *, user_id: int) -> list[LabelRecord]:
+    """Every label the person has given, oldest first — the fine-tuning set for the row question."""
+    rows = (
+        await session.scalars(
+            select(CandidateReviewLabel)
+            .where(CandidateReviewLabel.user_id == user_id)
+            .order_by(CandidateReviewLabel.created_at, CandidateReviewLabel.id)
+        )
+    ).all()
+    return [
+        LabelRecord(
+            symbol=stored.symbol,
+            state=dict(stored.state),
+            label=ReviewLabel(stored.label),
+            laya_label=None if stored.laya_label is None else ReviewLabel(stored.laya_label),
+            laya_confidence=stored.laya_confidence,
+            note=stored.note,
+            labelled_at=stored.updated_at,
+        )
+        for stored in rows
     ]

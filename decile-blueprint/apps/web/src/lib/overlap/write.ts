@@ -3,23 +3,25 @@ import "server-only";
 import { serverApiOrigin } from "@/lib/api/config";
 import { auth } from "@/lib/auth";
 
-import type { OverlapEventType } from "@/lib/overlap/candidates";
+import type { OverlapEventType, OverlapOpinionLabel } from "@/lib/overlap/candidates";
 
 /**
  * The writes `/build/overlap` has — a person's correction of a headline's tag and its removal,
- * and (25 Sep 2026, Maulik: "put laya scan button on overlap page") the "Scan filings with
- * Laya" button, which queues one read of the listed names' exchange filings and reads its
- * progress back. The scan fills display context only; it never reaches a rank, size or order.
+ * a person's label on a row's opinion and its removal, and (25 Sep 2026, Maulik: "put laya scan
+ * button on overlap page") the "Scan filings with Laya" button, which queues one read of the
+ * listed names' exchange filings and reads its progress back. The scan fills display context
+ * only; it never reaches a rank, size or order.
  *
  * `fetch-candidates.ts` next door is the read, and this file sits beside it rather than inside
  * it for the reason `lib/twt/write.ts` gives for the same split: a page whose only writer is
  * the narrowest thing that can work is a page whose writes can be read in one sitting.
  *
- *  - **two paths, as a closed union type rather than a pattern.** `/overlap/tags` and
- *    `/overlap/catalyst-scan`, nothing else. A pattern would admit a route this application must
- *    never name; the type is the guard.
+ *  - **three paths, as a closed union type rather than a pattern.** `/overlap/tags`,
+ *    `/overlap/reviews` and `/overlap/catalyst-scan`, nothing else. A pattern would admit a
+ *    route this application must never name; the type is the guard.
  *  - **each path its own methods, paired by the type.** On `/overlap/tags`, PUT stores the
- *    person's word and DELETE removes it. On `/overlap/catalyst-scan`, POST queues one scan and
+ *    person's word on a headline and DELETE removes it; on `/overlap/reviews`, the same pair for
+ *    a row's opinion, named by instrument. On `/overlap/catalyst-scan`, POST queues one scan and
  *    GET reads its progress. The overloads pair them, so a POST to the tags path does not
  *    compile.
  *  - **the bearer never leaves the server.** The token comes from the session here, so no action
@@ -32,21 +34,35 @@ import type { OverlapEventType } from "@/lib/overlap/candidates";
  */
 
 /** The only paths this application may write to under `/overlap`. Widening it is a deliberate act. */
-export type OverlapWritePath = "/overlap/tags" | "/overlap/catalyst-scan";
+export type OverlapWritePath = "/overlap/tags" | "/overlap/reviews" | "/overlap/catalyst-scan";
 
 /** What the action gets back. The sentence is chosen by this app's copy, never by the wire. */
 export type OverlapWriteOutcome =
   | { readonly ok: true; readonly status: number; readonly body: unknown }
   | { readonly ok: false; readonly status: number };
 
-export type OverlapWriteRequest =
+/** `/overlap/tags`: a word on a headline, or the word taken back. */
+export type OverlapTagRequest =
   | {
       readonly method: "PUT";
       readonly body: { headline: string; event_type: OverlapEventType; note: string | null };
     }
-  | { readonly method: "DELETE"; readonly query: { headline: string } }
+  | { readonly method: "DELETE"; readonly query: { headline: string } };
+
+/** `/overlap/reviews`: a word on a row's opinion, or the word taken back. */
+export type OverlapReviewRequest =
+  | {
+      readonly method: "PUT";
+      readonly body: { instrument_id: number; label: OverlapOpinionLabel; note: string | null };
+    }
+  | { readonly method: "DELETE"; readonly query: { instrument_id: number } };
+
+/** `/overlap/catalyst-scan`: queue one scan, or read the last one's progress. */
+export type OverlapScanRequest =
   | { readonly method: "POST"; readonly query: { scope: "actionable" | "all" } }
   | { readonly method: "GET" };
+
+export type OverlapWriteRequest = OverlapTagRequest | OverlapReviewRequest | OverlapScanRequest;
 
 function timeoutMs(): number {
   const parsed = Number.parseInt(process.env.BASKFY_SERVER_FETCH_TIMEOUT_MS?.trim() || "2500", 10);
@@ -56,11 +72,15 @@ function timeoutMs(): number {
 /** One request, with the session's bearer. Never throws: the caller gets a result either way. */
 export async function overlapWrite(
   path: "/overlap/tags",
-  request: Extract<OverlapWriteRequest, { method: "PUT" | "DELETE" }>,
+  request: OverlapTagRequest,
+): Promise<OverlapWriteOutcome>;
+export async function overlapWrite(
+  path: "/overlap/reviews",
+  request: OverlapReviewRequest,
 ): Promise<OverlapWriteOutcome>;
 export async function overlapWrite(
   path: "/overlap/catalyst-scan",
-  request: Extract<OverlapWriteRequest, { method: "POST" | "GET" }>,
+  request: OverlapScanRequest,
 ): Promise<OverlapWriteOutcome>;
 export async function overlapWrite(
   path: OverlapWritePath,
@@ -70,8 +90,11 @@ export async function overlapWrite(
   const token = session?.accessToken;
   if (!token) return { ok: false, status: 401 };
   const url = new URL(`${serverApiOrigin()}/api/v1${path}`);
-  if (request.method === "DELETE") url.searchParams.set("headline", request.query.headline);
-  if (request.method === "POST") url.searchParams.set("scope", request.query.scope);
+  if (request.method === "DELETE" || request.method === "POST") {
+    for (const [name, value] of Object.entries(request.query)) {
+      url.searchParams.set(name, String(value));
+    }
+  }
   try {
     const response = await fetch(url, {
       method: request.method,

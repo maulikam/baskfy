@@ -1,5 +1,5 @@
-"""`/overlap` can list the day's candidates, take a person's word on a headline tag, and can
-never trade, scan, rank or size.
+"""`/overlap` can list the day's candidates, take a person's word on a headline tag and on a
+row's opinion, and can never trade, scan, rank or size.
 
 `/build/overlap` used to compute its membership in the web app from three page reads and showed
 symbols only. Serving it from the API in one read is worth doing only if the read stays exactly
@@ -23,6 +23,14 @@ disagree with. So the surface has two writes on one path — a correction and it
 they are the whole of what may be written: one table, `catalyst_tag_correction`, holding a label
 on display context that never reached a rank, a size or an order. `DELIBERATE_MUTATING_ROUTES`
 below is an exact equality, so a third verb or a second path is a second decision.
+
+WHY THERE IS A SECOND PUT/DELETE PAIR (25 Sep 2026)
+---------------------------------------------------
+`baskfy_core.candidate_review` measured the base checkpoint at a coin flip on the row question
+("how much does this row deserve a look") and settled that the labels a person puts on rows are
+what the fine-tune trains on. `/overlap/reviews` is that pair: a label on a row's opinion and its
+removal, written to `candidate_review_label` and nowhere else — the same shape as the tag
+correction, keyed on the words the model saw rather than the headline. Still display context.
 
 WHY THERE IS A FILINGS SCAN, AND WHY IT IS STILL NOT A "SCAN NOW" (25 Sep 2026)
 ------------------------------------------------------------------------------
@@ -50,10 +58,11 @@ from baskfy_core.swing.config import TRADEABLE_SETUPS, Setup
 OpenApiSpec = dict[str, dict[str, dict[str, object]]]
 
 #: Every non-GET route on the surface, and why it is allowed: a person's correction of a headline
-#: tag, and its removal. A route that is not in this table fails
-#: `test_every_route_is_a_get_except_the_documented_writes` the moment it is added.
+#: tag, a person's label on a row's opinion, and their removals. A route that is not in this
+#: table fails `test_every_route_is_a_get_except_the_documented_writes` the moment it is added.
 DELIBERATE_MUTATING_ROUTES: dict[str, set[str]] = {
     "/api/v1/overlap/tags": {"put", "delete"},
+    "/api/v1/overlap/reviews": {"put", "delete"},
     # The "Scan filings with Laya" button: queues the filings read, never a detector.
     "/api/v1/overlap/catalyst-scan": {"post"},
 }
@@ -65,6 +74,7 @@ READ_FUNCTIONS = (
     overlap_service._tag,
     overlap_service.laya_answers,
     overlap_service.corrections_for,
+    overlap_service.labels_for,
     overlap_service._swing,
     overlap_service._volume_breakout,
     overlap_service._three_weeks_tight,
@@ -82,15 +92,18 @@ def _overlap_paths(spec: OpenApiSpec) -> list[str]:
 
 
 class TestTheSurfaceIsRegisteredAndReadOnly:
-    def test_the_four_routes_exist(self, spec: OpenApiSpec) -> None:
+    def test_the_six_routes_exist(self, spec: OpenApiSpec) -> None:
         assert _overlap_paths(spec) == [
             "/api/v1/overlap",
             "/api/v1/overlap/catalyst-scan",
+            "/api/v1/overlap/reviews",
+            "/api/v1/overlap/reviews/export",
             "/api/v1/overlap/tags",
             "/api/v1/overlap/tags/export",
         ]
         assert set(spec["paths"]["/api/v1/overlap"]) == {"get"}
         assert set(spec["paths"]["/api/v1/overlap/tags/export"]) == {"get"}
+        assert set(spec["paths"]["/api/v1/overlap/reviews/export"]) == {"get"}
         assert set(spec["paths"]["/api/v1/overlap/catalyst-scan"]) == {"get", "post"}
 
     def test_every_route_is_a_get_except_the_documented_writes(self, spec: OpenApiSpec) -> None:
@@ -98,7 +111,7 @@ class TestTheSurfaceIsRegisteredAndReadOnly:
             allowed = {"get"} | DELIBERATE_MUTATING_ROUTES.get(path, set())
             assert set(spec["paths"][path]) <= allowed, (
                 f"{path} exposes {sorted(spec['paths'][path])}; /overlap is read-only apart from "
-                f"a headline-tag correction and the filings scan"
+                f"a headline-tag correction, a row label and the filings scan"
             )
 
     def test_the_exemption_is_still_a_real_route(self, spec: OpenApiSpec) -> None:
@@ -107,10 +120,10 @@ class TestTheSurfaceIsRegisteredAndReadOnly:
             assert path in spec["paths"], f"{path} is exempted but no longer served"
             assert verbs <= set(spec["paths"][path])
 
-    def test_the_mutating_routes_are_the_correction_and_the_scan_and_nothing_else(
+    def test_the_mutating_routes_are_the_correction_the_label_and_the_scan_and_nothing_else(
         self, spec: OpenApiSpec
     ) -> None:
-        """Exact equality, not a subset: a third verb or a second path would be a second
+        """Exact equality, not a subset: another verb or another path would be another
         decision."""
         mutating = {
             path: {verb for verb in spec["paths"][path] if verb != "get"}
@@ -122,8 +135,8 @@ class TestTheSurfaceIsRegisteredAndReadOnly:
     def test_the_router_declares_only_the_documented_mutating_decorators(self) -> None:
         """Over the source, so a route added and not yet registered is still caught."""
         source = inspect.getsource(overlap_router)
-        assert source.count("@router.put(") == 1, "the correction, and nothing else"
-        assert source.count("@router.delete(") == 1, "its removal, and nothing else"
+        assert source.count("@router.put(") == 2, "the correction, the label, and nothing else"
+        assert source.count("@router.delete(") == 2, "their removals, and nothing else"
         assert source.count("@router.post(") == 1, "the filings scan, and nothing else"
         assert "@router.patch(" not in source, "routers/overlap.py declares a PATCH"
 
@@ -189,6 +202,38 @@ class TestTheSurfaceIsRegisteredAndReadOnly:
         ):
             assert forbidden not in source, f"the correction writer names {forbidden}"
 
+    def test_the_labeller_touches_the_labels_table_and_nothing_else(self) -> None:
+        """The second write is a label on display context. It may construct and delete a
+        `CandidateReviewLabel` and must name no strategy table, no plan and no position."""
+        source = inspect.getsource(overlap_service.label_row) + inspect.getsource(
+            overlap_service.clear_label
+        )
+        assert "CandidateReviewLabel(" in source
+        for forbidden in (
+            "SwSetupDaily",
+            "SwWatch",
+            "SwPlan",
+            "SwPosition",
+            "VbSignalDaily",
+            "TwStateDaily",
+            "TwSignalDaily",
+            "Screen",
+            "CatalystTagCorrection",
+            ".commit(",
+        ):
+            assert forbidden not in source, f"the label writer names {forbidden}"
+
+    def test_a_label_is_keyed_on_the_words_the_model_saw(self) -> None:
+        """The label's key is the row state's — the same content address the sidecar caches its
+        answer under — so a label given on one row applies wherever that exact state appears,
+        and the stored state is the row's own as `overlap` computed it, never the caller's."""
+        source = inspect.getsource(overlap_service.label_row)
+        assert "review_key(state)" in source
+        assert "row.state()" in source
+        router_source = inspect.getsource(overlap_router.put_review)
+        assert "_row_on_the_list(" in router_source
+        assert "payload.state" not in router_source, "the caller must not supply the state"
+
     def test_every_route_requires_an_authenticated_principal(self) -> None:
         handlers = [
             value
@@ -197,7 +242,7 @@ class TestTheSurfaceIsRegisteredAndReadOnly:
             and getattr(value, "__module__", "") == overlap_router.__name__
             and name.startswith(("get_", "put_", "delete_", "post_"))
         ]
-        assert len(handlers) == 6, f"found {len(handlers)} route handlers, expected six"
+        assert len(handlers) == 9, f"found {len(handlers)} route handlers, expected nine"
         for handler in handlers:
             hints = typing.get_type_hints(handler, include_extras=True)
             assert "principal" in hints, f"{handler.__name__} takes no principal"
@@ -207,12 +252,15 @@ class TestTheSurfaceIsRegisteredAndReadOnly:
         sole tenant and passes ``None`` for anyone else rather than trusting the principal;
         the writes and the export refuse anyone else outright, the way `/swing`'s do."""
         source = inspect.getsource(overlap_router)
-        assert source.count("scoped_sole_user_id(") == 6
+        assert source.count("scoped_sole_user_id(") == 9
         assert "strategies_user_id=sole" in source
         for handler in (
             overlap_router.put_tag,
             overlap_router.delete_tag,
             overlap_router.get_tags_export,
+            overlap_router.put_review,
+            overlap_router.delete_review,
+            overlap_router.get_reviews_export,
             overlap_router.post_catalyst_scan,
             overlap_router.get_catalyst_scan,
         ):

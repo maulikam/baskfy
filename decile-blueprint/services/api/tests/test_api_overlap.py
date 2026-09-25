@@ -22,11 +22,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api import overlap_scan
 from baskfy_api.curated_tenant import SOLE_TENANT_REFUSED
-from baskfy_api.overlap import WANTED_KEY, Strategy, best_catalyst_for, overlap
+from baskfy_api.overlap import REVIEW_WANTED_KEY, WANTED_KEY, Strategy, best_catalyst_for, overlap
 from baskfy_api.problems import STATUS_FOR, ProblemType
 from baskfy_api.settings import Settings
+from baskfy_core.candidate_review import review_key, review_state, shown
 from baskfy_core.catalyst_tags import cache_key
 from baskfy_core.models import (
+    CandidateReviewLabel,
     CatalystTagCorrection,
     Instrument,
     SwCatalyst,
@@ -439,6 +441,61 @@ class TestTheFilingWorthOpening:
             await screen_cache.delete(WANTED_KEY)
 
 
+class TestTheOpinion:
+    """The technicals in words plus the filing go to Laya; the answer is attention, gated."""
+
+    async def test_a_miss_queues_the_row_state_in_words_and_a_sure_answer_is_shown(
+        self, screener_session: AsyncSession, screen_cache: Redis
+    ) -> None:
+        user_id, _ = await make_user(screener_session, "overlap-opinion@example.com")
+        await _a_morning(screener_session, user_id)
+        # The answers are content-addressed, so a key left behind is the same key next run.
+        keys = [
+            review_key(row.state())
+            for row in (
+                await overlap(screener_session, user_id=user_id, strategies_user_id=user_id)
+            ).rows
+        ]
+        await screen_cache.delete(REVIEW_WANTED_KEY, *keys)
+        try:
+            first = await overlap(
+                screener_session, user_id=user_id, strategies_user_id=user_id, cache=screen_cache
+            )
+            both = first.rows[0]
+            assert both.opinion is None
+            state = review_state(both.facts(), both.catalyst.headline if both.catalyst else None)
+            # The words the sidecar will be shown: the scans' numbers, said plainly, and the filing.
+            assert state["setup"].startswith("Swing episodic pivot, gap day")
+            assert "Three weeks tight, entry today" in state["setup"]
+            assert state["filing"] == "Press Release - BOTH wins a multi-year order"
+            pipe = screen_cache.pipeline()
+            pipe.hgetall(REVIEW_WANTED_KEY)
+            [queued] = await pipe.execute()
+            queued_keys = {(k.decode() if isinstance(k, bytes) else str(k)) for k in queued}
+            assert review_key(state) in queued_keys
+
+            # The sidecar answers, sure on this one and unsure on FLAGCO's.
+            await screen_cache.set(
+                review_key(state), json.dumps({"choice": "look_first", "confidence": 0.82})
+            )
+            flagco = first.rows[1]
+            flag_state = review_state(
+                flagco.facts(), flagco.catalyst.headline if flagco.catalyst else None
+            )
+            await screen_cache.set(
+                review_key(flag_state), json.dumps({"choice": "skip", "confidence": 0.34})
+            )
+            second = await overlap(
+                screener_session, user_id=user_id, strategies_user_id=user_id, cache=screen_cache
+            )
+        finally:
+            await screen_cache.delete(REVIEW_WANTED_KEY, *keys)
+        sure, unsure = second.rows[0].opinion, second.rows[1].opinion
+        assert sure is not None and (sure.label, sure.confidence) == ("look_first", 0.82)
+        assert unsure is not None and unsure.confidence == 0.34
+        assert shown(sure) and not shown(unsure)
+
+
 class TestTheModelColumn:
     """The sidecar's cached answer, resolved against the rules, on the wire."""
 
@@ -827,6 +884,311 @@ class TestTheCorrection:
         assert merger.status_code == 400, merger.text
         assert blank.status_code == 400, blank.text
         assert await _correction_count(screener_session, user_id) == 0
+
+
+REVIEWS = url("/overlap/reviews")
+
+
+async def _label_count(session: AsyncSession, user_id: int) -> int:
+    return int(
+        (
+            await session.execute(
+                select(func.count())
+                .select_from(CandidateReviewLabel)
+                .where(CandidateReviewLabel.user_id == user_id)
+            )
+        ).scalar_one()
+    )
+
+
+class TestTheLabel:
+    """A person's word on a row's opinion wins on the page, is one row per state, and exports
+    as the set the row question's fine-tune trains on."""
+
+    @pytest.fixture
+    def settings(self, seeded_url: str) -> Settings:
+        return api_settings(seeded_url)
+
+    async def test_a_label_wins_over_the_model_is_always_shown_and_records_what_it_overruled(
+        self,
+        settings: Settings,
+        screener_session: AsyncSession,
+        screen_cache: Redis,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        user_id, public_id = await make_user(screener_session, "labelwins@example.com")
+        monkeypatch.setenv("BASKFY_SOLE_USER_ID", str(user_id))
+        ids = await _a_morning(screener_session, user_id)
+        view = await overlap(screener_session, user_id=user_id, strategies_user_id=user_id)
+        both = view.rows[0]
+        state = both.state()
+        # Laya, unsure (measured shape): the page says "not sure". The person says skip.
+        await screen_cache.set(
+            review_key(state), json.dumps({"choice": "look_first", "confidence": 0.41})
+        )
+        try:
+            async with running_app(settings, screener_session) as client:
+                before = await client.get(url("/overlap"), headers=bearer(public_id))
+                put = await client.put(
+                    REVIEWS,
+                    headers=bearer(public_id),
+                    json={"instrument_id": ids["BOTH"], "label": "skip", "note": "stale gap"},
+                )
+                after = await client.get(url("/overlap"), headers=bearer(public_id))
+        finally:
+            await screen_cache.delete(review_key(state))
+
+        assert before.json()["data"][0]["opinion"] == {
+            "label": "look_first",
+            "confidence": 0.41,
+            "source": "laya",
+            "shown": False,
+            "floor": 0.6,
+            "labelled": False,
+        }
+        assert put.status_code == 200, put.text
+        labelled: dict[str, object] = {
+            "label": "skip",
+            "confidence": 0.0,
+            "source": "labelled",
+            "shown": True,
+            "floor": 0.6,
+            "labelled": True,
+        }
+        assert put.json() == labelled
+        assert after.json()["data"][0]["opinion"] == labelled
+        # The other row is untouched: no label, and no cached answer, so no opinion.
+        assert after.json()["data"][1]["opinion"] is None
+        # The state stored is exactly what the page showed the model, keyed the same way.
+        row = (
+            await screener_session.scalars(
+                select(CandidateReviewLabel).where(CandidateReviewLabel.user_id == user_id)
+            )
+        ).one()
+        assert (row.review_key, row.state, row.instrument_id, row.symbol) == (
+            review_key(state),
+            state,
+            ids["BOTH"],
+            "BOTH",
+        )
+        assert (row.label, row.note, row.laya_label, row.laya_confidence) == (
+            "skip",
+            "stale gap",
+            "look_first",
+            Decimal("0.4100"),
+        )
+
+    async def test_a_second_label_updates_the_one_row(
+        self,
+        settings: Settings,
+        screener_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        user_id, public_id = await make_user(screener_session, "labelagain@example.com")
+        monkeypatch.setenv("BASKFY_SOLE_USER_ID", str(user_id))
+        ids = await _a_morning(screener_session, user_id)
+
+        async with running_app(settings, screener_session) as client:
+            first = await client.put(
+                REVIEWS,
+                headers=bearer(public_id),
+                json={"instrument_id": ids["BOTH"], "label": "worth_a_look", "note": "maybe"},
+            )
+            second = await client.put(
+                REVIEWS,
+                headers=bearer(public_id),
+                json={"instrument_id": ids["BOTH"], "label": "look_first"},
+            )
+            page = await client.get(url("/overlap"), headers=bearer(public_id))
+
+        assert first.status_code == 200, first.text
+        assert first.json()["label"] == "worth_a_look"
+        assert second.status_code == 200, second.text
+        assert second.json()["label"] == "look_first"
+        assert await _label_count(screener_session, user_id) == 1
+        opinion = page.json()["data"][0]["opinion"]
+        assert (opinion["label"], opinion["source"], opinion["shown"]) == (
+            "look_first",
+            "labelled",
+            True,
+        )
+        row = (
+            await screener_session.scalars(
+                select(CandidateReviewLabel).where(CandidateReviewLabel.user_id == user_id)
+            )
+        ).one()
+        assert row.note is None, "the second label carried no note, so the row has none"
+        # No cached answer in this database: the model's side of the signal is honestly null.
+        assert (row.laya_label, row.laya_confidence) == (None, None)
+
+    async def test_removing_the_label_restores_the_models_opinion(
+        self,
+        settings: Settings,
+        screener_session: AsyncSession,
+        screen_cache: Redis,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        user_id, public_id = await make_user(screener_session, "labelclear@example.com")
+        monkeypatch.setenv("BASKFY_SOLE_USER_ID", str(user_id))
+        ids = await _a_morning(screener_session, user_id)
+        view = await overlap(screener_session, user_id=user_id, strategies_user_id=user_id)
+        key = review_key(view.rows[0].state())
+        await screen_cache.set(key, json.dumps({"choice": "look_first", "confidence": 0.82}))
+        try:
+            async with running_app(settings, screener_session) as client:
+                await client.put(
+                    REVIEWS,
+                    headers=bearer(public_id),
+                    json={"instrument_id": ids["BOTH"], "label": "skip"},
+                )
+                removed = await client.delete(
+                    REVIEWS, headers=bearer(public_id), params={"instrument_id": ids["BOTH"]}
+                )
+                again = await client.delete(
+                    REVIEWS, headers=bearer(public_id), params={"instrument_id": ids["BOTH"]}
+                )
+                page = await client.get(url("/overlap"), headers=bearer(public_id))
+        finally:
+            await screen_cache.delete(key)
+
+        assert removed.status_code == 204, removed.text
+        assert again.status_code == 404, again.text
+        assert await _label_count(screener_session, user_id) == 0
+        opinion = page.json()["data"][0]["opinion"]
+        assert (opinion["label"], opinion["source"], opinion["labelled"], opinion["shown"]) == (
+            "look_first",
+            "laya",
+            False,
+            True,
+        )
+
+    async def test_the_export_is_one_ndjson_line_per_label_oldest_first(
+        self,
+        settings: Settings,
+        screener_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        user_id, public_id = await make_user(screener_session, "labelexport@example.com")
+        monkeypatch.setenv("BASKFY_SOLE_USER_ID", str(user_id))
+        ids = await _a_morning(screener_session, user_id)
+        view = await overlap(screener_session, user_id=user_id, strategies_user_id=user_id)
+        states = {row.symbol: row.state() for row in view.rows}
+
+        async with running_app(settings, screener_session) as client:
+            empty = await client.get(url("/overlap/reviews/export"), headers=bearer(public_id))
+            await client.put(
+                REVIEWS,
+                headers=bearer(public_id),
+                json={"instrument_id": ids["BOTH"], "label": "look_first", "note": "order win"},
+            )
+            await client.put(
+                REVIEWS,
+                headers=bearer(public_id),
+                json={"instrument_id": ids["FLAGCO"], "label": "skip"},
+            )
+            export = await client.get(url("/overlap/reviews/export"), headers=bearer(public_id))
+
+        assert empty.status_code == 200 and empty.text == ""
+        assert export.status_code == 200, export.text
+        assert export.headers["content-type"].startswith("application/x-ndjson")
+        lines = [json.loads(line) for line in export.text.splitlines()]
+        assert len(lines) == 2
+        assert export.text.endswith("\n")
+        first, second = lines
+        assert set(first) == {
+            "symbol",
+            "state",
+            "label",
+            "laya_label",
+            "laya_confidence",
+            "note",
+            "labelled_at",
+        }
+        assert (first["symbol"], first["state"], first["label"]) == (
+            "BOTH",
+            states["BOTH"],
+            "look_first",
+        )
+        assert (first["laya_label"], first["laya_confidence"]) == (None, None)
+        assert first["note"] == "order win"
+        assert dt.datetime.fromisoformat(first["labelled_at"]).tzinfo is not None
+        assert (second["symbol"], second["state"], second["label"], second["note"]) == (
+            "FLAGCO",
+            states["FLAGCO"],
+            "skip",
+            None,
+        )
+        assert second["state"]["filing"] == "No filing on record."
+
+    async def test_a_caller_who_is_not_the_sole_tenant_is_refused_the_writes_and_the_export(
+        self,
+        settings: Settings,
+        screener_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        sole_id, _ = await make_user(screener_session, "labelowner@example.com")
+        monkeypatch.setenv("BASKFY_SOLE_USER_ID", str(sole_id))
+        ids = await _a_morning(screener_session, sole_id)
+        _, guest = await make_user(screener_session, "labelguest@example.com")
+        refused = STATUS_FOR[ProblemType.NOT_FOUND]
+
+        async with running_app(settings, screener_session) as client:
+            put = await client.put(
+                REVIEWS,
+                headers=bearer(guest),
+                json={"instrument_id": ids["BOTH"], "label": "skip"},
+            )
+            delete = await client.delete(
+                REVIEWS, headers=bearer(guest), params={"instrument_id": ids["BOTH"]}
+            )
+            export = await client.get(url("/overlap/reviews/export"), headers=bearer(guest))
+            anonymous = await client.put(
+                REVIEWS, json={"instrument_id": ids["BOTH"], "label": "skip"}
+            )
+
+        assert anonymous.status_code == 401
+        for response in (put, delete, export):
+            assert response.status_code == refused, response.text
+            assert problem(response)["reason"] == SOLE_TENANT_REFUSED
+        assert await _label_count(screener_session, sole_id) == 0
+
+    async def test_a_name_not_on_the_list_or_a_word_outside_the_vocabulary_is_refused(
+        self,
+        settings: Settings,
+        screener_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """There is no state to label for a name the scans did not write today, so the server
+        cannot key a label for it — and will not take one from the caller."""
+        user_id, public_id = await make_user(screener_session, "labelbad@example.com")
+        monkeypatch.setenv("BASKFY_SOLE_USER_ID", str(user_id))
+        ids = await _a_morning(screener_session, user_id)
+        absent = await _instrument(screener_session, "NOSCAN")
+
+        async with running_app(settings, screener_session) as client:
+            unknown = await client.put(
+                REVIEWS, headers=bearer(public_id), json={"instrument_id": absent, "label": "skip"}
+            )
+            unknown_delete = await client.delete(
+                REVIEWS, headers=bearer(public_id), params={"instrument_id": absent}
+            )
+            buy = await client.put(
+                REVIEWS,
+                headers=bearer(public_id),
+                json={"instrument_id": ids["BOTH"], "label": "buy"},
+            )
+            # A row the scans wrote but no plan builder could take is still on the list.
+            quiet = await client.put(
+                REVIEWS,
+                headers=bearer(public_id),
+                json={"instrument_id": ids["QUIET"], "label": "skip"},
+            )
+
+        assert unknown.status_code == 404, unknown.text
+        assert unknown_delete.status_code == 404, unknown_delete.text
+        assert buy.status_code == 400, buy.text
+        assert quiet.status_code == 200, quiet.text
+        assert await _label_count(screener_session, user_id) == 1
 
 
 SCAN = url("/overlap/catalyst-scan")

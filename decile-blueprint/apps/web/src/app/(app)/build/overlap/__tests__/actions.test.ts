@@ -8,7 +8,7 @@ vi.mock("@/lib/overlap/write", () => ({
   overlapWrite: (...args: unknown[]): Promise<unknown> => overlapWrite(...args),
 }));
 
-const { filingsScanStatus, startFilingsScan, correctTag } = await import("../actions");
+const { filingsScanStatus, startFilingsScan, correctTag, labelRow } = await import("../actions");
 
 const done = {
   state: "done",
@@ -66,5 +66,53 @@ describe("the overlap page's server actions", () => {
     const result = await correctTag("Receipt of order", "order");
     expect(result.ok).toBe(true);
     expect(revalidatePath).toHaveBeenCalledWith("/build/overlap");
+  });
+
+  it("a row label is a PUT on /overlap/reviews with the instrument and the word, and re-renders", async () => {
+    overlapWrite.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: {
+        label: "skip",
+        confidence: 0,
+        source: "labelled",
+        shown: true,
+        floor: 0.6,
+        labelled: true,
+      },
+    });
+    const result = await labelRow(42, "skip");
+    expect(result).toEqual({ ok: true });
+    expect(overlapWrite).toHaveBeenCalledWith("/overlap/reviews", {
+      method: "PUT",
+      body: { instrument_id: 42, label: "skip", note: null },
+    });
+    expect(revalidatePath).toHaveBeenCalledWith("/build/overlap");
+  });
+
+  it("clearing a row label is a DELETE, and an already-absent label still re-renders", async () => {
+    overlapWrite.mockResolvedValue({ ok: false, status: 404 });
+    const result = await labelRow(42, null);
+    expect(result).toEqual({ ok: true });
+    expect(overlapWrite).toHaveBeenCalledWith("/overlap/reviews", {
+      method: "DELETE",
+      query: { instrument_id: 42 },
+    });
+    expect(revalidatePath).toHaveBeenCalledWith("/build/overlap");
+  });
+
+  it("a refused row label is said in this app's words and nothing is re-rendered", async () => {
+    overlapWrite.mockResolvedValue({ ok: false, status: 404 });
+    const result = await labelRow(42, "look_first");
+    expect(result).toEqual({
+      ok: false,
+      error: "That name is not on today's list, or labels belong to the account that runs the scans.",
+    });
+    expect(revalidatePath).not.toHaveBeenCalled();
+    /* A word outside the vocabulary never reaches the wire. */
+    overlapWrite.mockClear();
+    const bad = await labelRow(42, "buy" as unknown as "skip");
+    expect(bad.ok).toBe(false);
+    expect(overlapWrite).not.toHaveBeenCalled();
   });
 });

@@ -2683,6 +2683,56 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/overlap/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Label a row's opinion
+         * @description Store the person's word on a row and answer with the opinion the page now shows.
+         *
+         *     Idempotent on the row's state: a second label updates the one row. What Laya had cached for
+         *     that state is recorded beside it at this moment — the training signal. Sole tenant only.
+         */
+        put: operations["putReview"];
+        post?: never;
+        /**
+         * Remove a row's label
+         * @description The model's opinion shows again. 404 when the name is not on today's list or there was
+         *     no label to remove.
+         */
+        delete: operations["deleteReview"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/overlap/reviews/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every row label, as NDJSON
+         * @description The fine-tuning set for the row question: one line per labelled state, oldest first —
+         *     the symbol, the words the model saw, the person's label, what the model said at the time,
+         *     the note, and when. Sole tenant only.
+         */
+        get: operations["getReviewsExport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/overlap/tags": {
         parameters: {
             query?: never;
@@ -9436,6 +9486,28 @@ export interface components {
             /** Shown */
             shown: number;
         };
+        /**
+         * OverlapOpinionOut
+         * @description The opinion on the row — the technicals in words plus the filing — as attention, never a
+         *     trade. ``source`` names whose: ``laya`` for the model, ``labelled`` for a person's word,
+         *     which wins and is always shown. For the model, ``shown`` is false below the confidence
+         *     floor, and the page then says "not sure" rather than printing a guess with a percentage;
+         *     ``label`` and ``confidence`` are served regardless so a person can see what the model
+         *     thought when labelling the row.
+         */
+        OverlapOpinionOut: {
+            /** Confidence */
+            confidence: number;
+            /** Floor */
+            floor: number;
+            label: components["schemas"]["ReviewLabel"];
+            /** Labelled */
+            labelled: boolean;
+            /** Shown */
+            shown: boolean;
+            /** Source */
+            source: string;
+        };
         /** OverlapOut */
         OverlapOut: {
             /** Data */
@@ -9452,6 +9524,18 @@ export interface components {
             /** Strategies Read */
             strategies_read: boolean;
         };
+        /**
+         * OverlapReviewLabelIn
+         * @description A person's word on one row's opinion. The row is named by instrument; the server takes
+         *     the state from the row as the page shows it, so the label is keyed on exactly those words.
+         */
+        OverlapReviewLabelIn: {
+            /** Instrument Id */
+            instrument_id: number;
+            label: components["schemas"]["ReviewLabel"];
+            /** Note */
+            note?: string | null;
+        };
         /** OverlapRowOut */
         OverlapRowOut: {
             /** Actionable */
@@ -9465,6 +9549,7 @@ export interface components {
             last_price: string | null;
             /** Name */
             name: string;
+            opinion: components["schemas"]["OverlapOpinionOut"] | null;
             /** Screens */
             screens: components["schemas"]["OverlapScreenOut"][];
             /** Strategies */
@@ -11001,6 +11086,11 @@ export interface components {
             /** Unset */
             unset: boolean;
         };
+        /**
+         * ReviewLabel
+         * @enum {string}
+         */
+        ReviewLabel: "look_first" | "worth_a_look" | "skip";
         /**
          * ReviewPriority
          * @enum {string}
@@ -29033,6 +29123,314 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OverlapScanOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    putReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OverlapReviewLabelIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverlapOpinionOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    deleteReview: {
+        parameters: {
+            query: {
+                /** @description the row, as the page names it */
+                instrument_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getReviewsExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/x-ndjson": unknown;
                 };
             };
             /** @description Bad request */

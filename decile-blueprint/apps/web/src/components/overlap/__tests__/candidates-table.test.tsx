@@ -5,6 +5,7 @@ import { CandidatesTable } from "@/components/overlap/candidates-table";
 import {
   parseCandidates,
   type CorrectTagAction,
+  type LabelRowAction,
   type OverlapCandidates,
 } from "@/lib/overlap/candidates";
 import type * as LiveMarksModule from "@/lib/screens/live-marks";
@@ -60,6 +61,14 @@ const payload = parseCandidates({
           actionable: true,
         },
       ],
+      opinion: {
+        label: "look_first",
+        confidence: 0.82,
+        source: "laya",
+        shown: true,
+        floor: 0.6,
+        labelled: false,
+      },
       screens: [
         {
           name: "Investing 001",
@@ -107,6 +116,14 @@ const payload = parseCandidates({
       ],
       screens: [],
       catalyst: null,
+      opinion: {
+        label: "skip",
+        confidence: 0.34,
+        source: "laya",
+        shown: false,
+        floor: 0.6,
+        labelled: false,
+      },
     },
   ],
 });
@@ -319,6 +336,101 @@ describe("CandidatesTable", () => {
     expect(within(tag).getByLabelText("the two readers disagree")).toHaveAttribute(
       "title",
       "The other reader (rules) said order.",
+    );
+  });
+
+  it("shows Laya's opinion on the row only when it is sure, and never as a trade", () => {
+    render(<CandidatesTable candidates={payload} scope="all" />);
+    const [sure, unsure] = screen.getAllByTestId("overlap-candidate-opinion");
+    expect(sure).toHaveTextContent("Look first82%");
+    expect(sure).toHaveAttribute("data-state", "shown");
+    expect(sure).toHaveAttribute("title", expect.stringContaining("never a trade"));
+    expect(unsure).toHaveTextContent("not sure");
+    expect(unsure).toHaveAttribute("title", expect.stringContaining("Skip at 34%, below its 60% floor"));
+    expect(screen.getByRole("columnheader", { name: "Laya" })).toBeInTheDocument();
+  });
+
+  it("offers the three words and a clear option on the Laya cell when it can write, and nothing when it cannot", () => {
+    render(<CandidatesTable candidates={payload} scope="all" />);
+    expect(screen.queryByTestId("overlap-candidate-opinion-label")).toBeNull();
+    cleanup();
+
+    const labelRow: LabelRowAction = vi.fn(() => Promise.resolve({ ok: true as const }));
+    render(<CandidatesTable candidates={payload} scope="all" labelRow={labelRow} />);
+    /* Every row gets a select — including one the model has not answered or was unsure on. */
+    const selects = screen.getAllByTestId("overlap-candidate-opinion-label");
+    expect(selects).toHaveLength(2);
+    const select = selects[0]!;
+    expect(select).toHaveAttribute("aria-label", "Label BOTH: how much does this row deserve a look");
+    const options = within(select).getAllByRole("option");
+    /* A placeholder, the three words in the wire's order, and the clear option. */
+    expect(options.map((option) => option.getAttribute("value"))).toEqual([
+      "",
+      "look_first",
+      "worth_a_look",
+      "skip",
+      "__clear",
+    ]);
+    expect(options.slice(1, 4).map((option) => option.textContent)).toEqual([
+      "Look first",
+      "Worth a look",
+      "Skip",
+    ]);
+    expect(within(select).getByRole("option", { name: "Clear label" })).toBeDisabled();
+    /* Laya's word stands: nothing is selected until a person chooses. */
+    expect(select).toHaveValue("");
+    expect(within(select).getByRole("option", { name: "Label…" })).toBeDisabled();
+  });
+
+  it("calls the label action with the instrument and the chosen word", async () => {
+    const labelRow: LabelRowAction = vi.fn(() => Promise.resolve({ ok: true as const }));
+    render(<CandidatesTable candidates={payload} scope="all" labelRow={labelRow} />);
+    const [, quiet] = screen.getAllByTestId("overlap-candidate-opinion-label");
+    fireEvent.change(quiet!, { target: { value: "skip" } });
+    await waitFor(() => expect(labelRow).toHaveBeenCalledWith(2, "skip"));
+    expect(labelRow).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId("overlap-candidate-opinion-error")).toBeNull();
+  });
+
+  it("renders a labelled opinion as the person's word, without a percentage, and can clear it", async () => {
+    const labelled: OverlapCandidates = {
+      ...payload,
+      data: [
+        {
+          ...payload.data[0]!,
+          opinion: {
+            label: "skip",
+            confidence: 0,
+            source: "labelled",
+            shown: true,
+            floor: 0.6,
+            labelled: true,
+          },
+        },
+      ],
+    };
+    const labelRow: LabelRowAction = vi.fn(() =>
+      Promise.resolve({ ok: false as const, error: "The label was not saved." }),
+    );
+    render(<CandidatesTable candidates={labelled} scope="actionable" labelRow={labelRow} />);
+    const opinion = screen.getByTestId("overlap-candidate-opinion");
+    expect(opinion).toHaveAttribute("data-source", "labelled");
+    expect(opinion).toHaveAttribute("data-state", "shown");
+    expect(opinion).toHaveAttribute("data-label", "skip");
+    expect(opinion).toHaveTextContent("Skiplabelled");
+    expect(opinion).not.toHaveTextContent("%");
+    expect(within(opinion).getByTestId("overlap-candidate-opinion-source")).toHaveTextContent("labelled");
+    expect(opinion).toHaveAttribute("title", expect.stringContaining("Labelled by you"));
+    expect(opinion).toHaveAttribute("title", expect.stringContaining("never a trade"));
+
+    const select = screen.getByTestId("overlap-candidate-opinion-label");
+    expect(select).toHaveValue("skip");
+    expect(within(select).getByRole("option", { name: "Clear label" })).toBeEnabled();
+    fireEvent.change(select, { target: { value: "__clear" } });
+    await waitFor(() => expect(labelRow).toHaveBeenCalledWith(1, null));
+    /* A refusal is said in the cell, in this app's words. */
+    expect(await screen.findByTestId("overlap-candidate-opinion-error")).toHaveTextContent(
+      "The label was not saved.",
     );
   });
 

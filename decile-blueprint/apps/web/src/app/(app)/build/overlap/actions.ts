@@ -3,19 +3,23 @@
 import { revalidatePath } from "next/cache";
 
 import {
+  OPINION_LABELS,
   OVERLAP_EVENT_TYPES,
   type CorrectTagResult,
   type FilingsScan,
   type FilingsScanResult,
+  type LabelRowResult,
   type OverlapEventType,
+  type OverlapOpinionLabel,
   type OverlapScope,
 } from "@/lib/overlap/candidates";
 import { overlapWrite } from "@/lib/overlap/write";
 
 /**
- * `/build/overlap`'s server actions — a person's word on a headline, and (25 Sep 2026) the
- * "Scan filings with Laya" button's two: queue one read of the listed names' filings, and read
- * its progress. The scan fills the Results and Filing cells and nothing else.
+ * `/build/overlap`'s server actions — a person's word on a headline, a person's word on a
+ * row's opinion, and (25 Sep 2026) the "Scan filings with Laya" button's two: queue one read of
+ * the listed names' filings, and read its progress. The scan fills the Results and Filing cells
+ * and nothing else.
  *
  * The tag under a filing is read from the headline by fixed rules and by Laya; the order settled
  * for that tag (`baskfy_core.catalyst_tags`) is a baseline first, corrections collected against
@@ -68,6 +72,55 @@ export async function correctTag(
         });
   if (!outcome.ok && !(eventType === null && outcome.status === 404)) {
     return { ok: false, error: refusal(outcome.status) };
+  }
+  revalidatePath(PAGE);
+  return { ok: true };
+}
+
+function labelRefusal(status: number): string {
+  switch (status) {
+    case 0:
+      return "The service could not be reached; the label was not changed.";
+    case 401:
+      return "Sign in again to label a row.";
+    case 404:
+      return "That name is not on today's list, or labels belong to the account that runs the scans.";
+    default:
+      return "The label was not saved.";
+  }
+}
+
+/**
+ * Record the person's word on the row's opinion, or take it back with `null`.
+ *
+ * The server keys the label on the row's state as the page showed it — the setup in words and
+ * the filing — so a label given here applies wherever that exact state appears, and the export
+ * is the set the row question's fine-tune trains on. Idempotent: a second word on the same
+ * state updates the one row. The page is revalidated so the cell shows the label from the same
+ * read everything else on it comes from.
+ */
+export async function labelRow(
+  instrumentId: number,
+  label: OverlapOpinionLabel | null,
+): Promise<LabelRowResult> {
+  if (!Number.isInteger(instrumentId) || instrumentId <= 0) {
+    return { ok: false, error: "There is no row to label." };
+  }
+  if (label !== null && !OPINION_LABELS.includes(label)) {
+    return { ok: false, error: "That is not one of the three words a row can be." };
+  }
+  const outcome =
+    label === null
+      ? await overlapWrite("/overlap/reviews", {
+          method: "DELETE",
+          query: { instrument_id: instrumentId },
+        })
+      : await overlapWrite("/overlap/reviews", {
+          method: "PUT",
+          body: { instrument_id: instrumentId, label, note: null },
+        });
+  if (!outcome.ok && !(label === null && outcome.status === 404)) {
+    return { ok: false, error: labelRefusal(outcome.status) };
   }
   revalidatePath(PAGE);
   return { ok: true };

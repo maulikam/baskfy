@@ -89,6 +89,11 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     # `test_overlap_readonly.py` names exactly these verbs on exactly this path.
     "/overlap/tags": {"put", "delete"},
     "/overlap/tags/export": {"get"},
+    # 25 Sep 2026: a person's label on a row's attention opinion — the set the row question's
+    # fine-tune trains on — and the labels as NDJSON. The same shape as `/overlap/tags`, keyed on
+    # the words the model saw; `test_overlap_readonly.py` names exactly these verbs.
+    "/overlap/reviews": {"put", "delete"},
+    "/overlap/reviews/export": {"get"},
     # The "Scan filings with Laya" button (25 Sep 2026): queue one read of the listed names'
     # filings, and its progress. docs/07a "Overlap: the filings scan".
     "/overlap/catalyst-scan": {"get", "post"},

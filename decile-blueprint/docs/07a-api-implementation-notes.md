@@ -277,7 +277,29 @@ sole tenant only: `PUT /overlap/tags` {headline, event_type, note} upserts a cor
 content-addressed headline key and records what the rules and Laya said at that moment;
 `DELETE /overlap/tags?headline=` removes it; `GET /overlap/tags/export` streams every
 correction as NDJSON — the fine-tuning set. Nothing under `/overlap` reaches the gateway, and
-`services/api/tests/test_overlap_readonly.py` pins the two verbs as the whole mutating surface.
+`services/api/tests/test_overlap_readonly.py` pins the verbs as the whole mutating surface.
+
+### Overlap: the row label (25 Sep 2026)
+
+Each row also carries an **opinion** — Laya's answer to "how much does this row deserve a look"
+over the row's technicals in words plus its filing (`baskfy_core.candidate_review`), served as
+`opinion: {label, confidence, source, shown, floor, labelled}`. Measured on the base checkpoint
+that opinion is a coin flip, so the labels a person puts on rows are what the fine-tune trains
+on. The same shape as the tag correction, on `/overlap/reviews`, sole tenant only:
+
+* `PUT /overlap/reviews` {instrument_id, label: look_first|worth_a_look|skip, note} — the server
+  re-reads the row through `overlap()` (scope `all`; 404 when the name is not on today's list),
+  keys the label on `review_key(state)` — the same content address the sidecar caches under —
+  stores the `{setup, filing}` state verbatim, records what Laya had cached for it at that
+  moment, and upserts on `(user_id, review_key)`. Answers the opinion the page now shows:
+  `source: "labelled"`, `confidence: 0`, `shown: true`, `labelled: true`.
+* `DELETE /overlap/reviews?instrument_id=` — 204; 404 when the name is not on the list or there
+  was no label.
+* `GET /overlap/reviews/export` — NDJSON, oldest first: `{symbol, state, label, laya_label,
+  laya_confidence, note, labelled_at}`.
+
+On `GET /overlap` a stored label for a row's state wins over the cached opinion. Table
+`candidate_review_label` (migration 0054); display context only.
 
 ### Overlap: the filings scan (25 Sep 2026)
 

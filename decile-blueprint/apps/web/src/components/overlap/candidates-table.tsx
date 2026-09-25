@@ -11,13 +11,17 @@ import { FilingsScanButton } from "@/components/overlap/filings-scan-button";
 import { LiveMarksProvider, LivePrice, LiveStatus } from "@/components/screens/live-price";
 import { formatDateTimeIST, formatTradeDate } from "@/lib/format";
 import {
+  OPINION_LABELS,
+  OPINION_WORDS,
   OVERLAP_EVENT_TYPES,
   layaStatusLine,
   type CorrectTagAction,
   type FilingsScanActions,
+  type LabelRowAction,
   type OverlapCandidate,
   type OverlapCandidates,
   type OverlapEventType,
+  type OverlapOpinionLabel,
   type OverlapScope,
   type OverlapStrategy,
   type OverlapTag,
@@ -40,9 +44,10 @@ import { cn } from "@/lib/utils";
  * rules or by Laya, labelled with its source and never read by any rank or order path; whether
  * the filing explains the move is still the reader's judgement, on the exchange's page.
  *
- * **The one thing a person can change here is that tag.** The select on the chip records their
- * word on the headline (`correctTag`, a server action): it wins on the page, and the corrections
- * are the set the model is fine-tuned on. A correction is a label on display context — it
+ * **The two things a person can change here are that tag and the Laya cell.** The select on the
+ * chip records their word on the headline (`correctTag`, a server action); the select in the
+ * Laya cell records their word on the row's opinion (`labelRow`). Each wins on the page, and the
+ * two sets are what the model is fine-tuned on. Both are labels on display context — each
  * reaches one table and no rank, size or order.
  *
  * **Nothing here can place an order**, queue a scan, or change a setting. The table reads one
@@ -52,12 +57,15 @@ export function CandidatesTable({
   candidates,
   scope,
   correctTag,
+  labelRow,
   scanFilings,
 }: {
   candidates: OverlapCandidates | null;
   scope: OverlapScope;
   /** Absent in a render that cannot write (a test, a preview): the chip then has no select. */
   correctTag?: CorrectTagAction;
+  /** Absent where the page cannot write: the Laya cell then has no select. */
+  labelRow?: LabelRowAction;
   /** The "Scan filings with Laya" button's actions; absent where the page cannot write. */
   scanFilings?: FilingsScanActions;
 }) {
@@ -139,7 +147,11 @@ export function CandidatesTable({
             {layaStatusLine(candidates.laya, formatDateTimeIST)}
           </p>
           <p className="text-xs text-muted-foreground" data-testid="overlap-candidates-tag-note">
-            The small tag under a filing is read from its headline — by Laya, with its
+            The Laya column is the model&rsquo;s view of the whole row &mdash; the scan&rsquo;s
+            numbers said in words, plus the filing &mdash; as attention, never a trade: shown only
+            when it is sure, &ldquo;not sure&rdquo; otherwise. Your own word on a row wins there,
+            and the rows you label are what the model is trained on next. The small tag under a filing is read
+            from its headline — by Laya, with its
             confidence, when the model is sure, and by fixed rules otherwise; a &ldquo;?&rdquo; means
             the two disagreed. It is the subject the exchange named, nothing more: context for
             which filing to open first, not used in any rank, size or order. If it is wrong,
@@ -155,12 +167,18 @@ export function CandidatesTable({
                   <th className="px-2 py-2 text-right font-medium">Price</th>
                   <th className="px-2 py-2 font-medium">Results</th>
                   <th className="px-2 py-2 font-medium">Filing</th>
+                  <th className="px-2 py-2 font-medium">Laya</th>
                   <th className="py-2 pl-2 font-medium">Screens</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((row) => (
-                  <CandidateRow key={row.instrument_id} row={row} correctTag={correctTag} />
+                  <CandidateRow
+                    key={row.instrument_id}
+                    row={row}
+                    correctTag={correctTag}
+                    labelRow={labelRow}
+                  />
                 ))}
               </tbody>
             </table>
@@ -174,9 +192,11 @@ export function CandidatesTable({
 function CandidateRow({
   row,
   correctTag,
+  labelRow,
 }: {
   row: OverlapCandidate;
   correctTag: CorrectTagAction | undefined;
+  labelRow: LabelRowAction | undefined;
 }) {
   return (
     <tr
@@ -250,6 +270,14 @@ function CandidateRow({
           </span>
         ) : null}
       </td>
+      <td className="px-2 py-2 align-top text-xs">
+        <OpinionCell
+          opinion={row.opinion}
+          instrumentId={row.instrument_id}
+          symbol={row.symbol}
+          labelRow={labelRow}
+        />
+      </td>
       <td className="py-2 pl-2 align-top text-xs">
         {row.screens.length === 0 ? (
           <span className="text-muted-foreground/70">—</span>
@@ -276,6 +304,147 @@ function CandidateRow({
         )}
       </td>
     </tr>
+  );
+}
+
+/** The `<option>` value that takes a label back — never one of the three words. */
+const CLEAR_LABEL = "__clear";
+
+/**
+ * The opinion on the whole row — the scans' technicals in words plus the filing — as attention,
+ * never a trade. Laya's is shown as a word with its percentage when the model cleared the
+ * floor; "not sure" otherwise, with the guess on hover so a person labelling the row can see
+ * what the model thought. A person's own label wins: the word with "labelled" beside it, no
+ * percentage. The select records that label (`labelRow`, a server action) or takes it back;
+ * the labelled rows are the set the row question's fine-tune trains on. None of it is read by
+ * any rank, size or order path.
+ */
+function OpinionCell({
+  opinion,
+  instrumentId,
+  symbol,
+  labelRow,
+}: {
+  opinion: OverlapCandidate["opinion"];
+  instrumentId: number;
+  symbol: string;
+  labelRow: LabelRowAction | undefined;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const labelled = opinion !== null && opinion.labelled;
+
+  const onChange = (value: string) => {
+    if (!labelRow) return;
+    const next: OverlapOpinionLabel | null =
+      value === CLEAR_LABEL ? null : (OPINION_LABELS.find((label) => label === value) ?? null);
+    if (next === null && value !== CLEAR_LABEL) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await labelRow(instrumentId, next);
+      if (!result.ok) setError(result.error);
+    });
+  };
+
+  const select = labelRow ? (
+    <>
+      <select
+        aria-label={`Label ${symbol}: how much does this row deserve a look`}
+        className="max-w-[8rem] rounded border border-border/70 bg-background px-1 py-0 text-xs text-foreground"
+        data-testid="overlap-candidate-opinion-label"
+        disabled={pending}
+        value={labelled ? opinion.label : ""}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        <option value="" disabled>
+          Label…
+        </option>
+        {OPINION_LABELS.map((label) => (
+          <option key={label} value={label}>
+            {OPINION_WORDS[label]}
+          </option>
+        ))}
+        <option value={CLEAR_LABEL} disabled={!labelled}>
+          Clear label
+        </option>
+      </select>
+      {error ? (
+        <span role="alert" className="text-destructive" data-testid="overlap-candidate-opinion-error">
+          {error}
+        </span>
+      ) : null}
+    </>
+  ) : null;
+
+  let word: ReactNode;
+  if (opinion === null) {
+    word = (
+      <span className="text-muted-foreground/70" data-testid="overlap-candidate-opinion" data-state="pending">
+        —
+      </span>
+    );
+  } else if (labelled) {
+    word = (
+      <span
+        className={cn(
+          "inline-flex items-center gap-1 rounded-md border border-dashed px-1.5 py-0.5",
+          opinion.label === "look_first"
+            ? "border-primary/40 text-foreground"
+            : opinion.label === "worth_a_look"
+              ? "border-border text-foreground/80"
+              : "border-border/60 text-muted-foreground",
+        )}
+        data-testid="overlap-candidate-opinion"
+        data-state="shown"
+        data-source="labelled"
+        data-label={opinion.label}
+        title={`Labelled by you: ${OPINION_WORDS[opinion.label]}. Your word wins on the page and is what the model is trained on next. Attention, never a trade — not used in any rank, size or order.`}
+      >
+        {OPINION_WORDS[opinion.label]}
+        <span className="text-muted-foreground" data-testid="overlap-candidate-opinion-source">
+          labelled
+        </span>
+      </span>
+    );
+  } else {
+    const pct = `${Math.round(opinion.confidence * 100)}%`;
+    word = opinion.shown ? (
+      <span
+        className={cn(
+          "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5",
+          opinion.label === "look_first"
+            ? "border-primary/40 text-foreground"
+            : opinion.label === "worth_a_look"
+              ? "border-border text-foreground/80"
+              : "border-border/60 text-muted-foreground",
+        )}
+        data-testid="overlap-candidate-opinion"
+        data-state="shown"
+        data-source={opinion.source}
+        data-label={opinion.label}
+        title={`Laya read the setup in words and the filing: ${OPINION_WORDS[opinion.label]} at ${pct}. Attention, never a trade — not used in any rank, size or order.`}
+      >
+        {OPINION_WORDS[opinion.label]}
+        <span className="text-muted-foreground">{pct}</span>
+      </span>
+    ) : (
+      <span
+        className="text-muted-foreground/70"
+        data-testid="overlap-candidate-opinion"
+        data-state="unsure"
+        data-source={opinion.source}
+        title={`Laya was not sure (${OPINION_WORDS[opinion.label]} at ${pct}, below its ${Math.round(opinion.floor * 100)}% floor). Context only — never a trade.`}
+      >
+        not sure
+      </span>
+    );
+  }
+
+  return (
+    <span className="flex flex-wrap items-center gap-1.5">
+      {word}
+      {select}
+    </span>
   );
 }
 

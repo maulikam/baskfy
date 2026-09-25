@@ -229,6 +229,92 @@ def heartbeat(cache: redis.Redis, *, candidates: int, tagged: int, seconds: floa
     )
 
 
+#: Mirrors `baskfy_core.candidate_review.REVIEW_QUESTIONS`. Keep the two identical. The row
+#: states themselves come from the API (`baskfy_api.overlap.REVIEW_WANTED_KEY`, a hash of
+#: key -> {"setup": words, "filing": headline}) — only the API holds the rows, and only
+#: `baskfy_core.candidate_review.describe_row` may say the numbers in words.
+REVIEW_WANTED_KEY = "candidate_review:wanted"
+REVIEW_QUESTIONS: dict[str, dict[str, Any]] = {
+    "review_priority": {
+        "type": "choice",
+        "instructions": (
+            "`setup` describes a technical pattern a screener found on a stock today, in words. "
+            "`filing` is the newest material exchange filing for it. How much does this row "
+            "deserve a trader's attention before the others on the same list?"
+        ),
+        "criteria": {
+            "look_first": (
+                "the pattern is strong and the filing is the kind of news that produces it "
+                "(an order win, a result, an approval, an expansion)"
+            ),
+            "worth_a_look": (
+                "the pattern is real but the filing is routine or unknown, or the filing is "
+                "good but the pattern is weak"
+            ),
+            "skip": (
+                "the pattern is weak or stale, or the filing is adverse (a regulatory order, "
+                "a default, a resignation under a cloud)"
+            ),
+        },
+    }
+}
+
+
+def review_rows(agent: Agent, cache: redis.Redis) -> int:
+    """Answer the attention question on every row state the API queued, and clear the queue.
+
+    The answer is cached under the row's content-addressed key for thirty days; the API shows
+    it only above its confidence floor, so an unsure answer costs nothing on the page and is
+    still there for a person to see when labelling the row.
+    """
+    queued = cache.hgetall(REVIEW_WANTED_KEY)
+    if not queued:
+        return 0
+    keys: list[str] = []
+    states: list[dict[str, str]] = []
+    for raw_key, raw_state in queued.items():
+        key = raw_key.decode() if isinstance(raw_key, bytes) else str(raw_key)
+        try:
+            state = json.loads(raw_state)
+        except ValueError:
+            cache.hdel(REVIEW_WANTED_KEY, key)
+            continue
+        if not isinstance(state, dict) or "setup" not in state:
+            cache.hdel(REVIEW_WANTED_KEY, key)
+            continue
+        keys.append(key)
+        states.append({"setup": str(state["setup"]), "filing": str(state.get("filing", ""))})
+    written = 0
+    for i in range(0, len(states), BATCH):
+        batch_keys, batch_states = keys[i : i + BATCH], states[i : i + BATCH]
+        results = agent.predict_batch(batch_states, REVIEW_QUESTIONS)
+        for key, result in zip(batch_keys, results, strict=True):
+            answer = (
+                result.get("answers", {}).get("review_priority")
+                if isinstance(result, dict)
+                else None
+            )
+            if not isinstance(answer, dict) or not isinstance(answer.get("choice"), str):
+                log.warning("no opinion for row %s", key[-12:])
+                continue
+            cache.set(
+                key,
+                json.dumps(
+                    {
+                        "choice": answer["choice"],
+                        "confidence": round(float(answer.get("confidence", 0.0)), 4),
+                        "probabilities": answer.get("probabilities", {}),
+                        "model": result.get("model") if isinstance(result, dict) else None,
+                        "tagged_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+                    }
+                ),
+                ex=TTL_S,
+            )
+            written += 1
+        cache.hdel(REVIEW_WANTED_KEY, *batch_keys)
+    return written
+
+
 def once(agent: Agent, cache: redis.Redis) -> None:
     with psycopg.connect(pg_dsn(), connect_timeout=10) as conn:
         headlines = candidate_headlines(conn)
@@ -240,9 +326,12 @@ def once(agent: Agent, cache: redis.Redis) -> None:
         already = [h for h in wanted if h not in todo]
         if already:
             cache.srem(WANTED_KEY, *already)
+    reviewed = review_rows(agent, cache)
+    if reviewed:
+        log.info("answered the attention question on %d rows", reviewed)
     if not todo:
         log.info("nothing to tag (%d candidate headlines, all cached)", len(headlines))
-        heartbeat(cache, candidates=len(headlines), tagged=0, seconds=0.0)
+        heartbeat(cache, candidates=len(headlines), tagged=reviewed, seconds=0.0)
         return
     started = time.time()
     written = 0

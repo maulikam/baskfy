@@ -1732,8 +1732,14 @@ this module fixes them plus the review's next three items. Full account: `docs/D
   when the model tag changes. First sidecar tests: 19, with a fake agent and an in-memory cache,
   asserting the mirrors equal core's.
 
-**NOT done.** The 0.60 floor is unchanged (no labels to recalibrate against). No re-measurement of
-the two questions on the base checkpoint with the right field (no laya in this workspace). The
+**Deployed 59ce6ea, 26 Sep 2026 16:22 IST.** Measured there: of 115 headlines, 32 clear the floor on
+the calibrated number against 12 on the entropy score; the row question's highest probability on 25
+live rows was 0.48, so every row stays on the rules; a SEBI order under a strong pivot came back
+"worth a look", which is why the deterministic adverse flag matters. Full numbers in DECISIONS-MERGE.
+
+**NOT done.** The 0.60 floor is unchanged (no labels to recalibrate against). The rules tag NSE's
+"Price movement … in order to ensure …" notice as an order win (the `order` phrase matches "in order
+to") — a follow-up. The
 labelling rubric the review asked Maulik for is drafted (`docs/overlap/LABELLING-RUBRIC.md`,
 ⚠ UNREVIEWED) with nine open questions in `NEEDS-MAULIK.md`; the baseline implements none of the
 proposed lines. Three separate Laya questions and filing-attachment facts (D10) are not built.

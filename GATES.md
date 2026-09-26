@@ -26,10 +26,10 @@ choice.
   EXPECT: /[1-9]/
   EVIDENCE: intro copy: 'until you pick a column: every header sorts, and a second click turns it round'; DECISIONS-MERGE 'the candidates table sorts by any column' (UNREVIEWED)
 
-- [ ] G5: One commit `OV12: green — …`, tree clean apart from holdings-status/
+- [x] G5: One commit `OV12: green — …`, tree clean apart from holdings-status/
   CHECK: cd /Users/maulikdave/Documents/projects/baskfy && git log -1 --format=%s | cut -c1-12 && git status --porcelain | grep -v "^?? holdings-status/" | wc -l
   EXPECT: /OV12: green/
-  EVIDENCE: pending
+  EVIDENCE: 34de5c3 'OV12: green — the overlap candidates table sorts by any column'; git status: only ?? holdings-status/
 
-- [ ] G6: Deployed with ship.sh from a detached worktree outside the 18:40–21:15 nightly window; the page's headers are buttons on staging
-  EVIDENCE: pending
+- [x] G6: Deployed with ship.sh from a detached worktree outside the 18:40–21:15 nightly window; the page's headers are buttons on staging
+  EVIDENCE: ship.sh from deploy-34de5c3 worktree, Sat 26 Sep 19:32-19:39 IST (the guard skips weekends): '✓ DEPLOYED 34de5c3', pins=3 running=15 release=34de5c3; on staging.baskfy.com/build/overlap the eight headers are buttons with the sort tooltips, Price ▼ ordered 3444.90 / 3050.60 / 1952.30, second click flips

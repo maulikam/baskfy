@@ -310,6 +310,49 @@ strategy could act and the filing is material; worth a look otherwise — served
 true on the wire. An unsure model answer never reaches the page, but is still what a label
 records as overruled. Table `candidate_review_label` (migration 0054); display context only.
 
+### Overlap: the inference contract corrected (26 Sep 2026, OV11)
+
+A review of OV7–OV10 found three faults, fixed together and asserted by tests on both sides of
+the Redis boundary (`infra/laya/tests/test_laya_loop.py` imports the sidecar by path and
+`baskfy_core`, and checks the mirrors agree):
+
+1. **The number was the wrong field.** On a `choice` question laya's `confidence` is
+   `1 - H(p)/log(k)`, how concentrated the whole distribution is; the calibrated probability of
+   the chosen answer is `answer_confidence` (laya 0.3.20 `agent.py`, `_decode_answers`). Both
+   readers stored and gated on the former from 25 Sep. The sidecar now caches `confidence` **as
+   the chosen answer's probability** (`answer_confidence`, else `probabilities[choice]`), keeps the
+   entropy score under `entropy_confidence`, and records the model tag; `tag_from_laya` and
+   `opinion_from_laya` read through `catalyst_tags.chosen_probability` and refuse a payload that
+   carries only the entropy number. The wire is unchanged: `opinion.confidence`,
+   `opinion.laya.confidence` and `catalyst_tag.confidence` are now the probability the words
+   already claimed. The 0.60 floor is unchanged in value and now applied to the right quantity;
+   it is recalibrated when there are labels to calibrate against.
+2. **The context never reached the model.** The API composed `{setup, filing, context}`; the
+   sidecar rebuilt `{setup, filing}`. It now passes every string field through, in
+   `candidate_review.STATE_FIELDS` order — `filing, timeline, context, setup` — short fields
+   first because laya truncates the state from the right (about 320 tokens after the question):
+   what a two-strategy row loses is the tail of its technicals, never the filing or its date.
+3. **A confident model tag erased the adverse signal.** `rules_opinion` read the adverse phrases
+   off the resolved tag; a model tag has none. It now takes the headline and asks the rules
+   itself (`catalyst_tags.adverse_phrases`), so "SEBI order" tagged corporate_action by a sure
+   Laya, or re-tagged by a correction, still makes the baseline **skip**, and the reason names the
+   phrases: `the filing is adverse (orders passed, action(s) taken)`.
+
+Also in OV11: a fourth state field, **`timeline`** — the strategies' sessions, the filing's
+exchange date against the newest of them ("published 2 days before the session"), the results
+date ("results are due 4 days ahead"), and each screen run's age and whether its definition
+changed since — all differences between stored dates, never the clock (`describe_timeline`).
+Cache keys moved to **`v2` and carry the question-schema hash**
+(`catalyst_tag:v2:<schema>:<sha>`, `candidate_review:v2:<schema>:<sha>`, `question_schema_hash`)
+so no v1 answer is read against the floor and a changed question is a new key; the sidecar pins
+the checkpoint by Hugging Face revision (`LAYA_MODEL_REVISION`, default the sha the box loaded on
+25 Sep) and drops its own answer keys on start when the model tag changed (`laya:model`); its
+wheels are pinned in `infra/laya/requirements.txt` (uv-compiled for the box's platform), which
+compose installs from and `deploy-swing.sh` ships. Labels are keyed on the state, so a label
+placed on a v1 state does not attach to the v2 row (as OV8 noted for the OV7→OV8 change); the
+stored labels and their export are untouched. Labelling guidance, drafted and unreviewed:
+`docs/overlap/LABELLING-RUBRIC.md`.
+
 ### Overlap: the filings scan (25 Sep 2026)
 
 Maulik, in session: "put laya scan button on overlap page". Swing setups and TWT names that

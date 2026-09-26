@@ -199,6 +199,9 @@ explicit_package_bases = true
 exclude = ["(^|/)conftest\\.py$", "^apps/web/brand-src/"]
 files = [
     "network_guard.py",
+    # OV11: the Laya sidecar and its tests. `laya` and `huggingface_hub` are out of the locked
+    # stack and never installed here (see the override below).
+    "infra/laya",
     "packages/execution/src",
     # Prompt 19's repo-level tooling: the per-package coverage gate and the mutation harness.
     # `benchmarks/` predates this list and is checked by ruff only.
@@ -215,6 +218,14 @@ files = [
 
 [[tool.mypy.overrides]]
 module = ["alembic.*"]
+ignore_missing_imports = true
+
+# The Laya sidecar's two out-of-stack imports (house rule 1; `docs/02` "Laya sidecar"). They live
+# only in the sidecar's own container, so mypy cannot resolve them here. Excluded with the reason
+# rather than silenced at the import site, and the loop wraps each behind a Protocol of the one
+# call it makes.
+[[tool.mypy.overrides]]
+module = ["laya", "laya.*", "huggingface_hub", "huggingface_hub.*"]
 ignore_missing_imports = true
 
 # kiteconnect ships no py.typed marker and no stubs. baskfy_providers.kite therefore declares a
@@ -287,6 +298,9 @@ ignore_missing_imports = true
 asyncio_mode = "auto"
 testpaths = [
     "packages/core/tests",
+    # OV11 (26 Sep 2026): the Laya sidecar's contract with the product — the key, the payload,
+    # the state fields it passes through — asserted with a fake agent and a fake Redis. No torch.
+    "infra/laya/tests",
     # Absent until M16 follow-up: `packages/execution` is law #2's "only path to an order",
     # and its suite was never collected by `make test`. An ImportError sat in `adapters.py`
     # from ef50c09 until it was found by the GTT port, because nothing ran it.

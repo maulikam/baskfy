@@ -175,6 +175,8 @@ aws s3 cp --region "$REGION" --only-show-errors "$BLUE/infra/docker/compose.prod
 aws s3 cp --region "$REGION" --only-show-errors "$BLUE/infra/docker/Caddyfile"         "s3://$BUCKET/deploy/$TAG/Caddyfile"
 # OV3 (25 Sep 2026): the Laya sidecar's loop, bind-mounted read-only by the `laya` service.
 aws s3 cp --region "$REGION" --only-show-errors "$BLUE/infra/laya/laya_loop.py"          "s3://$BUCKET/deploy/$TAG/laya_loop.py"
+# OV11 (26 Sep 2026): the sidecar's pinned wheels, bind-mounted as /app/requirements.txt.
+aws s3 cp --region "$REGION" --only-show-errors "$BLUE/infra/laya/requirements.txt"       "s3://$BUCKET/deploy/$TAG/laya-requirements.txt"
 
 # Every box step is `cd /opt/baskfy` + the compose invocation NEEDS-MAULIK §30 uses.
 C='cd /opt/baskfy && docker compose --env-file .env.staging.compose -f compose.prod.yml'
@@ -182,7 +184,7 @@ STAMP="$(date +%Y%m%dT%H%M%S)"
 
 say "2. on the box: files, image tags, desk password, validate"
 box \
-  "set -e; cd /opt/baskfy; for f in compose.prod.yml Caddyfile laya_loop.py; do [ -f \$f ] && cp -p \$f \$f.bak-sw13-$STAMP; aws s3 cp --region $REGION --only-show-errors s3://$BUCKET/deploy/$TAG/\$f \$f; done; chown ec2-user:ec2-user compose.prod.yml Caddyfile laya_loop.py; ls -l compose.prod.yml Caddyfile laya_loop.py" \
+  "set -e; cd /opt/baskfy; for f in compose.prod.yml Caddyfile laya_loop.py laya-requirements.txt; do [ -f \$f ] && cp -p \$f \$f.bak-sw13-$STAMP; aws s3 cp --region $REGION --only-show-errors s3://$BUCKET/deploy/$TAG/\$f \$f; done; chown ec2-user:ec2-user compose.prod.yml Caddyfile laya_loop.py laya-requirements.txt; ls -l compose.prod.yml Caddyfile laya_loop.py laya-requirements.txt" \
   "set -e; cd /opt/baskfy; F=.env.staging.compose; for kv in BASKFY_WEB_IMAGE=$REG/baskfy-web:$TAG BASKFY_PY_IMAGE=$REG/baskfy-py:$TAG BASKFY_DESK_IMAGE=$REG/baskfy-desk:$TAG; do k=\${kv%%=*}; grep -q \"^\$k=\" \$F && sed -i \"s#^\$k=.*#\$kv#\" \$F || echo \"\$kv\" >> \$F; done; grep -E '^BASKFY_(WEB|PY|DESK)_IMAGE=' \$F" \
   "set -e; cd /opt/baskfy; F=.env.staging.compose; if ! grep -q '^BASKFY_DESK_PASSWORD=' \$F; then printf 'BASKFY_DESK_PASSWORD=%s\n' \"\$(python3 -c 'import secrets; print(secrets.token_hex(16))')\" >> \$F; echo 'BASKFY_DESK_PASSWORD generated on the box (hex, 32 chars; read it in an SSM shell, never through box.sh)'; else echo 'BASKFY_DESK_PASSWORD present'; fi; chmod 0600 \$F" \
   "set -e; cd /opt/baskfy; F=.env.staging.compose; if ! grep -q '^REVALIDATE_SECRET=' \$F; then printf 'REVALIDATE_SECRET=%s\n' \"\$(python3 -c 'import secrets; print(secrets.token_hex(32))')\" >> \$F; echo 'REVALIDATE_SECRET generated on the box (never printed)'; else echo 'REVALIDATE_SECRET present'; fi; chmod 0600 \$F" \

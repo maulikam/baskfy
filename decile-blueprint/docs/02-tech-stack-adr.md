@@ -172,5 +172,23 @@ and the rules fallback. The "does this filing explain the pattern?" question ans
 `probably_unrelated` at 0.21 on a ₹840 crore order under a gap and is not asked until a
 fine-tuned checkpoint exists. About 1.3 s per headline on this CPU, batched.
 
-**Reverse.** Remove the `laya` service and volume from compose, the two `laya` tokens in
+**Pinned, twice (OV11, 26 Sep 2026).** The container used to `pip install "laya==0.3.20" …` on
+every cold start and let pip resolve torch and transformers afresh, and `laya.load(repo)` resolved
+the checkpoint's moving head. Now `infra/laya/requirements.txt` pins every wheel (compiled with
+`uv pip compile` for `aarch64-unknown-linux-gnu` / Python 3.12 against the CPU torch index, the box
+being a t4g.large, and checked identical to the venv the box built on 25 Sep — the
+recipe is in the file's header; re-compile, never hand-edit), compose installs from that file
+alone, and the loop downloads exactly `LAYA_MODEL_REVISION` (a Hugging Face commit sha, default the
+one the box first loaded) and hands laya the local directory. The model tag is part of every cached
+answer and a change of it clears the sidecar's keys. `uv.lock` is still untouched: the pin lives
+beside the sidecar, out of the stack.
+
+**Corrected (OV11).** "Calibrated probability" above was true of what laya *returns* and false
+of what the sidecar *stored* until 26 Sep 2026: it cached laya's `confidence`, which on a `choice`
+question is a normalised-entropy score, and the readers gated on it. The payload's `confidence` is
+now `answer_confidence`, the probability of the chosen answer; the entropy score is kept under its
+own name; cache keys are `v2` with the question-schema hash so no old answer is read against the
+floor. `docs/07a` §17 has the account.
+
+**Reverse.** Remove the `laya` service and volume from compose, the `laya` tokens in
 `tools/deploy/{deploy-swing,ship}.sh`, `infra/laya/`; the API then serves the rules tag alone.

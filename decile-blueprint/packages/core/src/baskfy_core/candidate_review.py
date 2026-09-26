@@ -28,12 +28,20 @@ when a checkpoint that has learned these rows exists, it drops in under the same
 
 from __future__ import annotations
 
+import datetime as dt
 import hashlib
 import json
 from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import StrEnum
 from typing import Final
+
+from baskfy_core.catalyst_tags import (
+    CACHE_KEY_VERSION,
+    adverse_phrases,
+    chosen_probability,
+    question_schema_hash,
+)
 
 
 class ReviewLabel(StrEnum):
@@ -52,39 +60,25 @@ SOURCE_LAYA: Final = "laya"
 SOURCE_LABELLED: Final = "labelled"
 SOURCE_RULES: Final = "rules"
 
-#: The filing subjects that make a row one to skip whatever the pattern says — the same
-#: phrases `catalyst_tags` files under governance as adverse or regulatory.
-ADVERSE_PHRASES: Final[frozenset[str]] = frozenset(
-    {
-        "sebi order",
-        "nclt",
-        "court order",
-        "insolvency",
-        "penalty",
-        "default",
-        "orders passed",
-        "action(s) taken",
-        "actions taken",
-        "demand order",
-        "show cause",
-        "show-cause",
-        "resignation",
-        "resigns",
-    }
-)
 #: Gate words that mean the strategy may not enter today.
 SHUT_GATES: Final[frozenset[str]] = frozenset({"RED", "SHUT", "CLOSED", "OFF"})
 
-#: Below this the opinion is "not sure" on the page. The same bar the headline tag uses.
+#: Below this the opinion is "not sure" on the page. The same bar the headline tag uses, and
+#: since OV11 (26 Sep 2026) applied to the same quantity: the probability Laya put on the word
+#: it chose, not the entropy score both readers compared to it before. Left at 0.60 until there
+#: are labels to calibrate against (see DECISIONS-MERGE, OV11).
 REVIEW_CONFIDENCE_FLOOR: Final = 0.60
 
 REVIEW_QUESTIONS: Final[dict[str, dict[str, object]]] = {
     "review_priority": {
         "type": "choice",
         "instructions": (
-            "`setup` describes a technical pattern a screener found on a stock today, in words. "
-            "`filing` is the newest material exchange filing for it. How much does this row "
-            "deserve a trader's attention before the others on the same list?"
+            "`setup` describes a technical pattern a screener found on a stock, in words. "
+            "`filing` is the material exchange filing chosen for it. `timeline` says when the "
+            "filing, the results and the screen ranks were, relative to the setup's session. "
+            "`context` is that day's market gates and breadth, the sector, and the screens the "
+            "stock ranks on. How much does this row deserve a trader's attention before the "
+            "others on the same list?"
         ),
         "criteria": {
             ReviewLabel.LOOK_FIRST.value: (
@@ -117,8 +111,10 @@ class RowFacts:
 @dataclass(frozen=True, slots=True)
 class RowContext:
     """The day around the row — the strategies' own gates and breadth, the sector, the screens
-    the name ranks on. Closed-session facts only: nothing that moves during the day, so the
-    state (and its key) holds still until the next session."""
+    the name ranks on — and **when** each piece of the row was (OV11): the strategies' sessions,
+    the filing's date, the results date, the screen runs' dates. Closed-session facts only:
+    nothing that moves during the day and no clock, so the state (and its key) holds still until
+    the next session."""
 
     #: Per strategy name, its gate word that session ("GREEN", "OPEN", "SHUT" …), when known.
     gates: dict[str, str] = field(default_factory=dict)
@@ -127,6 +123,16 @@ class RowContext:
     sector: str | None = None
     #: ``(screen name, rank, of)`` for each screen the name is on.
     screens: tuple[tuple[str, int | None, int | None], ...] = ()
+    #: Per strategy name, the session its facts are from. The newest is the row's anchor date.
+    sessions: dict[str, dt.date] = field(default_factory=dict)
+    #: The exchange date the shown filing was published (IST), when the feed has it.
+    filing_published: dt.date | None = None
+    #: The results date the calendar lists, when it lists one.
+    earnings_date: dt.date | None = None
+    #: Per screen name, the ``as_of`` of the run its rank is from.
+    screen_runs: dict[str, dt.date] = field(default_factory=dict)
+    #: Screens whose definition was edited after that run — the rank is an earlier version's.
+    screens_changed: tuple[str, ...] = ()
 
 
 def describe_context(context: RowContext | None) -> str:
@@ -148,6 +154,85 @@ def describe_context(context: RowContext | None) -> str:
         ]
         parts.append("on screens " + ", ".join(named))
     return ("; ".join(parts) + ".") if parts else ""
+
+
+def _day(date: dt.date) -> str:
+    """``"Thu 25 Sep 2026"`` — the way a person names a session."""
+    return date.strftime("%a %d %b %Y").replace(" 0", " ")
+
+
+def _days(n: int) -> str:
+    return f"{n} day{'' if n == 1 else 's'}"
+
+
+def _relative(gap: int, what: str, when: str, *, before: str, after: str) -> str:
+    """``"the filing was published 2 days before the session (Tue 23 Sep 2026)"``: a stored date
+    against the anchor, in a person's words. ``gap`` is anchor minus the date, in days."""
+    if gap == 0:
+        return f"{what} on the session day"
+    if gap > 0:
+        return f"{what} {_days(gap)} {before} ({when})"
+    return f"{what} {_days(-gap)} {after} ({when})"
+
+
+def _screen_ages(context: RowContext, anchor: dt.date) -> str:
+    ages: list[str] = []
+    for name, run in context.screen_runs.items():
+        age = (anchor - run).days
+        note = " (definition changed since)" if name in context.screens_changed else ""
+        if age == 0:
+            ages.append(f"{name} from the session day{note}")
+        else:
+            older = "older" if age > 0 else "newer"
+            ages.append(f"{name} {_days(abs(age))} {older} than the session{note}")
+    return "screen ranks: " + ", ".join(ages)
+
+
+def describe_timeline(context: RowContext | None, *, filing_on_record: bool) -> str:
+    """When each piece of the row was, said relative to the setup's session — never to today.
+
+    The review that prompted this (26 Sep 2026): the model saw the headline but not whether it
+    came before the gap or eleven days after the breakout, so it could not say whether the
+    filing plausibly explains the move. Everything here is a difference between two stored
+    dates, so the sentence holds still within a session and the key with it.
+    """
+    if context is None or not context.sessions:
+        return ""
+    anchor = max(context.sessions.values())
+    same = [name for name, day in context.sessions.items() if day == anchor]
+    older = [(name, day) for name, day in context.sessions.items() if day != anchor]
+    parts = [
+        f"{' and '.join(same)} facts are from the session of {_day(anchor)}"
+        + "".join(
+            f"; {name} facts from {_day(day)}, {_days((anchor - day).days)} earlier"
+            for name, day in older
+        )
+    ]
+    if filing_on_record and context.filing_published is None:
+        parts.append("the filing's date is not on record")
+    elif filing_on_record and context.filing_published is not None:
+        parts.append(
+            _relative(
+                (anchor - context.filing_published).days,
+                "the filing was published",
+                _day(context.filing_published),
+                before="before the session",
+                after="after the session",
+            )
+        )
+    if context.earnings_date is not None:
+        parts.append(
+            _relative(
+                (anchor - context.earnings_date).days,
+                "results are due" if context.earnings_date >= anchor else "results were",
+                _day(context.earnings_date),
+                before="before the session",
+                after="ahead",
+            )
+        )
+    if context.screen_runs:
+        parts.append(_screen_ages(context, anchor))
+    return "; ".join(parts) + "."
 
 
 @dataclass(frozen=True, slots=True)
@@ -370,44 +455,66 @@ def describe_row(facts: list[RowFacts] | tuple[RowFacts, ...]) -> str:
     return " ".join(s.rstrip(".") + "." for s in sentences)
 
 
+#: The order the fields are shown to the model, and the order `review_state` builds them in.
+#: Laya serialises a dict state in insertion order and **truncates from the right** to fit its
+#: window (about 320 tokens after the question), so the short fields come first and the long
+#: `setup` last: a two-strategy row's technicals can run past the window, and what is lost
+#: must then be the tail of the technicals, never the filing or its date. Mirrored in
+#: `infra/laya/laya_loop.py` as `STATE_FIELDS`; a test there asserts the two agree.
+STATE_FIELDS: Final = ("filing", "timeline", "context", "setup")
+
+
 def review_state(
     facts: list[RowFacts] | tuple[RowFacts, ...],
     filing: str | None,
     context: RowContext | None = None,
 ) -> dict[str, str]:
-    """What Laya is shown: every number the scans stored about the row, said in words; the
-    day's context (gates, breadth, sector, screens); and the filing headline. No symbol and no
-    live price, so the state holds still within a session and the same facts get the same
-    opinion. (Maulik, 25 Sep 2026: "all the parameters which swing has noticed, including the
-    other parameters which we might have" — this is that set.)"""
-    state = {
+    """What Laya is shown: the filing headline; when the filing, the results and the screen runs
+    were, relative to the setup's session (`describe_timeline`); the day's context (gates,
+    breadth, sector, screens); and every number the scans stored about the row, said in words.
+    No symbol, no live price and no clock, so the state holds still within a session and the
+    same facts get the same opinion. (Maulik, 25 Sep 2026: "all the parameters which swing has
+    noticed, including the other parameters which we might have" — this is that set.)"""
+    on_record = bool(filing and filing.strip())
+    fields = {
+        "filing": filing.strip() if filing and on_record else "No filing on record.",
+        "timeline": describe_timeline(context, filing_on_record=on_record),
+        "context": describe_context(context),
         "setup": describe_row(facts),
-        "filing": filing.strip() if filing and filing.strip() else "No filing on record.",
     }
-    words = describe_context(context)
-    if words:
-        state["context"] = words
-    return state
+    return {name: fields[name] for name in STATE_FIELDS if fields[name]}
+
+
+REVIEW_SCHEMA: Final = question_schema_hash(REVIEW_QUESTIONS)
 
 
 def review_key(state: dict[str, str]) -> str:
-    """Content-addressed: the same state is asked once and answered identically."""
+    """Content-addressed: the same state is asked once and answered identically. The key names
+    the payload generation and the question (`catalyst_tags.CACHE_KEY_VERSION`,
+    `question_schema_hash`), so a changed payload meaning or a changed question never reads an
+    old answer: ``candidate_review:v2:<schema>:<sha256>``."""
     canonical = json.dumps(state, sort_keys=True, ensure_ascii=False)
-    return "candidate_review:v1:" + hashlib.sha256(canonical.encode()).hexdigest()
+    digest = hashlib.sha256(canonical.encode()).hexdigest()
+    return f"candidate_review:{CACHE_KEY_VERSION}:{REVIEW_SCHEMA}:{digest}"
 
 
 def opinion_from_laya(answer: object) -> ReviewOpinion | None:
+    """The sidecar's cached answer as an opinion. The number is the probability Laya put on the
+    word it chose (`catalyst_tags.chosen_probability`); a payload carrying only the entropy
+    ``confidence`` is not an opinion."""
     if not isinstance(answer, dict):
         return None
     choice = answer.get("choice")
-    confidence = answer.get("confidence")
-    if not isinstance(choice, str) or not isinstance(confidence, int | float):
+    if not isinstance(choice, str):
+        return None
+    confidence = chosen_probability(answer, choice)
+    if confidence is None:
         return None
     try:
         label = ReviewLabel(choice)
     except ValueError:
         return None
-    return ReviewOpinion(label, round(float(confidence), 4))
+    return ReviewOpinion(label, round(confidence, 4))
 
 
 def shown(opinion: ReviewOpinion | None) -> bool:
@@ -420,8 +527,8 @@ def shown(opinion: ReviewOpinion | None) -> bool:
 
 def rules_opinion(
     facts: list[RowFacts] | tuple[RowFacts, ...],
+    filing_headline: str | None,
     filing_event: str | None,
-    filing_matched: tuple[str, ...] | list[str],
     filing_priority: str | None,
     context: RowContext | None = None,
 ) -> ReviewOpinion:
@@ -433,8 +540,10 @@ def rules_opinion(
     a person can check:
 
     * **skip** — no strategy could act on the row (a rejected scan, a base with no entry), or
-      the filing is adverse (a regulatory order, a penalty, a default, a resignation), or the
-      acting strategy's gate is shut, or the name is locked in the upper circuit;
+      the filing is adverse (a regulatory order, a penalty, a default, a resignation — read
+      from the headline by the rules, `catalyst_tags.adverse_phrases`, whatever tag the page
+      shows: OV11), or the acting strategy's gate is shut, or the name is locked in the upper
+      circuit;
     * **look first** — a strategy could act and the filing is material (an order win, a
       result, an approval);
     * **worth a look** — a strategy could act and the filing is routine, unknown or absent.
@@ -444,9 +553,7 @@ def rules_opinion(
     """
     reasons: list[str] = []
     actionable = [f for f in facts if f.actionable]
-    adverse = filing_event == "governance" and any(
-        phrase in ADVERSE_PHRASES for phrase in filing_matched
-    )
+    adverse = adverse_phrases(filing_headline)
     locked = any(f.numbers.get("locked_upper_circuit") is True for f in facts)
     gates = context.gates if context is not None else {}
     acting_names = {
@@ -461,7 +568,7 @@ def rules_opinion(
     if not actionable:
         reasons.append("no strategy could act on the row as it stands")
     if adverse:
-        reasons.append("the filing is adverse")
+        reasons.append(f"the filing is adverse ({', '.join(adverse)})")
     if locked:
         reasons.append("locked in the upper circuit")
     if shut:

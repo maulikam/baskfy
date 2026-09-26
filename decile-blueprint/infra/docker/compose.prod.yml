@@ -633,13 +633,18 @@ services:
     volumes:
       - baskfy-laya:/models
       - ./laya_loop.py:/app/laya_loop.py:ro
+      # OV11 (26 Sep 2026): every wheel pinned (`infra/laya/requirements.txt`, compiled with uv for
+      # this image's platform); the container installs from it and nothing else, so a restart can
+      # no longer resolve a newer torch or transformers. The checkpoint is pinned in the loop
+      # itself (`LAYA_MODEL_REVISION`, a Hugging Face commit sha; override in `.env.staging`).
+      - ./laya-requirements.txt:/app/requirements.txt:ro
     command:
       - bash
       - -lc
       - >-
         test -x /models/venv/bin/python || python -m venv /models/venv;
         /models/venv/bin/pip install -q --extra-index-url https://download.pytorch.org/whl/cpu
-        "laya==0.3.20" "psycopg[binary]>=3.1" "redis>=5" &&
+        -r /app/requirements.txt &&
         exec /models/venv/bin/python /app/laya_loop.py
     mem_limit: 3g
     # One of the box's two vCPUs, never both (25 Sep 2026). Its first pass held both at ~190%

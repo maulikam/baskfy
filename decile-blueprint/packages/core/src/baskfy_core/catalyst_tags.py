@@ -30,7 +30,9 @@ readers see the same priority on the same headline.
 from __future__ import annotations
 
 import hashlib
+import json
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
@@ -383,6 +385,50 @@ def tag_headline(headline: str | None) -> CatalystTag:
     return CatalystTag(EventType.OTHER, ReviewPriority.LOW, ())
 
 
+#: The governance phrases that make a filing adverse — a regulatory or court order, a penalty,
+#: a default, a resignation. The first GOVERNANCE block above plus the resignation pair from the
+#: second; `adverse_filing` is the one reader of this set, and `candidate_review` skips on it.
+ADVERSE_PHRASES: Final[frozenset[str]] = frozenset(
+    {
+        "sebi order",
+        "nclt",
+        "court order",
+        "insolvency",
+        "penalty",
+        "default",
+        "orders passed",
+        "action(s) taken",
+        "actions taken",
+        "demand order",
+        "show cause",
+        "show-cause",
+        "resignation",
+        "resigns",
+    }
+)
+
+
+def adverse_phrases(headline: str | None) -> tuple[str, ...]:
+    """The adverse phrases the rules matched on this headline, in match order; empty when the
+    rules do not read it as governance with one of `ADVERSE_PHRASES`.
+
+    **Deterministic and independent of the tag the page shows** (OV11, 26 Sep 2026). The
+    resolved tag may be Laya's or a person's, and a model tag has no phrases at all — so a
+    confident `corporate_action` on "SEBI order" used to hand the attention baseline an empty
+    ``matched`` and the skip vanished. The rules read the headline again here, and the flag
+    survives whatever wins the Filing column.
+    """
+    tag = tag_headline(headline)
+    if tag.event_type is not EventType.GOVERNANCE:
+        return ()
+    return tuple(phrase for phrase in tag.matched if phrase in ADVERSE_PHRASES)
+
+
+def adverse_filing(headline: str | None) -> bool:
+    """Whether the rules read the headline as an adverse filing. See `adverse_phrases`."""
+    return bool(adverse_phrases(headline))
+
+
 # --- Laya: the model column, resolved against the rules ------------------------------------
 #
 # Maulik, 25 Sep 2026: "let use laya use as soon as possible and complete it". Measured before
@@ -441,24 +487,72 @@ def laya_state(headline: str) -> dict[str, str]:
     return {"headline": headline}
 
 
+#: The cache-key generation. **v2 (OV11, 26 Sep 2026):** the payload's ``confidence`` became the
+#: calibrated probability of the chosen answer (`chosen_probability`), so every v1 answer — whose
+#: ``confidence`` was a normalised-entropy score on another scale — must never be read against
+#: the floor again. Bump this whenever the payload's meaning changes; the schema hash below
+#: covers the question changing.
+CACHE_KEY_VERSION: Final = "v2"
+
+
+def question_schema_hash(questions: Mapping[str, object]) -> str:
+    """Eight hex characters over the question dict, canonically serialised. Part of every cache
+    key, so a changed instruction, criterion or vocabulary is a new key and an answer to the old
+    question is never served as an answer to the new one."""
+    canonical = json.dumps(questions, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode()).hexdigest()[:8]
+
+
+TAG_SCHEMA: Final = question_schema_hash(LAYA_QUESTIONS)
+
+
 def cache_key(headline: str) -> str:
     """Where a model tag for this exact headline lives in the cache — content-addressed, so the
-    same headline on two names or two days is tagged once and served identically."""
-    return "catalyst_tag:v1:" + hashlib.sha256(headline.strip().casefold().encode()).hexdigest()
+    same headline on two names or two days is tagged once and served identically. The key names
+    the payload generation and the question it answers: ``catalyst_tag:v2:<schema>:<sha256>``.
+    Mirrored in `infra/laya/laya_loop.py`; a test there asserts the two agree."""
+    digest = hashlib.sha256(headline.strip().casefold().encode()).hexdigest()
+    return f"catalyst_tag:{CACHE_KEY_VERSION}:{TAG_SCHEMA}:{digest}"
+
+
+def chosen_probability(answer: Mapping[str, object], choice: str) -> float | None:
+    """The probability Laya put on the answer it chose, or ``None`` when the payload does not say.
+
+    Read from ``answer_confidence`` — what laya ≥ 0.3.20 reports as the calibrated number, the
+    one temperature scaling fits and the README's gating relies on — else from that choice's
+    entry in ``probabilities``. **Never from ``confidence``:** on a `choice` question that field
+    is ``1 - H(p)/log(k)``, how concentrated the whole distribution is, on a different scale
+    (three-way p = 0.60/0.20/0.20 reads 0.14 there). Both readers used it against the 0.60
+    floor from 25 Sep 2026 until OV11 (26 Sep 2026) found the mistake; the sidecar now stores it
+    under ``entropy_confidence`` so it is on record without being compared to the floor.
+    """
+    value = answer.get("answer_confidence")
+    if isinstance(value, int | float) and not isinstance(value, bool):
+        return float(value)
+    probabilities = answer.get("probabilities")
+    if isinstance(probabilities, dict):
+        p = probabilities.get(choice)
+        if isinstance(p, int | float) and not isinstance(p, bool):
+            return float(p)
+    return None
 
 
 def tag_from_laya(answer: object) -> CatalystTag | None:
     """Laya's `event_type` answer as a tag, or ``None`` when the answer is not one.
 
-    Reads the shape `Agent.predict` returns — ``{"choice": "<type>", "confidence": 0.98, ...}``
-    — and nothing that is not in the eight-type vocabulary becomes a tag. ``matched`` is empty:
-    a model has no phrase to point at, and the wire says so rather than inventing one.
+    Reads the shape the sidecar caches — ``{"choice": "<type>", "answer_confidence": 0.98,
+    "probabilities": {...}, ...}`` — and nothing that is not in the eight-type vocabulary becomes
+    a tag. The number is the chosen answer's probability (`chosen_probability`); a payload that
+    carries only the entropy ``confidence`` is not an answer. ``matched`` is empty: a model has
+    no phrase to point at, and the wire says so rather than inventing one.
     """
     if not isinstance(answer, dict):
         return None
     choice = answer.get("choice")
-    confidence = answer.get("confidence")
-    if not isinstance(choice, str) or not isinstance(confidence, int | float):
+    if not isinstance(choice, str):
+        return None
+    confidence = chosen_probability(answer, choice)
+    if confidence is None:
         return None
     try:
         event_type = EventType(choice)

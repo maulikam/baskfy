@@ -2299,3 +2299,31 @@ run in code (FO7.1). **Yours, when you want them:**
 2. **F2's capital** is ₹0 (paper one lot; live refuses).
 3. **The 2022→ backfill** (`fno_cli backfill`, ~90 min at the NSE limiter), skipped by M.4.
 4. **A Kite login every trading day an F1 structure is open**; a missed cycle is a paper violation.
+
+## Laya rubric — nine labelling questions, none blocking (26 Sep 2026, OV11)
+
+The review you pasted asked you for a decision rubric per strategy so that the row labels on
+`/build/overlap` are consistent enough to train on. An agent drafted one from the strategies' own
+code and decision logs — `docs/overlap/LABELLING-RUBRIC.md` (⚠ UNREVIEWED) — and marked what the
+repo does not settle. **Nothing waits on these**: the rules baseline implements only the settled
+lines, labelling works today, and the fine-tune is not started. Answer in the doc or in session:
+
+1. Strong technicals, no filing on record — at most "worth a look"? (C6)
+2. A name on two or three strategies — does that raise the label? The product refuses a combined
+   score; the draft says label the strongest single setup. (C7)
+3. The window in which a filing "explains" the move — on the setup's session or ≤ 2 sessions before
+   it? A filing published after the breakout — never a catalyst? (C8)
+4. Results due within N sessions — a note, a downgrade, or a skip? Which N? (C9)
+5. The numeric "strong" thresholds proposed per strategy (EP score ≥ 60 and ≥ 5× volume; flag
+   tightness < 1.5 ADR; VBT ≥ 5× volume and close position ≥ 0.8; TWT range < 1.5% and ≥ 1.5×
+   volume) — keep, move, or label by eye? (Q5)
+6. A flag still setting up below the pivot — never "look first" because there is no entry today? (Q6)
+7. corporate_action and fundraising filings — supportive, neutral, or negative for a fresh entry? (Q7)
+8. Screens — membership only, or does a top-20 rank on a momentum screen count for more? (Q8)
+9. Three separate Laya questions (event type; positive/neutral/adverse/unclear; materiality)
+   combined with the technical facts, instead of one attention question — the review's
+   recommendation; a schema change, not built. (Q9)
+
+Also from the review, **yours and not an agent's:** reading filing attachments for structured facts
+(order value as a share of revenue, dilution, penalty size) widens D10 (market-data licensing).
+

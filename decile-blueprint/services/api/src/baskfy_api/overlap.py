@@ -77,6 +77,7 @@ from baskfy_core.catalyst_tags import (
     tag_from_laya,
     tag_headline,
 )
+from baskfy_core.market_hours_cb import IST
 from baskfy_core.models import (
     CandidateReviewLabel,
     CatalystTagCorrection,
@@ -665,6 +666,8 @@ async def review_opinions(
         if opinion is not None:
             found[key] = opinion
     if missing:
+        # The state is written with sorted keys for a stable payload; the sidecar puts the
+        # fields back in `candidate_review.STATE_FIELDS` order before the model sees them.
         try:
             pipe = cache.pipeline()
             pipe.hset(REVIEW_WANTED_KEY, mapping=missing)
@@ -768,11 +771,14 @@ def _opinion(
 
 
 def _rules_opinion(row: CandidateRow) -> ReviewOpinion:
+    """The baseline reads the headline itself for the adverse check (OV11): the resolved tag may
+    be Laya's or a person's, and neither carries the rules' phrases, so passing the tag alone
+    let a confident model re-tag "SEBI order" as corporate_action and the skip disappeared."""
     tag = row.catalyst_tag
     return rules_opinion(
         row.facts(),
+        row.catalyst.headline if row.catalyst is not None else None,
         None if tag is None else tag.event_type.value,
-        () if tag is None else tag.matched,
         None if tag is None else tag.review_priority.value,
         row.context,
     )
@@ -824,7 +830,10 @@ async def _gates(
 
 def _context(row: CandidateRow, gates: dict[str, str], breadth: dict[str, Decimal]) -> RowContext:
     """The day's context for one row: only the gates of the strategies that raised it, the
-    sector the swing detector recorded, and the screens the name is on."""
+    sector the swing detector recorded, the screens the name is on — and the dates each piece
+    is from (OV11): the strategies' own sessions, the filing's exchange date (the feed stores
+    the stamp in UTC; NSE publishes in IST, so the date is taken there), the results date, and
+    each screen run's ``as_of``. Stored dates only, so the state holds still within a session."""
     names = {hit.name for hit in row.strategies}
     sector = next(
         (
@@ -834,11 +843,17 @@ def _context(row: CandidateRow, gates: dict[str, str], breadth: dict[str, Decima
         ),
         None,
     )
+    published = row.catalyst.published_at if row.catalyst is not None else None
     return RowContext(
         gates={name: gate for name, gate in gates.items() if name in names},
         breadth_pct={name: pct for name, pct in breadth.items() if name in names},
         sector=sector,
         screens=tuple((screen.name, screen.rank, screen.of) for screen in row.screens),
+        sessions={hit.name: hit.as_of for hit in row.strategies},
+        filing_published=None if published is None else published.astimezone(IST).date(),
+        earnings_date=row.catalyst.earnings_date if row.catalyst is not None else None,
+        screen_runs={screen.name: screen.as_of for screen in row.screens},
+        screens_changed=tuple(screen.name for screen in row.screens if screen.definition_changed),
     )
 
 

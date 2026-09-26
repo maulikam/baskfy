@@ -2,23 +2,30 @@
 
 from __future__ import annotations
 
+import datetime as dt
 from decimal import Decimal
 
 from baskfy_core.candidate_review import (
     REVIEW_CONFIDENCE_FLOOR,
     REVIEW_QUESTIONS,
+    REVIEW_SCHEMA,
+    STATE_FIELDS,
     ReviewLabel,
     ReviewOpinion,
     RowContext,
     RowFacts,
     describe_context,
     describe_row,
+    describe_timeline,
     opinion_from_laya,
     review_key,
     review_state,
     rules_opinion,
     shown,
 )
+from baskfy_core.catalyst_tags import question_schema_hash
+
+ORDER = "Bagging/Receiving of orders/contracts — order worth Rs 840 crore"
 
 EP = RowFacts(
     "swing",
@@ -65,18 +72,20 @@ class TestTheRowInWords:
         )
 
     def test_the_state_carries_the_words_and_the_filing_and_nothing_else(self) -> None:
-        state = review_state(
-            [EP], "Bagging/Receiving of orders/contracts — order worth Rs 840 crore"
-        )
+        state = review_state([EP], ORDER)
         assert set(state) == {"setup", "filing"}
         assert state["filing"].startswith("Bagging")
         assert review_state([EP], "  ")["filing"] == "No filing on record."
+        # The short fields lead: laya truncates a long state from the right (OV11).
+        assert list(state) == ["filing", "setup"]
+        assert STATE_FIELDS == ("filing", "timeline", "context", "setup")
 
     def test_the_key_is_content_addressed(self) -> None:
         a = review_state([EP], "x")
         assert review_key(a) == review_key(dict(reversed(list(a.items()))))
         assert review_key(a) != review_key(review_state([VBT], "x"))
-        assert review_key(a).startswith("candidate_review:v1:")
+        assert review_key(a).startswith(f"candidate_review:v2:{REVIEW_SCHEMA}:")
+        assert question_schema_hash(REVIEW_QUESTIONS) == REVIEW_SCHEMA
 
 
 class TestTheQuestionAndTheAnswer:
@@ -91,15 +100,31 @@ class TestTheQuestionAndTheAnswer:
 
     def test_an_answer_below_the_floor_is_kept_but_not_shown(self) -> None:
         # Measured 25 Sep 2026: the base checkpoint answered near a third each way.
-        unsure = opinion_from_laya({"choice": "worth_a_look", "confidence": 0.13})
-        assert unsure == ReviewOpinion(ReviewLabel.WORTH_A_LOOK, 0.13)
+        unsure = opinion_from_laya({"choice": "worth_a_look", "answer_confidence": 0.38})
+        assert unsure == ReviewOpinion(ReviewLabel.WORTH_A_LOOK, 0.38)
         assert not shown(unsure)
-        sure = opinion_from_laya({"choice": "look_first", "confidence": REVIEW_CONFIDENCE_FLOOR})
+        sure = opinion_from_laya(
+            {"choice": "look_first", "answer_confidence": REVIEW_CONFIDENCE_FLOOR}
+        )
         assert shown(sure)
         assert shown(None) is False
 
+    def test_the_number_is_the_chosen_word_s_probability_never_the_entropy_score(self) -> None:
+        # OV11 (26 Sep 2026): both readers compared laya's `confidence` — on a `choice`
+        # question a normalised-entropy score — to the 0.60 floor. The probability is what the
+        # floor means; a payload carrying only the entropy score is not an opinion.
+        assert opinion_from_laya({"choice": "skip", "confidence": 0.93}) is None
+        from_probabilities = opinion_from_laya(
+            {
+                "choice": "skip",
+                "confidence": 0.14,
+                "probabilities": {"skip": 0.6, "look_first": 0.4},
+            },
+        )
+        assert from_probabilities == ReviewOpinion(ReviewLabel.SKIP, 0.6)
+
     def test_a_label_outside_the_vocabulary_is_not_an_opinion(self) -> None:
-        assert opinion_from_laya({"choice": "buy", "confidence": 0.99}) is None
+        assert opinion_from_laya({"choice": "buy", "answer_confidence": 0.99}) is None
         assert opinion_from_laya(None) is None
 
     def test_a_person_s_label_is_always_shown(self) -> None:
@@ -228,38 +253,117 @@ class TestTheRulesBaseline:
     """Always a word, always a reason, and the model or a person overrules it."""
 
     def test_an_actionable_row_with_a_material_filing_is_look_first(self) -> None:
-        opinion = rules_opinion([EP], "order", ("order",), "high")
+        opinion = rules_opinion([EP], ORDER, "order", "high")
         assert (opinion.label, opinion.source) == (ReviewLabel.LOOK_FIRST, "rules")
         assert opinion.reason == "a strategy could act and the filing is material (order)"
         assert shown(opinion)
 
     def test_an_actionable_row_with_a_routine_or_missing_filing_is_worth_a_look(self) -> None:
-        assert rules_opinion([VBT], "routine", ("newspaper publication",), "low").label is (
+        assert rules_opinion([VBT], "Copy of Newspaper Publication", "routine", "low").label is (
             ReviewLabel.WORTH_A_LOOK
         )
-        none = rules_opinion([VBT], None, (), None)
+        none = rules_opinion([VBT], None, None, None)
         assert none.label is ReviewLabel.WORTH_A_LOOK
         assert none.reason == "a strategy could act; no filing on record"
 
     def test_the_skips_name_their_reason(self) -> None:
         # Merely in the tight state: no strategy could act.
-        assert rules_opinion([TWT], "order", ("order",), "high").reason == (
+        assert rules_opinion([TWT], ORDER, "order", "high").reason == (
             "no strategy could act on the row as it stands"
         )
         # A regulatory order is adverse even under a strong setup.
-        adverse = rules_opinion([EP], "governance", ("orders passed", "demand order"), "medium")
-        assert (adverse.label, adverse.reason) == (ReviewLabel.SKIP, "the filing is adverse")
+        demand = "Action(s) taken or orders passed — receipt of Demand Order under Section 156"
+        adverse = rules_opinion([EP], demand, "governance", "medium")
+        assert (adverse.label, adverse.reason) == (
+            ReviewLabel.SKIP,
+            "the filing is adverse (orders passed, action(s) taken)",
+        )
         # A governance filing that is not adverse (a credit rating) is not a skip.
-        rating = rules_opinion([EP], "governance", ("credit rating", "rating"), "medium")
+        rating = rules_opinion([EP], "Credit rating reaffirmed", "governance", "medium")
         assert rating.label is ReviewLabel.WORTH_A_LOOK
         # The acting strategy's gate is shut.
-        shut = rules_opinion([EP], None, (), None, RowContext(gates={"Swing": "RED"}))
+        shut = rules_opinion([EP], None, None, None, RowContext(gates={"Swing": "RED"}))
         assert (shut.label, shut.reason) == (ReviewLabel.SKIP, "Swing gate shut")
         # Another strategy's gate being shut does not touch this row.
-        other = rules_opinion([EP], None, (), None, RowContext(gates={"Volume breakout": "SHUT"}))
+        other = rules_opinion([EP], None, None, None, RowContext(gates={"Volume breakout": "SHUT"}))
         assert other.label is ReviewLabel.WORTH_A_LOOK
         # Locked in the upper circuit.
         locked = RowFacts("swing", "EP · GAP_DAY", True, {"locked_upper_circuit": True})
-        assert rules_opinion([locked], "order", ("order",), "high").reason == (
+        assert rules_opinion([locked], ORDER, "order", "high").reason == (
             "locked in the upper circuit"
         )
+
+    def test_the_adverse_flag_survives_a_confident_model_or_a_correction_re_tagging_it(
+        self,
+    ) -> None:
+        # OV11 finding 3: the resolved tag used to be the only input. Laya, sure, said
+        # corporate_action on "SEBI order"; a model tag has no phrases; the skip vanished.
+        # The rules read the headline again here, whatever the Filing column shows.
+        sebi = "SEBI order against the company and its promoters"
+        as_laya_saw_it = rules_opinion([EP], sebi, "corporate_action", "medium")
+        assert (as_laya_saw_it.label, as_laya_saw_it.reason) == (
+            ReviewLabel.SKIP,
+            "the filing is adverse (sebi order)",
+        )
+        as_corrected = rules_opinion([EP], sebi, "routine", "low")
+        assert as_corrected.label is ReviewLabel.SKIP
+        # And a non-adverse headline the model calls governance is not a skip.
+        assert rules_opinion([EP], ORDER, "governance", "medium").label is ReviewLabel.WORTH_A_LOOK
+
+
+class TestTheTimeline:
+    """When each piece of the row was, relative to the session — never to today (OV11)."""
+
+    SWING = dt.date(2026, 9, 25)
+
+    def test_the_filing_the_results_and_the_screens_are_placed_against_the_session(self) -> None:
+        context = RowContext(
+            sessions={"Swing": self.SWING, "Three weeks tight": dt.date(2026, 9, 24)},
+            filing_published=dt.date(2026, 9, 23),
+            earnings_date=dt.date(2026, 10, 28),
+            screen_runs={"RSI Scan": self.SWING, "Trend Stack": dt.date(2026, 9, 21)},
+            screens_changed=("Trend Stack",),
+        )
+        assert describe_timeline(context, filing_on_record=True) == (
+            "Swing facts are from the session of Fri 25 Sep 2026; Three weeks tight facts from "
+            "Thu 24 Sep 2026, 1 day earlier; the filing was published 2 days before the session "
+            "(Wed 23 Sep 2026); results are due 33 days ahead (Wed 28 Oct 2026); screen ranks: "
+            "RSI Scan from the session day, Trend Stack 4 days older than the session "
+            "(definition changed since)."
+        )
+
+    def test_same_day_after_the_session_and_past_results_have_their_own_words(self) -> None:
+        same = RowContext(
+            sessions={"Swing": self.SWING},
+            filing_published=self.SWING,
+            earnings_date=dt.date(2026, 9, 15),
+        )
+        assert describe_timeline(same, filing_on_record=True) == (
+            "Swing facts are from the session of Fri 25 Sep 2026; the filing was published on "
+            "the session day; results were 10 days before the session (Tue 15 Sep 2026)."
+        )
+        after = RowContext(sessions={"Swing": self.SWING}, filing_published=dt.date(2026, 9, 26))
+        assert describe_timeline(after, filing_on_record=True).endswith(
+            "the filing was published 1 day after the session (Sat 26 Sep 2026)."
+        )
+
+    def test_a_filing_without_a_date_says_so_and_no_filing_says_nothing_about_one(self) -> None:
+        context = RowContext(sessions={"Swing": self.SWING})
+        assert describe_timeline(context, filing_on_record=True) == (
+            "Swing facts are from the session of Fri 25 Sep 2026; the filing's date is not on "
+            "record."
+        )
+        assert describe_timeline(context, filing_on_record=False) == (
+            "Swing facts are from the session of Fri 25 Sep 2026."
+        )
+        assert describe_timeline(None, filing_on_record=True) == ""
+        assert describe_timeline(RowContext(), filing_on_record=True) == ""
+
+    def test_the_timeline_is_a_state_field_in_second_place_and_changes_the_key(self) -> None:
+        context = RowContext(sessions={"Swing": self.SWING}, filing_published=self.SWING)
+        state = review_state([EP], ORDER, context)
+        assert list(state) == ["filing", "timeline", "setup"]
+        assert state["timeline"].endswith("the filing was published on the session day.")
+        assert review_key(state) != review_key(review_state([EP], ORDER))
+        # No clock anywhere: the same stored dates give the same words on any day.
+        assert review_state([EP], ORDER, context) == state

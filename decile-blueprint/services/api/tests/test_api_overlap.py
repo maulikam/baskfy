@@ -481,6 +481,15 @@ class TestTheOpinion:
             assert state["filing"] == "Press Release - BOTH wins a multi-year order"
             assert state["context"].startswith("Swing gate green; Three weeks tight gate open")
             assert "51% of the universe above its long average" in state["context"]
+            # When each piece was, against the session — the filing's 18:32 IST stamp is the
+            # swing session's own day; the tight facts are a day older; results are ahead.
+            assert state["timeline"] == (
+                "Swing facts are from the session of Fri 11 Sep 2026; Three weeks tight facts "
+                "from Thu 10 Sep 2026, 1 day earlier; the filing was published on the session "
+                "day; results are due 4 days ahead (Tue 15 Sep 2026)."
+            )
+            # Short fields first: laya truncates a long state from the right.
+            assert list(state) == ["filing", "timeline", "context", "setup"]
             assert state == review_state(
                 both.facts(), both.catalyst.headline if both.catalyst else None, both.context
             )
@@ -492,11 +501,13 @@ class TestTheOpinion:
 
             # The sidecar answers, sure on this one and unsure on FLAGCO's.
             await screen_cache.set(
-                review_key(state), json.dumps({"choice": "look_first", "confidence": 0.82})
+                review_key(state),
+                json.dumps({"choice": "look_first", "confidence": 0.82, "answer_confidence": 0.82}),
             )
             flagco = first.rows[1]
             await screen_cache.set(
-                review_key(flagco.state()), json.dumps({"choice": "skip", "confidence": 0.34})
+                review_key(flagco.state()),
+                json.dumps({"choice": "skip", "confidence": 0.34, "answer_confidence": 0.34}),
             )
             second = await overlap(
                 screener_session, user_id=user_id, strategies_user_id=user_id, cache=screen_cache
@@ -521,6 +532,63 @@ class TestTheOpinion:
         assert flag is not None and (flag.label, flag.confidence) == ("skip", 0.34)
         assert first.rows[0].laya is None
 
+    async def test_a_confident_model_tag_cannot_erase_an_adverse_filing(
+        self, screener_session: AsyncSession, screen_cache: Redis
+    ) -> None:
+        """OV11 finding 3. The rules read "orders passed" as adverse; Laya, sure, called the
+        headline corporate_action; the resolved tag is the model's and carries no phrases — so
+        the baseline used to lose the skip. The baseline reads the headline itself now."""
+        user_id, _ = await make_user(screener_session, "overlap-adverse@example.com")
+        ids = await _a_morning(screener_session, user_id)
+        headline = (
+            "Action(s) taken or orders passed — FLAGCO receipt of Demand Order under Section 156"
+        )
+        screener_session.add(
+            SwCatalyst(
+                user_id=user_id,
+                instrument_id=ids["FLAGCO"],
+                headline=headline,
+                published_at=dt.datetime(2026, 9, 10, 17, 5, tzinfo=IST),
+                url="https://nsearchives.nseindia.com/corporate/FLAGCO.pdf",
+                source="NSE_ANNOUNCEMENT",
+            )
+        )
+        await screener_session.flush()
+        await screen_cache.set(
+            cache_key(headline),
+            json.dumps(
+                {
+                    "choice": "corporate_action",
+                    "confidence": 0.91,
+                    "answer_confidence": 0.91,
+                    "probabilities": {"corporate_action": 0.91, "governance": 0.06},
+                }
+            ),
+        )
+        try:
+            view = await overlap(
+                screener_session, user_id=user_id, strategies_user_id=user_id, cache=screen_cache
+            )
+        finally:
+            await screen_cache.delete(cache_key(headline))
+        flagco = view.rows[1]
+        assert flagco.symbol == "FLAGCO"
+        tag = flagco.catalyst_tag
+        assert tag is not None and (tag.source, tag.event_type, tag.matched) == (
+            "laya",
+            "corporate_action",
+            (),
+        )
+        assert flagco.opinion is not None and (flagco.opinion.label, flagco.opinion.source) == (
+            "skip",
+            "rules",
+        )
+        assert flagco.opinion.reason == "the filing is adverse (orders passed, action(s) taken)"
+        assert flagco.state()["timeline"] == (
+            "Swing facts are from the session of Fri 11 Sep 2026; the filing was published "
+            "1 day before the session (Thu 10 Sep 2026)."
+        )
+
 
 class TestTheModelColumn:
     """The sidecar's cached answer, resolved against the rules, on the wire."""
@@ -535,7 +603,12 @@ class TestTheModelColumn:
         await screen_cache.set(
             cache_key(headline),
             json.dumps(
-                {"choice": "corporate_action", "confidence": 0.91, "model": "laya-rl-agent"}
+                {
+                    "choice": "corporate_action",
+                    "confidence": 0.91,
+                    "answer_confidence": 0.91,
+                    "model": "laya-rl-agent",
+                }
             ),
         )
         try:
@@ -560,7 +633,8 @@ class TestTheModelColumn:
         await _a_morning(screener_session, user_id)
         headline = "Press Release - BOTH wins a multi-year order"
         await screen_cache.set(
-            cache_key(headline), json.dumps({"choice": "routine", "confidence": 0.31})
+            cache_key(headline),
+            json.dumps({"choice": "routine", "confidence": 0.31, "answer_confidence": 0.31}),
         )
         try:
             unsure = await overlap(
@@ -689,7 +763,10 @@ class TestTheCorrection:
         await _a_morning(screener_session, user_id)
         # Laya, sure and wrong (measured shape); the rules say order; the person says order.
         await screen_cache.set(
-            cache_key(HEADLINE), json.dumps({"choice": "corporate_action", "confidence": 0.91})
+            cache_key(HEADLINE),
+            json.dumps(
+                {"choice": "corporate_action", "confidence": 0.91, "answer_confidence": 0.91}
+            ),
         )
         try:
             async with running_app(settings, screener_session) as client:
@@ -951,7 +1028,8 @@ class TestTheLabel:
         # Laya, unsure (measured shape): the page shows the rules baseline instead, and the
         # unsure answer is still what the label records as overruled. The person says skip.
         await screen_cache.set(
-            review_key(state), json.dumps({"choice": "look_first", "confidence": 0.41})
+            review_key(state),
+            json.dumps({"choice": "look_first", "confidence": 0.41, "answer_confidence": 0.41}),
         )
         try:
             async with running_app(settings, screener_session) as client:
@@ -1073,7 +1151,9 @@ class TestTheLabel:
         ids = await _a_morning(screener_session, user_id)
         view = await overlap(screener_session, user_id=user_id, strategies_user_id=user_id)
         key = review_key(view.rows[0].state())
-        await screen_cache.set(key, json.dumps({"choice": "look_first", "confidence": 0.82}))
+        await screen_cache.set(
+            key, json.dumps({"choice": "look_first", "confidence": 0.82, "answer_confidence": 0.82})
+        )
         try:
             async with running_app(settings, screener_session) as client:
                 await client.put(

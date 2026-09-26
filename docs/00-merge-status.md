@@ -1706,3 +1706,34 @@ night tops up a few hundred.
 had only the bhavcopy half (3,022 and 2,988 bars), and the gate's threshold (0.9 x the 10-day
 median, ~3,964) would have refused them. Maulik's 11:07 login on 17 Sep is what let both days
 land complete.
+
+## OV11 — Laya's inference contract corrected (26 Sep 2026)
+
+A review of OV7–OV10 (pasted by Maulik) found three faults in the overlap page's Laya column, and
+this module fixes them plus the review's next three items. Full account: `docs/DECISIONS-MERGE.md`
+"Laya's inference contract corrected" (⚠ UNREVIEWED); `docs/07a` §17; `docs/02` "Laya sidecar".
+
+* **The number was the wrong field.** The sidecar cached laya's `confidence`, which on a `choice`
+  question is a normalised-entropy score, and both readers gated it against the 0.60 floor. It now
+  caches `answer_confidence` — the probability of the chosen answer, the calibrated one — keeps the
+  entropy score under its own name, and the readers refuse a payload that carries only the old
+  field. Cache keys moved to `v2` with a question-schema hash, so no old answer is read again.
+* **The context never reached the model.** The API composed gates, breadth, sector and screen
+  ranks; the sidecar rebuilt only `setup` and `filing`. Every string field now passes through, in
+  `STATE_FIELDS` order (`filing, timeline, context, setup`) so right-truncation cuts the technicals'
+  tail, never the filing; unknown future fields follow the known ones.
+* **A confident model tag could erase an adverse filing.** The rules baseline read the adverse
+  phrases off the resolved tag, and a model tag has none. It now reads the headline itself
+  (`catalyst_tags.adverse_phrases`), whatever the Filing column shows.
+* **New: `timeline`.** The filing's date, the results date and each screen run's age, said
+  relative to the setup's session — stored dates only, no clock.
+* **Pinned.** `LAYA_MODEL_REVISION` (default the sha the box loaded on 25 Sep, verified against the
+  hub) and `infra/laya/requirements.txt` (38 wheels, CPU torch); the sidecar clears its own keys
+  when the model tag changes. First sidecar tests: 19, with a fake agent and an in-memory cache,
+  asserting the mirrors equal core's.
+
+**NOT done.** The 0.60 floor is unchanged (no labels to recalibrate against). No re-measurement of
+the two questions on the base checkpoint with the right field (no laya in this workspace). The
+labelling rubric the review asked Maulik for is drafted (`docs/overlap/LABELLING-RUBRIC.md`,
+⚠ UNREVIEWED) with nine open questions in `NEEDS-MAULIK.md`; the baseline implements none of the
+proposed lines. Three separate Laya questions and filing-attachment facts (D10) are not built.

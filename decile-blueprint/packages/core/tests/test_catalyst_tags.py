@@ -15,6 +15,7 @@ import pytest
 
 from baskfy_core import catalyst_tags
 from baskfy_core.catalyst_tags import (
+    ADVERSE_PHRASES,
     LAYA_CONFIDENCE_FLOOR,
     LAYA_QUESTIONS,
     PRIORITY_OF,
@@ -22,11 +23,16 @@ from baskfy_core.catalyst_tags import (
     SOURCE_CORRECTED,
     SOURCE_LAYA,
     SOURCE_RULES,
+    TAG_SCHEMA,
     CatalystTag,
     EventType,
     ReviewPriority,
+    adverse_filing,
+    adverse_phrases,
     cache_key,
+    chosen_probability,
     laya_state,
+    question_schema_hash,
     resolve_tag,
     split_subject,
     tag_from_laya,
@@ -134,7 +140,18 @@ class TestItStaysPure:
                 imported.update(alias.name for alias in node.names)
             elif isinstance(node, ast.ImportFrom):
                 imported.add(node.module or "")
-        assert imported <= {"__future__", "hashlib", "re", "dataclasses", "enum", "typing"}
+        # `json` and `collections.abc` joined for the key's schema hash (OV11): pure stdlib,
+        # no file, socket or clock behind either.
+        assert imported <= {
+            "__future__",
+            "collections.abc",
+            "dataclasses",
+            "enum",
+            "hashlib",
+            "json",
+            "re",
+            "typing",
+        }
 
 
 class TestTheModelColumn:
@@ -153,7 +170,7 @@ class TestTheModelColumn:
     def test_a_confident_model_answer_is_the_tag_and_carries_its_number(self) -> None:
 
         # Measured 25 Sep 2026: "Receipt of order worth Rs 840 crore ..." zero-shot.
-        laya = tag_from_laya({"type": "choice", "choice": "order", "confidence": 0.9861})
+        laya = tag_from_laya({"type": "choice", "choice": "order", "answer_confidence": 0.9861})
         assert laya == CatalystTag(
             EventType.ORDER, ReviewPriority.HIGH, (), source=SOURCE_LAYA, confidence=0.9861
         )
@@ -169,7 +186,7 @@ class TestTheModelColumn:
     def test_an_unsure_model_defers_to_the_rules_and_the_disagreement_is_kept(self) -> None:
 
         # Measured: "Resignation of Chief Financial Officer" -> corporate_action at 0.3301.
-        laya = tag_from_laya({"choice": "corporate_action", "confidence": 0.3301})
+        laya = tag_from_laya({"choice": "corporate_action", "answer_confidence": 0.3301})
         assert laya is not None and laya.confidence is not None
         assert laya.confidence < LAYA_CONFIDENCE_FLOOR
         rules = tag_headline("Resignation of Chief Financial Officer")
@@ -180,7 +197,7 @@ class TestTheModelColumn:
     def test_a_sure_but_different_model_answer_still_records_what_the_rules_said(self) -> None:
 
         # Measured: "SEBI order against the company" -> corporate_action at 0.6959 (wrong, sure).
-        laya = tag_from_laya({"choice": "corporate_action", "confidence": 0.6959})
+        laya = tag_from_laya({"choice": "corporate_action", "answer_confidence": 0.6959})
         chosen = resolve_tag(tag_headline("SEBI order against the company"), laya)
         assert (chosen.source, chosen.event_type) == ("laya", EventType.CORPORATE_ACTION)
         assert chosen.disagrees_with == "rules:governance"
@@ -190,13 +207,13 @@ class TestTheModelColumn:
     ) -> None:
 
         rules = tag_headline("USFDA approval for ANDA")
-        laya = tag_from_laya({"choice": "approval", "confidence": 0.9943})
+        laya = tag_from_laya({"choice": "approval", "answer_confidence": 0.9943})
         assert resolve_tag(rules, laya).disagrees_with is None
         assert resolve_tag(rules, None) == rules
 
     def test_an_answer_outside_the_vocabulary_is_not_a_tag(self) -> None:
 
-        assert tag_from_laya({"choice": "merger", "confidence": 0.9}) is None
+        assert tag_from_laya({"choice": "merger", "answer_confidence": 0.9}) is None
         assert tag_from_laya({"choice": "order"}) is None
         assert tag_from_laya("order") is None
         assert tag_from_laya(None) is None
@@ -205,7 +222,8 @@ class TestTheModelColumn:
 
         assert cache_key("Receipt of Order") == cache_key("  receipt of order ")
         assert cache_key("Receipt of Order") != cache_key("Receipt of Orders")
-        assert cache_key("x").startswith("catalyst_tag:v1:")
+        assert cache_key("x").startswith(f"catalyst_tag:v2:{TAG_SCHEMA}:")
+        assert len(TAG_SCHEMA) == 8
 
 
 class TestTheCorrection:
@@ -216,7 +234,7 @@ class TestTheCorrection:
         # and the person says order. The correction is the tag; the model's word is what it
         # overruled.
         rules = tag_headline("Press Release - BOTH wins a multi-year order")
-        laya = tag_from_laya({"choice": "corporate_action", "confidence": 0.91})
+        laya = tag_from_laya({"choice": "corporate_action", "answer_confidence": 0.91})
         chosen = resolve_tag(rules, laya, EventType.ORDER)
         assert chosen == CatalystTag(
             EventType.ORDER,
@@ -240,7 +258,7 @@ class TestTheCorrection:
 
     def test_the_model_s_word_is_named_before_the_rules_when_both_differed(self) -> None:
         rules = tag_headline("Resignation of Chief Financial Officer")
-        laya = tag_from_laya({"choice": "corporate_action", "confidence": 0.33})
+        laya = tag_from_laya({"choice": "corporate_action", "answer_confidence": 0.33})
         chosen = resolve_tag(rules, laya, EventType.ROUTINE)
         assert chosen.disagrees_with == "laya:corporate_action"
 
@@ -248,13 +266,13 @@ class TestTheCorrection:
         self,
     ) -> None:
         rules = tag_headline("SEBI order against the company")  # governance
-        laya = tag_from_laya({"choice": "corporate_action", "confidence": 0.6959})
+        laya = tag_from_laya({"choice": "corporate_action", "answer_confidence": 0.6959})
         chosen = resolve_tag(rules, laya, EventType.CORPORATE_ACTION)
         assert (chosen.source, chosen.disagrees_with) == (SOURCE_CORRECTED, "rules:governance")
 
     def test_a_correction_that_agrees_with_everyone_carries_no_disagreement(self) -> None:
         rules = tag_headline("USFDA approval for ANDA")
-        laya = tag_from_laya({"choice": "approval", "confidence": 0.9943})
+        laya = tag_from_laya({"choice": "approval", "answer_confidence": 0.9943})
         chosen = resolve_tag(rules, laya, EventType.APPROVAL)
         assert (chosen.source, chosen.confidence, chosen.matched, chosen.disagrees_with) == (
             SOURCE_CORRECTED,
@@ -265,7 +283,7 @@ class TestTheCorrection:
 
     def test_no_correction_leaves_the_resolution_as_it_was(self) -> None:
         rules = tag_headline("USFDA approval for ANDA")
-        laya = tag_from_laya({"choice": "approval", "confidence": 0.9943})
+        laya = tag_from_laya({"choice": "approval", "answer_confidence": 0.9943})
         assert resolve_tag(rules, laya, None) == resolve_tag(rules, laya)
         assert resolve_tag(rules, None, None) == rules
 
@@ -349,3 +367,58 @@ class TestTheExchangeSubjectLine:
         assert tag_headline("Action(s) taken or orders passed — demand order").event_type is (
             EventType.GOVERNANCE
         )
+
+
+class TestTheNumberOnTheAnswer:
+    """The probability of the chosen word — never laya's entropy score (OV11, 26 Sep 2026)."""
+
+    def test_answer_confidence_is_read_first_then_the_chosen_probability(self) -> None:
+        both = {"choice": "order", "answer_confidence": 0.98, "probabilities": {"order": 0.97}}
+        assert chosen_probability(both, "order") == 0.98
+        only_probabilities = {"choice": "order", "probabilities": {"order": 0.61, "routine": 0.3}}
+        assert chosen_probability(only_probabilities, "order") == 0.61
+
+    def test_a_payload_carrying_only_the_entropy_score_is_not_an_answer(self) -> None:
+        # laya 0.3.20: on a `choice` question `confidence` is 1 - H(p)/log(k), how concentrated
+        # the whole distribution is — three-way 0.60/0.20/0.20 reads about 0.14 there. It was
+        # compared to the 0.60 floor from 25 to 26 Sep 2026; the readers now refuse it.
+        entropy_only = {"choice": "order", "confidence": 0.93}
+        assert chosen_probability(entropy_only, "order") is None
+        assert tag_from_laya(entropy_only) is None
+        assert chosen_probability({"choice": "order", "answer_confidence": True}, "order") is None
+
+    def test_the_key_names_the_generation_and_the_question(self) -> None:
+        assert question_schema_hash(LAYA_QUESTIONS) == TAG_SCHEMA
+        changed = {"event_type": {**LAYA_QUESTIONS["event_type"], "instructions": "Say what."}}
+        assert question_schema_hash(changed) != TAG_SCHEMA
+        assert cache_key("x").split(":")[:3] == ["catalyst_tag", "v2", TAG_SCHEMA]
+
+
+class TestTheAdverseReader:
+    """Deterministic, from the headline, whatever tag the page shows (OV11 finding 3)."""
+
+    def test_a_regulatory_or_court_order_a_penalty_a_default_or_a_resignation_is_adverse(
+        self,
+    ) -> None:
+        assert adverse_phrases("SEBI order against the company") == ("sebi order",)
+        assert adverse_phrases(
+            "Action(s) taken or orders passed — receipt of Demand Order under Section 156"
+        ) == ("orders passed", "action(s) taken")
+        assert adverse_filing("Resignation of Chief Financial Officer")
+        assert adverse_filing("Default in payment of interest on NCDs")
+        assert set(adverse_phrases("NCLT admits insolvency petition")) == {"nclt", "insolvency"}
+
+    def test_governance_that_is_not_adverse_and_every_other_type_is_not(self) -> None:
+        assert adverse_phrases("Credit rating reaffirmed at AA-") == ()
+        assert not adverse_filing("Bagging/Receiving of orders/contracts — Rs 840 crore order")
+        assert not adverse_filing("Closure of trading window")
+        assert not adverse_filing(None) and not adverse_filing("  ")
+
+    def test_the_adverse_phrases_are_all_rules_the_headline_reader_knows(self) -> None:
+        governance = {
+            phrase
+            for event_type, phrases in RULES
+            if event_type is EventType.GOVERNANCE
+            for phrase in phrases
+        }
+        assert governance >= ADVERSE_PHRASES

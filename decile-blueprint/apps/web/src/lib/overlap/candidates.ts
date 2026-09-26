@@ -256,3 +256,147 @@ export function parseCandidates(payload: OverlapOut): OverlapCandidates {
     })),
   };
 }
+
+// --- Sorting the candidates table (OV12, 26 Sep 2026) ------------------------------------------
+//
+// Maulik: "I want to have the table which can be sorted in any of the ways I select on the UI."
+// The server's order — how many strategies raised the name, actionable first, then symbol — is
+// the starting order and stays available as `null`. A person picks a column; this is what each
+// column means as a sort, and it is a display order only, never read by any rank or order path.
+
+/** One of the eight headers, in the order the table shows them. */
+export type CandidateSortKey =
+  | "name"
+  | "on"
+  | "strategies"
+  | "price"
+  | "results"
+  | "filing"
+  | "laya"
+  | "screens";
+
+export const CANDIDATE_SORT_KEYS: readonly CandidateSortKey[] = [
+  "name",
+  "on",
+  "strategies",
+  "price",
+  "results",
+  "filing",
+  "laya",
+  "screens",
+];
+
+/** `1` ascends, `-1` descends — the same shape the holdings table uses. */
+export type CandidateSortDirection = 1 | -1;
+
+/**
+ * The direction a first click on the header takes. Text and dates ascend (A first, the soonest
+ * result first); figures and priorities descend (the most strategies, the highest price, the
+ * filing worth opening first, "look first" first, the most screens) — nobody opens a table of
+ * values wanting the smallest.
+ */
+export const CANDIDATE_SORT_DEFAULT_DIRECTION: Record<CandidateSortKey, CandidateSortDirection> = {
+  name: 1,
+  on: -1,
+  strategies: 1,
+  price: -1,
+  results: 1,
+  filing: -1,
+  laya: -1,
+  screens: -1,
+};
+
+/** What a header sorts by, in a person's words — the button's tooltip. */
+export const CANDIDATE_SORT_MEANING: Record<CandidateSortKey, string> = {
+  name: "Sort by symbol",
+  on: "Sort by how many strategies raised the name",
+  strategies: "Sort by which strategies raised the name, actionable first",
+  price: "Sort by the close (the live overlay does not reorder the rows)",
+  results: "Sort by the result date, soonest first; names without one last",
+  filing: "Sort by the filing's priority — order wins, results and approvals first — then newest; names without a filing last",
+  laya: "Sort by the word on the row — look first, worth a look, skip — then by Laya's percentage",
+  screens: "Sort by how many screens the name is on, then its best rank",
+};
+
+const PRIORITY_RANK: Record<OverlapTag["review_priority"], number> = { high: 3, medium: 2, low: 1 };
+const OPINION_RANK: Record<OverlapOpinionLabel, number> = { look_first: 3, worth_a_look: 2, skip: 1 };
+
+/**
+ * The comparable value of a row under a key, or `null` when the row has nothing to compare —
+ * a null always sorts last, whichever way the column is pointing, because "no filing" is not
+ * the smallest filing. A tuple compares element by element.
+ */
+function sortValue(row: OverlapCandidate, key: CandidateSortKey): (number | string)[] | null {
+  switch (key) {
+    case "name":
+      return [row.symbol];
+    case "on":
+      return [row.strategy_count, row.actionable ? 1 : 0];
+    case "strategies":
+      return [
+        row.actionable ? 0 : 1,
+        row.strategies.map((hit) => hit.name).join(", "),
+      ];
+    case "price":
+      return row.close === null ? null : [row.close];
+    case "results":
+      return row.catalyst?.earnings_date ? [row.catalyst.earnings_date] : null;
+    case "filing": {
+      const catalyst = row.catalyst;
+      if (!catalyst || catalyst.headline === null) return null;
+      return [
+        catalyst.tag ? PRIORITY_RANK[catalyst.tag.review_priority] : 0,
+        catalyst.published_at ?? "",
+      ];
+    }
+    case "laya":
+      return row.opinion === null
+        ? null
+        : [OPINION_RANK[row.opinion.label], row.opinion.source === "laya" ? row.opinion.confidence : 0];
+    case "screens": {
+      if (row.screens.length === 0) return null;
+      const ranks = row.screens.map((hit) => hit.rank).filter((rank): rank is number => rank !== null);
+      /* More screens first; among equals the best rank first, so the rank is negated. */
+      return [row.screens.length, ranks.length ? -Math.min(...ranks) : -Infinity];
+    }
+  }
+}
+
+function compareValues(a: (number | string)[], b: (number | string)[]): number {
+  for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
+    const x = a[i];
+    const y = b[i];
+    if (x === undefined || y === undefined) return x === undefined ? (y === undefined ? 0 : -1) : 1;
+    if (typeof x === "string" || typeof y === "string") {
+      const c = String(x).localeCompare(String(y), "en", { sensitivity: "base" });
+      if (c !== 0) return c;
+    } else if (x !== y) {
+      return x < y ? -1 : 1;
+    }
+  }
+  return 0;
+}
+
+/**
+ * The rows under one header's order. `null` is the server's order, untouched. Stable: rows the
+ * key cannot tell apart keep the server's order, and rows with nothing to compare go last in
+ * both directions. Pure — a new array, the rows themselves untouched.
+ */
+export function sortCandidates(
+  rows: readonly OverlapCandidate[],
+  key: CandidateSortKey | null,
+  direction: CandidateSortDirection,
+): OverlapCandidate[] {
+  if (key === null) return [...rows];
+  return rows
+    .map((row, index) => ({ row, index, value: sortValue(row, key) }))
+    .sort((a, b) => {
+      if (a.value === null || b.value === null) {
+        if (a.value === null && b.value === null) return a.index - b.index;
+        return a.value === null ? 1 : -1;
+      }
+      const c = compareValues(a.value, b.value) * direction;
+      return c !== 0 ? c : a.index - b.index;
+    })
+    .map((entry) => entry.row);
+}

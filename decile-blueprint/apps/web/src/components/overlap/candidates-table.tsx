@@ -4,7 +4,7 @@ import { ExternalLink } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState, useTransition, type ReactNode } from "react";
+import { useCallback, useMemo, useState, useTransition, type ReactNode } from "react";
 
 import { InstrumentLink } from "@/components/instrument/instrument-link";
 import { FilingsScanButton } from "@/components/overlap/filings-scan-button";
@@ -25,6 +25,12 @@ import {
   type OverlapScope,
   type OverlapStrategy,
   type OverlapTag,
+  CANDIDATE_SORT_DEFAULT_DIRECTION,
+  CANDIDATE_SORT_KEYS,
+  CANDIDATE_SORT_MEANING,
+  sortCandidates,
+  type CandidateSortDirection,
+  type CandidateSortKey,
 } from "@/lib/overlap/candidates";
 import { cn } from "@/lib/utils";
 
@@ -69,8 +75,26 @@ export function CandidatesTable({
   /** The "Scan filings with Laya" button's actions; absent where the page cannot write. */
   scanFilings?: FilingsScanActions;
 }) {
-  const rows = candidates?.data ?? [];
+  const rows = candidates?.data ?? NO_ROWS;
   const sessions = candidates?.sessions ?? null;
+  /* OV12: which header the person chose, or none for the server's order. Display only. */
+  const [sortKey, setSortKey] = useState<CandidateSortKey | null>(null);
+  const [direction, setDirection] = useState<CandidateSortDirection>(1);
+  const sorted = useMemo(() => sortCandidates(rows, sortKey, direction), [rows, sortKey, direction]);
+  /* Computed from the current key, not inside a state updater — StrictMode runs an updater
+     twice, and a `setDirection` inside one flips the direction straight back (the holdings
+     table learnt this the hard way). */
+  const toggleSort = useCallback(
+    (key: CandidateSortKey) => {
+      if (key === sortKey) {
+        setDirection((value) => (value === 1 ? -1 : 1));
+        return;
+      }
+      setSortKey(key);
+      setDirection(CANDIDATE_SORT_DEFAULT_DIRECTION[key]);
+    },
+    [sortKey],
+  );
   const latest = sessions
     ? [sessions.swing, sessions.volume_breakout, sessions.three_weeks_tight]
         .filter((value): value is string => Boolean(value))
@@ -95,7 +119,8 @@ export function CandidatesTable({
           <p className="max-w-[72ch] text-sm leading-relaxed text-muted-foreground">
             One row per name, with each strategy&rsquo;s own word on it, the screens it is on, and
             the exchange filing the swing feed linked. Ordered by how many strategies raised the
-            name — a count, not a score.
+            name — a count, not a score — until you pick a column: every header sorts, and a
+            second click turns it round.
           </p>
         </div>
         <div className="flex flex-col items-end gap-2">
@@ -162,18 +187,34 @@ export function CandidatesTable({
             <table className="w-full min-w-[56rem] text-sm" data-testid="overlap-candidates-table">
               <thead>
                 <tr className="border-b border-border/70 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="py-2 pr-3 font-medium">Name</th>
-                  <th className="px-2 py-2 text-center font-medium">On</th>
-                  <th className="px-2 py-2 font-medium">Strategies</th>
-                  <th className="px-2 py-2 text-right font-medium">Price</th>
-                  <th className="px-2 py-2 font-medium">Results</th>
-                  <th className="px-2 py-2 font-medium">Filing</th>
-                  <th className="px-2 py-2 font-medium">Laya</th>
-                  <th className="py-2 pl-2 font-medium">Screens</th>
+                  {CANDIDATE_SORT_KEYS.map((key) => {
+                    const active = sortKey === key;
+                    return (
+                      <th
+                        key={key}
+                        scope="col"
+                        aria-sort={active ? (direction === 1 ? "ascending" : "descending") : "none"}
+                        className={cn("py-2 font-medium", HEADER_CLASS[key])}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => toggleSort(key)}
+                          title={CANDIDATE_SORT_MEANING[key]}
+                          data-testid={`overlap-sort-${key}`}
+                          className="inline-flex items-center gap-1 hover:text-foreground"
+                        >
+                          {HEADER_LABEL[key]}
+                          <span aria-hidden="true" className={cn("text-[0.7em]", !active && "opacity-0")}>
+                            {direction === 1 ? "▲" : "▼"}
+                          </span>
+                        </button>
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => (
+                {sorted.map((row) => (
                   <CandidateRow
                     key={row.instrument_id}
                     row={row}
@@ -189,6 +230,31 @@ export function CandidatesTable({
     </section>
   );
 }
+
+/** One empty list for every render, so the sort memo does not recompute on a null read. */
+const NO_ROWS: readonly OverlapCandidate[] = [];
+
+/** The eight headers, as the table has always labelled them, and where each sits. */
+const HEADER_LABEL: Record<CandidateSortKey, string> = {
+  name: "Name",
+  on: "On",
+  strategies: "Strategies",
+  price: "Price",
+  results: "Results",
+  filing: "Filing",
+  laya: "Laya",
+  screens: "Screens",
+};
+const HEADER_CLASS: Record<CandidateSortKey, string> = {
+  name: "pr-3",
+  on: "px-2 text-center",
+  strategies: "px-2",
+  price: "px-2 text-right",
+  results: "px-2",
+  filing: "px-2",
+  laya: "px-2",
+  screens: "pl-2",
+};
 
 function CandidateRow({
   row,

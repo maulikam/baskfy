@@ -8435,3 +8435,15 @@ announced its next result meeting yet. His choice: "put laya scan button on over
 
 **Reverse.** Revert the commit; the cache keys go back to v1 and the sidecar re-answers under them.
 
+
+## Overlap: the candidates table sorts by any column (26 Sep 2026) · ⚠ UNREVIEWED
+
+**Context.** Maulik, in session: "Name On Strategies Price Results Filing Laya Screens — I want to have the table which can be sorted in any of the ways I select on the UI." The table on `/build/overlap` was served in one order — how many strategies raised the name, actionable first, then symbol — and the headers were labels.
+
+**Choice.** A client-side sort, every one of the eight headers a button (`aria-sort` on the `<th>`, the holdings table's pattern), the server's order kept as the starting order and restored by a reload. `sortCandidates(rows, key, direction)` in `lib/overlap/candidates.ts` is pure and stable — rows a key cannot tell apart keep the server's order, and a row with nothing to compare (no print, no result date, no filing, no screens) goes **last in both directions**, because "no filing" is not the smallest filing. A first click takes the column's natural direction and a second turns it round: text and dates ascend (Name A→Z; Results soonest first; Strategies by the names that raised the row, actionable first), figures and priorities descend (On, Price, Filing by the tag's review priority then newest, Laya by the word — look first, worth a look, skip — then the model's percentage when the word is Laya's, Screens by how many then the best rank). The tooltip on each header says exactly this. The live-price overlay does not reorder the rows; Price sorts the close. Display order only: nothing here is read by any rank, size or order path, and the wire is unchanged.
+
+**Rejected.** A server-side `sort=` parameter (the page has every row; a round trip to reorder them buys nothing and would add a contract). Persisting the choice in the URL or storage (not asked for; a reload returning to the served order is the cheap, obvious behaviour; add it if he asks). A three-state toggle back to "unsorted" (two states match the holdings table; reload is the third).
+
+**Tests.** 11 in `lib/overlap/__tests__/sort-candidates.test.ts` (every key both ways, nulls last, stability, purity) and 4 in `candidates-table.test.tsx` (eight headers at `aria-sort="none"`, first-click direction and flip, switching headers, nulls last). tsc and eslint clean.
+
+**Reverse.** Drop the sort block from `candidates.ts` and the header map from `candidates-table.tsx`; the `<th>` labels come back.

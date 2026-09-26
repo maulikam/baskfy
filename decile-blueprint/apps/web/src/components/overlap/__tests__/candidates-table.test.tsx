@@ -550,3 +550,57 @@ describe("CandidatesTable", () => {
     expect(screen.queryByTestId("overlap-candidates-table")).toBeNull();
   });
 });
+
+describe("CandidatesTable sorting (OV12)", () => {
+  const rowOrder = () =>
+    screen.getAllByTestId("overlap-candidate-row").map((row) => row.getAttribute("data-symbol"));
+
+  it("starts in the server's order with no header sorted", () => {
+    render(<CandidatesTable candidates={payload} scope="all" />);
+    expect(rowOrder()).toEqual(["BOTH", "QUIET"]);
+    const headers = screen.getAllByRole("columnheader");
+    expect(headers).toHaveLength(8);
+    for (const header of headers) expect(header).toHaveAttribute("aria-sort", "none");
+    expect(headers.map((h) => h.textContent?.replace(/[▲▼]/g, "").trim())).toEqual([
+      "Name",
+      "On",
+      "Strategies",
+      "Price",
+      "Results",
+      "Filing",
+      "Laya",
+      "Screens",
+    ]);
+  });
+
+  it("sorts by price descending on the first click and flips on the second", () => {
+    render(<CandidatesTable candidates={payload} scope="all" />);
+    fireEvent.click(screen.getByTestId("overlap-sort-price"));
+    expect(rowOrder()).toEqual(["QUIET", "BOTH"]);
+    expect(screen.getByTestId("overlap-sort-price").closest("th")).toHaveAttribute("aria-sort", "descending");
+    fireEvent.click(screen.getByTestId("overlap-sort-price"));
+    expect(rowOrder()).toEqual(["BOTH", "QUIET"]);
+    expect(screen.getByTestId("overlap-sort-price").closest("th")).toHaveAttribute("aria-sort", "ascending");
+  });
+
+  it("sorts by name ascending first, and moving to another header resets to its own direction", () => {
+    render(<CandidatesTable candidates={payload} scope="all" />);
+    fireEvent.click(screen.getByTestId("overlap-sort-name"));
+    expect(rowOrder()).toEqual(["BOTH", "QUIET"]);
+    fireEvent.click(screen.getByTestId("overlap-sort-name"));
+    expect(rowOrder()).toEqual(["QUIET", "BOTH"]);
+    fireEvent.click(screen.getByTestId("overlap-sort-laya"));
+    /* Laya descends on a first click: look first before worth a look. */
+    expect(rowOrder()).toEqual(["BOTH", "QUIET"]);
+    expect(screen.getByTestId("overlap-sort-laya").closest("th")).toHaveAttribute("aria-sort", "descending");
+    expect(screen.getByTestId("overlap-sort-name").closest("th")).toHaveAttribute("aria-sort", "none");
+  });
+
+  it("puts rows with nothing to sort by last, whichever way the column points", () => {
+    render(<CandidatesTable candidates={payload} scope="all" />);
+    fireEvent.click(screen.getByTestId("overlap-sort-results"));
+    expect(rowOrder()).toEqual(["BOTH", "QUIET"]);
+    fireEvent.click(screen.getByTestId("overlap-sort-results"));
+    expect(rowOrder()).toEqual(["BOTH", "QUIET"]);
+  });
+});

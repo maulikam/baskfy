@@ -66,10 +66,10 @@ threshold recalibration (needs labels), fine-tuning.
   EXPECT: /[1-9]/
   EVIDENCE: answer_confidence in docs/02:1, docs/07a:2, DECISIONS-MERGE:2; docs/overlap/LABELLING-RUBRIC.md present; NEEDS-MAULIK rubric section; docs/00-merge-status.md OV11 section appended
 
-- [ ] G13: One commit `OV11: green — …` on developer, working tree clean apart from pre-existing untracked dirs
+- [x] G13: One commit `OV11: green — …` on developer, working tree clean apart from pre-existing untracked dirs
   CHECK: cd /Users/maulikdave/Documents/projects/baskfy && git log -1 --format=%s | cut -c1-40 && git status --porcelain | grep -v "^?? holdings-status/" | wc -l
   EXPECT: /OV11: green/
-  EVIDENCE: pending
+  EVIDENCE: OV11: green — Laya's inference contract | 0
 
-- [ ] G14: Deployed to the box with ship.sh from a detached worktree, laya force-recreated (bind-mounted file changed), df checked
-  EVIDENCE: pending
+- [x] G14: Deployed to the box with ship.sh from a detached worktree, laya force-recreated (bind-mounted file changed), df checked
+  EVIDENCE: ship.sh from detached worktree deploy-59ce6ea (first run's baskfy-py push failed 5x on ECR dial errors; rerun succeeded): '✓ DEPLOYED 59ce6ea', pins=3 running=15 release=59ce6ea; laya recreated 16:22:25 IST (compose changed), log 'loading convaiinnovations/laya@55cf4c4ebb4e', laya:model set; df / 22% (79G free); 115 headlines tagged in 625s; 25 rows answered; v1 keys deleted (1268+325)

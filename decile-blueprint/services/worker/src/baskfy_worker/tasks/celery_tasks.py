@@ -57,7 +57,7 @@ from baskfy_providers.kite import KiteProvider
 from baskfy_providers.records import QuoteRecord
 from baskfy_providers.settings import get_provider_settings
 from baskfy_providers.tokens import AccessTokenStore
-from baskfy_worker import catch_up, kite_session_cli, ops
+from baskfy_worker import catch_up, eq_bars, kite_session_cli, ops
 from baskfy_worker.alerts import Alert, AlertName, Severity, dispatch
 from baskfy_worker.bhavcopy_backfill import backfill_bars_from_bhavcopy
 from baskfy_worker.celery_app import IST, QUEUE_COMPUTE, QUEUES
@@ -105,6 +105,7 @@ from baskfy_worker.tasks.curated_rebalance_notify import run_curated_rebalance_n
 from baskfy_worker.tasks.curated_sip import run_curated_sip_reminders
 from baskfy_worker.tasks.kite_login_nudge import NudgeWindow, run_login_nudge
 from baskfy_worker.tasks.portfolio_nav_job import run_portfolio_nav
+from baskfy_worker.tasks.published_session import last_published_session
 from baskfy_worker.tasks.purge_accounts import run_purge_accounts
 from baskfy_worker.tasks.resync import run_resync
 from baskfy_worker.tasks.swing import (
@@ -1184,6 +1185,49 @@ def options_index_bars_task(at: str | None = None) -> JsonObject:
         return {"at": now.isoformat(), **report.as_dict()}
 
     return run_in_session(_run)
+
+
+@shared_task(name="baskfy.eq_bars.session", acks_late=True)
+def eq_bars_session_task(trade_date: str | None = None) -> JsonObject:
+    """LV5: after the close, the session's one-minute bars for every liquid name.
+
+    Behind ``BASKFY_EQ_BARS_ENABLED`` (default on — read-only market data); skipped on a holiday
+    or with no Kite session. The universe is the swing book's ``liquid_universe`` as of the last
+    **published** session (today is not published at 15:45). One ``historical_data`` call per
+    name on the bulk lane, ~570 names, about three minutes; committed every 25 names so an
+    interruption keeps the evening. Idempotent: the upsert overwrites a minute with Kite's final
+    reading (house rule 7).
+    """
+    now = dt.datetime.now(tz=IST)
+    day = dt.date.fromisoformat(trade_date) if trade_date else now.date()
+    if not get_worker_settings().eq_bars_enabled:
+        return {"date": day.isoformat(), "skipped": "BASKFY_EQ_BARS_ENABLED is false"}
+    if not kite_session_usable():
+        return {"date": day.isoformat(), "skipped": "no usable Kite session"}
+    user_id = sole_user_id()
+    if user_id is None:
+        return {"date": day.isoformat(), "skipped": "BASKFY_SOLE_USER_ID is not set"}
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        if not await is_session_day(session, day):
+            return {"date": day.isoformat(), "skipped": "not an NSE trading day"}
+        as_of = await last_published_session(session, on_or_before=day - dt.timedelta(days=1))
+        if as_of is None:
+            return {"date": day.isoformat(), "skipped": "nothing published yet"}
+        names = await eq_bars.liquid_names(session, as_of=as_of, user_id=user_id)
+        if not names:
+            return {
+                "date": day.isoformat(),
+                "as_of": as_of.isoformat(),
+                "skipped": "no liquid names",
+            }
+        kite = build_options_kite(retry_hooks=provider_retry_hooks(), bars_lane=KiteLane.BULK)
+        report = await eq_bars.reconcile_session(
+            session, kite.bars, day, now=now, names=names, checkpoint=session.commit
+        )
+        return {"date": day.isoformat(), "as_of": as_of.isoformat(), **report.as_dict()}
+
+    return run_checkpointed(_run)
 
 
 @shared_task(name="baskfy.options.index_bars_eod", acks_late=True)

@@ -42,7 +42,11 @@ describe("LivePrice and LiveStatus", () => {
       liveOverlay: true,
       marketOpen: true,
       marks: { RELIANCE: 1520.4 },
-      quotes: { RELIANCE: { lastPrice: 1520.4, prevClose: 1500, changePct: 1.36 } },
+      quotes: {
+        RELIANCE: { lastPrice: 1520.4, prevClose: 1500, changePct: 1.36, stale: false, asOf: null },
+      },
+      requested: 1,
+      covered: 1,
     };
     renderRow(1500);
     expect(screen.getByTestId("live-price")).toHaveTextContent("1520.40");
@@ -70,6 +74,61 @@ describe("LivePrice and LiveStatus", () => {
     renderRow(1500);
     expect(screen.getByTestId("close-price")).toHaveTextContent("1500.00");
     expect(screen.getByTestId("live-status")).toHaveTextContent("no Kite session");
+  });
+
+  // LV1 (27 Sep 2026): a stale print is never shown as a live number, and a partial answer counts
+  // the rows it left on the close.
+  it("mutes a stale row, names the last print's time, and counts coverage in the header", () => {
+    current = {
+      ...EMPTY_LIVE_MARKS,
+      liveOverlay: true,
+      marketOpen: true,
+      marks: { RELIANCE: 1520.4 },
+      quotes: {
+        RELIANCE: {
+          lastPrice: 1520.4,
+          prevClose: 1500,
+          changePct: 1.36,
+          stale: true,
+          asOf: "2026-09-18T07:32:11Z",
+        },
+      },
+      requested: 50,
+      covered: 42,
+    };
+    renderRow(1500);
+    const price = screen.getByTestId("live-price");
+    expect(price).toHaveTextContent("1520.40");
+    const cell = price.parentElement as HTMLElement;
+    expect(cell).toHaveAttribute("data-stale", "true");
+    expect(cell).toHaveAttribute("title", "Stale — last quote 13:02:11 IST");
+    expect(cell.className).toContain("text-muted-foreground");
+    expect(screen.getByTestId("live-status")).toHaveTextContent("42 of 50 live");
+  });
+
+  it("marks a fresh row live with no muting", () => {
+    current = {
+      ...EMPTY_LIVE_MARKS,
+      liveOverlay: true,
+      marketOpen: true,
+      marks: { RELIANCE: 1520.4 },
+      quotes: {
+        RELIANCE: {
+          lastPrice: 1520.4,
+          prevClose: 1500,
+          changePct: 1.36,
+          stale: false,
+          asOf: "2026-09-18T07:44:58Z",
+        },
+      },
+      requested: 1,
+      covered: 1,
+    };
+    renderRow(1500);
+    const cell = screen.getByTestId("live-price").parentElement as HTMLElement;
+    expect(cell).toHaveAttribute("data-stale", "false");
+    expect(cell).toHaveAttribute("title", "Live — Kite last price");
+    expect(cell.className).not.toContain("text-muted-foreground");
   });
 
   it("renders a page's own fallback when not live", () => {

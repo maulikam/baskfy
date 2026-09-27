@@ -20,6 +20,13 @@ its rate limit. The window is short enough that the number still reads as live.
 **Silent fallback is deliberate here.** A failed or stale quote leaves the close in place, which is
 a correct number with a known meaning, and the page keeps working. This is the one place where
 degrading quietly is right: the alternative is an empty portfolio because a quote timed out.
+
+**Market data is not order permission (LV1.1, 27 Sep 2026).** ``quotes_permitted`` used to return
+``False`` whenever ``DRY_RUN`` was on, so the switch that keeps *orders* in rehearsal also removed
+every live price from every screen — on a process that has no execute route at all (D9). The
+read-only switch is now ``BASKFY_LIVE_QUOTES`` (:func:`market_data_enabled`, default on).
+``DRY_RUN`` keeps every meaning it has elsewhere: the OAuth callback still stores a *simulated*
+token under it, and a simulated token is still not a session here.
 """
 
 from __future__ import annotations
@@ -37,7 +44,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.broker_holdings import holdings_for_broker
 from baskfy_api.broker_oauth import (
-    dry_run_enabled,
     is_simulated_token,
     token_encryption_key,
     token_store_for,
@@ -119,10 +125,15 @@ class LiveQuote:
 
     ``prev_close`` comes with the quote rather than from ``ohlcv_daily`` so that a nightly that
     has not published yet (or a corporate action between the two) cannot manufacture a move.
+
+    ``as_of`` is the exchange's own time for the print (:attr:`QuoteRecord.as_of`, which the
+    provider fills from Kite's ``timestamp`` / ``last_trade_time`` and makes IST-aware). ``None``
+    when Kite sent no stamp — the reader then cannot tell how old the print is, and says so.
     """
 
     last_price: Decimal
     prev_close: Decimal | None
+    as_of: dt.datetime | None = None
 
 
 class _DetailMemo:
@@ -164,14 +175,30 @@ def reset_cache() -> None:
     _detail_memo.clear()
 
 
+#: The read-only market-data switch. Truthy spellings match ``dry_run_enabled``'s.
+LIVE_QUOTES_ENV: str = "BASKFY_LIVE_QUOTES"
+
+
+def market_data_enabled() -> bool:
+    """``BASKFY_LIVE_QUOTES`` — on unless explicitly off. Market data only; no order path reads it.
+
+    Default on, because the switch exists to *stop* the screens going dark by accident: the
+    review's first step (docs/live/PLAN.md) is that a rehearsal flag must not remove live prices.
+    An empty value is the default, as with ``DRY_RUN``.
+    """
+    raw = os.environ.get(LIVE_QUOTES_ENV, "true").strip().lower()
+    return raw in ("", "1", "true", "yes", "on")
+
+
 def quotes_permitted() -> bool:
-    """True only when a real, unexpired Kite session exists and DRY_RUN is off.
+    """True only when market data is enabled and a real, unexpired Kite session exists.
 
     The same local checks the brokers page uses for "connected" — no network call, and a
     ``sim_`` token is not a session. A quote against a stub would put an invented price
-    behind a rupee total, which is the failure this module exists to prevent.
+    behind a rupee total, which is the failure this module exists to prevent. ``DRY_RUN`` is
+    **not** read here (LV1.1): it governs orders, and this process places none.
     """
-    if dry_run_enabled():
+    if not market_data_enabled():
         return False
     if not os.environ.get("BASKFY_KITE_API_KEY", "").strip():
         return False
@@ -237,6 +264,7 @@ def _quote_details(symbols: Sequence[str]) -> dict[str, LiveQuote]:
                 if record.prev_close is not None and record.prev_close > 0
                 else None
             ),
+            as_of=record.as_of,
         )
         for record in records
         if record.last_price is not None and record.last_price > 0

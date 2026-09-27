@@ -324,8 +324,8 @@ export type SectionTab = { readonly href: Route; readonly label: string };
  */
 export const OPTIONS_SUBNAV: readonly SectionTab[] = [
   { href: "/options", label: "Intraday (NIFTY)" },
-  { href: "/options/overnight" as Route, label: "Overnight" },
-  { href: "/options/fno" as Route, label: "Stock F&O" },
+  { href: "/options/overnight", label: "Overnight" },
+  { href: "/options/fno", label: "Stock F&O" },
 ];
 
 /** Vocabulary titles for VBT / TWT are too long for the tab row; keep these short. */

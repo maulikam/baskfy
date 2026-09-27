@@ -250,15 +250,106 @@ async def get_status(session: SessionDep) -> StatusOut:
 
 
 _PCT_PLACES: Final = Decimal("0.01")
+#: A print older than this against ``served_at`` is stale (docs/live/PLAN.md, LV1 contract).
+STALE_AFTER_SECONDS: Final[int] = 120
 
 
-def _live_quote_out(quote: LiveQuote) -> LiveQuoteOut:
+def _is_stale(as_of: dt.datetime | None, served_at: dt.datetime) -> bool:
+    """``served_at - as_of`` beyond :data:`STALE_AFTER_SECONDS`.
+
+    A quote without a stamp is not stale — its age is unknown, and ``LiveQuoteOut.as_of`` being
+    ``None`` is how the client learns that. A stamp in the future (a clock ahead of ours) is not
+    stale either: the difference is negative. A naive stamp is read as IST, Kite's own clock, the
+    same rule the provider applies before it gets here.
+    """
+    if as_of is None:
+        return False
+    stamp = as_of if as_of.tzinfo is not None else as_of.replace(tzinfo=IST)
+    return (served_at - stamp).total_seconds() > STALE_AFTER_SECONDS
+
+
+def _live_quote_out(quote: LiveQuote, served_at: dt.datetime) -> LiveQuoteOut:
     change = None
     if quote.prev_close is not None:
         change = ((quote.last_price - quote.prev_close) / quote.prev_close * 100).quantize(
             _PCT_PLACES
         )
-    return LiveQuoteOut(last_price=quote.last_price, prev_close=quote.prev_close, change_pct=change)
+    return LiveQuoteOut(
+        last_price=quote.last_price,
+        prev_close=quote.prev_close,
+        change_pct=change,
+        as_of=quote.as_of,
+        stale=_is_stale(quote.as_of, served_at),
+    )
+
+
+def _requested_names(symbols: str) -> list[str]:
+    """The distinct names a request asks for, as ``live_quote_details`` will read them."""
+    names: list[str] = []
+    for part in symbols.split(","):
+        symbol = part.strip().upper()
+        if symbol and symbol not in names:
+            names.append(symbol)
+    return names
+
+
+def _closed_marks(
+    reason: LiveMarksReason,
+    *,
+    market_open: bool,
+    as_of: dt.date | None,
+    now: dt.datetime,
+    requested: int,
+) -> LiveMarksOut:
+    return LiveMarksOut(
+        live=False,
+        reason=reason,
+        market_open=market_open,
+        as_of=as_of,
+        quotes={},
+        live_overlay=False,
+        marks={},
+        served_at=now,
+        requested=requested,
+        covered=0,
+        stale_after_seconds=STALE_AFTER_SECONDS,
+    )
+
+
+def _marks_out(
+    details: dict[str, LiveQuote],
+    names: list[str],
+    now: dt.datetime,
+    *,
+    as_of: dt.date | None,
+    market_open: bool,
+) -> LiveMarksOut:
+    """Compose the answer for a page of names from whatever Kite quoted.
+
+    An empty ``details`` is ``unavailable``: the session exists but answered nothing, and the
+    page keeps the close. A partial answer is still ``live`` — the rows with a quote are live and
+    ``covered < requested`` tells the client the rest are on the close (the per-row fallback is
+    the client's). Every quote is judged stale against the same ``now``.
+    """
+    covered = sum(1 for name in names if name in details)
+    if not details or covered == 0:
+        return _closed_marks(
+            "unavailable", market_open=market_open, as_of=as_of, now=now, requested=len(names)
+        )
+    quotes = {symbol: _live_quote_out(quote, now) for symbol, quote in details.items()}
+    return LiveMarksOut(
+        live=True,
+        reason=None,
+        market_open=market_open,
+        as_of=as_of,
+        quotes=quotes,
+        live_overlay=True,
+        marks={symbol: quote.last_price for symbol, quote in details.items()},
+        served_at=now,
+        requested=len(names),
+        covered=covered,
+        stale_after_seconds=STALE_AFTER_SECONDS,
+    )
 
 
 @router.get("/live-marks", response_model=LiveMarksOut, summary="Live last prices")
@@ -272,38 +363,25 @@ async def get_live_marks(
     Ranks, factors, patterns and ``as_of`` stay on the last completed session (CLAUDE.md, "Which
     date the product shows"); this endpoint cannot move them and does not read them. It answers
     live only while the NSE session is open (calendar AND clock, as ``/meta/status``) and a real
-    Kite session exists. Outside those hours it does not call Kite at all: the published close
-    is the right number then, and a quote would only spend the operator's rate limit.
+    Kite session exists with market data enabled (``BASKFY_LIVE_QUOTES``, not ``DRY_RUN`` —
+    LV1.1). Outside those hours it does not call Kite at all: the published close is the right
+    number then, and a quote would only spend the operator's rate limit.
+
+    Every quote carries the exchange's own time and a ``stale`` verdict against ``served_at``;
+    ``requested`` and ``covered`` say how much of the page the answer actually marks.
     """
     del principal
-    names = [part.strip() for part in symbols.split(",") if part.strip()]
+    names = _requested_names(symbols)
     as_of = await latest_published_date(session)
     _session_day, market_open = await _session_day_and_market_open(session)
-
-    def _closed(reason: LiveMarksReason) -> LiveMarksOut:
-        return LiveMarksOut(
-            live=False,
-            reason=reason,
-            market_open=market_open,
-            as_of=as_of,
-            quotes={},
-            live_overlay=False,
-            marks={},
-        )
-
+    now = _now()
     if not market_open:
-        return _closed("market_closed")
+        return _closed_marks(
+            "market_closed", market_open=False, as_of=as_of, now=now, requested=len(names)
+        )
     if not quotes_permitted():
-        return _closed("no_session")
+        return _closed_marks(
+            "no_session", market_open=True, as_of=as_of, now=now, requested=len(names)
+        )
     details = await anyio.to_thread.run_sync(live_quote_details, tuple(names))
-    if not details:
-        return _closed("unavailable")
-    return LiveMarksOut(
-        live=True,
-        reason=None,
-        market_open=True,
-        as_of=as_of,
-        quotes={symbol: _live_quote_out(quote) for symbol, quote in details.items()},
-        live_overlay=True,
-        marks={symbol: quote.last_price for symbol, quote in details.items()},
-    )
+    return _marks_out(details, names, now, as_of=as_of, market_open=True)

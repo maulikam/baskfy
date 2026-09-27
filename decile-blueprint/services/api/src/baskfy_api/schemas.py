@@ -169,11 +169,19 @@ class LiveQuoteOut(_Out):
 
     Decimal strings on the wire (house rule 9). ``change_pct`` is rounded at write time to two
     places (house rule 8), and is ``None`` when Kite did not send a previous close.
+
+    ``as_of`` is the exchange's own time for the print (LV1, 27 Sep 2026); ``stale`` is true when
+    ``LiveMarksOut.served_at`` is more than ``stale_after_seconds`` after it — the row is then
+    shown muted, never as a live number. A quote with no ``as_of`` is ``stale=False`` **because
+    its age is unknown, not because it is fresh**: Kite sent no stamp, so there is nothing to
+    measure against, and the client shows the missing time rather than inventing one.
     """
 
     last_price: Decimal
     prev_close: Decimal | None
     change_pct: Decimal | None
+    as_of: dt.datetime | None
+    stale: bool
 
 
 class LiveMarksOut(_Out):
@@ -183,7 +191,9 @@ class LiveMarksOut(_Out):
     overlay never moves it. ``live`` is true only while the NSE session is open AND a real Kite
     session answered; otherwise ``reason`` says which, and ``quotes``/``marks`` are empty so the
     page keeps the close. ``live_overlay`` and ``marks`` are the pre-21-Sep shape, kept for
-    callers that only want a last price.
+    callers that only want a last price. ``served_at``, ``requested``, ``covered`` and
+    ``stale_after_seconds`` (LV1, 27 Sep 2026) let the browser tell a fresh answer from an old
+    one and a full page from a partial one.
     """
 
     live: bool
@@ -193,6 +203,46 @@ class LiveMarksOut(_Out):
     quotes: dict[str, LiveQuoteOut]
     live_overlay: bool
     marks: dict[str, Decimal]
+    #: When the API composed this answer (IST-aware). The browser ages the whole answer from its
+    #: own receipt time, and drops the overlay once it is older than 90 s (LV1).
+    served_at: dt.datetime
+    #: Distinct names asked for, after trimming and upper-casing; at most 500.
+    requested: int
+    #: How many of them have a quote in ``quotes``. ``live`` stays true with ``covered <
+    #: requested`` — the rows without a quote keep the close, and the status line says so.
+    covered: int
+    #: The staleness rule ``LiveQuoteOut.stale`` was judged by: ``served_at - as_of`` beyond this.
+    stale_after_seconds: int
+
+
+SleeveStateName = Literal[
+    "closed",
+    "waiting_for_login",
+    "scanning",
+    "signal_ready",
+    "plan_ready",
+    "monitoring",
+    "missed_window",
+    "blocked",
+    "idle",
+]
+
+
+class SleeveStateOut(_Out):
+    """One sleeve's state right now (LV4, ``GET /sleeves/state``), derived from stored rows.
+
+    ``reason`` says why in a sentence; ``next`` what happens or what to do; ``scan_means`` what
+    that sleeve's Scan button actually does, so a re-detection of a closed session is never read
+    as a live scan. ``as_of`` is the newest plan's session, when there is one.
+    """
+
+    sleeve: Literal["swing", "twt", "vbt"]
+    state: SleeveStateName
+    reason: str
+    scan_means: str
+    as_of: dt.date | None
+    next: str
+    updated_at: dt.datetime
 
 
 # ---------------------------------------------------------------------------

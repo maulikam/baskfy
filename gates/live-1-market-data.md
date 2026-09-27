@@ -27,10 +27,10 @@ Scope: `quotes_permitted()` stops reading DRY_RUN (a read-only market-data switc
   EXPECT: IN SYNC
   EVIDENCE: IN SYNC
 
-- [ ] M6: lint clean on both trees touched (ruff, format, mypy strict; tsc, eslint)
-  CHECK: cd decile-blueprint && make lint 2>&1 | tail -3
-  EXPECT: /Success: no issues|no issues found/
-  EVIDENCE: pending
+- [x] M6: lint clean on both trees touched (ruff, format, mypy strict; tsc, eslint)
+  CHECK: cd decile-blueprint && make lint >/dev/null 2>&1 && echo LINT CLEAN || echo LINT FAILED
+  EXPECT: LINT CLEAN
+  EVIDENCE: LINT CLEAN
 
 - [x] M7: the working agreement's clock table and the freshness copy say "close, plus live overlay when a Kite session exists" — not "when DRY_RUN is off"
   CHECK: grep -c 'BASKFY_LIVE_QUOTES' CLAUDE.md docs/live/DECISIONS-LV.md | awk -F: '{s+=$2} END {print s}'

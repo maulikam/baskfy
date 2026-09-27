@@ -10409,7 +10409,7 @@
       },
       "LiveMarksOut": {
         "additionalProperties": false,
-        "description": "The screens' live price overlay (21 Sep 2026). Display only.\n\n``as_of`` is the published session the ranks, factors and patterns were computed on; the\noverlay never moves it. ``live`` is true only while the NSE session is open AND a real Kite\nsession answered; otherwise ``reason`` says which, and ``quotes``/``marks`` are empty so the\npage keeps the close. ``live_overlay`` and ``marks`` are the pre-21-Sep shape, kept for\ncallers that only want a last price.",
+        "description": "The screens' live price overlay (21 Sep 2026). Display only.\n\n``as_of`` is the published session the ranks, factors and patterns were computed on; the\noverlay never moves it. ``live`` is true only while the NSE session is open AND a real Kite\nsession answered; otherwise ``reason`` says which, and ``quotes``/``marks`` are empty so the\npage keeps the close. ``live_overlay`` and ``marks`` are the pre-21-Sep shape, kept for\ncallers that only want a last price. ``served_at``, ``requested``, ``covered`` and\n``stale_after_seconds`` (LV1, 27 Sep 2026) let the browser tell a fresh answer from an old\none and a full page from a partial one.",
         "properties": {
           "as_of": {
             "anyOf": [
@@ -10422,6 +10422,10 @@
               }
             ],
             "title": "As Of"
+          },
+          "covered": {
+            "title": "Covered",
+            "type": "integer"
           },
           "live": {
             "title": "Live",
@@ -10465,6 +10469,19 @@
               }
             ],
             "title": "Reason"
+          },
+          "requested": {
+            "title": "Requested",
+            "type": "integer"
+          },
+          "served_at": {
+            "format": "date-time",
+            "title": "Served At",
+            "type": "string"
+          },
+          "stale_after_seconds": {
+            "title": "Stale After Seconds",
+            "type": "integer"
           }
         },
         "required": [
@@ -10474,15 +10491,31 @@
           "as_of",
           "quotes",
           "live_overlay",
-          "marks"
+          "marks",
+          "served_at",
+          "requested",
+          "covered",
+          "stale_after_seconds"
         ],
         "title": "LiveMarksOut",
         "type": "object"
       },
       "LiveQuoteOut": {
         "additionalProperties": false,
-        "description": "One row's live mark: the print, the exchange's previous close, and the move between them.\n\nDecimal strings on the wire (house rule 9). ``change_pct`` is rounded at write time to two\nplaces (house rule 8), and is ``None`` when Kite did not send a previous close.",
+        "description": "One row's live mark: the print, the exchange's previous close, and the move between them.\n\nDecimal strings on the wire (house rule 9). ``change_pct`` is rounded at write time to two\nplaces (house rule 8), and is ``None`` when Kite did not send a previous close.\n\n``as_of`` is the exchange's own time for the print (LV1, 27 Sep 2026); ``stale`` is true when\n``LiveMarksOut.served_at`` is more than ``stale_after_seconds`` after it — the row is then\nshown muted, never as a live number. A quote with no ``as_of`` is ``stale=False`` **because\nits age is unknown, not because it is fresh**: Kite sent no stamp, so there is nothing to\nmeasure against, and the client shows the missing time rather than inventing one.",
         "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
           "change_pct": {
             "anyOf": [
               {
@@ -10511,12 +10544,18 @@
               }
             ],
             "title": "Prev Close"
+          },
+          "stale": {
+            "title": "Stale",
+            "type": "boolean"
           }
         },
         "required": [
           "last_price",
           "prev_close",
-          "change_pct"
+          "change_pct",
+          "as_of",
+          "stale"
         ],
         "title": "LiveQuoteOut",
         "type": "object"
@@ -20393,6 +20432,76 @@
           "sleeves"
         ],
         "title": "SleeveSetIn",
+        "type": "object"
+      },
+      "SleeveStateOut": {
+        "additionalProperties": false,
+        "description": "One sleeve's state right now (LV4, ``GET /sleeves/state``), derived from stored rows.\n\n``reason`` says why in a sentence; ``next`` what happens or what to do; ``scan_means`` what\nthat sleeve's Scan button actually does, so a re-detection of a closed session is never read\nas a live scan. ``as_of`` is the newest plan's session, when there is one.",
+        "properties": {
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "next": {
+            "title": "Next",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "scan_means": {
+            "title": "Scan Means",
+            "type": "string"
+          },
+          "sleeve": {
+            "enum": [
+              "swing",
+              "twt",
+              "vbt"
+            ],
+            "title": "Sleeve",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "closed",
+              "waiting_for_login",
+              "scanning",
+              "signal_ready",
+              "plan_ready",
+              "monitoring",
+              "missed_window",
+              "blocked",
+              "idle"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sleeve",
+          "state",
+          "reason",
+          "scan_means",
+          "as_of",
+          "next",
+          "updated_at"
+        ],
+        "title": "SleeveStateOut",
         "type": "object"
       },
       "SnapshotOut": {
@@ -43227,7 +43336,7 @@
     },
     "/api/v1/meta/live-marks": {
       "get": {
-        "description": "The screens' live price overlay — display marks only (Maulik, 21 Sep 2026).\n\nRanks, factors, patterns and ``as_of`` stay on the last completed session (CLAUDE.md, \"Which\ndate the product shows\"); this endpoint cannot move them and does not read them. It answers\nlive only while the NSE session is open (calendar AND clock, as ``/meta/status``) and a real\nKite session exists. Outside those hours it does not call Kite at all: the published close\nis the right number then, and a quote would only spend the operator's rate limit.",
+        "description": "The screens' live price overlay — display marks only (Maulik, 21 Sep 2026).\n\nRanks, factors, patterns and ``as_of`` stay on the last completed session (CLAUDE.md, \"Which\ndate the product shows\"); this endpoint cannot move them and does not read them. It answers\nlive only while the NSE session is open (calendar AND clock, as ``/meta/status``) and a real\nKite session exists with market data enabled (``BASKFY_LIVE_QUOTES``, not ``DRY_RUN`` —\nLV1.1). Outside those hours it does not call Kite at all: the published close is the right\nnumber then, and a quote would only spend the operator's rate limit.\n\nEvery quote carries the exchange's own time and a ``stale`` verdict against ``served_at``;\n``requested`` and ``covered`` say how much of the page the answer actually marks.",
         "operationId": "getLiveMarks",
         "parameters": [
           {
@@ -51452,6 +51561,122 @@
         "summary": "Search the whole catalog",
         "tags": [
           "search"
+        ]
+      }
+    },
+    "/api/v1/sleeves/state": {
+      "get": {
+        "description": "swing, twt and vbt: ``closed``, ``waiting_for_login``, ``scanning``, ``monitoring``,\n``plan_ready``, ``missed_window``, ``signal_ready``, ``blocked`` or ``idle`` — with the reason,\nwhat happens next, and what that sleeve's Scan button actually does.",
+        "operationId": "getSleeveStates",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SleeveStateOut"
+                  },
+                  "title": "Response Getsleevestates",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Per-sleeve state",
+        "tags": [
+          "sleeves"
         ]
       }
     },

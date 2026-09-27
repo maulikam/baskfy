@@ -8,8 +8,10 @@ it was simply being discarded.
 
 from __future__ import annotations
 
+import datetime as dt
 from collections.abc import Callable
 from decimal import Decimal
+from pathlib import Path
 from typing import cast
 
 import pytest
@@ -18,6 +20,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api import live_prices
 from baskfy_api.broker_holdings import HoldingsResult, HoldingsSource
+from baskfy_core.market_hours_cb import IST
+from baskfy_providers.errors import CredentialsMissing
+from baskfy_providers.records import QuoteRecord
+from baskfy_providers.tokens import AccessToken
 
 
 def _row(symbol: str, last: str | None) -> HoldingRow:
@@ -141,11 +147,111 @@ async def test_live_prices_by_instrument_runs_kite_io_via_to_thread(
     assert ran == ["live_prices_by_symbol"]
 
 
-class TestQuotesAreRefusedWithoutALiveSession:
-    def test_dry_run_is_not_a_live_session(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("DRY_RUN", "true")
+class _Store:
+    """A token store that answers one token, or raises the way an empty store does."""
+
+    def __init__(self, token: AccessToken | None) -> None:
+        self._token = token
+
+    def load(self) -> AccessToken:
+        if self._token is None:
+            raise CredentialsMissing("no token")
+        return self._token
+
+
+def _real_token(*, issued_at: dt.datetime | None = None) -> AccessToken:
+    issued = issued_at or dt.datetime.now(IST)
+    return AccessToken(value="real-token-for-this-test", issued_at=issued)
+
+
+class TestMarketDataIsNotOrderPermission:
+    """LV1.1 (27 Sep 2026): ``quotes_permitted`` no longer reads ``DRY_RUN``.
+
+    ``DRY_RUN`` keeps orders in rehearsal. The API has no execute route (D9), so on this process
+    the flag guarded nothing but quotes — and removed every live price from every screen. The
+    read-only switch is ``BASKFY_LIVE_QUOTES``; a real, unexpired, non-simulated token is still
+    the session. The token store is stubbed: no file, no key, no network.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _key(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("BASKFY_KITE_API_KEY", "not-a-secret-for-this-test")
+        monkeypatch.delenv("BASKFY_LIVE_QUOTES", raising=False)
+
+    def test_dry_run_with_a_real_unexpired_token_is_permitted(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("DRY_RUN", "true")
+        monkeypatch.setattr(live_prices, "token_store_for", lambda: _Store(_real_token()))
+        assert live_prices.quotes_permitted() is True
+
+    def test_dry_run_off_with_a_real_token_is_permitted_too(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("DRY_RUN", "false")
+        monkeypatch.setattr(live_prices, "token_store_for", lambda: _Store(_real_token()))
+        assert live_prices.quotes_permitted() is True
+
+    def test_dry_run_still_refuses_a_simulated_token(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The OAuth callback stores a ``sim_`` token under DRY_RUN; that is not a session."""
+        monkeypatch.setenv("DRY_RUN", "true")
+        sim = AccessToken(value="sim_stub", issued_at=dt.datetime.now(IST))
+        monkeypatch.setattr(live_prices, "token_store_for", lambda: _Store(sim))
         assert live_prices.quotes_permitted() is False
+
+    def test_dry_run_with_an_expired_token_is_refused(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("DRY_RUN", "true")
+        yesterday = dt.datetime.now(IST) - dt.timedelta(days=1)
+        monkeypatch.setattr(
+            live_prices, "token_store_for", lambda: _Store(_real_token(issued_at=yesterday))
+        )
+        assert live_prices.quotes_permitted() is False
+
+    def test_dry_run_with_no_token_is_refused(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("DRY_RUN", "true")
+        monkeypatch.setattr(live_prices, "token_store_for", lambda: _Store(None))
+        assert live_prices.quotes_permitted() is False
+
+    @pytest.mark.parametrize("raw", ["false", "0", "no", "off", "FALSE", " off "])
+    def test_live_quotes_flag_off_refuses_even_a_real_session(
+        self, raw: str, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("DRY_RUN", "false")
+        monkeypatch.setenv("BASKFY_LIVE_QUOTES", raw)
+        monkeypatch.setattr(live_prices, "token_store_for", lambda: _Store(_real_token()))
+        assert live_prices.market_data_enabled() is False
+        assert live_prices.quotes_permitted() is False
+
+    @pytest.mark.parametrize("raw", [None, "", "1", "true", "yes", "on", "TRUE"])
+    def test_live_quotes_flag_defaults_on(
+        self, raw: str | None, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        if raw is None:
+            monkeypatch.delenv("BASKFY_LIVE_QUOTES", raising=False)
+        else:
+            monkeypatch.setenv("BASKFY_LIVE_QUOTES", raw)
+        assert live_prices.market_data_enabled() is True
+
+    def test_live_quotes_flag_does_not_replace_the_api_key(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("BASKFY_LIVE_QUOTES", "true")
+        monkeypatch.setenv("BASKFY_KITE_API_KEY", "")
+        monkeypatch.setattr(live_prices, "token_store_for", lambda: _Store(_real_token()))
+        assert live_prices.quotes_permitted() is False
+
+    def test_the_live_quotes_flag_is_market_data_only(self) -> None:
+        """Nothing order-capable reads it: the flag lives in this module and nowhere else."""
+        assert live_prices.LIVE_QUOTES_ENV == "BASKFY_LIVE_QUOTES"
+        execution = Path(live_prices.__file__).resolve().parents[4] / "packages" / "execution"
+        hits = [
+            path
+            for path in execution.rglob("*.py")
+            if live_prices.LIVE_QUOTES_ENV in path.read_text(encoding="utf-8")
+        ]
+        assert hits == []
 
 
 class TestQuotesFillNamesTheBookOmitted:
@@ -273,6 +379,31 @@ class TestScreenQuoteDetails:
         }
         live_prices.live_quote_details(["RELIANCE", "TCS"])
         assert calls == [("RELIANCE", "TCS")]
+
+    def test_the_exchange_time_rides_with_the_quote(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """LV1: ``QuoteRecord.as_of`` (IST-aware from the provider) reaches ``LiveQuote.as_of``."""
+        stamp = dt.datetime(2026, 9, 28, 13, 2, 11, tzinfo=IST)
+
+        class _Provider:
+            def quotes(self, symbols: list[str]) -> list[QuoteRecord]:
+                return [
+                    QuoteRecord(
+                        symbol=symbol,
+                        last_price=Decimal("101"),
+                        prev_close=Decimal("100"),
+                        as_of=stamp,
+                    )
+                    for symbol in symbols
+                ]
+
+        monkeypatch.setenv("BASKFY_KITE_API_KEY", "not-a-secret-for-this-test")
+        monkeypatch.setattr(live_prices, "build_kite_provider", lambda _settings: _Provider())
+        quoted = live_prices._quote_details(["RELIANCE"])
+        assert quoted == {
+            "RELIANCE": live_prices.LiveQuote(Decimal("101"), Decimal("100"), as_of=stamp)
+        }
+        assert quoted["RELIANCE"].as_of is not None
+        assert quoted["RELIANCE"].as_of.tzinfo is not None
 
     def test_caps_a_request_at_one_kite_batch(self, monkeypatch: pytest.MonkeyPatch) -> None:
         seen: list[int] = []

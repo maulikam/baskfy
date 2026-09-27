@@ -105,6 +105,14 @@ Exits, re-arms and ratchets are untouched — protection is never withheld.
 and the broker disagree, and the disagreement is not known to be one name's). Refusing across
 sleeves (one sleeve's naked position is its own; the account-wide answer is LV3's cap).
 
+**Amended while building (28 Sep 2026).** The swing book's guard reads the reconciler's recorded
+findings only, not its own naked rows: `test_swing_desk`'s route fixtures carry a deliberately
+naked position (the hub leads with it; `rearm_gtt` and the 15:15 sweep exist for it) and the
+book's spec has a confirm proceed beside one — SW7 — so passing the raw rows would have changed
+a swing rule this pack has no mandate to change. The block still follows: the reconciler records
+a NAKED issue for that row on its next pass (ten seconds, in session) and the guard reads it. TWT
+and VBT pass their naked rows directly; their specs never allowed a buy beside one.
+
 **Reverse.** Delete the three guard blocks; `protection_unresolved` stays for the lifecycle page.
 
 ## LV2.3 — TWT's market buy carries Kite's market protection (28 Sep 2026) · ⚠ UNREVIEWED
@@ -175,3 +183,136 @@ the JSON path and the in-memory default unchanged. Desk `tests/test_risk_store.p
 over sqlite under lock, two managers, the gateway wiring only on Postgres.
 
 **Reverse.** Drop `store=` from `app.main.gateway()`; the manager is per process again.
+
+## LV4.1 — Login is the event: a session supervisor beside the desk (28 Sep 2026) · ⚠ UNREVIEWED
+
+**Context.** Review gap 10 and the LV0 audit: everything but the swing scan assumed a token at its
+cron minute; eight of fifteen mornings had none at 09:05, and the logins of 22 and 25 Sep came at
+10:40 and 11:58.
+
+**Choice.** A sixteenth compose service, `session-supervisor` (`app/session_supervisor.py`,
+`scripts/session_supervisor_loop.py`, the desk's image), awake 08:30–15:50 IST on weekdays, ticking
+every ten seconds. A token blob whose mtime moved **and** authenticates is a login: the account's
+holdings are seeded into the shared risk ledger (LV3) and the reconciler runs once (LV2, restart
+recovery). In session it runs the reconciler every tick and writes `lv_heartbeat` rows
+(`supervisor`, `reconciler`) that `/sleeves/state` reads. It places nothing, builds no plan and
+starts no other process; every write it causes goes through the sleeves' handlers and the gateway.
+
+**Rejected.** Folding the reconciler into `twt-auto` (a 09:15 clock, not a session) or the swing
+monitor (one sleeve's process; the reconciler must run for all three whatever is up). Kite
+postbacks (no public URL on the desk). Reviving an expired TWT plan on a late login — P1.3 says
+not to, and the module does not.
+
+**Reverse.** Remove the service from compose and the deploy lists; the reconciler is then
+`python -m app.reconcile` by hand.
+
+## LV4.2 — The swing monitor reloads its watchlist and waits for a late login (28 Sep 2026) · ⚠ UNREVIEWED
+
+**Context.** Review P1.2: `swing_monitor.main` loaded the watchlist once and `run_until_close`
+subscribed once, so a "Scan now" at 11:00 added a database watch the running process never saw;
+with no token at 09:14 the process failed for the day; an empty list at start never entered the
+loop.
+
+**Choice.** `run_until_close(..., reload=, reload_every_seconds=60, subscribe=, unsubscribe=,
+heartbeat=)`: every minute the list is re-read (`load_watchlist` over the same connection, circuit
+bands from one quote pass), a gained name is `SwingBreakout.add_watch`ed, subscribed on the bus and
+on the KiteTicker, and put in the quote fallback; a lost name is dropped and unsubscribed. A name
+added mid-session builds its range from the ticks it sees from then — a trigger before it was
+watched is not back-filled, by design. `main()` waits for a Kite session until **15:20**
+(`wait_for_session`, 30-second polls) instead of exiting, enters the loop on an empty list (writing
+`monitor_ran` at once so the 09:20 alert stays quiet), and writes the `swing_monitor` heartbeat
+every fifteen seconds. Trigger and order de-duplication are untouched: the store's session lock
+and `client_id = plan_id:symbol` stand.
+
+**Rejected.** A restart of the container on each scan (drops the ranges being built — the
+deploy scripts already refuse to recreate the monitor in session for that reason). A pub/sub
+channel (a minute's poll of one small table is the same freshness with nothing new to run).
+
+**Reverse.** Pass no `reload`; `main()`'s wait is a constant (`SESSION_WAIT_UNTIL`).
+
+## LV4.3 — `/sleeves/state`: one deterministic state and reason per sleeve (28 Sep 2026) · ⚠ UNREVIEWED
+
+**Context.** Review P1.3: a 10:30 login must produce an explicit outcome per sleeve, visible beside
+the buttons, and an EOD detector must never be labelled an intraday strategy.
+
+**Choice.** `baskfy_api.sleeve_state.derive_state` — pure — over stored facts (calendar, token,
+newest scan run, newest plan, heartbeats, open protection issues, watch count): `blocked` ›
+`closed` › `waiting_for_login` › `scanning` › `monitoring` (swing, fresh heartbeat) › `plan_ready` ›
+`missed_window` (TWT after 09:35 without a live MORNING plan; VBT with an expired plan) ›
+`signal_ready` › `idle`, each with a reason and a next step, and `scan_means` saying what that
+sleeve's Scan button does ("re-detects the last published session" for TWT and VBT; "today so far"
+for swing). `GET /sleeves/state` is read-only; the web chip (`SleeveStateBadge`) polls it every
+30 s beside the three Scan buttons. The login callback now also queues the TWT and VBT scans of
+the last published session through the pages' own `request_scan` (their one-a-minute and
+in-flight rules apply; a refusal is a note, never a failed login). Sources recorded: `web` for
+TWT, `desk` for VBT — the tables' check constraints admit no `login`, and widening them is a
+migration this pack did not need.
+
+**Rejected.** Computing state in the browser from three page payloads (three truths). Reviving
+plans or triggering entries from the API (D9; the API has no execute route).
+
+**Reverse.** Drop the router, the service, the chip and the two `request_scan` calls in
+`_queue_post_login_refresh`.
+
+## LV5.1 — Intraday equity bars: captured after the close and backfilled, not collected live (28 Sep 2026) · ⚠ UNREVIEWED
+
+**Context.** Review gap 1: no intraday bar store for equities, so no live TWT/VBT variant can be
+defined or backtested. Step 4 asks for the capture "so live TWT/VBT variants can be *defined and
+backtested* rather than guessed."
+
+**Choice.** `eq_minute_bar` (migration 0056; a TimescaleDB hypertable on `ts`, monthly chunks;
+raw prints, `numeric(18,2)` rounded at write, volume from Kite's candle) written two ways, both
+from `historical_data(interval="minute")`: the **session reconcile** — Beat `baskfy.eq_bars.session`
+at 15:45 Mon–Fri, one call per name for the whole session, committed every 25 names — and the
+**backfill** — `python -m baskfy_worker.eq_bars_cli backfill --from … --to …`, per name in Kite's
+60-day windows, resumable from each name's newest stored bar, committed per window. The universe
+is the swing book's `liquid_universe` as of the last published session — one predicate, never a
+second. Measured on the box (`sw_scan_run` 66 and 67, 25 Sep 2026): the **liquid universe is 573 names** quoted live (554 liquid, 682 on the published re-detect) — so a session is ~570 calls,
+about three minutes on the bulk lane, and a year's backfill ~3,500 calls, about twenty minutes.
+Behind `BASKFY_EQ_BARS_ENABLED`, default **on**: read-only market data, and the data is the point.
+Pure readers in `baskfy_core.eq_bars` (opening range over closed minutes, session volume) reuse
+`baskfy_core.options.bars` for windows and five-minute bars — one definition of a 5-minute bar.
+
+**Not built, and why.** A live tick collector (`source = 'TICKS'` is reserved). Backtesting a
+variant needs history, which the backfill gives; running one live needs a stream, which is the
+variant's own module (step 5). One KiteTicker connection is the swing monitor's; a second for ~570
+names is well inside Kite's three, when a variant asks for it.
+
+**Rejected.** Aggregating the swing monitor's ticks into bars (it watches five names, not 570).
+Reading minute bars in the nightly chain (18:45 is the wrong hour for a 3-minute Kite pass that
+competes with the 7,000-call bhavcopy-only night).
+
+**Reverse.** Drop the Beat entry and the route; downgrade 0056. The setting turns it off first.
+
+## LV6.1 — One lifecycle per trade, judged at the broker; adoption is explicit (28 Sep 2026) · ⚠ UNREVIEWED
+
+**Context.** Review P1.4: "one visible lifecycle per trade … reconcile actual GTT status, not
+merely an ID in the database … an explicit workflow to adopt a manually bought Kite holding …
+instead of silently claiming ownership"; P2.3: "show entry, quantity, rupee risk, initial/current
+stop and the exact profit-exit rule on each trade card."
+
+**Choice.** The desk's `/lifecycle` (`app/lifecycle.py`): one row per open position across the
+three books — filled and open quantity, entry, initial and current stop, rupees between entry and
+stop, the **broker's** word on the stop from the live GTT list (`ARMED`, `NAKED`, `GTT_MISSING`,
+`GTT_OVERSIZED`, `GTT_UNDERSIZED`, `TRIGGERED_UNFILLED`; `UNVERIFIED` when there is no Kite session,
+said in those words rather than guessed), the next action, an `overdue` flag once a finding has stood
+thirty minutes, and every open `lv_protection_issue` the reconciler recorded. A triggered GTT is
+not a fill and the row stays unresolved. `POST /lifecycle/adopt` (`confirm=true`) puts a
+hand-bought holding into a named sleeve on the person's cost and quantity, links the GTT he armed
+or arms one through that sleeve's own helper and the gateway at the sleeve's stop distance, writes
+`lv_adoption`, and refuses a held name, an unknown symbol, a missing confirm; a swing adoption
+names its setup (the schema's constraint). The exact exit rules live once, in `app/exit_rules.py`,
+built from the three configs, and the same sentence is printed under each sleeve page's book, with
+"initial stop" and "₹ at risk" columns beside the existing entry and stop.
+
+**Rejected.** A per-sleeve lifecycle (the account holds one book). Auto-adopting unknown holdings
+(the review's "silently claiming ownership"). Any exit or repair action from the page — the
+review: "any wider automatic exit/repair policy must be recorded as a strategy-policy change; this
+review does not enable it."
+
+**Tests.** `tests/test_lifecycle.py`: the rows, the seven stop verdicts, ordering and overdue, the
+page and its JSON, adoption into each sleeve (position, fill, stop armed once, `lv_adoption` row),
+linking a hand-armed GTT, the refusals, the card's rule text from config, the page's one write and
+the absence of any order verb in the module.
+
+**Reverse.** Drop the router include and the nav entry; the sleeve pages keep the two columns.

@@ -2335,8 +2335,12 @@ export interface paths {
          *     Ranks, factors, patterns and ``as_of`` stay on the last completed session (CLAUDE.md, "Which
          *     date the product shows"); this endpoint cannot move them and does not read them. It answers
          *     live only while the NSE session is open (calendar AND clock, as ``/meta/status``) and a real
-         *     Kite session exists. Outside those hours it does not call Kite at all: the published close
-         *     is the right number then, and a quote would only spend the operator's rate limit.
+         *     Kite session exists with market data enabled (``BASKFY_LIVE_QUOTES``, not ``DRY_RUN`` —
+         *     LV1.1). Outside those hours it does not call Kite at all: the published close is the right
+         *     number then, and a quote would only spend the operator's rate limit.
+         *
+         *     Every quote carries the exchange's own time and a ``stale`` verdict against ``served_at``;
+         *     ``requested`` and ``covered`` say how much of the page the answer actually marks.
          */
         get: operations["getLiveMarks"];
         put?: never;
@@ -3644,6 +3648,28 @@ export interface paths {
          *     of its four groups.
          */
         get: operations["catalogSearch"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sleeves/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Per-sleeve state
+         * @description swing, twt and vbt: ``closed``, ``waiting_for_login``, ``scanning``, ``monitoring``,
+         *     ``plan_ready``, ``missed_window``, ``signal_ready``, ``blocked`` or ``idle`` — with the reason,
+         *     what happens next, and what that sleeve's Scan button actually does.
+         */
+        get: operations["getSleeveStates"];
         put?: never;
         post?: never;
         delete?: never;
@@ -8370,11 +8396,15 @@ export interface components {
          *     overlay never moves it. ``live`` is true only while the NSE session is open AND a real Kite
          *     session answered; otherwise ``reason`` says which, and ``quotes``/``marks`` are empty so the
          *     page keeps the close. ``live_overlay`` and ``marks`` are the pre-21-Sep shape, kept for
-         *     callers that only want a last price.
+         *     callers that only want a last price. ``served_at``, ``requested``, ``covered`` and
+         *     ``stale_after_seconds`` (LV1, 27 Sep 2026) let the browser tell a fresh answer from an old
+         *     one and a full page from a partial one.
          */
         LiveMarksOut: {
             /** As Of */
             as_of: string | null;
+            /** Covered */
+            covered: number;
             /** Live */
             live: boolean;
             /** Live Overlay */
@@ -8391,6 +8421,15 @@ export interface components {
             };
             /** Reason */
             reason: ("market_closed" | "no_session" | "unavailable") | null;
+            /** Requested */
+            requested: number;
+            /**
+             * Served At
+             * Format: date-time
+             */
+            served_at: string;
+            /** Stale After Seconds */
+            stale_after_seconds: number;
         };
         /**
          * LiveQuoteOut
@@ -8398,14 +8437,24 @@ export interface components {
          *
          *     Decimal strings on the wire (house rule 9). ``change_pct`` is rounded at write time to two
          *     places (house rule 8), and is ``None`` when Kite did not send a previous close.
+         *
+         *     ``as_of`` is the exchange's own time for the print (LV1, 27 Sep 2026); ``stale`` is true when
+         *     ``LiveMarksOut.served_at`` is more than ``stale_after_seconds`` after it — the row is then
+         *     shown muted, never as a live number. A quote with no ``as_of`` is ``stale=False`` **because
+         *     its age is unknown, not because it is fresh**: Kite sent no stamp, so there is nothing to
+         *     measure against, and the client shows the missing time rather than inventing one.
          */
         LiveQuoteOut: {
+            /** As Of */
+            as_of: string | null;
             /** Change Pct */
             change_pct: string | null;
             /** Last Price */
             last_price: string;
             /** Prev Close */
             prev_close: string | null;
+            /** Stale */
+            stale: boolean;
         };
         /** ManagerApplyIn */
         ManagerApplyIn: {
@@ -11966,6 +12015,39 @@ export interface components {
         SleeveSetIn: {
             /** Sleeves */
             sleeves: components["schemas"]["SleeveIn"][];
+        };
+        /**
+         * SleeveStateOut
+         * @description One sleeve's state right now (LV4, ``GET /sleeves/state``), derived from stored rows.
+         *
+         *     ``reason`` says why in a sentence; ``next`` what happens or what to do; ``scan_means`` what
+         *     that sleeve's Scan button actually does, so a re-detection of a closed session is never read
+         *     as a live scan. ``as_of`` is the newest plan's session, when there is one.
+         */
+        SleeveStateOut: {
+            /** As Of */
+            as_of: string | null;
+            /** Next */
+            next: string;
+            /** Reason */
+            reason: string;
+            /** Scan Means */
+            scan_means: string;
+            /**
+             * Sleeve
+             * @enum {string}
+             */
+            sleeve: "swing" | "twt" | "vbt";
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "closed" | "waiting_for_login" | "scanning" | "signal_ready" | "plan_ready" | "monitoring" | "missed_window" | "blocked" | "idle";
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** SnapshotOut */
         SnapshotOut: {
@@ -33831,6 +33913,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CatalogSearchOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    getSleeveStates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SleeveStateOut"][];
                 };
             };
             /** @description Bad request */

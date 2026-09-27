@@ -117,3 +117,5 @@ Append-only.
 - 2026-09-27 ~13:00 IST plan written, contract fixed; AWS SSO expired (login opened in Maulik's browser); Kite connector has no session.
 - 2026-09-28 00:20 IST LV0 audit read off the box: desk live, every book empty, TWT's six live buys of 23–24 Sep rejected by Zerodha for missing market protection; token rewritten 00:04, dies 06:00.
 - 2026-09-28 01:10 IST LV1 agent died mid-web (network); driver finished the web tests, docs and lint fixes. LV2 code and 21 tests written; migration 0055 test green on local Postgres.
+- 2026-09-28 02:30 IST LV0 committed (84cbb71). LV2 gates 10/10, LV3 gates 6/6 met. LV1 6/7 — M6 waits on the tree-wide lint after LV4. LV4 written: /sleeves/state + chip, login queues all three scans, session-supervisor service, monitor reload + late-login wait; gate check running.
+- 2026-09-28 01:20 IST LV4 gates 8/8, LV5 6/7 (lint: a duplicate test-module name, renamed), LV6 tests 21 green; web page tests fixed (the chip carries its own QueryClient). Status page, review annotation and NEEDS-MAULIK step-5 questions written. Next: lint-clean gate re-runs, six commits, deploy before the open.

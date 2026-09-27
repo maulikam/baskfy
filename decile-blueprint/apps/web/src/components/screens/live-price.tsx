@@ -6,6 +6,7 @@ import {
   EMPTY_LIVE_MARKS,
   formatTodayChange,
   liveStatusLine,
+  quoteTitle,
   useLiveMarks,
   type LiveMarks,
 } from "@/lib/screens/live-marks";
@@ -18,6 +19,9 @@ import { cn } from "@/lib/utils";
  * `<LivePrice>`, and the page states which numbers are live with `<LiveStatus>`. One query per
  * page, polled every 30 s only while the market is open. Ranks, patterns and every other column
  * stay on the published session — this touches the price cell and nothing else.
+ *
+ * A row whose print the server judged stale (LV1) is muted with the last quote's exchange time
+ * in its tooltip; a page whose answer is too old or whose last fetch failed is back on the close.
  */
 
 const LiveMarksContext = createContext<LiveMarks>(EMPTY_LIVE_MARKS);
@@ -88,9 +92,16 @@ export function LivePrice({
     );
   }
   return (
-    <span className={cn("tabular-nums", className)} title="Live — Kite last price">
+    <span
+      className={cn("tabular-nums", quote.stale && "text-muted-foreground", className)}
+      title={quoteTitle(quote)}
+      data-stale={quote.stale ? "true" : "false"}
+    >
       <span data-testid="live-price">{quote.lastPrice.toFixed(2)}</span>
-      <TodayChange changePct={quote.changePct} />
+      <TodayChange
+        changePct={quote.changePct}
+        {...(quote.stale ? { className: "text-muted-foreground" } : {})}
+      />
     </span>
   );
 }

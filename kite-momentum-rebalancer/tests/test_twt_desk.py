@@ -99,6 +99,10 @@ CREATE TABLE tw_session (
   fills INTEGER DEFAULT 0, ratchets INTEGER DEFAULT 0, exits INTEGER DEFAULT 0,
   naked_at_1515 INTEGER DEFAULT 0, first_live_entries_counted INTEGER DEFAULT 0,
   PRIMARY KEY (user_id, session_date));
+CREATE TABLE lv_protection_issue (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, sleeve TEXT NOT NULL,
+  position_id INTEGER NOT NULL, symbol TEXT NOT NULL, kind TEXT NOT NULL, detail TEXT NOT NULL,
+  seen_at TEXT NOT NULL, resolved_at TEXT);
 """
 
 

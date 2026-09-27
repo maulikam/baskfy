@@ -58,6 +58,7 @@ from baskfy_core.twt.config import DEFAULT_TWT_CONFIG
 from baskfy_core.twt.plan import LINE_ORDER
 
 from . import config as C
+from .exit_rules import EXIT_RULES
 from .core.guards import UntouchableInstrumentError
 
 log = logging.getLogger("twt.desk")
@@ -449,6 +450,56 @@ class PgTwtStore:
             (self.user_id, str(broker_order_id)),
         ).fetchone()
         return None if row is None else self._order_row(row)
+
+    def open_orders(self) -> list[dict]:
+        """Every buy the broker accepted and has not finished (LV2). ``reference_price`` is the
+        price the risk layer valued the order at, recovered from the stop: ``04`` §7.1 sets the
+        stop at ``stop_pct`` under the fill reference, so the reference is the stop over
+        ``1 - stop_pct``, within a tick — enough for a release of a dead order's reservation."""
+        rows = self.conn.execute(
+            self._ORDER_SELECT
+            + self._order_from()
+            + "WHERE o.user_id = ? AND o.state IN ('SENT', 'PARTIAL') "
+            "AND o.broker_order_id IS NOT NULL ORDER BY o.id",
+            (self.user_id,),
+        ).fetchall()
+        out: list[dict] = []
+        for row in rows:
+            order = self._order_row(row)
+            stop_pct = self.sleeve_money(order["signal_date"]).stop_pct
+            stop = order["stop_price"]
+            reference = None
+            if stop is not None and stop_pct is not None and Decimal(1) - stop_pct / 100 > 0:
+                reference = (stop / (Decimal(1) - stop_pct / 100)).quantize(Decimal("0.01"))
+            out.append({**order, "reference_price": reference})
+        return out
+
+    def line_by_client_id(self, client_id: str) -> dict | None:
+        """The plan line a broker order came from — ``client_id`` is ``plan_id:symbol`` (LV2)."""
+        row = self.conn.execute(
+            self._LINE_SELECT
+            + self._line_from()
+            + "WHERE l.user_id = ? AND l.client_id = ? ORDER BY l.id DESC LIMIT 1",
+            (self.user_id, str(client_id)),
+        ).fetchone()
+        return None if row is None else self._line_row(row)
+
+    def open_protection_issues(self) -> list[dict]:
+        """The reconciler's open findings for this sleeve (``lv_protection_issue``, LV2)."""
+        rows = self.conn.execute(
+            f"SELECT symbol, kind, detail, position_id FROM {self.t('lv_protection_issue')} "
+            "WHERE user_id = ? AND sleeve = ? AND resolved_at IS NULL ORDER BY seen_at, id",
+            (self.user_id, 'twt'),
+        ).fetchall()
+        return [
+            {
+                "symbol": str(r["symbol"]),
+                "kind": str(r["kind"]),
+                "detail": str(r["detail"]),
+                "position_id": int(r["position_id"]),
+            }
+            for r in rows
+        ]
 
     def create_order(self, fields: dict) -> int:
         columns = ["user_id", "broker_account_id", *fields]
@@ -959,6 +1010,7 @@ def build_view(store: PgTwtStore, *, now: dt.datetime) -> dict:
         "labels": KIND_LABEL,
         "skips": skips,
         "book": book,
+        "exit_rule": EXIT_RULES["twt"],
         "naked": [row["symbol"] for row in naked],
         "breadth": store.breadth(session_date),
         "session": store.session(session_date),

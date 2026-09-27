@@ -59,6 +59,59 @@ class ExplodingKC:
 class MemoryStore:
     """The ``VbtStore`` protocol over dicts. Deliberately dumb: the rules are in the module."""
 
+    # LV2: the reconciler's findings, the order book's view and the pending exits.
+    issues: list[dict] = []
+
+    def open_protection_issues(self) -> list[dict]:
+        return list(self.issues)
+
+    def open_positions(self) -> list[dict]:
+        # The desk's store joins the symbol in; this double names every instrument VBTCO.
+        return [
+            {"symbol": "VBTCO", **row} for row in self.positions.values()
+            if row.get("state") == "OPEN" and int(row.get("quantity_open") or 0) > 0
+        ]
+
+    def order_by_broker_id(self, broker_order_id: str) -> dict | None:
+        for row in self.orders.values():
+            if str(row.get("broker_order_id")) == str(broker_order_id):
+                return row
+        return None
+
+    def open_orders(self) -> list[dict]:
+        buys = [
+            {**row, "reference_price": row.get("limit_price")}
+            for row in self.orders.values()
+            if row.get("state") in {"SENT", "PARTIAL"} and row.get("broker_order_id")
+        ]
+        exits = [
+            dict(row) for row in getattr(self, "exit_orders", {}).values()
+            if row.get("state") in {"SENT", "PARTIAL"} and row.get("broker_order_id")
+        ]
+        return buys + exits
+
+    def create_exit_order(self, fields: dict) -> int:
+        if not hasattr(self, "exit_orders"):
+            self.exit_orders: dict[int, dict] = {}
+        identifier = self._id()
+        self.exit_orders[identifier] = {"id": identifier, "filled_quantity": 0, "avg_fill_price": None, **fields}
+        return identifier
+
+    def exit_order_by_broker_id(self, broker_order_id: str) -> dict | None:
+        for row in getattr(self, "exit_orders", {}).values():
+            if str(row.get("broker_order_id")) == str(broker_order_id):
+                return row
+        return None
+
+    def update_exit_order(self, exit_order_id: int, fields: dict) -> None:
+        self.exit_orders[int(exit_order_id)].update(fields)
+
+    def line_by_client_id(self, client_id: str) -> dict | None:
+        for row in self.lines.values():
+            if str(row.get("client_id")) == str(client_id):
+                return row
+        return None
+
     def __init__(self) -> None:
         self.plans: dict[str, dict] = {}
         self.lines: dict[int, dict] = {}

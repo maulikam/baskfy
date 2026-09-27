@@ -113,6 +113,7 @@ from baskfy_execution.tenancy import TenantIds
 from fastapi import HTTPException
 
 from . import config as C
+from . import reconcile as _reconcile
 from . import telemetry as _tel
 from .core import gateway as _gateway_module
 from .core.gateway import OrderGateway, ProductGates
@@ -293,6 +294,15 @@ class SwingStore(Protocol):
         ...
 
     # -- SW10.4 (STANDING-ANSWERS A5): the confirm-time gate --
+
+    def open_positions(self) -> list[dict]:
+        """The book's ``OPEN`` positions with shares (LV2: the reconciler's and the guard's read)."""
+        ...
+
+    def open_protection_issues(self) -> list[dict]:
+        """The reconciler's open findings for THIS sleeve (``symbol``, ``kind``, ``detail``).
+        A non-empty answer refuses every buy (LV2)."""
+        ...
 
     def lock_session_for_update(self, day: dt.date) -> AbstractContextManager[None]:
         """A transaction holding the day's ``sw_session`` row locked (``SELECT … FOR UPDATE``
@@ -778,6 +788,14 @@ async def rearm_gtt(
 # --- the three kinds ---------------------------------------------------------------------
 
 
+def _naked_positions(store) -> list[dict]:
+    """Every OPEN position with shares and no resting ``gtt_id`` — the guard's own read."""
+    return [
+        row for row in store.open_positions()
+        if row.get("gtt_id") is None and int(row.get("quantity_open") or 0) > 0
+    ]
+
+
 async def _buy(store, gw, *, line: dict, plan_id: str, now: dt.datetime,  # noqa: PLR0913
                simulated: bool, context: SignalContext | None = None,
                orders: OrderSource | None = None, last_price: Decimal | None = None,
@@ -805,6 +823,16 @@ async def _buy(store, gw, *, line: dict, plan_id: str, now: dt.datetime,  # noqa
         # line built before this morning's fill would not know.
         return ExecOutcome("BLOCKED", f"{symbol}: already held by the swing book",
                            None, None, None, simulated)
+    unresolved = _reconcile.protection_unresolved(store, naked=())
+    if unresolved:
+        # LV2: protection first, entries second — a book the reconciler has found wanting (a
+        # stop the broker no longer lists, shares that left the book, a fill without a stop)
+        # does not add a position until it says the book is whole again. The swing book's own
+        # naked rows are not passed here: the hub leads with them, `rearm_gtt` and the 15:15
+        # sweep exist for them, and the book's spec has a confirm proceed beside one (SW7,
+        # `test_swing_desk`); the reconciler records them as NAKED issues on its next pass and
+        # the block follows from that record (DECISIONS-LV LV2.2, amended).
+        return ExecOutcome("BLOCKED", _reconcile.refusal(unresolved), None, None, None, simulated)
     config = store.config()
     if context is None:
         context = store.session_context(_session_day(now))

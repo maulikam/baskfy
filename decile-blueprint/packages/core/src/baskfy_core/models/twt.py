@@ -174,7 +174,7 @@ TW_ORDER_STATES: tuple[str, ...] = (
 #: the open (same signals, re-sized), or a rebuild a person asked the desk for. There is no
 #: live-trigger source: this is an end-of-day strategy and nothing about it fires inside a
 #: session (``02`` Track C §3).
-TW_PLAN_SOURCES: tuple[str, ...] = ("EVENING", "MORNING", "MANUAL")
+TW_PLAN_SOURCES: tuple[str, ...] = ("EVENING", "MORNING", "MANUAL", "LIVE")
 
 #: ``tw_plan_line.kind`` — ``03`` §7.
 #:
@@ -455,6 +455,9 @@ class TwStateDaily(Base):
     locked_upper_circuit: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false"
     )
+    #: LV8 (DECISIONS-LV LV8.0): built from a bar still in progress — a live scan's row. The
+    #: nightly's real row replaces it (same key) and deletes the stragglers.
+    provisional: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     pipeline_run_id: Mapped[int | None] = _pipeline_run_fk()
     created_at: Mapped[CreatedAt]
 
@@ -518,6 +521,9 @@ class TwSignalDaily(Base):
     rank_key: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
     #: The liquidity floor's input, repeated here so the skip is readable without a join.
     turnover_avg_20: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    #: LV8 (DECISIONS-LV LV8.0): built from a bar still in progress — a live scan's row. The
+    #: nightly's real row replaces it (same key) and deletes the stragglers.
+    provisional: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     pipeline_run_id: Mapped[int | None] = _pipeline_run_fk()
     created_at: Mapped[CreatedAt]
 
@@ -578,6 +584,9 @@ class TwBreadthDaily(Base):
     #: The funnel: universe → with a bar → with a 200-DMA → above it → in state → entries →
     #: signals, and ``dropped_thin_sessions`` in the window.
     detail: Mapped[JsonObject | None] = mapped_column(JSONB, nullable=True)
+    #: LV8 (DECISIONS-LV LV8.0): built from a bar still in progress — a live scan's row. The
+    #: nightly's real row replaces it (same key) and deletes the stragglers.
+    provisional: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     pipeline_run_id: Mapped[int | None] = _pipeline_run_fk()
     created_at: Mapped[CreatedAt]
 
@@ -1064,6 +1073,9 @@ class TwScanRun(Base):
     source: Mapped[str] = mapped_column(String(8), nullable=False, server_default="desk")
     #: ``{"signals": n, "status": "...", ...the funnel}`` — the same shape the nightly step
     #: writes, so the row a person reads after pressing the button reads like the night's own.
+    #: LV8 (DECISIONS-LV LV8.0): built from a bar still in progress — a live scan's row. The
+    #: nightly's real row replaces it (same key) and deletes the stragglers.
+    provisional: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     detail: Mapped[JsonObject | None] = mapped_column(JSONB, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     #: The broker's message id once published. A row without one has not been picked up yet, and

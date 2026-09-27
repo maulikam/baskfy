@@ -73,8 +73,14 @@ MONITOR_PROCESS: Final[dict[str, str]] = {"swing": "swing_monitor", "twt": "twt_
 #: re-detection of a closed session as a live scan (review P1.3).
 SCAN_MEANS: Final[dict[str, str]] = {
     "swing": "Scan reads today so far from Kite quotes (provisional bars) during the session",
-    "twt": "Scan re-detects the last published session; TWT enters at the next open only",
-    "vbt": "Scan re-detects the last published session; VBT bids at the signal close",
+    "twt": (
+        "Scan reads today so far from Kite quotes (provisional bars) during the session and "
+        "proposes buys now, at market; outside it, the last published session"
+    ),
+    "vbt": (
+        "Scan reads today so far from Kite quotes (provisional bars) during the session and "
+        "proposes buys now, at market; outside it, the last published session"
+    ),
 }
 
 
@@ -167,7 +173,8 @@ def derive_state(facts: SleeveFacts, now: dt.datetime) -> SleeveStateOut:  # noq
             "plan_ready",
             f"a {facts.plan_source or ''} plan is ready; it expires at "
             f"{facts.plan_expires_at.astimezone(IST):%H:%M}",
-            "confirm on the desk" + (" (twt-auto confirms at 09:15)" if sleeve == "twt" else ""),
+            "confirm on the desk"
+            + (" (twt-auto confirms it within a minute)" if sleeve == "twt" else ""),
         )
     if sleeve == "twt" and facts.market_open and local.time() >= TWT_ENTRY_WINDOW_END:
         had = facts.plan_source == "MORNING" and facts.plan_session_date == today
@@ -178,8 +185,8 @@ def derive_state(facts: SleeveFacts, now: dt.datetime) -> SleeveStateOut:  # noq
                 if had
                 else "no MORNING plan was built for today"
             )
-            + " — TWT enters at the open only, and today's open has passed",
-            "tomorrow's plan, built at 21:20 and re-sized at 09:05",
+            + " — press Scan for a live read of today; a signal is bought now, at market",
+            "Scan now, or tomorrow's plan, built at 21:20 and re-sized at 09:05",
         )
     if sleeve == "vbt" and facts.market_open and plan_today and not plan_live:
         return out(

@@ -34,10 +34,18 @@ the plan's own ``plan_id``, the same :func:`app.twt_desk.twt_gateway` and the sa
 
 WHAT IT RUNS, AND IN WHAT ORDER
 -------------------------------
-Only **today's MORNING plan** — ``twt-morning`` builds it at 09:05 and it expires at 09:35. This
-module never builds, rebuilds or edits a plan: a missing, stale (built on another day), EVENING,
-or expired plan is refused loudly and nothing is sent. The entry rule is the next session's
-**open, at market** (``04`` §5.1), so the runner does nothing before 09:15 IST.
+Only **today's MORNING plan** — ``twt-morning`` builds it at 09:05 and it expires at 09:35 — or,
+since LV8 (28 Sep 2026, DECISIONS-TW **TW19**, Maulik's decision), **today's LIVE plan**: the one
+the Scan button builds from today's provisional bar during the session, whose entries are "buy
+now, at market" and which expires thirty minutes after it was built. This module never builds,
+rebuilds or edits a plan: a missing, stale (built on another day), EVENING, or expired plan is
+refused loudly and nothing is sent. The entry rule is **at market** (``04`` §5.1 for the open;
+TW19 for the live scan), so the runner does nothing before 09:15 IST or after 15:30.
+
+The session supervisor (LV4) calls :func:`drain_now` once a minute while the session is open and
+a Kite session exists, which is how a LIVE plan built at 11:40 is confirmed at 11:40 rather than
+waiting for a person. Every line still goes through ``execute_line`` — the same plan expiry,
+gateway, guards, GTT stop, three-entries cap and first-ten half size as a click.
 
 Lines are taken in **the plan's own order** (``baskfy_core.twt.plan.LINE_ORDER``): ``ARM_GTT``,
 then ``RAISE_GTT_STOP``, then ``BUY_AT_OPEN``, alphabetical within a kind, which is how
@@ -83,9 +91,16 @@ MARKET_OPEN: Final = dt.time(9, 15)
 #: expiry refuses long before this, and this is the belt beside those braces.
 MARKET_CLOSE: Final = dt.time(15, 30)
 
-#: The plan source this runner acts on. ``EVENING`` is built for a person to read the night
-#: before and has expired by morning; only the 09:05 rebuild is sized against this morning's book.
+#: The plan sources this runner acts on. ``EVENING`` is built for a person to read the night
+#: before and has expired by morning; the 09:05 rebuild is sized against this morning's book, and
+#: a LIVE plan (LV8) against the book at the minute the scan ran.
 MORNING: Final = "MORNING"
+LIVE: Final = "LIVE"
+AUTO_SOURCES: Final[frozenset[str]] = frozenset({MORNING, LIVE})
+
+#: How often the session supervisor's :func:`drain_now` looks for a LIVE plan. The plan lives
+#: thirty minutes; a minute's latency spends none of it worth having.
+DRAIN_EVERY_SECONDS: Final = 60
 
 #: How long to wait for a Kite session before giving up, and how often to look. Ten minutes is
 #: inside the plan's thirty: a login at 09:20 still trades at 09:20, and one at 09:40 does not
@@ -147,19 +162,20 @@ def _aware(stamp: dt.datetime) -> dt.datetime:
 
 
 def morning_plan(store: Any, now: dt.datetime) -> tuple[dict | None, str]:  # noqa: ANN401
-    """Today's MORNING plan, or ``None`` and the reason it will not be used.
+    """Today's MORNING or LIVE plan, or ``None`` and the reason it will not be used.
 
     Never a rebuild. The newest plan at or before today is read exactly as the page reads it,
-    and refused unless it is a ``MORNING`` plan, built today (IST), and not yet expired.
+    and refused unless it is a ``MORNING`` or ``LIVE`` plan, built today (IST), and not yet
+    expired. The name is historical: until LV8 only the 09:05 plan qualified.
     """
     today = now.astimezone(IST).date()
     plan = store.todays_plan(today)
     if plan is None:
-        return None, "NO_PLAN: no TWT plan exists — did twt-morning run at 09:05?"
-    if str(plan.get("source")) != MORNING:
+        return None, "NO_PLAN: no TWT plan exists — did twt-morning run at 09:05, or a live scan?"
+    if str(plan.get("source")) not in AUTO_SOURCES:
         return None, (
             f"NOT_MORNING: the newest plan {plan['plan_id']} is {plan.get('source')}, and only "
-            f"the 09:05 MORNING rebuild is sized against this morning's book"
+            f"the 09:05 MORNING rebuild or a LIVE scan's plan is sized against today's book"
         )
     built = plan.get("built_at")
     if built is None or _aware(built).astimezone(IST).date() != today:
@@ -331,7 +347,8 @@ def run_once(  # noqa: PLR0913 - every collaborator is a seam a test needs
         return _refuse(f"{stamp:%a} is not a weekday", "not_a_session")
     if stamp.time() < MARKET_OPEN or stamp.time() >= MARKET_CLOSE:
         return _refuse(
-            f"{stamp:%H:%M} IST is outside the session; the entry is the open (04 §5.1)",
+            f"{stamp:%H:%M} IST is outside the session; the entry is at market inside it "
+            "(04 §5.1, TW19)",
             "outside_session",
         )
 
@@ -364,6 +381,18 @@ def run_once(  # noqa: PLR0913 - every collaborator is a seam a test needs
     report.ran = True
     _tel.count("twt_auto_runs", outcome="ran")
     return report
+
+
+def drain_now(now: dt.datetime | None = None) -> RunReport:
+    """LV8: one pass for the session supervisor — today's MORNING or LIVE plan, sent now.
+
+    :func:`run_once` with no wait for a Kite session (the supervisor only calls this when it has
+    seen one) and no sleep. Every refusal is a ``RunReport`` with its reason; nothing raises to
+    the supervisor's tick. With any of the three flags off it does nothing, like everything else
+    in this module.
+    """
+    clock = (lambda: now) if now is not None else None
+    return run_once(now=clock, wait_seconds=0, poll_seconds=0, sleep=lambda _s: None)
 
 
 def main(argv: Iterable[str] | None = None) -> int:  # noqa: ARG001 - no arguments, on purpose

@@ -1743,3 +1743,53 @@ to") — a follow-up. The
 labelling rubric the review asked Maulik for is drafted (`docs/overlap/LABELLING-RUBRIC.md`,
 ⚠ UNREVIEWED) with nine open questions in `NEEDS-MAULIK.md`; the baseline implements none of the
 proposed lines. Three separate Laya questions and filing-attachment facts (D10) are not built.
+
+## LV — live at any login time (27–28 Sep 2026)
+
+`docs/trading-readiness-review-2026-09-27.md` executed as a pack under `/unlazy`: `docs/live/PLAN.md`
+(contract, tree, status log), `docs/live/DECISIONS-LV.md` (every call, all ⚠ UNREVIEWED),
+`gates/live-*.md` (the ledger), `docs/live/AUDIT-2026-09-27.md` (the read-only box audit).
+
+**What the audit found (LV0).** The API's DRY_RUN was already false on the box, so the review's
+first hypothesis for "yesterday's prices" does not hold. The desk is live with swing and TWT
+auto-execute on. Every sleeve book was empty — nothing unprotected. **TWT had never placed a live
+order:** on 23 and 24 Sep `twt-auto` sent six MARKET buys and Zerodha rejected all six for want of
+`market_protection`. Eight of fifteen mornings had no Kite session at 09:05.
+
+**Built.**
+* **LV1** — market data is `BASKFY_LIVE_QUOTES`, not `DRY_RUN`; every quote carries `as_of` and a
+  `stale` verdict; the browser drops the overlay after 90 s or a failed fetch; stale rows muted;
+  coverage counted.
+* **LV2** — `app/reconcile.py`: the broker's order book, GTT list and holdings once a pass against
+  every sleeve's book; TWT partial fills and dead orders; VBT buys and **exits booked from the fill**;
+  `lv_protection_issue`; every sleeve's buy refuses `PROTECTION_UNRESOLVED`; TWT's market buy
+  carries `market_protection=-1`. Migration 0055 (five tables).
+* **LV3** — `RiskStateStore`: one `risk_ledger` row per day, `SELECT … FOR UPDATE`, shared by the
+  desk, the monitor, `twt-auto` and the supervisor; `release`, `seed_positions`, a kill switch that
+  reaches every process.
+* **LV4** — the `session-supervisor` service (a token arriving is the event: seed exposure,
+  reconcile once, every 10 s in session, heartbeats); the swing monitor reloads its watchlist every
+  minute and waits for a late login until 15:20; `GET /sleeves/state` and the chip beside each Scan
+  button; the login queues the TWT and VBT scans of the last published session too.
+* **LV5** — `eq_minute_bar` (migration 0056, hypertable): the 15:45 session reconcile for the
+  ~570-name liquid universe, the resumable backfill CLI, pure readers in core.
+* **LV6** — the desk's `/lifecycle`: every open position with the stop judged at the broker,
+  findings, next action, overdue; `POST /lifecycle/adopt`; exit rule, initial stop and ₹ at risk on
+  every sleeve page.
+* **LV8 (Maulik's decision, 28 Sep 01:35 IST — DECISIONS-LV LV8.0, TW19, VB16)** — TWT's and
+  VBT's Scan read **today so far** during the session: one provisional bar per name from a Kite
+  quote, the same detector, rows stamped `provisional` and replaced by the nightly; a signal
+  becomes a **LIVE** plan (30-minute expiry) whose entries are **bought now, at market with Kite
+  market protection** — TWT via its existing market buy, confirmed by `twt-auto` within a minute
+  (the session supervisor drains it), VBT via a new `BUY_AT_MARKET` line confirmed by hand. No
+  Kite session → the last published session, and the row says so. Migration 0057. **No backtest of
+  the live entry, by his choice.** LV5's minute bars are off on the box (`BASKFY_EQ_BARS_ENABLED=false`).
+
+**NOT done, and why.** Of the review's step 5, the live-entry TWT/VBT variant is now LV8 (his
+answer: the same detector on a live bar, entered now, no backtest). Pyramiding, re-entry, targets
+and any backtest of the live system remain his decisions (`NEEDS-MAULIK.md` LV7 Q3–Q5). LV5's
+minute-bar collection is **off** on the box by his choice, so no intraday data accumulates. No live
+tick collector for equities (LV5.1). No tick-driven stop supervisor and no streaming feed for the screens (the overlay
+polls at 30 s, the reconciler at 10 s). Threshold recalibration nowhere. **The first TWT live fill
+happens on the first weekday with a Kite session before 09:15 after LV2 is deployed** —
+`NEEDS-MAULIK.md` LV0 says how to hold it back.

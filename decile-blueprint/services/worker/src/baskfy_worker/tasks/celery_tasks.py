@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import functools
 import json
 import logging
 import os
@@ -104,6 +105,7 @@ from baskfy_worker.tasks.curated_metrics import run_curated_metrics
 from baskfy_worker.tasks.curated_rebalance_notify import run_curated_rebalance_notify
 from baskfy_worker.tasks.curated_sip import run_curated_sip_reminders
 from baskfy_worker.tasks.kite_login_nudge import NudgeWindow, run_login_nudge
+from baskfy_worker.tasks.live_scan import run_twt_live, run_vbt_live
 from baskfy_worker.tasks.portfolio_nav_job import run_portfolio_nav
 from baskfy_worker.tasks.published_session import last_published_session
 from baskfy_worker.tasks.purge_accounts import run_purge_accounts
@@ -1631,16 +1633,32 @@ def twt_scan_task(run_id: int) -> JsonObject:
     **It is the existing detector.** ``run_twt_scan`` calls ``twt.detect_session``, the same
     function ``baskfy.twt.detect`` above calls, with ``force=True`` because a person asking for a
     scan is asking for exactly the session the nightly's "already detected" rule skips. There is
-    no second detector and no provisional intraday path (DECISIONS-TW **TW12.2**).
+    no second detector (DECISIONS-TW **TW12.2**); the provisional path is the same detector
+    over one more bar (TW19).
 
     Never raises: a failure is ``FAILED`` with its reason on the row, because the button has to be
     able to show what went wrong rather than leaving a request that simply stopped.
 
     It places, arms and cancels nothing, whichever way ``BASKFY_TWT_EXECUTION_ENABLED`` is set.
+
+    **LV8 (28 Sep 2026, TW19):** during the session, with a Kite session, it is today's
+    provisional bar and a LIVE plan — the quote source is built exactly as the swing scan's, on
+    the INTERACTIVE lane, and only when the decision is provisional.
     """
+    deps = build_pipeline_dependencies()
+
+    def quote_source() -> QuoteSource:
+        return build_kite_provider(
+            get_provider_settings(), provider_retry_hooks(), lane=KiteLane.INTERACTIVE
+        )
 
     async def _run(session: AsyncSession) -> JsonObject:
-        return await run_twt_scan(session, int(run_id))
+        return await run_twt_scan(
+            session,
+            int(run_id),
+            quote_source=quote_source,
+            live=functools.partial(run_twt_live, execution_enabled=deps.twt_execution_enabled),
+        )
 
     return run_in_session(_run)
 
@@ -2215,10 +2233,25 @@ def vbt_rescan_task(run_id: int) -> JsonObject:
 
     Never raises: a failure is `FAILED` with its reason on the row, because the desk's button has
     to be able to show what went wrong rather than leaving a request that simply stopped.
+
+    **LV8 (28 Sep 2026, VB14):** during the session, with a Kite session, it is today's
+    provisional bar and a LIVE plan of ``BUY_AT_MARKET`` lines — the quote source is built as the
+    swing scan's, on the INTERACTIVE lane, and only when the decision is provisional.
     """
+    deps = build_pipeline_dependencies()
+
+    def quote_source() -> QuoteSource:
+        return build_kite_provider(
+            get_provider_settings(), provider_retry_hooks(), lane=KiteLane.INTERACTIVE
+        )
 
     async def _run(session: AsyncSession) -> JsonObject:
-        return await run_vbt_rescan(session, int(run_id))
+        return await run_vbt_rescan(
+            session,
+            int(run_id),
+            quote_source=quote_source,
+            live=functools.partial(run_vbt_live, execution_enabled=deps.vbt_execution_enabled),
+        )
 
     return run_in_session(_run)
 

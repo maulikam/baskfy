@@ -316,3 +316,87 @@ linking a hand-armed GTT, the refusals, the card's rule text from config, the pa
 the absence of any order verb in the module.
 
 **Reverse.** Drop the router include and the nav entry; the sleeve pages keep the two columns.
+
+## LV8.0 — Maulik's answers, 28 Sep 2026 (in session, ~01:35 IST): live scans for TWT and VBT, entries now, minute bars off · ✅ decided by Maulik
+
+Asked with options after he said: *"Equities we are going to trade would be a swing trade, not an
+intraday trade. I think I don't want to backtest since it is already working on the daily chart. The
+strategy would be the same live. What we consider is we'll collect the live data and directly start
+trading on it."*
+
+1. **TWT and VBT Scan → "Live bar, like swing".** Build today's provisional bar from Kite quotes, run
+   the same detector over today-so-far, and propose entries. Same rules, live inputs. The option he
+   chose said plainly that the tested entry timing changes (TWT tested "next open", VBT "limit at
+   the signal close") and that he accepts that without a backtest. This reverses DECISIONS-TW
+   TW12.2 and VB12's "closed session only" for the two Scan buttons — **his reversal, not an
+   agent's**.
+2. **Entry timing → "Now, at market with protection".** A MARKET buy at the live price the moment
+   he confirms — or auto-execute confirms, for TWT — with Kite market protection and the GTT stop
+   the same session. The option text: *"This is 'directly start trading on it'."* For TWT this
+   widens the second named exception to non-negotiable 1 (TW17: the 09:05 MORNING plan only) to a
+   plan built from a live scan at any hour of the session; recorded as **DECISIONS-TW TW19** by
+   Maulik's choice of that option. VBT keeps **no** auto-execute flag: a live VBT signal is a plan
+   line he confirms by hand.
+3. **LV5 → "Off on the box, code stays".** `BASKFY_EQ_BARS_ENABLED=false` in the box env; the
+   empty `eq_minute_bar`, the job and the CLI remain. No backfill.
+
+Consequence for `NEEDS-MAULIK.md` LV7: questions 1 and 2 are answered (variant = the same detector
+over a live bar, entering now; no backtest wanted); 3, 4 and 5 stand.
+
+## LV8.1 — How the live scan was built: one decision function, one detector, one plan path per sleeve; no-session falls back rather than fails (28 Sep 2026) · ⚠ UNREVIEWED
+
+**Context.** LV8.0 is Maulik's; this entry is the agent's construction choices under it.
+
+**Choices.**
+
+1. **The session decision is the swing book's `decide_session`, imported, not copied.** One rule
+   for when "today" exists across three sleeves; the reasons it answers (`REASON_MARKET_OPEN`,
+   `REASON_AFTER_CLOSE`, `REASON_PUBLISHED`, `REASON_ALREADY_PUBLISHED`) land in the scan row's
+   detail.
+2. **The provisional bar is built in each sleeve's own `BAR_SCHEMA`** (`live_scan.provisional_daily_bars`),
+   so `run_detect_twt` / `run_detect_vbt` take it through one `pl.concat` and nothing in the
+   detectors changes but a flag. Rejected: a shared bar frame re-projected per sleeve — one more
+   place for a column to drift.
+3. **No Kite session during the market → the published session, with a note** (`LIVE_SKIPPED_NO_QUOTES`
+   in the row's detail), **not `FAILED`** as the swing scan does. The login callback queues these
+   scans the moment a session arrives, so the case is "pressed before logging in", and a
+   re-detect of the published day is still the honest answer to that press. Rejected: raising, as
+   swing does — consistent, but a red row for "log in first" on a page that also carries the
+   sleeve-state chip saying `waiting_for_login` would be two voices for one fact. Cheap to align
+   later if he prefers the swing behaviour.
+4. **The LIVE plan carries entries only.** Exits (`RAISE_GTT_STOP`, VBT's EMA sell) read a closed
+   bar; planning them off a half day would move stops on a bar that has not closed. The TWT
+   ratchet is skipped on a provisional run for the same reason.
+5. **TWT's live entry reuses `BUY_AT_OPEN`** (the desk's confirm is already a MARKET buy with
+   protection, LV2.3); **VBT's is a new kind, `BUY_AT_MARKET`**, because VBT's existing entry is a
+   LIMIT and reusing it would have silently changed what a click sends. The desk's handler mirrors
+   TWT's, including `market_protection=-1`.
+6. **The supervisor drains TWT once a minute** (`DRAIN_EVERY_SECONDS=60`) rather than every
+   ten-second tick: the plan lives thirty minutes, and a `todays_plan` query per tick per process
+   buys nothing. The `twt-auto` compose loop is unchanged and still drains at 09:15:10; both go
+   through `execute_line` under the session lock with `client_id` idempotency, so an overlap
+   cannot double-send (asserted by the existing `test_re_running_does_not_double_send`).
+7. **Tests pinning the reversed decision were rewritten to pin the new one** and cite LV8.0 —
+   `test_twt_scan_run_model`, `test_api_twt_scan`, `test_sleeve_state`, `test_twt_schema`,
+   `test_vbt_execute`'s kinds census. "Never weaken a test" is about passing a module; these
+   asserted a decision the owner reversed.
+
+8. **A re-scan keeps a LIVE plan with a line at the broker** (`IN_FLIGHT_LINE_STATES`:
+   CONFIRMED / SENT / FILLED) instead of rebuilding it. `store_plan` replaces the day's plan of a
+   source wholesale — the MORNING rebuild relies on that — and a rebuild thirty seconds after a
+   market buy went out would delete the line the order came from and offer the same name again
+   under a new `client_id`. Found in the self-review, not by a test that existed; now
+   `test_a_rescan_keeps_a_live_plan_whose_line_is_at_the_broker`.
+9. **TWT's live plan drops names with an order today** (`ORDERED_TODAY_STATES`), because TWT's
+   `BookState` knows positions only (``03`` §6 has no working orders in this sleeve) and a market
+   buy sent thirty seconds ago is not yet a position. VBT's `working_instrument_ids` already covers
+   it. **And the nightly's sweep keeps a provisional `tw_signal_daily` row that a `tw_order`
+   references** (`fk_tw_order_signal`, no cascade): deleting it would have failed the nightly's
+   TWT step on the first evening after a live buy the closing bar did not confirm. The row stays,
+   marked provisional — the honest record of what the order was taken on.
+
+**Not built.** A live index level for the TWT/VBT gate (the swing scan's `_live_index_level`) —
+both gates read breadth, which the provisional bars already move; the index rule is swing's.
+Pyramiding, targets and the first-live-morning handling stay in `NEEDS-MAULIK.md` LV7 Q3–Q5.
+
+**How to reverse.** TW19 and VB16 carry the one-line reversals; migration 0057 downgrades clean.

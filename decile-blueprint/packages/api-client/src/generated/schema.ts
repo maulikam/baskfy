@@ -13619,10 +13619,8 @@ export interface components {
          *
          *     ``session_date`` is null until the worker has decided which published session it is
          *     detecting, because the caller asks for "the latest" and only the worker knows which that is.
-         *     ``detail`` carries the funnel on DONE; ``error`` the reason on FAILED.
-         *
-         *     **There is no ``provisional`` field**, and its absence is the design rather than an omission:
-         *     see the module docstring and DECISIONS-TW TW12.2.
+         *     ``detail`` carries the funnel on DONE; ``error`` the reason on FAILED. ``provisional`` is true
+         *     when the run read today so far from live quotes (LV8, DECISIONS-TW TW19).
          */
         TwtScanRunOut: {
             /** Detail */
@@ -13635,6 +13633,11 @@ export interface components {
             finished_at: string | null;
             /** Found */
             found?: number | null;
+            /**
+             * Provisional
+             * @default false
+             */
+            provisional: boolean;
             /**
              * Requested At
              * Format: date-time
@@ -14205,8 +14208,8 @@ export interface components {
          *     re-detecting — the caller asks for "the latest" and only the worker knows which that is.
          *     ``funnel`` is the detector's own counts and is filled on DONE; ``error`` is the reason on
          *     FAILED; ``detail`` carries the rest, in the shape the nightly step writes so the two read
-         *     the same. There is no ``provisional`` here and there is no column for one: this sleeve
-         *     re-detects a **closed** session, never a partial one.
+         *     the same. ``provisional`` is true when the run read today so far from live quotes (LV8,
+         *     DECISIONS-VB VB14).
          */
         VbtScanRunOut: {
             /** Detail */
@@ -14223,6 +14226,11 @@ export interface components {
             funnel: {
                 [key: string]: unknown;
             } | null;
+            /**
+             * Provisional
+             * @default false
+             */
+            provisional: boolean;
             /**
              * Requested At
              * Format: date-time

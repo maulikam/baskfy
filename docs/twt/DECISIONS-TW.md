@@ -2728,3 +2728,50 @@ the stop, the slot count, the floor, or any other sleeve's flag.
 (or restore the backup) and `up -d desk twt-auto`; the desk's `/twt/halt` stops a morning already
 under way.
 
+## TW19 — the Scan button reads today live and its plan is bought now, at market; twt-auto confirms a LIVE plan at any hour of the session, by Maulik's instruction in session (28 Sep 2026) ✅ decided by Maulik
+
+**Maulik's words, in session, 28 Sep 2026 (~01:30 IST):** *"Equities we are going to trade would
+be a swing trade, not an intraday trade. I think I don't want to backtest since it is already
+working on the daily chart. The strategy would be the same live. What we consider is we'll collect
+the live data and directly start trading on it."* Asked with options (DECISIONS-LV LV8.0), he
+chose **"Live bar, like swing"** for the Scan button and **"Now, at market with protection"** for
+the entry, with the option text saying plainly that the tested entry timing changes and that no
+backtest is wanted.
+
+**What this reverses.** TW12.2 ("a provisional bar built from a live quote would change the
+answer without making it truer, so there is no provisional path here") and, for the entry, ``04``
+§5.1's "the next session's open" as the *only* entry. Both were agents' readings of the method;
+this is the owner's decision about his own book, and it is recorded as his.
+
+**What changed (LV8, `baskfy_worker.tasks.live_scan`).**
+
+* From 09:15 on a trading day until tonight's publish, `POST /twt/scan` (and the desk's button,
+  and the login callback's queued scan) builds one **provisional bar per name** in the TWT
+  universe from a Kite quote — open/high/low from the quote, the last price as the close, volume
+  so far, adjusted by the name's last factor with the raw close beside it — and runs **the same
+  detector** (`run_detect_twt`) over the published history plus that bar. Every row it writes
+  (`tw_signal_daily`, `tw_state_daily`, `tw_breadth_daily`, `tw_scan_run`) is stamped
+  `provisional`; the nightly's real bar overwrites them and deletes the stragglers. **The ratchet
+  does not run on a provisional bar.** Before 09:15, after the publish, or without a Kite session
+  the button re-detects the last published session as before, and the row's detail says why.
+* A signal on the provisional bar becomes a **`LIVE` plan** (`tw_plan.source`, migration 0057):
+  entries only, sized on the live close with the same `build_entries`, `assemble` and
+  `store_plan` the evening uses, thirty-minute expiry, no exits (a half-day close is not the
+  ratchet's input). Its `BUY_AT_OPEN` lines are the desk's existing market buy — LV2.3's
+  `market_protection=-1` — so "buy now, at market" needed no new order path.
+* **`twt-auto` accepts a LIVE plan** built today and not expired, beside the MORNING one
+  (`AUTO_SOURCES`), and the session supervisor (LV4) calls `twt_auto.drain_now` **once a minute
+  while the session is open and a Kite session exists**. Same three flags (`DRY_RUN=false`,
+  `BASKFY_TWT_EXECUTION_ENABLED`, `BASKFY_TWT_AUTO_EXECUTE`), same `execute_line`, same guards,
+  gateway, GTT in the same request, three entries a session, first-ten half size. The supervisor
+  adds no flag and the in-repo default stays false.
+
+**What did not change.** The evening plan, the 09:05 MORNING rebuild, the 15:15 sweep, the
+ratchet's rule, the stop, the caps. VBT gains **no** auto-execute flag (VB16). The nightly's
+writes are byte-identical (`provisional` defaults false).
+
+**Root `CLAUDE.md`** non-negotiable 1 is annotated: the second exception now covers a LIVE plan at
+any hour of the session, by this decision. **How to reverse:** set `BASKFY_TWT_AUTO_EXECUTE=false`
+on the box (the drain and the 09:15 loop both stop); or, to keep auto-execute for the MORNING plan
+only, remove `LIVE` from `twt_auto.AUTO_SOURCES` (one line) and the supervisor's drain becomes a
+no-op that beats `idle`.

@@ -67,6 +67,10 @@ MIGRATIONS = {
     path.name: path.read_text(encoding="utf-8")
     for path in sorted((screener_helpers.API_DIR / "alembic" / "versions").glob("00*_vbt*.py"))
 }
+#: LV8 (0057) widened `vb_plan_line.kind` and `vb_plan.source` in place; its CHECK text counts too.
+MIGRATIONS["0057_live_scans.py"] = (
+    screener_helpers.API_DIR / "alembic" / "versions" / "0057_live_scans.py"
+).read_text(encoding="utf-8")
 MIGRATION = "\n".join(MIGRATIONS.values())
 
 
@@ -126,12 +130,15 @@ class TestTheVocabularyIsTheEngines:
         assert VB_GATES == tuple(gate.value for gate in Gate) == ("OPEN", "SHUT")
 
     def test_the_line_kinds_are_the_engines_and_none_of_them_shorts(self) -> None:
+        """Five since LV8 (28 Sep 2026, DECISIONS-VB VB16): ``BUY_AT_MARKET`` is the live scan's
+        entry, a MARKET buy now; still nothing that shorts."""
         assert tuple(kind.value for kind in LineKind) == VB_LINE_KINDS
         assert set(VB_LINE_KINDS) == {
             "PLACE_LIMIT",
             "SELL_AT_OPEN",
             "CANCEL_LIMIT",
             "ARM_GTT",
+            "BUY_AT_MARKET",
         }
 
     def test_the_skip_reasons_are_the_engines(self) -> None:

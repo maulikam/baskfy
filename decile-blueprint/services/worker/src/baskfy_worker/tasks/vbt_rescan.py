@@ -7,14 +7,19 @@ reaches Baskfy through Postgres alone (`app/vbt_desk.py`). So its button writes 
 row and the worker's sweep publishes it, exactly the path SW15 built for the swing book's
 "Scan now" and for the same reason.
 
-**What it re-detects, and what it refuses to.** A session that has already **closed**. This is
-not the swing book's scan: three of VBT-1's five Chartink lines read the day's volume against its
-50-day average, the close's position inside the day's range and the day's change, and the entry
-limit *is* the signal bar's close. Asking for those before 15:30 does not give a provisional
-answer, it gives a different question with no action attached — `04` §10's clock is the published
-session's, and this module keeps it.
+**What it detects (LV8, 28 Sep 2026 — Maulik's reversal of VB12's "closed session only").** From
+09:15 on a trading day until tonight's publish, **today**: one provisional bar per name from a Kite
+quote — open, high, low and volume so far, the last price as the close — and the same five lines
+run over the published history plus that bar, as the swing book's SW15 scan has since 3 Sep. A
+signal becomes a **LIVE** plan whose entries are ``BUY_AT_MARKET`` — taken now, at the live price,
+with Kite market protection, never a resting limit at a close that has not printed
+(`baskfy_worker.tasks.live_scan`, DECISIONS-VB **VB14**, DECISIONS-LV LV8.0). Every row a live
+scan writes is stamped ``provisional`` and is overwritten by the nightly's real bar. Before the
+open, after the publish, or **without a Kite session** (no quote source), it re-detects the last
+**published** session, plain, and says so in its detail.
 
-**It writes signals and breadth, and nothing else.** No plan, no order, no broker. Detection is
+**It writes signals, breadth and — on a live scan — a plan, and nothing else.** No order, no
+broker; a VBT plan line is confirmed by a person and nothing else. Detection is
 idempotent per ``(user_id, date)`` (house rule 7), so pressing the button twice overwrites the
 same rows and moves no counter. The evening job is still what turns a signal into a plan line,
 and a person is still what turns a plan line into an order.
@@ -24,6 +29,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+from collections.abc import Callable
 from typing import Final
 
 from sqlalchemy import select
@@ -32,7 +38,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from baskfy_core.models import VbScanRun
 from baskfy_core.models.base import JsonObject
 from baskfy_worker.steps import StepOutcome
+from baskfy_worker.tasks.live_scan import IST, LiveScan, run_vbt_live
 from baskfy_worker.tasks.published_session import last_published_session
+from baskfy_worker.tasks.swing_premarket import QuoteSource
+from baskfy_worker.tasks.swing_scan_now import ScanNotRunnable, decide_session
 from baskfy_worker.tasks.vbt import run_detect_vbt
 
 log = logging.getLogger(__name__)
@@ -53,8 +62,13 @@ STALE_AFTER_SECONDS: Final = 600
 #: One press a minute. The button is not a toy and the work is not free.
 MIN_INTERVAL_SECONDS: Final = 60
 
+#: What the row's detail says when the market is open but there is no Kite session to quote it
+#: with: the scan fell back to the published session rather than failing.
+LIVE_SKIPPED_NO_QUOTES: Final = "market open but no Kite session: today's bar could not be built"
+
 __all__ = [
     "IN_FLIGHT",
+    "LIVE_SKIPPED_NO_QUOTES",
     "MIN_INTERVAL_SECONDS",
     "RESCAN_TASK_NAME",
     "STALE_AFTER_SECONDS",
@@ -138,9 +152,19 @@ async def claim_run(session: AsyncSession, run_id: int) -> VbScanRun | None:
 
 
 async def run_vbt_rescan(
-    session: AsyncSession, run_id: int, *, now: dt.datetime | None = None
+    session: AsyncSession,
+    run_id: int,
+    *,
+    now: dt.datetime | None = None,
+    quote_source: Callable[[], QuoteSource] | None = None,
+    live: LiveScan = run_vbt_live,
 ) -> JsonObject:
-    """Re-detect the latest published session for the row's user, and record what it saw.
+    """Detect for the row's user — today from live quotes when the market is open and a Kite
+    session exists, the latest published session otherwise — and record what it saw.
+
+    ``quote_source`` is called only on the provisional path, so a re-detect outside market hours
+    never touches Kite. ``live`` is the provisional path itself (``live_scan.run_vbt_live``, which
+    the Celery task binds with the sleeve's sizing inputs).
 
     Never raises into the worker: a failure is `FAILED` with the reason on the row, because the
     desk's button needs to be able to *show* what went wrong. The exception is logged.
@@ -150,24 +174,40 @@ async def run_vbt_rescan(
     if row is None:
         return {"run_id": run_id, "skipped": "not QUEUED — already claimed or finished"}
     try:
-        day = await latest_published_session(session, stamp.date())
-        if day is None:
+        try:
+            decision = await decide_session(session, stamp.astimezone(IST).replace(tzinfo=None))
+        except ScanNotRunnable as error:
             raise ValueError(
                 "the pipeline has published no session on or before "
                 f"{stamp.date().isoformat()}; there is nothing to re-detect until the chain runs"
+                f" ({error})"
+            ) from error
+        if decision.provisional and quote_source is not None:
+            report = await live(
+                session, user_id=row.user_id, decision=decision, quotes=quote_source(), now=stamp
             )
-        outcome = StepOutcome()
-        signals = await run_detect_vbt(session, outcome, day, user_id=row.user_id)
-        row.session_date = day
-        row.status = "DONE"
-        # `run_detect_vbt` flattens `VbtFunnel.as_detail()` onto the outcome, so the funnel's
-        # counts are already the outcome's keys. Copied verbatim, so the row a person reads after
-        # pressing the button is the same shape the nightly step writes.
-        row.detail = {
-            "signals": signals,
-            "status": outcome.status.value,
-            **dict(outcome.detail),
-        }
+            row.session_date = decision.session_date
+            row.provisional = True
+            row.status = "DONE"
+            row.detail = {**report.as_detail(), "reason": decision.reason}
+        else:
+            day = decision.published_as_of
+            outcome = StepOutcome()
+            signals = await run_detect_vbt(session, outcome, day, user_id=row.user_id)
+            row.session_date = day
+            row.provisional = False
+            row.status = "DONE"
+            # `run_detect_vbt` flattens `VbtFunnel.as_detail()` onto the outcome, so the funnel's
+            # counts are already the outcome's keys. Copied verbatim, so the row a person reads
+            # after pressing the button is the same shape the nightly step writes.
+            row.detail = {
+                "signals": signals,
+                "status": outcome.status.value,
+                "provisional": False,
+                "reason": decision.reason,
+                **({"live": LIVE_SKIPPED_NO_QUOTES} if decision.provisional else {}),
+                **dict(outcome.detail),
+            }
     except Exception as error:
         row.status = "FAILED"
         row.error = f"{type(error).__name__}: {error}"
@@ -178,6 +218,7 @@ async def run_vbt_rescan(
         "run_id": row.id,
         "status": row.status,
         "session_date": row.session_date.isoformat() if row.session_date else None,
+        "provisional": bool(row.provisional),
         "detail": row.detail,
         "error": row.error,
     }

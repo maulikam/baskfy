@@ -70,8 +70,9 @@ COLUMN_SOURCE: Final = "desk"
 class ScanRunView:
     """One `vb_scan_run` row, as `GET /vbt/scan/{run_id}` reads it.
 
-    No `provisional`: see the module docstring. `funnel` is the detector's own counts, lifted out
-    of `detail` so a page reads them the same way it reads the nightly's.
+    `provisional` (LV8, 28 Sep 2026, DECISIONS-VB **VB14** — Maulik's reversal of "closed session
+    only") is true when the run read **today so far** from Kite quotes. `funnel` is the detector's
+    own counts, lifted out of `detail` so a page reads them the same way it reads the nightly's.
     """
 
     run_id: int
@@ -90,6 +91,7 @@ class ScanRunView:
     #: signals a week in a normal market and none at all when the tape is thin, so the page must
     #: be able to tell "none" from "we do not know".
     found: int | None = None
+    provisional: bool = False
 
 
 def source_of(row: VbScanRun) -> str:
@@ -136,6 +138,7 @@ def scan_run_view(row: VbScanRun) -> ScanRunView:
         detail=detail,
         error=row.error,
         found=found_in(detail),
+        provisional=bool(row.provisional),
     )
 
 

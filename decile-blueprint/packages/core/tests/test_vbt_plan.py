@@ -339,13 +339,16 @@ def test_every_skip_reason_is_reachable_from_the_plan() -> None:
 
 
 def test_no_line_kind_can_short_or_carry_a_product_other_than_delivery() -> None:
-    """`02` Track C §1 — four kinds, and none of them is an opening sell."""
+    """`02` Track C §1 — four kinds from `04`, plus LV8's live market buy (Maulik, 28 Sep 2026;
+    DECISIONS-LV LV8.0), and none of them is an opening sell."""
     assert {kind.value for kind in LineKind} == {
         "PLACE_LIMIT",
         "SELL_AT_OPEN",
         "CANCEL_LIMIT",
         "ARM_GTT",
+        "BUY_AT_MARKET",
     }
+    assert not any("SELL" in kind.value and "OPEN" not in kind.value for kind in LineKind)
 
 
 @pytest.mark.parametrize("gate", list(Gate))

@@ -109,8 +109,9 @@ class TestTheTenThirtyLogin:
             at("10:30"),
         )
         assert out.state == "missed_window"
-        assert "expired at 09:35" in out.reason and "enters at the open only" in out.reason
-        assert "tomorrow" in out.next
+        # LV8: the open is no longer the only entry — Scan reads today live and buys at market.
+        assert "expired at 09:35" in out.reason and "at market" in out.reason
+        assert "Scan now" in out.next and "tomorrow" in out.next
 
     def test_twt_with_no_morning_plan_is_missed_window_too(self) -> None:
         out = derive_state(facts("twt"), at("10:30"))
@@ -180,11 +181,15 @@ class TestTheVocabularyIsHonest:
         assert out.scan_means == SCAN_MEANS[sleeve]
         assert out.sleeve == sleeve and out.updated_at == at("10:30")
 
-    def test_twt_and_vbt_scans_are_never_called_intraday_or_live(self) -> None:
+    def test_every_sleeve_scans_today_so_far_in_session_and_the_published_session_outside(
+        self,
+    ) -> None:
+        """LV4 said TWT's and VBT's scans were never live. Maulik's LV8 decision (28 Sep 2026,
+        DECISIONS-LV LV8.0; TW19, VB16) makes them so during the session — the same words as the
+        swing book's, so the chip teaches one vocabulary — and both still say what happens
+        outside it."""
         for sleeve in ("twt", "vbt"):
+            assert "today so far" in SCAN_MEANS[sleeve]
             assert "last published session" in SCAN_MEANS[sleeve]
-            assert (
-                "live" not in SCAN_MEANS[sleeve].lower()
-                and "intraday" not in SCAN_MEANS[sleeve].lower()
-            )
+            assert "at market" in SCAN_MEANS[sleeve]
         assert "today so far" in SCAN_MEANS["swing"]

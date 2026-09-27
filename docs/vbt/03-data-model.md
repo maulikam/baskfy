@@ -171,10 +171,16 @@ anything not here.
 
 Mirrors the desk's plan lifecycle exactly: `plan_id` (uuid), `built_at`, **`expires_at = built_at
 + 30 min`**, `plan_hash` (sha256 of the canonical lines), `gate`, `sleeve_equity_inr`,
-`total_new_exposure_inr`, `source` ∈ `EVENING` (built by the nightly job after the close) /
+`total_new_exposure_inr`, `source` ∈ **`LIVE`** (LV8, 28 Sep 2026 — built by the Scan button
+during the session from today's provisional bar; DECISIONS-VB VB16, DECISIONS-LV LV8.0) /
+`EVENING` (built by the nightly job after the close) /
 `MORNING` (rebuilt before the open from the same signals) / `MANUAL` (a desk rebuild).
 
 `vb_plan_line`: `kind` ∈
+* **`BUY_AT_MARKET`** — LV8's live entry: a signal read off today's provisional bar, bought
+  **now, at market** with Kite market protection (`-1`, Kite's auto band); `limit_price` records
+  the live price the size was previewed against, the stop is the plan's; the GTT is armed from the
+  fill. Only a `LIVE` plan carries one. Confirmed by hand — VBT has no auto-execute flag;
 * **`PLACE_LIMIT`** — a new working order at a signal's close, with `quantity`, `limit_price`,
   `stop_price`, `value_inr`, and a note naming the cap that bound;
 * **`SELL_AT_OPEN`** — a position whose close fell below its 21-EMA, `quantity = quantity_open`;

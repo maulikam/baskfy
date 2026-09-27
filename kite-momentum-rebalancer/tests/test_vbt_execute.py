@@ -391,6 +391,92 @@ class TestThePlaceLimit:
         assert outcome.reason.startswith("ALREADY_WORKING")
 
 
+class TestTheBuyAtMarket:
+    """LV8 (DECISIONS-VB VB16, Maulik 28 Sep 2026): a LIVE plan's entry is a MARKET buy now."""
+
+    def test_it_is_a_market_buy_with_kite_market_protection_at_the_live_price(self) -> None:
+        store, plan_id, line_id = a_store("BUY_AT_MARKET")
+        outcome = confirm(store, plan_id, line_id, last_price=D("97.50"))
+        assert outcome.status == "SIMULATED"
+        order = next(iter(store.orders.values()))
+        assert order["limit_price"] == D("97.50"), "the reference the size was valued against"
+        assert order["quantity"] == 1_000
+        assert X.VBT_MARKET_PROTECTION == -1.0, "Kite's auto band, as TWT sends it"
+        assert X.VBT_MARKET_PROTECTION == __import__("app.twt_execute").twt_execute.TWT_MARKET_PROTECTION
+
+    def test_without_a_live_price_it_values_against_the_plan_preview(self) -> None:
+        store, plan_id, line_id = a_store("BUY_AT_MARKET")
+        outcome = confirm(store, plan_id, line_id)
+        assert outcome.status == "SIMULATED"
+        assert next(iter(store.orders.values()))["limit_price"] == D("96.00")
+
+    def test_the_dry_run_branch_rehearses_position_fill_and_stop(self) -> None:
+        store, plan_id, line_id = a_store("BUY_AT_MARKET")
+        outcome = confirm(store, plan_id, line_id, last_price=D("97.50"))
+        assert outcome.position_id is not None
+        position = store.positions[outcome.position_id]
+        assert position["quantity_open"] == 1_000
+        assert position["entry_avg"] == D("97.50")
+        assert position["gtt_trigger"] == D("84.45"), "the plan's stop, armed in the same request"
+        assert position["gtt_armed_at"] is not None
+        assert outcome.gtt is not None
+        assert [fill["side"] for fill in store.fills] == ["BUY"]
+
+    def test_a_fourth_entry_in_one_session_is_refused(self) -> None:
+        store, plan_id, line_id = a_store("BUY_AT_MARKET")
+        for index in range(3):
+            store.orders[900 + index] = {
+                "id": 900 + index,
+                "instrument_id": 500 + index,
+                "state": "SENT",
+            }
+        outcome = confirm(store, plan_id, line_id, last_price=D("97.50"))
+        assert outcome.status == "BLOCKED" and "SESSION_CAP" in outcome.reason
+        assert len(store.orders) == 3
+
+    def test_a_name_already_held_is_refused(self) -> None:
+        store, plan_id, line_id = a_store("BUY_AT_MARKET")
+        store.positions[1] = {
+            "id": 1,
+            "instrument_id": 42,
+            "state": "OPEN",
+            "quantity_open": 100,
+            "stop_price": D("80.00"),
+            "entry_avg": D("90.00"),
+        }
+        outcome = confirm(store, plan_id, line_id, last_price=D("97.50"))
+        assert outcome.status == "BLOCKED" and "ALREADY_HELD" in outcome.reason
+
+    def test_the_gateway_is_asked_for_a_market_order_not_a_limit(self) -> None:
+        store, plan_id, line_id = a_store("BUY_AT_MARKET")
+        seen: dict = {}
+
+        class Recording:
+            async def place(self, **kwargs: object) -> dict:
+                seen.update(kwargs)
+                return {"status": "DRY_RUN", "order_id": "dry"}
+
+            async def place_gtt_stop(self, **kwargs: object) -> dict:
+                return {"status": "DRY_RUN_GTT", "trigger_id": "g"}
+
+        with contextlib.suppress(Exception):
+            run(
+                X.execute_line(
+                    store,
+                    Recording(),
+                    plan_id=plan_id,
+                    line_id=line_id,
+                    confirm="true",
+                    now=NOW,
+                    last_price=D("97.50"),
+                )
+            )
+        assert seen["order_type"] == "MARKET"
+        assert seen["market_protection"] == -1.0
+        assert seen["side"] == "BUY" and seen["product"] == "CNC"
+        assert seen["reference_price"] == 97.5
+
+
 class TestTheSell:
     def _held(self, store: MemoryStore, quantity: int = 1_000) -> None:
         store.positions[1] = {
@@ -485,9 +571,10 @@ class TestTheLaw:
         assert gates.intraday_enabled is False
         assert gates.options_enabled is False
 
-    def test_there_are_four_executable_kinds_and_none_of_them_shorts(self) -> None:
+    def test_there_are_five_executable_kinds_and_none_of_them_shorts(self) -> None:
+        """Five since LV8 (VB16): ``BUY_AT_MARKET`` is the live scan's entry. Still no sell short."""
         assert X.EXECUTABLE_KINDS == frozenset(
-            {"PLACE_LIMIT", "SELL_AT_OPEN", "CANCEL_LIMIT", "ARM_GTT"}
+            {"PLACE_LIMIT", "SELL_AT_OPEN", "CANCEL_LIMIT", "ARM_GTT", "BUY_AT_MARKET"}
         )
 
     def test_the_module_names_no_broker_method(self) -> None:

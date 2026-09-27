@@ -28,7 +28,8 @@ _ZERO = Decimal(0)
 
 
 class LineKind(StrEnum):
-    """What a confirmed line does. Four, and no fifth: this sleeve has no trail and no partial."""
+    """What a confirmed line does. Four from ``04``, and LV8's live entry: this sleeve has no
+    trail and no partial."""
 
     #: Place the working limit at the signal bar's close (``04`` §7).
     PLACE_LIMIT = "PLACE_LIMIT"
@@ -38,17 +39,24 @@ class LineKind(StrEnum):
     CANCEL_LIMIT = "CANCEL_LIMIT"
     #: Arm a GTT for a filled position that has none — the backstop for non-negotiable 4.
     ARM_GTT = "ARM_GTT"
+    #: LV8 (Maulik, 28 Sep 2026): a live scan's entry — a MARKET buy at the live price with Kite
+    #: market protection, confirmed by hand. The evening's tested entry stays ``PLACE_LIMIT``.
+    BUY_AT_MARKET = "BUY_AT_MARKET"
 
 
 #: The order ``04`` §9.3 renders a plan in, and it is an argument rather than a convention: what
 #: leaves the book first, then what stops being an order, then what protects a position that has
 #: no stop, and only then what commits new money. A person reading down the page reads the risk
 #: coming off before the risk going on.
+#: The kinds that commit new money: the evening's limit, and LV8's live market buy.
+ENTRY_KINDS: Final[frozenset[LineKind]] = frozenset({LineKind.PLACE_LIMIT, LineKind.BUY_AT_MARKET})
+
 LINE_ORDER: Final[tuple[LineKind, ...]] = (
     LineKind.SELL_AT_OPEN,
     LineKind.CANCEL_LIMIT,
     LineKind.ARM_GTT,
     LineKind.PLACE_LIMIT,
+    LineKind.BUY_AT_MARKET,
 )
 
 
@@ -137,13 +145,11 @@ class VbtPlan:
 
     @property
     def total_new_exposure_inr(self) -> Decimal:
-        return sum(
-            (line.value_inr for line in self.lines if line.kind is LineKind.PLACE_LIMIT), _ZERO
-        )
+        return sum((line.value_inr for line in self.lines if line.kind in ENTRY_KINDS), _ZERO)
 
     @property
     def entries(self) -> tuple[PlanLine, ...]:
-        return tuple(line for line in self.lines if line.kind is LineKind.PLACE_LIMIT)
+        return tuple(line for line in self.lines if line.kind in ENTRY_KINDS)
 
     def plan_hash(self) -> str:
         """sha256 of the canonical lines. **The same plan hashes the same.**"""

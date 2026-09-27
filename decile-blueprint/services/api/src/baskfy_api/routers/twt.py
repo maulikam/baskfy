@@ -274,10 +274,8 @@ class TwtScanRunOut(BaseModel):
 
     ``session_date`` is null until the worker has decided which published session it is
     detecting, because the caller asks for "the latest" and only the worker knows which that is.
-    ``detail`` carries the funnel on DONE; ``error`` the reason on FAILED.
-
-    **There is no ``provisional`` field**, and its absence is the design rather than an omission:
-    see the module docstring and DECISIONS-TW TW12.2.
+    ``detail`` carries the funnel on DONE; ``error`` the reason on FAILED. ``provisional`` is true
+    when the run read today so far from live quotes (LV8, DECISIONS-TW TW19).
     """
 
     run_id: int
@@ -292,6 +290,8 @@ class TwtScanRunOut(BaseModel):
     #: the same way the hub's inlined run does. ``None`` is "the run did not say"; ``0`` is "it
     #: looked and found none".
     found: int | None = None
+    #: LV8: the run read today so far from Kite quotes; its rows are replaced by the nightly.
+    provisional: bool = False
 
 
 class TwtScanQueuedOut(BaseModel):
@@ -384,6 +384,7 @@ def _run_out(view: twt_scan.ScanRunView) -> TwtScanRunOut:
         detail=view.detail,
         error=view.error,
         found=view.found,
+        provisional=view.provisional,
     )
 
 

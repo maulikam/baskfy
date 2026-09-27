@@ -1213,3 +1213,37 @@ SW15: it would be a column with no meaning and an invitation to detect a partial
 
 **Reversal.** Revert the leaf-3 commit. `/vbt/rescan`, the table, the task and the sweep are
 untouched by it, so the desk button keeps working with or without this change.
+
+### VB16 — the Scan button reads today live and a signal is bought now, at market, by hand; by Maulik's instruction in session (28 Sep 2026) · ✅ decided by Maulik
+
+**Context.** DECISIONS-LV LV8.0: Maulik — *"the strategy would be the same live … we'll collect the
+live data and directly start trading on it"* — chose, with options, that the TWT and VBT Scan
+buttons build today's provisional bar from Kite quotes during the session and that a signal is
+entered **now, at market with Kite market protection**. This reverses VB12's "a session that has
+already closed" for the button, and VB13.4's lesson stands in a narrower form: the button still
+never invents a session the bars do not know about — the live bar is *built*, per name, and
+labelled.
+
+**What changed (LV8).** `baskfy.vbt.rescan` decides the session with the swing book's
+`decide_session`; in session with a Kite session it builds the provisional frame in VBT's own bar
+schema and runs `run_detect_vbt` with `extra_bars`, every row stamped `provisional`
+(`vb_signal_daily`, `vb_breadth_daily`, `vb_scan_run`; migration 0057). A signal becomes a
+**`LIVE`** plan whose entries are a new line kind, **`BUY_AT_MARKET`**: the evening's `PLACE_LIMIT`
+line re-kinded, same size and stop, `limit_price` recording the live reference. The desk's
+`vbt_execute._buy_at_market` sends `order_type="MARKET"` with `market_protection=-1` through the
+gateway, the same refusals as `_place_limit` (cap, held, working, protection unresolved), the same
+`_apply_fill` and the GTT in the same request; dry-run rehearses the whole path.
+
+**What did not change.** The evening's `PLACE_LIMIT` at the signal close, the three-session
+expiry sweep, the 21-EMA exit, the stop. **VBT has no auto-execute flag and gains none**: a
+`BUY_AT_MARKET` line is confirmed by a person on the desk, which is why it exists as its own kind
+rather than reusing the limit.
+
+**Why the tested timing is allowed to change.** He said so, in the option text: "accepts changed
+entry timing without a backtest". The study's 9.6 % a year measured the limit at the close; the
+live entry is a different fill and no number is claimed for it. `docs/vbt/04` §7.1's argument for
+the limit stays in the doc as the evening's rule.
+
+**How to reverse.** Remove `BUY_AT_MARKET` from `build_live_plan_vbt`'s re-kinding (the LIVE plan
+then carries `PLACE_LIMIT` lines at the live close) or set the desk's `KIND_LABEL` to hide it;
+migration 0057's downgrade deletes any LIVE plan.

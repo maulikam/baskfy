@@ -29,23 +29,27 @@ threshold changed, or the night the chain's step was refused by the quality gate
 idempotent per ``(user_id, date)`` (house rule 7), so the re-run overwrites its own rows and moves
 no counter.
 
-**WHAT IT RE-DETECTS, AND WHAT IT REFUSES TO.** A session that has already been **published**.
-This is not the swing book's scan: `docs/twt/04` §2 reads three *weekly* ranges that have closed,
-a monthly low, and a sessions-out count over closed sessions. A provisional bar built from a live
-quote would change the answer without making it truer, so there is no provisional path here and
-no ``provisional`` column to write one into (DECISIONS-TW **TW12.2**).
+**WHAT IT DETECTS (LV8, 28 Sep 2026 — Maulik's reversal of TW12.2).** From 09:15 on a trading day
+until tonight's publish, **today**: the worker builds one provisional bar per name from a Kite
+quote and runs the same detector over the published history plus that bar, exactly as the swing
+book's SW15 scan has since 3 Sep; a signal becomes a **LIVE** plan whose entries are taken now, at
+market, with Kite market protection (`baskfy_worker.tasks.live_scan`, DECISIONS-TW **TW19**,
+DECISIONS-LV LV8.0 — *"the strategy would be the same live ... collect the live data and directly
+start trading on it"*). Every row a live scan writes is stamped ``provisional`` and is overwritten
+by the nightly's real bar. Before the open, after the publish, or **without a Kite session** (no
+quote source), it re-detects the last **published** session, plain, and says so in its detail.
 
-**It writes signals, states and breadth, and nothing else.** No plan, no order, no broker. The
-evening job is still what turns a signal into a plan line, and a person is still what turns a plan
-line into an order (`docs/twt/02` Track C §3). Nothing in this module names the execution package
-or a broker verb, and ``packages/core/tests/test_twt_safety_properties.py`` asserts that over the
-routes that write the row.
-"""
+**It writes signals, states, breadth and — on a live scan — a plan, and nothing else.** No order, no
+broker. A plan line is a proposal; a person (or, for TWT alone, the desk's flagged auto-execute) is
+still what turns one into an order (`docs/twt/02` Track C §3). Nothing in this module names the
+execution package or a broker verb, and ``packages/core/tests/test_twt_safety_properties.py``
+asserts that over the routes that write the row."""
 
 from __future__ import annotations
 
 import datetime as dt
 import logging
+from collections.abc import Callable
 from typing import Final
 
 from sqlalchemy import select
@@ -53,7 +57,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_core.models import TwScanRun
 from baskfy_core.models.base import JsonObject
+from baskfy_worker.tasks.live_scan import IST, LiveScan, run_twt_live
 from baskfy_worker.tasks.published_session import last_published_session
+from baskfy_worker.tasks.swing_premarket import QuoteSource
+from baskfy_worker.tasks.swing_scan_now import ScanNotRunnable, decide_session
 from baskfy_worker.tasks.twt import detect_session
 
 log = logging.getLogger(__name__)
@@ -76,6 +83,11 @@ STALE_AFTER_SECONDS: Final = 600
 #: One press a minute. The button is not a toy and the work is not free.
 MIN_INTERVAL_SECONDS: Final = 60
 
+#: What the row's detail says when the market is open but there is no Kite session to quote it
+#: with: the scan fell back to the published session rather than failing, because "log in first"
+#: is a note, not an outage.
+LIVE_SKIPPED_NO_QUOTES: Final = "market open but no Kite session: today's bar could not be built"
+
 #: How many unpublished rows one pass will publish. A ceiling rather than "all of them": a
 #: backlog means something is wrong upstream, and publishing two hundred detections at once
 #: would turn that into a second outage.
@@ -83,6 +95,7 @@ PUBLISH_LIMIT: Final = 10
 
 __all__ = [
     "IN_FLIGHT",
+    "LIVE_SKIPPED_NO_QUOTES",
     "MIN_INTERVAL_SECONDS",
     "PUBLISH_LIMIT",
     "SCAN_TASK_NAME",
@@ -161,9 +174,20 @@ async def claim_run(session: AsyncSession, run_id: int) -> TwScanRun | None:
 
 
 async def run_twt_scan(
-    session: AsyncSession, run_id: int, *, now: dt.datetime | None = None
+    session: AsyncSession,
+    run_id: int,
+    *,
+    now: dt.datetime | None = None,
+    quote_source: Callable[[], QuoteSource] | None = None,
+    live: LiveScan = run_twt_live,
 ) -> JsonObject:
-    """Detect the latest published session for the row's user, and record what it saw.
+    """Detect for the row's user — today from live quotes when the market is open and a Kite
+    session exists, the latest published session otherwise — and record what it saw.
+
+    ``quote_source`` is called only on the provisional path, so a scan outside market hours never
+    touches Kite. ``live`` is the provisional path itself (``live_scan.run_twt_live``, which the
+    Celery task binds with the sleeve's sizing inputs); this module knows neither the sleeve's
+    money nor its flag.
 
     **Never raises into the worker**: a failure is ``FAILED`` with the reason on the row, because
     the button needs to be able to *show* what went wrong rather than leaving a request that
@@ -174,20 +198,39 @@ async def run_twt_scan(
     if row is None:
         return {"run_id": run_id, "skipped": "not QUEUED — already claimed or finished"}
     try:
-        day = await latest_published_session(session, stamp.date())
-        if day is None:
+        try:
+            decision = await decide_session(session, stamp.astimezone(IST).replace(tzinfo=None))
+        except ScanNotRunnable as error:
             raise ValueError(
                 "the pipeline has published no session on or before "
                 f"{stamp.date().isoformat()}; there is nothing to detect until the chain runs"
+                f" ({error})"
+            ) from error
+        if decision.provisional and quote_source is not None:
+            report = await live(
+                session, user_id=row.user_id, decision=decision, quotes=quote_source(), now=stamp
             )
-        # THE EXISTING DETECTOR, AND THE ONLY CALL IN THIS MODULE THAT DOES ANY WORK.
-        # `force=True` because being asked for is the point: the nightly's rule is "skip a session
-        # that already has a breadth row", and that is exactly the session a person presses this
-        # button about. The write underneath is an upsert, so the re-run is still idempotent.
-        detail = await detect_session(session, day, user_id=row.user_id, force=True)
-        row.session_date = day
-        row.status = "DONE"
-        row.detail = dict(detail)
+            row.session_date = decision.session_date
+            row.provisional = True
+            row.status = "DONE"
+            row.detail = {**report.as_detail(), "reason": decision.reason}
+        else:
+            day = decision.published_as_of
+            # THE EXISTING DETECTOR, AND THE ONLY CALL IN THIS MODULE THAT DOES ANY WORK ON A
+            # PUBLISHED SESSION. `force=True` because being asked for is the point: the nightly's
+            # rule is "skip a session that already has a breadth row", and that is exactly the
+            # session a person presses this button about. The write underneath is an upsert, so
+            # the re-run is still idempotent.
+            detail = await detect_session(session, day, user_id=row.user_id, force=True)
+            row.session_date = day
+            row.provisional = False
+            row.status = "DONE"
+            row.detail = {
+                **dict(detail),
+                "provisional": False,
+                "reason": decision.reason,
+                **({"live": LIVE_SKIPPED_NO_QUOTES} if decision.provisional else {}),
+            }
     except Exception as error:
         row.status = "FAILED"
         row.error = f"{type(error).__name__}: {error}"
@@ -198,6 +241,7 @@ async def run_twt_scan(
         "run_id": row.id,
         "status": row.status,
         "session_date": row.session_date.isoformat() if row.session_date else None,
+        "provisional": bool(row.provisional),
         "detail": row.detail,
         "error": row.error,
     }

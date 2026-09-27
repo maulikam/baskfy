@@ -59,7 +59,7 @@ from decimal import Decimal
 from typing import Final
 
 import polars as pl
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -365,15 +365,29 @@ def _snap(price: Decimal, tick: Decimal) -> Decimal:
     return tick_floor(price, tick)
 
 
-async def upsert_signals(
+async def upsert_signals(  # noqa: PLR0913 - one keyword per input the row records
     session: AsyncSession,
     frame: pl.DataFrame,
     *,
     user_id: int,
     trade_date: dt.date,
     pipeline_run_id: int | None,
+    provisional: bool = False,
 ) -> int:
-    """Idempotent: running the job twice for a date changes no row (house rule 7)."""
+    """Idempotent: running the job twice for a date changes no row (house rule 7).
+
+    A real run (``provisional=False``) also deletes the day's provisional rows it did not
+    reproduce — a live scan's stragglers (LV8)."""
+    if not provisional:
+        keep = [int(v) for v in frame["instrument_id"].to_list()] if not frame.is_empty() else []
+        sweep = delete(VbSignalDaily).where(
+            VbSignalDaily.user_id == user_id,
+            VbSignalDaily.date == trade_date,
+            VbSignalDaily.provisional.is_(True),
+        )
+        if keep:
+            sweep = sweep.where(VbSignalDaily.instrument_id.not_in(keep))
+        await session.execute(sweep)
     if frame.is_empty():
         return 0
     payload = [
@@ -406,6 +420,7 @@ async def upsert_signals(
             "locked_upper_circuit": bool(row["locked_upper_circuit"]),
             "bars_in_window": None,
             "pipeline_run_id": pipeline_run_id,
+            "provisional": provisional,
         }
         for row in frame.iter_rows(named=True)
     ]
@@ -451,6 +466,7 @@ async def write_breadth_row(  # noqa: PLR0913 - one keyword per input the row re
     thin_session: bool,
     config: VbtConfig,
     pipeline_run_id: int | None,
+    provisional: bool = False,
 ) -> None:
     """One row per session, including the sessions the rules refused to trade.
 
@@ -470,6 +486,7 @@ async def write_breadth_row(  # noqa: PLR0913 - one keyword per input the row re
         "thin_session": thin_session,
         "detail": funnel.as_detail(),
         "pipeline_run_id": pipeline_run_id,
+        "provisional": provisional,
     }
     statement = insert(VbBreadthDaily).values(values)
     updatable = [key for key in values if key not in ("user_id", "date")]
@@ -481,13 +498,15 @@ async def write_breadth_row(  # noqa: PLR0913 - one keyword per input the row re
     )
 
 
-async def run_detect_vbt(
+async def run_detect_vbt(  # noqa: PLR0913 - one keyword per input the detection depends on
     session: AsyncSession,
     outcome: StepOutcome,
     trade_date: dt.date,
     *,
     user_id: int,
     pipeline_run_id: int | None = None,
+    extra_bars: pl.DataFrame | None = None,
+    provisional: bool = False,
 ) -> int:
     """Detect the session's signals and write its breadth row. Returns the signal count.
 
@@ -498,6 +517,11 @@ async def run_detect_vbt(
     universe = await load_universe(session, config)
     start = await lookback_start(session, trade_date, LOOKBACK_SESSIONS)
     bars = await load_vbt_bars(session, start, trade_date, universe)
+    if extra_bars is not None and not extra_bars.is_empty():
+        # LV8: today's bar from live quotes (`live_scan`), so the same five lines read "today so
+        # far" — the day's volume against the 50-day average, the close's place in the range.
+        # Every row is stamped `provisional`; the nightly's real rows replace them.
+        bars = pl.concat([bars, extra_bars.select(bars.columns)], how="vertical")
     if bars.is_empty():
         outcome.status = StepStatus.SKIPPED
         outcome.note(skipped_reason=f"no bars for {trade_date} in the VBT universe")
@@ -566,6 +590,7 @@ async def run_detect_vbt(
         user_id=user_id,
         trade_date=trade_date,
         pipeline_run_id=pipeline_run_id,
+        provisional=provisional,
     )
     signals = int((rows["state"] == SignalState.SIGNAL.value).sum()) if not rows.is_empty() else 0
     funnel = VbtFunnel(
@@ -587,10 +612,11 @@ async def run_detect_vbt(
         thin_session=False,
         config=config,
         pipeline_run_id=pipeline_run_id,
+        provisional=provisional,
     )
     outcome.rows_in = bars.height
     outcome.rows_out = written
-    outcome.note(gate=reading.gate.value, **funnel.as_detail())
+    outcome.note(gate=reading.gate.value, provisional=provisional, **funnel.as_detail())
     if written == 0:
         outcome.status = StepStatus.SKIPPED
     return signals

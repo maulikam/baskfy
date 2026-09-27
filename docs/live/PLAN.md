@@ -109,6 +109,7 @@ LV2 and LV3 both need `app/main.py`? No: LV3 owns it (gateway wiring); LV6 adds 
   - 1.5 LV5 intraday equity bars (store, reconcile, backfill) gates/live-5-eq-bars.md
   - 1.6 LV6 trade lifecycle, adoption, trade card ........ gates/live-6-lifecycle.md
   - 1.7 LV7 integration: suites, lint, deploy, docs, report gates/live-7-integration.md
+  - 1.8 LV8 live scans for TWT and VBT; entries now at market (Maulik, 28 Sep) gates/live-8-live-scans.md
 
 ## Status log
 
@@ -119,3 +120,6 @@ Append-only.
 - 2026-09-28 01:10 IST LV1 agent died mid-web (network); driver finished the web tests, docs and lint fixes. LV2 code and 21 tests written; migration 0055 test green on local Postgres.
 - 2026-09-28 02:30 IST LV0 committed (84cbb71). LV2 gates 10/10, LV3 gates 6/6 met. LV1 6/7 — M6 waits on the tree-wide lint after LV4. LV4 written: /sleeves/state + chip, login queues all three scans, session-supervisor service, monitor reload + late-login wait; gate check running.
 - 2026-09-28 01:20 IST LV4 gates 8/8, LV5 6/7 (lint: a duplicate test-module name, renamed), LV6 tests 21 green; web page tests fixed (the chip carries its own QueryClient). Status page, review annotation and NEEDS-MAULIK step-5 questions written. Next: lint-clean gate re-runs, six commits, deploy before the open.
+- 2026-09-28 01:20 IST every leaf gate met (LV0 5, LV1 7, LV2 10, LV3 6, LV4 8, LV5 7, LV6 6). Committed LV1 00725f5, LV2 2195d88, LV3 cfccfa2, LV4 7a89488, LV5 4af83e5, LV6 ece537a. ship.sh started from a clean worktree of ece537a; the screener's full suite running beside it.
+- 2026-09-28 01:35 IST Maulik, in session: TWT/VBT Scan builds a live bar like swing; entries now at market with protection (TWT auto confirms live plans; VBT by hand); LV5 off on the box, code stays. Added leaf LV8 (DECISIONS-LV LV8.0).
+- 2026-09-28 02:30 IST LV8 written: live_scan.py (provisional bars, live detect, LIVE plan builders), the two Scan tasks branch on decide_session with a Kite quote source bound in Celery, migration 0057, VBT `BUY_AT_MARKET` desk handler, twt-auto accepts LIVE plans and the supervisor drains once a minute, `provisional` on the wire and the pages, SCAN_MEANS reworded. Tests: worker test_live_scan (20), migration 0057 (3), desk 87 across the three touched suites, desk suite 2,527 green, web 292 green. Tests pinning the reversed decision rewritten to cite LV8.0. TW19, VB16, LV8.1 written. Next: lint, gates V1–V9, commits LV7 + LV8, deploy.

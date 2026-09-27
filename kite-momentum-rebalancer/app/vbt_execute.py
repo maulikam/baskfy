@@ -64,6 +64,11 @@ EXECUTABLE_KINDS: Final[frozenset[str]] = frozenset(kind.value for kind in LineK
 PLACED_STATUSES: Final[frozenset[str]] = frozenset({"PLACED", "DUPLICATE"})
 DRY_RUN_STATUSES: Final[frozenset[str]] = frozenset({"DRY_RUN"})
 
+#: Kite's ``market_protection`` on the LIVE plan's MARKET buy (LV8, 28 Sep 2026; the same value
+#: TWT's ``_buy_at_open`` sends, for the same reason: Zerodha refuses an API MARKET order without
+#: it — the box's record for 23 and 24 Sep 2026). ``-1`` is Kite's own auto band.
+VBT_MARKET_PROTECTION: Final[float] = -1.0
+
 #: Kite's order statuses, as the order book reports them (LV2). A dead order is one the broker
 #: will not fill any further; whatever filled before it died is the position.
 ORDER_COMPLETE: Final = "COMPLETE"
@@ -372,6 +377,119 @@ async def _place_limit(  # noqa: PLR0913 - a confirm is its line, its gateway an
         # `02` Track B: the dry-run branch is a complete fill at the limit, so the rehearsal
         # exercises the position, the fill and the stop rather than stopping at the order.
         return await _simulate_fill(store, gateway, line, plan, order_row, gates, now)
+    return ExecOutcome("SENT", "", result, None, order_row, None, gates.dry_run)
+
+
+async def _buy_at_market(  # noqa: PLR0913 - a confirm is its line, its gateway and its clock
+    store: VbtStore,
+    gateway: Any,  # noqa: ANN401 - an OrderGateway
+    line: dict,
+    plan: dict,
+    gates: ProductGates,
+    now: dt.datetime,
+    *,
+    last_price: Decimal | None = None,
+) -> ExecOutcome:
+    """LV8 (DECISIONS-VB VB14, Maulik 28 Sep 2026) — a **LIVE** plan's entry: a MARKET buy now.
+
+    The live scan read today's bar so far and found the signal *during* the session; Maulik's
+    decision is to take it now, at market, with Kite market protection, rather than bid at a
+    close that has not printed. The same refusals as :func:`_place_limit` (session cap, held,
+    working, protection unresolved), the same ``vb_order`` row, the same fill path and **the GTT
+    armed from the fill** (non-negotiable 4). The order's ``limit_price`` records the reference
+    the size was previewed against — the live price the desk supplies per confirm, else the
+    plan's own — so the book can say what the buy was worth when it was sent.
+    """
+    taken = store.entries_taken(plan["session_date"])
+    cap = DEFAULT_VBT_CONFIG.sizing.max_new_entries_per_session
+    if taken >= cap:
+        reason = f"SESSION_CAP: {taken} entries already taken today; {cap} is the session's cap"
+        store.set_line(line["id"], state="REJECTED", note=reason)
+        return _blocked(reason, simulated=gates.dry_run)
+    if store.open_position_for(line["instrument_id"]) is not None:
+        reason = "ALREADY_HELD: the sleeve holds this name; it is never averaged down"
+        store.set_line(line["id"], state="REJECTED", note=reason)
+        return _blocked(reason, simulated=gates.dry_run)
+    if store.working_order_for(line["instrument_id"]) is not None:
+        reason = "ALREADY_WORKING: an order is already working in this name"
+        store.set_line(line["id"], state="REJECTED", note=reason)
+        return _blocked(reason, simulated=gates.dry_run)
+    unresolved = _reconcile.protection_unresolved(store, naked=naked_positions(store))
+    if unresolved:
+        reason = _reconcile.refusal(unresolved)
+        store.set_line(line["id"], state="REJECTED", note=reason)
+        return _blocked(reason, simulated=gates.dry_run)
+
+    preview = Decimal(str(line["limit_price"] or 0))
+    reference = last_price if last_price is not None and last_price > _ZERO else preview
+    if reference <= _ZERO:
+        reason = "no price to value this market buy against"
+        store.set_line(line["id"], state="REJECTED", note=reason)
+        return _blocked(reason, simulated=gates.dry_run)
+    quantity = int(line["quantity"])
+    result = await gateway.place(
+        symbol=line["symbol"],
+        qty=quantity,
+        side="BUY",
+        product="CNC",
+        order_type="MARKET",
+        market_protection=VBT_MARKET_PROTECTION,
+        client_id=line["client_id"],
+        reference_price=float(reference),
+        gross_exposure=float(reference * quantity),
+        tenant=_tenant(),
+        plan_tenant=_tenant(),
+    )
+    status = str(result.get("status") or "")
+    if status not in PLACED_STATUSES | DRY_RUN_STATUSES:
+        reason = str(result.get("error") or f"the gateway answered {status}")
+        store.set_line(line["id"], state="REJECTED", note=reason)
+        return ExecOutcome(
+            "BLOCKED" if status.endswith("BLOCKED") else "REJECTED",
+            reason,
+            result,
+            None,
+            None,
+            None,
+            gates.dry_run,
+        )
+
+    order_row = store.create_order(
+        {
+            "instrument_id": line["instrument_id"],
+            "signal_date": plan["session_date"],
+            "limit_price": reference,
+            "stop_price": Decimal(str(line["stop_price"])),
+            "quantity": quantity,
+            "state": "SENT",
+            "broker_order_id": result.get("order_id"),
+            "client_id": line["client_id"],
+            "simulated": gates.dry_run,
+        }
+    )
+    store.set_line(
+        line["id"],
+        state="SENT",
+        journal_ref=str(result.get("order_id") or ""),
+        order_id=order_row,
+        note=f"market buy sent against a reference of {reference}",
+    )
+    store.bump_session(
+        plan["session_date"], mode="DRY_RUN" if gates.dry_run else "LIVE", confirms=1
+    )
+    if status in DRY_RUN_STATUSES:
+        return await _apply_fill(
+            store,
+            gateway,
+            line=line,
+            order_row=order_row,
+            quantity=quantity,
+            fill_price=reference,
+            entry_date=plan["session_date"],
+            gates=gates,
+            now=now,
+            complete=True,
+        )
     return ExecOutcome("SENT", "", result, None, order_row, None, gates.dry_run)
 
 
@@ -1039,10 +1157,15 @@ async def execute_line(  # noqa: PLR0913 - a confirm is its store, its gateway a
         LineKind.SELL_AT_OPEN.value: _sell_at_open,
         LineKind.CANCEL_LIMIT.value: _cancel_limit,
         LineKind.ARM_GTT.value: _arm_gtt_line,
+        LineKind.BUY_AT_MARKET.value: _buy_at_market,
     }
     with store.lock_session_for_update(plan["session_date"]):
         if line["kind"] == LineKind.SELL_AT_OPEN.value:
             return await _sell_at_open(
+                store, gateway, line, plan, gates, stamp, last_price=last_price
+            )
+        if line["kind"] == LineKind.BUY_AT_MARKET.value:
+            return await _buy_at_market(
                 store, gateway, line, plan, gates, stamp, last_price=last_price
             )
         return await handlers[line["kind"]](store, gateway, line, plan, gates, stamp)

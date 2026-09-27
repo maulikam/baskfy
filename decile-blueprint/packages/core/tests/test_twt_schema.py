@@ -268,7 +268,9 @@ class TestTheVocabularyIsTheDocuments:
         assert TW_ORDER_SIDES == ("BUY", "SELL")
         assert TW_FILL_SIDES == ("BUY", "SELL")
         assert TW_POSITION_STATES == ("OPEN", "CLOSED")
-        assert TW_PLAN_SOURCES == ("EVENING", "MORNING", "MANUAL")
+        # LIVE since LV8 (28 Sep 2026, DECISIONS-TW TW19): the Scan button's in-session plan.
+        assert TW_PLAN_SOURCES == ("EVENING", "MORNING", "MANUAL", "LIVE")
+        assert "`LIVE`" in DATA_MODEL
         assert TW_SESSION_MODES == ("DRY_RUN", "LIVE")
         assert TW_BACKTEST_SOURCES == ("PLANT", "RESEARCH_EXPORT")
         assert TW_LINE_STATES == (

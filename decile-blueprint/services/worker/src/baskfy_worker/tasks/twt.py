@@ -84,7 +84,7 @@ from decimal import Decimal
 from typing import Final
 
 import polars as pl
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, delete, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -96,6 +96,7 @@ from baskfy_core.models import (
     TradingDay,
     TwBreadthDaily,
     TwConfig,
+    TwOrder,
     TwPosition,
     TwSignalDaily,
     TwStateDaily,
@@ -566,15 +567,21 @@ async def _upsert(
     return written
 
 
-async def upsert_states(
+async def upsert_states(  # noqa: PLR0913 - the row's keys, plus LV8's provisional flag
     session: AsyncSession,
     frame: pl.DataFrame,
     *,
     user_id: int,
     trade_date: dt.date,
     pipeline_run_id: int | None,
+    provisional: bool = False,
 ) -> int:
-    """Idempotent: running the job twice for a date changes no row (house rule 7)."""
+    """Idempotent: running the job twice for a date changes no row (house rule 7).
+
+    A real run (``provisional=False``) also deletes the day's provisional rows it did not
+    reproduce — a live scan's stragglers (LV8)."""
+    if not provisional:
+        await _drop_provisional_stragglers(session, TwStateDaily, frame, user_id, trade_date)
     if frame.is_empty():
         return 0
     payload: list[dict[str, object]] = [
@@ -582,6 +589,7 @@ async def upsert_states(
             "user_id": user_id,
             "date": trade_date,
             "instrument_id": int(row["instrument_id"]),
+            "provisional": provisional,
             "open": _decimal(row["open"]),
             "high": _decimal(row["high"]),
             "low": _decimal(row["low"]),
@@ -609,15 +617,21 @@ async def upsert_states(
     return await _upsert(session, TwStateDaily, payload)
 
 
-async def upsert_signals(
+async def upsert_signals(  # noqa: PLR0913 - the row's keys, plus LV8's provisional flag
     session: AsyncSession,
     frame: pl.DataFrame,
     *,
     user_id: int,
     trade_date: dt.date,
     pipeline_run_id: int | None,
+    provisional: bool = False,
 ) -> int:
-    """Idempotent, and an upsert rather than a rewrite for the reason :func:`_upsert` gives."""
+    """Idempotent, and an upsert rather than a rewrite for the reason :func:`_upsert` gives.
+
+    A real run (``provisional=False``) also deletes the day's provisional rows it did not
+    reproduce — a live scan's stragglers (LV8)."""
+    if not provisional:
+        await _drop_provisional_stragglers(session, TwSignalDaily, frame, user_id, trade_date)
     if frame.is_empty():
         return 0
     payload: list[dict[str, object]] = [
@@ -625,6 +639,7 @@ async def upsert_signals(
             "user_id": user_id,
             "date": trade_date,
             "instrument_id": int(row["instrument_id"]),
+            "provisional": provisional,
             "state": str(row["signal_state"]),
             "failed_filters": list(row["failed_filters"] or []),
             "entry_reference_close": _decimal(row["entry_reference_close"]),
@@ -639,6 +654,35 @@ async def upsert_signals(
     return await _upsert(session, TwSignalDaily, payload)
 
 
+async def _drop_provisional_stragglers(
+    session: AsyncSession,
+    model: type[TwStateDaily] | type[TwSignalDaily],
+    frame: pl.DataFrame,
+    user_id: int,
+    trade_date: dt.date,
+) -> None:
+    """LV8: a live scan's rows for names the real bar did not reproduce are deleted, so the
+    published day never carries a provisional row beside a real one.
+
+    **Except a signal row an order references.** ``tw_order.signal_date`` is a foreign key into
+    ``tw_signal_daily`` (``fk_tw_order_signal``): a buy taken on a provisional signal that the
+    closing bar did not confirm keeps its row, still marked provisional — the honest record of
+    what the order was taken on — rather than failing the nightly on the constraint.
+    """
+    keep = [int(v) for v in frame["instrument_id"].to_list()] if not frame.is_empty() else []
+    statement = delete(model).where(
+        model.user_id == user_id, model.date == trade_date, model.provisional.is_(True)
+    )
+    if keep:
+        statement = statement.where(model.instrument_id.not_in(keep))
+    if model is TwSignalDaily:
+        ordered = select(TwOrder.instrument_id).where(
+            TwOrder.user_id == user_id, TwOrder.signal_date == trade_date
+        )
+        statement = statement.where(model.instrument_id.not_in(ordered))
+    await session.execute(statement)
+
+
 async def write_breadth_row(  # noqa: PLR0913 - one keyword per input the row records
     session: AsyncSession,
     *,
@@ -649,6 +693,7 @@ async def write_breadth_row(  # noqa: PLR0913 - one keyword per input the row re
     thin_session: bool,
     config: TwtConfig,
     pipeline_run_id: int | None,
+    provisional: bool = False,
 ) -> None:
     """One row per session, including the sessions the rules refused to trade.
 
@@ -672,6 +717,7 @@ async def write_breadth_row(  # noqa: PLR0913 - one keyword per input the row re
         "gate": Gate.SHUT.value if reading is None else reading.gate.value,
         "dma_bars": config.breadth.dma_bars,
         "thin_session": thin_session,
+        "provisional": provisional,
         "detail": funnel.as_detail(),
         "pipeline_run_id": pipeline_run_id,
     }
@@ -935,15 +981,22 @@ def _thin_funnel(
     )
 
 
-async def run_detect_twt(
+async def run_detect_twt(  # noqa: PLR0913 - one keyword per input the detection depends on
     session: AsyncSession,
     outcome: StepOutcome,
     trade_date: dt.date,
     *,
     user_id: int,
     pipeline_run_id: int | None = None,
+    extra_bars: pl.DataFrame | None = None,
+    provisional: bool = False,
 ) -> int:
     """Detect the session's state, its entry events and its breadth row, then ratchet the book.
+
+    **LV8:** with ``extra_bars`` (today's bar from live quotes, built by ``live_scan``) the same
+    rules read today-so-far; every row is stamped ``provisional`` and the ratchet does **not**
+    run — a trail moved on a half-day close would be a stop derived from a bar that has not
+    closed. The nightly's real run replaces the provisional rows.
 
     Returns the number of full ``SIGNAL`` rows — which on most sessions is zero, because this
     strategy enters about eighteen times a year.
@@ -958,6 +1011,8 @@ async def run_detect_twt(
     universe = await load_universe(session, config)
     start = await lookback_start(session, trade_date, LOOKBACK_SESSIONS)
     bars = await load_twt_bars(session, start, trade_date, universe)
+    if extra_bars is not None and not extra_bars.is_empty():
+        bars = pl.concat([bars, extra_bars.select(bars.columns)], how="vertical")
     if bars.is_empty():
         outcome.status = StepStatus.SKIPPED
         outcome.note(skipped_reason=f"no bars for {trade_date} in the TWT universe")
@@ -995,6 +1050,7 @@ async def run_detect_twt(
             thin_session=True,
             config=config,
             pipeline_run_id=pipeline_run_id,
+            provisional=provisional,
         )
         outcome.status = StepStatus.SKIPPED
         outcome.note(
@@ -1012,10 +1068,20 @@ async def run_detect_twt(
     states = state_rows(detected, trade_date)
     signals = signal_rows(detected, trade_date, config)
     states_written = await upsert_states(
-        session, states, user_id=user_id, trade_date=trade_date, pipeline_run_id=pipeline_run_id
+        session,
+        states,
+        user_id=user_id,
+        trade_date=trade_date,
+        pipeline_run_id=pipeline_run_id,
+        provisional=provisional,
     )
     entries_written = await upsert_signals(
-        session, signals, user_id=user_id, trade_date=trade_date, pipeline_run_id=pipeline_run_id
+        session,
+        signals,
+        user_id=user_id,
+        trade_date=trade_date,
+        pipeline_run_id=pipeline_run_id,
+        provisional=provisional,
     )
     full = (
         int((signals["signal_state"] == SignalState.SIGNAL.value).sum())
@@ -1042,10 +1108,17 @@ async def run_detect_twt(
         thin_session=False,
         config=config,
         pipeline_run_id=pipeline_run_id,
+        provisional=provisional,
     )
-    book = await run_twt_ratchet(session, trade_date, user_id=user_id, config=config)
     outcome.rows_in = bars.height
     outcome.rows_out = states_written + entries_written
+    if provisional:
+        # LV8: no ratchet on a bar that has not closed (docstring above).
+        outcome.note(gate=reading.gate.value, provisional=True, **funnel.as_detail())
+        if states_written == 0:
+            outcome.status = StepStatus.SKIPPED
+        return full
+    book = await run_twt_ratchet(session, trade_date, user_id=user_id, config=config)
     outcome.note(gate=reading.gate.value, **funnel.as_detail(), **book.as_detail())
     if states_written == 0 and book.positions == 0:
         outcome.status = StepStatus.SKIPPED

@@ -57,6 +57,8 @@ MARKET_CLOSE: Final = dt.time(15, 30)
 #: One tick. The order book is one limiter slot; ten seconds is six calls a minute, well inside
 #: Kite's general lane and fast enough that a fill is booked before a person could ask about it.
 TICK_SECONDS: Final = 10.0
+#: LV8: how often the supervisor asks TWT's auto-execute to drain a LIVE plan (twt_auto's number).
+DRAIN_EVERY_SECONDS: Final = 60.0
 
 STATE_WAITING: Final = "waiting_for_login"
 STATE_SESSION: Final = "session"
@@ -74,6 +76,11 @@ class Deps:
     seed_positions: Callable[[dict[str, float]], None]
     reconcile: Callable[[dt.datetime], Any]
     beat: Callable[[str, str, str, dt.datetime], None]
+    #: LV8: TWT's auto-execute drain (``twt_auto.drain_now``), called once a minute while the
+    #: session is open and a Kite session exists, so a LIVE plan is confirmed the minute it is
+    #: built. ``None`` (tests, or a desk without the module) drains nothing. The drain itself
+    #: refuses unless all three TWT flags are set; the supervisor adds no flag of its own.
+    drain_twt: Callable[[dt.datetime], Any] | None = None
 
 
 @dataclass
@@ -83,8 +90,11 @@ class Supervisor:
     _seen_mtime: float | None = field(default=None, init=False)
     _authed: bool = field(default=False, init=False)
     _last_reconcile: dt.datetime | None = field(default=None, init=False)
+    _last_drain: dt.datetime | None = field(default=None, init=False)
+    drain_every: float = DRAIN_EVERY_SECONDS
     logins: int = field(default=0, init=False)
     passes: int = field(default=0, init=False)
+    drains: int = field(default=0, init=False)
 
     def tick(self, now: dt.datetime) -> str:
         """One look at the world. Returns the supervisor's state after it."""
@@ -104,10 +114,39 @@ class Supervisor:
         if MARKET_OPEN <= local.time() < MARKET_CLOSE:
             if self._due(now):
                 self._reconcile(now)
+            if self._drain_due(now):
+                self._drain(now)
             self._beat("supervisor", STATE_SESSION, "session open; reconciling every tick", now)
             return STATE_SESSION
         self._beat("supervisor", STATE_IDLE, "session closed; token present", now)
         return STATE_IDLE
+
+    # --- LV8: TWT's live-plan drain --------------------------------------------------------
+
+    def _drain_due(self, now: dt.datetime) -> bool:
+        if self.deps.drain_twt is None:
+            return False
+        if self._last_drain is None:
+            return True
+        return (now - self._last_drain).total_seconds() >= self.drain_every
+
+    def _drain(self, now: dt.datetime) -> None:
+        assert self.deps.drain_twt is not None
+        self._last_drain = now
+        try:
+            report = self.deps.drain_twt(now)
+        except Exception as exc:  # noqa: BLE001 - the drain must never stop the supervisor
+            log.exception("TWT drain raised: %s", type(exc).__name__)
+            self._beat("twt-auto", "error", f"drain raised {type(exc).__name__}", now)
+            return
+        self.drains += 1
+        ran = bool(getattr(report, "ran", False))
+        reason = str(getattr(report, "reason", "") or "")
+        attempts = list(getattr(report, "attempts", []) or [])
+        if ran:
+            self._beat("twt-auto", "ran", f"{len(attempts)} line(s) sent through execute_line", now)
+        else:
+            self._beat("twt-auto", "idle", reason[:200] or "nothing to drain", now)
 
     # --- the login event -------------------------------------------------------------------
 
@@ -250,6 +289,8 @@ def from_desk() -> Supervisor:
     def seed(values: dict[str, float]) -> None:
         _main.gateway().risk.seed_positions(values)
 
+    from . import twt_auto  # noqa: PLC0415 - LV8: the drain, flag-gated inside itself
+
     deps = Deps(
         authed=kite.is_authed,
         token_mtime=lambda: Kite._blob_mtime(store),  # noqa: SLF001 - the desk's own mtime read
@@ -257,6 +298,7 @@ def from_desk() -> Supervisor:
         seed_positions=seed,
         reconcile=reconcile.run_pass_from_desk,
         beat=beats.beat,
+        drain_twt=twt_auto.drain_now,
     )
     return Supervisor(deps)
 

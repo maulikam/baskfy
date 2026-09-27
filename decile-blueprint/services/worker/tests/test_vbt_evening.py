@@ -317,24 +317,29 @@ class TestTheExits:
         assert line.stop_price == Decimal("88.00")
         assert line.quantity == 300
 
-    async def test_a_name_already_held_is_never_bought_again(self, session: AsyncSession) -> None:
+    async def test_a_name_at_the_per_name_cap_is_not_bought_again(
+        self, session: AsyncSession
+    ) -> None:
+        """Until LV10 one position per name. Maulik's LV9.0 (3) decision (28 Sep 2026, VB18): a
+        fresh signal in a held name is a second entry; the cap (2) refuses a third."""
         user_id = await _user(session)
         await _calendar(session, user_id)
         instrument_id = await _signal(session, user_id, "HELDCO")
-        session.add(
-            VbPosition(
-                user_id=user_id,
-                instrument_id=instrument_id,
-                entry_date=SESSIONS[0],
-                entry_avg=Decimal("90.00"),
-                quantity_entered=100,
-                quantity_open=100,
-                initial_stop=Decimal("80.00"),
-                stop_price=Decimal("80.00"),
-                state="OPEN",
-                gtt_id="gtt-held",
+        for _ in range(2):
+            session.add(
+                VbPosition(
+                    user_id=user_id,
+                    instrument_id=instrument_id,
+                    entry_date=SESSIONS[0],
+                    entry_avg=Decimal("90.00"),
+                    quantity_entered=100,
+                    quantity_open=100,
+                    initial_stop=Decimal("80.00"),
+                    stop_price=Decimal("80.00"),
+                    state="OPEN",
+                    gtt_id="gtt-held",
+                )
             )
-        )
         await session.flush()
 
         await _evening(session, user_id)

@@ -260,6 +260,13 @@ class SizingConfig:
     #: Ten slots, 10% of equity each. Eight cost 2.7 CAGR points and fifteen cost 5.3 — ten is
     #: the useful number for this signal count, not a round one.
     max_slots: int = 10
+    #: **LV10 (Maulik, 28 Sep 2026 — DECISIONS-LV LV9.0 (3): "lets we do what Kristjan Kullamägi
+    #: doing", "On for all three sleeves").** A fresh qualifying setup in a name already held is
+    #: a **new entry** with its own size and its own stop, counted against slots and exposure;
+    #: never an add without a fresh signal; at most ``max_entries_per_name`` open entries in one
+    #: name. ``pyramiding=False`` restores one position per name.
+    pyramiding: bool = True
+    max_entries_per_name: int = 2
     #: The per-position ceiling. Above the slot size, so it binds only when equity has drifted.
     max_position_pct: float = 12.5
     #: "1, 2, 3 a day" — counted as lines in this plan **plus** the session's confirmed or sent

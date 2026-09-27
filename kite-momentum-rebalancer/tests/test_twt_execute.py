@@ -625,12 +625,21 @@ class TestTheEntry:
         outcome = confirm(store, plan_id, line_id, last_price=D("100.00"))
         assert outcome.status == "SIMULATED"
 
-    def test_a_name_already_held_is_never_averaged_down(self) -> None:
+    def test_a_second_entry_in_a_held_name_is_allowed_and_a_third_is_refused(self) -> None:
+        """Until LV10 one position per name. Maulik's LV9.0 (3) decision (28 Sep 2026, TW21): a
+        fresh signal in a held name is a new entry, up to ``max_entries_per_name`` (2)."""
         store, plan_id, line_id = a_store()
         a_position(store)
         outcome = confirm(store, plan_id, line_id, last_price=D("100.00"))
+        assert outcome.status == "SIMULATED", outcome.reason
+        assert len(store.open_positions()) == 2
+
+        store2, plan_id2, line_id2 = a_store()
+        a_position(store2)
+        a_position(store2)
+        outcome = confirm(store2, plan_id2, line_id2, last_price=D("100.00"))
         assert outcome.status == "BLOCKED"
-        assert outcome.reason.startswith("ALREADY_HELD")
+        assert outcome.reason.startswith("ALREADY_HELD") and "2 open entries" in outcome.reason
 
     def test_a_sleeve_at_zero_blocks_the_confirm_too(self) -> None:
         """``04`` §9.3 and §10.5 — the confirm re-sizes through the same rules the plan did,

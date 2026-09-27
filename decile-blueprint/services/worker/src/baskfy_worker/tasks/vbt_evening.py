@@ -43,6 +43,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import uuid
+from collections import Counter
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Final
@@ -826,6 +827,7 @@ async def run_vbt_evening(  # noqa: PLR0913 - one keyword per input the evening 
     )
     book = BookState(
         open_instrument_ids=frozenset(row.instrument_id for row in positions),
+        open_entry_counts=dict(Counter(row.instrument_id for row in positions)),
         working_instrument_ids=frozenset(
             row.instrument_id for row in orders if row.state in {s.value for s in LIVE_STATES}
         ),

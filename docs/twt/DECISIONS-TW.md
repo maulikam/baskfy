@@ -2807,3 +2807,20 @@ lowered the result; no backtest of the new exit exists and none is claimed. The 
 **How to reverse.** `qulla_exits=False` in `TwtConfig.exits` (the ratchet runs again, the sale
 lines stop); to keep the exits but stop auto-sending the sale, remove `SELL_AT_OPEN` from
 `twt_auto.AUTO_KINDS` (one line). Migration 0058's downgrade neutralises `MA_TRAIL` closes.
+
+## TW21 — his pyramiding: a fresh signal in a held name is a second entry, up to two; by Maulik's instruction in session (28 Sep 2026) ✅ decided by Maulik
+
+**Maulik's words:** *"for Q3 pyramiding as well lets we do what Kristjan Kullamägi doing"*; then,
+asked how it ships, **"On for all three sleeves"** (DECISIONS-LV LV9.0 (3)).
+
+**What changed (LV10).** `SizingConfig.pyramiding = True`, `max_entries_per_name = 2`.
+`BookState.open_entry_counts` (built by `book_state` from the sleeve's positions) counts open
+entries per name; `_before_sizing` refuses `ALREADY_HELD` only at the cap (or, with pyramiding
+off, at one) and says which; `slots_taken` counts entries. The desk's `_buy_at_open` applies the
+same cap through `_held_refusal`. `tw_plan_line.position_id` is written for every exit and raise
+line, and the sell, arm and raise handlers act on the position the line names. A second entry is
+a fresh signal on a later session — `uq_tw_order_one_per_signal` still forbids two orders on one
+signal — sized by the same rules, with its own GTT.
+
+**What did not change.** The session cap (three entries a session), the slot count, the per-line
+size cap, the first-ten half size. No adds without a signal. **How to reverse:** `pyramiding=False`.

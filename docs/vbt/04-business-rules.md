@@ -219,6 +219,15 @@ per LIVE session (`vb_session.first_live_counted`), never a request's.
 a `vb_order` in `PROPOSED`/`CONFIRMED`/`SENT`, is skipped `ALREADY_HELD` / `ALREADY_WORKING`.
 **Never averaged down**, ever, in any state.
 
+> **Amended 28 Sep 2026 (LV10 — Maulik: *"for Q3 pyramiding as well lets we do what Kristjan
+> Kullamägi doing"*, then "On for all three sleeves"; DECISIONS-LV LV9.0 (3)).** A fresh
+> qualifying setup in a name already held is a **new entry** with its own size and its own stop,
+> counted against slots and exposure — never an add without a fresh signal, and at most
+> `SizingConfig.max_entries_per_name` (2) open entries in one name; a name may be re-entered after
+> an exit on a new signal. `ALREADY_HELD` now means "at the cap" (its detail says so).
+> `SizingConfig.pyramiding=false` restores one position per name. Exit and raise lines carry
+> `position_id`, so the desk acts on the position the evening decided for when a name holds two.
+
 ---
 
 ## §6 Stops and exits (`exits.py`, `ExitConfig`)

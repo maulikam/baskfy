@@ -45,6 +45,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import uuid
+from collections import Counter
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Final
@@ -323,7 +324,7 @@ async def manage_open_positions(
         managed += 1
         if all(action.kind is ActionKind.HOLD for action in actions):
             continue
-        lines.extend(exit_lines(symbol, actions))
+        lines.extend(exit_lines(symbol, actions, int(position.id)))
     return lines, naked, managed
 
 
@@ -368,6 +369,7 @@ async def sleeve_account(
         cash_available=max(capital - exposure, Decimal(0)),
         open_symbols=frozenset(symbol for _, symbol in rows),
         open_exposure_inr=exposure,
+        open_entry_counts=dict(Counter(symbol for _, symbol in rows)),
     )
 
 
@@ -479,6 +481,7 @@ async def store_plan(  # noqa: PLR0913 - one keyword per part of the plan being 
                 position_value=line.position_value,
                 trail=line.trail.value if line.trail else None,
                 note=line.note,
+                position_id=line.position_id,
                 state="PROPOSED",
                 # `04` §9.4: the gateway's idempotency key. The kind is in it because a plan can
                 # touch one symbol twice — sell part of it and raise its stop — and

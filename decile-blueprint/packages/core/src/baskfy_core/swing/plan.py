@@ -15,8 +15,8 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
-from collections.abc import Sequence
-from dataclasses import asdict, dataclass, replace
+from collections.abc import Mapping, Sequence
+from dataclasses import asdict, dataclass, field, replace
 from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 from enum import StrEnum
 from typing import Final
@@ -97,6 +97,20 @@ class SwingAccount:
     cash_available: Decimal
     open_symbols: frozenset[str]
     open_exposure_inr: Decimal
+    #: LV10: open entries per held name (pyramiding). Empty means one per name in ``open_symbols``.
+    open_entry_counts: Mapping[str, int] = field(default_factory=dict)
+
+    def entries_in(self, symbol: str) -> int:
+        if self.open_entry_counts:
+            return int(self.open_entry_counts.get(symbol, 0))
+        return 1 if symbol in self.open_symbols else 0
+
+    @property
+    def open_count(self) -> int:
+        """Open entries — a second entry in a name is a second position (LV10)."""
+        if self.open_entry_counts:
+            return sum(self.open_entry_counts.values())
+        return len(self.open_symbols)
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +125,8 @@ class PlanLine:
     position_value: Decimal
     trail: TrailMa | None
     note: str
+    #: LV10: the position an exit or a raise acts on, when the name holds more than one.
+    position_id: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -333,7 +349,7 @@ def build_entries(  # noqa: PLR0913 - one keyword per input the plan depends on
     lines: list[PlanLine] = []
     skipped: list[Skipped] = []
     sizing = sizing_at(config.sizing, risk_multiplier)
-    open_count = len(account.open_symbols)
+    open_count = account.open_count
     exposure = account.open_exposure_inr
     max_exposure = account.equity * Decimal(str(tier.max_exposure_pct)) / _PCT
     max_positions = min(tier.max_open_positions, config.sizing.max_open_positions)
@@ -349,8 +365,19 @@ def build_entries(  # noqa: PLR0913 - one keyword per input the plan depends on
         if gate is MarketGate.RED or not tier.new_entries_allowed:
             skipped.append(Skipped(item.symbol, SkipReason.GATE_RED, gate.value))
             continue
-        if item.symbol in account.open_symbols:
+        held = account.entries_in(item.symbol)
+        if held and not config.sizing.pyramiding:
             skipped.append(Skipped(item.symbol, SkipReason.ALREADY_HELD, ""))
+            continue
+        if held >= config.sizing.max_entries_per_name:
+            # LV10: his pyramiding — a fresh setup in a held name is a new entry, up to the cap.
+            skipped.append(
+                Skipped(
+                    item.symbol,
+                    SkipReason.ALREADY_HELD,
+                    f"{held} open entries already; {config.sizing.max_entries_per_name} is the cap",
+                )
+            )
             continue
         if item.locked_upper_circuit and item.stop_ref is not None:
             skipped.append(Skipped(item.symbol, SkipReason.LOCKED_UPPER_CIRCUIT, "no fill at band"))
@@ -408,8 +435,11 @@ def build_entries(  # noqa: PLR0913 - one keyword per input the plan depends on
     return lines, skipped
 
 
-def exit_lines(symbol: str, actions: Sequence[Action]) -> list[PlanLine]:
-    """The stop rules' actions for one open position, as plan lines for the open."""
+def exit_lines(
+    symbol: str, actions: Sequence[Action], position_id: int | None = None
+) -> list[PlanLine]:
+    """The stop rules' actions for one open position, as plan lines for the open. ``position_id``
+    (LV10) names the position when the book holds two in one name."""
     lines: list[PlanLine] = []
     for action in actions:
         if action.kind in (ActionKind.SELL_PARTIAL, ActionKind.SELL_ALL):
@@ -425,6 +455,7 @@ def exit_lines(symbol: str, actions: Sequence[Action]) -> list[PlanLine]:
                     position_value=_ZERO,
                     trail=None,
                     note=action.reason.value,
+                    position_id=position_id,
                 )
             )
         elif action.kind is ActionKind.RAISE_STOP and action.new_stop is not None:
@@ -440,6 +471,7 @@ def exit_lines(symbol: str, actions: Sequence[Action]) -> list[PlanLine]:
                     position_value=_ZERO,
                     trail=None,
                     note=action.reason.value,
+                    position_id=position_id,
                 )
             )
     return lines

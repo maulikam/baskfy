@@ -1269,3 +1269,16 @@ record; no backtest of the new exit exists.
 **How to reverse.** `qulla_exits=False` in `VbtConfig.exits`: the EMA exit fires again and no
 partial or raise is produced. Migration 0058's downgrade deletes RAISE lines and neutralises the
 new close reasons.
+
+### VB18 — his pyramiding: a fresh signal in a held name is a second entry, up to two; by Maulik's instruction in session (28 Sep 2026) · ✅ decided by Maulik
+
+**Context.** DECISIONS-LV LV9.0 (3): *"lets we do what Kristjan Kullamägi doing"*, "On for all
+three sleeves". `04` §5's "never averaged down, ever, in any state" was the tested rule; this is
+the owner's amendment.
+
+**What changed (LV10).** `SizingConfig.pyramiding = True`, `max_entries_per_name = 2`;
+`BookState.open_entry_counts` from the evening's and the live scan's positions; `build_entries`
+refuses `ALREADY_HELD` only at the cap; `slots_taken` counts entries plus working orders; a
+working limit in the name still refuses a second bid (`ALREADY_WORKING`). The desk's
+`_place_limit` and `_buy_at_market` apply the cap through `_held_refusal`; `vb_plan_line.position_id`
+names the position a sell or raise acts on. **How to reverse:** `pyramiding=False`.

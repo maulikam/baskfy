@@ -42,6 +42,7 @@ from __future__ import annotations
 import dataclasses
 import datetime as dt
 import logging
+from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -484,6 +485,7 @@ async def build_live_plan_vbt(
     )
     book = vbt_plan.BookState(
         open_instrument_ids=frozenset(row.instrument_id for row in positions),
+        open_entry_counts=dict(Counter(row.instrument_id for row in positions)),
         working_instrument_ids=frozenset(
             row.instrument_id for row in orders if row.state in {s.value for s in LIVE_STATES}
         ),

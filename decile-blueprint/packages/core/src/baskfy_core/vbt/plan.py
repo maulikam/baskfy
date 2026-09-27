@@ -14,7 +14,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
@@ -190,12 +190,25 @@ class BookState:
     cash_available_inr: Decimal = _ZERO
     entries_already_this_session: int = 0
     positions_naked_of_gtt: tuple[tuple[int, str, int, Decimal], ...] = field(default=())
+    #: LV10: open entries per held name (pyramiding). Empty means one per name.
+    open_entry_counts: Mapping[int, int] = field(default_factory=dict)
+
+    def entries_in(self, instrument_id: int) -> int:
+        if self.open_entry_counts:
+            return int(self.open_entry_counts.get(instrument_id, 0))
+        return 1 if instrument_id in self.open_instrument_ids else 0
 
     @property
     def slots_taken(self) -> int:
         """A working order holds a slot: the strategy bids and waits, and a book that could line
-        eleven limits for ten slots would over-commit its cash the day they all filled."""
-        return len(self.open_instrument_ids) + len(self.working_instrument_ids)
+        eleven limits for ten slots would over-commit its cash the day they all filled. Since
+        LV10 a second entry in a name is a second slot."""
+        held = (
+            sum(self.open_entry_counts.values())
+            if self.open_entry_counts
+            else len(self.open_instrument_ids)
+        )
+        return held + len(self.working_instrument_ids)
 
 
 def to_tick(price: Decimal, tick: Decimal | None = None) -> Decimal:
@@ -203,7 +216,7 @@ def to_tick(price: Decimal, tick: Decimal | None = None) -> Decimal:
     return (price / tick).quantize(Decimal(1), rounding=ROUND_HALF_UP) * tick
 
 
-def build_entries(  # noqa: PLR0913 - each input is a distinct gate the plan must consult
+def build_entries(  # noqa: PLR0913, PLR0915 - each input is a distinct gate the plan must consult
     candidates: list[Candidate],
     *,
     gate: Gate,
@@ -243,8 +256,17 @@ def build_entries(  # noqa: PLR0913 - each input is a distinct gate the plan mus
         if candidate.locked_upper_circuit:
             skip(SkipReason.LOCKED_UPPER_CIRCUIT, "the bar printed at the upper band")
             continue
-        if candidate.instrument_id in book.open_instrument_ids:
+        held = book.entries_in(candidate.instrument_id)
+        if held and not sizing.pyramiding:
             skip(SkipReason.ALREADY_HELD, "one position per name; never averaged down")
+            continue
+        if held >= sizing.max_entries_per_name:
+            # LV10: his pyramiding — a fresh signal in a held name is a new entry, up to the cap.
+            cap = sizing.max_entries_per_name
+            skip(
+                SkipReason.ALREADY_HELD,
+                f"{held} open entries in this name already; {cap} is the cap",
+            )
             continue
         if candidate.instrument_id in book.working_instrument_ids:
             skip(SkipReason.ALREADY_WORKING, "a limit is already resting in this name")

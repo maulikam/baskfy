@@ -282,6 +282,31 @@ def _tenant() -> TenantIds:
     return TenantIds(user_id=int(C.SOLE_USER_ID), broker_account_id=int(C.SOLE_BROKER_ACCOUNT_ID))
 
 
+def _open_entries_in(store: Any, instrument_id: int) -> int:  # noqa: ANN401 - a sleeve store
+    """LV10: how many open entries the sleeve holds in a name (pyramiding counts entries)."""
+    rows = getattr(store, "open_positions", None)
+    if rows is None:
+        return 1 if store.open_position_for(int(instrument_id)) is not None else 0
+    return sum(
+        1
+        for row in rows()
+        if int(row.get("instrument_id") or 0) == int(instrument_id)
+        and int(row.get("quantity_open") or 0) > 0
+    )
+
+
+def _held_refusal(store: Any, instrument_id: int, sizing: Any) -> str | None:  # noqa: ANN401
+    """LV10 (Maulik, 28 Sep 2026): a fresh signal in a held name is a new entry, up to
+    ``max_entries_per_name``; with pyramiding off, one position per name as before."""
+    held = _open_entries_in(store, instrument_id)
+    if held and not getattr(sizing, "pyramiding", False):
+        return "ALREADY_HELD: the sleeve holds this name; the book never averages down"
+    cap = int(getattr(sizing, "max_entries_per_name", 1))
+    if held >= cap:
+        return f"ALREADY_HELD: {held} open entries in this name already; {cap} is the cap"
+    return None
+
+
 async def _place_limit(  # noqa: PLR0913 - a confirm is its line, its gateway and its clock
     store: VbtStore,
     gateway: Any,  # noqa: ANN401 - an OrderGateway
@@ -307,10 +332,10 @@ async def _place_limit(  # noqa: PLR0913 - a confirm is its line, its gateway an
         reason = f"SESSION_CAP: {taken} entries already taken today; {cap} is the session's cap"
         store.set_line(line["id"], state="REJECTED", note=reason)
         return _blocked(reason, simulated=gates.dry_run)
-    if store.open_position_for(line["instrument_id"]) is not None:
-        reason = "ALREADY_HELD: the sleeve holds this name; it is never averaged down"
-        store.set_line(line["id"], state="REJECTED", note=reason)
-        return _blocked(reason, simulated=gates.dry_run)
+    held = _held_refusal(store, int(line["instrument_id"]), DEFAULT_VBT_CONFIG.sizing)
+    if held is not None:
+        store.set_line(line["id"], state="REJECTED", note=held)
+        return _blocked(held, simulated=gates.dry_run)
     if store.working_order_for(line["instrument_id"]) is not None:
         reason = "ALREADY_WORKING: a limit is already resting in this name"
         store.set_line(line["id"], state="REJECTED", note=reason)
@@ -406,10 +431,10 @@ async def _buy_at_market(  # noqa: PLR0913 - a confirm is its line, its gateway 
         reason = f"SESSION_CAP: {taken} entries already taken today; {cap} is the session's cap"
         store.set_line(line["id"], state="REJECTED", note=reason)
         return _blocked(reason, simulated=gates.dry_run)
-    if store.open_position_for(line["instrument_id"]) is not None:
-        reason = "ALREADY_HELD: the sleeve holds this name; it is never averaged down"
-        store.set_line(line["id"], state="REJECTED", note=reason)
-        return _blocked(reason, simulated=gates.dry_run)
+    held = _held_refusal(store, int(line["instrument_id"]), DEFAULT_VBT_CONFIG.sizing)
+    if held is not None:
+        store.set_line(line["id"], state="REJECTED", note=held)
+        return _blocked(held, simulated=gates.dry_run)
     if store.working_order_for(line["instrument_id"]) is not None:
         reason = "ALREADY_WORKING: an order is already working in this name"
         store.set_line(line["id"], state="REJECTED", note=reason)

@@ -547,14 +547,16 @@ def test_buy_with_stop_not_below_trigger_is_BLOCKED_before_the_gateway(gw) -> No
     assert gw._sent == {} and store.positions == {}
 
 
-def test_buy_for_a_name_already_held_is_BLOCKED(gw) -> None:
-    """`04` §6.5: never averaged down."""
+def test_buy_for_a_name_at_the_per_name_cap_is_BLOCKED_and_a_second_entry_is_not(gw) -> None:
+    """`04` §6.5 said never averaged down. Since LV10 (Maulik, 28 Sep 2026) a fresh setup in a
+    held name is a new entry, up to ``max_entries_per_name`` (2); at the cap it is refused."""
     store = MemoryStore()
+    store.add_position(instrument_id=11)
     store.add_position(instrument_id=11)
     plan_id = store.add_plan()
     line_id = store.add_line(plan_id, instrument_id=11)
     out = execute(store, gw, plan_id, line_id)
-    assert out.status == "BLOCKED" and "already held" in out.reason
+    assert out.status == "BLOCKED" and "ALREADY_HELD" in out.reason and "2 open entries" in out.reason
     assert gw._sent == {}
 
 
@@ -2237,3 +2239,19 @@ def test_observe_raises_inside_a_real_span_keeps_the_bodys_exception(monkeypatch
     with telemetry.span("swing.test") as current:
         ran = True
     assert ran and current is None
+
+
+def test_sell_acts_on_the_position_the_line_names_when_a_name_holds_two_positions(gw) -> None:
+    """LV10: pyramiding puts two entries in one name; a sell or a raise line carries the
+    position it was decided for, and the desk acts on that one."""
+    store = MemoryStore()
+    first = store.add_position(quantity_entered=300, quantity_open=300)
+    second = store.add_position(quantity_entered=200, quantity_open=200)
+    plan_id = store.add_plan()
+    line_id = store.add_line(plan_id, kind="SELL_AT_OPEN", quantity=100, trigger=None, stop=None,
+                             position_id=first)
+    out = execute(store, gw, plan_id, line_id, last_price=D("105"))
+    assert out.status != "BLOCKED", out.reason
+    assert out.position_id == first
+    assert store.positions[first]["quantity_open"] == 200
+    assert store.positions[second]["quantity_open"] == 200

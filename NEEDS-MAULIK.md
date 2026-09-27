@@ -2405,3 +2405,20 @@ Nothing here needs your hands; it is written so the first live scan is not a sur
   Scan says what the button does now. The nightly overwrites every provisional row after the close.
 * **Before 09:15 or without a Kite login**, Scan is exactly what it was: the last published session.
 
+## LV9 / LV10 — what your Q3–Q5 answers do on the box from today (28 Sep 2026)
+
+Nothing here needs your hands. Deployed before the open because every sleeve book was empty, so no
+open position's exit changed mid-flight; the first entries taken today are managed by the new rules
+from tonight's evening job.
+
+* **Exits (LV9, all three sleeves now).** Each evening: a third of a position is queued for sale
+  at the next open once it is on bar 3–5 after entry and green; the stop moves to breakeven after
+  that partial or at +1R; the rest is sold at the next open on a close below its 10-day (fast
+  names, ADR ≥ 6 %) or 20-day MA. The GTT stays the hard stop. **TWT's auto-execute sends the sale
+  lines too**, as you chose; VBT's sale and raise lines wait for your click on the desk.
+* **Pyramiding (LV10).** A second signal in a name you already hold is a second, separately sized
+  entry with its own stop; a third is refused. The lifecycle page lists each entry on its own row.
+* **To turn either off:** `qulla_exits=False` (each sleeve's `ExitConfig`) restores the tested
+  exit; `pyramiding=False` (each sleeve's `SizingConfig`) restores one position per name. Both
+  are code defaults, not box flags — say the word and I ship the change.
+

@@ -188,6 +188,15 @@ never the whole position, never 0 unless `qty < 3`.
 6. Otherwise `HOLD / NOTHING_TO_DO` — said explicitly.
 6.5 **A stop never falls:** `apply` takes `max(stop, new_stop)`; the desk refuses a
 `RAISE_GTT_STOP` below the resting trigger. **Never averaged down:** `ALREADY_HELD` skips.
+
+> **Amended 28 Sep 2026 (LV10 — Maulik: *"for Q3 pyramiding as well lets we do what Kristjan
+> Kullamägi doing"*, then "On for all three sleeves"; DECISIONS-LV LV9.0 (3)).** A fresh
+> qualifying setup in a name already held is a **new entry** with its own size and its own stop,
+> counted against slots and exposure — never an add without a fresh signal, and at most
+> `SizingConfig.max_entries_per_name` (2) open entries in one name; a name may be re-entered after
+> an exit on a new signal. `ALREADY_HELD` now means "at the cap" (its detail says so).
+> `SizingConfig.pyramiding=false` restores one position per name. Exit and raise lines carry
+> `position_id`, so the desk acts on the position the evening decided for when a name holds two.
 Sell lines execute **at the next open** (`SELL_AT_OPEN`); a stop-out is the GTT's.
 
 ## §7 The opening range and the live trigger (`opening_range.py`, `OpeningRangeConfig`)

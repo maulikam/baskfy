@@ -84,6 +84,17 @@ CREATE TABLE vb_session (
   user_id INTEGER, session_date TEXT, mode TEXT DEFAULT 'DRY_RUN', gate TEXT DEFAULT 'SHUT',
   signals INTEGER DEFAULT 0, confirms INTEGER DEFAULT 0, fills INTEGER DEFAULT 0,
   exits INTEGER DEFAULT 0, PRIMARY KEY (user_id, session_date));
+CREATE TABLE lv_protection_issue (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, sleeve TEXT NOT NULL,
+  position_id INTEGER NOT NULL, symbol TEXT NOT NULL, kind TEXT NOT NULL, detail TEXT NOT NULL,
+  seen_at TEXT NOT NULL, resolved_at TEXT);
+CREATE TABLE lv_exit_order (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, sleeve TEXT NOT NULL,
+  position_id INTEGER NOT NULL, line_id INTEGER, symbol TEXT NOT NULL, broker_order_id TEXT,
+  client_id TEXT, quantity INTEGER NOT NULL, reference_price NUMERIC NOT NULL,
+  state TEXT NOT NULL DEFAULT 'SENT', filled_quantity INTEGER NOT NULL DEFAULT 0,
+  avg_fill_price NUMERIC, reason TEXT NOT NULL, simulated INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP);
 """
 
 

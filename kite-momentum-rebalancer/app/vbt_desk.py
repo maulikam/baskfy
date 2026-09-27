@@ -32,6 +32,7 @@ from fastapi.responses import HTMLResponse
 from baskfy_core.vbt.config import DRY_RUN_SESSIONS_REQUIRED as _DRY_RUN_SESSIONS_REQUIRED
 
 from . import config as C
+from .exit_rules import EXIT_RULES
 
 log = logging.getLogger("vbt.desk")
 
@@ -401,6 +402,116 @@ class PgVbtStore:
         ).fetchone()
         return None if row is None else self._order_row(row)
 
+    def order_by_broker_id(self, broker_order_id: str) -> dict | None:
+        row = self.conn.execute(
+            self._ORDER_SELECT
+            + self._order_from()
+            + "WHERE o.user_id = ? AND o.broker_order_id = ? ORDER BY o.id DESC LIMIT 1",
+            (self.user_id, str(broker_order_id)),
+        ).fetchone()
+        return None if row is None else self._order_row(row)
+
+    def open_orders(self) -> list[dict]:
+        """Resting buys (``SENT``/``PARTIAL`` ``vb_order`` rows with a broker id) and pending
+        exits (``lv_exit_order`` ``SENT``/``PARTIAL``), as the reconciler reads them (LV2)."""
+        rows = self.conn.execute(
+            self._ORDER_SELECT
+            + self._order_from()
+            + "WHERE o.user_id = ? AND o.state IN ('SENT', 'PARTIAL') "
+            "AND o.broker_order_id IS NOT NULL ORDER BY o.id",
+            (self.user_id,),
+        ).fetchall()
+        buys = [{**self._order_row(r), "reference_price": self._order_row(r)["limit_price"]} for r in rows]
+        exits = self.conn.execute(
+            self._EXIT_SELECT + f"FROM {self.t('lv_exit_order')} "
+            "WHERE user_id = ? AND sleeve = 'vbt' AND state IN ('SENT', 'PARTIAL') "
+            "AND broker_order_id IS NOT NULL ORDER BY id",
+            (self.user_id,),
+        ).fetchall()
+        return buys + [self._exit_row(r) for r in exits]
+
+    def open_positions(self) -> list[dict]:
+        """The sleeve's own book — every ``OPEN`` position with shares (the page's ``book``)."""
+        return self.book()
+
+    def line_by_client_id(self, client_id: str) -> dict | None:
+        row = self.conn.execute(
+            self._LINE_SELECT
+            + self._line_from()
+            + "WHERE l.user_id = ? AND l.client_id = ? ORDER BY l.id DESC LIMIT 1",
+            (self.user_id, str(client_id)),
+        ).fetchone()
+        return None if row is None else self._line_row(row)
+
+    # -- VbtStore: pending exits (``lv_exit_order``, LV2) --------------------------------------
+
+    _EXIT_SELECT = (
+        "SELECT id, sleeve, position_id, line_id, symbol, broker_order_id, client_id, quantity, "
+        "reference_price, state, filled_quantity, avg_fill_price, reason, simulated "
+    )
+
+    def _exit_row(self, row: Any) -> dict:  # noqa: ANN401 - a driver row
+        return {
+            "id": int(row["id"]),
+            "sleeve": str(row["sleeve"]),
+            "position_id": int(row["position_id"]),
+            "line_id": None if row["line_id"] is None else int(row["line_id"]),
+            "symbol": str(row["symbol"]),
+            "broker_order_id": row["broker_order_id"],
+            "client_id": row["client_id"],
+            "quantity": int(row["quantity"]),
+            "reference_price": _dec(row["reference_price"]),
+            "state": str(row["state"]),
+            "filled_quantity": int(row["filled_quantity"] or 0),
+            "avg_fill_price": _dec(row["avg_fill_price"]),
+            "reason": str(row["reason"]),
+            "simulated": bool(row["simulated"]),
+        }
+
+    def create_exit_order(self, fields: dict) -> int:
+        columns = ["user_id", *fields]
+        values = [self.user_id, *fields.values()]
+        marks = ", ".join("?" for _ in columns)
+        row = self.conn.execute(
+            f"INSERT INTO {self.t('lv_exit_order')} ({', '.join(columns)}) VALUES ({marks}) "
+            "RETURNING id",
+            tuple(values),
+        ).fetchone()
+        return int(row["id"])
+
+    def exit_order_by_broker_id(self, broker_order_id: str) -> dict | None:
+        row = self.conn.execute(
+            self._EXIT_SELECT + f"FROM {self.t('lv_exit_order')} "
+            "WHERE user_id = ? AND broker_order_id = ? ORDER BY id DESC LIMIT 1",
+            (self.user_id, str(broker_order_id)),
+        ).fetchone()
+        return None if row is None else self._exit_row(row)
+
+    def update_exit_order(self, exit_order_id: int, fields: dict) -> None:
+        sets = ", ".join(f"{name} = ?" for name in fields)
+        self.conn.execute(
+            f"UPDATE {self.t('lv_exit_order')} SET {sets}, updated_at = CURRENT_TIMESTAMP "
+            "WHERE user_id = ? AND id = ?",
+            (*fields.values(), self.user_id, int(exit_order_id)),
+        )
+
+    def open_protection_issues(self) -> list[dict]:
+        """The reconciler's open findings for this sleeve (``lv_protection_issue``, LV2)."""
+        rows = self.conn.execute(
+            f"SELECT symbol, kind, detail, position_id FROM {self.t('lv_protection_issue')} "
+            "WHERE user_id = ? AND sleeve = ? AND resolved_at IS NULL ORDER BY seen_at, id",
+            (self.user_id, 'vbt'),
+        ).fetchall()
+        return [
+            {
+                "symbol": str(r["symbol"]),
+                "kind": str(r["kind"]),
+                "detail": str(r["detail"]),
+                "position_id": int(r["position_id"]),
+            }
+            for r in rows
+        ]
+
     def create_order(self, fields: dict) -> int:
         columns = ["user_id", "broker_account_id", *fields]
         values = [self.user_id, self.broker_account_id, *fields.values()]
@@ -733,6 +844,12 @@ def position_view(position: dict) -> dict:
         "naked": position["gtt_id"] is None,
         "entry_text": _price(position["entry_avg"]),
         "stop_text": _price(position["stop_price"]),
+        # LV6 (review P2.3): the card says the initial stop and the rupees between entry and stop.
+        "initial_stop_text": _price(position["initial_stop"]),
+        "risk_text": _price(
+            (Decimal(str(position["entry_avg"])) - Decimal(str(position["stop_price"])))
+            * int(position["quantity_open"])
+        ),
         "sells_tomorrow": position["exit_queued_for"] is not None,
     }
 
@@ -762,6 +879,7 @@ def build_view(store: PgVbtStore, *, now: dt.datetime) -> dict:
             for order in store.working()
         ],
         "book": [position_view(position) for position in store.book()],
+        "exit_rule": EXIT_RULES["vbt"],
         "breadth": breadth,
         "config": config,
         "session": session,
@@ -799,6 +917,7 @@ def unavailable_view(reason: str, *, now: dt.datetime) -> dict:
         "skips": [],
         "working": [],
         "book": [],
+        "exit_rule": EXIT_RULES["vbt"],
         "breadth": None,
         "config": {},
         "session": None,

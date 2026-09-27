@@ -81,6 +81,7 @@ from baskfy_core.swing.plan import EXECUTABLE_KINDS as _EXECUTABLE_KINDS
 from baskfy_core.swing.plan import LineKind
 
 from . import config as C
+from .exit_rules import EXIT_RULES
 from .core.guards import UntouchableInstrumentError
 from .swing_monitor import IST, SCHEMA, SignalContext, load_context
 
@@ -819,6 +820,23 @@ class PgSwingStore:
             for r in rows
         ]
 
+    def open_protection_issues(self) -> list[dict]:
+        """The reconciler's open findings for this sleeve (``lv_protection_issue``, LV2)."""
+        rows = self.conn.execute(
+            f"SELECT symbol, kind, detail, position_id FROM {self.t('lv_protection_issue')} "
+            "WHERE user_id = ? AND sleeve = ? AND resolved_at IS NULL ORDER BY seen_at, id",
+            (self.user_id, 'swing'),
+        ).fetchall()
+        return [
+            {
+                "symbol": str(r["symbol"]),
+                "kind": str(r["kind"]),
+                "detail": str(r["detail"]),
+                "position_id": int(r["position_id"]),
+            }
+            for r in rows
+        ]
+
     def open_positions(self) -> list[dict]:
         """The book: every position with shares on it, unprotected ones first (`05` §2 gives
         the hub the same rule — a naked position sits in the same place whether or not there is
@@ -1423,6 +1441,7 @@ def build_view(
                        for ln in sent_lines],
         "triggers": triggers,
         "plans": {"morning": morning_view, "preview": preview_view},
+        "exit_rule": EXIT_RULES["swing"],
         "book": {
             "positions": book,
             "naked_count": sum(1 for p in book if p["naked"]),
@@ -1457,6 +1476,7 @@ def unavailable_view(reason: str, *, now: dt.datetime) -> dict:
         "sleeve": None,
         "triggers": [],
         "plans": {"morning": None, "preview": None},
+        "exit_rule": EXIT_RULES["swing"],
         "book": {"positions": [], "naked_count": 0, "manage": []},
         "poll_ms": 0,
         "window_opens_in_ms": None,

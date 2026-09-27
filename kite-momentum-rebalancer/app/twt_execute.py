@@ -71,7 +71,9 @@ from typing import Any, Final, Protocol
 
 from baskfy_execution.gtt import (
     DRY_RUN_GTT_DELETE,
+    DRY_RUN_GTT_MODIFY,
     GTT_DELETED_STATUSES,
+    GTT_MODIFIED_STATUSES,
     GTT_PLACED,
     GTT_PLACED_STATUSES,
     StopBand,
@@ -86,6 +88,7 @@ from baskfy_core.twt.sizing import SizeRefusal, first_live_multiplier, size_entr
 from baskfy_core.twt.sleeve import MarkSource, OpenPositionValue, sleeve_value
 
 from . import config as C
+from . import reconcile as _reconcile
 from .core import gateway as _gateway_module
 from .core.gateway import OrderGateway, ProductGates
 
@@ -112,8 +115,18 @@ assert SELL_AT_OPEN not in EXECUTABLE_KINDS  # noqa: S101 - import-time contract
 PLACED_STATUSES: Final[frozenset[str]] = frozenset({"PLACED", "DUPLICATE"})
 DRY_RUN_STATUSES: Final[frozenset[str]] = frozenset({"DRY_RUN"})
 
-#: Kite's order statuses, as the postback and the order book report them.
+#: Kite's order statuses, as the postback and the order book report them. A dead order is one
+#: the broker will not fill any further; whatever filled before it died is the position.
 ORDER_COMPLETE: Final = "COMPLETE"
+ORDER_DEAD_STATUSES: Final[frozenset[str]] = frozenset({"REJECTED", "CANCELLED", "CANCELLED AMO"})
+
+#: Kite's ``market_protection`` on the MARKET buy (LV2.3, 28 Sep 2026). Zerodha refuses a MARKET
+#: order sent through the API without it — the box's record for 23 and 24 Sep 2026 is three
+#: ``REJECTED`` lines a morning reading "Market orders without market protection are not allowed
+#: via API", so the sleeve's tested entry had never once reached the exchange. ``-1`` is Kite's
+#: own auto-protection (its documented default band), chosen because the strategy's entry is
+#: "the open, at market" and a hand-picked percentage would be a rule the study never tested.
+TWT_MARKET_PROTECTION: Final[float] = -1.0
 
 #: This sleeve's own journal file, beside the weekly book's, the swing book's and VBT-1's. Four
 #: books, four journals: an operator reading one should not have to filter out the other three.
@@ -258,6 +271,16 @@ class TwtStore(Protocol):
     def order(self, order_id: int) -> dict | None: ...
 
     def order_by_broker_id(self, broker_order_id: str) -> dict | None: ...
+
+    def open_orders(self) -> list[dict]:
+        """Every order the broker accepted and has not finished — ``SENT`` or ``PARTIAL`` — with
+        its ``broker_order_id`` (LV2: what the reconciler asks the order book about)."""
+        ...
+
+    def open_protection_issues(self) -> list[dict]:
+        """The reconciler's open findings for THIS sleeve (``lv_protection_issue``): keys
+        ``symbol``, ``kind``, ``detail``. A non-empty answer refuses every buy (LV2)."""
+        ...
 
     def create_order(self, fields: dict) -> int: ...
 
@@ -601,6 +624,13 @@ async def _buy_at_open(  # noqa: PLR0913 - a confirm is its line, its money and 
         reason = "ALREADY_HELD: the sleeve holds this name; the book never averages down"
         store.set_line(line["id"], state="REJECTED", note=reason)
         return _blocked(reason, simulated=gates.dry_run)
+    unresolved = _reconcile.protection_unresolved(store, naked=naked_positions(store))
+    if unresolved:
+        # LV2: protection first, entries second. A book with a stop it cannot account for does
+        # not add a position until the reconciler says the book is whole again.
+        reason = _reconcile.refusal(unresolved)
+        store.set_line(line["id"], state="REJECTED", note=reason)
+        return _blocked(reason, simulated=gates.dry_run)
 
     money = store.sleeve_money(day)
     if money.equity_inr <= _ZERO:
@@ -637,6 +667,7 @@ async def _buy_at_open(  # noqa: PLR0913 - a confirm is its line, its money and 
         side="BUY",
         product="CNC",
         order_type="MARKET",
+        market_protection=TWT_MARKET_PROTECTION,
         client_id=line["client_id"],
         reference_price=float(reference),
         gross_exposure=float(value),
@@ -707,8 +738,13 @@ async def _apply_fill(  # noqa: PLR0913 - a fill is its order, its price and its
     fill_price: Decimal,
     gates: ProductGates,
     now: dt.datetime,
+    complete: bool = True,
 ) -> ExecOutcome:
     """A filled entry becomes a ``tw_position``, a ``tw_fill`` **and a resting GTT**.
+
+    ``complete=False`` is a partial fill (LV2): the position, the fill row and the GTT are for
+    exactly the shares filled so far, the order stays ``PARTIAL`` and the line ``SENT``, and
+    :func:`on_order_update` grows all three as the rest arrives — never a second GTT.
 
     The three writes and the arm are one request, deliberately. ``04`` §7.4: a fill without a
     same-session GTT has no fill-day protection at all, and the backtest's ``STOP_DAY0`` — a
@@ -760,14 +796,14 @@ async def _apply_fill(  # noqa: PLR0913 - a fill is its order, its price and its
     store.update_order(
         order_row,
         {
-            "state": "FILLED",
+            "state": "FILLED" if complete else "PARTIAL",
             "filled_quantity": quantity,
             "avg_fill_price": fill_price,
             "position_id": position_id,
         },
     )
     if line is not None:
-        store.set_line(line["id"], state="FILLED", position_id=position_id)
+        store.set_line(line["id"], state="FILLED" if complete else "SENT", position_id=position_id)
     store.bump_session(day, mode="DRY_RUN" if gates.dry_run else "LIVE", fills=1)
     # `04` §6.4, TW5.3: the countdown moves once per FILLED entry, by the session that filled
     # it — never on a proposed line, never on a simulated fill, never twice for the same one.
@@ -1393,36 +1429,251 @@ async def on_order_update(
     *,
     now: dt.datetime,
 ) -> ExecOutcome | None:
-    """A fill reported by the broker — the postback, or a poll of the order book.
+    """A broker report on one of this sleeve's buys — the order book, or a postback (LV2).
 
-    ``None`` when the update is about an order this sleeve does not own, or one that has not
-    completed. A completed buy becomes the position, the fill row **and the GTT**, through
-    exactly the same :func:`_apply_fill` the dry-run branch uses: the rehearsal and the real
-    thing are one code path, which is the only way a rehearsal proves anything.
+    ``payload`` is Kite's shape: ``order_id``, ``status``, ``filled_quantity``,
+    ``average_price``. ``None`` when the order is not this sleeve's, or when the report says
+    nothing the book does not already know. Under the session lock:
+
+    * no position and shares filled → the position, its fill and its GTT for exactly the filled
+      quantity, through the same :func:`_apply_fill` the dry-run branch uses;
+    * a position and MORE shares filled than it holds → one fill row for the difference at the
+      price that makes the averages agree, the position grown, its one GTT **re-sized** (or
+      armed, if the first arm was refused) — never a second GTT;
+    * a position and no more shares than it holds → nothing to write: idempotent on a repeated,
+      out-of-order or duplicate report;
+    * ``COMPLETE`` closes the order ``FILLED``; a dead order with shares held is ``FILLED`` for
+      what filled; a dead order with nothing filled is ``REJECTED``/``CANCELLED`` and the line is
+      released with the broker's reason.
     """
     broker_id = str(payload.get("order_id") or "")
     if not broker_id:
         return None
     order = store.order_by_broker_id(broker_id)
-    if order is None or order.get("position_id") is not None:
+    if order is None or str(order.get("side") or "BUY") != "BUY":
         return None
-    if str(payload.get("status") or "").upper() != ORDER_COMPLETE:
+    if str(order.get("state")) not in ("SENT", "PARTIAL"):
         return None
+    status = str(payload.get("status") or "").upper()
     filled = int(payload.get("filled_quantity") or 0)
-    price = payload.get("average_price")
-    if filled <= 0 or price is None:
+    raw_price = payload.get("average_price")
+    average = _price(raw_price) if raw_price is not None else _ZERO
+    day = session_day(now)
+    gates = twt_gates()
+    with store.lock_session_for_update(day):
+        current = store.order(int(order["id"]))
+        if current is None or str(current.get("state")) not in ("SENT", "PARTIAL"):
+            return None
+        recorded = int(current.get("filled_quantity") or 0)
+        position_id = current.get("position_id")
+        complete = status == ORDER_COMPLETE
+        outcome: ExecOutcome | None = None
+        if filled > recorded and average > _ZERO:
+            if position_id is None:
+                outcome = await _apply_fill(
+                    store,
+                    gateway,
+                    line=None,
+                    plan=None,
+                    order_row=int(current["id"]),
+                    quantity=filled,
+                    fill_price=average,
+                    gates=gates,
+                    now=now,
+                    complete=complete,
+                )
+            else:
+                outcome = await _grow_position(
+                    store,
+                    gateway,
+                    order=current,
+                    position_id=int(position_id),
+                    filled=filled,
+                    average=average,
+                    gates=gates,
+                    now=now,
+                    complete=complete,
+                )
+        if status in ORDER_DEAD_STATUSES:
+            outcome = _close_dead_order(store, current, status=status, payload=payload, outcome=outcome)
+        elif complete and outcome is None and position_id is not None:
+            # Complete with nothing new to write (the poll had already booked every share):
+            # the order's state still has to say so.
+            store.update_order(int(current["id"]), {"state": "FILLED"})
+            line_id = _line_for_order(store, current)
+            if line_id is not None:
+                store.set_line(line_id, state="FILLED", position_id=int(position_id))
+            outcome = ExecOutcome("FILLED", "", None, None, int(current["id"]), int(position_id), gates.dry_run)
+        return outcome
+
+
+def _line_for_order(store: TwtStore, order: dict) -> int | None:
+    """The plan line that produced ``order``, when the store can find it by client id."""
+    finder = getattr(store, "line_by_client_id", None)
+    if finder is None or not order.get("client_id"):
         return None
-    return await _apply_fill(
-        store,
-        gateway,
-        line=None,
-        plan=None,
-        order_row=int(order["id"]),
-        quantity=filled,
-        fill_price=_price(price),
-        gates=twt_gates(),
-        now=now,
+    line = finder(str(order["client_id"]))
+    return None if line is None else int(line["id"])
+
+
+async def _grow_position(  # noqa: PLR0913 - a growth is its order, its position and its size
+    store: TwtStore,
+    gateway: Any,  # noqa: ANN401 - an OrderGateway
+    *,
+    order: dict,
+    position_id: int,
+    filled: int,
+    average: Decimal,
+    gates: ProductGates,
+    now: dt.datetime,
+    complete: bool,
+) -> ExecOutcome:
+    """More of the same order filled: grow the position and re-size — never re-arm — its GTT."""
+    position = store.position(position_id)
+    assert position is not None
+    symbol = str(position["symbol"])
+    entered = int(position["quantity_entered"])
+    open_qty = int(position["quantity_open"])
+    delta = filled - entered
+    if delta <= 0:
+        return ExecOutcome(
+            "FILLED" if complete else "SENT", "", None, None, int(order["id"]), position_id, gates.dry_run
+        )
+    old_avg = _price(position["entry_avg"])
+    delta_price = ((average * filled - old_avg * entered) / delta).quantize(Decimal("0.0001"))
+    if delta_price <= _ZERO:
+        delta_price = average
+    new_open = open_qty + delta
+    store.add_fill(
+        {
+            "position_id": position_id,
+            "order_id": int(order["id"]),
+            "side": "BUY",
+            "quantity": delta,
+            "price": delta_price,
+            "filled_at": _aware(now),
+            "simulated": gates.dry_run,
+        }
     )
+    store.update_position(
+        position_id,
+        {"quantity_entered": filled, "quantity_open": new_open, "entry_avg": average},
+    )
+    store.update_order(
+        int(order["id"]),
+        {
+            "state": "FILLED" if complete else "PARTIAL",
+            "filled_quantity": filled,
+            "avg_fill_price": average,
+        },
+    )
+    line_id = _line_for_order(store, order)
+    if line_id is not None:
+        store.set_line(line_id, state="FILLED" if complete else "SENT", position_id=position_id)
+    trigger = resting_trigger(position)
+    gtt_id = position.get("gtt_id")
+    if gtt_id is None:
+        gtt = await _arm(
+            gateway,
+            symbol=symbol,
+            qty=new_open,
+            trigger=trigger,
+            last_price=average,
+            client_id=f"fill:{order['id']}:{symbol}:{ARM_GTT}",
+        )
+        ok = str(gtt.get("status")) in GTT_PLACED_STATUSES
+        if ok:
+            store.update_position(position_id, _gtt_fields(gtt, trigger=trigger, now=now))
+    else:
+        gtt = await _resize_gtt(
+            gateway, gtt_id=gtt_id, symbol=symbol, qty=new_open, trigger=trigger, last_price=average
+        )
+        ok = str(gtt.get("status")) in GTT_MODIFIED_STATUSES
+        if ok:
+            store.update_position(position_id, {"gtt_armed_at": _aware(now)})
+    final = "FILLED" if complete else "SENT"
+    if ok:
+        return ExecOutcome(
+            final,
+            f"{symbol}: +{delta} filled at {delta_price}, GTT now covers {new_open}",
+            None,
+            gtt,
+            int(order["id"]),
+            position_id,
+            gates.dry_run,
+        )
+    log.error("%s: +%d filled and the GTT could not cover %d — TWT_POSITION_NAKED", symbol, delta, new_open)
+    return ExecOutcome(
+        final,
+        f"{symbol}: +{delta} filled, but the GTT could not be re-sized to {new_open} — "
+        f"{_blocked_reason(gtt, what='the GTT')}; it still covers {open_qty}",
+        None,
+        gtt,
+        int(order["id"]),
+        position_id,
+        gates.dry_run,
+        naked=True,
+    )
+
+
+async def _resize_gtt(  # noqa: PLR0913 - a re-size is its trigger, its size and its two prices
+    gateway: Any,  # noqa: ANN401 - an OrderGateway
+    *,
+    gtt_id: Any,  # noqa: ANN401 - a store value
+    symbol: str,
+    qty: int,
+    trigger: Decimal,
+    last_price: Decimal,
+) -> dict:
+    """Re-size one resting GTT to ``qty`` — the gateway's ``modify_gtt_quantity``, the ONLY way
+    to touch a GTT. A simulated trigger (nothing at the exchange) is recorded as re-sized."""
+    broker_id = _broker_gtt_id(gtt_id)
+    if broker_id is None:
+        return {"status": DRY_RUN_GTT_MODIFY, "gtt_id": gtt_id, "symbol": symbol, "qty": qty}
+    return await gateway.modify_gtt_quantity(
+        gtt_id=broker_id,
+        symbol=symbol,
+        qty=int(qty),
+        trigger=float(trigger),
+        last_price=float(last_price),
+        exchange="NSE",
+        client_id=f"resize:{gtt_id}:{symbol}:{qty}",
+        tenant=_tenant(),
+        plan_tenant=_tenant(),
+        limit_fraction=twt_limit_fraction(),
+    )
+
+
+def _close_dead_order(
+    store: TwtStore,
+    order: dict,
+    *,
+    status: str,
+    payload: dict,
+    outcome: ExecOutcome | None,
+) -> ExecOutcome:
+    """A dead order: ``FILLED`` for what filled (the position stands), else the broker's word."""
+    position_id = order.get("position_id")
+    if outcome is not None and outcome.position_id is not None:
+        position_id = outcome.position_id
+    reason = str(payload.get("status_message") or payload.get("status_message_raw") or status)
+    line_id = _line_for_order(store, order)
+    if position_id is not None:
+        store.update_order(int(order["id"]), {"state": "FILLED"})
+        if line_id is not None:
+            store.set_line(
+                line_id,
+                state="FILLED",
+                position_id=int(position_id),
+                note=f"{status}: {int(order.get('filled_quantity') or 0)} filled, the rest never did",
+            )
+        return outcome or ExecOutcome(
+            "FILLED", f"{status} with shares held", None, None, int(order["id"]), int(position_id), twt_gates().dry_run
+        )
+    store.update_order(int(order["id"]), {"state": "REJECTED" if status == "REJECTED" else "CANCELLED"})
+    if line_id is not None:
+        store.set_line(line_id, state="REJECTED", note=f"{status}: {reason}")
+    return ExecOutcome("REJECTED", f"{status}: {reason}", None, None, int(order["id"]), None, twt_gates().dry_run)
 
 
 # --- the money the confirm re-reads -----------------------------------------------------------

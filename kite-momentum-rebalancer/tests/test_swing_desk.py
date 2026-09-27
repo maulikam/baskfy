@@ -299,6 +299,10 @@ DDL = [
         error TEXT,
         task_id TEXT,
         CHECK (status IN ('QUEUED', 'RUNNING', 'DONE', 'FAILED')))""",
+    """CREATE TABLE lv_protection_issue (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, sleeve TEXT NOT NULL,
+  position_id INTEGER NOT NULL, symbol TEXT NOT NULL, kind TEXT NOT NULL, detail TEXT NOT NULL,
+  seen_at TEXT NOT NULL, resolved_at TEXT)"""
 ]
 
 

@@ -72,6 +72,25 @@ class ExplodingKC:
 class MemoryStore:
     """The ``TwtStore`` protocol over dicts. Deliberately dumb: the rules are in the module."""
 
+    # LV2: the reconciler's findings and the order book's view. Nothing wrong, by default.
+    issues: list[dict] = []
+
+    def open_protection_issues(self) -> list[dict]:
+        return list(self.issues)
+
+    def open_orders(self) -> list[dict]:
+        return [
+            {"reference_price": None, **row}
+            for row in self.orders.values()
+            if row.get("state") in {"SENT", "PARTIAL"} and row.get("broker_order_id")
+        ]
+
+    def line_by_client_id(self, client_id: str) -> dict | None:
+        for row in self.lines.values():
+            if str(row.get("client_id")) == str(client_id):
+                return row
+        return None
+
     def __init__(self, *, capital: Decimal = TWENTY_FIVE_LAKH, first_live: int = 10) -> None:
         self.plans: dict[str, dict] = {}
         self.lines: dict[int, dict] = {}

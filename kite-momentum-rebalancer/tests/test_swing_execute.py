@@ -78,6 +78,12 @@ class MemoryStore:
     dicts are copied on entry and restored on an exception, the in-memory twin of a rollback.
     """
 
+    # LV2: the reconciler's findings. Nothing wrong, by default.
+    issues: list = []
+
+    def open_protection_issues(self):
+        return list(self.issues)
+
     def __init__(self, *, first_live_sessions_left: int = 0, rung: int = 3,
                  gate: str = "GREEN", capital: Decimal = D("1000000")) -> None:
         self.plans: dict[str, dict] = {}

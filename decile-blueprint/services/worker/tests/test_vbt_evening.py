@@ -244,13 +244,16 @@ class TestTheEntries:
 
 @pytest.mark.db
 class TestTheExits:
-    async def test_a_close_below_the_ema_becomes_tomorrow_s_sell(
+    async def test_a_close_below_the_trail_ma_becomes_tomorrow_s_sell(
         self, session: AsyncSession
     ) -> None:
+        """Until LV9 this was the 21-EMA exit (``EMA_EXIT``). Maulik's LV9.0 decision (28 Sep
+        2026, VB17) makes the working exit Qullamaggie's: a close below the trail MA sells the
+        remainder at the next open, reason ``MA_TRAIL``. The shape of the evening is unchanged."""
         user_id = await _user(session)
         await _calendar(session, user_id)
         instrument_id = await make_instrument(session, "FADING")
-        # A long flat stretch so the 21-day EMA exists, then a close well under it.
+        # A long flat stretch so the averages exist, then a close well under them.
         for index, day in enumerate(_history(60)):
             close = "100.00" if index < 59 else "80.00"
             session.add(_bar(instrument_id, day, close))
@@ -277,12 +280,14 @@ class TestTheExits:
         assert report.sells == 1
         line = (await _lines(session, LineKind.SELL_AT_OPEN))[0]
         assert line.quantity == 500
-        assert line.reason == "EMA_EXIT"
+        assert line.reason == "MA_TRAIL"
         position = (
             await session.execute(sa.select(VbPosition).where(VbPosition.user_id == user_id))
         ).scalar_one()
+        assert line.position_id == position.id
         assert position.exit_queued_for is not None
-        assert position.exit_reason_queued == "EMA_EXIT"
+        assert position.exit_reason_queued == "MA_TRAIL"
+        assert position.trail == "MA20", "a flat name (ADR 0) trails the slow average"
 
     async def test_a_naked_position_gets_an_arm_gtt_line(self, session: AsyncSession) -> None:
         user_id = await _user(session)

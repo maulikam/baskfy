@@ -1247,3 +1247,25 @@ the limit stays in the doc as the evening's rule.
 **How to reverse.** Remove `BUY_AT_MARKET` from `build_live_plan_vbt`'s re-kinding (the LIVE plan
 then carries `PLACE_LIMIT` lines at the live close) or set the desk's `KIND_LABEL` to hide it;
 migration 0057's downgrade deletes any LIVE plan.
+
+### VB17 — Qullamaggie's exits replace the 21-EMA exit; a RAISE_GTT_STOP line; by Maulik's instruction in session (28 Sep 2026) · ✅ decided by Maulik
+
+**Context.** DECISIONS-LV LV9.0: Maulik — *"based on Kristjan Kullamägi's style"*, then "TWT and
+VBT, replacing their tested exits". VBT keeps no auto-execute flag; every line is a click.
+
+**What changed (LV9).** `ExitConfig.qulla_exits` (default true): `managed_actions` still lets
+the sleeve's own `manage` judge the stop and the no-bar write-off, then hands a HOLD or an EMA
+sell to `baskfy_core.exits.qulla.decide` over the bar's exchange-price history — a third into
+strength on bars 3-5 if green (`QUEUE_PARTIAL_AT_OPEN` → `SELL_AT_OPEN`, `reason = PARTIAL`), the
+stop to breakeven (`RAISE_STOP` → a new line kind `RAISE_GTT_STOP`; the desk's `_raise_gtt_stop`
+cancels and re-arms higher, never lower), the remainder on a close below the 10/20-day MA
+(`QUEUE_SELL_AT_OPEN`, `reason = MA_TRAIL`). `bars_for_book` carries the history; `trail` is
+persisted once from the ADR; a partial fill sets `partial_done`. Migration 0058 (columns, the
+widened close reasons, the new kind). Plan lines carry `position_id` (LV10).
+
+**What is not claimed.** `04` §6.3's measurement that a partial lowered the result stands as the
+record; no backtest of the new exit exists.
+
+**How to reverse.** `qulla_exits=False` in `VbtConfig.exits`: the EMA exit fires again and no
+partial or raise is produced. Migration 0058's downgrade deletes RAISE lines and neutralises the
+new close reasons.

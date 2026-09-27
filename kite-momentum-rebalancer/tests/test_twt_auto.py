@@ -233,8 +233,10 @@ class TestTheFlag:
         assert live == [(False, True, True)], f"more than one live cell: {live}"
 
     def test_the_kinds_it_sends_are_exactly_the_kinds_a_click_may_send(self) -> None:
+        """Since LV9 (Maulik, 28 Sep 2026 — DECISIONS-TW TW20) that includes ``SELL_AT_OPEN``:
+        Qullamaggie's partial and MA-trail exit are drained like the stops and the buys."""
         assert A.AUTO_KINDS == X.EXECUTABLE_KINDS
-        assert "SELL_AT_OPEN" not in A.AUTO_KINDS
+        assert "SELL_AT_OPEN" in A.AUTO_KINDS
 
 
 # =========================================================================================

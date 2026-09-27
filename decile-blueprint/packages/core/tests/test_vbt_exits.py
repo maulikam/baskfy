@@ -189,12 +189,19 @@ class TestR:
 
 
 class TestWhatDoesNotExist:
-    def test_there_is_no_target_or_partial_in_the_action_vocabulary(self) -> None:
-        """`04` §6.3 — each was tested and each lowered the result, because the book's profit is
-        a right tail. A vocabulary that cannot express a target cannot grow one by accident."""
+    def test_the_action_vocabulary_has_no_target_and_since_lv9_has_a_partial_and_a_raise(
+        self,
+    ) -> None:
+        """`04` §6.3 measured a target and a partial and found each lowered the result. Maulik
+        reversed the partial on 28 Sep 2026 (DECISIONS-LV LV9.0, DECISIONS-VB VB17): Qullamaggie's
+        third into strength and the breakeven raise. There is still no target — a vocabulary that
+        cannot express one cannot grow one by accident."""
         assert {member.value for member in Action} == {
             "HOLD",
             "QUEUE_SELL_AT_OPEN",
+            "QUEUE_PARTIAL_AT_OPEN",
+            "RAISE_STOP",
             "STOPPED_OUT",
             "WRITE_OFF",
         }
+        assert not any("TARGET" in member.value for member in Action)

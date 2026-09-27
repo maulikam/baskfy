@@ -302,7 +302,8 @@ class PgTwtStore:
         "p.entry_adj_factor, p.quantity_entered, p.quantity_open, p.initial_stop, p.stop_price, "
         "p.high_since, p.high_since_date, p.gtt_id, p.gtt_trigger, p.gtt_armed_at, "
         "p.next_trigger, p.next_trigger_for, p.state, p.closed_on, p.exit_avg, p.close_reason, "
-        "p.pnl_inr, p.return_pct, p.simulated, p.half_size "
+        "p.pnl_inr, p.return_pct, p.simulated, p.half_size, p.partial_done, p.trail, "
+        "p.partial_queued_for, p.partial_quantity, p.exit_queued_for, p.exit_reason_queued "
     )
 
     def _position_from(self) -> str:
@@ -339,6 +340,13 @@ class PgTwtStore:
             "return_pct": _dec(row["return_pct"]),
             "simulated": bool(row["simulated"]),
             "half_size": bool(row["half_size"]),
+            # LV9: Qullamaggie's exit state
+            "partial_done": bool(row["partial_done"]),
+            "trail": row["trail"],
+            "partial_queued_for": _date(row["partial_queued_for"]),
+            "partial_quantity": None if row["partial_quantity"] is None else int(row["partial_quantity"]),
+            "exit_queued_for": _date(row["exit_queued_for"]),
+            "exit_reason_queued": row["exit_reason_queued"],
         }
 
     def open_position_for(self, instrument_id: int) -> dict | None:
@@ -472,7 +480,66 @@ class PgTwtStore:
             if stop is not None and stop_pct is not None and Decimal(1) - stop_pct / 100 > 0:
                 reference = (stop / (Decimal(1) - stop_pct / 100)).quantize(Decimal("0.01"))
             out.append({**order, "reference_price": reference})
-        return out
+        exits = self.conn.execute(
+            self._EXIT_SELECT + f"FROM {self.t('lv_exit_order')} "
+            "WHERE user_id = ? AND sleeve = 'twt' AND state IN ('SENT', 'PARTIAL') "
+            "AND broker_order_id IS NOT NULL ORDER BY id",
+            (self.user_id,),
+        ).fetchall()
+        return out + [self._exit_row(r) for r in exits]
+
+    # --- LV9: pending sells (``lv_exit_order``), the VBT store's shape --------------------
+
+    _EXIT_SELECT = (
+        "SELECT id, sleeve, position_id, line_id, symbol, broker_order_id, client_id, quantity, "
+        "reference_price, state, filled_quantity, avg_fill_price, reason, simulated "
+    )
+
+    def _exit_row(self, row: Any) -> dict:  # noqa: ANN401 - a driver row
+        return {
+            "id": int(row["id"]),
+            "sleeve": str(row["sleeve"]),
+            "position_id": int(row["position_id"]),
+            "line_id": None if row["line_id"] is None else int(row["line_id"]),
+            "symbol": str(row["symbol"]),
+            "broker_order_id": row["broker_order_id"],
+            "client_id": row["client_id"],
+            "quantity": int(row["quantity"]),
+            "reference_price": _dec(row["reference_price"]),
+            "state": str(row["state"]),
+            "filled_quantity": int(row["filled_quantity"] or 0),
+            "avg_fill_price": _dec(row["avg_fill_price"]),
+            "reason": row["reason"],
+            "simulated": bool(row["simulated"]),
+            "side": "SELL",
+        }
+
+    def create_exit_order(self, fields: dict) -> int:
+        columns = ["user_id", *fields]
+        values = [self.user_id, *fields.values()]
+        marks = ", ".join("?" for _ in columns)
+        row = self.conn.execute(
+            f"INSERT INTO {self.t('lv_exit_order')} ({', '.join(columns)}) VALUES ({marks}) "
+            "RETURNING id",
+            tuple(values),
+        ).fetchone()
+        return int(row["id"])
+
+    def exit_order_by_broker_id(self, broker_order_id: str) -> dict | None:
+        row = self.conn.execute(
+            self._EXIT_SELECT + f"FROM {self.t('lv_exit_order')} "
+            "WHERE user_id = ? AND broker_order_id = ? ORDER BY id DESC LIMIT 1",
+            (self.user_id, str(broker_order_id)),
+        ).fetchone()
+        return None if row is None else self._exit_row(row)
+
+    def update_exit_order(self, exit_order_id: int, fields: dict) -> None:
+        sets = ", ".join(f"{name} = ?" for name in fields)
+        self.conn.execute(
+            f"UPDATE {self.t('lv_exit_order')} SET {sets}, updated_at = CURRENT_TIMESTAMP "
+            "WHERE user_id = ? AND id = ?",
+            (*fields.values(), self.user_id, int(exit_order_id)),
+        )
 
     def line_by_client_id(self, client_id: str) -> dict | None:
         """The plan line a broker order came from — ``client_id`` is ``plan_id:symbol`` (LV2)."""

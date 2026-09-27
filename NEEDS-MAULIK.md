@@ -2350,7 +2350,10 @@ Blocks nothing in this run.
 
 **Answered in session at ~01:35 IST on 28 Sep (DECISIONS-LV LV8.0):** questions 1 and 2 — TWT and VBT
 scan today's live bar like swing does and enter **now, at market with protection**, no backtest; LV5's
-minute bars are off on the box. Questions 3, 4 and 5 below still stand.
+minute bars are off on the box. **Answered at ~04:00 IST (DECISIONS-LV LV9.0):** 3 — pyramiding his
+(Qullamaggie's) way, a fresh setup in a held name is a new entry, on for all three sleeves (LV10);
+4 — the swing book's Qullamaggie exits replace TWT's and VBT's tested exits, and TWT's auto-execute
+sends the partial sale too (LV9, TW20); 5 — let the first live entries run. Nothing below is open.
 
 Steps 1–4 of `docs/trading-readiness-review-2026-09-27.md` are built (LV1–LV6). Step 5 — "the new
 strategies, each versioned and backtested on the same runtime" — turns on decisions the review says

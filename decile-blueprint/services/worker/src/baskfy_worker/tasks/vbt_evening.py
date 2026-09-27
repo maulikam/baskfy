@@ -53,6 +53,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from baskfy_api.vbt_settings import record_system_change
 from baskfy_api.vbt_sleeve import load_sleeve
+from baskfy_core.exits.qulla import MA_TRAIL, PARTIAL, OhlcBar, Position, decide, trail_for
 from baskfy_core.models import (
     Instrument,
     OhlcvDaily,
@@ -69,6 +70,7 @@ from baskfy_core.models import (
 )
 from baskfy_core.models.vbt import VB_PLAN_TTL_MINUTES
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
+from baskfy_core.swing.stops import TrailMa
 from baskfy_core.vbt.calendar import SessionCalendar, drop_thin_sessions
 from baskfy_core.vbt.config import Gate, SignalState, VbtConfig
 from baskfy_core.vbt.exits import (
@@ -235,15 +237,37 @@ async def bars_for_book(
     kept, bar_calendar = drop_thin_sessions(frame, config)
     indicated = with_vbt_indicators(kept, bar_calendar, config)
     today = indicated.filter(pl.col("date") == as_of)
+    # LV9: each name's history in exchange prices (the adjusted series divided by its factor),
+    # oldest first, for Qullamaggie's averages and ADR. Built only when that rule is on.
+    histories: dict[int, list[OhlcBar]] = {}
+    if config.exits.qulla_exits:
+        for row in kept.sort(["instrument_id", "date"]).iter_rows(named=True):
+            factor = Decimal(str(row["adj_factor"] or 1))
+            prices = [_price(row[key]) for key in ("open", "high", "low", "close")]
+            if any(value is None for value in prices) or factor <= 0:
+                continue
+            open_, high, low, close = (Decimal(str(v)) / factor for v in prices)
+            raw_close = _price(row.get("close_raw"))
+            histories.setdefault(int(row["instrument_id"]), []).append(
+                OhlcBar(
+                    date=row["date"],
+                    open=open_,
+                    high=high,
+                    low=low,
+                    close=raw_close if raw_close is not None else close,
+                )
+            )
     out: dict[int, Bar] = {}
     for row in today.iter_rows(named=True):
-        out[int(row["instrument_id"])] = Bar(
+        instrument_id = int(row["instrument_id"])
+        out[instrument_id] = Bar(
             session=as_of,
             open=_price(row["open"]),
             high=_price(row["high"]),
             low=_price(row["low"]),
             close=_price(row["close"]),
             ema_exit=_price(row["ema_exit"]),
+            history=tuple(histories.get(instrument_id, ())),
         )
     return out
 
@@ -355,20 +379,34 @@ async def sweep_expired_orders(  # noqa: PLR0913, PLR0917 - the sweep is its inp
     ], refreshed
 
 
-def managed_actions(
+ManagedAction = tuple[int, str, int, ManageAction, int | None]
+
+
+def managed_actions(  # noqa: PLR0913, PLR0917 - the book, its bars, its names, its rules, its blanks
     positions: list[VbPosition],
     bars: dict[int, Bar],
     symbols: dict[int, str],
     config: VbtConfig,
     blanks: dict[int, int],
-) -> list[tuple[int, str, int, ManageAction]]:
-    """``manage`` over the book — the pure rules, one position at a time (``04`` §6)."""
-    out: list[tuple[int, str, int, ManageAction]] = []
+    bars_since_entry: dict[int, int] | None = None,
+) -> list[ManagedAction]:
+    """``manage`` over the book — the pure rules, one position at a time (``04`` §6).
+
+    **LV9 (Maulik, 28 Sep 2026 — VB17):** with ``config.exits.qulla_exits`` on, the stop and
+    the no-bar write-off are still ``manage``'s (they read the bar the same way), but the working
+    exit is Qullamaggie's (``baskfy_core.exits.qulla.decide`` over the bar's ``history``): a
+    ``QUEUE_PARTIAL_AT_OPEN`` for the third into strength, a ``RAISE_STOP`` to breakeven, a
+    ``QUEUE_SELL_AT_OPEN`` with ``MA_TRAIL`` on a close below the trail MA. The 21-EMA exit does
+    not fire. ``bars_since_entry`` is the caller's calendar count per position id (law 1).
+    Each row carries the position id, so a name holding two positions (LV10) is managed twice.
+    """
+    out: list[ManagedAction] = []
     for row in positions:
         bar = bars.get(
             row.instrument_id,
             Bar(session=row.entry_date, open=None, high=None, low=None, close=None, ema_exit=None),
         )
+        symbol = symbols.get(row.instrument_id, str(row.instrument_id))
         action = manage(
             OpenPosition(
                 instrument_id=row.instrument_id,
@@ -383,15 +421,61 @@ def managed_actions(
             blank_sessions=blanks.get(row.instrument_id, 0),
             config=config.exits,
         )
-        out.append(
-            (
-                row.instrument_id,
-                symbols.get(row.instrument_id, str(row.instrument_id)),
-                row.quantity_open,
-                action,
+        if config.exits.qulla_exits and action.action in (Action.HOLD, Action.QUEUE_SELL_AT_OPEN):
+            action = _qulla_action(
+                row, symbol, bar, config, (bars_since_entry or {}).get(int(row.id), 0)
             )
-        )
+        out.append((row.instrument_id, symbol, row.quantity_open, action, int(row.id)))
     return out
+
+
+def _qulla_action(
+    row: VbPosition, symbol: str, bar: Bar, config: VbtConfig, bars_since_entry: int
+) -> ManageAction:
+    """Qullamaggie's rule for one position, as a VBT ``ManageAction``. A partial outranks a raise
+    on the same evening only in the line it produces — the raise rides in ``new_stop`` beside it,
+    and :func:`baskfy_core.vbt.plan.exit_lines` emits both."""
+    resting = (
+        Decimal(str(row.stop_price))
+        if row.gtt_trigger is None
+        else max(Decimal(str(row.stop_price)), Decimal(str(row.gtt_trigger)))
+    )
+    decision = decide(
+        Position(
+            position_id=int(row.id),
+            symbol=symbol,
+            entry_date=row.entry_date,
+            entry=Decimal(str(row.entry_avg)),
+            initial_stop=Decimal(str(row.initial_stop)),
+            stop=resting,
+            quantity=int(row.quantity_open),
+            partial_done=bool(row.partial_done),
+            trail=None if row.trail is None else TrailMa(row.trail),
+        ),
+        bar.history,
+        on=bar.session,
+        bars_since_entry=bars_since_entry,
+        config=config.exits.qulla,
+    )
+    if decision is None:
+        return ManageAction(Action.HOLD, None, None, note="no bar today")
+    raise_to = decision.raise_to if decision.raise_to and decision.raise_to > resting else None
+    if decision.sell_reason == MA_TRAIL and decision.sell_quantity > 0:
+        return ManageAction(
+            Action.QUEUE_SELL_AT_OPEN, ExitReason.MA_TRAIL, None, note=decision.note
+        )
+    if decision.sell_reason == PARTIAL and decision.sell_quantity > 0:
+        return ManageAction(
+            Action.QUEUE_PARTIAL_AT_OPEN,
+            ExitReason.PARTIAL,
+            None,
+            note=decision.note,
+            quantity=int(decision.sell_quantity),
+            new_stop=raise_to,
+        )
+    if raise_to is not None:
+        return ManageAction(Action.RAISE_STOP, None, None, note=decision.note, new_stop=raise_to)
+    return ManageAction(Action.HOLD, None, None, note=decision.note or "holding under the rule")
 
 
 def naked_positions(
@@ -520,6 +604,7 @@ async def store_plan(  # noqa: PLR0913 - a stored plan is its plan and its conte
                 size_cap=None if line.cap is None else line.cap.value,
                 reason=None if line.reason is None else line.reason.value,
                 note=line.note,
+                position_id=line.position_id,
                 client_id=f"{plan_id}:{line.symbol}:{line.kind.value}",
             )
         )
@@ -540,7 +625,7 @@ async def store_plan(  # noqa: PLR0913 - a stored plan is its plan and its conte
 async def queue_exits(
     session: AsyncSession,
     positions: list[VbPosition],
-    actions: list[tuple[int, str, int, ManageAction]],
+    actions: list[ManagedAction],
     next_session: dt.date | None,
 ) -> int:
     """Write ``exit_queued_for`` on the positions ``manage`` decided to sell (``04`` §6.2).
@@ -549,18 +634,66 @@ async def queue_exits(
     session it is to be sold on. A position already queued for an earlier session keeps its date:
     a sell that has not been confirmed does not get postponed by another evening running.
     """
-    by_id = {row.instrument_id: row for row in positions}
+    by_position = {int(row.id): row for row in positions}
+    by_instrument = {row.instrument_id: row for row in positions}
     queued = 0
-    for instrument_id, _symbol, _quantity, action in actions:
-        row = by_id.get(instrument_id)
+    for managed in actions:
+        instrument_id, action = managed[0], managed[3]
+        position_id = managed[4] if len(managed) > 4 else None  # noqa: PLR2004 - optional fifth
+        row = by_position.get(int(position_id)) if position_id is not None else None
+        if row is None:
+            row = by_instrument.get(instrument_id)
         if row is None:
             continue
         if action.action is Action.QUEUE_SELL_AT_OPEN and row.exit_queued_for is None:
             row.exit_queued_for = next_session
-            row.exit_reason_queued = ExitReason.EMA_EXIT.value
+            row.exit_reason_queued = (action.reason or ExitReason.EMA_EXIT).value
             queued += 1
     await session.flush()
     return queued
+
+
+async def persist_trails(
+    session: AsyncSession, positions: list[VbPosition], bars: dict[int, Bar], config: VbtConfig
+) -> int:
+    """LV9: the trail is chosen once, from the ADR, the first evening a position is managed, and
+    written so every later evening reads the same average."""
+    if not config.exits.qulla_exits:
+        return 0
+    written = 0
+    for row in positions:
+        if row.trail is not None:
+            continue
+        bar = bars.get(row.instrument_id)
+        if bar is None or not bar.history:
+            continue
+        row.trail = trail_for(bar.history, config.exits.qulla).value
+        written += 1
+    await session.flush()
+    return written
+
+
+async def bars_since_entry_by_position(
+    session: AsyncSession, positions: list[VbPosition], as_of: dt.date
+) -> dict[int, int]:
+    """Trading days strictly after each position's entry and up to ``as_of`` (entry day = 0)."""
+    out: dict[int, int] = {}
+    for row in positions:
+        out[int(row.id)] = int(
+            (
+                await session.execute(
+                    select(func.count())
+                    .select_from(TradingDay)
+                    .where(
+                        TradingDay.exchange_id == NSE_EXCHANGE_ID,
+                        TradingDay.is_trading_day.is_(True),
+                        TradingDay.date > row.entry_date,
+                        TradingDay.date <= as_of,
+                    )
+                )
+            ).scalar_one()
+        )
+    return out
 
 
 async def settle_session(  # noqa: PLR0913 - the session row is its counters
@@ -676,7 +809,9 @@ async def run_vbt_evening(  # noqa: PLR0913 - one keyword per input the evening 
         session, [row.instrument_id for row in positions], trade_date, config
     )
     blanks = await blank_session_counts(session, positions, trade_date, calendar)
-    actions = managed_actions(positions, bars, symbols, config, blanks)
+    since_entry = await bars_since_entry_by_position(session, positions, trade_date)
+    actions = managed_actions(positions, bars, symbols, config, blanks, since_entry)
+    await persist_trails(session, positions, bars, config)
 
     sleeve = (await load_sleeve(session, user_id, trade_date)).quantize()
     gate = await gate_for_session(session, user_id, trade_date)

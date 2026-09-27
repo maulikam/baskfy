@@ -91,6 +91,28 @@ class MemoryStore:
                 return row
         return None
 
+    # LV9: pending sells, as the VBT test store keeps them
+    def create_exit_order(self, fields: dict) -> int:
+        if not hasattr(self, "exit_orders"):
+            self.exit_orders: dict[int, dict] = {}
+        identifier = self._id()
+        self.exit_orders[identifier] = {
+            "id": identifier,
+            "filled_quantity": 0,
+            "avg_fill_price": None,
+            **fields,
+        }
+        return identifier
+
+    def exit_order_by_broker_id(self, broker_order_id: str) -> dict | None:
+        for row in getattr(self, "exit_orders", {}).values():
+            if str(row.get("broker_order_id")) == str(broker_order_id):
+                return row
+        return None
+
+    def update_exit_order(self, exit_order_id: int, fields: dict) -> None:
+        self.exit_orders[int(exit_order_id)].update(fields)
+
     def __init__(self, *, capital: Decimal = TWENTY_FIVE_LAKH, first_live: int = 10) -> None:
         self.plans: dict[str, dict] = {}
         self.lines: dict[int, dict] = {}
@@ -501,13 +523,13 @@ class TestNothingFiresWithoutTheClick:
             confirm(store, plan_id, line_id, now=NOW + dt.timedelta(minutes=25, seconds=1))
         assert caught.value.status_code == 410
 
-    def test_a_sell_at_open_line_cannot_be_confirmed_at_all(self) -> None:
-        """``04`` §10.2 and DECISIONS-TW TW6.4 — this sleeve has no end-of-day sell rule."""
-        store, plan_id, line_id = a_store(kind="SELL_AT_OPEN")
-        with pytest.raises(HTTPException) as caught:
-            confirm(store, plan_id, line_id)
-        assert caught.value.status_code == 400
-        assert "the GTT is the exit" in caught.value.detail
+    def test_a_sell_at_open_line_for_a_name_the_sleeve_does_not_hold_is_blocked(self) -> None:
+        """Until LV9 a sell could not be confirmed at all (TW6.4). Since Maulik's LV9.0 decision
+        (28 Sep 2026, TW20) it is Qullamaggie's exit — and Track C §5 still holds: only what the
+        sleeve holds, never more."""
+        store, plan_id, line_id = a_store(kind="SELL_AT_OPEN", quantity=100)
+        outcome = confirm(store, plan_id, line_id)
+        assert outcome.status == "BLOCKED" and "not in this sleeve's book" in outcome.reason
 
     def test_the_whole_confirm_runs_under_the_session_lock(self) -> None:
         """``04`` §10.5 — two browser tabs cannot confirm past the session cap together."""
@@ -1234,3 +1256,116 @@ class TestNoOrderReachesABrokerInDryRun:
         assert ("place", "DRY_RUN") in tape
         assert [call for call, status in tape if not status.startswith("DRY_RUN")] == []
         assert [status for _call, status in tape if status in {"PLACED", "GTT_PLACED"}] == []
+
+
+# =========================================================================================
+# LV9 — Qullamaggie's sale at the open (DECISIONS-TW TW20)
+# =========================================================================================
+class TestTheSellAtOpen:
+    def _held(self, store: MemoryStore, *, partial_quantity: int | None = 100, exit_reason: str | None = None) -> int:
+        position_id = a_position(store, quantity=300, entry="100.00", stop="80.00", gtt_id="DRY-1", gtt_trigger="80.00")
+        store.positions[position_id].update(
+            {
+                "partial_done": False,
+                "trail": "MA20",
+                "partial_queued_for": SESSION if partial_quantity else None,
+                "partial_quantity": partial_quantity,
+                "exit_queued_for": SESSION if exit_reason else None,
+                "exit_reason_queued": exit_reason,
+                "quantity_entered": 300,
+            }
+        )
+        return position_id
+
+    def test_the_partial_sells_a_third_at_market_with_protection_and_keeps_the_position(self) -> None:
+        store, plan_id, line_id = a_store(kind="SELL_AT_OPEN", quantity=100)
+        position_id = self._held(store)
+        store.lines[line_id]["position_id"] = position_id
+
+        outcome = confirm(store, plan_id, line_id, last_price=D("110.00"))
+
+        assert outcome.status == "SIMULATED" and outcome.position_id == position_id
+        position = store.positions[position_id]
+        assert position["quantity_open"] == 200 and position["state"] == "OPEN"
+        assert position["partial_done"] is True and position["partial_quantity"] is None
+        assert [fill["side"] for fill in store.fills] == ["SELL"]
+        assert store.fills[0]["quantity"] == 100 and store.fills[0]["price"] == D("110.00")
+        assert store.lines[line_id]["state"] == "FILLED"
+        place = [call for call, _ in SpyGateway.tape if call == "place"]
+        assert place, "the sell went through the gateway"
+
+    def test_the_gateway_is_asked_for_a_market_sell_with_kite_protection(self) -> None:
+        store, plan_id, line_id = a_store(kind="SELL_AT_OPEN", quantity=100)
+        self._held(store)
+        seen: dict = {}
+
+        class Recording:
+            async def place(self, **kwargs: object) -> dict:
+                seen.update(kwargs)
+                return {"status": "DRY_RUN", "order_id": "dry"}
+
+        confirm(store, plan_id, line_id, gateway=Recording(), last_price=D("110.00"))
+        assert seen["side"] == "SELL" and seen["order_type"] == "MARKET"
+        assert seen["market_protection"] == X.TWT_MARKET_PROTECTION and seen["qty"] == 100
+
+    def test_the_remainder_on_a_trail_exit_closes_the_position_with_the_reason(self) -> None:
+        store, plan_id, line_id = a_store(kind="SELL_AT_OPEN", quantity=300)
+        position_id = self._held(store, partial_quantity=None, exit_reason="MA_TRAIL")
+
+        outcome = confirm(store, plan_id, line_id, last_price=D("95.00"))
+
+        assert outcome.status == "SIMULATED"
+        position = store.positions[position_id]
+        assert position["state"] == "CLOSED" and position["close_reason"] == "MA_TRAIL"
+        assert position["quantity_open"] == 0 and position["exit_avg"] == D("95.00")
+        assert position["pnl_inr"] == D("-1500.00")
+        assert store.sessions[SESSION]["exits"] == 1
+
+    def test_never_more_than_the_sleeve_holds(self) -> None:
+        store, plan_id, line_id = a_store(kind="SELL_AT_OPEN", quantity=301)
+        self._held(store, partial_quantity=None, exit_reason="MA_TRAIL")
+        outcome = confirm(store, plan_id, line_id, last_price=D("95.00"))
+        assert outcome.status == "BLOCKED" and "holds 300" in outcome.reason
+
+    def test_a_live_sell_is_recorded_and_booked_only_from_the_brokers_fill(self) -> None:
+        """LV2's rule on the exit side: accepted is not filled."""
+        store, plan_id, line_id = a_store(kind="SELL_AT_OPEN", quantity=100)
+        position_id = self._held(store)
+
+        class Accepting:
+            async def place(self, **kwargs: object) -> dict:
+                return {"status": "PLACED", "order_id": "BRK-SELL-1"}
+
+        outcome = confirm(store, plan_id, line_id, gateway=Accepting(), last_price=D("110.00"))
+        assert outcome.status == "SENT"
+        assert store.positions[position_id]["quantity_open"] == 300, "nothing booked yet"
+        assert store.lines[line_id]["state"] == "SENT"
+        exit_order = next(iter(store.exit_orders.values()))
+        assert (exit_order["reason"], exit_order["quantity"], exit_order["sleeve"]) == ("PARTIAL", 100, "twt")
+
+        result = run(
+            X.on_order_update(
+                store,
+                Accepting(),
+                {"order_id": "BRK-SELL-1", "status": "COMPLETE", "filled_quantity": 100, "average_price": 111.5},
+                now=NOW,
+            )
+        )
+        assert result is not None and result.status == "FILLED"
+        position = store.positions[position_id]
+        assert position["quantity_open"] == 200 and position["partial_done"] is True
+        assert store.fills[-1]["quantity"] == 100 and store.fills[-1]["price"] == D("111.5000")
+        assert exit_order["state"] == "FILLED"
+        assert store.lines[line_id]["state"] == "FILLED"
+
+    def test_the_line_names_its_position_when_a_name_holds_two(self) -> None:
+        """LV10: two entries in one name; the sell acts on the one the evening decided for."""
+        store, plan_id, line_id = a_store(kind="SELL_AT_OPEN", quantity=100)
+        first = self._held(store, partial_quantity=None)
+        second = self._held(store)
+        store.lines[line_id]["position_id"] = second
+
+        confirm(store, plan_id, line_id, last_price=D("110.00"))
+
+        assert store.positions[second]["quantity_open"] == 200
+        assert store.positions[first]["quantity_open"] == 300

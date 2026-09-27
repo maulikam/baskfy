@@ -157,7 +157,8 @@ anything not here.
 | `state` | `OPEN` / `CLOSED` |
 | `exit_queued_for` | date, nullable — the session whose open this position is to be sold at, written by the evening when the close fell below the 21-EMA (`04` §6.2). Null means hold |
 | `exit_reason_queued` | `EMA_EXIT` when queued |
-| `closed_on`, `exit_avg`, `close_reason` | `EMA_EXIT` / `STOP_HIT` / `STOP_GAP` / `NO_BAR` / `MANUAL` |
+| `partial_done`, `trail` | LV9 (migration 0058): Qullamaggie's exit state — the third sold once; `MA10`/`MA20` chosen from the ADR the first evening the position is managed |
+| `closed_on`, `exit_avg`, `close_reason` | `EMA_EXIT` / `STOP_HIT` / `STOP_GAP` / `NO_BAR` / `MANUAL` / **`MA_TRAIL`** (LV9: the remainder sold on a close below the trail MA; `PARTIAL` exists on the exit order's reason and never closes a position) |
 | `pnl_inr`, `return_pct`, `r_multiple`, `hold_sessions` | written at close |
 | `simulated` | bool — true for every `DRY_RUN` / flag-off fill; the pages label them and the backtest card never mixes them |
 | `half_risk` | bool — sized at the first-live multiplier (`04` §5.4) |
@@ -177,6 +178,9 @@ during the session from today's provisional bar; DECISIONS-VB VB16, DECISIONS-LV
 `MORNING` (rebuilt before the open from the same signals) / `MANUAL` (a desk rebuild).
 
 `vb_plan_line`: `kind` ∈
+* **`RAISE_GTT_STOP`** — LV9 (Maulik, 28 Sep 2026; DECISIONS-VB VB17): raise a position's resting
+  GTT to a higher trigger — Qullamaggie's breakeven move after the partial or at +1R. Cancel, then
+  re-arm; never lowers. The line carries `position_id` (LV10);
 * **`BUY_AT_MARKET`** — LV8's live entry: a signal read off today's provisional bar, bought
   **now, at market** with Kite market protection (`-1`, Kite's auto band); `limit_price` records
   the live price the size was previewed against, the stop is the plan's; the GTT is armed from the

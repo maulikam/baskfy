@@ -63,7 +63,7 @@ from baskfy_api.twt_settings import TwtConfigNotSeeded, read_config, record_syst
 from baskfy_core.allocation_ledger import PortfolioKind, PortfolioSource
 from baskfy_core.models import Instrument, OhlcvDaily, TwConfig, TwOrder, TwPosition, TwSession
 from baskfy_core.twt.config import DEFAULT_TWT_CONFIG, TwtConfig
-from baskfy_core.twt.plan import BookState, NakedPosition, RatchetDue
+from baskfy_core.twt.plan import BookState, NakedPosition, RatchetDue, SellDue
 from baskfy_core.twt.sizing import first_live_multiplier
 from baskfy_core.twt.sleeve import (
     MarkSource,
@@ -391,7 +391,34 @@ async def book_state(
     )
     naked: list[NakedPosition] = []
     ratchets: list[RatchetDue] = []
+    sells: list[SellDue] = []
     for position, symbol in rows:
+        # LV9: the evening's queued sales — the partial into strength and the MA-trail exit.
+        # ``exit_lines`` keeps only those decided for the session it plans.
+        if position.exit_queued_for is not None and position.exit_reason_queued:
+            sells.append(
+                SellDue(
+                    instrument_id=position.instrument_id,
+                    symbol=symbol,
+                    quantity=position.quantity_open,
+                    reason=str(position.exit_reason_queued),
+                    decided_for=position.exit_queued_for,
+                    note=f"close below the {position.trail or 'trail'}: sell the remainder",
+                    position_id=int(position.id),
+                )
+            )
+        elif position.partial_queued_for is not None and position.partial_quantity:
+            sells.append(
+                SellDue(
+                    instrument_id=position.instrument_id,
+                    symbol=symbol,
+                    quantity=int(position.partial_quantity),
+                    reason="PARTIAL",
+                    decided_for=position.partial_queued_for,
+                    note="a third into strength; the stop moves to breakeven",
+                    position_id=int(position.id),
+                )
+            )
         if position.gtt_id is None or position.gtt_trigger is None:
             naked.append(
                 NakedPosition(
@@ -399,6 +426,7 @@ async def book_state(
                     symbol=symbol,
                     quantity=position.quantity_open,
                     stop_price=Decimal(str(position.stop_price)),
+                    position_id=int(position.id),
                 )
             )
             continue
@@ -413,6 +441,12 @@ async def book_state(
                 next_trigger=Decimal(str(position.next_trigger)),
                 next_trigger_for=position.next_trigger_for,
                 high_since=Decimal(str(position.high_since)),
+                note=(
+                    f"stop to breakeven ({position.trail or 'trail'} rule)"
+                    if position.trail is not None
+                    else ""
+                ),
+                position_id=int(position.id),
             )
         )
     return BookState(
@@ -424,6 +458,7 @@ async def book_state(
         ),
         positions_naked_of_gtt=tuple(naked),
         ratchets_due=tuple(ratchets),
+        sells_due=tuple(sells),
     )
 
 

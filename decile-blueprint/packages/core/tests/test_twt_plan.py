@@ -27,6 +27,7 @@ from baskfy_core.twt.plan import (
     NakedPosition,
     PlanLine,
     RatchetDue,
+    SellDue,
     Skipped,
     SkipReason,
     assemble,
@@ -73,8 +74,10 @@ def book(  # noqa: PLR0913 - the book is what the plan consults, one field at a 
     entries_already_this_session: int = 0,
     positions_naked_of_gtt: tuple[NakedPosition, ...] = (),
     ratchets_due: tuple[RatchetDue, ...] = (),
+    sells_due: tuple[SellDue, ...] = (),
 ) -> BookState:
     return BookState(
+        sells_due=sells_due,
         open_instrument_ids=open_instrument_ids,
         open_exposure_inr=open_exposure_inr,
         cash_available_inr=cash_available_inr,
@@ -317,9 +320,11 @@ class TestTheExitLines:
         )
         assert exit_lines(book(ratchets_due=(due,)), NEXT) == []
 
-    def test_exit_lines_can_emit_no_sell_at_open(self) -> None:
-        """``03`` §7. The strategy has no end-of-day sell rule; the GTT is the exit. The kind
-        exists so a person can be given a line for a ``MANUAL`` exit without a migration."""
+    def test_exit_lines_emit_a_sell_only_from_a_sale_the_evening_decided(self) -> None:
+        """Until LV9 this test pinned "no SELL_AT_OPEN, ever" (``03`` §7, TW10). Maulik reversed
+        it on 28 Sep 2026 (DECISIONS-LV LV9.0, TW20): Qullamaggie's partial and MA-trail exit are
+        sells at the next open. They come **only** from ``sells_due`` decided for this session —
+        a naked position or a ratchet still cannot produce one."""
         naked = NakedPosition(instrument_id=1, symbol="A", quantity=1, stop_price=Decimal("1"))
         due = RatchetDue(
             instrument_id=2,
@@ -331,8 +336,15 @@ class TestTheExitLines:
             high_since=Decimal("3"),
         )
         lines = exit_lines(book(positions_naked_of_gtt=(naked,), ratchets_due=(due,)), SESSION)
-        assert {line.kind for line in lines} <= {LineKind.ARM_GTT, LineKind.RAISE_GTT_STOP}
-        assert LineKind.SELL_AT_OPEN in set(LineKind)
+        assert {line.kind for line in lines} == {LineKind.ARM_GTT, LineKind.RAISE_GTT_STOP}
+
+        partial = SellDue(3, "C", 100, "PARTIAL", SESSION, position_id=31)
+        stale = SellDue(4, "D", 200, "MA_TRAIL", SESSION - dt.timedelta(days=1))
+        lines = exit_lines(book(sells_due=(partial, stale)), SESSION)
+        assert [(line.kind, line.symbol, line.quantity, line.position_id) for line in lines] == [
+            (LineKind.SELL_AT_OPEN, "C", 100, 31)
+        ], "a sale decided for another session is not this plan's"
+        assert lines[0].note == "partial decided on " + SESSION.isoformat()
 
 
 class TestAssembly:

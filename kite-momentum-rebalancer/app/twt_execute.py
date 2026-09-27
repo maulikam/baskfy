@@ -101,15 +101,15 @@ ARM_GTT = LineKind.ARM_GTT.value
 RAISE_GTT_STOP = LineKind.RAISE_GTT_STOP.value
 SELL_AT_OPEN = LineKind.SELL_AT_OPEN.value
 
-#: The kinds a confirm may act on — **three, and ``SELL_AT_OPEN`` is not one of them.**
-#:
-#: The kind exists in the schema so a person can be given a line for a ``MANUAL`` exit without a
-#: migration (``03`` §7), and ``04`` §10.2 says no TWT rule ever emits one. A route that could
-#: execute it would be an end-of-day sell rule this strategy does not have — the GTT is the exit
-#: (``01`` §5) — so the refusal is here as well as in the planner, and TW10's assertion has one
-#: fewer way to be wrong. DECISIONS-TW **TW6.4**.
-EXECUTABLE_KINDS: Final[frozenset[str]] = frozenset({BUY_AT_OPEN, ARM_GTT, RAISE_GTT_STOP})
-assert SELL_AT_OPEN not in EXECUTABLE_KINDS  # noqa: S101 - import-time contract
+#: The kinds a confirm may act on — **four since LV9.** Until 28 Sep 2026 ``SELL_AT_OPEN`` was
+#: refused here as well as in the planner (TW6.4, TW10: no end-of-day sell rule, the GTT is the
+#: exit). Maulik's LV9.0 decision (DECISIONS-TW **TW20**) made the sleeve's exits Qullamaggie's:
+#: the partial into strength and the remainder on a close below the trail MA are both sells at
+#: the next open, and :func:`_sell_at_open` is their one path — a MARKET sell with protection
+#: through the gateway, recorded in ``lv_exit_order`` and booked from the broker's fill.
+EXECUTABLE_KINDS: Final[frozenset[str]] = frozenset(
+    {BUY_AT_OPEN, ARM_GTT, RAISE_GTT_STOP, SELL_AT_OPEN}
+)
 
 #: What a ``place()`` answers when the order reached the broker and when it did not.
 PLACED_STATUSES: Final[frozenset[str]] = frozenset({"PLACED", "DUPLICATE"})
@@ -271,6 +271,13 @@ class TwtStore(Protocol):
     def order(self, order_id: int) -> dict | None: ...
 
     def order_by_broker_id(self, broker_order_id: str) -> dict | None: ...
+
+    # LV9: pending sells (``lv_exit_order``), as the VBT store already keeps them (LV2).
+    def create_exit_order(self, fields: dict) -> int: ...
+
+    def exit_order_by_broker_id(self, broker_order_id: str) -> dict | None: ...
+
+    def update_exit_order(self, exit_order_id: int, fields: dict) -> None: ...
 
     def open_orders(self) -> list[dict]:
         """Every order the broker accepted and has not finished — ``SENT`` or ``PARTIAL`` — with
@@ -523,11 +530,7 @@ def _validate(store: TwtStore, plan_id: str, line_id: int, confirm: str, now: dt
     if line is None or str(line["plan_id"]) != str(plan_id):
         raise HTTPException(404, f"no line {line_id} on plan {plan_id}")
     if line["kind"] not in EXECUTABLE_KINDS:
-        raise HTTPException(
-            400,
-            f"a {line['kind']} line cannot be executed: this sleeve has no end-of-day sell "
-            f"rule and the GTT is the exit",
-        )
+        raise HTTPException(400, f"a {line['kind']} line cannot be executed on this sleeve")
     if line["state"] != "PROPOSED":
         raise HTTPException(
             409,
@@ -854,6 +857,259 @@ async def _apply_fill(  # noqa: PLR0913 - a fill is its order, its price and its
 # --- ARM_GTT -------------------------------------------------------------------------------
 
 
+def _position_for_line(store: TwtStore, line: dict) -> dict | None:
+    """The position a line acts on: the one it names (LV10 — a name may hold two) if it is still
+    open, else the name's open position."""
+    position_id = line.get("position_id")
+    if position_id is not None:
+        found = store.position(int(position_id))
+        if found is not None and str(found.get("state")) == "OPEN" and int(found.get("quantity_open") or 0) > 0:
+            return found
+    return store.open_position_for(int(line["instrument_id"]))
+
+
+def _sell_reason(position: dict, quantity: int) -> str:
+    """Why the line sells: the evening's queued partial (``PARTIAL``), the queued full exit's
+    reason (``MA_TRAIL``), or — for a hand-made line — ``MANUAL``."""
+    if position.get("exit_queued_for") is not None and position.get("exit_reason_queued"):
+        if quantity >= int(position.get("quantity_open") or 0):
+            return str(position["exit_reason_queued"])
+    if position.get("partial_quantity") and int(position["partial_quantity"]) == quantity:
+        return "PARTIAL"
+    if quantity < int(position.get("quantity_open") or 0):
+        return "PARTIAL"
+    return "MANUAL"
+
+
+async def _sell_at_open(  # noqa: PLR0913 - a sell is its line, its book and its gateway
+    store: TwtStore,
+    gateway: Any,  # noqa: ANN401 - an OrderGateway
+    line: dict,
+    plan: dict,
+    gates: ProductGates,
+    now: dt.datetime,
+    last_price: Decimal | None,
+) -> ExecOutcome:
+    """LV9 (DECISIONS-TW TW20) — Qullamaggie's sale at the open: the partial into strength or the
+    remainder on a close below the trail MA. Never more than the position holds, and only what
+    it holds. A MARKET sell with Kite market protection through the gateway; a live one is
+    recorded in ``lv_exit_order`` and **booked from the broker's fill**
+    (:func:`_apply_exit_update`), a dry-run one is booked at the reference at once. After a
+    partial the position stays open with ``partial_done`` and its GTT re-sized to what is left;
+    after a full sale it is closed with the reason and its GTT pulled.
+    """
+    position = _position_for_line(store, line)
+    if position is None:
+        reason = f"{line['symbol']} is not in this sleeve's book; this sleeve never sells a holding it did not buy"
+        store.set_line(line["id"], state="REJECTED", note=reason)
+        return _blocked(reason, simulated=gates.dry_run)
+    owned = int(position["quantity_open"])
+    quantity = int(line["quantity"])
+    if quantity <= 0 or quantity > owned:
+        reason = f"the line sells {quantity} and the sleeve holds {owned}"
+        store.set_line(line["id"], state="REJECTED", note=reason)
+        return _blocked(reason, simulated=gates.dry_run, position_id=int(position["id"]))
+    reason_code = _sell_reason(position, quantity)
+    reference = last_price if last_price is not None else _price(position["entry_avg"])
+    result = await gateway.place(
+        symbol=line["symbol"],
+        qty=quantity,
+        side="SELL",
+        product="CNC",
+        order_type="MARKET",
+        market_protection=TWT_MARKET_PROTECTION,
+        client_id=line["client_id"],
+        reference_price=float(reference),
+        gross_exposure=float(reference * quantity),
+        tenant=_tenant(),
+        plan_tenant=_tenant(),
+    )
+    status = str(result.get("status") or "")
+    if status not in PLACED_STATUSES | DRY_RUN_STATUSES:
+        reason = str(result.get("error") or f"the gateway answered {status}")
+        store.set_line(line["id"], state="REJECTED", note=reason)
+        return _blocked(reason, simulated=gates.dry_run, position_id=int(position["id"]))
+    store.set_line(
+        line["id"],
+        state="SENT",
+        journal_ref=str(result.get("order_id") or ""),
+        position_id=int(position["id"]),
+        note=f"{reason_code.lower()}: sell {quantity} of {owned}",
+    )
+    store.bump_session(plan["session_date"], mode="DRY_RUN" if gates.dry_run else "LIVE", confirms=1)
+    if status in DRY_RUN_STATUSES:
+        return await _apply_exit_fill(
+            store,
+            gateway,
+            position=position,
+            line_id=int(line["id"]),
+            quantity=quantity,
+            average=reference,
+            reason=reason_code,
+            day=plan["session_date"],
+            simulated=True,
+            now=now,
+        )
+    creator = getattr(store, "create_exit_order", None)
+    if creator is not None:
+        creator(
+            {
+                "sleeve": "twt",
+                "position_id": int(position["id"]),
+                "line_id": int(line["id"]),
+                "symbol": line["symbol"],
+                "broker_order_id": result.get("order_id"),
+                "client_id": line["client_id"],
+                "quantity": quantity,
+                "reference_price": reference,
+                "state": "SENT",
+                "filled_quantity": 0,
+                "reason": reason_code,
+                "simulated": False,
+            }
+        )
+    return ExecOutcome("SENT", "", result, None, None, int(position["id"]), gates.dry_run)
+
+
+async def _apply_exit_fill(  # noqa: PLR0913 - a fill is its position, its size and its price
+    store: TwtStore,
+    gateway: Any,  # noqa: ANN401 - an OrderGateway
+    *,
+    position: dict,
+    line_id: int | None,
+    quantity: int,
+    average: Decimal,
+    reason: str,
+    day: dt.date,
+    simulated: bool,
+    now: dt.datetime,
+) -> ExecOutcome:
+    """``quantity`` shares sold at ``average``: the fill row, the position shrunk or closed, the
+    GTT following what is left (re-sized after a partial, pulled after a close). ``simulated``
+    is the dry-run rehearsal; a broker's fill is never simulated, whatever the desk's flag."""
+    position_id = int(position["id"])
+    symbol = str(position["symbol"])
+    remaining = max(0, int(position["quantity_open"]) - quantity)
+    store.add_fill(
+        {
+            "position_id": position_id,
+            "order_id": None,
+            "side": "SELL",
+            "quantity": quantity,
+            "price": average,
+            "filled_at": now,
+            "simulated": simulated,
+        }
+    )
+    fields: dict[str, object] = {"quantity_open": remaining}
+    if reason == "PARTIAL":
+        fields.update({"partial_done": True, "partial_queued_for": None, "partial_quantity": None})
+    if remaining == 0:
+        entry = _price(position["entry_avg"])
+        fields.update(
+            {
+                "state": "CLOSED",
+                "closed_on": day,
+                "close_reason": reason if reason in ("MA_TRAIL", "MANUAL") else "MANUAL",
+                "exit_avg": average,
+                "pnl_inr": ((average - entry) * int(position["quantity_entered"] or quantity)).quantize(Decimal("0.01")),
+                "return_pct": (((average / entry) - 1) * 100).quantize(Decimal("0.01")) if entry > 0 else None,
+                "exit_queued_for": None,
+                "exit_reason_queued": None,
+            }
+        )
+    store.update_position(position_id, fields)
+    gtt_id = position.get("gtt_id")
+    if remaining == 0:
+        cancel = await _cancel(gateway, gtt_id=gtt_id, symbol=symbol, client_id=f"exit:{position_id}:{symbol}:cancel")
+        if cancel is not None and str(cancel.get("status")) in GTT_DELETED_STATUSES:
+            store.update_position(position_id, {"gtt_id": None, "gtt_trigger": None})
+        store.bump_session(day, mode="DRY_RUN" if simulated else "LIVE", exits=1)
+    elif gtt_id is not None:
+        resized = await _resize_gtt(
+            gateway,
+            gtt_id=gtt_id,
+            symbol=symbol,
+            qty=remaining,
+            trigger=resting_trigger(position),
+            last_price=average,
+        )
+        if str(resized.get("status")) not in GTT_MODIFIED_STATUSES | {DRY_RUN_GTT_MODIFY}:
+            log.warning("%s: the GTT was not re-sized to %d after the partial (%s)", symbol, remaining, resized.get("status"))
+    if line_id is not None:
+        store.set_line(line_id, state="FILLED", position_id=position_id)
+    return ExecOutcome(
+        "SIMULATED" if simulated else "FILLED",
+        f"{symbol}: sold {quantity} at {average} ({reason.lower()}); {remaining} left",
+        None,
+        None,
+        None,
+        position_id,
+        simulated,
+    )
+
+
+async def _apply_exit_update(  # noqa: PLR0913 - a report is its order, its size and its price
+    store: TwtStore,
+    gateway: Any,  # noqa: ANN401 - an OrderGateway
+    exit_order: dict,
+    *,
+    status: str,
+    filled: int,
+    average: Decimal,
+    gates: ProductGates,
+    now: dt.datetime,
+) -> ExecOutcome | None:
+    """A pending sell's report from the broker (LV2's shape, LV9's use): the newly filled shares
+    are booked through :func:`_apply_exit_fill`; a dead order releases the line."""
+    if str(exit_order.get("state")) not in ("SENT", "PARTIAL"):
+        return None
+    position = store.position(int(exit_order["position_id"]))
+    if position is None:
+        return None
+    recorded = int(exit_order.get("filled_quantity") or 0)
+    complete = status == ORDER_COMPLETE
+    outcome: ExecOutcome | None = None
+    if filled > recorded and average > _ZERO:
+        delta = filled - recorded
+        old_avg = _price(exit_order.get("avg_fill_price") or 0)
+        delta_price = ((average * filled - old_avg * recorded) / delta) if recorded else average
+        if delta_price <= _ZERO:
+            delta_price = average
+        outcome = await _apply_exit_fill(
+            store,
+            gateway,
+            position=position,
+            line_id=None,
+            quantity=delta,
+            average=delta_price.quantize(Decimal("0.0001")),
+            reason=str(exit_order.get("reason") or "MANUAL"),
+            day=session_day(now),
+            simulated=False,
+            now=now,
+        )
+        store.update_exit_order(
+            int(exit_order["id"]),
+            {"state": "FILLED" if complete else "PARTIAL", "filled_quantity": filled, "avg_fill_price": average},
+        )
+    if status in ORDER_DEAD_STATUSES:
+        final = "FILLED" if max(filled, recorded) > 0 else ("REJECTED" if status == "REJECTED" else "CANCELLED")
+        store.update_exit_order(int(exit_order["id"]), {"state": final})
+        if exit_order.get("line_id") is not None:
+            store.set_line(
+                int(exit_order["line_id"]),
+                state="FILLED" if final == "FILLED" else "REJECTED",
+                note=f"{status}: {max(filled, recorded)} of {exit_order['quantity']} sold",
+            )
+        return ExecOutcome(final, f"{exit_order['symbol']}: sell {status}", None, None, None, int(position["id"]), gates.dry_run)
+    if complete:
+        store.update_exit_order(int(exit_order["id"]), {"state": "FILLED"})
+        if exit_order.get("line_id") is not None:
+            store.set_line(int(exit_order["line_id"]), state="FILLED", position_id=int(position["id"]))
+        return outcome or ExecOutcome("FILLED", f"{exit_order['symbol']}: sold {filled} at {average}", None, None, None, int(position["id"]), gates.dry_run)
+    return outcome
+
+
 async def _arm_gtt_line(  # noqa: PLR0913 - a re-arm is its line, its book and its gateway
     store: TwtStore,
     gateway: Any,  # noqa: ANN401 - an OrderGateway
@@ -952,7 +1208,7 @@ async def _raise_gtt_stop(  # noqa: PLR0913, C901 - the ratchet is its guards
     Then the two halves, and the second is the one that can cost money. See the module docstring.
     """
     symbol = str(line["symbol"])
-    position = store.open_position_for(int(line["instrument_id"]))
+    position = _position_for_line(store, line)
     if position is None:
         reason = f"{symbol} is not in this sleeve's book"
         store.set_line(line["id"], state="REJECTED", note=reason)
@@ -1101,6 +1357,8 @@ async def execute_line(  # noqa: PLR0913 - a confirm is its store, its gateway a
             return await _buy_at_open(store, gateway, line, plan, gates, stamp, last_price)
         if line["kind"] == ARM_GTT:
             return await _arm_gtt_line(store, gateway, line, plan, gates, stamp, last_price)
+        if line["kind"] == SELL_AT_OPEN:
+            return await _sell_at_open(store, gateway, line, plan, gates, stamp, last_price)
         return await _raise_gtt_stop(store, gateway, line, plan, gates, stamp, last_price)
 
 
@@ -1449,17 +1707,34 @@ async def on_order_update(
     broker_id = str(payload.get("order_id") or "")
     if not broker_id:
         return None
-    order = store.order_by_broker_id(broker_id)
-    if order is None or str(order.get("side") or "BUY") != "BUY":
-        return None
-    if str(order.get("state")) not in ("SENT", "PARTIAL"):
-        return None
     status = str(payload.get("status") or "").upper()
     filled = int(payload.get("filled_quantity") or 0)
     raw_price = payload.get("average_price")
     average = _price(raw_price) if raw_price is not None else _ZERO
     day = session_day(now)
     gates = twt_gates()
+    order = store.order_by_broker_id(broker_id)
+    if order is None:
+        # LV9: not one of this sleeve's buys — a pending sell (``lv_exit_order``), perhaps.
+        finder = getattr(store, "exit_order_by_broker_id", None)
+        exit_order = finder(broker_id) if finder is not None else None
+        if exit_order is None:
+            return None
+        with store.lock_session_for_update(day):
+            return await _apply_exit_update(
+                store,
+                gateway,
+                exit_order,
+                status=status,
+                filled=filled,
+                average=average,
+                gates=gates,
+                now=now,
+            )
+    if str(order.get("side") or "BUY") != "BUY":
+        return None
+    if str(order.get("state")) not in ("SENT", "PARTIAL"):
+        return None
     with store.lock_session_for_update(day):
         current = store.order(int(order["id"]))
         if current is None or str(current.get("state")) not in ("SENT", "PARTIAL"):

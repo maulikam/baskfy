@@ -387,16 +387,26 @@ def _params_json(params: BacktestParams, start: dt.date, end: dt.date | None) ->
     the difference this whole module is careful about.
     """
     config: JsonObject = {}
+
+    def _flat(value: object) -> object:
+        if isinstance(value, tuple):
+            return list(value)
+        if isinstance(value, (Decimal, dt.date)):
+            return str(value)
+        return value
+
     for group in dataclasses.fields(params.config):
         sub = getattr(params.config, group.name)
         for spec in dataclasses.fields(sub):
             value = getattr(sub, spec.name)
-            if isinstance(value, tuple):
-                config[f"{group.name}.{spec.name}"] = list(value)
-            elif isinstance(value, (Decimal, dt.date)):
-                config[f"{group.name}.{spec.name}"] = str(value)
-            else:
-                config[f"{group.name}.{spec.name}"] = value
+            if dataclasses.is_dataclass(value) and not isinstance(value, type):
+                # LV9: `exits.qulla` is the swing book's StopConfig, nested one level down.
+                for inner in dataclasses.fields(value):
+                    config[f"{group.name}.{spec.name}.{inner.name}"] = _flat(
+                        getattr(value, inner.name)
+                    )
+                continue
+            config[f"{group.name}.{spec.name}"] = _flat(value)
     return {
         "start": start.isoformat(),
         "end": end.isoformat() if end else None,

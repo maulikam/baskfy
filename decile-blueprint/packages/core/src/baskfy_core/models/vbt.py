@@ -448,6 +448,11 @@ class VbPosition(Base):
     #: close fell below the 21-day EMA. Null means hold (``04`` §6.2).
     exit_queued_for: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
     exit_reason_queued: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    # --- LV9 (migration 0058): Qullamaggie's exit state, DECISIONS-VB VB17 -----------------
+    #: The partial into strength has been sold (a third, once).
+    partial_done: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    #: ``MA10`` or ``MA20`` — chosen from the name's ADR the first evening it is managed.
+    trail: Mapped[str | None] = mapped_column(String(4), nullable=True)
     closed_on: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
     exit_avg: Mapped[Decimal | None] = mapped_column(PRICE_RAW, nullable=True)
     close_reason: Mapped[str | None] = mapped_column(String(24), nullable=True)

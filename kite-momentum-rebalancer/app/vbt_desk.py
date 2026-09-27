@@ -90,6 +90,7 @@ KIND_ORDER: Final[tuple[str, ...]] = (
     "SELL_AT_OPEN",
     "CANCEL_LIMIT",
     "ARM_GTT",
+    "RAISE_GTT_STOP",
     "PLACE_LIMIT",
     "BUY_AT_MARKET",
 )
@@ -100,6 +101,7 @@ KIND_LABEL: Final[dict[str, str]] = {
     "SELL_AT_OPEN": "VBT SELL AT OPEN",
     "CANCEL_LIMIT": "VBT CANCEL",
     "ARM_GTT": "VBT ARM STOP",
+    "RAISE_GTT_STOP": "VBT RAISE STOP (breakeven)",
 }
 
 
@@ -279,7 +281,8 @@ class PgVbtStore:
         "SELECT p.id, p.instrument_id, i.symbol, p.entry_date, p.entry_avg, "
         "p.quantity_entered, p.quantity_open, p.initial_stop, p.stop_price, p.gtt_id, "
         "p.gtt_trigger, p.gtt_armed_at, p.state, p.exit_queued_for, p.exit_reason_queued, "
-        "p.closed_on, p.exit_avg, p.close_reason, p.pnl_inr, p.return_pct, p.simulated "
+        "p.closed_on, p.exit_avg, p.close_reason, p.pnl_inr, p.return_pct, p.simulated, "
+        "p.partial_done, p.trail "
     )
 
     def _position_from(self) -> str:
@@ -311,6 +314,9 @@ class PgVbtStore:
             "pnl_inr": _dec(row["pnl_inr"]),
             "return_pct": _dec(row["return_pct"]),
             "simulated": bool(row["simulated"]),
+            # LV9: Qullamaggie's exit state
+            "partial_done": bool(row["partial_done"]),
+            "trail": row["trail"],
         }
 
     def open_position_for(self, instrument_id: int) -> dict | None:

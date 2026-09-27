@@ -65,6 +65,7 @@ that is a property of the arrangement rather than of either suite.
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 import os
 import subprocess
@@ -80,6 +81,7 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+import baskfy_worker.tasks.twt as twt_module
 from baskfy_core.models import (
     AppUser,
     Exchange,
@@ -92,7 +94,7 @@ from baskfy_core.models import (
     TwStateDaily,
 )
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
-from baskfy_core.twt.config import DEFAULT_TWT_CONFIG, Gate, SignalState
+from baskfy_core.twt.config import DEFAULT_TWT_CONFIG, Gate, SignalState, TwtConfig
 from baskfy_worker.steps import StepOutcome, StepStatus
 from baskfy_worker.tasks.twt import (
     LOOKBACK_SESSIONS,
@@ -857,6 +859,21 @@ class TestADateWithNothingToRead:
 
 
 class TestTomorrowsTriggerIsComputedTonight:
+    @pytest.fixture(autouse=True)
+    def _the_tested_ratchet(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """LV9 (Maulik, 28 Sep 2026 — TW20) sidelined the 20 % ratchet behind
+        ``ExitConfig.qulla_exits``; these tests are about the ratchet, so they run it: the same
+        code, the reversal is one flag (``test_twt_qulla`` pins the default)."""
+        real = twt_module.load_twt_config
+
+        async def legacy(session: AsyncSession, user_id: int) -> TwtConfig:
+            config = await real(session, user_id)
+            return dataclasses.replace(
+                config, exits=dataclasses.replace(config.exits, qulla_exits=False)
+            )
+
+        monkeypatch.setattr(twt_module, "load_twt_config", legacy)
+
     async def test_the_ratchet_raises_high_since_and_stores_the_next_trigger(
         self, twt_url: str
     ) -> None:
@@ -977,6 +994,21 @@ class TestTomorrowsTriggerIsComputedTonight:
 
 
 class TestASplitStoresAnExchangePriceAndNeverLowersAStop:
+    @pytest.fixture(autouse=True)
+    def _the_tested_ratchet(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """LV9 (Maulik, 28 Sep 2026 — TW20) sidelined the 20 % ratchet behind
+        ``ExitConfig.qulla_exits``; these tests are about the ratchet, so they run it: the same
+        code, the reversal is one flag (``test_twt_qulla`` pins the default)."""
+        real = twt_module.load_twt_config
+
+        async def legacy(session: AsyncSession, user_id: int) -> TwtConfig:
+            config = await real(session, user_id)
+            return dataclasses.replace(
+                config, exits=dataclasses.replace(config.exits, qulla_exits=False)
+            )
+
+        monkeypatch.setattr(twt_module, "load_twt_config", legacy)
+
     async def test_a_split_stores_an_entry_reference_equal_to_the_raw_price(
         self, twt_url: str
     ) -> None:

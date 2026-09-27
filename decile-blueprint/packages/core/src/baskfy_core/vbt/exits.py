@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from decimal import ROUND_DOWN, Decimal
 from enum import StrEnum
 
+from baskfy_core.exits.qulla import OhlcBar
 from baskfy_core.vbt.config import ExitConfig
 
 
@@ -35,12 +36,20 @@ class ExitReason(StrEnum):
     END_OF_RUN = "END_OF_RUN"
     #: A person sold it.
     MANUAL = "MANUAL"
+    #: LV9: the remainder sold at the next open on a close below the trail MA (Qullamaggie's exit).
+    MA_TRAIL = "MA_TRAIL"
+    #: LV9: a third sold into strength on bars 3-5. Never a close reason — the position stays open.
+    PARTIAL = "PARTIAL"
 
 
 class Action(StrEnum):
     HOLD = "HOLD"
     #: Queue a sell for the next session's open.
     QUEUE_SELL_AT_OPEN = "QUEUE_SELL_AT_OPEN"
+    #: LV9: queue a partial sale (``ManageAction.quantity`` shares) for the next open.
+    QUEUE_PARTIAL_AT_OPEN = "QUEUE_PARTIAL_AT_OPEN"
+    #: LV9: raise the resting stop to ``ManageAction.new_stop`` (breakeven).
+    RAISE_STOP = "RAISE_STOP"
     #: The stop fired (or should have — the GTT is the exchange's copy of this rule).
     STOPPED_OUT = "STOPPED_OUT"
     WRITE_OFF = "WRITE_OFF"
@@ -69,6 +78,9 @@ class Bar:
     low: Decimal | None
     close: Decimal | None
     ema_exit: Decimal | None
+    #: LV9: the exchange-price history ending on this session, for Qullamaggie's rule
+    #: (``baskfy_core.exits.qulla``). Empty when the caller runs the tested EMA exit.
+    history: tuple[OhlcBar, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,6 +93,10 @@ class ManageAction:
     #: hold and for a queued sell, whose price is tomorrow's open and is not knowable tonight.
     price: Decimal | None = None
     note: str = ""
+    #: LV9: the shares a partial sells; ``None`` for every other action.
+    quantity: int | None = None
+    #: LV9: the stop a ``RAISE_STOP`` raises to.
+    new_stop: Decimal | None = None
 
 
 def tick_floor(price: Decimal, tick: Decimal) -> Decimal:

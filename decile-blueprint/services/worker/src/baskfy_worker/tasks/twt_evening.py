@@ -353,6 +353,7 @@ async def store_plan(  # noqa: PLR0913 - a stored plan is its plan and its conte
                 high_since=line.high_since,
                 previous_trigger=line.previous_stop,
                 note=line.note,
+                position_id=line.position_id,
                 client_id=client_id_for(str(plan_id), line.symbol, line.kind),
             )
         )

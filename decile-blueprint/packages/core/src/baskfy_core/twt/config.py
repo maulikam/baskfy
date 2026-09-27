@@ -40,6 +40,8 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Final
 
+from baskfy_core.swing.config import StopConfig
+
 
 class Gate(StrEnum):
     """The regime gate (``04`` §4.3). **Two values, not three.**
@@ -298,6 +300,14 @@ class ExitConfig:
     #: setting's ceiling would refuse the ceiling itself on a tick-floor rounding.
     gtt_band_min_pct: Decimal = Decimal("0.005")
     gtt_band_max_pct: Decimal = Decimal("0.30")
+    #: **LV9 (Maulik, 28 Sep 2026 — DECISIONS-LV LV9.0, DECISIONS-TW TW20).** When true, the
+    #: exits above §7.1's stop are Qullamaggie's, as the swing book runs them
+    #: (``baskfy_core.exits.qulla`` over ``swing.stops.manage``): a third sold into strength on
+    #: bars 3-5, the stop to breakeven, the rest trailing the 10/20-day MA and sold at the next
+    #: open on a close below it. The 20 % high-water ratchet (§7.2) does not run. His reversal of
+    #: ``01`` §5's finding; false restores the tested trail in one line.
+    qulla_exits: bool = True
+    qulla: StopConfig = field(default_factory=StopConfig)
 
 
 @dataclass(frozen=True, slots=True)

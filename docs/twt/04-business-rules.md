@@ -249,6 +249,21 @@ discipline, and a paper plan that is not the plan is not a rehearsal.
 
 ## §7 The exits — and there are exactly two
 
+> **Superseded for the live book on 28 Sep 2026 (LV9 — Maulik: *"based on Kristjan Kullamägi's
+> style"*, "TWT and VBT, replacing their tested exits"; DECISIONS-LV LV9.0, DECISIONS-TW TW20).**
+> §7.1's stop stays exactly as written and is still the GTT. §7.2's 20 % high-water ratchet
+> **does not run** while `ExitConfig.qulla_exits` is true (the shipped default). In its place the
+> evening runs the swing book's rule through `baskfy_core.exits.qulla` — one implementation for
+> all three sleeves: a third sold into strength between bar 3 and bar 5 after entry if the
+> position is green; the stop to breakeven after the partial or once +1R is showing; the rest
+> trailing the 10-day MA (ADR ≥ 6 %) or the 20-day MA and sold at the **next open** on a close
+> below it (`close_reason = MA_TRAIL`). Both sales are `SELL_AT_OPEN` plan lines, sent by the
+> desk's `_sell_at_open` — a MARKET sell with Kite market protection, booked from the broker's
+> fill — and **twt-auto confirms them too** (TW20's widening of non-negotiable 1's second
+> exception to sells). The research below measured a partial and an MA exit and rejected them;
+> this is the owner's reversal, and no number is claimed for the new exit. `qulla_exits=false`
+> restores §7.2 in one line.
+
 ### §7.1 The disaster stop
 
 `ExitConfig.stop_pct = 20.0`. The initial stop is

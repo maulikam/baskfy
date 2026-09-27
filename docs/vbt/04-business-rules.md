@@ -223,6 +223,19 @@ a `vb_order` in `PROPOSED`/`CONFIRMED`/`SENT`, is skipped `ALREADY_HELD` / `ALRE
 
 ## §6 Stops and exits (`exits.py`, `ExitConfig`)
 
+> **Superseded for the live book on 28 Sep 2026 (LV9 — Maulik: *"based on Kristjan Kullamägi's
+> style"*; DECISIONS-LV LV9.0, DECISIONS-VB VB17).** §6.1's stop and §6.5's no-bar write-off stay
+> exactly as written. §6.2's close-below-the-21-EMA exit **does not fire** while
+> `ExitConfig.qulla_exits` is true (the shipped default). In its place the evening runs the swing
+> book's rule through `baskfy_core.exits.qulla`: a third sold into strength between bar 3 and
+> bar 5 after entry if green (`SELL_AT_OPEN`, `reason = PARTIAL`); the stop to breakeven after the
+> partial or at +1R (a new `RAISE_GTT_STOP` line — cancel, re-arm higher, never lower); the rest
+> trailing the 10-day MA (ADR ≥ 6 %) or the 20-day MA and sold at the next open on a close below
+> it (`SELL_AT_OPEN`, `reason = MA_TRAIL`). Every line is confirmed by hand — VBT has no
+> auto-execute flag. §6.3's finding that a partial lowered the result stands as the research
+> record; this is the owner's reversal, with no number claimed. `qulla_exits=false` restores
+> §6.2 in one line.
+
 Checked in this order. The order is the rule; §11's engine and the live evening job walk the same
 function.
 

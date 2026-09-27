@@ -71,6 +71,10 @@ MIGRATIONS = {
 MIGRATIONS["0057_live_scans.py"] = (
     screener_helpers.API_DIR / "alembic" / "versions" / "0057_live_scans.py"
 ).read_text(encoding="utf-8")
+#: LV9 (0058) widened `vb_plan_line.kind` again (RAISE_GTT_STOP) and the close reasons.
+MIGRATIONS["0058_qulla_exits.py"] = (
+    screener_helpers.API_DIR / "alembic" / "versions" / "0058_qulla_exits.py"
+).read_text(encoding="utf-8")
 MIGRATION = "\n".join(MIGRATIONS.values())
 
 
@@ -139,6 +143,7 @@ class TestTheVocabularyIsTheEngines:
             "CANCEL_LIMIT",
             "ARM_GTT",
             "BUY_AT_MARKET",
+            "RAISE_GTT_STOP",
         }
 
     def test_the_skip_reasons_are_the_engines(self) -> None:

@@ -2775,3 +2775,35 @@ any hour of the session, by this decision. **How to reverse:** set `BASKFY_TWT_A
 on the box (the drain and the 09:15 loop both stop); or, to keep auto-execute for the MORNING plan
 only, remove `LIVE` from `twt_auto.AUTO_SOURCES` (one line) and the supervisor's drain becomes a
 no-op that beats `idle`.
+
+## TW20 — Qullamaggie's exits replace the 20 % trail, and twt-auto sends the partial sale; by Maulik's instruction in session (28 Sep 2026) ✅ decided by Maulik
+
+**Maulik's words, in session, ~04:00 IST:** Q4 (targets) — *"that we need to do based on Kristjan
+Kullamägi's style"*; then, asked with options: **"TWT and VBT, replacing their tested exits"** and,
+for who sends TWT's partial sale, **"Auto-execute sends it too"**.
+
+**What changed (LV9).** `ExitConfig.qulla_exits` (default true) makes the evening run
+`baskfy_core.exits.qulla.decide` — an adapter over `baskfy_core.swing.stops.manage`, the swing
+book's rule, so there is one implementation of the partial, the breakeven and the trail — over
+every OPEN position instead of `run_twt_ratchet`: the third into strength on bars 3-5 if green
+(`partial_queued_for` / `partial_quantity`), the stop to breakeven after the partial or at +1R
+(`next_trigger` / `next_trigger_for`, the existing columns — the RAISE line is the same kind), the
+remainder on a close below the 10- or 20-day MA (`exit_queued_for` / `exit_reason_queued =
+MA_TRAIL`); `trail` is chosen once from the ADR. `exit_lines` emits `SELL_AT_OPEN` for a sale
+decided for the session just closed; until now it could emit none (TW10). The desk's
+`_sell_at_open` sends a MARKET sell with `market_protection=-1` through the gateway, records
+`lv_exit_order`, books from the broker's fill (partial: `partial_done`, the GTT re-sized; full:
+closed with the reason, the GTT pulled). `EXECUTABLE_KINDS` and `twt_auto.AUTO_KINDS` gain
+`SELL_AT_OPEN`, so the 09:15 loop and the supervisor's drain send the sale at the open under the
+same three flags. Migration 0058.
+
+**What this widens.** Non-negotiable 1's second exception now covers sells as well as stops and
+buys — **his widening**, recorded in root `CLAUDE.md`. No new flag.
+
+**What is not claimed.** `01` §5 measured a partial and an MA exit on this signal and found each
+lowered the result; no backtest of the new exit exists and none is claimed. The research stays in
+`04` §7 as the record.
+
+**How to reverse.** `qulla_exits=False` in `TwtConfig.exits` (the ratchet runs again, the sale
+lines stop); to keep the exits but stop auto-sending the sale, remove `SELL_AT_OPEN` from
+`twt_auto.AUTO_KINDS` (one line). Migration 0058's downgrade neutralises `MA_TRAIL` closes.

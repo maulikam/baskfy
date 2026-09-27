@@ -437,10 +437,14 @@ class TestLiveMarksOverlay:
         quotes = body["quotes"]
         assert isinstance(quotes, dict)
         # Decimal strings on the wire (house rule 9), change rounded to 0.01 (house rule 8).
+        # `as_of` and `stale` joined the quote with LV1 (27 Sep 2026, DECISIONS-LV LV1.1): a quote
+        # with no exchange timestamp is `as_of: None` and is judged fresh at the moment served.
         assert quotes["RELIANCE"] == {
             "last_price": "1520.40",
             "prev_close": "1500.00",
             "change_pct": "1.36",
+            "as_of": None,
+            "stale": False,
         }
         assert quotes["TCS"]["change_pct"] is None
         assert body["marks"] == {"RELIANCE": "1520.40", "TCS": "3000"}

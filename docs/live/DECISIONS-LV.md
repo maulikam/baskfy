@@ -195,8 +195,11 @@ cron minute; eight of fifteen mornings had none at 09:05, and the logins of 22 a
 every ten seconds. A token blob whose mtime moved **and** authenticates is a login: the account's
 holdings are seeded into the shared risk ledger (LV3) and the reconciler runs once (LV2, restart
 recovery). In session it runs the reconciler every tick and writes `lv_heartbeat` rows
-(`supervisor`, `reconciler`) that `/sleeves/state` reads. It places nothing, builds no plan and
-starts no other process; every write it causes goes through the sleeves' handlers and the gateway.
+(`supervisor`, `reconciler`) that `/sleeves/state` reads. It builds no plan and starts no other
+process; every write it causes goes through the sleeves' handlers and the gateway. *(Amended by
+LV8.1: since 28 Sep 2026 it also calls `twt_auto.drain_now` once a minute in session, so "places
+nothing" is no longer literally true — the drain sends TWT's LIVE plan through `execute_line`
+under the same three flags as `twt-auto`.)*
 
 **Rejected.** Folding the reconciler into `twt-auto` (a 09:15 clock, not a session) or the swing
 monitor (one sleeve's process; the reconciler must run for all three whatever is up). Kite

@@ -384,8 +384,9 @@ class TestTheSchemaOnARealDatabase:
 @requires_db
 class TestMigrateSeedMigrate:
     async def test_migrate_then_seed_then_migrate_is_a_no_op(self, fo_url: str) -> None:
-        head = _alembic(fo_url, "heads").stdout.split()[0]
-        assert head == FNO_HEAD, "one head, and it is the FO schema"
+        heads = _alembic(fo_url, "heads").stdout.strip().splitlines()
+        assert len(heads) == 1, "one head"
+        assert FNO_HEAD in _alembic(fo_url, "history").stdout, "in the head's history"
         async with _rolled_back(fo_url) as session:
             user_id = await _fresh_user(session, "mseed")
             first = await seed_fno(session, user_id)
@@ -402,7 +403,10 @@ class TestMigrateSeedMigrate:
             assert row is not None and row.capital_inr == Decimal("500000.00")
         again = _alembic(fo_url, "upgrade", "head")
         assert "Running upgrade" not in again.stderr + again.stdout
-        assert _alembic(fo_url, "current").stdout.split()[0] == FNO_HEAD
+        assert (
+            _alembic(fo_url, "current").stdout.split()[0]
+            == _alembic(fo_url, "heads").stdout.split()[0]
+        )
 
     async def test_the_seed_writes_maulik_s_capital_and_the_documents_defaults(
         self, fo_url: str
@@ -480,4 +484,7 @@ class TestTheRoundTrip:
         finally:
             await engine.dispose()
             _alembic(fo_url, "upgrade", "head")
-        assert _alembic(fo_url, "current").stdout.split()[0] == FNO_HEAD
+        assert (
+            _alembic(fo_url, "current").stdout.split()[0]
+            == _alembic(fo_url, "heads").stdout.split()[0]
+        )

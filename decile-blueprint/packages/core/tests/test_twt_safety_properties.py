@@ -405,6 +405,44 @@ class TestTheSurfaceIsWhatWeThinkItIs:
         return resolved
 
     @classmethod
+    def _imported_module_constants(cls, source: str) -> dict[str, dict[str, str]]:
+        """The fourth shape (OV5, 25 Sep 2026): a sibling module imported whole and its constant
+        named as an attribute — ``from baskfy_worker.tasks import overlap_scan`` and then
+        ``@shared_task(name=overlap_scan.SCAN_TASK)``. Followed one level, into the worker's own
+        package or the API's (the registry imports the overlap scan's name from there), and
+        nowhere else — the same discipline as the imported-name arm above."""
+        resolved: dict[str, dict[str, str]] = {}
+        package = BLUEPRINT / "services" / "worker" / "src" / "baskfy_worker"
+        api = BLUEPRINT / "services" / "api" / "src" / "baskfy_api"
+        for node in ast.parse(source).body:
+            if isinstance(node, ast.ImportFrom) and node.module in (
+                "baskfy_worker",
+                "baskfy_worker.tasks",
+                "baskfy_api",
+            ):
+                base = (
+                    api
+                    if node.module == "baskfy_api"
+                    else package / "tasks"
+                    if node.module.endswith("tasks")
+                    else package
+                )
+                for alias in node.names:
+                    path = base / f"{alias.name}.py"
+                    if path.exists():
+                        resolved[alias.asname or alias.name] = cls._string_constants(_source(path))
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    if not alias.name.startswith("baskfy_worker."):
+                        continue
+                    path = package / Path(*alias.name.split(".")[1:]).with_suffix(".py")
+                    if path.exists():
+                        resolved[alias.asname or alias.name.rsplit(".", 1)[-1]] = (
+                            cls._string_constants(_source(path))
+                        )
+        return resolved
+
+    @classmethod
     def _shared_task_names(cls, source: str) -> tuple[set[str], set[str]]:
         """``(resolved names, unresolvable decorator expressions)`` from one module's source."""
         tree = ast.parse(source)
@@ -412,6 +450,7 @@ class TestTheSurfaceIsWhatWeThinkItIs:
             **cls._imported_string_constants(source),
             **cls._string_constants(source),
         }
+        modules = cls._imported_module_constants(source)
 
         names: set[str] = set()
         unresolved: set[str] = set()
@@ -433,6 +472,12 @@ class TestTheSurfaceIsWhatWeThinkItIs:
                     names.add(keyword.value.value)
                 elif isinstance(keyword.value, ast.Name) and keyword.value.id in constants:
                     names.add(constants[keyword.value.id])
+                elif (
+                    isinstance(keyword.value, ast.Attribute)
+                    and isinstance(keyword.value.value, ast.Name)
+                    and keyword.value.attr in modules.get(keyword.value.value.id, {})
+                ):
+                    names.add(modules[keyword.value.value.id][keyword.value.attr])
                 else:
                     unresolved.add(f"{node.name}: name={ast.dump(keyword.value)[:60]}")
         return names, unresolved

@@ -41,7 +41,11 @@ DOCUMENTED_HYPERTABLES = ("ohlcv_daily", "factor_daily", "index_member_daily")
 #: docs/DECISIONS.md §16.2.
 SCALING_HYPERTABLES = ("market_health_daily", "index_snapshot_daily")
 
-HYPERTABLES = DOCUMENTED_HYPERTABLES + SCALING_HYPERTABLES
+#: LV5 (docs/04f-live-addendum.md): one-minute equity bars for the liquid universe, ~210,000 rows
+#: a session, so a hypertable on ``ts`` with monthly chunks — migration 0056.
+LIVE_HYPERTABLES = ("eq_minute_bar",)
+
+HYPERTABLES = DOCUMENTED_HYPERTABLES + SCALING_HYPERTABLES + LIVE_HYPERTABLES
 
 
 def _alembic(*args: str) -> subprocess.CompletedProcess[str]:

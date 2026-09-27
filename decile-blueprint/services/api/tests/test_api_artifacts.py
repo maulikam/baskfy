@@ -38,6 +38,7 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     "/meta/ranking-presets": {"get"},
     # Display marks only. Ranks, factors and sleeve signals stay on the published session.
     "/meta/live-marks": {"get"},
+    "/sleeves/state": {"get"},
     "/screens": {"get", "post"},
     # M22 (MERGE-PROMPTS.md), not docs/07 — which predates the merge and describes a screener
     # with no basket to show. Both are GET and only GET: execution stays in the desk console, and

@@ -195,6 +195,17 @@ DOCUMENTED_TABLES: dict[str, tuple[str, ...]] = {
     "tw_plan_skip": ("id",),
     "tw_session": ("user_id", "session_date"),
     "tw_backtest_run": ("id",),
+    # OV4 (25 Sep 2026): a person's correction of a filing tag — docs/04f-live-addendum.md names it.
+    "catalyst_tag_correction": ("id",),
+    # OV8 (25 Sep 2026): a person's label on a row's attention opinion — docs/04f names it.
+    "candidate_review_label": ("id",),
+    # The "live at any login time" pack (docs/04f-live-addendum.md; migrations 0055, 0056).
+    "lv_protection_issue": ("id",),
+    "lv_heartbeat": ("user_id", "process"),
+    "lv_exit_order": ("id",),
+    "lv_adoption": ("id",),
+    "risk_ledger": ("user_id", "day"),
+    "eq_minute_bar": ("instrument_id", "ts"),
     # TW12: one press of "Scan now" (docs/twt/03 §11, migration 0042). Append-only like
     # `tw_backtest_run`, and the only `tw_` table that records a *request* rather than a
     # measurement. There is deliberately no `provisional` column — DECISIONS-TW TW12.2.

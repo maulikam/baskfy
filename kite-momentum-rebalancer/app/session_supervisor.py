@@ -24,10 +24,17 @@ weekdays, ticking every ten seconds:
 
 WHAT IT NEVER DOES
 ------------------
-Place a buy, build a plan, or start another process. The swing monitor reloads its own
-watchlist (this module does not reach into it); ``twt-auto`` keeps its 09:15 clock (a plan that
-expired at 09:35 is not revived by a login — review P1.3). Every write the reconciler causes goes
-through the sleeves' handlers and the gateway. The token is read, never written.
+Build a plan, place anything of its own, or start another process. The swing monitor reloads its
+own watchlist (this module does not reach into it); ``twt-auto`` keeps its 09:15 clock (a plan
+that expired at 09:35 is not revived by a login — review P1.3). Every write the reconciler causes
+goes through the sleeves' handlers and the gateway. The token is read, never written.
+
+**The one order path it touches, since LV8 (28 Sep 2026, DECISIONS-TW TW19, Maulik's):** once a
+minute in session it asks ``twt_auto.drain_now`` to confirm TWT's LIVE plan — that module's own
+``execute_line``, its plan expiry, gateway, guards, GTT stop and caps, under the same three flags
+as the 09:15 loop (``DRY_RUN=false``, ``BASKFY_TWT_EXECUTION_ENABLED``,
+``BASKFY_TWT_AUTO_EXECUTE``). With any of them off the drain is a no-op that beats ``idle``. This
+module adds no flag and never builds the plan it drains.
 
 Everything time- and broker-dependent is injected (`Deps`) so the supervisor is a table of
 tests; `from_desk()` wires the real desk.

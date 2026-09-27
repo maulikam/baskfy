@@ -53,6 +53,8 @@ __all__ = ["PRODUCER_TASK_ROUTES", "TaskQueue", "build_task_queue"]
 #: table, so drift fails the build rather than silently misrouting work.
 PRODUCER_TASK_ROUTES: dict[str, dict[str, str]] = {
     "baskfy.ingest.*": {"queue": "ingest"},
+    # LV5: the after-close equity minute bars; the worker routes the same prefix to ingest.
+    "baskfy.eq_bars.*": {"queue": "ingest"},
     "baskfy.compute.*": {"queue": "compute"},
     "baskfy.backtest.*": {"queue": "backtest"},
     "baskfy.pipeline.*": {"queue": "default"},

@@ -164,10 +164,11 @@
 {#- ============================== the book ============================== -#}
 <section class="card" id="vbBook">
   <h2>Book <span class="muted">what this sleeve bought, and nothing else</span></h2>
+  <p class="muted vb-exit-rule">Exit rule: {{ v.exit_rule }}</p>
   <table class="tbl">
     <thead><tr>
-      <th>symbol</th><th>entered</th><th>entry</th><th>qty</th><th>stop</th><th>GTT</th>
-      <th>tomorrow</th>
+      <th>symbol</th><th>entered</th><th>entry</th><th>qty</th><th>initial stop</th><th>stop</th>
+      <th>₹ at risk</th><th>GTT</th><th>tomorrow</th>
     </tr></thead>
     <tbody>
       {% for position in v.book %}
@@ -177,7 +178,9 @@
         <td>{{ position.entry_date }}</td>
         <td>{{ position.entry_text }}</td>
         <td>{{ position.quantity_open }}</td>
+        <td>{{ position.initial_stop_text }}</td>
         <td>{{ position.stop_text }}</td>
+        <td class="vb-risk">{{ position.risk_text }}</td>
         <td>{% if position.naked %}<span class="pill bad">naked</span>
             {% else %}{{ position.gtt_id }}{% endif %}</td>
         <td>{% if position.sells_tomorrow %}sells at the open
@@ -185,7 +188,7 @@
       </tr>
       {% endfor %}
       {% if not v.book %}
-      <tr><td colspan="7" class="muted">The book is empty.</td></tr>
+      <tr><td colspan="9" class="muted">The book is empty.</td></tr>
       {% endif %}
     </tbody>
   </table>

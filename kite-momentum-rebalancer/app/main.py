@@ -162,6 +162,13 @@ from . import fno_desk                                               # noqa: E40
 app.include_router(fno_desk.router)
 templates.env.globals["fno_badge"] = fno_desk.nav_badge
 
+# LV6 (docs/live/PLAN.md, review P1.4): one visible lifecycle per trade across the three sleeves,
+# the stop judged against the broker's GTT list, and the explicit adoption of a hand-bought
+# holding. Read-only apart from /lifecycle/adopt, whose only broker write is a GTT armed for
+# shares the person says he holds — through the sleeve's own helper and the gateway.
+from . import lifecycle                                              # noqa: E402
+app.include_router(lifecycle.router)
+
 PLANS: dict[str, dict] = {}          # plan_id -> plan (in-memory, session-scoped)
 _kite: Kite | None = None
 _gateway: OrderGateway | None = None
@@ -187,9 +194,24 @@ def _latest_nav() -> float:
         return 0.0
 
 
+def _risk_store():  # noqa: ANN202 - a PgRiskStateStore, or None on a sqlite desk
+    """LV3: on the Postgres desk the risk state is the shared ``risk_ledger`` row, so the desk,
+    the swing monitor, ``twt-auto`` and the session supervisor decide against ONE day-loss cap,
+    ONE order counter and ONE exposure map. A sqlite desk (a laptop, the tests) keeps the
+    in-memory state it always had."""
+    from .analytics import db as _db  # noqa: PLC0415 - the desk imports its DB lazily
+
+    if _db.DB_BACKEND != "postgres":
+        return None
+    from .core.risk_store import PgRiskStateStore  # noqa: PLC0415
+
+    return PgRiskStateStore(_db.connect, user_id=C.SOLE_USER_ID, schema="public")
+
+
 def gateway() -> OrderGateway:
     """The sole order path. Holds the risk manager so the daily loss cap, the kill switch
-    and the order counter persist across requests rather than resetting per plan.
+    and the order counter persist across requests rather than resetting per plan — and, on
+    Postgres, across PROCESSES (LV3).
 
     Limits are derived from live NAV so they cannot contradict the strategy's own sizing:
     a fixed rupee cap silently forbids a position MAX_SINGLE_WEIGHT explicitly permits.
@@ -203,7 +225,7 @@ def gateway() -> OrderGateway:
         logging.info("risk limits: position<=Rs %,.0f gross<=Rs %,.0f dayloss<=Rs %,.0f"
                      .replace("%,", "%") % (cfg.max_position_value, cfg.max_gross_exposure,
                                             cfg.max_daily_loss))
-        _risk = RiskManager(cfg)
+        _risk = RiskManager(cfg, store=_risk_store())
         _gateway = OrderGateway(kite().kc, _risk)
     return _gateway
 

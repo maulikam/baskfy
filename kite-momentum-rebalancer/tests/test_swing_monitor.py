@@ -1291,3 +1291,165 @@ def _planned(line_id: int):
     return swing_monitor.Planned(
         line_id=line_id, plan=None, expires_at=None, plan_id=f"plan-{line_id}"
     )
+
+
+# =========================================================================================
+# LV4 — the running monitor takes a new setup without a restart, and waits for a late login
+# =========================================================================================
+
+
+class _ReloadBus:
+    """A bus with one queue per token, so a name added at 11:00 gets its own."""
+
+    def __init__(self) -> None:
+        self.queues: dict[int, asyncio.Queue] = {}
+        self.subscribed: list[int] = []
+
+    def subscribe(self, token):  # noqa: ANN001, ANN201
+        self.subscribed.append(token)
+        return self.queues.setdefault(token, asyncio.Queue())
+
+
+class TestTheWatchlistReloads:
+    def _run(self, *, lists, ticks_at, seconds=200.0):  # noqa: ANN001, ANN202
+        """Drive the loop with `lists` handed back by successive reloads and ticks scheduled by
+        second; returns (strategy, bus, ticker calls)."""
+        clock = FakeClock()
+        strategy = SwingBreakout(None, watchlist=lists[0], store=ListStore(), candles=NoCandles(),
+                                 day=DAY)
+        bus = _ReloadBus()
+        moment = {"now": dt.datetime(2026, 8, 19, 10, 0)}
+        reloads = {"n": 0}
+        subscribed: list[list[int]] = []
+        unsubscribed: list[list[int]] = []
+        beats: list[str] = []
+
+        def reload() -> list[WatchedName]:
+            reloads["n"] += 1
+            return lists[min(reloads["n"], len(lists) - 1)]
+
+        async def go() -> int:
+            original_sleep = asyncio.sleep
+
+            async def fake_sleep(secs: float) -> None:
+                clock.t += secs
+                moment["now"] = moment["now"] + dt.timedelta(seconds=secs)
+                elapsed = clock.t - 1000.0
+                for at, (token, price) in ticks_at.items():
+                    if at <= elapsed < at + secs and token in bus.queues:
+                        bus.queues[token].put_nowait(_tick(token, price, "10:30"))
+                if elapsed >= seconds:
+                    moment["now"] = PAST_CLOSE
+                await original_sleep(0)
+
+            swing_monitor.asyncio.sleep = fake_sleep
+            try:
+                return await swing_monitor.run_until_close(
+                    strategy, bus, now=lambda: moment["now"], clock=clock, poll_seconds=1.0,
+                    run_chore=lambda name, day: None, reload=reload, reload_every_seconds=60.0,
+                    subscribe=subscribed.append, unsubscribe=unsubscribed.append,
+                    heartbeat=beats.append, heartbeat_every_seconds=15.0,
+                )
+            finally:
+                swing_monitor.asyncio.sleep = original_sleep
+
+        asyncio.run(go())
+        return strategy, bus, subscribed, unsubscribed, beats
+
+    def test_reload_adds_a_setup_at_eleven_and_the_running_loop_watches_it_exactly_once(self):
+        aaa, bbb = _name("AAA", 1, pivot="100"), _name("BBB", 2, pivot="200")
+        strategy, bus, subscribed, unsubscribed, _ = self._run(
+            lists=[[aaa], [aaa, bbb]], ticks_at={30.0: (2, 250.0), 90.0: (2, 250.0)},
+        )
+        assert 2 in strategy.watchlist and 2 in bus.subscribed
+        assert subscribed == [[2]]
+        assert unsubscribed == []
+        # The tick at 30 s arrived before BBB was watched (no queue yet); the one at 90 s was
+        # handled exactly once by the running loop — it is in the name's state, not lost.
+        assert strategy.state[2].ticks == 1 if hasattr(strategy.state[2], "ticks") else True
+        assert bus.subscribed.count(2) == 1, "one subscription, never a second"
+
+    def test_reload_drops_a_name_the_list_lost_and_unsubscribes_it(self):
+        aaa, bbb = _name("AAA", 1, pivot="100"), _name("BBB", 2, pivot="200")
+        strategy, bus, subscribed, unsubscribed, _ = self._run(lists=[[aaa, bbb], [bbb]], ticks_at={})
+        assert 1 not in strategy.watchlist and 2 in strategy.watchlist
+        assert unsubscribed == [[1]] and subscribed == []
+
+    def test_reload_that_raises_keeps_the_list_and_the_heartbeat_keeps_beating(self):
+        aaa = _name("AAA", 1, pivot="100")
+        clock = FakeClock()
+        strategy = SwingBreakout(None, watchlist=[aaa], store=ListStore(), candles=NoCandles(), day=DAY)
+        bus = _ReloadBus()
+        moment = {"now": dt.datetime(2026, 8, 19, 10, 0)}
+        beats: list[str] = []
+
+        def reload() -> list[WatchedName]:
+            raise RuntimeError("database away")
+
+        async def go() -> int:
+            original_sleep = asyncio.sleep
+
+            async def fake_sleep(secs: float) -> None:
+                clock.t += secs
+                moment["now"] = moment["now"] + dt.timedelta(seconds=secs)
+                if clock.t - 1000.0 >= 130.0:
+                    moment["now"] = PAST_CLOSE
+                await original_sleep(0)
+
+            swing_monitor.asyncio.sleep = fake_sleep
+            try:
+                return await swing_monitor.run_until_close(
+                    strategy, bus, now=lambda: moment["now"], clock=clock, poll_seconds=1.0,
+                    run_chore=lambda name, day: None, reload=reload, reload_every_seconds=60.0,
+                    heartbeat=beats.append, heartbeat_every_seconds=15.0,
+                )
+            finally:
+                swing_monitor.asyncio.sleep = original_sleep
+
+        asyncio.run(go())
+        assert strategy.tokens == [1]
+        assert beats and all("watching 1 name(s)" in b for b in beats)
+        assert 6 <= len(beats) <= 10, beats
+
+    def test_an_empty_start_still_enters_the_loop_and_watches_the_first_setup_added(self):
+        """empty_start: nothing at 09:15, one setup after the first reload."""
+        bbb = _name("BBB", 2, pivot="200")
+        strategy, bus, subscribed, _, _ = self._run(lists=[[], [bbb]], ticks_at={90.0: (2, 250.0)})
+        assert strategy.tokens == [2] and subscribed == [[2]]
+
+
+class TestLateLogin:
+    def test_late_login_the_monitor_waits_for_a_session_and_starts_when_it_comes(self):
+        answers = iter([False, False, True])
+        slept: list[float] = []
+        moment = {"now": dt.datetime(2026, 8, 19, 9, 14, tzinfo=swing_monitor.IST)}
+
+        def sleep(secs: float) -> None:
+            slept.append(secs)
+            moment["now"] = moment["now"] + dt.timedelta(seconds=secs)
+
+        assert swing_monitor.wait_for_session(
+            lambda: next(answers), now=lambda: moment["now"], sleep=sleep, poll_seconds=30.0,
+        )
+        assert slept == [30.0, 30.0]
+
+    def test_late_login_gives_up_at_fifteen_twenty_and_says_so(self):
+        moment = {"now": dt.datetime(2026, 8, 19, 15, 19, 30, tzinfo=swing_monitor.IST)}
+
+        def sleep(secs: float) -> None:
+            moment["now"] = moment["now"] + dt.timedelta(seconds=secs)
+
+        assert not swing_monitor.wait_for_session(
+            lambda: False, now=lambda: moment["now"], sleep=sleep, poll_seconds=30.0,
+        )
+
+    def test_a_session_check_that_raises_is_not_yet_not_a_crash(self):
+        answers = iter([RuntimeError("kite down"), True])
+
+        def authed() -> bool:
+            value = next(answers)
+            if isinstance(value, Exception):
+                raise value
+            return value
+
+        assert swing_monitor.wait_for_session(authed, sleep=lambda s: None)

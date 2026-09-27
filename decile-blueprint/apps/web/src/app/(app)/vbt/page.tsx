@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { SleeveStateBadge } from "@/components/screens/sleeve-state";
 import { InstrumentLink } from "@/components/instrument/instrument-link";
 import { LiveMarksProvider, LivePrice, LiveStatus } from "@/components/screens/live-price";
 import { Answer, Mark } from "@/components/shell/answer";
@@ -315,6 +316,7 @@ export default async function VbtTodayPage() {
                 As of {formatTradeDate(asOf)}
               </span>
             ) : null}
+            <SleeveStateBadge sleeve="vbt" />
             <ScanNow action={scanNow} lastScan={lastScan} session={asOf} />
           </span>
         }

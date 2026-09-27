@@ -27,8 +27,10 @@ from typing import Annotated, Final
 import anyio
 from fastapi import APIRouter, Path, Query, Request
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from baskfy_api.auth import AuthenticatedDep
+from baskfy_api import twt_scan, vbt_scan
+from baskfy_api.auth import AuthenticatedDep, settings_for
 from baskfy_api.broker_accounts import ensure_default_broker_account
 from baskfy_api.broker_holdings import (
     HoldingsResult,
@@ -79,6 +81,10 @@ SESSION_CATCH_UP_TASK: Final = "baskfy.pipeline.session_catch_up"
 #: A login during the cash session also starts the live, provisional swing detector. It is a
 #: separate compute-queue task from the historical catch-up, so neither waits for the other.
 SWING_SCAN_AFTER_LOGIN_TASK: Final = "baskfy.swing.scan_after_login"
+#: The source each sleeve's scan-run row records for a login-triggered scan (LV4). The check
+#: constraints admit ``desk``/``web``/``cli`` (TWT) and ``desk``/``cli`` (VBT); the API is the
+#: web for TWT, and for VBT the closest true word is the desk's own — a login is the operator.
+LOGIN_SCAN_SOURCE: Final[dict[str, str]] = {"twt": "web", "vbt": "desk"}
 
 log = logging.getLogger("baskfy_api.brokers")
 
@@ -319,8 +325,17 @@ def _gate_out() -> BrokerGateOut:
     )
 
 
-def _queue_post_login_refresh(request: Request, user_id: int) -> str:
-    """Publish the history and live-swing refreshes without ever failing the login."""
+async def _queue_post_login_refresh(
+    request: Request, user_id: int, session: AsyncSession | None = None
+) -> str:
+    """Publish every refresh a login unlocks, without ever failing the login (LV4: gap 10).
+
+    The catch-up and the live swing scan as before; then the TWT and VBT scans of the last
+    **published** session — closed-session re-detections, idempotent per ``(user, date)``, queued
+    through the same ``request_scan`` the pages' buttons use (so their one-a-minute and
+    in-flight rules apply, and a refusal is a note here, not an error). A login is the moment the
+    system knows it can talk to Kite; everything that can start should start.
+    """
     queue = getattr(request.app.state, "task_queue", None)
     if queue is None:
         return "no task queue configured, so no data refresh was requested"
@@ -335,12 +350,48 @@ def _queue_post_login_refresh(request: Request, user_id: int) -> str:
             queued.append(label)
         except Exception as exc:
             failed.append(f"{label} ({type(exc).__name__})")
-    if failed:
-        return (
-            f"queued {', '.join(queued) if queued else 'no refresh jobs'}; "
-            f"could not be queued: {', '.join(failed)}"
+    if session is not None:
+        now = dt.datetime.now(tz=dt.UTC)
+        for label, request_scan, kind in (
+            ("TWT scan of the last published session", twt_scan.request_scan, "twt"),
+            ("VBT scan of the last published session", vbt_scan.request_scan, "vbt"),
+        ):
+            try:
+                settings = settings_for(request)
+                await request_scan(
+                    session,
+                    user_id=user_id,
+                    now=now,
+                    min_interval=dt.timedelta(
+                        seconds=getattr(settings, f"{kind}_scan_min_interval_seconds")
+                    ),
+                    stale_after=dt.timedelta(
+                        seconds=getattr(settings, f"{kind}_scan_stale_after_seconds")
+                    ),
+                    source=LOGIN_SCAN_SOURCE[kind],
+                    queue=queue,
+                )
+                queued.append(label)
+            except Exception as exc:
+                failed.append(f"{label} ({type(exc).__name__})")
+    original = {"missed-session catch-up", "live swing scan"}
+    base_ok = original <= set(queued)
+    base_failed = [f for f in failed if f.split(" (")[0] in original]
+    extra_ok = [label for label in queued if label not in original]
+    extra_failed = [f for f in failed if f.split(" (")[0] not in original]
+    if base_ok:
+        note = "missed sessions will be caught up and today's live swing scan was requested"
+    else:
+        base_queued = [label for label in queued if label in original]
+        note = (
+            f"queued {', '.join(base_queued) if base_queued else 'no refresh jobs'}; "
+            f"could not be queued: {', '.join(base_failed)}"
         )
-    return "missed sessions will be caught up and today's live swing scan was requested"
+    if extra_ok:
+        note += "; also queued: " + ", ".join(extra_ok)
+    if extra_failed:
+        note += "; could not be queued: " + ", ".join(extra_failed)
+    return note
 
 
 def _connection_state(broker_id: str) -> tuple[bool, str]:
@@ -533,7 +584,7 @@ async def oauth_callback(
     # Idempotent and cheap when there is nothing to do — a published day is not in its list, so
     # the ordinary morning costs one query. Best-effort exactly like the holdings pull below: a
     # queue that is not there must not fail a login that has already succeeded.
-    catch_up_note = _queue_post_login_refresh(request, user_id)
+    catch_up_note = await _queue_post_login_refresh(request, user_id, session)
     log.info("broker connect: %s", catch_up_note)
 
     # PULL THE HOLDINGS NOW, NOT WHEN SOMEBODY REMEMBERS TO PRESS A BUTTON (M81).

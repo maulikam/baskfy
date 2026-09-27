@@ -93,6 +93,7 @@ from baskfy_api.routers import (
     public,
     screens,
     search,
+    sleeve_state,
     sleeves,
     support,
     swing,
@@ -577,6 +578,7 @@ def _mount_routers(versioned: APIRouter) -> None:
     # M34: sleeves -- a portfolio divided across several screens plus a slice run by hand.
     # Amounts and weights only; no share counts, so nothing here is an order list.
     versioned.include_router(sleeves.router)
+    versioned.include_router(sleeve_state.router)
     # PROMPTS.md Prompt 18 §2's contact form. Not in docs/07 (`docs/DECISIONS.md` §18.5).
     versioned.include_router(support.router)
     # docs/09 §Observability: "`pipeline_run_step` is the operator UI; expose it at

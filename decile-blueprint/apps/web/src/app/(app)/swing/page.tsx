@@ -1,6 +1,7 @@
 import type { Metadata, Route } from "next";
 import Link from "next/link";
 
+import { SleeveStateBadge } from "@/components/screens/sleeve-state";
 import { InstrumentLink } from "@/components/instrument/instrument-link";
 import { LiveMarksProvider, LivePrice, LiveStatus } from "@/components/screens/live-price";
 import { Answer, Mark } from "@/components/shell/answer";
@@ -356,6 +357,7 @@ export default async function SwingSetupsPage(props: {
               <span className="text-sm text-muted-foreground">As of {formatTradeDate(asOf)}</span>
             ) : null}
             <ScanLabel provisional={provisional} scannedAt={scannedAt} />
+            <SleeveStateBadge sleeve="swing" />
             <ScanNow action={scanNow} lastScan={lastScan} session={asOf} />
           </span>
         }

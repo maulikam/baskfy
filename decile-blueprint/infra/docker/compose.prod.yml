@@ -498,6 +498,21 @@ services:
     healthcheck:
       disable: true
 
+  # LV4 (docs/live/PLAN.md, 28 Sep 2026) — the session supervisor. `session-supervisor-loop`
+  # (scripts/session_supervisor_loop.py) ticks every ten seconds 08:30-15:50 IST on a weekday:
+  # a Kite token arriving is the event — the risk ledger is seeded from holdings and the
+  # reconciler runs once; in session the reconciler runs every tick (the broker's order book,
+  # GTT list and holdings against every sleeve's book; fills booked, stops re-sized, issues
+  # written); and the `supervisor`/`reconciler` heartbeats /sleeves/state reads are kept. It
+  # never places a buy and holds no gateway of its own — every mutation it causes goes through
+  # the sleeves' handlers and the desk's gateway. Same image, same env, same read-only token.
+  session-supervisor:
+    <<: *desk
+    command: [session-supervisor-loop]
+    expose: []
+    healthcheck:
+      disable: true
+
   # OP15 (docs/options/06) — the options book's session monitor. `options-monitor-loop`
   # (scripts/options_monitor_loop.py) starts `python -m app.options_monitor` at 09:14 IST on a
   # weekday, at once if the container starts mid-session (it resumes from op_position), and again

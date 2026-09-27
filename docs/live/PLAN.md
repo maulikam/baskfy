@@ -1,0 +1,119 @@
+# Plan: LV — live at any login time (from `docs/trading-readiness-review-2026-09-27.md`)
+
+Depth: tree 3   Mode: orchestrated-lite (one driver; leaves worked in sequence or at most two at once — the
+16 GB Mac rule)   Started: Sunday 27 Sep 2026.
+Budget note: the review is five delivery steps; steps 1–4 are engineering against existing rules and are
+built here as LV1–LV6. Step 5 (new strategy variants, pyramiding, targets) needs Maulik's decisions and
+backtests on data LV5 only starts collecting; it is **not built** in this run and is handed back as
+questions with options (DECISIONS-LV LV0.1).
+
+## Contract
+
+Decided before fan-out. Everything a leaf could get wrong about its neighbours.
+
+### Naming
+* Module prefix **LV**; commits `LV<N>: green — …`; decisions in `docs/live/DECISIONS-LV.md` numbered
+  `LV<N>.<k>`, every entry `⚠ UNREVIEWED` until Maulik reads it; gates in `gates/live-<N>-<name>.md`.
+* New env: `BASKFY_LIVE_QUOTES` (API, default `"true"`, read-only market data; **not** a money flag).
+  No other new flag. No default changes to any existing flag (non-negotiable 1).
+* New desk tables live in the **public** schema beside `tw_*`/`vb_*` (the desk's stores prefix `public.`; the `desk`
+  schema is the migrated SQLite's) and are created by **one** Alembic migration owned by LV2:
+  `0055_live_desk_state.py` — `lv_protection_issue`, `lv_heartbeat`, `lv_exit_order`, `lv_adoption`, `risk_ledger`
+  (amended while building LV2: VBT's pending sell needed a row of its own; DECISIONS-LV LV2.4).
+  LV5 owns `0056_eq_minute_bar.py`. Nobody else adds a migration.
+
+### Interfaces
+* **LV1** `baskfy_api.live_prices`: `market_data_enabled() -> bool` (the `BASKFY_LIVE_QUOTES` read);
+  `quotes_permitted()` = `market_data_enabled() and api key and a real, unexpired, non-sim token` — it no
+  longer reads `DRY_RUN`. `LiveQuote` gains `as_of: dt.datetime | None`. Wire: `LiveQuoteOut` gains
+  `as_of: datetime|null`, `stale: bool`; `LiveMarksOut` gains `served_at: datetime`, `requested: int`,
+  `covered: int`, `stale_after_seconds: int` (120). Web `LiveMarks` gains `receivedAt`, `requested`,
+  `covered`; `LiveQuote` gains `stale`, `asOf`. The overlay is dropped in the browser when the last
+  successful answer is older than `LIVE_MAX_AGE_MS = 90_000` or the last fetch errored.
+* **LV2** desk `app/reconcile.py`:
+  `class SleeveHooks(Protocol)`: `name: str`; `open_orders(store) -> list[dict]` (rows with
+  `broker_order_id`, state SENT/PARTIAL); `on_order_update(store, gateway, payload, *, now)` — payload is
+  Kite's order-book row (`order_id`, `status`, `filled_quantity`, `average_price`, `transaction_type`,
+  `tradingsymbol`). `reconcile_once(book, sleeves, *, now, issues) -> ReconcileRun` (counts: seen,
+  applied, dead, released, issues). `class OrderBook(Protocol)`: `orders() -> list[dict]`,
+  `get_gtts() -> list[dict]`, `holdings() -> list[dict]`. Issues go to `lv_protection_issue`
+  (`sleeve, position_id, kind in {NAKED, GTT_MISSING, GTT_OVERSIZED, GTT_UNDERSIZED, EXTERNAL_EXIT,
+  GTT_TRIGGERED_UNFILLED, STOP_REJECTED}, detail, seen_at, resolved_at`). `protection_unresolved(conn, sleeve) -> list[dict]` is
+  the buy guard every sleeve's buy calls: a non-empty answer refuses with `PROTECTION_UNRESOLVED`.
+  TWT `on_order_update` handles partial fills exactly as swing's does (position for the filled quantity,
+  GTT resized as more fills arrive, never a second GTT). VBT gains `on_order_update` for buys and sells;
+  `_sell_at_open`'s real path records the sell `SENT` and books nothing until the broker reports a fill.
+  `python -m app.reconcile` runs one pass (restart recovery) and exits.
+* **LV3** `baskfy_execution.risk`: `class RiskStateStore(Protocol)`: `lock()` (context manager),
+  `load() -> dict | None`, `save(payload: dict) -> None`. `RiskManager(cfg, *, state_path=None,
+  store=None)`; with a store, `pre_order`, `on_pnl`, `kill`, `release` reload under `lock()` before
+  deciding and save after. New `release(symbol, value)` (an unfilled reservation given back) and
+  `seed_positions(values: dict[str, float])` (holdings counted toward exposure). Desk
+  `app/core/risk_store.py`: `PgRiskStateStore(connect)` over `desk.risk_ledger` (one row per IST day,
+  `SELECT … FOR UPDATE`). `app.main.gateway()` passes it when `DB_BACKEND == "postgres"`.
+* **LV4** desk `app/session_supervisor.py` (+ `scripts/session_supervisor_loop.py`, Dockerfile command
+  `session-supervisor-loop`, compose service `session-supervisor`, deploy scripts' service lists).
+  Heartbeats: `lv_heartbeat(process, state, detail, at)` upserted by process name; writers:
+  `supervisor`, `reconciler`, `swing_monitor`, `twt_auto`. Swing monitor: `run_until_close(...,
+  reload=None, reload_every_seconds=60, heartbeat=None)`; `main()` waits for a Kite session until 15:20
+  instead of exiting. API `GET /sleeves/state` → `list[SleeveStateOut]` with
+  `sleeve in {swing, twt, vbt}`, `state in {closed, waiting_for_login, scanning, signal_ready,
+  plan_ready, monitoring, missed_window, blocked, idle}`, `reason`, `as_of`, `next`, `updated_at`.
+  Web `<SleeveState sleeve=…/>` chip beside each Scan button. API login callback also queues
+  `baskfy.twt.scan` and `baskfy.vbt.rescan` (closed-session, idempotent, labelled as such).
+* **LV5** `eq_minute_bar(instrument_id, ts timestamptz, open, high, low, close numeric(18,2), volume
+  bigint, source text)` PK `(instrument_id, ts)`; worker `baskfy_worker/eq_bars.py`:
+  `reconcile_session(session, provider, day)` over the liquid universe (swing's `liquid_universe`,
+  as of the last published session) and `backfill(session, provider, start, end)` resumable per
+  instrument per 60-day window; Beat `baskfy.eq_bars.session` 15:45 Mon–Fri; CLI `eq_bars_cli`.
+  Core `baskfy_core/eq_bars.py`: pure readings only (windows, 5-minute bars, opening range).
+* **LV6** desk `app/lifecycle.py`: `TradeLifecycle` rows over the three sleeves' open positions
+  (`sleeve, symbol, filled_qty, open_qty, entry_avg, initial_stop, stop, stop_state in {ARMED, NAKED,
+  GTT_MISSING, GTT_OVERSIZED, TRIGGERED_UNFILLED}, stop_qty, rupee_risk, exit_rule, next_action,
+  overdue, issues`), page `GET /lifecycle`, `POST /lifecycle/adopt` (`confirm=true`, sleeve, symbol,
+  quantity, avg_cost, gtt_id optional) → a position in that sleeve's store + `lv_adoption` row + a stop
+  armed through the gateway when no `gtt_id` is given. Each sleeve page's trade card shows entry,
+  quantity, rupee risk, initial and current stop, and the exact exit rule.
+
+### Data ownership (no two leaves touch the same file)
+| Leaf | Owns |
+|---|---|
+| LV0 | `docs/live/AUDIT-2026-09-27.md`, `NEEDS-MAULIK.md` (append) |
+| LV1 | `decile-blueprint/services/api/src/baskfy_api/live_prices.py`, `routers/meta.py`, `schemas.py` (LiveMarks* only), `apps/web/src/lib/screens/live-marks.ts`, `components/screens/live-price.tsx`, their tests, `openapi.json` + TS client regen |
+| LV2 | desk `app/reconcile.py`, `app/twt_execute.py`, `app/vbt_execute.py`, `app/swing_execute.py` (guard only), stores' `open_orders`, `alembic/versions/0055_live_desk_state.py`, desk tests |
+| LV3 | `packages/execution/src/baskfy_execution/risk.py`, desk `app/core/risk_store.py`, `app/main.py` (gateway wiring), tests |
+| LV4 | desk `app/session_supervisor.py`, `scripts/session_supervisor_loop.py`, `app/swing_monitor.py`, `Dockerfile.desk`, `compose.prod.yml`, `tools/deploy/*.sh` service lists, API `routers/sleeves.py` + `sleeve_state.py` + `brokers.py` (queue list), web `components/screens/sleeve-state.tsx` + three page headers |
+| LV5 | `alembic/versions/0056_eq_minute_bar.py`, `baskfy_core/models/eq_bars.py`, `baskfy_core/eq_bars.py`, `baskfy_worker/eq_bars.py`, `celery_app.py` (one Beat entry + route), `eq_bars_cli.py`, tests |
+| LV6 | desk `app/lifecycle.py`, `templates/lifecycle.html`, sleeve templates' trade card, `app/main.py` (router include), tests |
+| LV7 | `docs/00-merge-status.md`, `docs/DECISIONS-MERGE.md` (pointer), `docs/live/DECISIONS-LV.md`, `CLAUDE.md` (clock table row for the price column), deploy ledger |
+
+LV2 and LV3 both need `app/main.py`? No: LV3 owns it (gateway wiring); LV6 adds its router include
+**after** LV3 is committed. LV4's `brokers.py` edit is one tuple line.
+
+### Conventions
+* Tests assert the spec (house rule 2); no `# type: ignore`, no `Any` outside the desk's existing
+  `# noqa: ANN401` idiom; ruff + ruff format + mypy strict on the screener trees; the desk suite is run
+  with `.venv/bin/python -m pytest` and nothing else touches `baskfy_test` while it runs.
+* Every buy path keeps: guards → risk → rate limit → journal → broker; `client_id = plan_id:symbol`.
+* `DRY_RUN=true` in every environment an agent creates. No live order. No flag flipped on the box.
+* Doc updates ride with the module that changed behaviour.
+
+## Tree
+
+- 1 LV — live at any login time .......................... gates/live-root.md
+  - 1.0 LV0 box + account audit (read-only) .............. gates/live-0-audit.md
+  - 1.1 LV1 market data off DRY_RUN; freshness end to end . gates/live-1-market-data.md
+  - 1.2 LV2 fill reconciliation, all three sleeves ....... gates/live-2-reconcile.md
+  - 1.3 LV3 account-wide risk ledger ..................... gates/live-3-risk.md
+  - 1.4 LV4 login as the event; sleeve state; monitor reload gates/live-4-login-event.md
+  - 1.5 LV5 intraday equity bars (store, reconcile, backfill) gates/live-5-eq-bars.md
+  - 1.6 LV6 trade lifecycle, adoption, trade card ........ gates/live-6-lifecycle.md
+  - 1.7 LV7 integration: suites, lint, deploy, docs, report gates/live-7-integration.md
+
+## Status log
+
+Append-only.
+
+- 2026-09-27 ~13:00 IST plan written, contract fixed; AWS SSO expired (login opened in Maulik's browser); Kite connector has no session.
+- 2026-09-28 00:20 IST LV0 audit read off the box: desk live, every book empty, TWT's six live buys of 23–24 Sep rejected by Zerodha for missing market protection; token rewritten 00:04, dies 06:00.
+- 2026-09-28 01:10 IST LV1 agent died mid-web (network); driver finished the web tests, docs and lint fixes. LV2 code and 21 tests written; migration 0055 test green on local Postgres.

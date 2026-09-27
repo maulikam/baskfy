@@ -2327,3 +2327,21 @@ lines, labelling works today, and the fine-tune is not started. Answer in the do
 Also from the review, **yours and not an agent's:** reading filing attachments for structured facts
 (order value as a share of revenue, dilution, penalty size) widens D10 (market-data licensing).
 
+## LV0 — the audit found TWT has never placed a live order, and why (28 Sep 2026)
+
+Read-only audit of the box, night of 27→28 Sep: `docs/live/AUDIT-2026-09-27.md`. Nothing is
+unprotected — every sleeve book is empty. Two things are yours:
+
+1. **TWT's live buys were rejected by Zerodha on 23 and 24 Sep** ("Market orders without market
+   protection are not allowed via API"), three a morning, because the buy never passed Kite's
+   `market_protection`. LV2 adds it (`-1`, Kite's automatic band; DECISIONS-LV LV2.3). **Once LV2 is
+   deployed, the first weekday with a Kite session before 09:15 is TWT's first live fill** — ₹25 lakh
+   sleeve, three entries a session, half size for the first ten. If you would rather watch the first
+   morning by hand, set `BASKFY_TWT_AUTO_EXECUTE=false` in `/opt/baskfy/.env.staging.compose` and
+   `up -d twt-auto` before that morning; say so and an agent does it (TW18 delegation). The
+   reconciler (LV2) and the lifecycle page (LV6) exist so that morning is watched by the system.
+2. **A Kite login before 09:15 on a trading day** is still what makes any of the desk trade: your
+   00:04 login on 28 Sep expires at 06:00. Eight of the last fifteen mornings had no session at
+   09:05. LV4 makes a later login start everything it can; it cannot make a token that is not there.
+
+Blocks nothing in this run.

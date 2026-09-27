@@ -8447,3 +8447,11 @@ announced its next result meeting yet. His choice: "put laya scan button on over
 **Tests.** 11 in `lib/overlap/__tests__/sort-candidates.test.ts` (every key both ways, nulls last, stability, purity) and 4 in `candidates-table.test.tsx` (eight headers at `aria-sort="none"`, first-click direction and flip, switching headers, nulls last). tsc and eslint clean.
 
 **Reverse.** Drop the sort block from `candidates.ts` and the header map from `candidates-table.tsx`; the `<th>` labels come back.
+
+## LV — the "live at any login time" pack (27 Sep 2026 →) · ⚠ UNREVIEWED
+
+The trading-readiness review of 27 Sep 2026 (`docs/trading-readiness-review-2026-09-27.md`) is being
+executed as its own pack. Its judgement calls are numbered in **`docs/live/DECISIONS-LV.md`** (LV0.1 scope;
+LV1.1 market data is `BASKFY_LIVE_QUOTES`, not `DRY_RUN` — which amends "Screens: a live price overlay"
+above: the overlay no longer goes dark under a rehearsal flag on a process with no execute route).
+Plan and contract: `docs/live/PLAN.md`; gates: `gates/live-*.md`.

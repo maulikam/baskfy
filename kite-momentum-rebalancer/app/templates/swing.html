@@ -273,10 +273,11 @@
 <section id="book">
   <h2>Book &mdash; {{ v.book.positions | length }} open{% if v.book.naked_count %},
     <span class="bad">{{ v.book.naked_count }} without a stop</span>{% endif %}</h2>
+  <p class="muted sw-exit-rule">Exit rule: {{ v.exit_rule }}</p>
   <div class="card scroll">
     <table aria-label="Open swing positions">
       <thead><tr><th>Symbol</th><th>Setup</th><th>Entered</th><th>Avg</th><th>Open / entered</th>
-        <th>Stop</th><th>GTT</th><th>Trail</th><th>Partial</th><th>Mode</th><th>Action</th></tr></thead>
+        <th>Stop</th><th>₹ at risk</th><th>GTT</th><th>Trail</th><th>Partial</th><th>Mode</th><th>Action</th></tr></thead>
       <tbody>
       {% for p in v.book.positions %}
         <tr class="sw-position {{ 'sw-naked' if p.naked else '' }}" data-position-id="{{ p.id }}">
@@ -286,6 +287,7 @@
           <td>{{ px(p.entry_avg) }}</td>
           <td>{{ '{:,}'.format(p.quantity_open) }} / {{ '{:,}'.format(p.quantity_entered) }}</td>
           <td>{{ px(p.stop) }} <span class="muted">(initial {{ px(p.initial_stop) }})</span></td>
+          <td class="sw-risk">{{ px((p.entry_avg - p.stop) * p.quantity_open) }}</td>
           <td>{% if p.naked %}<b class="bad">naked</b>{% else %}#{{ p.gtt_id }}
             <span class="muted">@ {{ px(p.gtt_trigger) }}</span>{% endif %}</td>
           <td>{{ p.trail }}</td>

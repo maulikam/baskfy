@@ -153,11 +153,12 @@ confirm is <code>BLOCKED (SESSION_CAP)</code>, and that is correct behaviour.</p
 
 {#- ============================== 4. the book ============================== -#}
 <h2>The book <span class="muted">— only what this sleeve bought</span></h2>
+<p class="muted tw-exit-rule">Exit rule: {{ v.exit_rule }}</p>
 {% if v.book %}
 <table class="grid">
   <thead><tr>
-    <th>symbol</th><th>entered</th><th>qty</th><th>entry</th><th>stop in force</th>
-    <th>GTT</th><th>high since</th><th>next trigger</th><th></th>
+    <th>symbol</th><th>entered</th><th>qty</th><th>entry</th><th>initial stop</th><th>stop in force</th>
+    <th>₹ at risk</th><th>GTT</th><th>high since</th><th>next trigger</th><th></th>
   </tr></thead>
   <tbody>
   {% for pos in v.book %}
@@ -166,7 +167,9 @@ confirm is <code>BLOCKED (SESSION_CAP)</code>, and that is correct behaviour.</p
       <td>{{ pos.entry_date }}</td>
       <td>{{ pos.quantity_open }}</td>
       <td>{{ inr(pos.entry_avg) }}</td>
+      <td>{{ inr(pos.initial_stop) }}</td>
       <td>{{ inr(pos.stop_price) }}</td>
+      <td class="tw-risk">{{ inr((pos.entry_avg - pos.stop_price) * pos.quantity_open) }}</td>
       <td>{% if pos.gtt_id %}{{ inr(pos.gtt_trigger) }}{% else %}<b>NAKED</b>{% endif %}</td>
       <td>{{ inr(pos.high_since) }}</td>
       <td>{% if pos.next_trigger %}{{ inr(pos.next_trigger) }}

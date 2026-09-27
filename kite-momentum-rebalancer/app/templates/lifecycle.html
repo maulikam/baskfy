@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Lifecycle{% endblock %}
+{% block content %}
+{% macro inr(x) -%}{% if x is none %}—{% else %}₹{{ '{:,.2f}'.format(x) }}{% endif %}{%- endmacro %}
+<h1>Lifecycle <span class="muted">— every open trade, entry to exit, against the broker</span></h1>
+
+<p class="muted">
+  One row per open position across the swing, TWT and VBT books. The stop column is the
+  <b>broker's</b> word{% if not v.gtt_checked %} — <b class="bad">not checked: no Kite session</b>, so every
+  stop reads UNVERIFIED until a login{% endif %}. A GTT that fired is not a fill: the row stays
+  unresolved until the position closes. Findings are the reconciler's (LV2), refreshed every ten
+  seconds in session.
+</p>
+
+{% if v.error %}<p class="bad">The page could not read the books: {{ v.error }}</p>{% endif %}
+
+<h2>{{ v.rows | length }} open{% if v.unresolved %}, <span class="bad">{{ v.unresolved }} unresolved</span>{% endif %}</h2>
+<table class="grid" id="lifecycle">
+  <thead><tr>
+    <th>sleeve</th><th>symbol</th><th>entered</th><th>filled / open</th><th>entry</th>
+    <th>initial stop</th><th>stop</th><th>₹ at risk</th><th>stop at broker</th><th>GTT qty</th>
+    <th>next action</th><th>findings</th><th>exit rule</th>
+  </tr></thead>
+  <tbody>
+  {% for r in v.rows %}
+    <tr class="{{ 'bad' if not r.resolved else '' }}" data-sleeve="{{ r.sleeve }}" data-position-id="{{ r.position_id }}" data-stop-state="{{ r.stop_state }}">
+      <td>{{ r.sleeve }}{% if r.simulated %} <span class="pill">simulated</span>{% endif %}</td>
+      <td><b>{{ r.symbol }}</b></td>
+      <td>{{ r.entry_date }}</td>
+      <td>{{ r.filled_qty }} / {{ r.open_qty }}</td>
+      <td>{{ inr(r.entry_avg) }}</td>
+      <td>{% if r.initial_stop is not none %}{{ inr(r.initial_stop) }}{% else %}—{% endif %}</td>
+      <td>{% if r.stop is not none %}{{ inr(r.stop) }}{% else %}—{% endif %}</td>
+      <td>{{ inr(r.rupee_risk) }}</td>
+      <td><b>{{ r.stop_state }}</b>{% if r.overdue %} <span class="pill bad">overdue</span>{% endif %}{% if r.gtt_id %} <span class="muted">#{{ r.gtt_id }}</span>{% endif %}</td>
+      <td>{% if r.stop_qty is not none %}{{ r.stop_qty }}{% else %}—{% endif %}</td>
+      <td>{{ r.next_action }}</td>
+      <td>{% for i in r.issues %}<div class="muted">{{ i }}</div>{% endfor %}</td>
+      <td class="muted">{{ r.exit_rule }}</td>
+    </tr>
+  {% endfor %}
+  {% if not v.rows %}
+    <tr><td colspan="13" class="muted">No sleeve holds anything. A name in the Kite account that no
+    sleeve bought is the weekly book's or yours; adopt it below if a sleeve should manage it.</td></tr>
+  {% endif %}
+  </tbody>
+</table>
+
+<h2>Adopt a holding <span class="muted">— explicitly, on your numbers</span></h2>
+<p class="muted">A holding you bought in the Kite app becomes a sleeve position on the cost and quantity
+  you state. Name the GTT you armed by hand to link it; leave it blank and the sleeve arms one through
+  the gateway at its own stop distance. Nothing is claimed silently: a name the sleeve holds already is
+  refused.</p>
+<form method="post" action="/lifecycle/adopt" class="adopt" id="adoptForm">
+  <label>sleeve <select name="sleeve"><option value="swing">swing</option><option value="twt">twt</option><option value="vbt">vbt</option></select></label>
+  <label>symbol <input name="symbol" required placeholder="NSE symbol"></label>
+  <label>quantity <input name="quantity" type="number" min="1" required></label>
+  <label>avg cost <input name="avg_cost" type="number" step="0.01" min="0.01" required></label>
+  <label>GTT id <input name="gtt_id" placeholder="optional"></label>
+  <label>swing setup <select name="setup"><option value="">—</option><option value="FLAG">FLAG</option><option value="EP">EP</option></select></label>
+  <label>note <input name="note" placeholder="why this sleeve"></label>
+  <label><input type="checkbox" name="confirm" value="true"> I bought this by hand and want this sleeve to manage it</label>
+  <button type="submit">Adopt</button>
+</form>
+{% endblock %}

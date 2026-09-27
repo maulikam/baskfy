@@ -973,8 +973,22 @@ async def run_until_close(  # noqa: PLR0913 - the loop's collaborators, named
     clock: Callable[[], float] = time.monotonic,
     on_first_tick: Callable[[], None] | None = None,
     run_chore: Callable[[str, dt.date], None] | None = None,
+    reload: Callable[[], list[WatchedName]] | None = None,
+    reload_every_seconds: float = 60.0,
+    subscribe: Callable[[list[int]], None] | None = None,
+    unsubscribe: Callable[[list[int]], None] | None = None,
+    heartbeat: Callable[[str], None] | None = None,
+    heartbeat_every_seconds: float = 15.0,
 ) -> int:
     """Consume the bus until `monitor_close`; returns the number of signals raised.
+
+    ``reload`` (LV4, review P1.2) is asked every ``reload_every_seconds`` for the current
+    watchlist: a name it gained is added to the strategy, subscribed on the bus and — through
+    ``subscribe`` — on the ticker; a name it lost is dropped and unsubscribed. So a "Scan now"
+    at 11:00 that adds a setup is watched by the running monitor, without a restart, and a
+    trigger on it is observed exactly once. ``heartbeat`` is called at most every
+    ``heartbeat_every_seconds`` with a one-line state (the ``swing_monitor`` heartbeat row that
+    ``/sleeves/state`` reads).
 
     ``quotes`` is the B10 fallback: asked only when no tick has arrived for
     `quote_poll_min_seconds`, and it refuses to be asked faster than that itself.
@@ -1031,7 +1045,63 @@ async def run_until_close(  # noqa: PLR0913 - the loop's collaborators, named
     queues = {token: bus.subscribe(token) for token in strategy.tokens}
     quiet_for = DEFAULT_SWING_CONFIG.opening_range.quote_poll_min_seconds
     last_tick_at = clock()
+    last_reload_at = clock()
+    last_beat_at: float | None = None
     first_tick_seen = False
+
+    def _reload_watchlist() -> None:
+        """Diff the list against what is watched; add, subscribe, drop, unsubscribe (LV4)."""
+        if reload is None:
+            return
+        try:
+            fresh = {w.token: w for w in reload()}
+        except Exception as exc:  # noqa: BLE001 - a failed reload keeps the list as it was
+            log.warning("watchlist reload failed; keeping the current list: %s", exc)
+            return
+        added = [w for token, w in fresh.items() if token not in strategy.watchlist]
+        gone = [token for token in list(strategy.watchlist) if token not in fresh]
+        for w in added:
+            if strategy.add_watch(w):
+                queues[w.token] = bus.subscribe(w.token)
+                if quotes is not None:
+                    quotes.symbols_by_token[w.token] = w.symbol
+        for token in gone:
+            if strategy.drop_watch(token):
+                queues.pop(token, None)
+                if quotes is not None:
+                    quotes.symbols_by_token.pop(token, None)
+        if added and subscribe is not None:
+            try:
+                subscribe([w.token for w in added])
+            except Exception as exc:  # noqa: BLE001 - the quote fallback still covers them
+                log.warning("could not subscribe %d new name(s) on the ticker: %s", len(added), exc)
+        if gone and unsubscribe is not None:
+            try:
+                unsubscribe(gone)
+            except Exception as exc:  # noqa: BLE001 - a stale subscription is only noise
+                log.warning("could not unsubscribe %d name(s) on the ticker: %s", len(gone), exc)
+        if added or gone:
+            log.info(
+                "watchlist reloaded: +%s -%s (%d watched)",
+                ", ".join(w.symbol for w in added) or "none",
+                ", ".join(str(t) for t in gone) or "none",
+                len(strategy.watchlist),
+            )
+
+    def _beat(moment: dt.datetime) -> None:
+        nonlocal last_beat_at
+        if heartbeat is None:
+            return
+        if last_beat_at is not None and clock() - last_beat_at < heartbeat_every_seconds:
+            return
+        last_beat_at = clock()
+        try:
+            heartbeat(
+                f"watching {len(strategy.watchlist)} name(s), {len(strategy.signals)} signal(s) "
+                f"raised, at {moment:%H:%M:%S}"
+            )
+        except Exception as exc:  # noqa: BLE001 - the record, not the watching
+            log.error("could not write the monitor heartbeat: %s", exc)
     await strategy.on_start()
     _tel.gauge("swing_monitor_up", 1)
 
@@ -1062,6 +1132,10 @@ async def run_until_close(  # noqa: PLR0913 - the loop's collaborators, named
             # cannot stall the bus, and so the queue never carries a trigger across a sleep.
             _drain(strategy)
             _chores(moment)
+            _beat(moment)
+            if reload is not None and clock() - last_reload_at >= reload_every_seconds:
+                last_reload_at = clock()
+                _reload_watchlist()
             if drained:
                 last_tick_at = clock()
                 continue
@@ -1096,65 +1170,92 @@ def main() -> int:
     kite = Kite()
     # A second process beside the desk server: its own metrics port, or the desk's plus one.
     _tel.install(metrics_port=monitor_metrics_port())
-    with connect() as conn:
-        config = load_config(conn, user_id=user_id)
-        symbols = [
-            str(r["symbol"])
-            for r in conn.execute(
-                f"SELECT i.symbol FROM {SCHEMA}.sw_watch w JOIN {SCHEMA}.instrument i "
-                "ON i.id = w.instrument_id WHERE w.user_id = ? AND w.state = 'WATCHING'",
-                (user_id,),
-            ).fetchall()
-        ]
-        watchlist = load_watchlist(conn, user_id=user_id, circuits=circuit_bands(kite, symbols))
-        context = load_context(conn, user_id=user_id, day=day)
-        notifier = Notifier(
-            observe=lambda channel, outcome: _tel.count(
-                "swing_notifications", channel=channel, outcome=outcome
-            )
-        )
-        store = PgSignalStore(
-            conn, user_id=user_id, day=day, config=config, context=context, notifier=notifier
-        )
-        # No gateway at all. `BaseStrategy` takes one because every other engine trades through
-        # it; this one raises signals, and a process that holds no gateway cannot be talked into
-        # using one.
-        strategy = build_monitor(
-            enabled=C.SWING_MONITOR_ENABLED,
-            gateway=None,
-            watchlist=watchlist,
-            store=store,
-            candles=KiteCandles(kite),
-            day=day,
-            config=config,
-        )
-        if strategy is None or not watchlist:
-            # Nothing to watch is still a monitor that ran (`SWING_MONITOR_DID_NOT_START` must
-            # not fire on an empty watchlist), and the clock below still owes the day its
-            # cutoff and its 15:15 sweep — yesterday's positions do not care about today's list.
-            log.info("nothing to watch today (%d names)", len(watchlist))
-            record_monitor_ran(conn, user_id=user_id, day=day, signals=0)
-        else:
-            strategy.observe_with(
-                lambda seconds: _tel.observe("swing_verdict_seconds", seconds)
-            )
-            fallback = QuoteFallback(kite, {w.token: w.symbol for w in watchlist})
+    # LV4 (review P1.2, gap 10): a late login must not be a lost day. Wait for a Kite session
+    # until the last moment a watch could still matter, instead of failing at 09:14 for want of
+    # a token that arrives at 10:40.
+    if not wait_for_session(kite.is_authed):
+        log.error("no Kite session arrived before %s; the monitor did not run", SESSION_WAIT_UNTIL)
+    else:
+        with connect() as conn:
+            config = load_config(conn, user_id=user_id)
 
-            async def _serve() -> int:
-                bus = TickBus()
-                start_ticker(C.KITE_API_KEY, kite.kc.access_token, strategy.tokens, bus)
-                # SW11.2: `monitor_ran` is written on the FIRST tick the strategy handles —
-                # pushed or polled — so `SWING_MONITOR_DID_NOT_START` (09:20) reads "the
-                # monitor is watching the market", not "the process was launched".
-                return await run_until_close(
-                    strategy, bus, quotes=fallback,
-                    on_first_tick=lambda: record_monitor_ran(
-                        conn, user_id=user_id, day=day, signals=0
-                    ),
+            def watched_symbols() -> list[str]:
+                return [
+                    str(r["symbol"])
+                    for r in conn.execute(
+                        f"SELECT i.symbol FROM {SCHEMA}.sw_watch w JOIN {SCHEMA}.instrument i "
+                        "ON i.id = w.instrument_id WHERE w.user_id = ? AND w.state = 'WATCHING'",
+                        (user_id,),
+                    ).fetchall()
+                ]
+
+            def reload_watchlist() -> list[WatchedName]:
+                return load_watchlist(
+                    conn, user_id=user_id, circuits=circuit_bands(kite, watched_symbols())
                 )
 
-            raised = asyncio.run(_serve())
-            record_monitor_ran(conn, user_id=user_id, day=day, signals=raised)
+            watchlist = reload_watchlist()
+            context = load_context(conn, user_id=user_id, day=day)
+            notifier = Notifier(
+                observe=lambda channel, outcome: _tel.count(
+                    "swing_notifications", channel=channel, outcome=outcome
+                )
+            )
+            store = PgSignalStore(
+                conn, user_id=user_id, day=day, config=config, context=context, notifier=notifier
+            )
+            # No gateway at all. `BaseStrategy` takes one because every other engine trades through
+            # it; this one raises signals, and a process that holds no gateway cannot be talked into
+            # using one.
+            strategy = build_monitor(
+                enabled=C.SWING_MONITOR_ENABLED,
+                gateway=None,
+                watchlist=watchlist,
+                store=store,
+                candles=KiteCandles(kite),
+                day=day,
+                config=config,
+            )
+            if not watchlist:
+                # Nothing to watch is still a monitor that ran (`SWING_MONITOR_DID_NOT_START` must
+                # not fire on an empty watchlist), so the row is written at once. LV4: the process
+                # then ENTERS the loop anyway — a "Scan now" at 11:00 can add the day's first setup,
+                # and the running monitor must be there to watch it.
+                log.info("nothing to watch today (0 names) yet; watching for the list to change")
+                record_monitor_ran(conn, user_id=user_id, day=day, signals=0)
+            if strategy is None:
+                log.info("the monitor was not built")
+            else:
+                strategy.observe_with(
+                    lambda seconds: _tel.observe("swing_verdict_seconds", seconds)
+                )
+                fallback = QuoteFallback(kite, {w.token: w.symbol for w in watchlist})
+                beats = heartbeat_writer(conn, user_id=user_id)
+
+                async def _serve() -> int:
+                    bus = TickBus()
+                    kws = start_ticker(C.KITE_API_KEY, kite.kc.access_token, strategy.tokens, bus)
+
+                    def _subscribe(tokens: list[int]) -> None:
+                        kws.subscribe(tokens)
+                        kws.set_mode(kws.MODE_FULL, tokens)
+
+                    # SW11.2: `monitor_ran` is written on the FIRST tick the strategy handles —
+                    # pushed or polled — so `SWING_MONITOR_DID_NOT_START` (09:20) reads "the
+                    # monitor is watching the market", not "the process was launched".
+                    return await run_until_close(
+                        strategy, bus, quotes=fallback,
+                        on_first_tick=lambda: record_monitor_ran(
+                            conn, user_id=user_id, day=day, signals=0
+                        ),
+                        reload=reload_watchlist,
+                        subscribe=_subscribe,
+                        unsubscribe=kws.unsubscribe,
+                        heartbeat=beats,
+                    )
+
+                raised = asyncio.run(_serve())
+                record_monitor_ran(conn, user_id=user_id, day=day, signals=raised)
     # The strategy is done and holds nothing. What follows is the desk's clock as a BACKSTOP
     # (SW26): the loop above already ran both chores at their own hours, so this normally finds
     # nothing to do. It still runs unconditionally, because the empty-watchlist branch above
@@ -1163,6 +1264,51 @@ def main() -> int:
     from .swing_clock import run_after_close  # noqa: PLC0415 - after the monitor, never before
 
     return run_after_close(day=day)
+
+
+#: LV4: the latest a session may arrive and still be worth watching for — ten minutes before the
+#: monitor's close, so a login at 15:19 still runs the 15:15 sweep and the marks; one at 15:21 is
+#: tomorrow's.
+SESSION_WAIT_UNTIL = dt.time(15, 20)
+SESSION_POLL_SECONDS = 30.0
+
+
+def wait_for_session(
+    authed: Callable[[], bool],
+    *,
+    now: Callable[[], dt.datetime] | None = None,
+    sleep: Callable[[float], None] | None = None,
+    until: dt.time = SESSION_WAIT_UNTIL,
+    poll_seconds: float = SESSION_POLL_SECONDS,
+) -> bool:
+    """Poll for a Kite session until ``until`` (IST). True the moment one exists (LV4)."""
+    read_now = now or (lambda: dt.datetime.now(tz=IST))
+    pause = sleep or time.sleep
+    while True:
+        try:
+            if authed():
+                return True
+        except Exception as exc:  # noqa: BLE001 - a failed check is "not yet"
+            log.warning("Kite session check failed: %s", exc)
+        moment = read_now().astimezone(IST)
+        if moment.time() >= until:
+            return False
+        log.info("no Kite session yet; the monitor waits (until %s IST)", until)
+        pause(poll_seconds)
+
+
+def heartbeat_writer(conn: Any, *, user_id: int) -> Callable[[str], None]:
+    """The ``swing_monitor`` row of ``lv_heartbeat`` (LV4), through the monitor's connection."""
+
+    def beat(detail: str) -> None:
+        conn.execute(
+            f"INSERT INTO {SCHEMA}.lv_heartbeat (user_id, process, state, detail, at) "
+            "VALUES (?, 'swing_monitor', 'watching', ?, ?) ON CONFLICT (user_id, process) "
+            "DO UPDATE SET state = EXCLUDED.state, detail = EXCLUDED.detail, at = EXCLUDED.at",
+            (user_id, detail[:2000], dt.datetime.now(tz=IST)),
+        )
+
+    return beat
 
 
 def monitor_metrics_port() -> int | None:

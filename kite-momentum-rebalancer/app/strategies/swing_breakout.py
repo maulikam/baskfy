@@ -186,6 +186,26 @@ class SwingBreakout(BaseStrategy):
     def tokens(self) -> list[int]:
         return list(self.watchlist)
 
+    def add_watch(self, watched: WatchedName) -> bool:
+        """Start watching a name the list gained after start-up (LV4). False when already
+        watched — the caller must not subscribe it twice. The name's state starts empty, so a
+        range is built from the ticks it sees from now; a setup that triggered before it was
+        added is not back-filled, by design: the monitor confirms what it watched."""
+        if watched.token in self.watchlist:
+            return False
+        self.watchlist[watched.token] = watched
+        self.state[watched.token] = _NameState()
+        return True
+
+    def drop_watch(self, token: int) -> bool:
+        """Stop watching a name the list lost (expired, cancelled, filled elsewhere). False when
+        it was not watched. A signal already raised for it stands; it will raise no more."""
+        if token not in self.watchlist:
+            return False
+        del self.watchlist[token]
+        self.state.pop(token, None)
+        return True
+
     def observe_with(self, sink: Callable[[float], None] | None) -> None:
         """Hand every verdict's duration to ``sink`` (the desk's telemetry). A sink that raises
         is dropped and logged — observability never stops a verdict (SW11, B8)."""

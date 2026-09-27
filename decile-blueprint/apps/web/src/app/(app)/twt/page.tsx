@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { SleeveStateBadge } from "@/components/screens/sleeve-state";
 import { Answer, Mark } from "@/components/shell/answer";
 import { PageHeader } from "@/components/shell/page-header";
 import { SectionTabs } from "@/components/shell/section-tabs";
@@ -70,6 +71,7 @@ export default async function TwtPage() {
             {view.gate.session ? (
               <span>As of {formatTradeDate(view.gate.session)}</span>
             ) : null}
+            <SleeveStateBadge sleeve="twt" />
             <ScanNow action={scanNow} lastScan={lastScan} session={view.gate.session} />
           </span>
         }

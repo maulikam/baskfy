@@ -236,6 +236,7 @@ def kill_switch_reason(risk: RiskManager) -> str:
     as set until the first of those runs today. That can only refuse a CANCEL, never withhold
     a stop, which is the direction an error here should point.
     """
+    risk.refresh()  # LV3: a kill from another process is on the shared row, not in this one
     if not risk.state.killed:
         return ""
     return f"KILL SWITCH: {'; '.join(risk.state.reasons)}"

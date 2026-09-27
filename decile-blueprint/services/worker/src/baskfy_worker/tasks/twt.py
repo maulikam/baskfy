@@ -88,6 +88,7 @@ from sqlalchemy import Select, delete, func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from baskfy_core.exits.qulla import MA_TRAIL, PARTIAL, OhlcBar, Position, decide
 from baskfy_core.models import (
     IndexDef,
     IndexMemberDaily,
@@ -104,6 +105,7 @@ from baskfy_core.models import (
 from baskfy_core.models.base import JsonObject
 from baskfy_core.precision import COLUMN_PRECISION, apply_storage_precision, quantise
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
+from baskfy_core.swing.stops import TrailMa
 from baskfy_core.twt.breadth import BreadthReading, breadth_above_dma
 from baskfy_core.twt.calendar import SessionCalendar, drop_thin_sessions
 from baskfy_core.twt.config import (
@@ -962,6 +964,196 @@ async def run_twt_ratchet(
     )
 
 
+# --- LV9: Qullamaggie's exits (Maulik, 28 Sep 2026 — DECISIONS-LV LV9.0, DECISIONS-TW TW20) ---
+
+#: Sessions of history the trail needs: the 20-day average plus the ADR window, with slack.
+QULLA_LOOKBACK_SESSIONS: Final[int] = 45
+
+
+@dataclass(frozen=True, slots=True)
+class QullaReport:
+    """What one evening's management wrote."""
+
+    positions: int
+    partials: int
+    exits: int
+    raises: int
+    stop_hits: int
+    without_a_bar: int
+
+    def as_detail(self) -> dict[str, int]:
+        return {
+            "managed_positions": self.positions,
+            "partials_queued": self.partials,
+            "exits_queued": self.exits,
+            "breakeven_raises": self.raises,
+            "stop_hits_seen": self.stop_hits,
+            "positions_without_a_bar": self.without_a_bar,
+        }
+
+
+async def _exchange_series(
+    session: AsyncSession, instrument_ids: list[int], start: dt.date, end: dt.date
+) -> dict[int, list[OhlcBar]]:
+    """Each held name's bars in **exchange** prices, oldest first — the space the positions,
+    the stops and the GTTs are in (the adjusted series divided by each row's factor)."""
+    if not instrument_ids:
+        return {}
+    rows = await session.execute(
+        select(
+            OhlcvDaily.instrument_id,
+            OhlcvDaily.date,
+            OhlcvDaily.open,
+            OhlcvDaily.high,
+            OhlcvDaily.low,
+            OhlcvDaily.close,
+            OhlcvDaily.close_raw,
+            OhlcvDaily.adj_factor,
+        )
+        .where(
+            OhlcvDaily.instrument_id.in_(instrument_ids),
+            OhlcvDaily.date >= start,
+            OhlcvDaily.date <= end,
+        )
+        .order_by(OhlcvDaily.instrument_id, OhlcvDaily.date)
+    )
+    out: dict[int, list[OhlcBar]] = {}
+    for row in rows:
+        if row.open is None or row.high is None or row.low is None or row.close is None:
+            continue
+        factor = Decimal(str(row.adj_factor)) if row.adj_factor is not None else Decimal(1)
+        close = (
+            Decimal(str(row.close_raw))
+            if row.close_raw is not None
+            else _exchange(Decimal(str(row.close)), factor)
+        )
+        out.setdefault(int(row.instrument_id), []).append(
+            OhlcBar(
+                date=row.date,
+                open=_exchange(Decimal(str(row.open)), factor) or Decimal(0),
+                high=_exchange(Decimal(str(row.high)), factor) or Decimal(0),
+                low=_exchange(Decimal(str(row.low)), factor) or Decimal(0),
+                close=close or Decimal(0),
+            )
+        )
+    return out
+
+
+async def sessions_between(session: AsyncSession, start: dt.date, end: dt.date) -> int:
+    """Trading days strictly after ``start`` and up to ``end`` — ``bars_since_entry``. The entry
+    day is bar 0 (the swing book's ``04`` §6.4), so a position entered today has zero behind it."""
+    return int(
+        (
+            await session.execute(
+                select(func.count())
+                .select_from(TradingDay)
+                .where(
+                    TradingDay.exchange_id == NSE_EXCHANGE_ID,
+                    TradingDay.is_trading_day.is_(True),
+                    TradingDay.date > start,
+                    TradingDay.date <= end,
+                )
+            )
+        ).scalar_one()
+    )
+
+
+async def run_twt_manage_qulla(
+    session: AsyncSession,
+    trade_date: dt.date,
+    *,
+    user_id: int,
+    config: TwtConfig,
+) -> QullaReport:
+    """Qullamaggie's rule over every ``OPEN`` position after ``trade_date``'s close (LV9).
+
+    Replaces :func:`run_twt_ratchet` when ``config.exits.qulla_exits`` is on. What is written:
+    ``trail`` (once, from the ADR), ``partial_queued_for`` / ``partial_quantity`` for the third
+    into strength, ``exit_queued_for`` / ``exit_reason_queued = MA_TRAIL`` for the remainder on a
+    close below the trail MA, ``next_trigger`` / ``next_trigger_for`` for the breakeven raise.
+    What is **not**: ``stop_price``, ``gtt_trigger``, ``quantity_open`` — every one of those moves
+    only when the desk has confirmed the line and the broker has done the thing (``02`` Track C
+    §3). A stop the rule saw traded through is counted and left to the reconciler: the GTT is the
+    exchange's copy of that rule, and this job does not pretend to know whether it filled.
+
+    A decision is **for the session just closed**; a plan reads it only for that session, so a
+    stale queue from an evening whose morning nobody confirmed is not re-sold by accident.
+    """
+    positions = list(
+        (
+            await session.execute(
+                select(TwPosition, Instrument.symbol)
+                .join(Instrument, Instrument.id == TwPosition.instrument_id)
+                .where(
+                    TwPosition.user_id == user_id,
+                    TwPosition.state == "OPEN",
+                    TwPosition.quantity_open > 0,
+                )
+                .order_by(Instrument.symbol)
+            )
+        ).all()
+    )
+    if not positions:
+        return QullaReport(0, 0, 0, 0, 0, 0)
+    start = await lookback_start(session, trade_date, QULLA_LOOKBACK_SESSIONS)
+    series = await _exchange_series(
+        session, [int(position.instrument_id) for position, _ in positions], start, trade_date
+    )
+    partials = exits = raises = stop_hits = missing = 0
+    for position, symbol in positions:
+        bars = series.get(int(position.instrument_id), [])
+        resting = (
+            position.stop_price
+            if position.gtt_trigger is None
+            else max(position.stop_price, position.gtt_trigger)
+        )
+        decision = decide(
+            Position(
+                position_id=int(position.id),
+                symbol=symbol,
+                entry_date=position.entry_date,
+                entry=Decimal(str(position.entry_avg)),
+                initial_stop=Decimal(str(position.initial_stop)),
+                stop=Decimal(str(resting)),
+                quantity=int(position.quantity_open),
+                partial_done=bool(position.partial_done),
+                trail=None if position.trail is None else TrailMa(position.trail),
+            ),
+            bars,
+            on=trade_date,
+            bars_since_entry=await sessions_between(session, position.entry_date, trade_date),
+            config=config.exits.qulla,
+        )
+        if decision is None:
+            missing += 1
+            continue
+        if position.trail is None:
+            position.trail = decision.trail.value
+        # Tonight's decision replaces last night's, whatever it was: the plan reads only a
+        # decision dated the session just closed.
+        position.partial_queued_for = None
+        position.partial_quantity = None
+        position.exit_queued_for = None
+        position.exit_reason_queued = None
+        position.next_trigger = None
+        position.next_trigger_for = trade_date
+        if decision.stop_hit:
+            stop_hits += 1
+        if decision.sell_reason == PARTIAL and decision.sell_quantity > 0:
+            position.partial_queued_for = trade_date
+            position.partial_quantity = int(decision.sell_quantity)
+            partials += 1
+        elif decision.sell_reason == MA_TRAIL and decision.sell_quantity > 0:
+            position.exit_queued_for = trade_date
+            position.exit_reason_queued = MA_TRAIL
+            exits += 1
+        if decision.raise_to is not None and decision.raise_to > Decimal(str(resting)):
+            position.next_trigger = _store(decision.raise_to, "next_trigger")
+            raises += 1
+    await session.flush()
+    return QullaReport(len(positions), partials, exits, raises, stop_hits, missing)
+
+
 # --- the step ------------------------------------------------------------------
 
 
@@ -1116,6 +1308,13 @@ async def run_detect_twt(  # noqa: PLR0913 - one keyword per input the detection
         # LV8: no ratchet on a bar that has not closed (docstring above).
         outcome.note(gate=reading.gate.value, provisional=True, **funnel.as_detail())
         if states_written == 0:
+            outcome.status = StepStatus.SKIPPED
+        return full
+    if config.exits.qulla_exits:
+        # LV9 (TW20): Qullamaggie's management instead of the 20 % ratchet.
+        managed = await run_twt_manage_qulla(session, trade_date, user_id=user_id, config=config)
+        outcome.note(gate=reading.gate.value, **funnel.as_detail(), **managed.as_detail())
+        if states_written == 0 and managed.positions == 0:
             outcome.status = StepStatus.SKIPPED
         return full
     book = await run_twt_ratchet(session, trade_date, user_id=user_id, config=config)

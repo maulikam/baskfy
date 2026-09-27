@@ -40,11 +40,10 @@ class LineKind(StrEnum):
     #: ``gtt_trigger``. The line carries the new trigger, the old one and ``high_since``, so the
     #: page can show the move rather than a number.
     RAISE_GTT_STOP = "RAISE_GTT_STOP"
-    #: **Present in the schema, produced by nothing in TWT-1.** The strategy has no end-of-day sell
-    #: rule; the GTT is the exit (``01`` §5). The kind exists so a person can be given a line for a
-    #: ``MANUAL`` exit without a migration, and TW10 asserts that no TWT rule ever emits one — a
-    #: check the swing and VBT packs did not need and this one does, because the shape it copied
-    #: has such a rule and copying shapes is how rules get imported by accident.
+    #: Until LV9, **present in the schema, produced by nothing in TWT-1** (TW10). Since LV9
+    #: (Maulik, 28 Sep 2026 — DECISIONS-TW TW20) it is Qullamaggie's exit: the partial sale into
+    #: strength on bars 3-5 and the remainder sold at the next open on a close below the trail
+    #: MA, both from ``exit_lines`` off the evening's decision on the position.
     SELL_AT_OPEN = "SELL_AT_OPEN"
 
 
@@ -59,9 +58,11 @@ LINE_ORDER: Final[tuple[LineKind, ...]] = (
     LineKind.BUY_AT_OPEN,
 )
 
-#: The kinds :func:`exit_lines` is allowed to produce. ``BUY_AT_OPEN`` is an entry and
-#: ``SELL_AT_OPEN`` is nobody's — ``03`` §7 and TW10.
-EXIT_LINE_KINDS: Final[frozenset[LineKind]] = frozenset({LineKind.ARM_GTT, LineKind.RAISE_GTT_STOP})
+#: The kinds :func:`exit_lines` is allowed to produce. ``BUY_AT_OPEN`` is an entry; the three
+#: others manage a position — ``SELL_AT_OPEN`` since LV9 (TW20).
+EXIT_LINE_KINDS: Final[frozenset[LineKind]] = frozenset(
+    {LineKind.ARM_GTT, LineKind.RAISE_GTT_STOP, LineKind.SELL_AT_OPEN}
+)
 
 
 class SkipReason(StrEnum):
@@ -149,6 +150,7 @@ class NakedPosition:
     symbol: str
     quantity: int
     stop_price: Decimal
+    position_id: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -166,6 +168,23 @@ class RatchetDue:
     next_trigger_for: dt.date
     high_since: Decimal
     note: str = ""
+    position_id: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SellDue:
+    """LV9: a sale the evening decided for the next open — the partial into strength
+    (``reason == "PARTIAL"``, ``quantity`` a third) or the remainder on a close below the trail
+    MA (``reason == "MA_TRAIL"``, ``quantity`` all that is open)."""
+
+    instrument_id: int
+    symbol: str
+    quantity: int
+    reason: str
+    #: The session the decision was taken on. A plan never sells on a decision for another day.
+    decided_for: dt.date
+    note: str = ""
+    position_id: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,6 +202,8 @@ class PlanLine:
     value_inr: Decimal = _ZERO
     cap: SizeCap | None = None
     note: str = ""
+    #: LV10: the position an exit or a raise acts on, when the name holds more than one.
+    position_id: int | None = None
 
     def canonical(self) -> dict[str, str | int]:
         """The form ``plan_hash`` sees. Prices as strings of their exact decimal, never floats."""
@@ -191,6 +212,7 @@ class PlanLine:
             "instrument_id": self.instrument_id,
             "symbol": self.symbol,
             "quantity": self.quantity,
+            "position_id": self.position_id if self.position_id is not None else "",
             "entry_price": str(self.entry_price) if self.entry_price is not None else "",
             "stop_price": str(self.stop_price) if self.stop_price is not None else "",
         }
@@ -208,6 +230,8 @@ class BookState:
     entries_already_this_session: int = 0
     positions_naked_of_gtt: tuple[NakedPosition, ...] = ()
     ratchets_due: tuple[RatchetDue, ...] = ()
+    #: LV9: the sales the evening decided (partials and MA-trail exits).
+    sells_due: tuple[SellDue, ...] = ()
 
     @property
     def slots_taken(self) -> int:
@@ -419,20 +443,32 @@ def _entry_line(candidate: Candidate, sized: SizedEntry) -> PlanLine:
 
 
 def exit_lines(book: BookState, session: dt.date) -> list[PlanLine]:
-    """``04`` §10.2, and **nothing else**.
+    """``04`` §10.2, plus LV9's sales.
 
     For every ``OPEN`` position: no ``gtt_id`` while ``quantity_open > 0`` is an ``ARM_GTT``; a
     ``next_trigger`` that exceeds the resting ``gtt_trigger`` **and was computed for the session
-    just closed** is a ``RAISE_GTT_STOP``.
-
-    In particular this function can emit **no ``SELL_AT_OPEN``** — TWT-1 has no end-of-day sell
-    rule, the GTT is the exit, and TW10 asserts the absence rather than trusting it (``03`` §7).
+    just closed** is a ``RAISE_GTT_STOP`` (the ratchet before LV9; the breakeven move since); a
+    sale the evening decided **for the session just closed** is a ``SELL_AT_OPEN`` — the partial
+    into strength or the remainder on a close below the trail MA (DECISIONS-TW TW20; until LV9
+    this function emitted no sell and TW10 asserted it).
 
     A trigger at or below the resting one is not a line either. **A stop never falls**, and this is
-    the second of the three places that say so — the first is the ``max`` inside the ratchet, the
+    the second of the three places that say so — the first is the ``max`` inside the rule, the
     third is the desk's own refusal of a ``RAISE_GTT_STOP`` at or below the resting trigger.
     """
     lines: list[PlanLine] = [
+        PlanLine(
+            kind=LineKind.SELL_AT_OPEN,
+            instrument_id=sale.instrument_id,
+            symbol=sale.symbol,
+            quantity=sale.quantity,
+            note=sale.note or f"{sale.reason.lower()} decided on {sale.decided_for.isoformat()}",
+            position_id=sale.position_id,
+        )
+        for sale in book.sells_due
+        if sale.decided_for == session and sale.quantity > 0
+    ]
+    lines.extend(
         PlanLine(
             kind=LineKind.ARM_GTT,
             instrument_id=naked.instrument_id,
@@ -440,9 +476,10 @@ def exit_lines(book: BookState, session: dt.date) -> list[PlanLine]:
             quantity=naked.quantity,
             stop_price=naked.stop_price,
             note="a position without a resting stop is the one state the method forbids",
+            position_id=naked.position_id,
         )
         for naked in book.positions_naked_of_gtt
-    ]
+    )
     lines.extend(
         PlanLine(
             kind=LineKind.RAISE_GTT_STOP,
@@ -452,7 +489,8 @@ def exit_lines(book: BookState, session: dt.date) -> list[PlanLine]:
             stop_price=due.next_trigger,
             previous_stop=due.gtt_trigger,
             high_since=due.high_since,
-            note=due.note or f"the trail ratcheted on {due.next_trigger_for.isoformat()}",
+            note=due.note or f"the stop moves on {due.next_trigger_for.isoformat()}",
+            position_id=due.position_id,
         )
         for due in book.ratchets_due
         if due.next_trigger_for == session and due.next_trigger > due.gtt_trigger

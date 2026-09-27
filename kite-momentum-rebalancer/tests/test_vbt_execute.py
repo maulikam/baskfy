@@ -571,10 +571,18 @@ class TestTheLaw:
         assert gates.intraday_enabled is False
         assert gates.options_enabled is False
 
-    def test_there_are_five_executable_kinds_and_none_of_them_shorts(self) -> None:
-        """Five since LV8 (VB16): ``BUY_AT_MARKET`` is the live scan's entry. Still no sell short."""
+    def test_there_are_six_executable_kinds_and_none_of_them_shorts(self) -> None:
+        """Five since LV8 (VB16: ``BUY_AT_MARKET``), six since LV9 (VB17: ``RAISE_GTT_STOP``, the
+        breakeven move). Still no sell short."""
         assert X.EXECUTABLE_KINDS == frozenset(
-            {"PLACE_LIMIT", "SELL_AT_OPEN", "CANCEL_LIMIT", "ARM_GTT", "BUY_AT_MARKET"}
+            {
+                "PLACE_LIMIT",
+                "SELL_AT_OPEN",
+                "CANCEL_LIMIT",
+                "ARM_GTT",
+                "BUY_AT_MARKET",
+                "RAISE_GTT_STOP",
+            }
         )
 
     def test_the_module_names_no_broker_method(self) -> None:
@@ -591,3 +599,106 @@ class TestTheLaw:
 
         source = pathlib.Path(X.__file__).read_text(encoding="utf-8").upper()
         assert "AUTO_EXECUTE" not in source.replace("AUTO_EXECUTE`` TO FIND", "")
+
+
+class TestTheRaise:
+    """LV9 (DECISIONS-VB VB17): Qullamaggie's breakeven move — cancel, re-arm higher, never lower."""
+
+    def _held(self, store: MemoryStore, *, gtt_id: str | None = "DRY-1") -> None:
+        store.positions[1] = {
+            "id": 1,
+            "instrument_id": 42,
+            "symbol": "VBTCO",
+            "state": "OPEN",
+            "quantity_open": 500,
+            "entry_avg": D("96.00"),
+            "initial_stop": D("84.45"),
+            "stop_price": D("84.45"),
+            "gtt_id": gtt_id,
+            "gtt_trigger": D("84.45") if gtt_id else None,
+            "partial_done": False,
+            "trail": "MA20",
+        }
+
+    def test_it_raises_the_resting_stop_to_the_lines_trigger(self) -> None:
+        store, plan_id, line_id = a_store("RAISE_GTT_STOP", stop_price=D("96.00"))
+        self._held(store)
+        outcome = confirm(store, plan_id, line_id, last_price=D("110.00"))
+        assert outcome.status == "SIMULATED" and outcome.gtt is not None
+        assert store.positions[1]["stop_price"] == D("96.00")
+        assert store.positions[1]["gtt_trigger"] == D("96.00")
+        assert store.lines[line_id]["state"] == "FILLED"
+
+    def test_a_stop_never_falls(self) -> None:
+        store, plan_id, line_id = a_store("RAISE_GTT_STOP", stop_price=D("80.00"))
+        self._held(store)
+        outcome = confirm(store, plan_id, line_id, last_price=D("110.00"))
+        assert outcome.status == "BLOCKED" and "never falls" in outcome.reason
+        assert store.positions[1]["gtt_trigger"] == D("84.45")
+
+    def test_a_trigger_at_or_above_the_market_is_refused(self) -> None:
+        store, plan_id, line_id = a_store("RAISE_GTT_STOP", stop_price=D("96.00"))
+        self._held(store)
+        outcome = confirm(store, plan_id, line_id, last_price=D("95.00"))
+        assert outcome.status == "BLOCKED" and "fire at once" in outcome.reason
+
+    def test_the_line_acts_on_the_position_it_names(self) -> None:
+        store, plan_id, line_id = a_store("RAISE_GTT_STOP", stop_price=D("96.00"))
+        self._held(store)
+        store.positions[2] = {**store.positions[1], "id": 2, "stop_price": D("90.00"), "gtt_trigger": D("90.00")}
+        store.lines[line_id]["position_id"] = 2
+        confirm(store, plan_id, line_id, last_price=D("110.00"))
+        assert store.positions[2]["stop_price"] == D("96.00")
+        assert store.positions[1]["stop_price"] == D("84.45")
+
+
+class TestThePartialSale:
+    """LV9: a third into strength leaves the position open with ``partial_done``."""
+
+    def test_a_partial_fill_from_the_broker_marks_the_partial_done_and_keeps_the_position(self) -> None:
+        store, plan_id, line_id = a_store("SELL_AT_OPEN", quantity=300, reason="PARTIAL")
+        store.positions[1] = {
+            "id": 1,
+            "instrument_id": 42,
+            "symbol": "VBTCO",
+            "state": "OPEN",
+            "quantity_open": 900,
+            "entry_avg": D("96.00"),
+            "initial_stop": D("84.45"),
+            "stop_price": D("84.45"),
+            "gtt_id": "DRY-1",
+            "gtt_trigger": D("84.45"),
+            "partial_done": False,
+            "exit_queued_for": None,
+            "exit_reason_queued": None,
+        }
+
+        class Accepting:
+            async def place(self, **kwargs: object) -> dict:
+                return {"status": "PLACED", "order_id": "BRK-VB-SELL"}
+
+            async def place_gtt_stop(self, **kwargs: object) -> dict:
+                return {"status": "DRY_RUN_GTT", "gtt_id": "DRY-2"}
+
+            async def modify_gtt_quantity(self, **kwargs: object) -> dict:
+                return {"status": "DRY_RUN_GTT_MODIFY"}
+
+        outcome = run(
+            X.execute_line(store, Accepting(), plan_id=plan_id, line_id=line_id, confirm="true", now=NOW, last_price=D("110.00"))
+        )
+        assert outcome.status == "SENT"
+        exit_order = next(iter(store.exit_orders.values()))
+        assert exit_order["reason"] == "PARTIAL"
+        assert store.positions[1]["exit_queued_for"] is None, "a partial is not a full exit"
+
+        run(
+            X.on_order_update(
+                store,
+                Accepting(),
+                {"order_id": "BRK-VB-SELL", "status": "COMPLETE", "filled_quantity": 300, "average_price": 111.0},
+                now=NOW,
+            )
+        )
+        position = store.positions[1]
+        assert position["quantity_open"] == 600 and position["state"] == "OPEN"
+        assert position["partial_done"] is True

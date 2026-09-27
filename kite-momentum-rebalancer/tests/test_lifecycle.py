@@ -77,7 +77,7 @@ class TestRowsAndPage:
         assert by["VBTCO"].rupee_risk == D("577.50")
         assert all(r.stop_state == L.ARMED and r.resolved for r in rows)
         assert by["TWTCO"].exit_rule == EXIT_RULES["twt"] and "20%" in by["TWTCO"].exit_rule
-        assert "21-day EMA" in by["VBTCO"].exit_rule and "trails" in by["SWINGCO"].exit_rule
+        assert "20-day MA" in by["VBTCO"].exit_rule and "trails" in by["SWINGCO"].exit_rule
 
     def test_rows_put_unresolved_and_overdue_first_and_carry_the_reconcilers_findings(self) -> None:
         positions = {"twt": [position("twt", 1, "GOOD", gtt_id="1"), position("twt", 2, "NAKEDCO", gtt_id=None)]}
@@ -235,9 +235,11 @@ class TestAdopt:
 
 class TestTheTradeCard:
     def test_card_rules_come_from_the_configs_and_name_the_numbers(self) -> None:
-        assert "20% initial stop" in EXIT_RULES["twt"] and "20% high-water trail" in EXIT_RULES["twt"]
-        assert "12% initial stop" in EXIT_RULES["vbt"] and "21-day EMA" in EXIT_RULES["vbt"]
+        # LV9 (Maulik, 28 Sep 2026): Qullamaggie's exits on all three, each over its own hard stop.
+        assert "20% initial stop" in EXIT_RULES["twt"] and "1/3 sold" in EXIT_RULES["twt"]
+        assert "12% initial stop" in EXIT_RULES["vbt"] and "20-day MA" in EXIT_RULES["vbt"]
         assert "1/3 sold" in EXIT_RULES["swing"] and "10-day MA" in EXIT_RULES["swing"]
+        assert "Qullamaggie" in EXIT_RULES["twt"] and "Qullamaggie" in EXIT_RULES["vbt"]
         for rule in EXIT_RULES.values():
             assert "target" not in rule.replace("no target", "")
 

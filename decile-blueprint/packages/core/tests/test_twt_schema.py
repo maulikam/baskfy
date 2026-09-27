@@ -130,6 +130,10 @@ MIGRATIONS: Final[dict[str, str]] = {
     path.name: path.read_text(encoding="utf-8")
     for path in sorted((API_DIR / "alembic" / "versions").glob("00*_twt*.py"))
 }
+#: LV9 (0058) widened `tw_position.close_reason` in place; its CHECK text counts too.
+MIGRATIONS["0058_qulla_exits.py"] = (
+    API_DIR / "alembic" / "versions" / "0058_qulla_exits.py"
+).read_text(encoding="utf-8")
 MIGRATION: Final = "\n".join(MIGRATIONS.values())
 
 DATA_MODEL: Final = (MONOREPO_ROOT / "docs" / "twt" / "03-data-model.md").read_text(
@@ -234,7 +238,16 @@ class TestTheVocabularyIsTheDocuments:
         The 50-SMA exit is a *different strategy* with the same signal (`01` §5). A reason that
         exists is a reason somebody writes code for.
         """
-        assert TW_CLOSE_REASONS == ("STOP_HIT", "STOP_GAP", "STOP_DAY0", "NO_BAR", "MANUAL")
+        # MA_TRAIL since LV9 (28 Sep 2026, DECISIONS-TW TW20): Qullamaggie's exit, the remainder
+        # sold at the next open on a close below the trail MA. Still no EMA exit, no time exit.
+        assert TW_CLOSE_REASONS == (
+            "STOP_HIT",
+            "STOP_GAP",
+            "STOP_DAY0",
+            "NO_BAR",
+            "MANUAL",
+            "MA_TRAIL",
+        )
         assert "EMA_EXIT" not in TW_CLOSE_REASONS
         assert "TIME_EXIT" not in TW_CLOSE_REASONS
         assert "There is no `EMA_EXIT` and no `TIME_EXIT`" in DATA_MODEL
@@ -243,7 +256,10 @@ class TestTheVocabularyIsTheDocuments:
         """`03` §7: the kind is here so a MANUAL exit needs no migration, and TW10 asserts that
         no TWT rule ever emits one. The schema admitting it is the deliberate half."""
         assert TW_LINE_KINDS == ("BUY_AT_OPEN", "ARM_GTT", "RAISE_GTT_STOP", "SELL_AT_OPEN")
+        # LV9 (28 Sep 2026, DECISIONS-TW TW20): the doc records both halves — what TW10 pinned
+        # and Maulik's reversal that made the kind Qullamaggie's exit.
         assert "produced by nothing in TWT-1" in DATA_MODEL
+        assert "Since LV9" in DATA_MODEL and "MA_TRAIL" in DATA_MODEL
 
     def test_the_skip_reasons_are_the_documents_twelve(self) -> None:
         """`03` §7 lists them; `04` §10.1 is where each is applied."""

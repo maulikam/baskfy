@@ -1784,6 +1784,15 @@ order:** on 23 and 24 Sep `twt-auto` sent six MARKET buys and Zerodha rejected a
   (the session supervisor drains it), VBT via a new `BUY_AT_MARKET` line confirmed by hand. No
   Kite session → the last published session, and the row says so. Migration 0057. **No backtest of
   the live entry, by his choice.** LV5's minute bars are off on the box (`BASKFY_EQ_BARS_ENABLED=false`).
+* **LV9 (Maulik's decision, 28 Sep ~04:00 IST — DECISIONS-LV LV9.0, TW20, VB17)** — **Qullamaggie's
+  exits on TWT and VBT**, replacing TWT's 20 % high-water trail and VBT's 21-EMA exit: a third sold
+  into strength on bars 3-5 if green, the stop to breakeven, the rest trailing the 10/20-day MA and
+  sold at the next open on a close below it; each sleeve's own hard stop stays the GTT. One rule
+  module (`baskfy_core.exits.qulla` over the swing book's `stops.manage`), two adapters. TWT's
+  auto-execute **sends the sale too** (his widening of non-negotiable 1's second exception to
+  sells). VBT gains `RAISE_GTT_STOP`. Migration 0058. `ExitConfig.qulla_exits=false` is the one-line
+  reversal. **No backtest of the new exits, by his choice; the research that rejected a partial
+  stays in the docs as the record.**
 
 **NOT done, and why.** Of the review's step 5, the live-entry TWT/VBT variant is now LV8 (his
 answer: the same detector on a live bar, entered now, no backtest). Pyramiding, re-entry, targets

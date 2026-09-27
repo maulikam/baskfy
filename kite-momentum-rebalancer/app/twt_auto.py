@@ -47,12 +47,14 @@ a Kite session exists, which is how a LIVE plan built at 11:40 is confirmed at 1
 waiting for a person. Every line still goes through ``execute_line`` — the same plan expiry,
 gateway, guards, GTT stop, three-entries cap and first-ten half size as a click.
 
-Lines are taken in **the plan's own order** (``baskfy_core.twt.plan.LINE_ORDER``): ``ARM_GTT``,
-then ``RAISE_GTT_STOP``, then ``BUY_AT_OPEN``, alphabetical within a kind, which is how
-``assemble`` sorted them and how the page shows them. Stops first on purpose: a re-arm or a
-ratchet protects shares already held and spends none of the session's three entries, so nothing
-that happens to a buy can delay the book's protection. The planner has already capped the buys
-at three; the confirm-time ``SESSION_CAP`` is the second refusal, not the first.
+Lines are taken in **the plan's own order** (``baskfy_core.twt.plan.LINE_ORDER``):
+``SELL_AT_OPEN`` (since LV9 — Qullamaggie's partial and MA-trail exit, Maulik's TW20 widening of
+this exception to sells), then ``ARM_GTT``, then ``RAISE_GTT_STOP``, then ``BUY_AT_OPEN``,
+alphabetical within a kind, which is how ``assemble`` sorted them and how the page shows them.
+Risk comes off first on purpose: a sale, a re-arm or a raise protects or realises shares already
+held and spends none of the session's three entries, so nothing that happens to a buy can delay
+the book's protection. The planner has already capped the buys at three; the confirm-time
+``SESSION_CAP`` is the second refusal, not the first.
 
 FAIL SOFT, PER LINE
 -------------------
@@ -111,7 +113,9 @@ SESSION_POLL_SECONDS: Final = 30
 #: The kinds this runner sends — exactly ``twt_execute.EXECUTABLE_KINDS``, restated so the
 #: module can be imported without the execute module's broker-side imports. Asserted equal in
 #: ``tests/test_twt_auto.py``.
-AUTO_KINDS: Final[frozenset[str]] = frozenset({"ARM_GTT", "RAISE_GTT_STOP", "BUY_AT_OPEN"})
+AUTO_KINDS: Final[frozenset[str]] = frozenset(
+    {"SELL_AT_OPEN", "ARM_GTT", "RAISE_GTT_STOP", "BUY_AT_OPEN"}
+)
 
 
 def live_execution() -> bool:

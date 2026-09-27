@@ -83,7 +83,8 @@ CREATE TABLE tw_position (
   high_since_date TEXT, gtt_id TEXT, gtt_trigger NUMERIC, gtt_armed_at TEXT,
   next_trigger NUMERIC, next_trigger_for TEXT, state TEXT, closed_on TEXT, exit_avg NUMERIC,
   close_reason TEXT, pnl_inr NUMERIC, return_pct NUMERIC, simulated INTEGER DEFAULT 1,
-  half_size INTEGER DEFAULT 0);
+  half_size INTEGER DEFAULT 0, partial_done INTEGER DEFAULT 0, trail TEXT,
+  partial_queued_for TEXT, partial_quantity INTEGER, exit_queued_for TEXT, exit_reason_queued TEXT);
 CREATE TABLE tw_order (
   id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, broker_account_id INTEGER,
   instrument_id INTEGER, signal_date TEXT, side TEXT, quantity INTEGER, stop_price NUMERIC,

@@ -29,6 +29,8 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Final
 
+from baskfy_core.swing.config import StopConfig
+
 
 class Gate(StrEnum):
     """The breadth gate. Two values, not three (DECISIONS-VB VB0.4).
@@ -302,6 +304,13 @@ class ExitConfig:
     #: A held name that stops printing is written off at its last close after this many blank
     #: sessions. On the live book it is an alert as well as an exit line.
     no_bar_tolerance_sessions: int = 5
+    #: **LV9 (Maulik, 28 Sep 2026 — DECISIONS-LV LV9.0, DECISIONS-VB VB17).** When true, the
+    #: working exit is Qullamaggie's, as the swing book runs it (``baskfy_core.exits.qulla``): a
+    #: third sold into strength on bars 3-5, the stop to breakeven, the rest trailing the
+    #: 10/20-day MA and sold at the next open on a close below it. The 21-EMA exit does not
+    #: fire. The stop and the no-bar write-off are unchanged. False restores the tested EMA exit.
+    qulla_exits: bool = True
+    qulla: StopConfig = field(default_factory=StopConfig)
 
 
 @dataclass(frozen=True, slots=True)

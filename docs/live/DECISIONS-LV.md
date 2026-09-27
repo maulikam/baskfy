@@ -403,3 +403,64 @@ both gates read breadth, which the provisional bars already move; the index rule
 Pyramiding, targets and the first-live-morning handling stay in `NEEDS-MAULIK.md` LV7 Q3–Q5.
 
 **How to reverse.** TW19 and VB16 carry the one-line reversals; migration 0057 downgrades clean.
+
+## LV9.0 — Maulik's answers, 28 Sep 2026 (in session, ~04:00 IST): Qullamaggie's exits on TWT and VBT, his pyramiding on all three, TWT's first live entries run · ✅ decided by Maulik
+
+Asked with options (`NEEDS-MAULIK.md` LV7 Q3–Q5, then one round of specifics):
+
+1. **Q5, first live TWT entries → "Let it run".** Auto-execute stays on; the first-ten half size,
+   the three-a-session cap, the same-session GTT, the reconciler and `/lifecycle` are the rails.
+   Nothing changes on the box for this.
+2. **Q4, targets → "based on Kristjan Kullamägi's style"**, then **"TWT and VBT, replacing their
+   tested exits"**: the swing book's exit rule (`StopConfig`: 1/3 sold into strength between bar 3
+   and bar 5 after entry if the position is green, the stop to breakeven after the partial or at
+   +1R, the remainder trailing the 10-day MA for names with ADR ≥ 6 % or the 20-day MA otherwise,
+   sold at the next open on a close below it; the GTT is the exit) **replaces** TWT's 20 %
+   high-water trail and VBT's close-below-21-EMA. His reversal of the two research findings
+   (TWT `04` §7, VBT `04` §8 measured fixed targets and rejected them); recorded as his, not an
+   agent's. **And "Auto-execute sends it too"**: TWT's `twt-auto` and the supervisor confirm the
+   partial `SELL_AT_OPEN` lines under the same three flags — a widening of non-negotiable 1's
+   second exception from stops-and-buys to sells as well, **his** (DECISIONS-TW TW20). VBT's
+   partial stays a click.
+3. **Q3, pyramiding → "lets we do what Kristjan Kullamägi doing"**, then **"On for all three
+   sleeves"**: a fresh qualifying setup in a name already held is a **new entry** with its own
+   size and its own stop, counted against slots and exposure; no add without a fresh signal; a
+   name may be re-entered after an exit on a new signal; at most two open entries per name. Ships
+   as the rule with a per-sleeve config switch to turn it off.
+
+**Timing.** It is 04:00 IST on a trading day. These change live exits and entries; they are built
+and tested now and **deployed after today's close (after 15:30, before 18:40)**, not into the
+morning's session. Today's session runs on dde3c1e as deployed: LV8's live scans, the tested exits.
+
+Leaves: **LV9** (exits) and **LV10** (pyramiding), each with its gates file; DECISIONS-TW TW20 /
+TW21 and DECISIONS-VB VB17 / VB18 carry the sleeve-level records.
+
+## LV9.1 — How the exits were built: one rule module, two adapters, decisions persisted where the plan is built from state (28 Sep 2026) · ⚠ UNREVIEWED
+
+1. **One implementation.** `baskfy_core.exits.qulla` wraps `swing.stops.manage`; TWT and VBT never
+   re-state the partial, breakeven or trail rule (`test_qulla_exits` asserts the adapter carries no
+   rule of its own). The numbers are the swing book's `StopConfig`, held on each sleeve's
+   `ExitConfig.qulla` so a sleeve could diverge later without touching the swing book.
+2. **TWT persists the evening's decision on the position** (`partial_queued_for` /
+   `partial_quantity`, `exit_queued_for` / `exit_reason_queued`, `next_trigger` for the raise,
+   `trail`) because its plan is built from the book's state and the MORNING rebuild re-reads it;
+   **VBT re-derives the actions each evening** from the bars, as its evening already did for the
+   EMA exit, and persists only `trail` and, after the fill, `partial_done`. Two shapes, each the
+   sleeve's own; the rule is still one.
+3. **A decision is dated the session just closed** and a plan reads it only for that session — a
+   queued sale from an evening whose morning nobody confirmed is not re-sold by accident.
+4. **The hard stop stays the reconciler's business.** The rule's ``STOPPED_OUT`` is counted and
+   left alone: the GTT is the exchange's copy of it, and LV2's reconciler says whether it filled.
+5. **VBT's breakeven is a new kind** (`RAISE_GTT_STOP`, `_raise_gtt_stop` mirroring TWT's) rather
+   than a re-arm through `ARM_GTT`, whose meaning ("a naked position gets its stop back") the
+   desk's tests pin.
+6. **Broker fills are never simulated** whatever the desk's `DRY_RUN`: `_apply_exit_fill` takes
+   `simulated` explicitly — the rehearsal passes true, `_apply_exit_update` false.
+7. **TWT's session counters key on the plan's session** for a confirmed sale (as its buys do) and
+   on the fill's day for a broker report (as VBT's do).
+8. **The ratchet tests keep their subject.** `test_twt_detect`'s five ratchet tests run the
+   detector with `qulla_exits=False`: the 20 % ratchet is still code (the reversal is one line)
+   and its tests still prove it; a new test pins that the default runs the rule instead.
+
+**Not built.** The 04 §7.3 corporate-action branch is skipped in qulla mode (a split still
+leaves the stop where it was; the alert path is untouched). No live index level, no re-test.

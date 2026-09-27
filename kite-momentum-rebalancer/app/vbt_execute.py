@@ -652,8 +652,10 @@ async def _sell_at_open(  # noqa: PLR0913 - a sell is its line, its book and its
     last_price: Decimal | None = None,
 ) -> ExecOutcome:
     """`04` §6.2 — and Track C §5's whole content: never more than the sleeve owns, and only
-    what it owns."""
-    position = store.open_position_for(line["instrument_id"])
+    what it owns. Since LV9 (VB17) the sale may be Qullamaggie's partial (``reason == PARTIAL``,
+    a third; the position stays open with ``partial_done``) or the remainder on a close below
+    the trail MA (``MA_TRAIL``)."""
+    position = _position_for_line(store, line)
     if position is None:
         reason = (
             f"{line['symbol']} is not in this sleeve's book — it may be the weekly book's or "
@@ -663,6 +665,7 @@ async def _sell_at_open(  # noqa: PLR0913 - a sell is its line, its book and its
         return _blocked(reason, simulated=gates.dry_run)
     owned = int(position["quantity_open"])
     quantity = int(line["quantity"])
+    exit_reason = str(line.get("reason") or position.get("exit_reason_queued") or "EMA_EXIT")
     if quantity > owned:
         reason = f"the line sells {quantity} and the sleeve holds {owned}"
         store.set_line(line["id"], state="REJECTED", note=reason)
@@ -710,14 +713,15 @@ async def _sell_at_open(  # noqa: PLR0913 - a sell is its line, its book and its
                 "reference_price": reference,
                 "state": "SENT",
                 "filled_quantity": 0,
-                "reason": "EMA_EXIT",
+                "reason": exit_reason,
                 "simulated": False,
             }
         )
-        store.update_position(
-            position["id"],
-            {"exit_queued_for": plan["session_date"], "exit_reason_queued": "EMA_EXIT"},
-        )
+        if exit_reason != "PARTIAL":
+            store.update_position(
+                position["id"],
+                {"exit_queued_for": plan["session_date"], "exit_reason_queued": exit_reason},
+            )
         store.set_line(
             line["id"],
             state="SENT",
@@ -834,6 +838,93 @@ async def _cancel_limit(  # noqa: PLR0913 - a cancel is its line, its order and 
         None,
         gates.dry_run,
     )
+
+
+def _position_for_line(store: VbtStore, line: dict) -> dict | None:
+    """The position a line acts on: the one it names (LV10 — a name may hold two) if it is still
+    open, else the name's open position."""
+    position_id = line.get("position_id")
+    if position_id is not None:
+        found = store.position(int(position_id))
+        if (
+            found is not None
+            and str(found.get("state")) == "OPEN"
+            and int(found.get("quantity_open") or 0) > 0
+        ):
+            return found
+    return store.open_position_for(line["instrument_id"])
+
+
+async def _raise_gtt_stop(  # noqa: PLR0913 - a raise is its line, its book and its gateway
+    store: VbtStore,
+    gateway: Any,  # noqa: ANN401 - an OrderGateway
+    line: dict,
+    plan: dict,
+    gates: ProductGates,
+    now: dt.datetime,
+    last_price: Decimal | None = None,
+) -> ExecOutcome:
+    """LV9 (DECISIONS-VB VB17) — Qullamaggie's breakeven move: the resting GTT is raised to the
+    line's ``stop_price``. **A stop never falls**: at or below the resting trigger is refused; a
+    trigger at or above the last price is refused (it would fire at once). Then the one resting
+    GTT is re-covered at the new trigger through :func:`_cover` — cancel and re-arm — so the
+    position is never left with two triggers or none."""
+    symbol = str(line["symbol"])
+    position = _position_for_line(store, line)
+    if position is None:
+        reason = f"{symbol} is not in this sleeve's book"
+        store.set_line(line["id"], state="REJECTED", note=reason)
+        return _blocked(reason, simulated=gates.dry_run)
+    position_id = int(position["id"])
+    if line.get("stop_price") is None:
+        reason = f"{symbol}: a RAISE line needs a new trigger"
+        store.set_line(line["id"], state="REJECTED", note=reason)
+        return _blocked(reason, simulated=gates.dry_run)
+    new_trigger = Decimal(str(line["stop_price"]))
+    resting = Decimal(str(position.get("gtt_trigger") or position["stop_price"]))
+    if new_trigger <= resting:
+        reason = f"{symbol}: the new trigger {new_trigger} is not above the resting stop {resting} — a stop never falls"
+        store.set_line(line["id"], state="REJECTED", note=reason)
+        return _blocked(reason, simulated=gates.dry_run)
+    open_qty = int(position.get("quantity_open") or 0)
+    if open_qty <= 0:
+        reason = f"{symbol}: nothing is open to protect"
+        store.set_line(line["id"], state="REJECTED", note=reason)
+        return _blocked(reason, simulated=gates.dry_run)
+    reference = last_price if last_price is not None else Decimal(str(position["entry_avg"]))
+    if new_trigger >= reference:
+        reason = f"{symbol}: the new trigger {new_trigger} is at or above the last price {reference} — that would fire at once"
+        store.set_line(line["id"], state="REJECTED", note=reason)
+        return _blocked(reason, simulated=gates.dry_run)
+    gtt_id = position.get("gtt_id")
+    if gtt_id is not None and not str(gtt_id).startswith(SIMULATED_GTT_PREFIX):
+        cancel = await gateway.delete_gtt(
+            gtt_id=int(gtt_id),
+            symbol=symbol,
+            exchange="NSE",
+            client_id=f"{line['client_id']}:cancel",
+            tenant=_tenant(),
+            plan_tenant=_tenant(),
+        )
+        status = str(cancel.get("status") or "")
+        if status.endswith("BLOCKED") or status == "ERROR":
+            reason = f"{symbol}: the resting GTT could not be cancelled ({status}); the stop stays where it was"
+            store.set_line(line["id"], state="REJECTED", note=reason)
+            return _blocked(reason, simulated=gates.dry_run)
+    store.update_position(position_id, {"gtt_id": None})
+    armed = await _arm_stop(store, gateway, symbol, position_id, open_qty, new_trigger, reference, now)
+    ok = armed is not None and (
+        str(armed.get("status") or "") in GTT_PLACED_STATUSES
+        or str(armed.get("status") or "").startswith("DRY_RUN")
+    )
+    if not ok:
+        reason = f"{symbol}: the old trigger is gone and the new one was NOT armed — the position is naked; re-arm now"
+        store.set_line(line["id"], state="REJECTED", note=reason)
+        return ExecOutcome("REJECTED", reason, None, armed, None, position_id, gates.dry_run)
+    store.update_position(position_id, {"stop_price": new_trigger})
+    store.set_line(line["id"], state="FILLED", position_id=position_id)
+    store.bump_session(plan["session_date"], mode="DRY_RUN" if gates.dry_run else "LIVE", confirms=1)
+    return ExecOutcome("SIMULATED" if gates.dry_run else "FILLED", "", None, armed, None, position_id, gates.dry_run)
 
 
 async def _arm_gtt_line(  # noqa: PLR0913 - a re-arm is its line, its book and its gateway
@@ -1097,13 +1188,19 @@ async def _apply_exit_update(  # noqa: PLR0913 - a report is its order, its size
             {"position_id": int(position["id"]), "order_id": None, "side": "SELL", "quantity": delta, "price": delta_price, "filled_at": now, "simulated": False}
         )
         closed = remaining == 0
+        partial = str(exit_order.get("reason") or "") == "PARTIAL"
         store.update_position(
             int(position["id"]),
             {
                 "quantity_open": remaining,
                 "state": "CLOSED" if closed else "OPEN",
                 "closed_on": day if closed else None,
-                "close_reason": str(exit_order.get("reason") or "EMA_EXIT") if closed else None,
+                "partial_done": True if partial else position.get("partial_done", False),
+                "close_reason": (
+                    ("MANUAL" if partial else str(exit_order.get("reason") or "EMA_EXIT"))
+                    if closed
+                    else None
+                ),
                 "exit_avg": average.quantize(_FOUR_DP) if closed else None,
                 "exit_queued_for": None if closed else position.get("exit_queued_for"),
                 "exit_reason_queued": None if closed else position.get("exit_reason_queued"),
@@ -1158,10 +1255,15 @@ async def execute_line(  # noqa: PLR0913 - a confirm is its store, its gateway a
         LineKind.CANCEL_LIMIT.value: _cancel_limit,
         LineKind.ARM_GTT.value: _arm_gtt_line,
         LineKind.BUY_AT_MARKET.value: _buy_at_market,
+        LineKind.RAISE_GTT_STOP.value: _raise_gtt_stop,
     }
     with store.lock_session_for_update(plan["session_date"]):
         if line["kind"] == LineKind.SELL_AT_OPEN.value:
             return await _sell_at_open(
+                store, gateway, line, plan, gates, stamp, last_price=last_price
+            )
+        if line["kind"] == LineKind.RAISE_GTT_STOP.value:
+            return await _raise_gtt_stop(
                 store, gateway, line, plan, gates, stamp, last_price=last_price
             )
         if line["kind"] == LineKind.BUY_AT_MARKET.value:

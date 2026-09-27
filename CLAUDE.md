@@ -68,6 +68,9 @@ history; D3 is no longer the engineering blocker.
    `twt-auto` path also confirms a **LIVE** plan — built by the Scan button from today's
    provisional bar during the session — at any hour between 09:15 and 15:30, via the session
    supervisor's once-a-minute drain, under the same three flags. Nothing else about it changed.
+   **Widened again the same day (DECISIONS-LV LV9.0, DECISIONS-TW TW20 — "Auto-execute sends it
+   too"):** the kinds it sends include `SELL_AT_OPEN` — Qullamaggie's partial into strength and
+   the MA-trail exit — beside the stops and the buys. Same flags, same `execute_line`.
    An agent may not widen either exception, add a third, or default either flag to true.
 2. Holdings quantity = `quantity` + `t1_quantity` + `collateral_quantity`.
 3. Pledged shares sell directly (Zerodha instant-sale); plan flags them as info only.

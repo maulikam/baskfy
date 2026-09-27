@@ -63,7 +63,7 @@ CREATE TABLE vb_position (
   instrument_id INTEGER, entry_date TEXT, entry_avg NUMERIC, quantity_entered INTEGER,
   quantity_open INTEGER, initial_stop NUMERIC, stop_price NUMERIC, gtt_id TEXT,
   gtt_trigger NUMERIC, gtt_armed_at TEXT, state TEXT, exit_queued_for TEXT,
-  exit_reason_queued TEXT, closed_on TEXT, exit_avg NUMERIC, close_reason TEXT,
+  exit_reason_queued TEXT, partial_done INTEGER DEFAULT 0, trail TEXT, closed_on TEXT, exit_avg NUMERIC, close_reason TEXT,
   pnl_inr NUMERIC, return_pct NUMERIC, simulated INTEGER);
 CREATE TABLE vb_order (
   id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, broker_account_id INTEGER,

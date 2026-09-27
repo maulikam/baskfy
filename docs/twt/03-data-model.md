@@ -163,7 +163,8 @@ not here.
 | `next_trigger_for` | date — the session `next_trigger` was computed for; a plan never reads a trigger computed for another session |
 | `quantity_open` | 0 when closed |
 | `state` | `OPEN` / `CLOSED` |
-| `closed_on`, `exit_avg`, `close_reason` | `STOP_HIT` / `STOP_GAP` / `STOP_DAY0` / `NO_BAR` / `MANUAL`. **There is no `EMA_EXIT` and no `TIME_EXIT`** — TWT-1 has no exit that is not a stop (`01` §5), and a reason that exists is a reason somebody writes code for |
+| `partial_done`, `trail`, `partial_queued_for`, `partial_quantity`, `exit_queued_for`, `exit_reason_queued` | LV9 (migration 0058): Qullamaggie's exit state — the partial sold once; `MA10`/`MA20` chosen from the ADR the first evening the position is managed; the evening's queued partial and full exit (`MA_TRAIL`), read by the plan for the session just closed |
+| `closed_on`, `exit_avg`, `close_reason` | `STOP_HIT` / `STOP_GAP` / `STOP_DAY0` / `NO_BAR` / `MANUAL` / **`MA_TRAIL`** (LV9: the remainder sold on a close below the trail MA). **There is no `EMA_EXIT` and no `TIME_EXIT`** — TWT-1 has no exit that is not a stop (`01` §5), and a reason that exists is a reason somebody writes code for |
 | `pnl_inr`, `return_pct`, `r_multiple`, `hold_sessions` | written at close |
 | `simulated` | bool — true for every `DRY_RUN` / flag-off fill; the pages label them and the backtest card never mixes them |
 | `half_size` | bool — sized at the first-live multiplier (`04` §6.4) |
@@ -230,11 +231,15 @@ not reproduce are deleted). The ratchet never runs on a provisional bar.
 * **`RAISE_GTT_STOP`** — **the ratchet**: a position whose `next_trigger` exceeds its resting
   `gtt_trigger`. `stop_price` is the new trigger, and the line carries `high_since` and the old
   trigger so the page can show the move;
-* **`SELL_AT_OPEN`** — **present in the schema, produced by nothing in TWT-1.** The strategy has no
-  end-of-day sell rule; the GTT is the exit (`01` §5). The kind exists so a person can be given a
-  line for a `MANUAL` exit without a migration, and TW10 asserts that **no TWT rule ever emits
-  one** — a check the swing and VBT packs did not need and this one does, because the shape it
-  copied has such a rule and copying shapes is how rules get imported by accident;
+* **`SELL_AT_OPEN`** — until LV9, **present in the schema, produced by nothing in TWT-1** (TW10:
+  the strategy had no end-of-day sell rule; the GTT was the exit). **Since LV9 (Maulik, 28 Sep
+  2026 — DECISIONS-TW TW20) it is Qullamaggie's exit**: the partial sale into strength (a third,
+  between bar 3 and bar 5 after entry, if green — `quantity` is the third) and the remainder sold
+  at the next open on a close below the trail MA (`quantity` is all that is open). Both come only
+  from a sale the evening decided and wrote on the position (`partial_queued_for` /
+  `partial_quantity`, `exit_queued_for` / `exit_reason_queued = MA_TRAIL`), for the session just
+  closed; `RAISE_GTT_STOP` is, since LV9, the breakeven move rather than the 20 % ratchet. The
+  line carries `position_id` (LV10) so the desk acts on the position it was decided for.
 
 plus `instrument_id`, `state` (`PROPOSED` / `CONFIRMED` / `SENT` / `FILLED` / `REJECTED` /
 `EXPIRED` / `SKIPPED`), `client_id = plan_id:symbol:kind`, `journal_ref`, `order_id`,

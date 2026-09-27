@@ -14,6 +14,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 from enum import StrEnum
@@ -27,13 +28,20 @@ from baskfy_core.vbt.sizing import SizeCap, SizedEntry, SizeRefusal, size_entry
 _ZERO = Decimal(0)
 
 
+#: One managed position as the evening hands it to :func:`exit_lines`: ``(instrument_id, symbol,
+#: quantity_open, action)`` and, since LV10, the position id as a fifth element.
+ManagedRow = tuple[int, str, int, "ManageAction"] | tuple[int, str, int, "ManageAction", int | None]
+
+
 class LineKind(StrEnum):
-    """What a confirmed line does. Four from ``04``, and LV8's live entry: this sleeve has no
-    trail and no partial."""
+    """What a confirmed line does. Four from ``04``, LV8's live entry, and LV9's raise — since
+    LV9 (Maulik, 28 Sep 2026) this sleeve does trail and does take a partial: Qullamaggie's rule,
+    ``baskfy_core.exits.qulla``."""
 
     #: Place the working limit at the signal bar's close (``04`` §7).
     PLACE_LIMIT = "PLACE_LIMIT"
-    #: Sell a position whose close fell below its 21-day EMA, at the next open (``04`` §6.2).
+    #: Sell at the next open: the whole position (a close below the exit average — the 21-day EMA
+    #: before LV9, the trail MA since) or, with ``reason == PARTIAL``, a third into strength.
     SELL_AT_OPEN = "SELL_AT_OPEN"
     #: Cancel a working order at the end of its third session (``04`` §7.2, VB7's sweep).
     CANCEL_LIMIT = "CANCEL_LIMIT"
@@ -42,6 +50,9 @@ class LineKind(StrEnum):
     #: LV8 (Maulik, 28 Sep 2026): a live scan's entry — a MARKET buy at the live price with Kite
     #: market protection, confirmed by hand. The evening's tested entry stays ``PLACE_LIMIT``.
     BUY_AT_MARKET = "BUY_AT_MARKET"
+    #: LV9 (DECISIONS-VB VB17, Maulik 28 Sep 2026): raise a position's resting GTT to a higher
+    #: trigger — the breakeven move of Qullamaggie's rule. Cancel, then re-arm; never lowers.
+    RAISE_GTT_STOP = "RAISE_GTT_STOP"
 
 
 #: The order ``04`` §9.3 renders a plan in, and it is an argument rather than a convention: what
@@ -55,6 +66,7 @@ LINE_ORDER: Final[tuple[LineKind, ...]] = (
     LineKind.SELL_AT_OPEN,
     LineKind.CANCEL_LIMIT,
     LineKind.ARM_GTT,
+    LineKind.RAISE_GTT_STOP,
     LineKind.PLACE_LIMIT,
     LineKind.BUY_AT_MARKET,
 )
@@ -119,6 +131,8 @@ class PlanLine:
     cap: SizeCap | None = None
     reason: ExitReason | None = None
     note: str = ""
+    #: LV10: the position an exit or a raise acts on, when the name holds more than one.
+    position_id: int | None = None
 
     def canonical(self) -> dict[str, str | int]:
         """The form ``plan_hash`` sees. Prices as strings of their exact decimal, never floats."""
@@ -127,6 +141,7 @@ class PlanLine:
             "instrument_id": self.instrument_id,
             "symbol": self.symbol,
             "quantity": self.quantity,
+            "position_id": self.position_id if self.position_id is not None else "",
             "limit_price": str(self.limit_price) if self.limit_price is not None else "",
             "stop_price": str(self.stop_price) if self.stop_price is not None else "",
         }
@@ -302,13 +317,17 @@ def _entry_line(candidate: Candidate, sized: SizedEntry) -> PlanLine:
 
 
 def exit_lines(
-    managed: list[tuple[int, str, int, ManageAction]],
+    managed: Sequence[ManagedRow],
     expired: list[tuple[WorkingOrder, str]],
     book: BookState,
 ) -> list[PlanLine]:
-    """``04`` §9.2: sells, then cancels, then the GTT backstop."""
+    """``04`` §9.2: sells, then cancels, then the GTT backstop — and, since LV9, the partial
+    sale and the breakeven raise Qullamaggie's rule asks for. ``managed`` may carry a fifth
+    element, the position id, which the line keeps so the desk acts on that position."""
     lines: list[PlanLine] = []
-    for instrument_id, symbol, quantity_open, action in managed:
+    for row in managed:
+        instrument_id, symbol, quantity_open, action = row[0], row[1], row[2], row[3]
+        position_id = row[4] if len(row) == 5 else None  # noqa: PLR2004 - the optional fifth
         if action.action is Action.QUEUE_SELL_AT_OPEN:
             lines.append(
                 PlanLine(
@@ -318,6 +337,44 @@ def exit_lines(
                     quantity=quantity_open,
                     reason=action.reason,
                     note=action.note,
+                    position_id=position_id,
+                )
+            )
+        elif action.action is Action.QUEUE_PARTIAL_AT_OPEN and action.quantity:
+            lines.append(
+                PlanLine(
+                    kind=LineKind.SELL_AT_OPEN,
+                    instrument_id=instrument_id,
+                    symbol=symbol,
+                    quantity=int(action.quantity),
+                    reason=ExitReason.PARTIAL,
+                    note=action.note,
+                    position_id=position_id,
+                )
+            )
+            if action.new_stop is not None:
+                # The breakeven move rides with the partial: the stop for what stays open.
+                lines.append(
+                    PlanLine(
+                        kind=LineKind.RAISE_GTT_STOP,
+                        instrument_id=instrument_id,
+                        symbol=symbol,
+                        quantity=quantity_open - int(action.quantity),
+                        stop_price=action.new_stop,
+                        note="stop to breakeven after the partial",
+                        position_id=position_id,
+                    )
+                )
+        elif action.action is Action.RAISE_STOP and action.new_stop is not None:
+            lines.append(
+                PlanLine(
+                    kind=LineKind.RAISE_GTT_STOP,
+                    instrument_id=instrument_id,
+                    symbol=symbol,
+                    quantity=quantity_open,
+                    stop_price=action.new_stop,
+                    note=action.note,
+                    position_id=position_id,
                 )
             )
     for order, symbol in expired:

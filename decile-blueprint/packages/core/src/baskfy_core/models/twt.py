@@ -150,6 +150,9 @@ TW_CLOSE_REASONS: tuple[str, ...] = (
     "STOP_DAY0",
     "NO_BAR",
     "MANUAL",
+    #: LV9 (Maulik, 28 Sep 2026 — TW20): the remainder sold at the next open on a close below
+    #: the trail MA. Qullamaggie's exit, replacing the 20 % trail; migration 0058.
+    "MA_TRAIL",
 )
 
 TW_FILL_SIDES: tuple[str, ...] = ("BUY", "SELL")
@@ -679,6 +682,19 @@ class TwPosition(Base):
     next_trigger: Mapped[Decimal | None] = mapped_column(PRICE, nullable=True)
     #: The session ``next_trigger`` was computed for.
     next_trigger_for: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
+
+    # --- LV9 (migration 0058): Qullamaggie's exit state, DECISIONS-TW TW20 -----------------
+    #: The partial into strength has been sold (a third, once).
+    partial_done: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    #: ``MA10`` or ``MA20`` — chosen from the name's ADR the first evening it is managed; null
+    #: until then.
+    trail: Mapped[str | None] = mapped_column(String(4), nullable=True)
+    #: A partial the evening decided: the session it decided on and the shares to sell.
+    partial_queued_for: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
+    partial_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: A full exit the evening decided (``MA_TRAIL``): the session it decided on and why.
+    exit_queued_for: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
+    exit_reason_queued: Mapped[str | None] = mapped_column(String(24), nullable=True)
 
     quantity_open: Mapped[int] = mapped_column(Integer, nullable=False)
     state: Mapped[str] = mapped_column(String(16), nullable=False, server_default="OPEN")

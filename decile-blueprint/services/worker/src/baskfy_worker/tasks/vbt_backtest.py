@@ -139,16 +139,27 @@ def _params_json(params: BacktestParams, start: dt.date, end: dt.date | None) ->
     remembering to add it.
     """
     config: JsonObject = {}
+
+    def _flat(value: object) -> object:
+        if isinstance(value, tuple):
+            return list(value)
+        if isinstance(value, Decimal):
+            # House rule 9 — money stays exact through JSONB (asyncpg uses json.dumps).
+            return str(value)
+        return value
+
     for group in dataclasses.fields(params.config):
         sub = getattr(params.config, group.name)
         for spec in dataclasses.fields(sub):
             value = getattr(sub, spec.name)
-            if isinstance(value, tuple):
-                value = list(value)
-            elif isinstance(value, Decimal):
-                # House rule 9 — money stays exact through JSONB (asyncpg uses json.dumps).
-                value = str(value)
-            config[f"{group.name}.{spec.name}"] = value
+            if dataclasses.is_dataclass(value) and not isinstance(value, type):
+                # LV9: `exits.qulla` is the swing book's StopConfig, nested one level down.
+                for inner in dataclasses.fields(value):
+                    config[f"{group.name}.{spec.name}.{inner.name}"] = _flat(
+                        getattr(value, inner.name)
+                    )
+                continue
+            config[f"{group.name}.{spec.name}"] = _flat(value)
     return {
         "start": start.isoformat(),
         "end": end.isoformat() if end else None,

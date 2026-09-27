@@ -111,6 +111,25 @@ LV2 and LV3 both need `app/main.py`? No: LV3 owns it (gateway wiring); LV6 adds 
   - 1.7 LV7 integration: suites, lint, deploy, docs, report gates/live-7-integration.md
   - 1.8 LV8 live scans for TWT and VBT; entries now at market (Maulik, 28 Sep) gates/live-8-live-scans.md
 
+## Added 28 Sep 2026 04:00 IST — LV9 and LV10 (Maulik's Q3–Q5 answers, DECISIONS-LV LV9.0)
+
+**LV9 — Qullamaggie exits on TWT and VBT (`gates/live-9-qulla-exits.md`).** The swing book's
+`StopConfig` rule replaces TWT's 20 % high-water trail and VBT's 21-EMA exit: a third sold into
+strength between bar 3 and bar 5 after entry if green, the stop to breakeven after the partial or
+at +1R, the remainder trailing the 10-day MA (ADR ≥ 6 %) or the 20-day MA, sold at the next open on
+a close below it; the GTT stays the hard stop. One rule module (`baskfy_core.swing.stops.manage`),
+two adapters. TWT's auto-execute sends the partial `SELL_AT_OPEN` too (TW20). Contract: positions
+gain `partial_done`, `trail`; TWT positions gain the queued-sell columns VBT already has; VBT gains
+`RAISE_GTT_STOP`; migration 0058; `ExitConfig.qulla_exits` (default true) is the one-line reversal.
+
+**LV10 — his pyramiding on all three sleeves (`gates/live-10-pyramiding.md`).** A fresh qualifying
+setup in a held name is a new entry with its own size and stop, counted against slots and exposure;
+at most `max_entries_per_name` (2) open entries per name; re-entry after an exit on a new signal.
+`SizingConfig.pyramiding` (default true) per sleeve. Plan lines carry `position_id` so exits and
+raises name the position they act on when a name holds two.
+
+**Deploy:** after today's close (15:30–18:40 IST window), not into the morning session.
+
 ## Status log
 
 Append-only.
@@ -124,3 +143,4 @@ Append-only.
 - 2026-09-28 01:35 IST Maulik, in session: TWT/VBT Scan builds a live bar like swing; entries now at market with protection (TWT auto confirms live plans; VBT by hand); LV5 off on the box, code stays. Added leaf LV8 (DECISIONS-LV LV8.0).
 - 2026-09-28 02:30 IST LV8 written: live_scan.py (provisional bars, live detect, LIVE plan builders), the two Scan tasks branch on decide_session with a Kite quote source bound in Celery, migration 0057, VBT `BUY_AT_MARKET` desk handler, twt-auto accepts LIVE plans and the supervisor drains once a minute, `provisional` on the wire and the pages, SCAN_MEANS reworded. Tests: worker test_live_scan (20), migration 0057 (3), desk 87 across the three touched suites, desk suite 2,527 green, web 292 green. Tests pinning the reversed decision rewritten to cite LV8.0. TW19, VB16, LV8.1 written. Next: lint, gates V1–V9, commits LV7 + LV8, deploy.
 - 2026-09-28 03:50 IST LV8 gates 9/9; committed dde3c1e; deployed from a clean worktree 02:42–02:53 IST (`✓ DEPLOYED dde3c1e`, running=16, alembic 0057_live_scans, live_quotes true, twt_execution_true=1 twt_auto_true=1, EQ_BARS off). LV7 I1 run by hand (the runner's cap is 30 min): `1 failed, 13554 passed, 19 skipped, 1 xfailed in 32:13` — the one failure pinned the pre-LV1 quote shape, fixed, its file 33 green. Supervisor docstring/compose comment reconciled with LV8's drain. Root ledger running; LV7 commit and report next.
+- 2026-09-28 05:40 IST LV9 built: core `exits/qulla.py` (adapter over swing stops.manage) + tests (12); TWT/VBT ExitConfig.qulla_exits; TWT evening `run_twt_manage_qulla` replaces the ratchet (tests 7), VBT evening qulla branch + RAISE_GTT_STOP kind (tests 7); migration 0058 (3); desk: TWT `_sell_at_open` + exit-order bookkeeping + auto-execute sells, VBT `_raise_gtt_stop` + partial_done; exit_rules text; tests pinning the reversed decisions rewritten to cite LV9.0. Desk suite 2,538 green; screener sleeve suites green. Gate run done; commit next, then LV10.

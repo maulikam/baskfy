@@ -49,6 +49,7 @@ TASK_ROUTES: Final[dict[str, dict[str, str]]] = {
     # half. No task is named `baskfy.ingest.*` yet, so nothing was misrouted by it; the first one
     # added would have been, silently, onto the default queue.
     "baskfy.ingest.*": {"queue": QUEUE_INGEST},
+    "baskfy.eq_bars.*": {"queue": QUEUE_INGEST},
     "baskfy.compute.*": {"queue": QUEUE_COMPUTE},
     "baskfy.backtest.*": {"queue": QUEUE_BACKTEST},
     "baskfy.pipeline.*": {"queue": QUEUE_DEFAULT},
@@ -211,6 +212,15 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         "task": "baskfy.options.weekly",
         "schedule": crontab(hour=16, minute=30, day_of_week="fri"),
         "options": {"queue": QUEUE_DEFAULT},
+    },
+    # LV5 (docs/live/PLAN.md): the session's one-minute EQUITY bars for the swing book's liquid
+    # universe (~570 names, one historical call each, on the bulk lane) into eq_minute_bar, so a
+    # live TWT/VBT variant can be defined and backtested. Read-only market data; behind
+    # BASKFY_EQ_BARS_ENABLED (default on). 15:45, after the index bars' own reconcile slot below.
+    "eq-bars-session": {
+        "task": "baskfy.eq_bars.session",
+        "schedule": crontab(hour=15, minute=45, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_INGEST},
     },
     # The same session's bars once more after the close, correcting any minute read while forming.
     "options-index-bars-eod": {

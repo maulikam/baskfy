@@ -133,6 +133,11 @@ class WorkerSettings(BaseSettings):
     options_monitor_enabled: bool = False
     options_collect_enabled: bool = False
     options_scan_enabled: bool = False
+    #: LV5 (docs/live/PLAN.md): the after-close capture of one-minute equity bars for the swing
+    #: book's liquid universe into ``eq_minute_bar`` — read-only market data, ~570 historical
+    #: calls at 15:45 on the bulk lane. On by default because the data is the point of LV5 and
+    #: nothing else runs at that hour; ``BASKFY_EQ_BARS_ENABLED=false`` turns it off.
+    eq_bars_enabled: bool = True
     #: The desk's own product switches and DRY_RUN, read under the desk's unprefixed names and
     #: parsed the desk's way (``app/config.py``): DRY_RUN is on unless exactly ``false``; the two
     #: switches are on only when exactly ``true``. Strings, so pydantic's lenient bool parsing

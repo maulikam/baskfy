@@ -211,7 +211,15 @@ re-run of the evening cannot double-place. Index `(user_id, state)`.
 Mirrors the desk's plan lifecycle exactly: `plan_id` (uuid), `built_at`, **`expires_at = built_at
 + 30 min`**, `plan_hash` (sha256 of the canonical lines), `gate`, `sleeve_equity_inr`,
 `total_new_exposure_inr`, `source` ∈ `EVENING` (built by the nightly job after the close) /
-`MORNING` (rebuilt before the open from the same signals) / `MANUAL` (a desk rebuild).
+`MORNING` (rebuilt before the open from the same signals) / `MANUAL` (a desk rebuild) /
+**`LIVE`** (LV8, 28 Sep 2026 — built by the Scan button during the session from today's
+provisional bar; its `BUY_AT_OPEN` lines mean "buy now, at market", and `twt-auto` confirms it
+within a minute; DECISIONS-TW TW19, DECISIONS-LV LV8.0).
+
+**`provisional`** (boolean, default false; migration `0057_live_scans`) sits on `tw_signal_daily`,
+`tw_state_daily`, `tw_breadth_daily` and `tw_scan_run`: the row was built from a bar still in
+progress, from Kite quotes, and the nightly's real bar replaces it (stragglers the real bar does
+not reproduce are deleted). The ratchet never runs on a provisional bar.
 
 `tw_plan_line`: `kind` ∈
 

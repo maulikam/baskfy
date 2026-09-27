@@ -58,6 +58,89 @@ class World:
         )
 
 
+class TestTheLiveDrain:
+    """LV8: in session, with a Kite session, the supervisor asks twt_auto to drain once a minute.
+
+    The drain is the flag-gated ``twt_auto.drain_now``; here it is a recorder. With no drain
+    handed in (the default) nothing is called — the field is optional so every older test and a
+    desk without the module keep working.
+    """
+
+    def _world(self) -> tuple[World, list[dt.datetime]]:
+        world = World()
+        calls: list[dt.datetime] = []
+        return world, calls
+
+    def _deps(self, world: World, calls: list[dt.datetime], *, ran: bool = False) -> S.Deps:
+        def drain(now: dt.datetime) -> object:
+            calls.append(now)
+
+            class Report:
+                pass
+
+            report = Report()
+            report.ran = ran  # type: ignore[attr-defined]
+            report.reason = "" if ran else "NO_PLAN: no TWT plan exists"  # type: ignore[attr-defined]
+            report.attempts = [("AAA", "BUY_AT_OPEN", "SENT")] if ran else []  # type: ignore[attr-defined]
+            return report
+
+        deps = world.deps()
+        return S.Deps(**{**deps.__dict__, "drain_twt": drain})
+
+    def test_in_session_it_drains_once_a_minute_not_every_tick(self) -> None:
+        world, calls = self._world()
+        sup = S.Supervisor(self._deps(world, calls), reconcile_every=10.0, drain_every=60.0)
+        world.mtime, world.authed = 1.0, True
+        start = at("10:00")
+        for seconds in range(0, 130, 10):
+            sup.tick(start + dt.timedelta(seconds=seconds))
+        assert [int((c - start).total_seconds()) for c in calls] == [0, 60, 120]
+        idle = [b for b in world.beats if b[0] == "twt-auto"]
+        assert idle and idle[-1][1] == "idle" and "NO_PLAN" in idle[-1][2]
+
+    def test_a_drain_that_ran_beats_with_its_line_count(self) -> None:
+        world, calls = self._world()
+        sup = S.Supervisor(self._deps(world, calls, ran=True))
+        world.mtime, world.authed = 1.0, True
+        sup.tick(at("11:40"))
+        assert sup.drains == 1
+        assert ("twt-auto", "ran", "1 line(s) sent through execute_line") in world.beats
+
+    def test_outside_the_session_or_without_a_token_it_never_drains(self) -> None:
+        world, calls = self._world()
+        sup = S.Supervisor(self._deps(world, calls))
+        sup.tick(at("10:00"))  # no token
+        world.mtime, world.authed = 1.0, True
+        sup.tick(at("08:50"))  # token, before the open
+        sup.tick(at("15:31"))  # token, after the close
+        assert calls == []
+
+    def test_no_drain_handed_in_means_nothing_is_called_and_nothing_breaks(self) -> None:
+        world = World()
+        sup = S.Supervisor(world.deps())
+        world.mtime, world.authed = 1.0, True
+        assert sup.tick(at("10:00")) == S.STATE_SESSION
+        assert sup.drains == 0
+
+    def test_a_drain_that_raises_is_a_heartbeat_not_a_crash(self) -> None:
+        world, calls = self._world()
+
+        def boom(now: dt.datetime) -> object:
+            raise RuntimeError("desk db away")
+
+        deps = S.Deps(**{**world.deps().__dict__, "drain_twt": boom})
+        sup = S.Supervisor(deps)
+        world.mtime, world.authed = 1.0, True
+        assert sup.tick(at("10:00")) == S.STATE_SESSION
+        assert ("twt-auto", "error", "drain raised RuntimeError") in world.beats
+
+    def test_from_desk_wires_twt_autos_drain(self) -> None:
+        import inspect
+
+        source = inspect.getsource(S.from_desk)
+        assert "drain_twt=twt_auto.drain_now" in source
+
+
 class TestTheLoginEvent:
     def test_no_token_is_waiting_for_login_and_nothing_else_runs(self) -> None:
         world = World()

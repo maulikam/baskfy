@@ -361,6 +361,57 @@ class TestThePlanItActsOn:
         assert self._refused(store).reason.startswith("EXPIRED")
         assert store.lines[1]["state"] == "PROPOSED"
 
+    def test_a_live_plan_built_today_is_used(self) -> None:
+        """LV8 (TW19): the Scan button's LIVE plan is drained like the MORNING one."""
+        store = AutoStore()
+        plan_id, pk = a_plan(store, source="LIVE", built_at=OPEN + dt.timedelta(hours=2))
+        a_line(store, plan_id, pk, line_id=1, symbol="AAA")
+        spy = SpyExecute(store)
+        report = _run(store, at=OPEN + dt.timedelta(hours=2, minutes=5), execute=spy)
+        assert report.ran is True and report.plan_id == plan_id
+        assert [c["line_id"] for c in spy.calls] == [1]
+
+    def test_an_expired_live_plan_sends_nothing(self) -> None:
+        store = AutoStore()
+        plan_id, pk = a_plan(store, source="LIVE", built_at=OPEN + dt.timedelta(hours=2))
+        a_line(store, plan_id, pk, line_id=1, symbol="AAA")
+        report = self._refused(store, at=OPEN + dt.timedelta(hours=2, minutes=31))
+        assert report.reason.startswith("EXPIRED")
+
+    def test_a_live_plan_is_drained_in_the_afternoon_too(self) -> None:
+        """SW26's widening, inherited: the live scan may run at 14:00 and its plan is good then."""
+        store = AutoStore()
+        built = OPEN.replace(hour=14, minute=0)
+        plan_id, pk = a_plan(store, source="LIVE", built_at=built)
+        a_line(store, plan_id, pk, line_id=1, symbol="AAA")
+        spy = SpyExecute(store)
+        report = _run(store, at=built + dt.timedelta(minutes=1), execute=spy)
+        assert report.ran is True and len(spy.calls) == 1
+
+    def test_drain_now_is_run_once_without_a_wait(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The supervisor's entry point: no sleep, no wait, the same refusals."""
+        store = AutoStore()
+        plan_id, pk = a_plan(store, source="LIVE", built_at=OPEN + dt.timedelta(hours=1))
+        a_line(store, plan_id, pk, line_id=1, symbol="AAA")
+        spy = SpyExecute(store)
+        seen: dict = {}
+
+        def fake_run_once(**kwargs: object) -> A.RunReport:
+            seen.update(kwargs)
+            return A.RunReport()
+
+        monkeypatch.setattr(A, "run_once", fake_run_once)
+        A.drain_now(OPEN + dt.timedelta(hours=1, minutes=1))
+        assert seen["wait_seconds"] == 0 and seen["poll_seconds"] == 0
+        assert seen["now"]() == OPEN + dt.timedelta(hours=1, minutes=1)
+        del spy
+
+    def test_drain_now_with_the_flag_off_does_nothing(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Same three flags as the click and the 09:15 loop; the supervisor adds none."""
+        _flags(monkeypatch, dry_run=True, execution=False, auto=False)
+        report = A.drain_now(OPEN + dt.timedelta(hours=1))
+        assert report.ran is False and "auto-execute is off" in report.reason
+
     def test_an_evening_plan_is_never_used(self) -> None:
         store = AutoStore()
         plan_id, pk = a_plan(store, source="EVENING", ttl_minutes=24 * 60)

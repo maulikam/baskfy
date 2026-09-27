@@ -64,6 +64,10 @@ history; D3 is no longer the engineering blocker.
    **Delegated 22 Sep 2026** (DECISIONS-TW TW18): Maulik — *"You set it and deploy it on AWS
    every time"* — so it is **true on the box** in `.env.staging.compose`, set by an agent, and
    deploys preserve it. The in-repo default stays false.
+   **Widened 28 Sep 2026, by Maulik (DECISIONS-LV LV8.0, DECISIONS-TW TW19):** the same
+   `twt-auto` path also confirms a **LIVE** plan — built by the Scan button from today's
+   provisional bar during the session — at any hour between 09:15 and 15:30, via the session
+   supervisor's once-a-minute drain, under the same three flags. Nothing else about it changed.
    An agent may not widen either exception, add a third, or default either flag to true.
 2. Holdings quantity = `quantity` + `t1_quantity` + `collateral_quantity`.
 3. Pledged shares sell directly (Zerodha instant-sale); plan flags them as info only.

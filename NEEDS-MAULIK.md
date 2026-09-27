@@ -2345,3 +2345,60 @@ unprotected — every sleeve book is empty. Two things are yours:
    09:05. LV4 makes a later login start everything it can; it cannot make a token that is not there.
 
 Blocks nothing in this run.
+
+## LV7 — the review's step 5 is yours: five decisions before any new strategy variant is built (28 Sep 2026)
+
+**Answered in session at ~01:35 IST on 28 Sep (DECISIONS-LV LV8.0):** questions 1 and 2 — TWT and VBT
+scan today's live bar like swing does and enter **now, at market with protection**, no backtest; LV5's
+minute bars are off on the box. Questions 3, 4 and 5 below still stand.
+
+Steps 1–4 of `docs/trading-readiness-review-2026-09-27.md` are built (LV1–LV6). Step 5 — "the new
+strategies, each versioned and backtested on the same runtime" — turns on decisions the review says
+are not an agent's ("No numerical thresholds are approved by this review"). The data they need
+starts collecting with LV5 (`eq_minute_bar`, 15:45 nightly; backfill with
+`python -m baskfy_worker.eq_bars_cli backfill --from 2025-01-01`). Answer in session; each is a
+multiple choice with a recommended default first.
+
+1. **Live-entry TWT** (gap 4). The tested rule is "the next open, at market". Options: (a) keep it,
+   and let LV4's session supervisor + `twt-auto` make the 09:15 run reliable — *recommended: it is
+   the rule the 20.9 % CAGR was measured on*; (b) a versioned "TWT-late" variant that enters at the
+   first 5-minute close above the signal high any time before 10:30, backtested on `eq_minute_bar`
+   first; (c) nothing until a year of minute bars exists.
+2. **Live-entry VBT** (gap 4). Tested: a limit at the signal close working three sessions. Options:
+   (a) keep — *recommended*; (b) a "VBT-intraday" variant on today's volume-so-far against the
+   50-day average at 14:30, backtested first; (c) nothing yet.
+3. **Pyramiding** (P2.1). Options: (a) none — *recommended until the live system has forward
+   evidence*; (b) one add at +1R on a fresh continuation signal, sized at half the original, the
+   stop for the whole raised to the original entry — backtested against baseline on untouched
+   periods first; (c) re-entry after a completed exit only, never an add to an open position.
+4. **Targets** (P2.3). Options: (a) none — *recommended: TWT's and VBT's own research measured
+   targets and found they lowered returns*; (b) a partial at +2R for TWT only, as a versioned
+   variant; (c) a swing-style 1/3 partial on all three.
+5. **The first TWT live morning.** With LV2 deployed, the first weekday with a Kite session before
+   09:15 is TWT's first live fill (LV0). Options: (a) let it run — the reconciler, the supervisor and
+   `/lifecycle` are watching — *recommended*; (b) `BASKFY_TWT_AUTO_EXECUTE=false` on the box for one
+   week while you confirm by hand from the desk page and watch `/lifecycle`; (c) halve
+   `tw_config.sleeve_capital_inr` for the first ten entries (the half-size rule already halves them).
+
+Also yours, from the review and not built: a tick-driven stop supervisor (gap 9), a streaming feed
+for the screens (gap 3), and a forward paper/shadow run of the live system before promotion (P2.2).
+
+## LV8 — what your decision does on the first session it is deployed for (28 Sep 2026)
+
+Nothing here needs your hands; it is written so the first live scan is not a surprise.
+
+* **TWT.** On any trading day, once the API has a Kite session and the time is past 09:15, pressing
+  **Scan** on `/twt` (the desk's button, or the web's; and the login callback queues one for you the
+  moment you log in) reads today so far and may build a **LIVE** plan. Because
+  `BASKFY_TWT_AUTO_EXECUTE=true` is on the box (TW18), the session supervisor will confirm that plan's
+  lines **within a minute**: a real MARKET buy per line, Kite market protection, the 20 % GTT stop in
+  the same request, three entries a session, the first ten at half size. If you want to look before
+  it buys, set `BASKFY_TWT_AUTO_EXECUTE=false` in `/opt/baskfy/.env.staging.compose` and
+  `up -d desk twt-auto session-supervisor`; the plan then waits thirty minutes for your click.
+* **VBT.** The same scan builds a LIVE plan of `BUY_AT_MARKET` lines, but VBT has no auto-execute
+  flag and `BASKFY_VBT_EXECUTION_ENABLED` is **false** on the box, so a click is a simulated fill.
+  Flipping that flag is yours (VB16).
+* **What the pages show.** A live scan's row says "from live quotes (today so far)"; the chip beside
+  Scan says what the button does now. The nightly overwrites every provisional row after the close.
+* **Before 09:15 or without a Kite login**, Scan is exactly what it was: the last published session.
+

@@ -24849,7 +24849,7 @@
         "type": "object"
       },
       "TwtScanRunOut": {
-        "description": "One \"Scan now\" run (TW12). ``status`` walks QUEUED -> RUNNING -> DONE | FAILED.\n\n``session_date`` is null until the worker has decided which published session it is\ndetecting, because the caller asks for \"the latest\" and only the worker knows which that is.\n``detail`` carries the funnel on DONE; ``error`` the reason on FAILED.\n\n**There is no ``provisional`` field**, and its absence is the design rather than an omission:\nsee the module docstring and DECISIONS-TW TW12.2.",
+        "description": "One \"Scan now\" run (TW12). ``status`` walks QUEUED -> RUNNING -> DONE | FAILED.\n\n``session_date`` is null until the worker has decided which published session it is\ndetecting, because the caller asks for \"the latest\" and only the worker knows which that is.\n``detail`` carries the funnel on DONE; ``error`` the reason on FAILED. ``provisional`` is true\nwhen the run read today so far from live quotes (LV8, DECISIONS-TW TW19).",
         "properties": {
           "detail": {
             "anyOf": [
@@ -24896,6 +24896,11 @@
               }
             ],
             "title": "Found"
+          },
+          "provisional": {
+            "default": false,
+            "title": "Provisional",
+            "type": "boolean"
           },
           "requested_at": {
             "format": "date-time",
@@ -26483,7 +26488,7 @@
         "type": "object"
       },
       "VbtScanRunOut": {
-        "description": "One \"Scan now\" run (VB12). ``status`` walks QUEUED -> RUNNING -> DONE | FAILED.\n\n``session_date`` is null until the worker has decided which published session it is\nre-detecting — the caller asks for \"the latest\" and only the worker knows which that is.\n``funnel`` is the detector's own counts and is filled on DONE; ``error`` is the reason on\nFAILED; ``detail`` carries the rest, in the shape the nightly step writes so the two read\nthe same. There is no ``provisional`` here and there is no column for one: this sleeve\nre-detects a **closed** session, never a partial one.",
+        "description": "One \"Scan now\" run (VB12). ``status`` walks QUEUED -> RUNNING -> DONE | FAILED.\n\n``session_date`` is null until the worker has decided which published session it is\nre-detecting — the caller asks for \"the latest\" and only the worker knows which that is.\n``funnel`` is the detector's own counts and is filled on DONE; ``error`` is the reason on\nFAILED; ``detail`` carries the rest, in the shape the nightly step writes so the two read\nthe same. ``provisional`` is true when the run read today so far from live quotes (LV8,\nDECISIONS-VB VB14).",
         "properties": {
           "detail": {
             "anyOf": [
@@ -26542,6 +26547,11 @@
               }
             ],
             "title": "Funnel"
+          },
+          "provisional": {
+            "default": false,
+            "title": "Provisional",
+            "type": "boolean"
           },
           "requested_at": {
             "format": "date-time",

@@ -164,6 +164,12 @@ export interface TwtScanRun {
   requested_at: string | null;
   finished_at: string | null;
   error: string | null;
+  /**
+   * LV8 (DECISIONS-TW TW19): the run read today so far from Kite quotes — one bar per name from
+   * a live quote, the same detector — and the nightly's real bar replaces its rows. Absent on a
+   * payload written before LV8 means "from published bars".
+   */
+  provisional?: boolean;
 }
 
 export interface TwtToday {

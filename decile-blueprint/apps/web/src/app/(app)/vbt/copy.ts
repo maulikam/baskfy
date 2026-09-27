@@ -200,7 +200,10 @@ export function scanRunLine(
     const stopped = when ? ` It stopped ${when}.` : "";
     return `The last scan did not finish, so nothing changed.${stopped} You can start another.`;
   }
+  // LV8: a live scan says so, and says from what — the same words the swing book's line uses,
+  // so a person reading the three pages learns one vocabulary.
+  const from = run.provisional ? " from live quotes (today so far)" : "";
   const lead = when ? `Last scanned ${when}` : "The last scan finished";
   const found = foundClause(run.found);
-  return found ? `${lead}${found}` : `${lead}.`;
+  return found ? `${lead}${from}${found}` : `${lead}${from}.`;
 }

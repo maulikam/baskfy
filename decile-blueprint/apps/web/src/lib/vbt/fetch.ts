@@ -91,6 +91,11 @@ export interface VbtScanRun {
   requested_at: string | null;
   finished_at: string | null;
   error: string | null;
+  /**
+   * LV8 (DECISIONS-VB VB14): the run read today so far from Kite quotes and its entries are
+   * "buy now, at market". Absent on a payload written before LV8 means "from published bars".
+   */
+  provisional?: boolean;
 }
 
 /** One of `04` §3.2's six trend filters, as the API spells it out. */

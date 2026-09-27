@@ -38,6 +38,7 @@ from baskfy_core.models.swing import SW_SCAN_STATUSES
 REPO: Final = Path(__file__).resolve().parents[3]
 MIGRATION_PATH: Final = REPO / "services" / "api" / "alembic" / "versions" / "0042_twt_scan_run.py"
 MIGRATION: Final = MIGRATION_PATH.read_text(encoding="utf-8")
+LIVE_MIGRATION: Final = (MIGRATION_PATH.parent / "0057_live_scans.py").read_text(encoding="utf-8")
 
 #: Through the metadata rather than ``TwScanRun.__table__``, which is typed ``FromClause`` and
 #: so has neither ``constraints`` nor ``indexes`` as far as a type checker is concerned. The same
@@ -84,14 +85,16 @@ class TestTheTableItself:
     def test_it_is_named_what_the_document_says(self) -> None:
         assert TwScanRun.__tablename__ == "tw_scan_run"
 
-    def test_it_carries_no_provisional_column(self) -> None:
-        """DECISIONS-TW TW12.2, as an assertion rather than a comment.
-
-        `sw_scan_run` has one because the swing book's setups can be read off a bar still being
-        formed. `04` §2 measures three *closed* weekly ranges, so there is nothing provisional to
-        record and a column that is always false would be a promise this strategy cannot keep.
-        """
-        assert "provisional" not in TABLE.c
+    def test_it_carries_a_provisional_column_since_lv8(self) -> None:
+        """TW12.2 said there was nothing provisional to record. Maulik reversed that on 28 Sep
+        2026 (DECISIONS-LV LV8.0, DECISIONS-TW TW19): during the session the scan reads today so
+        far from Kite quotes, and a row built from a bar still forming must say so — as
+        `sw_scan_run.provisional` has since SW15. Default false, so the nightly's writes and every
+        pre-LV8 row read "from published bars"."""
+        column = TABLE.c["provisional"]
+        assert column.nullable is False
+        assert column.server_default is not None
+        assert str(getattr(column.server_default, "arg", "")) == "false"
 
     def test_the_columns_are_the_ones_the_migration_creates(self) -> None:
         expected = {
@@ -107,10 +110,12 @@ class TestTheTableItself:
             "error",
             "task_id",
             "created_at",
+            "provisional",
         }
         assert set(TABLE.c.keys()) == expected
-        for name in expected:
+        for name in expected - {"provisional"}:
             assert f'"{name}"' in MIGRATION, f"{name} is on the model and not in the migration"
+        assert '"provisional"' in LIVE_MIGRATION, "provisional arrived with 0057 (LV8)"
 
     def test_only_the_columns_the_worker_fills_in_later_are_nullable(self) -> None:
         """A scan that has not run yet knows its user and its time and nothing else; a scan that

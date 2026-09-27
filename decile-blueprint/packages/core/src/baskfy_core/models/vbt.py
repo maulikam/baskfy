@@ -108,7 +108,7 @@ VB_FILL_SIDES: tuple[str, ...] = ("BUY", "SELL")
 #: ``vb_plan.source`` — the evening's plan from the closed session, the morning's rebuild before
 #: the open, or a rebuild a person asked the desk for. There is no live-trigger source: this is
 #: an end-of-day strategy and nothing about it fires inside a session (``02`` Track C §3).
-VB_PLAN_SOURCES: tuple[str, ...] = ("EVENING", "MORNING", "MANUAL")
+VB_PLAN_SOURCES: tuple[str, ...] = ("EVENING", "MORNING", "MANUAL", "LIVE")
 
 #: ``vb_scan_run.status`` — the same four the swing book's scan uses, and for the same reason:
 #: a row that is QUEUED has been asked for, RUNNING has been picked up, and DONE or FAILED has
@@ -299,6 +299,9 @@ class VbSignalDaily(Base):
     )
     #: How many bars the 200-session window actually held, so ``04`` §2.2's tolerance is auditable.
     bars_in_window: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    #: LV8 (DECISIONS-LV LV8.0): built from a bar still in progress — a live scan's row. The
+    #: nightly's real row replaces it (same key) and deletes the stragglers.
+    provisional: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     pipeline_run_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("pipeline_run.id", ondelete="SET NULL"), nullable=True
     )
@@ -339,6 +342,9 @@ class VbBreadthDaily(Base):
     #: The funnel: universe → with a bar → with a 200-day average → above it → signals →
     #: scan-only, and the thin sessions dropped inside the window.
     detail: Mapped[JsonObject | None] = mapped_column(JSONB, nullable=True)
+    #: LV8 (DECISIONS-LV LV8.0): built from a bar still in progress — a live scan's row. The
+    #: nightly's real row replaces it (same key) and deletes the stragglers.
+    provisional: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     pipeline_run_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("pipeline_run.id", ondelete="SET NULL"), nullable=True
     )
@@ -690,6 +696,9 @@ class VbScanRun(Base):
     source: Mapped[str] = mapped_column(String(8), nullable=False, server_default="desk")
     #: ``{"funnel": {...}, "signals": n, "scan_only": n, "gate": "OPEN"}`` — the same funnel the
     #: nightly writes, so the two are read the same way.
+    #: LV8 (DECISIONS-LV LV8.0): built from a bar still in progress — a live scan's row. The
+    #: nightly's real row replaces it (same key) and deletes the stragglers.
+    provisional: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     detail: Mapped[JsonObject | None] = mapped_column(JSONB)
     error: Mapped[str | None] = mapped_column(Text)
     #: The broker's message id once published. A row without one has not been picked up yet, and

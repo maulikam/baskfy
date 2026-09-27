@@ -113,15 +113,12 @@ class TestScanNow:
         assert body["detail"] is None
         assert body["error"] is None
 
-    async def test_the_answer_has_no_provisional_field(
+    async def test_the_answer_carries_provisional_false_until_a_live_scan_says_otherwise(
         self, settings: Settings, screener_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """DECISIONS-TW TW12.2, as a payload assertion.
-
-        The swing book's run carries `provisional`, because its setups can be read off a bar still
-        forming. This strategy's cannot — `04` §2 measures three *closed* weekly ranges — so a
-        page that saw the field would be offered a freshness the strategy has no use for. Absence
-        is cheaper to keep honest than a field that is always false.
+        """TW12.2 kept this field out; Maulik's LV8 decision (28 Sep 2026, DECISIONS-TW TW19)
+        brings it in: during the session the scan reads today so far from Kite quotes, and the
+        page must be able to say so. A queued run has read nothing, so it is false.
         """
         _, public_id = await _sole_tenant(screener_session, monkeypatch)
 
@@ -131,10 +128,11 @@ class TestScanNow:
                 url(f"/twt/scan/{posted.json()['run_id']}"), headers=bearer(public_id)
             )
 
-        assert "provisional" not in read.json()
+        assert read.json()["provisional"] is False
         # An exact set, so a field added to this payload is reviewed rather than noticed. ``found``
         # joined it on 12 Sep 2026: the page could say a run had finished but not what it found,
-        # and "DONE" is not a sentence anybody wants to read about their own money.
+        # and "DONE" is not a sentence anybody wants to read about their own money. ``provisional``
+        # joined on 28 Sep 2026 (LV8).
         assert set(read.json()) == {
             "run_id",
             "status",
@@ -145,6 +143,7 @@ class TestScanNow:
             "detail",
             "error",
             "found",
+            "provisional",
         }
         assert read.json()["found"] is None, "a queued run has not looked at anything yet"
 

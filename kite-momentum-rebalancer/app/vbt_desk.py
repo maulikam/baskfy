@@ -91,10 +91,12 @@ KIND_ORDER: Final[tuple[str, ...]] = (
     "CANCEL_LIMIT",
     "ARM_GTT",
     "PLACE_LIMIT",
+    "BUY_AT_MARKET",
 )
 
 KIND_LABEL: Final[dict[str, str]] = {
     "PLACE_LIMIT": "VBT BUY LIMIT",
+    "BUY_AT_MARKET": "VBT BUY AT MARKET (live scan)",
     "SELL_AT_OPEN": "VBT SELL AT OPEN",
     "CANCEL_LIMIT": "VBT CANCEL",
     "ARM_GTT": "VBT ARM STOP",

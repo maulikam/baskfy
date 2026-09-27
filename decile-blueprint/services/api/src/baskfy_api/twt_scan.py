@@ -61,10 +61,10 @@ IN_FLIGHT: Final[tuple[str, ...]] = ("QUEUED", "RUNNING")
 class ScanRunView:
     """One ``tw_scan_run`` row, as ``GET /twt/scan/{id}`` reads it.
 
-    **There is no ``provisional`` field** and the absence is the design, not an omission: this
-    sleeve's signal is read off closed weekly bars, so there is no intraday scan to label
-    (DECISIONS-TW **TW12.2**). A page that showed one would be promising a freshness the strategy
-    cannot use.
+    ``provisional`` (LV8, 28 Sep 2026, DECISIONS-TW **TW19** — Maulik's reversal of TW12.2) is
+    true when the run read **today so far** from Kite quotes: one bar built per name from a live
+    quote, the same detector, rows the nightly's real bar will replace. False is a scan of the
+    last published session.
     """
 
     run_id: int
@@ -80,6 +80,7 @@ class ScanRunView:
     #: none, which for this sleeve is the **ordinary** answer (about eighteen entries a year,
     #: ``docs/twt/04``) and must not render as a fault.
     found: int | None = None
+    provisional: bool = False
 
 
 def found_in(detail: dict[str, object] | None) -> int | None:
@@ -108,6 +109,7 @@ def scan_run_view(row: TwScanRun) -> ScanRunView:
         detail=detail,
         error=row.error,
         found=found_in(detail),
+        provisional=bool(row.provisional),
     )
 
 

@@ -146,8 +146,8 @@ class VbtScanRunOut(BaseModel):
     re-detecting — the caller asks for "the latest" and only the worker knows which that is.
     ``funnel`` is the detector's own counts and is filled on DONE; ``error`` is the reason on
     FAILED; ``detail`` carries the rest, in the shape the nightly step writes so the two read
-    the same. There is no ``provisional`` here and there is no column for one: this sleeve
-    re-detects a **closed** session, never a partial one.
+    the same. ``provisional`` is true when the run read today so far from live quotes (LV8,
+    DECISIONS-VB VB14).
     """
 
     run_id: int
@@ -164,6 +164,8 @@ class VbtScanRunOut(BaseModel):
     #: found without parsing the worker's payload. ``None`` means "the run did not say"; ``0``
     #: means "it looked and found none", and the two must not render the same.
     found: int | None = None
+    #: LV8: the run read today so far from Kite quotes; its rows are replaced by the nightly.
+    provisional: bool = False
 
 
 class VbtFilterOut(BaseModel):
@@ -740,6 +742,7 @@ def _scan_run_out(view: vbt_scan.ScanRunView) -> VbtScanRunOut:
         detail=view.detail,
         error=view.error,
         found=view.found,
+        provisional=view.provisional,
     )
 
 

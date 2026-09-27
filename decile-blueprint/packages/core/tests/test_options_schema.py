@@ -331,8 +331,9 @@ class TestTheSchemaOnARealDatabase:
 @requires_db
 class TestMigrateSeedMigrate:
     async def test_migrate_then_seed_then_migrate_is_a_no_op(self, op_url: str) -> None:
-        head = _alembic(op_url, "heads").stdout.split()[0]
-        assert head == OPTIONS_HEAD, "one head, and it is the options schema's newest"
+        heads = _alembic(op_url, "heads").stdout.strip().splitlines()
+        assert len(heads) == 1, "one head"
+        assert OPTIONS_HEAD in _alembic(op_url, "history").stdout, "in the head's history"
         async with _rolled_back(op_url) as session:
             user_id = await _fresh_user(session, "mseed")
             first = await seed_options(session, user_id)
@@ -353,7 +354,10 @@ class TestMigrateSeedMigrate:
             assert row is not None and row.max_lots == 1
         again = _alembic(op_url, "upgrade", "head")
         assert "Running upgrade" not in again.stderr + again.stdout
-        assert _alembic(op_url, "current").stdout.split()[0] == OPTIONS_HEAD
+        assert (
+            _alembic(op_url, "current").stdout.split()[0]
+            == _alembic(op_url, "heads").stdout.split()[0]
+        )
 
     async def test_the_seed_writes_the_documents_defaults_and_zero_capital(
         self, op_url: str
@@ -415,4 +419,7 @@ class TestTheRoundTrip:
         finally:
             await engine.dispose()
             _alembic(op_url, "upgrade", "head")
-        assert _alembic(op_url, "current").stdout.split()[0] == OPTIONS_HEAD
+        assert (
+            _alembic(op_url, "current").stdout.split()[0]
+            == _alembic(op_url, "heads").stdout.split()[0]
+        )

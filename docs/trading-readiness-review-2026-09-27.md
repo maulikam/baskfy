@@ -193,3 +193,21 @@ This review traced source, schedules, deployed-compose definitions, tests and re
 The full pipeline/database/browser suites and historical backtests were not rerun for this documentation-only review.
 
 The initial desk run, with dotenv disabled, DRY_RUN enabled and empty broker credentials, produced **2,432 passed, 147 skipped, 4 failed** (12 additional subtests passed). Three failures were test-environment assumptions: two constructor tests require a nonempty API-key string despite mocking the client; one secrecy assertion tests that the secret is absent from HTML and fails for an empty string. A targeted rerun with explicit non-secret dummy strings resolved those three. The remaining test asserts `FULLY_INVESTED=True`, whereas `app/config.py:110` defaults it to false. This is a test/configuration mismatch, not evidence to change a trading setting. No source or test assertion was changed. A second full run uses those dummy strings and an explicit process-only `FULLY_INVESTED=true` to exercise the profile that test requires; its result follows below. No real credentials or existing token store were used.
+
+## Status, 28 Sep 2026 — what each item became (LV pack, `docs/live/PLAN.md`)
+
+Written by the agent that executed this review under `/unlazy`; every claim below is a commit and
+a gate (`gates/live-*.md`), not a plan. `docs/live/DECISIONS-LV.md` carries the judgement calls.
+
+| Item | Became | Where |
+|---|---|---|
+| "Check the API container's `BASKFY_DRY_RUN` first" | Read on the box: **already false**; every sleeve book empty; TWT's six live buys of 23–24 Sep rejected by Zerodha for missing `market_protection` | LV0, `docs/live/AUDIT-2026-09-27.md` |
+| Gap 2 / P1.1 — market data off `DRY_RUN`; freshness end to end | `BASKFY_LIVE_QUOTES` is the market-data switch; `as_of`/`stale` per quote, `served_at`, `requested`/`covered`; browser drops the overlay after 90 s or a failed fetch; stale rows muted | LV1 |
+| Gap 7 / P0.1 — fill reconciliation and same-fill protection | `app/reconcile.py`: order book, GTT list and holdings once a pass; TWT partial fills and dead orders; VBT buys and **exits booked from the fill**; `lv_protection_issue`; every sleeve's buy refuses `PROTECTION_UNRESOLVED`; TWT market buys carry `market_protection` | LV2 |
+| Gap 8 / P0.2 — account-wide risk | `RiskStateStore` — one `risk_ledger` row per day, `SELECT … FOR UPDATE`, shared by every process; `release`, `seed_positions`, kill switch across processes | LV3 |
+| Gap 10 / P1.2 / P1.3 — login as the event; monitor reload; per-sleeve state | `session-supervisor` service (token arrival → seed exposure, reconcile once, every 10 s in session, heartbeats); swing monitor reloads its watchlist every minute and waits for a late login until 15:20; `GET /sleeves/state` and the chip beside each Scan button; the login queues the TWT and VBT scans too | LV4 |
+| Gap 1 — no intraday equity bars | `eq_minute_bar` hypertable; 15:45 session reconcile for the ~570-name liquid universe; resumable backfill CLI; pure readers | LV5 (no live tick collector — DECISIONS-LV LV5.1) |
+| P1.4 — one lifecycle per trade; adoption; P2.3 trade card | `/lifecycle` on the desk: stop judged at the broker (`ARMED`…`TRIGGERED_UNFILLED`, `UNVERIFIED`), findings, next action, overdue; `POST /lifecycle/adopt`; exit rule, initial stop and ₹ at risk on every sleeve page | LV6 |
+| Gap 4 / P2.1 — live-entry TWT/VBT | **Built as Maulik decided (28 Sep, DECISIONS-LV LV8.0):** the Scan buttons read today so far from Kite quotes with the same detectors; a signal is a `LIVE` plan bought **now, at market with protection** (TWT auto-confirmed within a minute; VBT's new `BUY_AT_MARKET` by hand); rows `provisional`, replaced by the nightly. **No backtest of the live entry, by his choice.** | LV8 (TW19, VB16) |
+| Gaps 11–13 / P2.2 (pyramiding, re-entry, targets, backtests of the live system) | **Not built.** Maulik's decisions; `NEEDS-MAULIK.md` LV7 Q3–Q5. LV5's minute bars are off on the box by his choice, so no intraday data accumulates for a backtest | — |
+| Gap 3 / 9 — streaming feed for screens and stop supervision on ticks | **Not built.** The overlay polls (30 s), the reconciler polls (10 s); a tick-driven stop supervisor is a policy change the review does not enable | — |

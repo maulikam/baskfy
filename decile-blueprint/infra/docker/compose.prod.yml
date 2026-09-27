@@ -504,8 +504,12 @@ services:
   # reconciler runs once; in session the reconciler runs every tick (the broker's order book,
   # GTT list and holdings against every sleeve's book; fills booked, stops re-sized, issues
   # written); and the `supervisor`/`reconciler` heartbeats /sleeves/state reads are kept. It
-  # never places a buy and holds no gateway of its own — every mutation it causes goes through
-  # the sleeves' handlers and the desk's gateway. Same image, same env, same read-only token.
+  # holds no gateway of its own — every mutation it causes goes through the sleeves' handlers
+  # and the desk's gateway. Since LV8 (28 Sep 2026, Maulik's TW19) it also calls
+  # `twt_auto.drain_now` once a minute in session: TWT's LIVE plan is confirmed through the same
+  # `execute_line`, under the same three flags (DRY_RUN=false, BASKFY_TWT_EXECUTION_ENABLED,
+  # BASKFY_TWT_AUTO_EXECUTE) as the 09:15 loop; with any of them off the drain does nothing.
+  # Same image, same env, same read-only token.
   session-supervisor:
     <<: *desk
     command: [session-supervisor-loop]

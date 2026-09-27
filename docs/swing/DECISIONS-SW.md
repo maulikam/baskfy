@@ -2822,3 +2822,15 @@ something, which is a different and still-useful question. The monitor's own clo
   note's old text, and drop `TestTheScanCandidatesAreOnTheFeed` from
   `services/worker/tests/test_swing_catalyst.py`. No migration, no config, no schedule change.
 
+## SW28 — his pyramiding: a fresh setup in a held name is a second entry, up to two; by Maulik's instruction in session (28 Sep 2026) ✅ decided by Maulik
+
+**Context.** DECISIONS-LV LV9.0 (3): *"lets we do what Kristjan Kullamägi doing"*, "On for all
+three sleeves". `04` §6.5's "never averaged down: `ALREADY_HELD` skips" was the rule.
+
+**What changed (LV10).** `SizingConfig.pyramiding = True`, `max_entries_per_name = 2`;
+`SwingAccount.open_entry_counts` (built by `sleeve_account`), `entries_in` and `open_count`;
+`build_entries` refuses `ALREADY_HELD` only at the cap; the desk's `_buy_on_trigger` applies the
+cap through `_held_refusal`. `manage_open_positions` manages each position and every exit or
+raise line carries its `position_id` (`sw_plan_line.position_id`, already in the schema); the
+desk's `_sell` and `_raise_stop` act on the position the line names. **How to reverse:**
+`pyramiding=False`.

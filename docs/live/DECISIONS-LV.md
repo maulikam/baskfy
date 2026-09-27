@@ -464,3 +464,23 @@ TW21 and DECISIONS-VB VB17 / VB18 carry the sleeve-level records.
 
 **Not built.** The 04 §7.3 corporate-action branch is skipped in qulla mode (a split still
 leaves the stop where it was; the alert path is untouched). No live index level, no re-test.
+
+## LV10.1 — How pyramiding was built: counts beside the held set, the cap in one place per sleeve, lines that name their position (28 Sep 2026) · ⚠ UNREVIEWED
+
+1. **Counts beside the set, not instead of it.** Each planner's book keeps `open_instrument_ids`
+   / `open_symbols` and gains `open_entry_counts`; a builder that hands no counts means one per
+   name, so every caller and test that predates LV10 still reads correctly. `slots_taken` counts
+   entries when counts are given.
+2. **`ALREADY_HELD` keeps its name.** The skip-reason vocabularies are pinned to documents and
+   constrained in the schema; the cap is the same refusal with a detail that says the count.
+3. **No schema change.** Every plan-line table already had `position_id`; LV9 put it on the core
+   line types and the writers, LV10 makes the exit and raise builders fill it and the desk read
+   it first (`_position_for_line`, falling back to the name's open position).
+4. **The desk's guard is one helper per sleeve** (`_held_refusal` over `open_positions()`),
+   reading the shipped sizing config; a store without `open_positions` degrades to the old
+   one-per-name check.
+5. **What still refuses a second entry:** VBT's `ALREADY_WORKING` (a limit already resting in
+   the name), every session cap, the slot ceiling, the per-line size cap, exposure.
+
+**Not built.** A per-name exposure cap beyond the count (two full slots in one name is what he
+chose); adds at a fixed +R without a fresh signal (not his method).

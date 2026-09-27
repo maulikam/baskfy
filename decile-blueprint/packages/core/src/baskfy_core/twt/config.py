@@ -234,6 +234,13 @@ class SizingConfig:
     #: ``04`` §6.1. Eight slots returns 26.3 % CAGR at -27 % and fifteen returns 14.7 % at -29 %:
     #: ten is the useful number for this signal count, not a round one.
     max_slots: int = 10
+    #: **LV10 (Maulik, 28 Sep 2026 — DECISIONS-LV LV9.0 (3): "lets we do what Kristjan Kullamägi
+    #: doing", "On for all three sleeves").** A fresh qualifying setup in a name already held is
+    #: a **new entry** with its own size and its own stop, counted against slots and exposure;
+    #: never an add without a fresh signal; at most ``max_entries_per_name`` open entries in one
+    #: name. ``pyramiding=False`` restores one position per name.
+    pyramiding: bool = True
+    max_entries_per_name: int = 2
     #: The per-position ceiling, a percent of sleeve equity. Above the slot size, so it binds only
     #: when equity has drifted.
     max_position_pct: Decimal = Decimal("12.5")

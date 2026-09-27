@@ -129,11 +129,14 @@ class TestTheOrderOfTheChecks:
         _, skips = entries([candidate(locked=True)])
         assert skips[0].reason is SkipReason.LOCKED_UPPER_CIRCUIT
 
-    def test_a_name_already_held_is_never_added_to(self) -> None:
-        """One position per name; never averaged down, in any state."""
-        book = BookState(open_instrument_ids=frozenset({1}), cash_available_inr=LAKH)
+    def test_a_name_at_the_per_name_cap_is_not_added_to(self) -> None:
+        """Until LV10 one position per name. Maulik's LV9.0 (3) decision (28 Sep 2026, VB18):
+        a fresh signal in a held name is a new entry, up to ``max_entries_per_name``."""
+        book = BookState(
+            open_instrument_ids=frozenset({1}), open_entry_counts={1: 2}, cash_available_inr=LAKH
+        )
         _, skips = entries([candidate(instrument_id=1)], book=book)
-        assert skips[0].reason is SkipReason.ALREADY_HELD
+        assert skips[0].reason is SkipReason.ALREADY_HELD and "2 open entries" in skips[0].detail
 
     def test_a_name_with_a_resting_limit_is_not_bid_for_twice(self) -> None:
         book = BookState(working_instrument_ids=frozenset({1}), cash_available_inr=LAKH)
@@ -299,7 +302,11 @@ def test_every_skip_reason_is_reachable_from_the_plan() -> None:
     produced.add(
         entries(
             [candidate()],
-            book=BookState(open_instrument_ids=frozenset({1}), cash_available_inr=LAKH),
+            book=BookState(
+                open_instrument_ids=frozenset({1}),
+                open_entry_counts={1: 2},
+                cash_available_inr=LAKH,
+            ),
         )[1][0].reason
     )
     produced.add(

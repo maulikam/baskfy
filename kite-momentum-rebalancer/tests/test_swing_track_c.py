@@ -489,8 +489,12 @@ class TestASellNeverExceedsWhatTheSleeveOwns:
     def test_a_sell_never_consults_the_brokers_holdings(self):
         """Track C §5 says the book, not the broker, is the source of truth; the code that
         decides a SELL reads `open_position_for` and names no holdings call."""
-        code = _code_only(inspect.getsource(X._sell))
-        assert "open_position_for" in code
+        # LV10: the sell reads the position the line names first, then the name's open one;
+        # both reads are the book's own (`_position_for_line` over `open_position_for`).
+        code = _code_only(inspect.getsource(X._sell)) + _code_only(
+            inspect.getsource(X._position_for_line)
+        )
+        assert "_position_for_line" in code and "open_position_for" in code
         for word in ("holdings", "kc.", "positions()"):
             assert word not in code
 

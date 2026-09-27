@@ -369,19 +369,28 @@ class TestThePlaceLimit:
         assert outcome.reason.startswith("SESSION_CAP")
         assert store.lines[line_id]["state"] == "REJECTED"
 
-    def test_a_name_already_held_is_refused(self) -> None:
-        store, plan_id, line_id = a_store()
-        store.positions[1] = {
-            "id": 1,
+    def test_a_second_entry_in_a_held_name_is_allowed_and_a_third_is_refused(self) -> None:
+        """Until LV10 one position per name. Maulik's LV9.0 (3) decision (28 Sep 2026, VB18): a
+        fresh signal in a held name is a new entry, up to ``max_entries_per_name`` (2)."""
+        held = {
             "instrument_id": 42,
             "state": "OPEN",
             "quantity_open": 100,
             "stop_price": D("80.00"),
             "entry_avg": D("90.00"),
+            "gtt_id": "g",
         }
+        store, plan_id, line_id = a_store()
+        store.positions[1] = {"id": 1, **held}
         outcome = confirm(store, plan_id, line_id)
+        assert outcome.status == "SIMULATED", outcome.reason
+
+        store2, plan_id2, line_id2 = a_store()
+        store2.positions[1] = {"id": 1, **held}
+        store2.positions[2] = {"id": 2, **held}
+        outcome = confirm(store2, plan_id2, line_id2)
         assert outcome.status == "BLOCKED"
-        assert outcome.reason.startswith("ALREADY_HELD")
+        assert outcome.reason.startswith("ALREADY_HELD") and "2 open entries" in outcome.reason
 
     def test_a_name_already_bid_for_is_refused(self) -> None:
         store, plan_id, line_id = a_store()
@@ -436,16 +445,22 @@ class TestTheBuyAtMarket:
 
     def test_a_name_already_held_is_refused(self) -> None:
         store, plan_id, line_id = a_store("BUY_AT_MARKET")
-        store.positions[1] = {
-            "id": 1,
+        held = {
             "instrument_id": 42,
             "state": "OPEN",
             "quantity_open": 100,
             "stop_price": D("80.00"),
             "entry_avg": D("90.00"),
+            "gtt_id": "g",
         }
+        store.positions[1] = {"id": 1, **held}
+        store.positions[2] = {"id": 2, **held}
         outcome = confirm(store, plan_id, line_id, last_price=D("97.50"))
         assert outcome.status == "BLOCKED" and "ALREADY_HELD" in outcome.reason
+        # LV10: one held is a second entry, not a refusal
+        store2, plan_id2, line_id2 = a_store("BUY_AT_MARKET")
+        store2.positions[1] = {"id": 1, **held}
+        assert confirm(store2, plan_id2, line_id2, last_price=D("97.50")).status == "SIMULATED"
 
     def test_the_gateway_is_asked_for_a_market_order_not_a_limit(self) -> None:
         store, plan_id, line_id = a_store("BUY_AT_MARKET")

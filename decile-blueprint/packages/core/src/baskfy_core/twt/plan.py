@@ -16,7 +16,8 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import StrEnum
 from typing import Final
@@ -232,11 +233,23 @@ class BookState:
     ratchets_due: tuple[RatchetDue, ...] = ()
     #: LV9: the sales the evening decided (partials and MA-trail exits).
     sells_due: tuple[SellDue, ...] = ()
+    #: LV10: open entries per held name. A name may hold more than one (pyramiding); a builder
+    #: that leaves this empty means one per name in ``open_instrument_ids``.
+    open_entry_counts: Mapping[int, int] = field(default_factory=dict)
+
+    def entries_in(self, instrument_id: int) -> int:
+        """How many open entries the book holds in a name."""
+        if self.open_entry_counts:
+            return int(self.open_entry_counts.get(instrument_id, 0))
+        return 1 if instrument_id in self.open_instrument_ids else 0
 
     @property
     def slots_taken(self) -> int:
-        """Open positions. **There are no working orders in this sleeve** to hold a slot (``03``
-        §6): TWT-1 buys at the next open, at market, so an entry is either a position or nothing."""
+        """Open **entries** (LV10: a second entry in a name takes a second slot). **There are no
+        working orders in this sleeve** to hold a slot (``03`` §6): TWT-1 buys at the next open,
+        at market, so an entry is either a position or nothing."""
+        if self.open_entry_counts:
+            return sum(self.open_entry_counts.values())
         return len(self.open_instrument_ids)
 
 
@@ -395,8 +408,15 @@ def _before_sizing(  # noqa: PLR0911, PLR0913 - `04` §10.1 is a list of refusal
     sizing = config.sizing
     if gate is Gate.SHUT:
         return SkipReason.GATE_SHUT, "breadth is at or below the gate"
-    if candidate.instrument_id in book.open_instrument_ids:
+    held = book.entries_in(candidate.instrument_id)
+    if held and not sizing.pyramiding:
         return SkipReason.ALREADY_HELD, "one position per name; the book never averages down"
+    if held >= sizing.max_entries_per_name:
+        # LV10: his pyramiding — a fresh signal in a held name is a new entry, up to the cap.
+        return (
+            SkipReason.ALREADY_HELD,
+            f"{held} open entries in this name already; {sizing.max_entries_per_name} is the cap",
+        )
     floor_inr = config.entry.min_turnover_inr
     if candidate.turnover_avg_inr is None or candidate.turnover_avg_inr < floor_inr:
         return (

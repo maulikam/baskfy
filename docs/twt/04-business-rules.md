@@ -396,6 +396,14 @@ entry session → `NO_BAR`; `open == high == low` → `LOCKED_UPPER_CIRCUIT`;
 with a note; `open exposure + value > equity` → `EXPOSURE_FULL`; else a `BUY_AT_OPEN` line.
 **Cash spent by earlier lines is not spent twice.**
 
+> **Amended 28 Sep 2026 (LV10 — Maulik: *"for Q3 pyramiding as well lets we do what Kristjan
+> Kullamägi doing"*, then "On for all three sleeves"; DECISIONS-LV LV9.0 (3), DECISIONS-TW TW21).**
+> `ALREADY_HELD` now fires only at `SizingConfig.max_entries_per_name` (2) open entries in the
+> name, or at one with `pyramiding=false`: a fresh signal in a held name is a **new entry** with
+> its own size and stop, counted against the slots and the session cap — never an add without a
+> signal. Exit and raise lines carry `position_id` so the desk acts on the position the evening
+> decided for.
+
 10.2 `exit_lines`: for every `OPEN` position — no `gtt_id` with `quantity_open > 0` → `ARM_GTT`;
 `next_trigger > gtt_trigger` and `next_trigger_for` is the session just closed → `RAISE_GTT_STOP`.
 **Nothing else.** In particular this function can emit no `SELL_AT_OPEN`, and TW10 asserts it

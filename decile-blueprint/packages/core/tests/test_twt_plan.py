@@ -75,9 +75,11 @@ def book(  # noqa: PLR0913 - the book is what the plan consults, one field at a 
     positions_naked_of_gtt: tuple[NakedPosition, ...] = (),
     ratchets_due: tuple[RatchetDue, ...] = (),
     sells_due: tuple[SellDue, ...] = (),
+    open_entry_counts: dict[int, int] | None = None,
 ) -> BookState:
     return BookState(
         sells_due=sells_due,
+        open_entry_counts=open_entry_counts or {},
         open_instrument_ids=open_instrument_ids,
         open_exposure_inr=open_exposure_inr,
         cash_available_inr=cash_available_inr,
@@ -137,11 +139,15 @@ class TestTheSkipsInOrder:
         assert lines == []
         assert [skip.reason for skip in skips] == [SkipReason.GATE_SHUT]
 
-    def test_a_name_already_held_is_never_averaged_down(self) -> None:
+    def test_a_name_at_the_per_name_cap_is_refused_first(self) -> None:
+        """Until LV10 one position per name. Maulik's LV9.0 (3) decision (28 Sep 2026, TW21):
+        a fresh signal in a held name is a new entry, up to ``max_entries_per_name``; at the cap
+        the refusal is still ``ALREADY_HELD`` and still outranks the liquidity floor."""
         _, skips = build(
-            [candidate(turnover=Decimal("1"))], state=book(open_instrument_ids=frozenset({1}))
+            [candidate(turnover=Decimal("1"))],
+            state=book(open_instrument_ids=frozenset({1}), open_entry_counts={1: 2}),
         )
-        assert skips[0].reason is SkipReason.ALREADY_HELD
+        assert skips[0].reason is SkipReason.ALREADY_HELD and "2 open entries" in skips[0].detail
 
     def test_a_name_under_the_liquidity_floor_is_skipped(self) -> None:
         floor = DEFAULT_TWT_CONFIG.entry.min_turnover_inr

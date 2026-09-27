@@ -22,6 +22,7 @@ the one the document describes.
 
 from __future__ import annotations
 
+import dataclasses
 import datetime as dt
 from dataclasses import replace
 from decimal import Decimal
@@ -1093,17 +1094,29 @@ class TestTheSkipOrder:
         )
         assert [s.reason for s in skipped] == [SkipReason.GATE_RED]
 
-    def test_a_name_already_held_is_never_averaged_into(self) -> None:
-        """§6.5: "Never averaged down: `ALREADY_HELD` skips"."""
+    def test_a_name_at_the_per_name_cap_is_not_averaged_into(self) -> None:
+        """§6.5 said "never averaged down: `ALREADY_HELD` skips". Since LV10 (Maulik, 28 Sep
+        2026, DECISIONS-LV LV9.0 (3)) a fresh setup in a held name is a new entry, up to
+        ``max_entries_per_name`` (2); at the cap the skip is still ``ALREADY_HELD``."""
+        held = _account(held=frozenset({"AAA"}))
         _, skipped = build_entries(
             as_of=DAY,
             watch=[_watch("AAA")],
-            account=_account(held=frozenset({"AAA"})),
+            account=dataclasses.replace(held, open_entry_counts={"AAA": 2}),
             gate=MarketGate.GREEN,
             tier=_tier(),
             config=DEFAULT_SWING_CONFIG,
         )
         assert [s.reason for s in skipped] == [SkipReason.ALREADY_HELD]
+        lines, skipped = build_entries(
+            as_of=DAY,
+            watch=[_watch("AAA")],
+            account=dataclasses.replace(held, open_entry_counts={"AAA": 1}),
+            gate=MarketGate.GREEN,
+            tier=_tier(),
+            config=DEFAULT_SWING_CONFIG,
+        )
+        assert skipped == [] and len(lines) == 1, "one held: a second entry"
 
     def test_a_locked_name_is_skipped_with_its_own_reason(self) -> None:
         _, skipped = build_entries(

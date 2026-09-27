@@ -1793,12 +1793,18 @@ order:** on 23 and 24 Sep `twt-auto` sent six MARKET buys and Zerodha rejected a
   sells). VBT gains `RAISE_GTT_STOP`. Migration 0058. `ExitConfig.qulla_exits=false` is the one-line
   reversal. **No backtest of the new exits, by his choice; the research that rejected a partial
   stays in the docs as the record.**
+* **LV10 (Maulik's decision, same session — DECISIONS-LV LV9.0 (3), TW21, VB18, SW28)** — **his
+  pyramiding on all three sleeves**: a fresh qualifying setup in a held name is a new entry with
+  its own size and stop, counted against slots and exposure; at most two open entries per name;
+  re-entry after an exit on a new signal; never an add without a signal. `SizingConfig.pyramiding`
+  (default true) per sleeve is the switch. Exit and raise lines name their position. No schema
+  change.
 
-**NOT done, and why.** Of the review's step 5, the live-entry TWT/VBT variant is now LV8 (his
-answer: the same detector on a live bar, entered now, no backtest). Pyramiding, re-entry, targets
-and any backtest of the live system remain his decisions (`NEEDS-MAULIK.md` LV7 Q3–Q5). LV5's
-minute-bar collection is **off** on the box by his choice, so no intraday data accumulates. No live
-tick collector for equities (LV5.1). No tick-driven stop supervisor and no streaming feed for the screens (the overlay
+**NOT done, and why.** Of the review's step 5, the live-entry TWT/VBT variant is LV8, the exits
+LV9 and pyramiding LV10 — all by his answers of 28 Sep, all without a backtest of the live system,
+by his choice. Any backtest or forward paper run of the live rules is not built. LV5's minute-bar
+collection is **off** on the box by his choice, so no intraday data accumulates. No live tick
+collector for equities (LV5.1). No tick-driven stop supervisor and no streaming feed for the screens (the overlay
 polls at 30 s, the reconciler at 10 s). Threshold recalibration nowhere. **The first TWT live fill
 happens on the first weekday with a Kite session before 09:15 after LV2 is deployed** —
 `NEEDS-MAULIK.md` LV0 says how to hold it back.

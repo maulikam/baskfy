@@ -120,6 +120,13 @@ class SizingConfig:
     """Risk per trade decides survival (docs/swing/04 §5). Ceilings are system-only env."""
 
     risk_per_trade_pct: float = 0.5
+    #: **LV10 (Maulik, 28 Sep 2026 — DECISIONS-LV LV9.0 (3): "lets we do what Kristjan Kullamägi
+    #: doing", "On for all three sleeves").** A fresh qualifying setup in a name already held is
+    #: a **new entry** with its own size and its own stop, counted against slots and exposure;
+    #: never an add without a fresh signal; at most ``max_entries_per_name`` open entries in one
+    #: name. ``pyramiding=False`` restores one position per name.
+    pyramiding: bool = True
+    max_entries_per_name: int = 2
     #: "Most of my positions are 10-20% of account size"; the hard ceiling he states is 30%
     #: overnight, which is the system-only env ceiling, not this default.
     max_position_pct: float = 20.0

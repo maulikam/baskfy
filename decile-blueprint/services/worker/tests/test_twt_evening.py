@@ -326,12 +326,15 @@ class TestTheEveningPlansTheEntries:
             SkipReason.NO_SLEEVE_CAPITAL.value
         ]
 
-    async def test_a_name_the_sleeve_already_holds_is_never_averaged_down(
+    async def test_a_name_at_the_per_name_cap_is_not_bought_again(
         self, session: AsyncSession
     ) -> None:
+        """Until LV10 one position per name. Maulik's LV9.0 (3) decision (28 Sep 2026, TW21): a
+        fresh signal in a held name is a second entry; the cap (2) refuses a third."""
         user_id = await _user(session, "held")
         await _breadth(session, user_id)
         instrument_id = await _signal(session, user_id, "TWTCO")
+        await _position(session, user_id, instrument_id)
         await _position(session, user_id, instrument_id)
 
         report = await _plan(session, user_id)

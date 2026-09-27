@@ -50,6 +50,7 @@ pure and stays that way.
 from __future__ import annotations
 
 import datetime as dt
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from decimal import Decimal
@@ -451,6 +452,7 @@ async def book_state(
         )
     return BookState(
         open_instrument_ids=frozenset(position.instrument_id for position in sleeve.positions),
+        open_entry_counts=dict(Counter(position.instrument_id for position in sleeve.positions)),
         open_exposure_inr=sleeve.value.open_exposure_inr,
         cash_available_inr=sleeve.value.cash_available_inr,
         entries_already_this_session=await entries_already_this_session(

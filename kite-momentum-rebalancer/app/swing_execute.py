@@ -818,11 +818,12 @@ async def _buy(store, gw, *, line: dict, plan_id: str, now: dt.datetime,  # noqa
         # only AFTER the buy had gone — leaving a bought position with no stop.
         return ExecOutcome("BLOCKED", f"{symbol}: stop {stop} is not below entry {trigger}",
                            None, None, None, simulated)
-    if store.open_position_for(int(line["instrument_id"])) is not None:
-        # ``04`` §6.5: never averaged down. The planner skips a held name (ALREADY_HELD); a
-        # line built before this morning's fill would not know.
-        return ExecOutcome("BLOCKED", f"{symbol}: already held by the swing book",
-                           None, None, None, simulated)
+    held = _held_refusal(store, int(line["instrument_id"]), DEFAULT_SWING_CONFIG.sizing)
+    if held is not None:
+        # ``04`` §6.5 said never averaged down; since LV10 (Maulik, 28 Sep 2026) a fresh setup in
+        # a held name is a new entry, up to the cap. The planner skips beyond it (ALREADY_HELD);
+        # a line built before this morning's fill would not know.
+        return ExecOutcome("BLOCKED", f"{symbol}: {held}", None, None, None, simulated)
     unresolved = _reconcile.protection_unresolved(store, naked=())
     if unresolved:
         # LV2: protection first, entries second — a book the reconciler has found wanting (a
@@ -1276,11 +1277,48 @@ def _naked_positions(store: SwingStore) -> list[dict]:
     return [p for p in reader() if p.get("gtt_id") is None and int(p.get("quantity_open") or 0) > 0]
 
 
+def _open_entries_in(store: Any, instrument_id: int) -> int:  # noqa: ANN401 - a sleeve store
+    """LV10: how many open entries the sleeve holds in a name (pyramiding counts entries)."""
+    rows = getattr(store, "open_positions", None)
+    if rows is None:
+        return 1 if store.open_position_for(int(instrument_id)) is not None else 0
+    return sum(
+        1
+        for row in rows()
+        if int(row.get("instrument_id") or 0) == int(instrument_id)
+        and int(row.get("quantity_open") or 0) > 0
+    )
+
+
+def _held_refusal(store: Any, instrument_id: int, sizing: Any) -> str | None:  # noqa: ANN401
+    """LV10 (Maulik, 28 Sep 2026): a fresh signal in a held name is a new entry, up to
+    ``max_entries_per_name``; with pyramiding off, one position per name as before."""
+    held = _open_entries_in(store, instrument_id)
+    if held and not getattr(sizing, "pyramiding", False):
+        return "ALREADY_HELD: the sleeve holds this name; the book never averages down"
+    cap = int(getattr(sizing, "max_entries_per_name", 1))
+    if held >= cap:
+        return f"ALREADY_HELD: {held} open entries in this name already; {cap} is the cap"
+    return None
+
+
+def _position_for_line(store: Any, line: dict) -> dict | None:  # noqa: ANN401 - a swing store
+    """The position a line acts on: the one it names (LV10) if it is still open, else the
+    name's open position."""
+    position_id = line.get("position_id")
+    if position_id is not None:
+        finder = getattr(store, "position", None)
+        found = finder(int(position_id)) if finder is not None else None
+        if found is not None and int(found.get("quantity_open") or 0) > 0:
+            return found
+    return store.open_position_for(int(line["instrument_id"]))
+
+
 async def _sell(store, gw, *, line: dict, plan_id: str, now: dt.datetime,  # noqa: PLR0913
                 simulated: bool, last_price: Decimal | None) -> ExecOutcome:
     symbol = line["symbol"]
     quantity = int(line.get("quantity") or 0)
-    pos = store.open_position_for(int(line["instrument_id"]))
+    pos = _position_for_line(store, line)
     if pos is None:
         # Track C §5: the sleeve never sells a holding it did not buy — and it does not look
         # at the broker's holdings to find out, because those hold the weekly book too.
@@ -1405,7 +1443,7 @@ def _book_after_sell(pos: dict, *, remaining: int, exit_avg: Decimal, note: str,
 async def _raise_stop(store, gw, *, line: dict, plan_id: str, now: dt.datetime,  # noqa: PLR0913
                       simulated: bool, last_price: Decimal | None) -> ExecOutcome:
     symbol = line["symbol"]
-    pos = store.open_position_for(int(line["instrument_id"]))
+    pos = _position_for_line(store, line)
     if pos is None:
         return ExecOutcome("BLOCKED", f"{symbol}: not a swing position", None, None, None,
                            simulated)

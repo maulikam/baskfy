@@ -1815,3 +1815,14 @@ collector for equities (LV5.1). No tick-driven stop supervisor and no streaming 
 polls at 30 s, the reconciler at 10 s). Threshold recalibration nowhere. **The first TWT live fill
 happens on the first weekday with a Kite session before 09:15 after LV2 is deployed** —
 `NEEDS-MAULIK.md` LV0 says how to hold it back.
+
+## F3 — the directional index credit spread (28 Sep 2026)
+
+Maulik's method, coded as sleeve F3 of the F&O book on his three answers (a credit spread with a
+far wing; auto-exit under `BASKFY_FNO_F3_AUTO_EXIT`, default false, his hand; NIFTY weekly,
+BANKNIFTY monthly). F3-0…F3-5 green (`docs/fno/F3-PLAN.md`, `gates/f3-*.md`); paper only, both F3
+flags false. The EOD re-test says the daily half alone loses after costs (NIFTY −0.021R,
+BANKNIFTY −0.020R); the intraday half — his edge — is untestable from a closing file and the
+paper period is its test. **Not done:** the web app's F3 card; F3 in the quarterly re-test
+families; the index history backfill on the box (F3-6 runs it).
+

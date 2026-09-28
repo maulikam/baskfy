@@ -13,8 +13,9 @@ Units, stated once
 
 What is deliberately absent
 ---------------------------
-* **An auto-execute field**, for any sleeve (``02`` Track B: "There is no auto-execute flag, and
-  none may be added"). A field that exists is a field somebody turns on.
+* **An auto-execute field**, for any sleeve (``02`` Track B: no auto-executed entry, ever). The
+  one auto flag in the F&O book, F3's ``BASKFY_FNO_F3_AUTO_EXIT`` (M.5, Maulik's, an exit only),
+  is the desk's env and never a config field. A field that exists is a field somebody turns on.
 * **Lot sizes, strike steps and expiry dates.** They come from the NFO master (``04`` §1).
 * **The env ceilings as config fields.** :class:`FnoCeilings` carries ``02``'s defaults so the
   pure core can be called with them; the values in force are system-only env read by the
@@ -45,6 +46,9 @@ class FoSleeve(StrEnum):
     F1N = "F1N"
     F1B = "F1B"
     F2 = "F2"
+    #: F3, the directional index credit spread (M.5): NIFTY weekly, BANKNIFTY monthly.
+    F3N = "F3N"
+    F3B = "F3B"
 
 
 class FoSleeveGroup(StrEnum):
@@ -52,10 +56,15 @@ class FoSleeveGroup(StrEnum):
 
     F1 = "F1"
     F2 = "F2"
+    F3 = "F3"
 
 
 def group_of(sleeve: FoSleeve) -> FoSleeveGroup:
-    return FoSleeveGroup.F2 if sleeve is FoSleeve.F2 else FoSleeveGroup.F1
+    if sleeve is FoSleeve.F2:
+        return FoSleeveGroup.F2
+    if sleeve in (FoSleeve.F3N, FoSleeve.F3B):
+        return FoSleeveGroup.F3
+    return FoSleeveGroup.F1
 
 
 def f1_sleeve_for(underlying: str) -> FoSleeve:
@@ -67,11 +76,22 @@ def f1_sleeve_for(underlying: str) -> FoSleeve:
     raise ValueError(f"{underlying!r} is not an F1 underlying (04 §1)")
 
 
+def f3_sleeve_for(underlying: str) -> FoSleeve:
+    """``F3N`` for NIFTY (weekly), ``F3B`` for BANKNIFTY (monthly); M.5's third answer."""
+    if underlying == "NIFTY":
+        return FoSleeve.F3N
+    if underlying == "BANKNIFTY":
+        return FoSleeve.F3B
+    raise ValueError(f"{underlying!r} is not an F3 underlying (04 §11)")
+
+
 class Structure(StrEnum):
     """``fo_plan.structure`` (``03`` §4)."""
 
     IRON_CONDOR = "IRON_CONDOR"
     FUTURE = "FUTURE"
+    #: F3's short option with its far wing (M.5, ``04`` §11).
+    CREDIT_SPREAD = "CREDIT_SPREAD"
 
 
 class PlanKind(StrEnum):
@@ -80,6 +100,8 @@ class PlanKind(StrEnum):
     ENTRY = "ENTRY"
     EXIT = "EXIT"
     ROLL = "ROLL"
+    #: F3's pyramid (``04`` §11): more lots onto the open spread, never a new position.
+    ADD = "ADD"
 
 
 class ScanState(StrEnum):
@@ -267,6 +289,73 @@ class F2Config:
 
 
 @dataclass(frozen=True, slots=True)
+class F3Config:
+    """F3, the directional index credit spread (``04`` §11; Maulik, M.5, 28 Sep 2026).
+
+    The auto-exit switch is **not** a field here: ``BASKFY_FNO_F3_AUTO_EXIT`` is the desk's env,
+    read by ``fno_gates`` alone, so the pure core cannot know or change whether an exit is sent
+    by a hand or by the monitor.
+    """
+
+    underlyings: tuple[str, ...] = ("NIFTY", "BANKNIFTY")
+    pivot_lookback: int = 60
+    pivot_width: int = 3
+    trend_sessions: int = 20
+    weekly_sessions: int = 5
+    confirm_bars: int = 10
+    distance_pct: Decimal = Decimal("1.0")
+    wing_pct: Decimal = Decimal("2.0")
+    short_premium_min_inr: Decimal = Decimal("10")
+    min_sessions_weekly: int = 2
+    min_sessions_monthly: int = 5
+    entry_share_pct: Decimal = Decimal("25")
+    full_share_pct: Decimal = Decimal("50")
+    add_working_pct: Decimal = Decimal("20")
+    decay_target_pct: Decimal = Decimal("80")
+    loss_cut_mult: Decimal = Decimal("2.0")
+    level_buffer_pct: Decimal = Decimal("0.10")
+    max_open_per_underlying: int = 1
+    risk_per_trade_pct: Decimal = Decimal("1.0")
+    #: F1's entry window (``04`` §1), shared: plan at 09:20, confirmable to 10:30.
+    plan_time: dt.time = dt.time(9, 20)
+    entry_window_end: dt.time = dt.time(10, 30)
+    #: Research slippage per leg per crossing, the index-option figure F1 uses (``04`` §3).
+    slippage_pct: Decimal = Decimal("0.5")
+    slippage_min_inr: Decimal = Decimal("0.05")
+
+    def __post_init__(self) -> None:
+        if not self.underlyings or not set(self.underlyings) <= {"NIFTY", "BANKNIFTY"}:
+            raise ValueError(
+                "f3_underlyings must be a non-empty subset of NIFTY, BANKNIFTY (04 §11)"
+            )
+        _between("f3_pivot_lookback", self.pivot_lookback, 20, 250)
+        _between("f3_pivot_width", self.pivot_width, 1, 10)
+        _between("f3_trend_sessions", self.trend_sessions, 5, 100)
+        _between("f3_weekly_sessions", self.weekly_sessions, 3, 10)
+        _between("f3_confirm_bars", self.confirm_bars, 3, 40)
+        _between("f3_distance_pct", self.distance_pct, Decimal("0.25"), Decimal("3.0"))
+        _between("f3_wing_pct", self.wing_pct, Decimal("0.5"), Decimal("5.0"))
+        _between("f3_short_premium_min_inr", self.short_premium_min_inr, Decimal(1), Decimal(100))
+        _between("f3_min_sessions_weekly", self.min_sessions_weekly, 1, 4)
+        _between("f3_min_sessions_monthly", self.min_sessions_monthly, 1, 15)
+        _between("f3_entry_share_pct", self.entry_share_pct, Decimal(5), Decimal(50))
+        _between("f3_full_share_pct", self.full_share_pct, Decimal(10), Decimal(100))
+        if self.full_share_pct < self.entry_share_pct:
+            raise ValueError("f3_full_share_pct cannot sit below f3_entry_share_pct")
+        _between("f3_add_working_pct", self.add_working_pct, Decimal(5), Decimal(80))
+        _between("f3_decay_target_pct", self.decay_target_pct, Decimal(50), Decimal(95))
+        _between("f3_loss_cut_mult", self.loss_cut_mult, Decimal("1.2"), Decimal("4.0"))
+        _between("f3_level_buffer_pct", self.level_buffer_pct, Decimal(0), Decimal("1.0"))
+        _between("f3_max_open_per_underlying", self.max_open_per_underlying, 1, 1)
+        if self.risk_per_trade_pct <= 0:
+            raise ValueError("risk_per_trade_pct must be positive")
+        if not dt.time(9, 15) <= self.plan_time < self.entry_window_end <= dt.time(15, 0):
+            raise ValueError("f3's entry window must sit inside 09:15-15:00 (04 §1)")
+        if self.slippage_pct < 0 or self.slippage_min_inr < 0:
+            raise ValueError("slippage cannot be negative")
+
+
+@dataclass(frozen=True, slots=True)
 class FutureCostRates:
     """``04`` §10's futures costs per order, as dated percent fields.
 
@@ -343,14 +432,18 @@ class FnoConfig:
     common: CommonConfig = field(default_factory=CommonConfig)
     f1: F1Config = field(default_factory=F1Config)
     f2: F2Config = field(default_factory=F2Config)
+    f3: F3Config = field(default_factory=F3Config)
     future_costs: FutureCostRates = field(default_factory=FutureCostRates)
     stop_vol: StopVolConfig = field(default_factory=StopVolConfig)
     series: SeriesConfig = field(default_factory=SeriesConfig)
     book: BookConfig = field(default_factory=BookConfig)
 
     def risk_per_trade_pct(self, sleeve: FoSleeve) -> Decimal:
-        if group_of(sleeve) is FoSleeveGroup.F1:
+        group = group_of(sleeve)
+        if group is FoSleeveGroup.F1:
             return self.f1.risk_per_trade_pct
+        if group is FoSleeveGroup.F3:
+            return self.f3.risk_per_trade_pct
         return self.f2.risk_per_trade_pct
 
 
@@ -361,7 +454,11 @@ DEFAULT_FNO_CEILINGS: Final = FnoCeilings()
 def ceiling_violations(config: FnoConfig, ceilings: FnoCeilings) -> tuple[str, ...]:
     """Every field that sits above its env ceiling (``02`` Track B). Empty means admissible."""
     found: list[str] = []
-    for name, pct in (("f1", config.f1.risk_per_trade_pct), ("f2", config.f2.risk_per_trade_pct)):
+    for name, pct in (
+        ("f1", config.f1.risk_per_trade_pct),
+        ("f2", config.f2.risk_per_trade_pct),
+        ("f3", config.f3.risk_per_trade_pct),
+    ):
         if pct > ceilings.risk_pct_max:
             found.append(
                 f"{name}.risk_per_trade_pct {pct} > BASKFY_FNO_RISK_PCT_MAX {ceilings.risk_pct_max}"

@@ -43,10 +43,12 @@ log = logging.getLogger("baskfy_worker.options.index_bars")
 
 IST: Final = dt.timezone(dt.timedelta(hours=5, minutes=30))
 
-#: ``03`` §4: the two indices the sleeves read, as Kite's ``INDICES`` segment names them.
+#: ``03`` §4: the two indices the option sleeves read, as Kite's ``INDICES`` segment names them;
+#: ``NIFTY BANK`` joined for F3's 75-minute confirm (``docs/fno/03`` §9, M.5).
 NIFTY_50: Final = "NIFTY 50"
 INDIA_VIX: Final = "INDIA VIX"
-INDEX_SYMBOLS: Final[tuple[str, ...]] = (NIFTY_50, INDIA_VIX)
+NIFTY_BANK: Final = "NIFTY BANK"
+INDEX_SYMBOLS: Final[tuple[str, ...]] = (NIFTY_50, INDIA_VIX, NIFTY_BANK)
 
 SOURCE_KITE: Final = "KITE_HIST"
 _CENT: Final = Decimal("0.01")
@@ -102,7 +104,7 @@ def _cent(value: Decimal) -> Decimal:
 
 
 async def index_rows(session: AsyncSession) -> dict[str, IndexRow]:
-    """``NIFTY 50`` and ``INDIA VIX`` as the ``instrument`` table knows them, with a Kite token."""
+    """The indices as the ``instrument`` table knows them, each with a Kite token."""
     rows = (
         await session.execute(
             select(Instrument.symbol, Instrument.id, Instrument.kite_token).where(

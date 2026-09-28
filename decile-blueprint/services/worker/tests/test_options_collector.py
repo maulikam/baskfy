@@ -633,6 +633,14 @@ async def _rolled_back(url: str) -> AsyncIterator[AsyncSession]:
     try:
         await session.execute(sa.delete(OpContract).where(OpContract.underlying == "NIFTY"))
         await session.execute(sa.delete(OpIndexMinute))
+        # Another suite's committed fixture may have left an index row with a token (the
+        # worker's `session` fixture commits); each test here points at exactly the indices it
+        # creates, so the rest are untokened inside the rollback.
+        await session.execute(
+            sa.update(Instrument)
+            .where(Instrument.symbol.in_(index_bars.INDEX_SYMBOLS))
+            .values(kite_token=None)
+        )
         yield session
     finally:
         await session.rollback()

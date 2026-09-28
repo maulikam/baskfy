@@ -3,8 +3,8 @@
 ``options_settings``'s boundary, applied to the FO book (``docs/fno/03`` §6, ``02`` Track B
 "Ceilings"), so a reader of one recognises the other.
 
-**Settings** belong to the person: per sleeve group (``F1``, ``F2``) the capital, risk %, max
-lots, max open positions and whether paper runs; for the book the monthly loss pause (0 = not
+**Settings** belong to the person: per sleeve group (``F1``, ``F2``, ``F3``) the capital, risk %,
+max lots, max open positions and whether paper runs; for the book the monthly loss pause (0 = not
 set, FO4.9). ``03`` §6 names capital and risk % as the config ("Config is per-sleeve capital, risk
 %, max concurrent positions, and the book's loss pause. Every write goes through settings_audit")
 and ``05`` §4 puts them on "the settings form, audited" (FO5.1). They are money-free in the sense
@@ -57,6 +57,15 @@ F1_MAX_OPEN: Final = len(DEFAULT_FNO_CONFIG.f1.underlyings) * (
 )
 #: F2: ``f2_max_open``'s bound, 1-10 (``04`` §10).
 F2_MAX_OPEN: Final = 10
+#: F3: one spread per underlying (``f3_max_open_per_underlying`` = 1; ``04`` §11).
+F3_MAX_OPEN: Final = len(DEFAULT_FNO_CONFIG.f3.underlyings) * (
+    DEFAULT_FNO_CONFIG.f3.max_open_per_underlying
+)
+_GROUP_MAX_OPEN: Final[Mapping[FoSleeveGroup, int]] = {
+    FoSleeveGroup.F1: F1_MAX_OPEN,
+    FoSleeveGroup.F2: F2_MAX_OPEN,
+    FoSleeveGroup.F3: F3_MAX_OPEN,
+}
 
 SYSTEM_OWNED_FIELDS: Final[tuple[str, ...]] = ("paused_until", "paused_reason")
 
@@ -139,7 +148,7 @@ def check_sleeve(
     the row as it would stand afterwards."""
     for field, value in changes.items():
         _check_ceiling(field, value, ceilings, SLEEVE_CEILINGS)
-    open_bound = F1_MAX_OPEN if group is FoSleeveGroup.F1 else F2_MAX_OPEN
+    open_bound = _GROUP_MAX_OPEN[group]
     wanted_open = changes.get("max_open_positions")
     if wanted_open is not None and int(str(wanted_open)) > open_bound:
         raise FnoSettingOutOfBounds("max_open_positions", wanted_open, open_bound)

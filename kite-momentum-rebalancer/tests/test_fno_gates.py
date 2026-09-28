@@ -20,8 +20,10 @@ from baskfy_core.fno.config import FoSleeve, FoSleeveGroup, group_of
 from baskfy_core.options.config import Mode
 
 ROWS = list(itertools.product((False, True), repeat=4))
-_FLAG = {FoSleeveGroup.F1: "FNO_F1_EXECUTION_ENABLED", FoSleeveGroup.F2: "FNO_F2_EXECUTION_ENABLED"}
+_FLAG = {FoSleeveGroup.F1: "FNO_F1_EXECUTION_ENABLED", FoSleeveGroup.F2: "FNO_F2_EXECUTION_ENABLED",
+         FoSleeveGroup.F3: "FNO_F3_EXECUTION_ENABLED"}
 FNO_FLAGS = ("FNO_CARRY_ENABLED", "FNO_F1_EXECUTION_ENABLED", "FNO_F2_EXECUTION_ENABLED",
+             "FNO_F3_EXECUTION_ENABLED",
              "FNO_MONITOR_ENABLED")
 
 

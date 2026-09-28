@@ -26,7 +26,11 @@ from baskfy_core.fno.gating import (
 from baskfy_core.options.config import Mode
 
 ROWS = list(itertools.product((False, True), repeat=4))
-_FIELD = {FoSleeveGroup.F1: "f1_execution_enabled", FoSleeveGroup.F2: "f2_execution_enabled"}
+_FIELD = {
+    FoSleeveGroup.F1: "f1_execution_enabled",
+    FoSleeveGroup.F2: "f2_execution_enabled",
+    FoSleeveGroup.F3: "f3_execution_enabled",
+}
 
 
 def _flags(sleeve: FoSleeve, dry_off: bool, options: bool, carry: bool, ex: bool) -> FnoFlags:
@@ -60,8 +64,12 @@ def test_live_only_when_all_four_are_on(
 
 
 @pytest.mark.parametrize("sleeve", list(FoSleeve))
-def test_another_sleeves_flag_never_makes_a_sleeve_live(sleeve: FoSleeve) -> None:
-    other = FoSleeveGroup.F1 if group_of(sleeve) is FoSleeveGroup.F2 else FoSleeveGroup.F2
+@pytest.mark.parametrize("other", list(FoSleeveGroup))
+def test_another_sleeves_flag_never_makes_a_sleeve_live(
+    sleeve: FoSleeve, other: FoSleeveGroup
+) -> None:
+    if other is group_of(sleeve):
+        pytest.skip("its own flag")
     flags = FnoFlags(
         dry_run=False, options_enabled=True, fno_carry_enabled=True, **{_FIELD[other]: True}
     )

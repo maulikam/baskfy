@@ -282,6 +282,10 @@ FNO_F1_EXECUTION_ENABLED = (
     os.getenv("BASKFY_FNO_F1_EXECUTION_ENABLED", "false").lower() == "true")
 FNO_F2_EXECUTION_ENABLED = (
     os.getenv("BASKFY_FNO_F2_EXECUTION_ENABLED", "false").lower() == "true")
+# F3, the directional index credit spread (docs/fno/DECISIONS-FO M.5, 28 Sep 2026): paper only
+# until 02 §3's real-money gate, like F1.
+FNO_F3_EXECUTION_ENABLED = (
+    os.getenv("BASKFY_FNO_F3_EXECUTION_ENABLED", "false").lower() == "true")
 # Operational — the desk process that raises plans and runs exits (FO7). Moves no money.
 FNO_MONITOR_ENABLED = os.getenv("BASKFY_FNO_MONITOR_ENABLED", "false").lower() == "true"
 

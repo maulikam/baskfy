@@ -69,11 +69,12 @@ from baskfy_core.models.base import INR, MONEY, PRICE, Base, BigIntPk, CreatedAt
 
 # --- vocabularies ---------------------------------------------------------------------------------
 
-#: ``01`` §4: ``F1N`` (NIFTY), ``F1B`` (BANKNIFTY) and ``F2``. Fixed by the research.
-FO_SLEEVES: Final[tuple[str, ...]] = ("F1N", "F1B", "F2")
-#: Config and flags are grouped as ``F1`` and ``F2`` (``01`` §4); F1's capital is one number for
-#: both underlyings together (M.1).
-FO_SLEEVE_GROUPS: Final[tuple[str, ...]] = ("F1", "F2")
+#: ``01`` §4: ``F1N`` (NIFTY), ``F1B`` (BANKNIFTY) and ``F2``. Fixed by the research. ``F3N``
+#: (NIFTY weekly) and ``F3B`` (BANKNIFTY monthly) added by 0059 (M.5, ``01`` §1c).
+FO_SLEEVES: Final[tuple[str, ...]] = ("F1N", "F1B", "F2", "F3N", "F3B")
+#: Config and flags are grouped as ``F1``, ``F2`` and ``F3`` (``01`` §4); F1's capital is one
+#: number for both underlyings together (M.1), and so is F3's (M.5).
+FO_SLEEVE_GROUPS: Final[tuple[str, ...]] = ("F1", "F2", "F3")
 #: ``03`` §1: the legacy ``INSTRUMENT`` vocabulary, for both bhavcopy layouts.
 FO_INSTRUMENTS: Final[tuple[str, ...]] = ("FUTSTK", "FUTIDX", "OPTSTK", "OPTIDX")
 FO_FUTURE_INSTRUMENTS: Final[tuple[str, ...]] = ("FUTSTK", "FUTIDX")
@@ -81,9 +82,13 @@ FO_FUTURE_INSTRUMENTS: Final[tuple[str, ...]] = ("FUTSTK", "FUTIDX")
 FO_CONTRACT_TYPES: Final[tuple[str, ...]] = ("CE", "PE", "XX")
 FUTURE_TYPE: Final = "XX"
 FO_INGEST_STATUSES: Final[tuple[str, ...]] = ("PENDING", "INGESTED", "MISSING")
-#: ``03`` §4: ``IRON_CONDOR`` (F1), ``FUTURE`` (F2); a later sleeve widens this by migration.
-FO_STRUCTURES: Final[tuple[str, ...]] = ("IRON_CONDOR", "FUTURE")
-FO_PLAN_KINDS: Final[tuple[str, ...]] = ("ENTRY", "EXIT", "ROLL")
+#: ``03`` §4: ``IRON_CONDOR`` (F1), ``FUTURE`` (F2), ``CREDIT_SPREAD`` (F3, 0059).
+FO_STRUCTURES: Final[tuple[str, ...]] = ("IRON_CONDOR", "FUTURE", "CREDIT_SPREAD")
+#: ``ADD`` is F3's pyramid (``04`` §11): more lots onto the open spread, never a new position.
+FO_PLAN_KINDS: Final[tuple[str, ...]] = ("ENTRY", "EXIT", "ROLL", "ADD")
+#: ``03`` §9: the index underlyings ``fo_index_daily`` carries.
+FO_INDEX_UNDERLYINGS: Final[tuple[str, ...]] = ("NIFTY", "BANKNIFTY")
+FO_INDEX_SOURCES: Final[tuple[str, ...]] = ("KITE_HIST",)
 FO_SIZING_MODES: Final[tuple[str, ...]] = ("BUDGET", "PAPER_ONE_LOT")
 FO_LEG_ROLES: Final[tuple[str, ...]] = (
     "LONG_CALL",
@@ -217,6 +222,32 @@ class FoUnderlyingDaily(Base):
     #: The F&O ban list for the **next** session (Track C §9).
     in_ban: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     ca_flag: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    updated_at: Mapped[dt.datetime] = _updated_at()
+
+
+class FoIndexDaily(Base):
+    """``03`` §9 — the index's own daily OHLC, from Kite's history on the index token (F3).
+
+    The bhavcopy has no index candle and ``index_snapshot_daily`` keeps only a level; F3's
+    levels, trend and weekly range need the highs and lows. Idempotent on ``(underlying,
+    trade_date)``; prices rounded to the paisa at write (house rule 8).
+    """
+
+    __tablename__ = "fo_index_daily"
+    __table_args__ = (
+        PrimaryKeyConstraint("underlying", "trade_date"),
+        CheckConstraint(_in("underlying", FO_INDEX_UNDERLYINGS), name="underlying_known"),
+        CheckConstraint(_in("source", FO_INDEX_SOURCES), name="source_known"),
+        CheckConstraint("high >= low", name="high_not_below_low"),
+    )
+
+    underlying: Mapped[str] = mapped_column(String(16), nullable=False)
+    trade_date: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    open: Mapped[Decimal] = mapped_column(PRICE, nullable=False)
+    high: Mapped[Decimal] = mapped_column(PRICE, nullable=False)
+    low: Mapped[Decimal] = mapped_column(PRICE, nullable=False)
+    close: Mapped[Decimal] = mapped_column(PRICE, nullable=False)
+    source: Mapped[str] = mapped_column(String(16), nullable=False, server_default="KITE_HIST")
     updated_at: Mapped[dt.datetime] = _updated_at()
 
 

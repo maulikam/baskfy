@@ -238,6 +238,14 @@ BEAT_SCHEDULE: Final[dict[str, dict[str, object]]] = {
         "schedule": crontab(minute=30, hour="18-23", day_of_week="mon-fri"),
         "options": {"queue": QUEUE_DEFAULT},
     },
+    # F3 (docs/fno/03 §9): the two indices' daily OHLC from Kite's history, extended each evening
+    # before the bhavcopy chain so the scan reads today's candle. Two Kite calls; behind
+    # BASKFY_FNO_SCAN_ENABLED; moves no money.
+    "fno-index-daily": {
+        "task": "baskfy.fno.index_daily",
+        "schedule": crontab(hour=18, minute=15, day_of_week="mon-fri"),
+        "options": {"queue": QUEUE_DEFAULT},
+    },
     # FO3 (docs/fno/06 FO3): the 15:00 spread sample — one Kite quote() over ATM ± 3 strikes of
     # the near monthly of the top 30 stock underlyings by futures turnover plus NIFTY and
     # BANKNIFTY (448 keys, one call on the shared quote clock) into fo_spread_sample, and the

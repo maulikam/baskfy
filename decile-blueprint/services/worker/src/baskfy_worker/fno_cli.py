@@ -34,10 +34,16 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from baskfy_core.models.base import JsonObject
-from baskfy_providers.factory import build_archive, build_nse_provider
+from baskfy_providers.factory import (
+    KiteFamily,
+    build_archive,
+    build_kite_family_provider,
+    build_nse_provider,
+)
 from baskfy_providers.settings import get_provider_settings
 from baskfy_worker.celery_app import IST
 from baskfy_worker.db import checkpointed_session, session_scope
+from baskfy_worker.fno import index_daily
 from baskfy_worker.fno.backfill import BACKFILL_START, backfill_days
 from baskfy_worker.fno.nightly import run_night
 from baskfy_worker.fno.retest import run_retest
@@ -80,6 +86,17 @@ async def _ingest(day: dt.date) -> JsonObject:
         return await run_night(session, provider, day, now_ist=dt.datetime.now(tz=IST))
 
 
+async def _index_daily(start: dt.date | None, end: dt.date) -> JsonObject:
+    """F3's ``fo_index_daily``: a backfill from ``start``, or the evening extension to ``end``."""
+    kite = build_kite_family_provider(
+        get_provider_settings(), KiteFamily.HISTORICAL, provider_retry_hooks()
+    )
+    async with session_scope() as session:
+        if start is not None:
+            return (await index_daily.backfill(session, kite, start, end)).as_dict()
+        return (await index_daily.extend(session, kite, end)).as_dict()
+
+
 async def _scan(day: dt.date) -> JsonObject:
     async with session_scope() as session:
         return await run_scan(session, day)
@@ -92,9 +109,13 @@ async def _retest(today: dt.date, families: list[str] | None, force: bool) -> Js
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="fno_cli", description=__doc__)
-    parser.add_argument("command", choices=("seed", "backfill", "ingest", "scan", "retest"))
     parser.add_argument(
-        "--from", dest="start", help=f"backfill: first session (default {BACKFILL_START})"
+        "command", choices=("seed", "backfill", "ingest", "scan", "retest", "index-daily")
+    )
+    parser.add_argument(
+        "--from",
+        dest="start",
+        help=f"backfill: first session (default {BACKFILL_START}); index-daily: backfill from here",
     )
     parser.add_argument("--to", dest="end", help="backfill: last session (default: today)")
     parser.add_argument(
@@ -130,6 +151,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     elif args.command == "scan":
         day = dt.date.fromisoformat(args.date) if args.date else today
         result = asyncio.run(_scan(day))
+    elif args.command == "index-daily":
+        # --from backfills from that day; without it, the evening extension to --to (default today)
+        from_day = dt.date.fromisoformat(args.start) if args.start else None
+        to_day = dt.date.fromisoformat(args.end) if args.end else today
+        result = asyncio.run(_index_daily(from_day, to_day))
     else:
         day = dt.date.fromisoformat(args.date) if args.date else today
         result = asyncio.run(_ingest(day))

@@ -23,7 +23,7 @@ ROWS = list(itertools.product((False, True), repeat=4))
 _FLAG = {FoSleeveGroup.F1: "FNO_F1_EXECUTION_ENABLED", FoSleeveGroup.F2: "FNO_F2_EXECUTION_ENABLED",
          FoSleeveGroup.F3: "FNO_F3_EXECUTION_ENABLED"}
 FNO_FLAGS = ("FNO_CARRY_ENABLED", "FNO_F1_EXECUTION_ENABLED", "FNO_F2_EXECUTION_ENABLED",
-             "FNO_F3_EXECUTION_ENABLED",
+             "FNO_F3_EXECUTION_ENABLED", "FNO_F3_AUTO_EXIT",
              "FNO_MONITOR_ENABLED")
 
 
@@ -58,12 +58,16 @@ def test_every_fo_flag_defaults_false_and_the_shipped_mode_is_paper() -> None:
         assert G.product_gates(sleeve).dry_run is True
 
 
-def test_no_fo_auto_execute_setting_exists() -> None:
+def test_the_only_fo_auto_setting_is_f3s_exit_flag() -> None:
+    """M.5 (Maulik, 28 Sep 2026): ``BASKFY_FNO_F3_AUTO_EXIT`` / ``FNO_F3_AUTO_EXIT`` is the one
+    admitted spelling, an exit only; an auto-execute or another sleeve's variant still trips."""
     root = Path(__file__).resolve().parents[1] / "app"
     for path in (root / "config.py", root / "fno_gates.py"):
         text = path.read_text(encoding="utf-8").upper()
+        text = text.replace("BASKFY_FNO_F3_AUTO_EXIT", "").replace("FNO_F3_AUTO_EXIT", "")
         assert not re.search(r"BASKFY_FNO_\w*AUTO", text), path.name
         assert not re.search(r"\bFNO_\w*AUTO", text), path.name
+    assert G.f3_auto_exit_enabled() is False
 
 
 def test_the_weekly_desk_gateway_is_untouched_by_the_fo_flags(monkeypatch) -> None:

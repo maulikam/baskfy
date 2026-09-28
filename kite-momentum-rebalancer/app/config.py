@@ -286,6 +286,12 @@ FNO_F2_EXECUTION_ENABLED = (
 # until 02 §3's real-money gate, like F1.
 FNO_F3_EXECUTION_ENABLED = (
     os.getenv("BASKFY_FNO_F3_EXECUTION_ENABLED", "false").lower() == "true")
+# The product's THIRD auto-execute exception, Maulik's (in session, 28 Sep 2026; DECISIONS-FO
+# M.5 "Auto-exit under a new flag"; root CLAUDE.md non-negotiable 1): with this true the FO
+# monitor sends the EXIT it raised for an F3 spread (a level break, the loss cut, the decay
+# target, the hard exit) itself; false, the exit waits for the click on /fno. It never sends an
+# entry or an add. Defaults false; flipping it on the box is Maulik's hand.
+FNO_F3_AUTO_EXIT = os.getenv("BASKFY_FNO_F3_AUTO_EXIT", "false").lower() == "true"
 # Operational — the desk process that raises plans and runs exits (FO7). Moves no money.
 FNO_MONITOR_ENABLED = os.getenv("BASKFY_FNO_MONITOR_ENABLED", "false").lower() == "true"
 

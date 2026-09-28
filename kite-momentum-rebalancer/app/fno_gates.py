@@ -11,7 +11,8 @@ PAPER it always carries `dry_run=True`, so the gateway's dry-run branch simulate
 nothing reaches a broker (non-negotiable 1), whatever `DRY_RUN` says. `intraday_enabled` is False
 in every row.
 
-Nothing here places an order. There is no unattended-entry input and none may be added.
+Nothing here places an order. There is no unattended-entry input and none may be added;
+`f3_auto_exit_enabled` is an unattended-EXIT input, Maulik's (M.5), and gates nothing else.
 """
 from __future__ import annotations
 
@@ -38,6 +39,12 @@ def fno_flags() -> FnoFlags:
 def fno_gates(sleeve: FoSleeve) -> FnoGate:
     """`PAPER` unless all four switches are on for `sleeve`."""
     return _fno_gates(sleeve, fno_flags())
+
+
+def f3_auto_exit_enabled() -> bool:
+    """M.5's flag, read here and nowhere else: may the monitor send an F3 exit itself? It
+    gates exits only; an entry or an add is a click whatever it says."""
+    return bool(C.FNO_F3_AUTO_EXIT)
 
 
 def product_gates(sleeve: FoSleeve) -> ProductGates:

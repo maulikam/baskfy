@@ -36,7 +36,7 @@ from decimal import Decimal
 from typing import Any
 
 from baskfy_core.fno.condor import LegRole
-from baskfy_core.fno.config import FoSleeve, PlanState, Structure
+from baskfy_core.fno.config import FoSleeve, PlanKind, PlanState, Structure, group_of
 from baskfy_core.fno.monitor import f1_close_cost
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -50,7 +50,7 @@ log = logging.getLogger("desk.fno_desk")
 router = APIRouter()
 IST = X.IST
 SCHEMA = "public"
-SLEEVES: tuple[FoSleeve, ...] = (FoSleeve.F1N, FoSleeve.F1B, FoSleeve.F2)
+SLEEVES: tuple[FoSleeve, ...] = (FoSleeve.F1N, FoSleeve.F1B, FoSleeve.F2, FoSleeve.F3N, FoSleeve.F3B)
 #: `05` §4: a credit that drifted more than this from the scan's is shown in amber.
 DRIFT_AMBER_PCT = Decimal(20)
 #: The index each F1 underlying is read as on NSE (DECISIONS-FO FO5.8).
@@ -66,6 +66,18 @@ CONFIRM_SENTENCES: dict[str, str] = {
         "This confirm also authorises this position's trailing GTT stop, its E−1 rolls and its "  # noqa: RUF001 - 05 §4 verbatim
         "40-session time exit"
     ),
+    "F3": (
+        "This confirm sends the wing, then the short, and nothing else. The exit — a level break, "
+        "the cut at 2× the credit, the 80 % decay target, or 15:00 on expiry day — is raised by "
+        "the monitor and sent only when BASKFY_FNO_F3_AUTO_EXIT is on; otherwise it waits for "
+        "your click here. An add is always a click."
+    ),
+}
+#: The click on an F3 exit the monitor raised (M.5, the flag off) or on its add.
+ACTION_SENTENCES: dict[str, str] = {
+    "EXIT": "This confirm closes the spread now, short first, then the wing. Nothing else.",
+    "ADD": ("This confirm sends the same two legs again, wing first, onto the open spread. It "
+            "opens no new position and moves the level nowhere."),
 }
 
 #: The live underlying level by F1 symbol (`NIFTY`, `BANKNIFTY`), or ``None``.
@@ -73,7 +85,7 @@ SpotSource = Callable[[str], Decimal | None]
 
 
 def sentence_for(sleeve: str) -> str:
-    return CONFIRM_SENTENCES["F2" if sleeve == FoSleeve.F2.value else "F1"]
+    return CONFIRM_SENTENCES[group_of(FoSleeve(sleeve)).value]
 
 
 # --- the seams tests replace ---------------------------------------------------------------------
@@ -257,7 +269,7 @@ def _plan_view(
     sequence = " → ".join(f"{lg.role.replace('_', ' ').lower()}" for lg in plan.legs)
     return {
         "plan_id": plan.plan_id, "sleeve": plan.sleeve.value,
-        "group": "F2" if plan.sleeve is FoSleeve.F2 else "F1", "symbol": plan.symbol,
+        "group": group_of(plan.sleeve).value, "symbol": plan.symbol,
         "structure": plan.structure, "status": plan.status, "reason": head.get("reason"),
         "issued_at": plan.issued_at.isoformat(), "expires_at": expires.isoformat(),
         "expires_epoch_ms": int(expires.timestamp() * 1000),
@@ -283,6 +295,11 @@ def _plan_view(
         "cost_inr": _s(X._px(head.get("expected_cost_inr"))),
         "cost_share_pct": _s(head.get("cost_share")),
         "hard_exit_date": _s(plan.hard_exit_date),
+        "kind": plan.kind,
+        "direction": d.get("direction"), "level": _s(X._dec(d.get("level"))),
+        "index_last": _s(X._dec(d.get("index_last"))),
+        "decay_target": _s(X._dec(d.get("decay_target_mark"))),
+        "loss_cut": _s(X._dec(d.get("loss_cut_mark"))), "rule": d.get("rule"),
     }  # fmt: skip
 
 
@@ -358,6 +375,53 @@ def _f1_next_rule(pos: X.PositionRow, profit: Decimal | None, loss: Decimal | No
             "first")  # fmt: skip
 
 
+def _f3_view(
+    store: X.FoStore, pos: X.PositionRow, *, live: Mapping[str, X.FoQuote], spot: SpotSource | None,
+) -> dict[str, Any]:  # fmt: skip
+    """An open F3 spread: the level against the index, the mark against the target and the cut,
+    the next rule and whether the add is spent (04 §11)."""
+    legs = pos.leg_list
+    carry = pos.carry
+    marks: dict[str, Decimal] = {}
+    for lg in legs:
+        q = live.get(str(lg.get("tradingsymbol")))
+        if q is not None and q.mid is not None:
+            marks[str(lg.get("role"))] = q.mid
+    short_mark = next((m for r, m in marks.items() if r.startswith("SHORT")), None)
+    wing_mark = next((m for r, m in marks.items() if r.startswith("LONG")), None)
+    mark = None if short_mark is None else (short_mark - (wing_mark or Decimal(0))).quantize(
+        Decimal("0.01"))
+    level = None
+    try:
+        level = spot(pos.symbol) if spot is not None else None
+    except Exception as exc:  # a missing level is a dash, never a failed page
+        log.warning("FO page: the %s level could not be read: %s", pos.symbol, exc)
+    row = _position_row(store, pos.id)
+    target = X._px(row.get("profit_take_points"))
+    cut = X._px(row.get("loss_close_points"))
+    pnl = None
+    if mark is not None and pos.entry_credit is not None:
+        pnl = ((pos.entry_credit - mark) * pos.lots * pos.lot_size).quantize(Decimal("0.01"))
+    direction = str(carry.get("direction") or "")
+    beyond = "below" if direction == "UP" else "above"
+    when = "—" if pos.hard_exit_date is None else pos.hard_exit_date.isoformat()
+    return {
+        "id": pos.id, "sleeve": pos.sleeve.value, "symbol": pos.symbol,
+        "entry_plan_id": pos.entry_plan_id, "lots": pos.lots, "lot_size": pos.lot_size,
+        "direction": direction, "level": _s(pos.stop_price), "spot": _s(level),
+        "entry_credit": _s(pos.entry_credit), "mark": _s(mark), "live_pnl_inr": _s(pnl),
+        "max_loss_inr": _s(pos.max_loss_inr), "decay_target": _s(target), "loss_cut": _s(cut),
+        "expiry": when, "added": bool(carry.get("added")),
+        "next_rule": (f"out at once if {pos.symbol} trades {beyond} {_s(pos.stop_price) or '—'}; "
+                      f"the cut at a mark of {_s(cut) or '—'}; the target at {_s(target) or '—'}; "
+                      f"flat at 15:00 on {when}"),
+        "last_mark": _last_mark(store, pos.id), "simulated": pos.simulated,
+        "legs": [{"role": lg.get("role"), "symbol": lg.get("tradingsymbol"),
+                  "quantity": lg.get("quantity"), "avg_price": _s(lg.get("avg_price")),
+                  "mid": _s(marks.get(str(lg.get("role"))))} for lg in legs],
+    }  # fmt: skip
+
+
 def _f2_view(
     store: X.FoStore, pos: X.PositionRow, *, live: Mapping[str, X.FoQuote]
 ) -> dict[str, Any]:
@@ -431,19 +495,28 @@ def _last_mark(store: X.FoStore, position_id: int) -> dict[str, Any] | None:
 def _actions(store: X.FoStore, day: dt.date) -> list[dict[str, Any]]:
     """The exits and rolls the monitor raised under a confirm: today's, and any still running."""
     rows = store.conn.execute(
-        f"SELECT plan_id, parent_plan_id, sleeve, symbol, kind, status, reason, issued_at, detail "
-        f"FROM {store.t('fo_plan')} WHERE user_id = ? AND kind IN ('EXIT', 'ROLL') AND "
-        "(trade_date = ? OR status IN ('ISSUED', 'CONFIRMED', 'FILLING')) ORDER BY id DESC",
+        f"SELECT plan_id, parent_plan_id, sleeve, symbol, kind, status, reason, issued_at, "
+        f"expires_at, detail FROM {store.t('fo_plan')} WHERE user_id = ? AND kind IN "
+        "('EXIT', 'ROLL', 'ADD') AND (trade_date = ? OR status IN ('ISSUED', 'CONFIRMED', "
+        "'FILLING')) ORDER BY id DESC",
         (store.user_id, day),
     ).fetchall()
     out = []
     for r in rows:
         detail = X._json(r["detail"])
+        # An F3 exit the monitor raised for the click (M.5, the flag off), or an F3 add: ISSUED
+        # and confirmable until it lapses.
+        expires = X._aware(r["expires_at"])
+        confirmable = (str(r["status"]) == PlanState.ISSUED.value
+                       and str(r["kind"]) in ACTION_SENTENCES and _now() < expires)  # fmt: skip
         out.append({
             "plan_id": r["plan_id"], "parent_plan_id": r["parent_plan_id"], "sleeve": r["sleeve"],
             "symbol": r["symbol"], "kind": r["kind"], "status": r["status"],
             "code": detail.get("code"), "message": detail.get("message"), "reason": r["reason"],
-            "issued_at": _s(X._aware(r["issued_at"])),
+            "issued_at": _s(X._aware(r["issued_at"])), "confirmable": confirmable,
+            "awaits_click": bool(detail.get("awaits_click")),
+            "sentence": ACTION_SENTENCES.get(str(r["kind"])),
+            "expires_epoch_ms": int(expires.timestamp() * 1000),
         })  # fmt: skip
     return out
 
@@ -495,10 +568,19 @@ def build_view(
                        if p.structure == Structure.IRON_CONDOR.value],
         "futures": [_f2_view(store, p, live=live) for p in positions
                     if p.structure == Structure.FUTURE.value],
+        "spreads": [_f3_view(store, p, live=live, spot=spot) for p in positions
+                    if p.structure == Structure.CREDIT_SPREAD.value],
+        "f3_auto_exit": _f3_auto_exit(),
         "actions": _actions(store, day),
         "violations": _violations(store),
         "badge": badge_of(positions),
     }  # fmt: skip
+
+
+def _f3_auto_exit() -> bool:
+    from .fno_gates import f3_auto_exit_enabled  # noqa: PLC0415 - M.5's flag lives there
+
+    return f3_auto_exit_enabled()
 
 
 def badge_of(positions: list[X.PositionRow]) -> dict[str, Any]:
@@ -592,15 +674,22 @@ async def fno_execute(plan_id: str = Form(""), confirm: str = Form("")) -> JSONR
             plan = store.plan(plan_id)
             if plan is None:
                 return JSONResponse({"code": "UNKNOWN_PLAN", "detail": "no such plan"}, 404)
-            outcome = await X.execute_entry(
-                store, gateway_for(plan.sleeve), quotes=quotes(), plan_id=plan_id, confirm=True,
-                mode_of=mode_of, now=_now,
-            )  # fmt: skip
+            if plan.kind == PlanKind.EXIT.value:
+                # An F3 exit the monitor raised for the click (M.5): confirmed and closed here.
+                outcome = await X.execute_click_exit(
+                    store, gateway_for(plan.sleeve), quotes=quotes(), plan_id=plan_id,
+                    confirm=True, now=_now,
+                )  # fmt: skip
+            else:
+                outcome = await X.execute_entry(
+                    store, gateway_for(plan.sleeve), quotes=quotes(), plan_id=plan_id,
+                    confirm=True, mode_of=mode_of, now=_now,
+                )  # fmt: skip
     except X.Refused as exc:
         return JSONResponse({"code": exc.code, "detail": exc.message}, status_code=exc.status)
     _badge_cache["at"] = -1e9  # the tab's count changes with this confirm
     body = outcome_json(outcome)
-    if outcome.outcome != PlanState.OPEN.value:
+    if outcome.outcome not in (PlanState.OPEN.value, PlanState.CLOSED.value):
         refusals = outcome.detail.get("refusals") or []
         body["code"] = outcome.outcome
         body["detail"] = "; ".join(str(r) for r in refusals) or outcome.outcome

@@ -45,6 +45,10 @@ class ExitReason(StrEnum):
     #: F2's future without its resting GTT: an alert, a paper violation, and the exit at the next
     #: check (``04`` §10; FO7).
     NAKED_FUTURE = "NAKED_FUTURE"
+    #: F3's (``04`` §11, M.5), in precedence; ``HARD_EXIT`` above is shared.
+    LEVEL_BREAK = "LEVEL_BREAK"
+    LOSS_CUT = "LOSS_CUT"
+    DECAY_TARGET = "DECAY_TARGET"
 
 
 @dataclass(frozen=True, slots=True)

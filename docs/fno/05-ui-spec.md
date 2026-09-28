@@ -78,3 +78,17 @@ Phone: the table collapses to symbol · IV ÷ RV · OI chg · ban, and a tap ope
   stale quote) is shown by name, never as a spinner.
 * No field on this page moves money except Confirm. Capital, risk % and pauses are the settings
   form, audited.
+
+## §6 — F3 on the desk's `/fno` (F3-5; M.5)
+
+* **Plan card** (group F3): the direction, the level and the index at 09:20, the credit on mids,
+  the width, the target and cut marks, the rule sentence; the confirm sentence says the confirm
+  sends the wing then the short and nothing else, that the exit is the monitor's only under
+  `BASKFY_FNO_F3_AUTO_EXIT`, and that an add is always a click.
+* **Open spreads**: one card per F3 position — the direction, the level against the live index,
+  the credit, the live mark and P&L, the target and the cut, the expiry, the legs with their fills
+  and mids, whether the add is spent, the next rule; the section header states the flag's state.
+* **Exits and adds**: an F3 exit the monitor raised with the flag off shows `WAITS FOR YOUR CLICK`
+  with a **Send the exit (paper)** button and its sentence (short first, then the wing); an add
+  shows **Add (paper)** with its sentence. Both post to the one execute route and lapse with the
+  plan's expiry. The web app (`/options/overnight`) has no F3 card yet (F3-PLAN).

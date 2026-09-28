@@ -25,6 +25,9 @@ MONEY_FLAGS = (
     "BASKFY_FNO_CARRY_ENABLED",
     "BASKFY_FNO_F1_EXECUTION_ENABLED",
     "BASKFY_FNO_F2_EXECUTION_ENABLED",
+    "BASKFY_FNO_F3_EXECUTION_ENABLED",
+    # M.5 (Maulik, 28 Sep 2026): the monitor may send an F3 exit itself. Default false, like money.
+    "BASKFY_FNO_F3_AUTO_EXIT",
 )
 
 
@@ -54,8 +57,10 @@ def test_compose_runs_the_monitor_from_the_desk_block_with_money_flags_false() -
         assert env["DRY_RUN"] == "${BASKFY_DESK_DRY_RUN:-true}"
 
 
-def test_no_fno_auto_execute_variable_in_compose() -> None:
-    assert re.search(r"FNO\w*AUTO", COMPOSE.read_text()) is None
+def test_the_only_fno_auto_variable_in_compose_is_f3s_exit_flag() -> None:
+    """M.5: ``BASKFY_FNO_F3_AUTO_EXIT`` is the one admitted spelling; any other still trips."""
+    text = COMPOSE.read_text().replace("BASKFY_FNO_F3_AUTO_EXIT", "")
+    assert re.search(r"FNO\w*AUTO", text) is None
 
 
 def test_a_deploy_restarts_it_and_ship_expects_it_and_verifies_it() -> None:

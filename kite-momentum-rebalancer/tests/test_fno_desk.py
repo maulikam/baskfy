@@ -334,7 +334,7 @@ class TestThePage:
         desk.post(plan_id)
         page = desk.page()
         assert f'id="navFnoBadge">1 open · exit {HARD_EXIT.isoformat()}</span>' in page
-        assert 'title="F1N PAPER · F1B PAPER · F2 PAPER"' in page
+        assert 'title="F1N PAPER · F1B PAPER · F2 PAPER · F3N PAPER · F3B PAPER"' in page  # F3 (M.5)
 
     def test_the_view_says_why_it_has_nothing(
         self, desk: Desk, monkeypatch: pytest.MonkeyPatch
@@ -367,7 +367,9 @@ class TestStructure:
         assert fno_desk.sentence_for("F1B") == F1_SENTENCE
         assert fno_desk.sentence_for("F2") == F2_SENTENCE
 
-    def test_the_page_offers_one_form_and_it_is_the_confirm(self) -> None:
+    def test_the_page_offers_two_forms_and_both_are_the_confirm(self) -> None:
+        """One per plan card and, since M.5 (F3), one per action the monitor raised for the
+        click — an F3 exit with the flag off, or an F3 add. Both post to the one execute route."""
         html = (Path(__file__).resolve().parent.parent / "app/templates/fno.html").read_text()
-        assert re.findall(r'<form[^>]*action="([^"]+)"', html) == ["/fno/execute"]
+        assert re.findall(r'<form[^>]*action="([^"]+)"', html) == ["/fno/execute", "/fno/execute"]
         assert len(re.findall(r"<input(?![^>]*hidden)", html)) == 0  # no field that moves money

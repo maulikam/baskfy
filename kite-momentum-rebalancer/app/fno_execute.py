@@ -400,10 +400,12 @@ class FoStore:
         return [str(r["plan_id"]) for r in rows]
 
     def pending_actions(self) -> list[FoPlanRow]:
-        """EXIT and ROLL plans the monitor raised whose position is still open."""
+        """EXIT and ROLL plans the monitor raised whose position is still open. An EXIT that is
+        only ISSUED waits for the click (F3 with its flag off, M.5); a ROLL is sent as issued."""
         rows = self.conn.execute(
-            f"SELECT p.* FROM {self.t('fo_plan')} p WHERE p.user_id = ? AND p.kind IN "
-            "('EXIT', 'ROLL') AND p.status IN ('ISSUED', 'CONFIRMED', 'FILLING') ORDER BY p.id",
+            f"SELECT p.* FROM {self.t('fo_plan')} p WHERE p.user_id = ? AND ("
+            "(p.kind = 'ROLL' AND p.status IN ('ISSUED', 'CONFIRMED', 'FILLING')) OR "
+            "(p.kind = 'EXIT' AND p.status IN ('CONFIRMED', 'FILLING'))) ORDER BY p.id",
             (self.user_id,),
         ).fetchall()
         return [self._plan(r) for r in rows]
@@ -842,8 +844,8 @@ def _validate(plan: FoPlanRow | None, confirm: bool, now: dt.datetime) -> FoPlan
         raise Refused(400, "CONFIRM_REQUIRED", "confirm must be true")
     if plan is None:
         raise Refused(404, "UNKNOWN_PLAN", "no such plan")
-    if plan.kind != PlanKind.ENTRY.value:
-        raise Refused(400, "NOT_AN_ENTRY", "only an entry plan is confirmed")
+    if plan.kind not in (PlanKind.ENTRY.value, PlanKind.ADD.value):
+        raise Refused(400, "NOT_AN_ENTRY", "only an entry or an add plan is confirmed here")
     if plan.status != PlanState.ISSUED.value:
         raise Refused(409, "NOT_ISSUED", f"the plan is {plan.status}")
     if now >= plan.expires_at:
@@ -879,10 +881,43 @@ async def execute_entry(  # noqa: PLR0913 - the store, the gateway, the book, th
     if not store.confirm(plan, clock()):
         raise Refused(409, "NOT_ISSUED", "the plan was confirmed or closed meanwhile")
     store.set_status(plan.plan_id, PlanState.FILLING.value)
+    if plan.kind == PlanKind.ADD.value:
+        return await _add_to_spread(store, gateway, plan, quotes=quotes, now=clock,
+                                    broker_book=broker_book, alert=alert)  # fmt: skip
     if plan.structure == Structure.FUTURE.value:
         return await _enter_future(store, gateway, plan, quotes=quotes, now=clock, alert=alert)
     return await _enter_condor(store, gateway, plan, quotes=quotes, now=clock,
                                broker_book=broker_book, alert=alert)  # fmt: skip
+
+
+async def execute_click_exit(  # noqa: PLR0913 - the store, the gateway, the plan and the clock
+    store: FoStore,
+    gateway: Gateway,
+    *,
+    quotes: QuoteSource,
+    plan_id: str,
+    confirm: bool,
+    now: Callable[[], dt.datetime] | None = None,
+    broker_book: BrokerBook = paper_book,
+) -> FoOutcome:
+    """``POST /fno/execute`` on an EXIT the monitor raised for the click (F3, M.5): the plan must
+    be an ISSUED EXIT; it is confirmed here and closed at once, shorts first."""
+    clock = now or (lambda: dt.datetime.now(tz=IST))
+    if not confirm:
+        raise Refused(400, "CONFIRM_REQUIRED", "confirm must be true")
+    plan = store.plan(plan_id)
+    if plan is None:
+        raise Refused(404, "UNKNOWN_PLAN", "no such plan")
+    if plan.kind != PlanKind.EXIT.value:
+        raise Refused(400, "NOT_AN_EXIT", "only an exit plan is confirmed here")
+    if plan.status != PlanState.ISSUED.value:
+        raise Refused(409, "NOT_ISSUED", f"the plan is {plan.status}")
+    if not store.confirm(plan, clock()):
+        raise Refused(409, "NOT_ISSUED", "the plan was confirmed or closed meanwhile")
+    confirmed = store.plan(plan_id)
+    assert confirmed is not None  # noqa: S101 - just confirmed
+    return await execute_exit(store, gateway, plan=confirmed, quotes=quotes, now=clock,
+                              broker_book=broker_book)  # fmt: skip
 
 
 def _legs_json(plan: FoPlanRow, avg: Mapping[str, Decimal | None]) -> list[dict[str, Any]]:
@@ -919,13 +954,21 @@ async def _enter_condor(  # noqa: PLR0913 - the plan and its collaborators
         width = _dec(detail.get("width_points")) or Decimal(0)
         max_loss = money((width - credit) * quantity) if width else None
         levels = _exit_levels(detail.get("strikes"), credit)
+        spread = plan.structure == Structure.CREDIT_SPREAD.value
+        carry: dict[str, Any] = {"strikes": detail.get("strikes")}
+        if spread:  # F3 (04 §11): the direction and the level ride with the position
+            carry.update({"direction": detail.get("direction"), "level": detail.get("level"),
+                          "added": False})  # fmt: skip
         position_id = store.open_position({
             "sleeve": plan.sleeve.value, "symbol": plan.symbol, "structure": plan.structure,
             "entry_plan_id": plan.plan_id,
-            "legs": {"legs": _legs_json(plan, avg), "carry": {"strikes": detail.get("strikes")}},
+            "legs": {"legs": _legs_json(plan, avg), "carry": carry},
             "lots": plan.lots, "lot_size": plan.lot_size, "entry_credit": credit,
             "max_loss_inr": max_loss,
-            "profit_take_points": levels[0], "loss_close_points": levels[1],
+            # F3's target and cut follow the credit actually taken, not the 09:20 mids (04 §11).
+            "profit_take_points": _spread_levels(credit)[0] if spread else levels[0],
+            "loss_close_points": _spread_levels(credit)[1] if spread else levels[1],
+            "stop_price": _dec(detail.get("level")) if spread else None,
             "hard_exit_date": plan.hard_exit_date, "opened_at": now(), "simulated": True,
         })  # fmt: skip
         store.attach_fills(plan, position_id)
@@ -948,6 +991,17 @@ async def _enter_condor(  # noqa: PLR0913 - the plan and its collaborators
                      detail={"left_open": left, "refusals": venue.refusals})  # fmt: skip
 
 
+def _spread_levels(credit: Decimal) -> tuple[Decimal | None, Decimal | None]:
+    """F3's decay-target and loss-cut marks on the credit actually taken (``04`` §11)."""
+    from baskfy_core.fno import directional as d3  # noqa: PLC0415
+    from baskfy_core.fno.config import DEFAULT_FNO_CONFIG  # noqa: PLC0415
+
+    if credit <= 0:
+        return None, None
+    f3 = DEFAULT_FNO_CONFIG.f3
+    return d3.decay_target_mark(credit, f3), d3.loss_cut_mark(credit, f3)
+
+
 def _exit_levels(raw: object, credit: Decimal) -> tuple[Decimal | None, Decimal | None]:
     """The profit-take and loss-close costs to close on the credit actually taken (``04`` §1)."""
     from baskfy_core.fno.condor import (  # noqa: PLC0415
@@ -967,6 +1021,68 @@ def _exit_levels(raw: object, credit: Decimal) -> tuple[Decimal | None, Decimal 
     f1 = DEFAULT_FNO_CONFIG.f1
     return (money(profit_take_level(credit, f1)),
             money(loss_close_level(credit, strikes, f1)))  # fmt: skip
+
+
+async def _add_to_spread(  # noqa: PLR0913 - the plan and its collaborators
+    store: FoStore, gateway: Gateway, plan: FoPlanRow, *, quotes: QuoteSource,
+    now: Callable[[], dt.datetime], broker_book: BrokerBook, alert: Callable[[str], None],
+) -> FoOutcome:  # fmt: skip
+    """F3's add (04 §11, kind ADD): the same two legs again, wing first, onto the open spread.
+    A fill grows the position's lots, averages its credit, adds its max loss and marks it
+    ``added``; a partial fill is abandoned like an entry and the position is untouched."""
+    position = _position_for(store, plan)
+    if position is None:
+        store.set_status(plan.plan_id, PlanState.CLOSED.value, "no open position to add to")
+        return FoOutcome(plan.plan_id, plan.sleeve.value, plan.kind, "NO_POSITION", True, 0)
+    venue = OptionVenue(gateway=gateway, loop=asyncio.get_running_loop(), store=store, plan=plan,
+                        underlying=plan.symbol, quotes=quotes, now=now, broker_book=broker_book,
+                        position_id=position.id)  # fmt: skip
+    quantity = plan.lots * plan.lot_size
+    roles = [LegRole(r.value) for r in ENTRY_SEQUENCE if r.value in venue.legs]
+    result = await asyncio.to_thread(
+        run_entry, venue, roles, quantity, sleeve=_CONDOR_RULES, tick=TICK,
+        config=ExecutionConfig(),
+    )  # fmt: skip
+    store.settle_legs(plan)
+    if result.outcome is Outcome.OPEN:
+        avg = {r.value: result.avg_price(r) for r in result.fills}
+        credit = Decimal(0)
+        for role, price in avg.items():
+            credit += (-(price or 0)) if LegRole(role).is_long else (price or 0)
+        credit = money(credit)
+        old_units = position.lots * position.lot_size
+        old_credit = position.entry_credit or Decimal(0)
+        new_credit = money((old_credit * old_units + credit * quantity) / (old_units + quantity))
+        width = _dec(plan.detail.get("width_points")) or Decimal(0)
+        add_loss = money((width - credit) * quantity) if width else Decimal(0)
+        legs_now = position.leg_list
+        by_role = {str(x.get("role")): x for x in legs_now}
+        for lg in plan.legs:
+            held = by_role.get(lg.role)
+            if held is not None:
+                held["quantity"] = int(held.get("quantity") or 0) + lg.quantity
+        carry = {**position.carry, "added": True, "add_plan_id": plan.plan_id,
+                 "add_credit": credit}  # fmt: skip
+        store.update_position(
+            position.id, lots=position.lots + plan.lots, entry_credit=new_credit,
+            max_loss_inr=(position.max_loss_inr or Decimal(0)) + add_loss,
+            legs={"legs": legs_now, "carry": carry},
+        )  # fmt: skip
+        store.attach_fills(plan, position.id)
+        store.set_status(plan.plan_id, PlanState.OPEN.value)
+        return FoOutcome(plan.plan_id, plan.sleeve.value, plan.kind, "OPEN", True, venue.orders,
+                         position.id, {"credit": credit, "lots": position.lots + plan.lots})  # fmt: skip
+    left = {r.value: q for r, q in result.position.items() if q}
+    reason = "a leg of the add did not fill in full; the add was abandoned and the position is unchanged"
+    if venue.refusals:
+        reason += f" ({'; '.join(venue.refusals)})"
+    store.set_status(plan.plan_id, PlanState.ABANDONED_PARTIAL.value, reason)
+    store.merge_detail(plan.plan_id, {"left_open": left, "refusals": venue.refusals})
+    if left:
+        alert(f"FO {plan.plan_id}: abandoned add left {left} open; close it by hand")
+    return FoOutcome(plan.plan_id, plan.sleeve.value, plan.kind,
+                     PlanState.ABANDONED_PARTIAL.value, True, venue.orders,
+                     detail={"left_open": left, "refusals": venue.refusals})  # fmt: skip
 
 
 async def _enter_future(  # noqa: PLR0913 - the plan and its collaborators
@@ -1059,7 +1175,7 @@ async def execute_exit(  # noqa: PLR0913 - the store, the gateway, the plan and 
     store.set_status(position.entry_plan_id, PlanState.EXITING.value, only_from=("OPEN",))
     net = store.net_by_symbol(position.id)
     orders = 0
-    if position.structure == Structure.IRON_CONDOR.value:
+    if position.structure in (Structure.IRON_CONDOR.value, Structure.CREDIT_SPREAD.value):
         by_symbol = {lg.tradingsymbol: lg.role for lg in plan.legs}
         held = {by_symbol[s]: q for s, q in net.items() if s in by_symbol}
         venue = OptionVenue(gateway=gateway, loop=asyncio.get_running_loop(), store=store,

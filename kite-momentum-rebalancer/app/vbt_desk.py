@@ -55,6 +55,15 @@ RESCAN_MIN_INTERVAL_SECONDS: Final = 60
 IN_FLIGHT: Final[tuple[str, ...]] = RESCAN_IN_FLIGHT
 
 
+def _ist_day(stamp: dt.datetime | None) -> dt.date | None:
+    """The IST calendar day of a stored timestamp (UTC when naive)."""
+    if stamp is None:
+        return None
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=dt.UTC)
+    return stamp.astimezone(dt.timezone(dt.timedelta(hours=5, minutes=30))).date()
+
+
 class ScanRefused(Exception):
     """The two refusals, carrying the HTTP status the contract answers with.
 
@@ -589,12 +598,15 @@ class PgVbtStore:
         yield
 
     def entries_taken(self, day: dt.date) -> int:
-        row = self.conn.execute(
-            f"SELECT COUNT(*) AS n FROM {self.t('vb_order')} WHERE user_id = ? "
-            "AND signal_date = ? AND state IN ('CONFIRMED', 'SENT', 'FILLED', 'PARTIAL')",
-            (self.user_id, day),
-        ).fetchone()
-        return int(row["n"] or 0)
+        """``04`` §5.3's session cap, counted by the IST day the order was **sent**
+        (``created_at``) — not by ``signal_date``, which a LIVE plan (LV8) and an EVENING plan
+        drained on the same day no longer share (DECISIONS-LV LV10.2)."""
+        rows = self.conn.execute(
+            f"SELECT created_at FROM {self.t('vb_order')} WHERE user_id = ? "
+            "AND state IN ('CONFIRMED', 'SENT', 'FILLED', 'PARTIAL')",
+            (self.user_id,),
+        ).fetchall()
+        return sum(1 for r in rows if _ist_day(_stamp(r["created_at"])) == day)
 
     # -- the page's own reads ----------------------------------------------------------------
 

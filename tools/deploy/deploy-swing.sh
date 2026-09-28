@@ -55,9 +55,10 @@ export AWS_PROFILE="$PROFILE"
 # running, keeps its state, and picks up the new image whenever it is next restarted. Safe
 # whenever the deploy does not change swing code — and when it does, this flag is the wrong tool
 # and the guard's wait is the right one.
-RESTART_SERVICES="api worker ingest-worker beat desk desk-daily swing-monitor twt-auto session-supervisor options-monitor fno-monitor laya web"
+# `laya` left this list on 28 Sep 2026 (Maulik: "leave it off"; compose profile `laya`).
+RESTART_SERVICES="api worker ingest-worker beat desk desk-daily swing-monitor twt-auto session-supervisor options-monitor fno-monitor web"
 if [ "${KEEP_MONITOR:-0}" = "1" ]; then
-  RESTART_SERVICES="api worker ingest-worker beat desk desk-daily twt-auto session-supervisor options-monitor fno-monitor laya web"
+  RESTART_SERVICES="api worker ingest-worker beat desk desk-daily twt-auto session-supervisor options-monitor fno-monitor web"
 fi
 
 say() { printf '\n── %s\n' "$*"; }

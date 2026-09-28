@@ -2422,3 +2422,17 @@ from tonight's evening job.
   exit; `pyramiding=False` (each sleeve's `SizingConfig`) restores one position per name. Both
   are code defaults, not box flags — say the word and I ship the change.
 
+## 28 Sep 2026 morning — five TWT positions are live; Laya is off at your word; a cap fix ships tonight
+
+* **Positions (all filled, all GTT-protected, half size):** LALPATHLAB 64 @ 1933.93 (stop 1547.10),
+  NAUKRI 99 @ 1247.21 (997.75), CUPID 467 @ 266.10 (212.85), ETERNAL 377 @ 331.45 (265.15),
+  SYRMA 70 @ 1766.45 (1413.15). Five is two more than the three-a-session cap; the count keyed on
+  the signal's date and a MORNING plan and a LIVE plan carry different ones. Fixed to count by the
+  day the entries are sent; deploys after 15:30 today. Tonight's evening job manages these five
+  under the new exits.
+* **Laya:** off, by your "leave it off" — behind a compose profile, so no deploy revives it. Bring
+  it back only on a box with room for a resident model (`docker compose --profile laya up -d laya`).
+* **The box:** rebooted 10:12, back 10:17, fifteen services, 5 GB free. If it slows again during a
+  session, the first read is `free -m`; the remedy that worked is an EC2 reboot (`aws ec2
+  reboot-instances`), which the queued services survive.
+

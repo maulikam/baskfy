@@ -345,7 +345,9 @@ async def build_live_plan_twt(
     settings_row = await twt_evening.config_row(session, user_id)
     sleeve = await twt_load_sleeve(session, user_id, trade_date)
     equity = sleeve.value.quantize().equity_inr
-    book = await twt_book_state(session, user_id=user_id, as_of=trade_date, signal_date=trade_date)
+    book = await twt_book_state(
+        session, user_id=user_id, as_of=trade_date, signal_date=trade_date, entries_on=trade_date
+    )
     multiplier = await twt_slot_multiplier(
         session, user_id=user_id, execution_enabled=execution_enabled, config=config
     )
@@ -493,7 +495,7 @@ async def build_live_plan_vbt(
         cash_available_inr=sleeve.cash_available_inr,
         entries_already_this_session=await vbt_evening.entries_confirmed_today(
             session, user_id, trade_date
-        ),
+        ),  # a LIVE plan executes today
         positions_naked_of_gtt=vbt_evening.naked_positions(positions, symbols),
     )
     entries, skips = vbt_plan.build_entries(

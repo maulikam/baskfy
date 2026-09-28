@@ -326,7 +326,8 @@ async def _place_limit(  # noqa: PLR0913 - a confirm is its line, its gateway an
     preview, and two tabs confirming a fourth entry between them is exactly what the lock exists
     to stop (``04`` §9.4).
     """
-    taken = store.entries_taken(plan["session_date"])
+    # LV10.2: the cap is the trading day's, counted by when orders were sent.
+    taken = store.entries_taken(now.astimezone(_IST).date())
     cap = DEFAULT_VBT_CONFIG.sizing.max_new_entries_per_session
     if taken >= cap:
         reason = f"SESSION_CAP: {taken} entries already taken today; {cap} is the session's cap"
@@ -387,6 +388,7 @@ async def _place_limit(  # noqa: PLR0913 - a confirm is its line, its gateway an
             "broker_order_id": result.get("order_id"),
             "client_id": line["client_id"],
             "simulated": gates.dry_run,
+            "created_at": now,
         }
     )
     store.set_line(
@@ -425,7 +427,8 @@ async def _buy_at_market(  # noqa: PLR0913 - a confirm is its line, its gateway 
     the size was previewed against — the live price the desk supplies per confirm, else the
     plan's own — so the book can say what the buy was worth when it was sent.
     """
-    taken = store.entries_taken(plan["session_date"])
+    # LV10.2: the cap is the trading day's, counted by when orders were sent.
+    taken = store.entries_taken(now.astimezone(_IST).date())
     cap = DEFAULT_VBT_CONFIG.sizing.max_new_entries_per_session
     if taken >= cap:
         reason = f"SESSION_CAP: {taken} entries already taken today; {cap} is the session's cap"
@@ -490,6 +493,7 @@ async def _buy_at_market(  # noqa: PLR0913 - a confirm is its line, its gateway 
             "broker_order_id": result.get("order_id"),
             "client_id": line["client_id"],
             "simulated": gates.dry_run,
+            "created_at": now,
         }
     )
     store.set_line(

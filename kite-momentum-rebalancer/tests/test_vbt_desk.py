@@ -71,7 +71,7 @@ CREATE TABLE vb_order (
   quantity INTEGER, state TEXT, working_from TEXT, expires_after_session TEXT,
   sessions_worked INTEGER DEFAULT 0, broker_order_id TEXT, client_id TEXT,
   filled_quantity INTEGER DEFAULT 0, avg_fill_price NUMERIC, position_id INTEGER,
-  cancelled_on TEXT, cancel_reason TEXT, simulated INTEGER);
+  cancelled_on TEXT, cancel_reason TEXT, simulated INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE vb_fill (
   id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, position_id INTEGER, order_id INTEGER,
   side TEXT, quantity INTEGER, price NUMERIC, filled_at TEXT, journal_ref TEXT,
@@ -238,6 +238,7 @@ class TestTheStoreRoundTrips:
                 "stop_price": "84.45",
                 "quantity": 10,
                 "state": "SENT",
+                "created_at": dt.datetime.combine(SESSION, dt.time(4, 0), tzinfo=dt.UTC),
             }
         )
         store.create_order(
@@ -248,6 +249,7 @@ class TestTheStoreRoundTrips:
                 "stop_price": "44.00",
                 "quantity": 10,
                 "state": "EXPIRED",
+                "created_at": dt.datetime.combine(SESSION, dt.time(4, 0), tzinfo=dt.UTC),
             }
         )
         assert store.entries_taken(SESSION) == 1

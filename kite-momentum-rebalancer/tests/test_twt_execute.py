@@ -229,11 +229,20 @@ class MemoryStore:
         self.orders[int(order_id)].update(fields)
 
     def entries_taken(self, day: dt.date) -> int:
+        """LV10.2: by the IST day the order was sent; a hand-made row without ``created_at``
+        counts on its signal day."""
+
+        def sent_on(row: dict) -> object:
+            stamp = row.get("created_at")
+            if stamp is None:
+                return row.get("signal_date")
+            return stamp.astimezone(IST).date()
+
         return sum(
             1
             for row in self.orders.values()
             if row.get("side") == "BUY"
-            and row.get("signal_date") == day
+            and sent_on(row) == day
             and row["state"] in {"CONFIRMED", "SENT", "PARTIAL", "FILLED"}
         )
 
@@ -603,6 +612,8 @@ class TestTheEntry:
                 "signal_date": SESSION,
                 "state": "FILLED",
                 "instrument_id": 500 + index,
+                # LV10.2: sent this morning — the cap counts the day of sending, not the signal
+                "created_at": NOW,
             }
         outcome = confirm(store, plan_id, line_id, last_price=D("100.00"))
 

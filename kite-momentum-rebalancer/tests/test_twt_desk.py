@@ -89,7 +89,8 @@ CREATE TABLE tw_order (
   id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, broker_account_id INTEGER,
   instrument_id INTEGER, signal_date TEXT, side TEXT, quantity INTEGER, stop_price NUMERIC,
   state TEXT, broker_order_id TEXT, client_id TEXT, filled_quantity INTEGER DEFAULT 0,
-  avg_fill_price NUMERIC, position_id INTEGER, simulated INTEGER DEFAULT 1);
+  avg_fill_price NUMERIC, position_id INTEGER, simulated INTEGER DEFAULT 1,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE tw_fill (
   id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, position_id INTEGER, order_id INTEGER,
   side TEXT, quantity INTEGER, price NUMERIC, filled_at TEXT, journal_ref TEXT,
@@ -292,9 +293,12 @@ class TestTheStore:
                 "state": "CONFIRMED",
                 "client_id": "a",
                 "simulated": True,
+                # LV10.2: the cap counts by the IST day the order was sent
+                "created_at": dt.datetime.combine(SESSION, dt.time(4, 0), tzinfo=dt.UTC),
             }
         )
         assert store.entries_taken(SESSION) == 1
+        assert store.entries_taken(SESSION + dt.timedelta(days=1)) == 0
 
     def test_the_sleeves_money_is_its_own(self, store) -> None:  # noqa: ANN001
         a_position(store, quantity=100, entry="100.00")

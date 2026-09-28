@@ -892,3 +892,36 @@ The desk block names `BASKFY_FNO_CARRY_ENABLED`, `BASKFY_FNO_F1_EXECUTION_ENABLE
 `fno-monitor` service runs FO7's loop and idles with the monitor flag false. `deploy-swing.sh`
 restarts it, `ship.sh` expects fifteen running services and runs `verify-fno.sh` after
 `verify-options.sh`. The verify asserts the money flags false and reports the operational ones.
+
+## M.5 — F3, the directional index credit spread: Maulik's method and his three answers (in session, 28 Sep 2026)
+
+**Context.** Maulik brought a method (a trader's thread: sell weekly index options in the market's
+direction; daily support/resistance, 75-minute confirm, intraday trend; strikes ~1 % beyond the
+weekly candle; ~80 % decay target; out immediately on a level break; 20–30 % of capital first,
+pyramid the next day if working; ~1 % a week; "sell 20–30 rupee options and cut at 50") and asked:
+*"here instead of banknifty choose nifty for weekly expiry and choose bank nifty for monthly
+expiry and code it"*. Three points the F&O charter cannot settle by itself were put to him with
+options, and he answered:
+
+1. **Structure — "Credit spread with a far wing".** The thread sells naked; `02` §2.1 forbids a
+   naked short option at any instant. The wing caps the gap loss and the exchange's spread margin
+   makes his "20–30 % of capital" a max-loss share rather than a notional. Rejected: a naked short
+   (breaks the charter), a ratio or a condor (not his trade).
+2. **The non-negotiable exit — "Auto-exit under a new flag".** His rule is "out immediately, not
+   after one more candle"; a plan that waits for a click is not that rule. `BASKFY_FNO_F3_AUTO_EXIT`
+   (default false, desk only, his hand) lets the monitor confirm the EXIT plan it raised. Entries
+   and adds stay clicks. This is the **third** auto-execute exception in the product and it is his,
+   recorded in root `CLAUDE.md` non-negotiable 1 and `02` Track B; an agent may not widen it.
+   Rejected: click-only (his rule unmet), auto-exit without a flag (a money path an agent turned on).
+3. **Instruments — "Yes, exactly that": NIFTY on the weekly expiry, BANKNIFTY on the monthly.**
+   BANKNIFTY has had no weekly since NSE's 2024 change, which is why the thread's "weekly Bank
+   Nifty" cannot be coded as written.
+
+**Taken by the agent under the charter (⚠ UNREVIEWED), each cheap to reverse in `F3Config`:**
+the numbers of `04` §11 (a rolling five-session "weekly candle"; the 75-minute confirm as the last
+bar's close against its ten-bar average; the intraday check as index against the session open;
+the level buffer 0.10 %; the wing 2 % of the index beyond the short; the loss cut at 2 × credit,
+from his 20–30 → 50 example; the hard exit at 15:00 on the expiry day, index-only); `F3N`/`F3B`
+under one config group `F3`; capital ₹0 (Q10) so paper runs one lot; the EOD re-test claims only
+the daily half. **Not built in this pack:** the web app's card (read-only; a later leaf), and real
+money, which waits on `02` §3 like F1.

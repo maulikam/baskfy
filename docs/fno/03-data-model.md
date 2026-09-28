@@ -145,3 +145,20 @@ positions, and the book's loss pause. Every write goes through `settings_audit`.
 * `op_contract` and `op_expiry`: `lot_size` widened from `smallint` to `integer` in `0052_fno`,
   because the master now holds every F&O underlying and IDEA's lot (71,475) does not fit a
   smallint.
+
+## 9. Added by F3 (M.5): `fo_index_daily`, and the widened vocabulary
+
+* **`fo_index_daily`** — the index's own daily OHLC (market data, shared): `underlying`
+  (`NIFTY`/`BANKNIFTY`), `trade_date`, `open`, `high`, `low`, `close` (`numeric(12,2)`), `source`
+  (`kite`). From Kite's historical API on the index token (the bhavcopy has no index candle and
+  `index_snapshot_daily` keeps only a level). Backfilled two years, extended each evening;
+  idempotent on `(underlying, trade_date)`. F3's levels, trend and weekly range read it.
+* `fo_sleeve` gains `F3N`, `F3B`; `fo_sleeve_config.sleeve` and `fo_config_audit.scope` admit
+  `F3`; `fo_plan.structure` (and the position's and journal's) admits `CREDIT_SPREAD`;
+  `fo_plan.kind` admits `ADD`.
+* `fo_scan.detail` for F3 carries `direction`, `support`, `resistance`, `level`, `weekly_high`,
+  `weekly_low`, `trend_avg`, `confirm` (the 75-minute verdict and the bar it read), `expiry`,
+  `short_strike`, `wing_strike`, `option_type`, the settle of each leg and the proposed `lots`.
+* `fo_position.detail` for F3 carries the level, the direction, the entry credit per unit, the
+  decay-target and loss-cut marks, and `adds` (a list of the ADD plans that grew it).
+* `op_index_minute` gains `NIFTY BANK` (the collector's `INDEX_SYMBOLS`), the 75-minute source.

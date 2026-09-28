@@ -71,7 +71,13 @@ history; D3 is no longer the engineering blocker.
    **Widened again the same day (DECISIONS-LV LV9.0, DECISIONS-TW TW20 — "Auto-execute sends it
    too"):** the kinds it sends include `SELL_AT_OPEN` — Qullamaggie's partial into strength and
    the MA-trail exit — beside the stops and the buys. Same flags, same `execute_line`.
-   An agent may not widen either exception, add a third, or default either flag to true.
+   ⚠️ **The third exception, also Maulik's — "Auto-exit under a new flag" (in session, 28 Sep
+   2026; `docs/fno/DECISIONS-FO.md` M.5):** the desk's F&O monitor confirms the **exit** plan it
+   raised for the F3 directional credit spread (a level break, the loss cut, the decay target or
+   the hard exit) when `BASKFY_FNO_F3_AUTO_EXIT=true` **and** `fno_gates('F3')` is open. It never
+   sends an entry or an add; those stay clicks. The flag defaults false in code, compose and the
+   desk's env, and flipping it is Maulik's hand.
+   An agent may not widen any of the three exceptions, add a fourth, or default any flag to true.
 2. Holdings quantity = `quantity` + `t1_quantity` + `collateral_quantity`.
 3. Pledged shares sell directly (Zerodha instant-sale); plan flags them as info only.
 4. Every buy gets a GTT stop the same session, vol-scaled 8–12% via `stop_from_vol()`.

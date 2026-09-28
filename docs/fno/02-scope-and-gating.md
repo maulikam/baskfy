@@ -84,9 +84,12 @@ A real FO order needs **four** flags for its sleeve: `DRY_RUN=false`, `OPTIONS_E
 not one of them, and must not become one**: an FO order is NRML, never MIS. `fno_gates(sleeve)`
 is the one function that ANDs them (`options_gates()` and `swing_gates()` are the precedents).
 
-**There is no auto-execute flag, and none may be added.** No name matching `BASKFY_FNO_*AUTO*` is
-read anywhere (FO11 scans for it). The swing SW25/SW26 and TWT TW17 exceptions belong to those
-books alone, and root `CLAUDE.md` forbids an agent to add a third. **Exits under a confirm are not
+**There is no auto-execute flag for an entry, and none may be added.** The one name matching
+`BASKFY_FNO_*AUTO*` is **`BASKFY_FNO_F3_AUTO_EXIT`** (M.5, Maulik's answer in session, 28 Sep
+2026: "Auto-exit under a new flag"), and FO11's scan admits that name alone: it lets the monitor
+send an F3 **exit** it raised itself, never an entry or an add, and it defaults false in code,
+compose and the desk's env. The swing SW25/SW26 and TWT TW17 exceptions belong to those books
+alone, and root `CLAUDE.md` forbids an agent to add another. **Exits under a confirm are not
 entries**: one confirm covers the plan's rule-driven exits (options PACK.2, carried).
 
 ### Ceilings (system-only env; a setting may sit below them, never above)

@@ -364,6 +364,10 @@ def _code(path: Path) -> str:
 
 
 AUTO_FLAG = re.compile(r"FNO\w*AUTO|AUTO\w*FNO", re.IGNORECASE)
+#: The one admitted name (DECISIONS-FO M.5, Maulik in session 28 Sep 2026: "Auto-exit under a new
+#: flag"): the F3 monitor may send the **exit** it raised. It is his; the scan admits this exact
+#: spelling and nothing else, so a second name, or an entry variant, is still a red test.
+ADMITTED_AUTO_NAME = "BASKFY_FNO_F3_AUTO_EXIT"
 
 
 def _auto_scan_tops() -> list[Path]:
@@ -388,8 +392,24 @@ def test_no_fno_auto_execute_name_is_read_anywhere() -> None:
     assert len(scanned) > 500  # the scan really read the trees
     names = {p.name for p in scanned}
     assert {".env.staging.compose", "compose.yml", ".env.example"} <= names  # and the env files
-    hits = [str(p.relative_to(ROOT)) for p in scanned if AUTO_FLAG.search(_code(p))]
+    hits = [
+        str(p.relative_to(ROOT))
+        for p in scanned
+        if AUTO_FLAG.search(_code(p).replace(ADMITTED_AUTO_NAME, ""))
+    ]
     assert hits == []
+
+
+def test_the_admitted_name_is_the_exit_flag_alone() -> None:
+    """M.5 admits one spelling; ``F3_AUTO_EXECUTE`` or a ``F1``/``F2`` variant would still trip."""
+    assert AUTO_FLAG.search(ADMITTED_AUTO_NAME)
+    assert ADMITTED_AUTO_NAME.endswith("_AUTO_EXIT") and "F3" in ADMITTED_AUTO_NAME
+    for variant in (
+        "BASKFY_FNO_F3_AUTO_EXECUTE",
+        "BASKFY_FNO_F1_AUTO_EXIT",
+        "BASKFY_FNO_AUTO_EXIT",
+    ):
+        assert AUTO_FLAG.search(variant.replace(ADMITTED_AUTO_NAME, "")), variant
 
 
 def test_the_auto_pattern_would_catch_one() -> None:
@@ -543,6 +563,7 @@ def test_no_beat_entry_targets_an_fo_order() -> None:
 
 def test_02_still_asks_for_these_scans() -> None:
     text = " ".join((ROOT / "docs/fno/02-scope-and-gating.md").read_text().split())
-    assert "No name matching `BASKFY_FNO_*AUTO*` is read anywhere (FO11 scans for it)" in text
+    assert "The one name matching `BASKFY_FNO_*AUTO*` is **`BASKFY_FNO_F3_AUTO_EXIT`**" in text
+    assert "never an entry or an add" in text
     plan = " ".join((ROOT / "docs/fno/06-module-plan.md").read_text().split())
     assert "No `BASKFY_FNO_*AUTO*` name is read anywhere" in plan

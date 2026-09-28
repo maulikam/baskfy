@@ -58,6 +58,36 @@ rally. Expect the paper period to lose unless the tape looks like 2023.
 | Size | Capital ₹0 (Q1 was asked for F1 only), so paper runs **one lot** and live refuses `NO_SLEEVE_CAPITAL`. Note: one lot's 3-ATR risk is often ₹30,000–₹80,000, above the ₹25,000 per-trade ceiling, so live sizing would refuse most names at that ceiling (`04` §10) |
 | Concurrency | At most `f2_max_open` (5) positions, one per stock, and at most 2 per sector (the NSE industry of the cash instrument) |
 
+## §1c — F3: the directional index credit spread (paper; Maulik, M.5, 28 Sep 2026)
+
+**Why it is built.** Maulik brought the method and asked for it to be coded (M.5): sell index
+options in the direction of the market, direction read from daily support and resistance,
+confirmed on the 75-minute chart, aligned with the intraday trend; strikes about 1 % beyond the
+weekly candle's high or low; target ~80 % premium decay; out at once when the level breaks; a
+first entry of 20-30 % of capital and an add the next session only if the trade is working;
+about 1 % a week. His three answers to the questions the charter forced: **a credit spread with
+a far wing** (never naked, `02` §2.1 stands), **auto-exit under a new flag** (the level-break
+rule is his non-negotiable, so the monitor may send the exit itself when he turns the flag on;
+entries and adds stay clicks), and **NIFTY on the weekly expiry, BANKNIFTY on the monthly**.
+
+**Honest limit, first.** The method's edge, as he describes it, is intraday discipline: the
+75-minute confirm, the intraday alignment and the immediate cut on a level break. None of these
+is in a bhavcopy, so the EOD re-test (F3-3) tests only the daily half - levels, direction and the
+next-session entry at settle - and says so. Paper first, like F1 (`02` §3).
+
+| | |
+|---|---|
+| Underlyings | NIFTY (`F3N`, weekly expiry) and BANKNIFTY (`F3B`, monthly expiry) |
+| Levels (at the close) | Pivot highs and lows over the last `f3_pivot_lookback` sessions, a pivot being an extreme with `f3_pivot_width` lower highs (higher lows) either side. **Support** is the highest pivot low below the close; **resistance** the lowest pivot high above it. The **weekly range** is the last `f3_weekly_sessions` sessions' high and low |
+| Direction (at the close) | **UP** when the close is above its `f3_trend_sessions` average and above support; **DOWN** when below the average and below resistance; otherwise **NONE**. The 75-minute confirm: the last completed 75-minute bar's close above (UP) or below (DOWN) the average of the last `f3_confirm_bars` 75-minute closes. Disagreement is NONE |
+| The key level | Support when UP, resistance when DOWN. The trade is over the moment the index trades beyond it by `f3_level_buffer_pct` |
+| Entry | Plan at 09:20 the next session, confirmable 09:20-10:30 (`04` §1's window). The intraday check at plan time: the index above the session's open (UP) or below it (DOWN), and the level intact. UP sells a **put** at the weekly low × (1 − `f3_distance_pct`), DOWN a **call** at the weekly high × (1 + `f3_distance_pct`), rounded to the strike step *away* from the index; the wing sits `f3_wing_pct` further out. Wing first, short second (`02` §2.2) |
+| Expiry | NIFTY: the nearest weekly with at least `f3_min_sessions_weekly` sessions left, else the next. BANKNIFTY: the current monthly with at least `f3_min_sessions_monthly` sessions left, else the next month |
+| Size | The first entry spends `f3_entry_share_pct` of the sleeve's capital as **max loss** (the spread's width × lot − credit, which is also its margin under the exchange's spread benefit), bounded by `04` §3's risk budget and `fo_max_lots`; zero lots is `REJECTED_SIZE`. Capital is ₹0 until Q10 is answered, so paper runs one lot |
+| Add | The next session and later, in the entry window, only if the mark has decayed at least `f3_add_working_pct` of the credit, the direction still reads the same and the level is intact: the same lots at the same strikes and expiry, until the position's max loss reaches `f3_full_share_pct` of capital. Never an add to a loser (Track C §5 is kept, not widened) |
+| Exit, in this order | **LEVEL_BREAK** - the index beyond the level by the buffer, checked every minute, sent at once; **LOSS_CUT** - the spread's mark at or above `f3_loss_cut_mult` × the credit ("sell 20-30 and cut at 50"); **DECAY_TARGET** - the mark at or below (1 − `f3_decay_target_pct`) × the credit; **HARD_EXIT** - `fo_hard_exit_time` on the expiry day, because an index option settles in cash and the last hour is gamma, not theta. Short first, wing second |
+| Concurrency | One open F3 position per underlying |
+
 ## §2 — FX: the F&O data layer and the re-test engine (build)
 
 **Why it is built although it trades nothing.** Every rejected family in `RESEARCH.md` was
@@ -96,5 +126,6 @@ and links the research.
 | Hedging the equity books with index futures | not built | QUESTIONS Q5 |
 | Covered calls on the holdings | impossible | a holding enters the F&O list (none of the 20 has) |
 
-**Sleeve codes** for `fo_sleeve`: `F1N` (NIFTY), `F1B` (BANKNIFTY) and `F2`. Flags are grouped
-as `F1` and `F2`.
+**Sleeve codes** for `fo_sleeve`: `F1N` (NIFTY), `F1B` (BANKNIFTY), `F2`, and since M.5 `F3N`
+(NIFTY weekly) and `F3B` (BANKNIFTY monthly). Flags are grouped
+as `F1`, `F2` and `F3`.

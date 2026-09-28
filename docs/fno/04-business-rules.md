@@ -146,3 +146,51 @@ records what the live size would have been.
 **Costs** per round trip, and again per roll: futures STT 0.05 % on the sale, exchange 0.00173 %
 per side, stamp 0.002 % on the buy, ₹20 per order, GST 18 % on brokerage and exchange charges,
 and the measured slippage (FO3), or 0.03 % a side until it is measured.
+
+## §11 — F3, the directional index credit spread (paper; Maulik, M.5)
+
+| Field | Default | Bounds | Rule |
+|---|---|---|---|
+| `f3_pivot_lookback` | `60` | 20–250 | sessions of daily bars the pivots are read from |
+| `f3_pivot_width` | `3` | 1–10 | a pivot high has n lower highs on each side; a pivot low n higher lows |
+| `f3_trend_sessions` | `20` | 5–100 | UP needs close > its n-session average; DOWN close < it |
+| `f3_weekly_sessions` | `5` | 3–10 | the "weekly candle": the high and low of the last n sessions (a rolling week, so Monday does not read one bar) |
+| `f3_confirm_bars` | `10` | 3–40 | the 75-minute confirm: the last completed 75-minute close against the average of the last n 75-minute closes |
+| `f3_distance_pct` | `1.0` | 0.25–3.0 | the short strike sits this far beyond the weekly low (UP, put) or high (DOWN, call), rounded to the step away from the index |
+| `f3_wing_pct` | `2.0` | 0.5–5.0 | the long wing this far beyond the short strike (of the index level), rounded to the step away |
+| `f3_short_premium_min_inr` | `10` | 1–100 | a short whose settle or mid is below this is `REJECTED_COST`: the credit would not pay the round trip |
+| `f3_min_sessions_weekly` | `2` | 1–4 | NIFTY: the nearest weekly expiry with at least n sessions left after the entry session |
+| `f3_min_sessions_monthly` | `5` | 1–15 | BANKNIFTY: the current monthly with at least n sessions left, else the next month |
+| `f3_entry_share_pct` | `25` | 5–50 | the first entry's max loss as a share of sleeve capital (his 20–30 %) |
+| `f3_full_share_pct` | `50` | 10–100 | the position's max loss after adds may not exceed this share |
+| `f3_add_working_pct` | `20` | 5–80 | an add needs the mark to have decayed this much of the credit |
+| `f3_decay_target_pct` | `80` | 50–95 | DECAY_TARGET when the mark ≤ (1 − n %) × credit |
+| `f3_loss_cut_mult` | `2.0` | 1.2–4.0 | LOSS_CUT when the mark ≥ n × credit |
+| `f3_level_buffer_pct` | `0.10` | 0–1.0 | LEVEL_BREAK when the index trades beyond the level by this much |
+| `f3_max_open_per_underlying` | `1` | 1–1 | one open F3 position per underlying |
+| `f3_risk_per_trade_pct` | `1.0` | — | §3's risk budget, shared with the other sleeves; the share caps sit under it |
+
+**The 75-minute bars** are aggregated from the minute bars the options collector writes
+(`op_index_minute`): five a session, opening 09:15, 10:30, 11:45, 13:00 and 14:15, the last one
+closing at 15:30. A session with fewer than the expected minutes for a bar leaves that bar out,
+and a confirm cannot read a bar that has not closed.
+
+**Sizing.** `lots = floor(min(capital × entry share, §3's risk budget) ÷ max loss per lot)`, capped
+at `fo_max_lots`. Max loss per lot = (|short − wing| − credit) × lot size; it is also the margin
+the exchange asks for a spread, so the "20–30 % of capital" is spent as max loss, not as notional.
+An add sizes to the same lots and is refused when `(open + new) × max loss per lot` would pass the
+full share. With capital ₹0 (Q10 open) paper runs one lot and records what live would have sized.
+
+**Exits in precedence:** LEVEL_BREAK, LOSS_CUT, DECAY_TARGET, HARD_EXIT. The level check reads the
+index's last print (a minute, never a close): "not after one more candle". `HARD_EXIT` for F3 is on
+the **expiry day** at `fo_hard_exit_time`, not E−1: the whole point of the weekly is the last day's
+decay, and cash settlement means nothing is delivered. `02` §2.2's "no position held into its
+expiry day" is a **stock** rule and stays; for index options it says "exit before 15:00 on expiry
+day", which this is.
+
+**Costs** are the index-option costs of §3, per leg per crossing, and again for every add and exit.
+
+**The auto-exit flag** (M.5, Maulik's second answer): `BASKFY_FNO_F3_AUTO_EXIT`, default false,
+desk only. When true, and `fno_gates('F3')` is open, the monitor confirms the EXIT plan it raised
+itself and sends it through the same executor a click would use. It never sends an ENTRY or an
+ADD. False, it raises the plan and an alert and waits for the click.

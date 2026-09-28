@@ -152,7 +152,8 @@ exits all happen.
 
 ### FO11 — Gating and safety proof
 
-- No `BASKFY_FNO_*AUTO*` name is read anywhere. The web app has no route to the gateway. With
+- No `BASKFY_FNO_*AUTO*` name is read anywhere but `BASKFY_FNO_F3_AUTO_EXIT` (M.5, an exit
+  only, Maulik's). The web app has no route to the gateway. With
   every FO flag false, no NRML order can be formed (a fuzz over the execute route). The options
   pack's `OPTIONS_ENABLED` side-door test is green. `frozen/` is untouched.
 
@@ -162,3 +163,12 @@ exits all happen.
   per the deploy memory rule, outside market hours and the nightly window, with every money flag
   still false. Then write `FO-FINAL-REPORT.md` at the root: what was built, what was decided, what
   is NOT done, what needs Maulik, and the first paper entry day step by step.
+
+## F3 — the directional index credit spread (Maulik, M.5, 28 Sep 2026; `F3-PLAN.md`)
+
+Seven leaves, each with a gates file under `gates/f3-*.md`: **F3-0** the design, the decision
+record and the plan; **F3-1** the pure core (`baskfy_core.fno.directional`, `F3Config`, `04`
+§11); **F3-2** migration 0059, `fo_index_daily` and its Kite history job, `NIFTY BANK` minutes;
+**F3-3** the EOD re-test of the daily half on the option bhavcopies, with its stated limits;
+**F3-4** the evening scan; **F3-5** the desk (entry, watch, add, exit; the two flags; `/fno`);
+**F3-6** integration and the paper-only deploy. Real money waits on `02` §3 as for F1.

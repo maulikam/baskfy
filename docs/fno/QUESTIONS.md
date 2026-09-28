@@ -15,3 +15,6 @@ Sep 2026 (`DECISIONS-FO` M.1). The rest carry their defaults.
 | Q7 | **Paper periods** (`04` §9): long enough? | As proposed |
 | Q8 | **Earnings.** No free point-in-time results calendar is wired, so no sleeve trades *around* results, and the scan cannot yet skip a name whose results fall inside a hold. Should FO3 wire NSE's event calendar (the existing `results_calendar` read) as a skip filter from the day it starts collecting? | Yes. It is forward-only, so the backtests cannot use it, and the pages say so |
 | Q9 | Turn on the **nightly bhavcopy ingest and scans** on the box as soon as FO2/FO5 are green? | Yes. They move no money and make ~1 NSE request a night |
+| Q10 | **F3's capital** (M.5). ₹0 sizes paper to one lot; a live size needs a number | ₹0 until you say; the scan records what live would have sized at the ceiling |
+| Q11 | **F3's numbers** (`04` §11): the rolling five-session weekly candle, the ten-bar 75-minute confirm, the 0.10 % level buffer, the 2 % wing, the 2 × credit cut, the 15:00 expiry-day hard exit | As written; each is one field of `F3Config` |
+| Q12 | **`BASKFY_FNO_F3_AUTO_EXIT` on the box** — your hand, like TW18's. Paper only until `02` §3 | Off. The monitor raises the exit plan and an alert and waits for the click |

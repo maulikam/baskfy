@@ -9,8 +9,10 @@ Where each number comes from — **none is an agent's choice**:
 * **F2 capital ₹0** — Q1 was asked for F1 only (``01`` §1b "Size"): paper runs one lot and live
   refuses ``NO_SLEEVE_CAPITAL``.
 * **Risk 1.0 %** per trade for both (``04`` §3), **max lots 2** (``04`` §3 ``fo_max_lots``).
+* **F3 capital ₹0** — DECISIONS-FO M.5 (28 Sep 2026), QUESTIONS Q10 open: paper one lot.
 * **Max open positions**: F1 **2** — one per underlying (``04`` §1 ``f1_max_open_per_underlying``)
-  times its two underlyings (``f1_underlyings``); F2 **5** (``04`` §10 ``f2_max_open``).
+  times its two underlyings (``f1_underlyings``); F2 **5** (``04`` §10 ``f2_max_open``); F3 **2**
+  (``04`` §11, one spread per underlying).
 * ``fo_book_config`` is written with its column defaults (``monthly_pause_inr`` 0), exactly as
   the options seed writes ``op_book_config``: the pause amount is a person's number, set on the
   settings form under the ₹75,000 ceiling (FO10 owns what 0 means).
@@ -70,11 +72,21 @@ SLEEVE_SEEDS: Final[tuple[SleeveSeed, ...]] = (
         source="docs/fno/01 §1b: Q1 was asked for F1 only; F2 paper one lot, live refuses "
         "NO_SLEEVE_CAPITAL",
     ),
+    SleeveSeed(
+        sleeve="F3",
+        capital_inr=Decimal("0.00"),
+        risk_per_trade_pct=DEFAULT_FNO_CONFIG.f3.risk_per_trade_pct,
+        max_lots=DEFAULT_FNO_CONFIG.common.max_lots,
+        max_open_positions=DEFAULT_FNO_CONFIG.f3.max_open_per_underlying
+        * len(DEFAULT_FNO_CONFIG.f3.underlyings),
+        source="docs/fno/DECISIONS-FO M.5 (28 Sep 2026): F3 capital Rs 0 until QUESTIONS Q10 is "
+        "answered; paper one lot, live refuses NO_SLEEVE_CAPITAL",
+    ),
 )
 
 
 async def seed_fno(session: AsyncSession, user_id: int) -> dict[str, int]:
-    """The book row and the two sleeve rows for ``user_id``. Returns rows written per table."""
+    """The book row and the three sleeve rows for ``user_id``. Returns rows written per table."""
     book = await session.execute(
         insert(FoBookConfig)
         .values(user_id=user_id, updated_by=SEEDED_BY)

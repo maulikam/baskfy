@@ -57,14 +57,25 @@ DATA_MODEL: Final = (MONOREPO_ROOT / "docs" / "fno" / "03-data-model.md").read_t
     encoding="utf-8"
 )
 METHOD: Final = (MONOREPO_ROOT / "docs" / "fno" / "01-method.md").read_text(encoding="utf-8")
+#: Tables a later migration created, with that migration: they are named in ``03`` like the rest
+#: but are not 0052's to create or drop.
+LATER_MIGRATIONS: Final[dict[str, str]] = {"fo_index_daily": "0059_f3_directional.py"}
 
 MARKET_TABLES: Final = frozenset(
-    {"fo_contract_daily", "fo_underlying_daily", "fo_ingest_day", "fo_spread_sample"}
+    {
+        "fo_contract_daily",
+        "fo_underlying_daily",
+        "fo_ingest_day",
+        "fo_spread_sample",
+        # F3's index history (``03`` §9, 0059): shared market data like the bhavcopy.
+        "fo_index_daily",
+    }
 )
 FO_TABLES: Final[list[str]] = sorted(t for t in Base.metadata.tables if t.startswith("fo_"))
 USER_TABLES: Final[list[str]] = [t for t in FO_TABLES if t not in MARKET_TABLES]
-#: ``03`` §1-§7's thirteen plus §8's ``fo_ingest_day`` and ``fo_config_audit``.
-EXPECTED_TABLE_COUNT: Final = 15
+#: ``03`` §1-§7's thirteen plus §8's ``fo_ingest_day`` and ``fo_config_audit``, plus §9's
+#: ``fo_index_daily`` (M.5).
+EXPECTED_TABLE_COUNT: Final = 16
 #: Jan 2022 .. Dec 2027 inclusive.
 PARTITIONS: Final = 72
 
@@ -113,6 +124,11 @@ def test_market_data_tables_are_shared_facts(table_name: str) -> None:
 @pytest.mark.parametrize("table_name", FO_TABLES)
 def test_every_table_is_named_in_the_data_model_and_the_migration(table_name: str) -> None:
     assert f"`{table_name}`" in DATA_MODEL
+    later = LATER_MIGRATIONS.get(table_name)
+    if later is not None:
+        text = (API_DIR / "alembic" / "versions" / later).read_text(encoding="utf-8")
+        assert f'"{table_name}"' in text and f'op.drop_table("{table_name}")' in text
+        return
     assert f'"{table_name}"' in MIGRATION
     assert f'    "{table_name}",\n' in MIGRATION, f"{table_name} missing from TABLES (downgrade)"
 
@@ -125,10 +141,10 @@ def test_the_migration_revises_the_head_fo0_recorded() -> None:
 
 def test_the_sleeve_enum_is_the_methods() -> None:
     """``03``: "the codes in ``01``". ``01`` §4 names them."""
-    assert FO_SLEEVES == ("F1N", "F1B", "F2")
-    assert "`F1N` (NIFTY), `F1B` (BANKNIFTY) and `F2`" in METHOD
-    assert FO_SLEEVE_GROUPS == ("F1", "F2")
-    assert "Flags are grouped\nas `F1` and `F2`" in METHOD
+    assert FO_SLEEVES == ("F1N", "F1B", "F2", "F3N", "F3B")
+    assert "`F1N` (NIFTY), `F1B` (BANKNIFTY), `F2`, and since M.5 `F3N`" in METHOD
+    assert FO_SLEEVE_GROUPS == ("F1", "F2", "F3")
+    assert "Flags are grouped\nas `F1`, `F2` and `F3`" in METHOD
 
 
 def test_the_contract_key_is_the_documents() -> None:
@@ -324,7 +340,7 @@ class TestTheSchemaOnARealDatabase:
                     {"d": dt.date(2026, 9, 24), "i": instrument, "k": 800, "t": option_type},
                 )
 
-    @pytest.mark.parametrize("sleeve", ["F1N", "F1B", "F3", "O1M"])
+    @pytest.mark.parametrize("sleeve", ["F1N", "F1B", "F3N", "O1M"])
     async def test_config_is_per_sleeve_group_only(self, fo_url: str, sleeve: str) -> None:
         """F1's capital is one number for both underlyings (M.1), so ``F1N`` is not a row."""
         async with _rolled_back(fo_url) as session:
@@ -390,7 +406,8 @@ class TestMigrateSeedMigrate:
         async with _rolled_back(fo_url) as session:
             user_id = await _fresh_user(session, "mseed")
             first = await seed_fno(session, user_id)
-            assert first == {"fo_book_config": 1, "fo_sleeve_config": 2, "fo_config_audit": 2}
+            # three sleeve groups since M.5 (F3 seeded at ₹0), one audit row each
+            assert first == {"fo_book_config": 1, "fo_sleeve_config": 3, "fo_config_audit": 3}
             # A person changes a number; a second seed must not reset it, nor audit anything.
             row = await session.get(FoSleeveConfig, (user_id, "F1"))
             assert row is not None
@@ -431,7 +448,7 @@ class TestMigrateSeedMigrate:
                     )
                 ).scalars()
             }
-            assert set(rows) == {"F1", "F2"}
+            assert set(rows) == {"F1", "F2", "F3"}  # F3 seeded at ₹0 (DECISIONS-FO M.5)
             # 01 §1 / 04 §3 / DECISIONS-FO M.2: F1 Rs 25,00,000 for both underlyings; F2 Rs 0.
             assert rows["F1"].capital_inr == Decimal("2500000.00")
             assert rows["F2"].capital_inr == Decimal("0.00")
@@ -444,7 +461,7 @@ class TestMigrateSeedMigrate:
             # 1.0 % of Rs 25 lakh is Rs 25,000 per structure, exactly the per-trade ceiling (04 §3).
             assert rows["F1"].capital_inr * rows["F1"].risk_per_trade_pct / 100 == Decimal("25000")
             assert book is not None and book.monthly_pause_inr == 0
-            assert set(audits) == {"F1", "F2"}
+            assert set(audits) == {"F1", "F2", "F3"}  # one seed audit per group (M.5 adds F3)
             assert audits["F1"].new_value == "2500000.00" and audits["F1"].old_value is None
             assert "M.2" in (audits["F1"].note or "")
 

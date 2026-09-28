@@ -62,6 +62,9 @@ PIPELINE_TABLES = (
     "tw_state_daily, tw_signal_daily, tw_breadth_daily, tw_config_audit, tw_config, "
     "tw_fill, tw_order, tw_position, tw_plan_line, tw_plan_skip, tw_plan, tw_session, "
     "tw_backtest_run, "
+    # F3's index history (docs/fno/03 §9) is keyed by underlying, not instrument, so it does not
+    # cascade; a backfill written by one test would still be there for the next.
+    "fo_index_daily, "
     # Prompt 12's account purge is a worker task too, and it writes `app_user` — which nothing
     # else here truncates, so without these a second test run finds the first one's accounts.
     "index_def"

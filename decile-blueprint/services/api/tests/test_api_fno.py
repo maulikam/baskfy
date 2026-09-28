@@ -103,6 +103,16 @@ async def _config(session: AsyncSession, user_id: int) -> None:
                 max_open_positions=5,
                 paper_enabled=True,
             ),
+            # F3 (DECISIONS-FO M.5): the settings read walks every group, so the row must exist.
+            FoSleeveConfig(
+                user_id=user_id,
+                sleeve="F3",
+                capital_inr=Decimal(0),
+                risk_per_trade_pct=Decimal("1.00"),
+                max_lots=2,
+                max_open_positions=2,
+                paper_enabled=True,
+            ),
         ]
     )
     await session.flush()

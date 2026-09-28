@@ -38,6 +38,7 @@ from baskfy_core.options.config import Mode
 EXECUTION_FLAG_ENV: Final[Mapping[FoSleeveGroup, str]] = {
     FoSleeveGroup.F1: "BASKFY_FNO_F1_EXECUTION_ENABLED",
     FoSleeveGroup.F2: "BASKFY_FNO_F2_EXECUTION_ENABLED",
+    FoSleeveGroup.F3: "BASKFY_FNO_F3_EXECUTION_ENABLED",
 }
 
 #: The carry switch: NRML on NFO for ``fo_plan`` orders, and F2's GTT (``02`` §1). A LOCKED_KEY.
@@ -62,11 +63,16 @@ class FnoFlags:
     fno_carry_enabled: bool = False
     f1_execution_enabled: bool = False
     f2_execution_enabled: bool = False
+    f3_execution_enabled: bool = False
 
     def execution_enabled(self, sleeve: FoSleeve) -> bool:
-        """The sleeve's own execution flag; ``F1N`` and ``F1B`` share ``F1``'s."""
-        if group_of(sleeve) is FoSleeveGroup.F2:
+        """The sleeve's own execution flag; ``F1N``/``F1B`` share ``F1``'s, ``F3N``/``F3B``
+        ``F3``'s."""
+        group = group_of(sleeve)
+        if group is FoSleeveGroup.F2:
             return self.f2_execution_enabled
+        if group is FoSleeveGroup.F3:
+            return self.f3_execution_enabled
         return self.f1_execution_enabled
 
 

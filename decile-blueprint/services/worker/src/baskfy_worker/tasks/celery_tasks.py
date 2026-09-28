@@ -53,7 +53,13 @@ from baskfy_core.models import PipelineRun
 from baskfy_core.models.base import JsonObject
 from baskfy_core.options.config import OptionsConfig, Sleeve
 from baskfy_providers.errors import TransientProviderError
-from baskfy_providers.factory import KiteLane, build_kite_provider, build_nse_provider
+from baskfy_providers.factory import (
+    KiteFamily,
+    KiteLane,
+    build_kite_family_provider,
+    build_kite_provider,
+    build_nse_provider,
+)
 from baskfy_providers.kite import KiteProvider
 from baskfy_providers.records import QuoteRecord
 from baskfy_providers.settings import get_provider_settings
@@ -63,6 +69,7 @@ from baskfy_worker.alerts import Alert, AlertName, Severity, dispatch
 from baskfy_worker.bhavcopy_backfill import backfill_bars_from_bhavcopy
 from baskfy_worker.celery_app import IST, QUEUE_COMPUTE, QUEUES
 from baskfy_worker.db import run_checkpointed, run_in_session, session_scope
+from baskfy_worker.fno import index_daily as fno_index_daily
 from baskfy_worker.fno.alerts import RedisMarkers as FnoRedisMarkers
 from baskfy_worker.fno.alerts import bhavcopy_missing_alert as fno_bhavcopy_missing_alert
 from baskfy_worker.fno.alerts import run_fno_alerts as fno_run_alerts
@@ -984,6 +991,40 @@ def fno_ingest_bhavcopy_task(trade_date: str | None = None, at: str | None = Non
         if missing is not None:
             out["alert"] = await dispatch(missing)
         return out
+
+    return run_in_session(_run)
+
+
+FNO_INDEX_DAILY_TASK: Final = "baskfy.fno.index_daily"
+
+
+@shared_task(name=FNO_INDEX_DAILY_TASK, acks_late=True)
+def fno_index_daily_task(at: str | None = None, start: str | None = None) -> JsonObject:
+    """F3 (``docs/fno/03`` §9): the two indices' daily OHLC into ``fo_index_daily`` from Kite's
+    history — the evening extension, or a backfill from ``start``.
+
+    Behind ``BASKFY_FNO_SCAN_ENABLED`` like the bhavcopy ingest; skipped without a usable Kite
+    session (the ``historical`` family needs one). One call per index per 2,000 days; reads
+    only, moves no money. Idempotent: a stored day is overwritten with Kite's reading.
+    """
+    now = _options_now(at)
+    if not get_worker_settings().fno_scan_enabled:
+        return {"date": now.date().isoformat(), "skipped": "BASKFY_FNO_SCAN_ENABLED is false"}
+    if not kite_session_usable():
+        return {"date": now.date().isoformat(), "skipped": "no usable Kite session"}
+
+    async def _run(session: AsyncSession) -> JsonObject:
+        # The historical family's adapter (``KiteProvider.daily_bars``), on that family's clock.
+        kite = build_kite_family_provider(
+            get_provider_settings(), KiteFamily.HISTORICAL, provider_retry_hooks()
+        )
+        if start:
+            report = await fno_index_daily.backfill(
+                session, kite, dt.date.fromisoformat(start), now.date()
+            )
+        else:
+            report = await fno_index_daily.extend(session, kite, now.date())
+        return {"date": now.date().isoformat(), **report.as_dict()}
 
     return run_in_session(_run)
 

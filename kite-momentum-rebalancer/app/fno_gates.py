@@ -1,7 +1,7 @@
 """The FO book's switches on the desk (docs/fno/02 Track B, FO6).
 
 `fno_gates(sleeve)` reads the desk's four switches for that sleeve — `DRY_RUN`, `OPTIONS_ENABLED`,
-`BASKFY_FNO_CARRY_ENABLED` and `BASKFY_FNO_<F1|F2>_EXECUTION_ENABLED` — at the moment it is
+`BASKFY_FNO_CARRY_ENABLED` and `BASKFY_FNO_<F1|F2|F3>_EXECUTION_ENABLED` — at the moment it is
 called, and hands them to `baskfy_core.fno.gating.fno_gates`, the one function that ANDs them.
 `LIVE` needs all four; every other combination is `PAPER`. `INTRADAY_ENABLED` is not read: an FO
 order is NRML, never MIS.
@@ -31,6 +31,7 @@ def fno_flags() -> FnoFlags:
         fno_carry_enabled=bool(C.FNO_CARRY_ENABLED),
         f1_execution_enabled=bool(C.FNO_F1_EXECUTION_ENABLED),
         f2_execution_enabled=bool(C.FNO_F2_EXECUTION_ENABLED),
+        f3_execution_enabled=bool(C.FNO_F3_EXECUTION_ENABLED),
     )
 
 

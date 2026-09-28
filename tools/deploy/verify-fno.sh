@@ -27,7 +27,7 @@ FAILS=0
 ok()   { printf '  ok   %s\n' "$*"; }
 bad()  { printf '  FAIL %s\n' "$*"; FAILS=$((FAILS+1)); }
 note() { printf '  --   %s\n' "$*"; }
-MONEY_FLAGS="BASKFY_FNO_CARRY_ENABLED BASKFY_FNO_F1_EXECUTION_ENABLED BASKFY_FNO_F2_EXECUTION_ENABLED"
+MONEY_FLAGS="BASKFY_FNO_CARRY_ENABLED BASKFY_FNO_F1_EXECUTION_ENABLED BASKFY_FNO_F2_EXECUTION_ENABLED BASKFY_FNO_F3_EXECUTION_ENABLED BASKFY_FNO_F3_AUTO_EXIT"
 OPS_FLAGS="BASKFY_FNO_SCAN_ENABLED BASKFY_FNO_MONITOR_ENABLED"
 COMPOSE="$ROOT/decile-blueprint/infra/docker/compose.prod.yml"
 SCHEMA_AT_LEAST="0052"
@@ -42,13 +42,14 @@ grep -q '      OPTIONS_ENABLED: "false"' "$COMPOSE" && ok 'compose pins OPTIONS_
   || bad "compose does not pin OPTIONS_ENABLED false"
 grep -q '      INTRADAY_ENABLED: "false"' "$COMPOSE" && ok 'compose pins INTRADAY_ENABLED "false"' \
   || bad "compose does not pin INTRADAY_ENABLED false"
-if grep -rEq 'FNO[A-Z0-9_]*AUTO' "$COMPOSE" "$ROOT/kite-momentum-rebalancer/app" \
+# M.5 (Maulik, 28 Sep 2026): BASKFY_FNO_F3_AUTO_EXIT is the one admitted spelling — an exit only.
+if grep -rEh 'FNO[A-Z0-9_]*AUTO' "$COMPOSE" "$ROOT/kite-momentum-rebalancer/app" \
      "$ROOT/kite-momentum-rebalancer/scripts" "$ROOT/decile-blueprint/services" \
      "$ROOT/decile-blueprint/packages" --include='*.py' --include='*.yml' --exclude-dir=tests \
-     2>/dev/null; then
-  bad "an FNO…AUTO name appears in compose or code (02 Track B: there is none)"
+     2>/dev/null | sed 's/BASKFY_FNO_F3_AUTO_EXIT//g' | grep -Eq 'FNO[A-Z0-9_]*AUTO'; then
+  bad "an FNO…AUTO name other than BASKFY_FNO_F3_AUTO_EXIT appears in compose or code (02 Track B)"
 else
-  ok "no FNO…AUTO name in compose, the desk, the services or the packages (tests that scan for one excepted)"
+  ok "no FNO…AUTO name but BASKFY_FNO_F3_AUTO_EXIT (M.5, an exit only) in compose, the desk, the services or the packages"
 fi
 grep -q "  fno-monitor:" "$COMPOSE" && grep -q "command: \[fno-monitor-loop\]" "$COMPOSE" \
   && ok "compose runs fno-monitor (fno-monitor-loop)" || bad "compose has no fno-monitor service"
@@ -58,8 +59,9 @@ if [ "${LOCAL:-0}" = "1" ]; then
   DESK_FLAGS="$(cd "$ROOT/kite-momentum-rebalancer" && env -i PATH="$PATH" HOME="$HOME" \
     .venv/bin/python -c 'from app import config as C
 print(C.DRY_RUN, C.OPTIONS_ENABLED, C.INTRADAY_ENABLED, C.FNO_CARRY_ENABLED,
-      C.FNO_F1_EXECUTION_ENABLED, C.FNO_F2_EXECUTION_ENABLED, C.FNO_MONITOR_ENABLED)' 2>&1 | tail -1)"
-  [ "$DESK_FLAGS" = "True False False False False False False" ] \
+      C.FNO_F1_EXECUTION_ENABLED, C.FNO_F2_EXECUTION_ENABLED, C.FNO_F3_EXECUTION_ENABLED,
+      C.FNO_F3_AUTO_EXIT, C.FNO_MONITOR_ENABLED)' 2>&1 | tail -1)"
+  [ "$DESK_FLAGS" = "True False False False False False False False False" ] \
     && ok "desk defaults: DRY_RUN true, every FO switch false" \
     || bad "desk defaults are not safe: $DESK_FLAGS"
   GATES="$(cd "$ROOT/kite-momentum-rebalancer" && env -i PATH="$PATH" HOME="$HOME" \
@@ -131,8 +133,9 @@ for svc in desk monitor; do
   for f in OPTIONS_ENABLED INTRADAY_ENABLED $MONEY_FLAGS; do
     grep -qx "$f=false" <<<"$ENV" && ok "$svc: $f=false" || bad "$svc: $f is not false"
   done
-  grep -qE 'FNO[A-Z0-9_]*AUTO' <<<"$ENV" && bad "$svc: an FNO…AUTO variable is set" \
-    || ok "$svc: no FNO…AUTO variable"
+  sed 's/BASKFY_FNO_F3_AUTO_EXIT=false//' <<<"$ENV" | grep -qE 'FNO[A-Z0-9_]*AUTO' \
+    && bad "$svc: an FNO…AUTO variable other than BASKFY_FNO_F3_AUTO_EXIT=false is set" \
+    || ok "$svc: no FNO…AUTO variable but BASKFY_FNO_F3_AUTO_EXIT=false (M.5)"
   note "$svc: $(grep -m1 '^DRY_RUN=' <<<"$ENV" || echo 'DRY_RUN unset') (the FO sleeves stay PAPER while OPTIONS_ENABLED is false)"
   note "$svc: $(grep -m1 '^BASKFY_FNO_MONITOR_ENABLED=' <<<"$ENV" || echo 'BASKFY_FNO_MONITOR_ENABLED unset')"
 done

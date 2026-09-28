@@ -452,13 +452,17 @@ services:
       # the sleeve's own execution flag (`app/fno_gates.py`). Each is named here, default false,
       # so a line in `.env.staging` cannot flip it for the process that reaches the gateway; only
       # `.env.staging.compose` can, by Maulik's hand after 02 §3. INTRADAY_ENABLED is not one of
-      # them (an FO order is NRML). THERE IS NO FNO AUTO-EXECUTE VARIABLE and none may be added
-      # (02 Track B; FO11 scans for one). The monitor flag is operational: it starts the FO
+      # them (an FO order is NRML). THERE IS NO FNO AUTO-EXECUTE VARIABLE for an entry; the one
+      # auto name is F3's exit flag below (M.5; FO11's scan admits that spelling alone). The monitor flag is operational: it starts the FO
       # monitor, which raises plans and runs exits under an entry's confirm, and moves no money on
       # its own. `fno-monitor` below inherits all of this via `<<: *desk`.
       BASKFY_FNO_CARRY_ENABLED: "${BASKFY_FNO_CARRY_ENABLED:-false}"
       BASKFY_FNO_F1_EXECUTION_ENABLED: "${BASKFY_FNO_F1_EXECUTION_ENABLED:-false}"
       BASKFY_FNO_F2_EXECUTION_ENABLED: "${BASKFY_FNO_F2_EXECUTION_ENABLED:-false}"
+      BASKFY_FNO_F3_EXECUTION_ENABLED: "${BASKFY_FNO_F3_EXECUTION_ENABLED:-false}"
+      # M.5 (Maulik, 28 Sep 2026): the ONE FNO auto name — the monitor may send an F3 spread's
+      # EXIT itself. Exits only, never an entry or an add; default false; his hand on the box.
+      BASKFY_FNO_F3_AUTO_EXIT: "${BASKFY_FNO_F3_AUTO_EXIT:-false}"
       BASKFY_FNO_MONITOR_ENABLED: "${BASKFY_FNO_MONITOR_ENABLED:-false}"
     expose: ["8420"]
     healthcheck:

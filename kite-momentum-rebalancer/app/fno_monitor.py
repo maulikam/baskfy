@@ -61,8 +61,10 @@ from baskfy_core.fno.condor import (
     LegRole,
     loss_close_hit,
     loss_close_level,
+    option_type_of,
     profit_take_hit,
     profit_take_level,
+    sign_of,
 )
 from baskfy_core.fno.config import (
     DEFAULT_FNO_CEILINGS,
@@ -75,6 +77,7 @@ from baskfy_core.fno.config import (
     ScanState,
     Structure,
 )
+from baskfy_core.fno import directional as D3
 from baskfy_core.fno.exits import ExitDecision, ExitReason, f1_exit, f2_time_exit_session
 from baskfy_core.fno.monitor import (
     f1_close_cost,
@@ -86,7 +89,7 @@ from baskfy_core.fno.monitor import (
     reprice_future,
 )
 from baskfy_core.fno.sizing import MarginVerdict, margin_check
-from baskfy_core.options.config import CostRates, Mode
+from baskfy_core.options.config import CostRates, Mode, OptionType
 
 from . import config as C
 from . import fno_execute as X
@@ -98,6 +101,9 @@ IST = X.IST
 SCHEMA = "public"
 SESSION_OPEN = dt.time(9, 15)
 SESSION_CLOSE = dt.time(15, 30)
+#: F3's two sleeves (``04`` §11, M.5) and their index names on NSE, for the level check.
+F3_SLEEVES = (FoSleeve.F3N, FoSleeve.F3B)
+F3_INDEX_NAMES = {"NIFTY": "NIFTY 50", "BANKNIFTY": "NIFTY BANK"}
 F1_SLEEVES: tuple[FoSleeve, ...] = (FoSleeve.F1N, FoSleeve.F1B)
 
 
@@ -139,6 +145,26 @@ class MarginQuote:
 
 #: ``basket_order_margins`` for the plan's legs and the free margin, or ``None`` when unreadable.
 MarginSource = Callable[[Sequence[MarginLeg]], MarginQuote | None]
+
+
+@dataclass(frozen=True)
+class IndexQuote:
+    """The index now: its last print and the session's open (F3's level and intraday checks)."""
+
+    last: Decimal
+    open: Decimal | None
+
+
+#: The index's quote by underlying (``NIFTY``/``BANKNIFTY``), or ``None`` without a session.
+IndexSource = Callable[[str], IndexQuote | None]
+
+
+def _no_index(_underlying: str) -> IndexQuote | None:
+    return None
+
+
+def _no_monitor_exit(_sleeve: FoSleeve) -> bool:
+    return False
 
 
 @dataclass(frozen=True)
@@ -193,15 +219,18 @@ class NightReport:
 # --- reading the scan and the sleeve config ------------------------------------------------------
 
 
-def scan_candidates(store: X.FoStore, sleeves: Sequence[FoSleeve], day: dt.date) -> list[ScanRow]:
-    """The latest scan before ``day`` for these sleeves, ``CANDIDATE`` rows only."""
+def scan_candidates(
+    store: X.FoStore, sleeves: Sequence[FoSleeve], day: dt.date,
+    state: ScanState = ScanState.CANDIDATE,
+) -> list[ScanRow]:  # fmt: skip
+    """The latest scan before ``day`` for these sleeves, rows in ``state`` only."""
     names = [s.value for s in sleeves]
     rows = store.conn.execute(
         f"SELECT id, sleeve, trade_date, symbol, state, rv20, detail FROM {store.t('fo_scan')} "
         "WHERE user_id = ? AND sleeve::text = ANY(?) AND state = ? AND trade_date = ("
         f"SELECT max(trade_date) FROM {store.t('fo_scan')} WHERE user_id = ? "
         "AND sleeve::text = ANY(?) AND trade_date < ?) ORDER BY sleeve, symbol",
-        (store.user_id, names, ScanState.CANDIDATE.value, store.user_id, names, day),
+        (store.user_id, names, state.value, store.user_id, names, day),
     ).fetchall()
     return [
         ScanRow(int(r["id"]), str(r["sleeve"]), X._day(r["trade_date"]), str(r["symbol"]),
@@ -251,8 +280,15 @@ class FnoMonitor:
         config: FnoConfig = DEFAULT_FNO_CONFIG, ceilings: FnoCeilings = DEFAULT_FNO_CEILINGS,
         mode_of: Callable[[FoSleeve], Mode] = X.fno_mode,
         alert: Callable[[str], None] = log.error, rates: CostRates | None = None,
+        index_quotes: IndexSource = _no_index,
+        exit_by_monitor: Callable[[FoSleeve], bool] = _no_monitor_exit,
     ) -> None:  # fmt: skip
+        """``index_quotes`` is F3's index reader; ``exit_by_monitor`` answers, per sleeve, whether
+        the monitor may send an F3 exit itself (M.5's flag, read by ``fno_gates``; the default
+        says no, so the exit waits for the click)."""
         self.store = store
+        self.index_quotes = index_quotes
+        self.exit_by_monitor = exit_by_monitor
         self.gateway_for = gateway_for
         self.quotes = quotes
         self.instruments = instruments
@@ -300,6 +336,23 @@ class FnoMonitor:
             plan_id = self._raise_f1(row, now)
             if plan_id:
                 raised.append(plan_id)
+        for row in scan_candidates(self.store, F3_SLEEVES, day):
+            if str(row.detail.get("entry_session")) != day.isoformat():
+                continue
+            if any(p.symbol == row.symbol and p.sleeve in F3_SLEEVES for p in open_positions):
+                continue  # one F3 spread per underlying (04 §11)
+            paused = self._paused(row, now)
+            if paused is not None:
+                raised.append(paused)
+                continue
+            plan_id = self._raise_f3(row, now)
+            if plan_id:
+                raised.append(plan_id)
+        for position in open_positions:
+            if position.structure == Structure.CREDIT_SPREAD.value:
+                plan_id = self._raise_f3_add(position, now)
+                if plan_id:
+                    raised.append(plan_id)
         sessions = list(self.market.sessions())
         previous = sessions_before(sessions, day, 1) if day in sessions else None
         held = {p.symbol for p in open_positions if p.sleeve is FoSleeve.F2}
@@ -332,7 +385,12 @@ class FnoMonitor:
                                 config=self.config, ceilings=self.ceilings)  # fmt: skip
         if not reasons:
             return None
-        structure = Structure.FUTURE if sleeve is FoSleeve.F2 else Structure.IRON_CONDOR
+        if sleeve is FoSleeve.F2:
+            structure = Structure.FUTURE
+        elif sleeve in F3_SLEEVES:
+            structure = Structure.CREDIT_SPREAD
+        else:
+            structure = Structure.IRON_CONDOR
         expires = plan_expires_at(now, self.config.f1, self.config.common)
         head = self._head(
             plan_id, sleeve, row.symbol, day, structure, now, expires, lots=1,
@@ -473,6 +531,269 @@ class FnoMonitor:
         self.store.insert_plan(head, legs)
         return plan_id
 
+    # F3 — the directional index credit spread (04 §11; DECISIONS-FO M.5) -----------------------
+
+    def _f3_index(self, symbol: str) -> IndexQuote | None:
+        try:
+            return self.index_quotes(symbol)
+        except Exception as exc:  # a missing level is a refusal by name, never a crash
+            log.warning("F3 %s: the index could not be read: %s", symbol, exc)
+            return None
+
+    def _raise_f3(self, row: ScanRow, now: dt.datetime) -> str | None:  # noqa: PLR0911, PLR0915
+        """The 09:20 plan from the scan's CANDIDATE: the intraday check and the level from the
+        index's live quote, the two legs repriced on mids, sized under 04 §3, margin-checked.
+        Wing first, short second. A refusal is a plan row with its reason, never silence."""
+        sleeve = FoSleeve(row.sleeve)
+        f3 = self.config.f3
+        day = now.astimezone(IST).date()
+        plan_id = entry_plan_id(sleeve, day, row.symbol, self.store.user_id)
+        if self.store.plan(plan_id) is not None:
+            return None
+        d = row.detail
+        issued = now
+        expires = plan_expires_at(issued, self.config.f1, self.config.common)
+        expiry = X._opt_day(d.get("expiry"))
+        level = X._dec(d.get("level"))
+        direction = D3.Direction(str(d.get("direction") or "NONE"))
+        lot_from_scan = int(d.get("lot_size") or 1)
+        base: dict[str, Any] = {
+            "scan_id": row.id, "scan_date": row.trade_date, "direction": direction.value,
+            "level": level, "violations": [],
+            "strikes": {"SHORT": d.get("short_strike"), "WING": d.get("wing_strike")},
+        }  # fmt: skip
+
+        def refuse(state: PlanState, reasons: list[str]) -> str:
+            self.store.insert_plan(
+                self._head(plan_id, sleeve, row.symbol, day, Structure.CREDIT_SPREAD, issued,
+                           expires, lots=1, lot_size=lot_from_scan, status=state.value,
+                           reason="; ".join(reasons), detail={**base, "reasons": reasons}),
+                [],
+            )  # fmt: skip
+            return plan_id
+
+        if expiry is None or level is None or direction is D3.Direction.NONE:
+            return refuse(PlanState.REJECTED_STRUCTURE,
+                          ["the scan row lacks its expiry, level or direction"])  # fmt: skip
+        legs_raw = [x for x in d.get("legs") or [] if isinstance(x, dict)]
+        by_role = {str(x.get("role")): x for x in legs_raw}
+        roles = ([LegRole.LONG_PUT, LegRole.SHORT_PUT] if direction is D3.Direction.UP
+                 else [LegRole.LONG_CALL, LegRole.SHORT_CALL])  # fmt: skip
+        contracts: dict[LegRole, Contract] = {}
+        strikes: dict[LegRole, Decimal] = {}
+        reasons: list[str] = []
+        for role in roles:
+            leg = by_role.get(role.value)
+            if leg is None:
+                reasons.append(f"{role.value}: the scan names no leg")
+                continue
+            strike = Decimal(str(leg.get("strike")))
+            strikes[role] = strike
+            found = self.instruments.option(row.symbol, expiry, strike, option_type_of(role).value)
+            if found is None:
+                reasons.append(f"{role.value} {strike}: not in the NFO master")
+            else:
+                contracts[role] = found
+        if reasons:
+            return refuse(PlanState.REJECTED_STRUCTURE, reasons)
+        index = self._f3_index(row.symbol)
+        if index is None:
+            return refuse(PlanState.REJECTED_STRUCTURE,
+                          [f"no live quote for {F3_INDEX_NAMES.get(row.symbol, row.symbol)}: the "
+                           "intraday check and the level cannot be read (04 §11)"])  # fmt: skip
+        base["index_last"] = index.last
+        base["index_open"] = index.open
+        if D3.level_broken(direction, level, index.last, f3):
+            return refuse(PlanState.REJECTED_STRUCTURE,
+                          [f"the level {level} is already broken: the index prints {index.last}; "
+                           "no entry into a broken level (04 §11)"])  # fmt: skip
+        if index.open is None or not D3.intraday_aligned(direction, index.last, index.open):
+            return refuse(PlanState.REJECTED_STRUCTURE,
+                          [f"the intraday check fails: {direction.value} needs the index "
+                           f"{'above' if direction is D3.Direction.UP else 'below'} the session's "
+                           f"open {index.open}, and it prints {index.last} (04 §11)"])  # fmt: skip
+        long_role, short_role = roles
+        books = self.quotes([c.tradingsymbol for c in contracts.values()])
+        mids: dict[LegRole, Decimal] = {}
+        for role, c in contracts.items():
+            q = books.get(c.tradingsymbol)
+            if q is None or q.mid is None:
+                reasons.append(f"{role.value} {c.tradingsymbol}: no two-sided quote")
+            else:
+                mids[role] = q.mid
+        if reasons:
+            return refuse(PlanState.REJECTED_LIQUIDITY, reasons)
+        lot = contracts[short_role].lot_size
+        spread = D3.SpreadStrikes(option_type_of(short_role), strikes[short_role], strikes[long_role])
+        credit = D3.credit_per_unit(mids[short_role], mids[long_role])
+        if mids[short_role] < f3.short_premium_min_inr or credit <= 0:
+            return refuse(PlanState.REJECTED_COST,
+                          [f"short mid {mids[short_role]} against wing mid {mids[long_role]}: "
+                           f"credit {credit}, below ₹{f3.short_premium_min_inr} or not positive"])  # fmt: skip
+        loss_unit = D3.max_loss_per_unit(spread, credit)
+        sizing = D3.size_entry(
+            mode=self.mode_of(sleeve), capital_inr=sleeve_capital(self.store, "F3"),
+            max_loss_per_unit=loss_unit, lot_size=lot, f3=f3, common=self.config.common,
+            ceilings=self.ceilings,
+        )  # fmt: skip
+        state: PlanState | None = sizing.state
+        reasons = [sizing.message]
+        lots = sizing.lots if sizing.lots > 0 else 0
+        quantity = max(lots, 1) * lot
+        margin_required: Decimal | None = None
+        if state is None:
+            margin_legs = [
+                MarginLeg(contracts[r].tradingsymbol, "BUY" if sign_of(r) > 0 else "SELL", quantity,
+                          mids[r])
+                for r in roles
+            ]  # fmt: skip
+            state, message, margin_required = self._margin(margin_legs)
+            reasons.append(message)
+        decay = D3.decay_target_mark(credit, f3)
+        cut = D3.loss_cut_mark(credit, f3)
+        detail: dict[str, Any] = {
+            **base, "reasons": reasons, "mids": {r.value: m for r, m in mids.items()},
+            "lots_sized": lots, "width_points": spread.width, "expiry": expiry,
+            "decay_target_mark": _money(decay), "loss_cut_mark": _money(cut),
+            "sizing": {"lots": sizing.lots, "message": sizing.message,
+                       "lots_at_ceiling": sizing.lots_at_ceiling},
+            "margin_required_inr": margin_required,
+            "rule": (f"out at once if {row.symbol} trades beyond {level}; the cut at a mark of "
+                     f"{_money(cut)}; the target at {_money(decay)}; flat at "
+                     f"{self.config.common.hard_exit_time:%H:%M} on {expiry.isoformat()}"),
+        }  # fmt: skip
+        head = self._head(
+            plan_id, sleeve, row.symbol, day, Structure.CREDIT_SPREAD, issued, expires,
+            lots=max(lots, 1), lot_size=lot,
+            status=(state.value if state is not None else PlanState.ISSUED.value),
+            reason=None if state is None else "; ".join(reasons), detail=detail,
+        )  # fmt: skip
+        head.update({
+            "hard_exit_date": expiry, "credit_points": _money(credit),
+            "width_points": spread.width,
+            "risk_per_lot_inr": _money(sizing.risk_per_lot_inr),
+            "risk_budget_inr": _money(sizing.risk_budget_inr),
+            "max_loss_inr": _money(sizing.max_loss_inr),
+            "margin_required_inr": margin_required,
+            "sizing_mode": sizing.sizing_mode.value,
+        })  # fmt: skip
+        legs = []
+        for seq, role in enumerate(roles, start=1):  # the wing first, then the short
+            c = contracts[role]
+            q = books.get(c.tradingsymbol)
+            legs.append({
+                "entry_seq": seq, "role": role.value, "tradingsymbol": c.tradingsymbol,
+                "instrument_token": c.instrument_token, "expiry": c.expiry,
+                "strike": strikes[role], "option_type": option_type_of(role).value,
+                "side": "BUY" if sign_of(role) > 0 else "SELL", "quantity": quantity,
+                "reference_price": mids.get(role),
+                "bid": None if q is None else q.bid, "ask": None if q is None else q.ask,
+            })  # fmt: skip
+        self.store.insert_plan(head, legs)
+        return plan_id
+
+    def _f3_open(self, position: X.PositionRow) -> D3.OpenSpread | None:
+        """The pure core's view of an open F3 position, from the row and its carry."""
+        carry = position.carry
+        legs = position.leg_list
+        short = next((x for x in legs if str(x.get("role")).startswith("SHORT")), None)
+        wing = next((x for x in legs if str(x.get("role")).startswith("LONG")), None)
+        expiry = None if short is None else X._opt_day(short.get("expiry"))
+        level = position.stop_price
+        credit = position.entry_credit
+        if (short is None or wing is None or expiry is None or level is None or credit is None
+                or position.max_loss_inr is None):
+            return None
+        kind = OptionType(str(short.get("option_type")))
+        strikes = D3.SpreadStrikes(kind, X._dec(short.get("strike")) or Decimal(0),
+                                   X._dec(wing.get("strike")) or Decimal(0))  # fmt: skip
+        return D3.OpenSpread(
+            direction=D3.Direction(str(carry.get("direction") or "NONE")), level=level,
+            strikes=strikes, expiry=expiry,
+            entry_session=position.opened_at.astimezone(IST).date(), entry_credit=credit,
+            lots=position.lots, lot_size=position.lot_size,
+            max_loss_per_lot_inr=position.max_loss_inr / max(position.lots, 1),
+        )  # fmt: skip
+
+    def _f3_mark(self, position: X.PositionRow) -> Decimal | None:
+        """The spread's live mark per unit: the short's mid less the wing's."""
+        legs = position.leg_list
+        symbols = {str(x.get("role")): str(x.get("tradingsymbol")) for x in legs}
+        books = self.quotes(list(symbols.values()))
+        short = next((books.get(s) for r, s in symbols.items() if r.startswith("SHORT")), None)
+        wing = next((books.get(s) for r, s in symbols.items() if r.startswith("LONG")), None)
+        if short is None or short.mid is None:
+            return None
+        return short.mid - (wing.mid if wing is not None and wing.mid is not None else Decimal(0))
+
+    def _f3_decision(self, position: X.PositionRow, now: dt.datetime) -> ExitDecision | None:
+        spread = self._f3_open(position)
+        if spread is None:
+            self.alert(f"F3 position {position.id} lacks its level, credit or legs; not watched")
+            return None
+        index = self._f3_index(position.symbol)
+        due = D3.f3_exit(
+            now=now.astimezone(IST).replace(tzinfo=None), position=spread,
+            last_price=None if index is None else index.last, mark=self._f3_mark(position),
+            f3=self.config.f3, common=self.config.common,
+        )  # fmt: skip
+        return None if due is None else ExitDecision(ExitReason(due.reason.value), due.message)
+
+    def _raise_f3_add(self, position: X.PositionRow, now: dt.datetime) -> str | None:
+        """04 §11's add, raised for the click in the entry window: the next session or later,
+        only while the trade works, the direction (last night's scan) and the level hold, and
+        the full share has room. One add per position."""
+        spread = self._f3_open(position)
+        if spread is None or position.carry.get("added"):
+            return None
+        day = now.astimezone(IST).date()
+        add_id = f"{position.entry_plan_id}-A1"
+        if self.store.plan(add_id) is not None:
+            return None
+        rows = scan_candidates(self.store, (position.sleeve,), day, ScanState.OPEN_POSITION)
+        row = next((r for r in rows if r.symbol == position.symbol), None)
+        direction_now = D3.Direction(str((row.detail if row else {}).get("direction") or "NONE"))
+        index = self._f3_index(position.symbol)
+        intact = index is not None and not D3.level_broken(
+            spread.direction, spread.level, index.last, self.config.f3)
+        decision = D3.add_decision(
+            position=spread, today=day, direction_now=direction_now, level_intact=intact,
+            mark=self._f3_mark(position), capital_inr=sleeve_capital(self.store, "F3"),
+            f3=self.config.f3, common=self.config.common,
+        )  # fmt: skip
+        if not decision.allowed:
+            return None
+        entry = self.store.plan(position.entry_plan_id)
+        if entry is None:
+            return None
+        quantity = decision.lots * position.lot_size
+        expires = plan_expires_at(now, self.config.f1, self.config.common)
+        head = self._head(
+            add_id, position.sleeve, position.symbol, day, Structure.CREDIT_SPREAD, now, expires,
+            lots=decision.lots, lot_size=position.lot_size, status=PlanState.ISSUED.value,
+            reason=None, kind=PlanKind.ADD,
+            detail={"position_id": position.id, "reason": decision.message,
+                    "direction": spread.direction.value, "level": spread.level,
+                    "under_confirm_of": None, "violations": []},
+        )  # fmt: skip
+        head.update({"parent_plan_id": entry.plan_id, "hard_exit_date": position.hard_exit_date,
+                     "width_points": spread.strikes.width})  # fmt: skip
+        legs = []
+        for seq, leg in enumerate(sorted(position.leg_list,
+                                         key=lambda x: 0 if str(x["role"]).startswith("LONG")
+                                         else 1), start=1):  # fmt: skip
+            legs.append({
+                "entry_seq": seq, "role": str(leg["role"]),
+                "tradingsymbol": str(leg["tradingsymbol"]),
+                "instrument_token": int(leg["instrument_token"]),
+                "expiry": X._opt_day(leg["expiry"]), "strike": X._dec(leg.get("strike")),
+                "option_type": str(leg["option_type"]),
+                "side": "BUY" if str(leg["role"]).startswith("LONG") else "SELL",
+                "quantity": quantity,
+            })  # fmt: skip
+        self.store.insert_plan(head, legs)
+        return add_id
+
     def _raise_f2(self, row: ScanRow, now: dt.datetime, sessions: Sequence[dt.date]) -> str | None:
         day = now.astimezone(IST).date()
         plan_id = entry_plan_id(FoSleeve.F2, day, row.symbol, self.store.user_id)
@@ -569,6 +890,8 @@ class FnoMonitor:
                 continue
             if position.structure == Structure.IRON_CONDOR.value:
                 decision = self._f1_decision(position, now)
+            elif position.structure == Structure.CREDIT_SPREAD.value:
+                decision = self._f3_decision(position, now)
             else:
                 decision = self._f2_decision(position, now)
             if decision is None:
@@ -645,17 +968,28 @@ class FnoMonitor:
             self.alert(f"FO position {position.id} is open with no units; nothing to close")
             return None
         close = dt.datetime.combine(now.astimezone(IST).date(), SESSION_CLOSE, tzinfo=IST)
+        # F3 (M.5): the exit is sent by the monitor only when its flag says so; otherwise it is
+        # ISSUED for the click and the desk is told. F1's and F2's exits run under the entry's
+        # confirm as before.
+        by_click = (position.structure == Structure.CREDIT_SPREAD.value
+                    and not self.exit_by_monitor(position.sleeve))  # fmt: skip
         head = self._head(
             exit_id, position.sleeve, position.symbol, now.astimezone(IST).date(),
             Structure(position.structure), now, max(close, now + dt.timedelta(minutes=1)),
-            lots=position.lots, lot_size=position.lot_size, status=PlanState.CONFIRMED.value,
+            lots=position.lots, lot_size=position.lot_size,
+            status=PlanState.ISSUED.value if by_click else PlanState.CONFIRMED.value,
             reason=decision.message, kind=PlanKind.EXIT,
             detail={"code": decision.reason.value, "reason": decision.message,
-                    "position_id": position.id, "under_confirm_of": entry.plan_id},
+                    "position_id": position.id, "under_confirm_of": entry.plan_id,
+                    "awaits_click": by_click},
         )  # fmt: skip
-        head.update({"parent_plan_id": entry.plan_id, "confirmed_at": entry.confirmed_at,
+        head.update({"parent_plan_id": entry.plan_id,
+                     "confirmed_at": None if by_click else entry.confirmed_at,
                      "hard_exit_date": position.hard_exit_date, "entry_window_end": None})
         self.store.insert_plan(head, legs)
+        if by_click:
+            self.alert(f"F3 {position.symbol}: {decision.reason.value} — {decision.message}; the "
+                       f"exit {exit_id} waits for the click on /fno (the monitor may not send it)")
         if decision.reason is ExitReason.LATE_EXIT:
             self.store.add_violation(entry.plan_id, "LATE_EXIT", decision.message, now)
             self.alert(f"FO {entry.plan_id}: LATE_EXIT — {decision.message}")
@@ -725,6 +1059,8 @@ class FnoMonitor:
                     continue
                 if position.structure == Structure.IRON_CONDOR.value:
                     ok = self._mark_f1(position, session)
+                elif position.structure == Structure.CREDIT_SPREAD.value:
+                    ok = self._mark_f3(position, session)
                 else:
                     ok = await self._mark_f2(position, session, report)
                     position = self.store.position(position.id) or position  # the trail moved
@@ -763,6 +1099,35 @@ class FnoMonitor:
         }  # fmt: skip
         self.store.write_mark(position.id, day, mark_points=close_cost, pnl_inr=pnl,
                               stop_price=None, detail=detail)  # fmt: skip
+        return True
+
+    def _mark_f3(self, position: X.PositionRow, day: dt.date) -> bool:
+        spread = self._f3_open(position)
+        if spread is None:
+            return False
+        keys: dict[str, PrintKey] = {}
+        for leg in position.leg_list:
+            expiry = X._opt_day(leg.get("expiry"))
+            if expiry is None:
+                return False
+            keys[str(leg["role"])] = (position.symbol, expiry, X._dec(leg.get("strike")),
+                                      str(leg["option_type"]))  # fmt: skip
+        prints = self.market.prints(day, list(keys.values()))
+        short = next((prints.get(k) for r, k in keys.items() if r.startswith("SHORT")), None)
+        wing = next((prints.get(k) for r, k in keys.items() if r.startswith("LONG")), None)
+        if short is None:
+            return False
+        mark = short.settle - (wing.settle if wing is not None else Decimal(0))
+        pnl = D3.pnl_inr(spread.entry_credit, mark, position.lots * position.lot_size)
+        f3 = self.config.f3
+        detail = {
+            "settles": {r: str(prints[k].settle) for r, k in keys.items() if k in prints},
+            "decay_target_hit": mark <= D3.decay_target_mark(spread.entry_credit, f3),
+            "loss_cut_hit": mark >= D3.loss_cut_mark(spread.entry_credit, f3),
+            "note": "the settle is a mark; exits fire on the live check (04 §11)",
+        }  # fmt: skip
+        self.store.write_mark(position.id, day, mark_points=_money(mark), pnl_inr=pnl,
+                              stop_price=position.stop_price, detail=detail)  # fmt: skip
         return True
 
     async def _mark_f2(self, position: X.PositionRow, day: dt.date, report: NightReport) -> bool:
@@ -926,6 +1291,26 @@ def kite_quotes(kite: Any) -> X.QuoteSource:  # noqa: ANN401
     return read
 
 
+def kite_index_quotes(kite: Any) -> IndexSource:  # noqa: ANN401
+    """The index's last print and the session's open from ``quote_raw`` (``NSE:NIFTY 50``)."""
+
+    def read(underlying: str) -> IndexQuote | None:
+        name = F3_INDEX_NAMES.get(underlying)
+        if name is None:
+            return None
+        payload = kite.quote_raw([f"NSE:{name}"]) or {}
+        q = payload.get(f"NSE:{name}")
+        if not isinstance(q, dict):
+            return None
+        last = X._dec(q.get("last_price"))
+        if last is None:
+            return None
+        ohlc = q.get("ohlc") if isinstance(q.get("ohlc"), dict) else {}
+        return IndexQuote(last, X._dec(ohlc.get("open")))
+
+    return read
+
+
 def kite_margins(kite: Any) -> MarginSource:  # noqa: ANN401
     """``basket_order_margins`` (NRML, the basket's hedge benefit counted) against the equity
     segment's free margin. A read; an unreadable answer is ``None`` and the plan is refused."""
@@ -982,12 +1367,15 @@ def main() -> int:
     def gateway_for(sleeve: FoSleeve) -> Any:  # noqa: ANN401
         return X.fo_gateway(sleeve, kite.kc, _main._risk)
 
+    from .fno_gates import f3_auto_exit_enabled  # noqa: PLC0415 - M.5's flag lives there
+
     with connect() as conn:
         monitor = build_monitor(
             enabled=C.FNO_MONITOR_ENABLED, store=X.FoStore(conn, user_id=user_id),
             gateway_for=gateway_for, quotes=kite_quotes(kite),
             instruments=PgKiteInstruments(conn, kite), margins=kite_margins(kite),
-            market=PgMarket(conn),
+            market=PgMarket(conn), index_quotes=kite_index_quotes(kite),
+            exit_by_monitor=lambda _sleeve: f3_auto_exit_enabled(),
         )  # fmt: skip
         if monitor is None:
             return 0

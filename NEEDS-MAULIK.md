@@ -2437,3 +2437,16 @@ from tonight's evening job.
   session, the first read is `free -m`; the remedy that worked is an EC2 reboot (`aws ec2
   reboot-instances`), which the queued services survive.
 
+## F3 — the directional index credit spread (28 Sep 2026)
+
+Built as sleeve F3 of the F&O book on your three answers (DECISIONS-FO M.5); paper only until
+`02` §3. Nothing is needed from you for the paper period. Two things are yours alone:
+
+* **`BASKFY_FNO_F3_AUTO_EXIT` on the box** (QUESTIONS Q12). It is absent from
+  `.env.staging.compose`, so false: the monitor raises an F3 exit and waits for your click on
+  `/fno`. Setting it true is your hand, like TW18's; an agent will not.
+* **F3's capital** (Q10) is ₹0: paper runs one lot and an add of one lot. A live size needs a
+  number from you, and at the default ceilings (₹25,000 per trade) a NIFTY spread with a 2 % wing
+  sizes to zero lots — the EOD re-test's finding (`evidence/f3-retest.md`: the daily half loses
+  after costs on both underlyings) is a reason to leave it at ₹0 through the paper period.
+

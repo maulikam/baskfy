@@ -368,6 +368,15 @@ AUTO_FLAG = re.compile(r"FNO\w*AUTO|AUTO\w*FNO", re.IGNORECASE)
 #: flag"): the F3 monitor may send the **exit** it raised. It is his; the scan admits this exact
 #: spelling and nothing else, so a second name, or an entry variant, is still a red test.
 ADMITTED_AUTO_NAME = "BASKFY_FNO_F3_AUTO_EXIT"
+#: The desk reads it into ``app.config.FNO_F3_AUTO_EXIT`` (the env prefix dropped, as every desk
+#: setting is); the two spellings name one flag.
+ADMITTED_AUTO_SPELLINGS = (ADMITTED_AUTO_NAME, "FNO_F3_AUTO_EXIT")
+
+
+def _without_admitted(text: str) -> str:
+    for name in ADMITTED_AUTO_SPELLINGS:
+        text = text.replace(name, "")
+    return text
 
 
 def _auto_scan_tops() -> list[Path]:
@@ -393,9 +402,7 @@ def test_no_fno_auto_execute_name_is_read_anywhere() -> None:
     names = {p.name for p in scanned}
     assert {".env.staging.compose", "compose.yml", ".env.example"} <= names  # and the env files
     hits = [
-        str(p.relative_to(ROOT))
-        for p in scanned
-        if AUTO_FLAG.search(_code(p).replace(ADMITTED_AUTO_NAME, ""))
+        str(p.relative_to(ROOT)) for p in scanned if AUTO_FLAG.search(_without_admitted(_code(p)))
     ]
     assert hits == []
 
@@ -408,8 +415,10 @@ def test_the_admitted_name_is_the_exit_flag_alone() -> None:
         "BASKFY_FNO_F3_AUTO_EXECUTE",
         "BASKFY_FNO_F1_AUTO_EXIT",
         "BASKFY_FNO_AUTO_EXIT",
+        "FNO_F3_AUTO_EXECUTE",
+        "FNO_AUTO_EXIT",
     ):
-        assert AUTO_FLAG.search(variant.replace(ADMITTED_AUTO_NAME, "")), variant
+        assert AUTO_FLAG.search(_without_admitted(variant)), variant
 
 
 def test_the_auto_pattern_would_catch_one() -> None:

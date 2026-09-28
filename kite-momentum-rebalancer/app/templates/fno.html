@@ -46,7 +46,11 @@ capital, risk and pauses are the settings form's.</p>
       </tbody>
     </table>
     <dl class="fno-facts">
-      {% if p.group == 'F1' %}
+      {% if p.group == 'F3' %}
+      <dt>Direction</dt><dd>{{ d(p.direction) }} · level {{ d(p.level) }} · {{ p.symbol }} {{ d(p.index_last) }} at 09:20</dd>
+      <dt>Credit</dt><dd>{{ d(p.credit) }} pts (priced 09:20) · width {{ d(p.width) }} pts · target at a mark of {{ d(p.decay_target) }} · cut at {{ d(p.loss_cut) }}</dd>
+      {% if p.rule %}<dt>Rule</dt><dd>{{ p.rule }}</dd>{% endif %}
+      {% elif p.group == 'F1' %}
       <dt>Credit</dt><dd>{{ d(p.credit) }} pts (priced 09:20){% if p.live_credit %} · now {{ p.live_credit }}{% endif %}
         · scan {{ d(p.scan_credit) }}
         {% if p.credit_drift_pct is not none %}
@@ -95,6 +99,23 @@ capital, risk and pauses are the settings form's.</p>
   {% endfor %}
 </section>
 
+{#- ============================== open F3 spreads ============================== -#}
+<section id="fnoSpreads">
+  <h2>Open spreads (F3)</h2>
+  <p class="muted">Auto-exit {{ 'ON — the monitor sends a level break, the cut, the target and the hard exit itself (BASKFY_FNO_F3_AUTO_EXIT)' if v.f3_auto_exit else 'OFF — the monitor raises the exit and waits for your click below (BASKFY_FNO_F3_AUTO_EXIT)' }}. An add is always a click.</p>
+  {% if not v.spreads %}<p class="muted">No spread is open.</p>{% endif %}
+  {% for s in v.spreads %}
+  <article class="card" data-position-id="{{ s.id }}">
+    <h3>{{ s.sleeve }} · {{ s.symbol }} · {{ s.direction }} · {{ s.lots }} × {{ s.lot_size }}{% if s.added %} · added{% endif %}{% if s.simulated %} <span class="pill warn">PAPER</span>{% endif %}</h3>
+    <p>Level {{ d(s.level) }} · {{ s.symbol }} now {{ d(s.spot) }} · credit {{ d(s.entry_credit) }} · mark now {{ d(s.mark) }} · P&amp;L {{ inr(s.live_pnl_inr) }} · max loss {{ inr(s.max_loss_inr) }}
+      {% if s.last_mark %}· settle {{ s.last_mark.trade_date }}: {{ s.last_mark.mark_points }} ({{ inr(s.last_mark.pnl_inr) }}){% endif %}</p>
+    <p>Target at {{ d(s.decay_target) }} · cut at {{ d(s.loss_cut) }} · expiry {{ s.expiry }}
+      {% for lg in s.legs %} · {{ lg.role|replace('_', ' ')|lower }} {{ lg.symbol }} × {{ d(lg.quantity) }} @ {{ d(lg.avg_price) }}{% if lg.mid %} (mid {{ lg.mid }}){% endif %}{% endfor %}</p>
+    <p class="muted">Next: {{ s.next_rule }}</p>
+  </article>
+  {% endfor %}
+</section>
+
 {#- ============================== open F2 futures ============================== -#}
 <section id="fnoFutures">
   <h2>Open futures</h2>
@@ -123,7 +144,17 @@ capital, risk and pauses are the settings form's.</p>
     <tbody>
     {% for a in v.actions %}
       <tr><td>{{ a.plan_id }}</td><td>{{ d(a.parent_plan_id) }}</td><td>{{ a.kind }}</td>
-          <td>{{ d(a.code) }}</td><td>{{ a.status }}</td><td>{{ a.message or a.reason or '' }}</td></tr>
+          <td>{{ d(a.code) }}</td><td>{{ a.status }}{% if a.awaits_click and a.status == 'ISSUED' %} <span class="pill warn">WAITS FOR YOUR CLICK</span>{% endif %}</td><td>{{ a.message or a.reason or '' }}
+          {% if a.confirmable %}
+          <form method="post" action="/fno/execute" class="fno-confirm" data-plan-id="{{ a.plan_id }}">
+            <input type="hidden" name="plan_id" value="{{ a.plan_id }}">
+            <input type="hidden" name="confirm" value="true">
+            <button type="submit" class="btn-saffron">{{ 'Send the exit (paper)' if a.kind == 'EXIT' else 'Add (paper)' }}</button>
+            <span class="muted fno-countdown" data-expires="{{ a.expires_epoch_ms }}"></span>
+          </form>
+          <p class="fno-sentence">{{ a.sentence }}</p>
+          <div class="fno-outcome" data-outcome-for="{{ a.plan_id }}" aria-live="polite"></div>
+          {% endif %}</td></tr>
     {% endfor %}
     </tbody>
   </table>
@@ -145,8 +176,8 @@ document.querySelectorAll('form.fno-confirm').forEach(function (form) {
     try {
       var response = await fetch('/fno/execute', { method: 'POST', body: new FormData(form) });
       var body = await response.json();
-      if (response.ok && body.outcome === 'OPEN') {
-        target.textContent = 'OPEN (simulated) — ' + body.orders + ' orders';
+      if (response.ok && (body.outcome === 'OPEN' || body.outcome === 'CLOSED')) {
+        target.textContent = body.outcome + ' (simulated) — ' + body.orders + ' orders';
         setTimeout(function () { window.location.reload(); }, 1500);
       } else {
         target.textContent = (body.code || body.outcome || response.status) + (body.detail ? ' — ' + body.detail : '');

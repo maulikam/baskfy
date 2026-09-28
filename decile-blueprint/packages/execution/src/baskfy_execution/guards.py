@@ -89,7 +89,8 @@ def assert_not_overnight_option(symbol: str, exchange: str, product: str) -> Non
 
 #: The ``fo_sleeve`` codes (``docs/fno/01`` §4). F1 trades index option structures, F2 stock
 #: futures; anything else is not an FO plan and is refused.
-FO_OPTION_SLEEVES: frozenset[str] = frozenset({"F1N", "F1B"})
+#: F3N/F3B (M.5, 28 Sep 2026): the directional credit spread, a vertical the same predicate covers.
+FO_OPTION_SLEEVES: frozenset[str] = frozenset({"F1N", "F1B", "F3N", "F3B"})
 FO_FUTURE_SLEEVES: frozenset[str] = frozenset({"F2"})
 #: Index underlyings: a GTT is admitted for a STOCK future only (``02`` §1, M.1).
 INDEX_UNDERLYINGS: frozenset[str] = frozenset(

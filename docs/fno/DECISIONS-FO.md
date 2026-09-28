@@ -925,3 +925,46 @@ from his 20–30 → 50 example; the hard exit at 15:00 on the expiry day, index
 under one config group `F3`; capital ₹0 (Q10) so paper runs one lot; the EOD re-test claims only
 the daily half. **Not built in this pack:** the web app's card (read-only; a later leaf), and real
 money, which waits on `02` §3 like F1.
+
+## F3-5 — The desk's F3: how the three answers became code, and five choices under them · ⚠ UNREVIEWED
+
+**Context.** M.5 gave the structure, the flag and the instruments; the desk had to say what each
+means at 09:20, every minute, and at the click. Taken by the agent, each cheap to reverse:
+
+1. **The held exit is a plan in `ISSUED` that the runner ignores.** Before F3 every EXIT the monitor
+   raised was `CONFIRMED` under the entry's confirm and sent on the same tick (PACK.2). With
+   `BASKFY_FNO_F3_AUTO_EXIT` false an F3 exit is inserted `ISSUED` with `detail.awaits_click`, an
+   alert names it, `/fno` shows it with a **Send the exit** button, and `POST /fno/execute` confirms
+   and closes it at once (`execute_click_exit`, short first). `FoStore.pending_actions` therefore
+   picks an EXIT only in `CONFIRMED`/`FILLING` (a ROLL still runs as issued, as F2 needs). F1's and
+   F2's exits are unchanged: they are inserted `CONFIRMED`. With the flag true the F3 exit is
+   inserted `CONFIRMED` like theirs. Rejected: a new plan status (a migration for a label), and
+   holding the exit in the monitor's memory (a restart would lose it).
+2. **The add is a click, always, and one per position.** Kind `ADD`, raised in the entry window
+   the next session or later when `04` §11's add rule allows (the mark decayed 20 % of the credit,
+   last night's scan still reads the same direction, the level intact on the live quote, room under
+   the full share); confirmed through the same route as an entry; a fill grows the position's lots,
+   averages its credit, adds its max loss and marks `carry.added`. Rejected: an automatic add (his
+   flag is for the exit only) and repeated adds (the paper period tests one).
+3. **The level, the target and the cut ride on the position row** — `stop_price` holds the level,
+   `profit_take_points` the decay-target mark and `loss_close_points` the loss-cut mark, computed on
+   the **credit actually taken** at the touch, not the 09:20 mids; `legs.carry` holds the direction.
+   No schema change.
+4. **The hard exit is the expiry day at 15:00**, not E−1: an index option settles in cash and the
+   weekly's last day is the decay (`04` §11). `hard_exit_date` on the plan and position is the
+   expiry itself.
+5. **The gateway's covered-overnight guard admits `F3N`/`F3B`** as option sleeves
+   (`baskfy_execution.guards.FO_OPTION_SLEEVES`): a vertical satisfies the same predicate (every
+   short covered by a long further from the money, same expiry, at least the quantity), so no new
+   rule is wired. Before this the guard refused the sleeve by name (fail-closed, FO6.1), which is
+   how the first replay found it.
+
+**The monitor's index reader.** `kite_index_quotes` reads `NSE:NIFTY 50` / `NSE:NIFTY BANK` through
+`quote_raw` for the last print and the session's open; the intraday check and the level are read
+from it at 09:20 and the level every minute. Without a quote the entry is refused by name and the
+exit judges the mark alone (the hard exit still fires).
+
+**Kept out of the monitor's source on purpose:** the flag's name. `fno_gates.f3_auto_exit_enabled`
+reads it; the monitor takes `exit_by_monitor` as a seam, so `test_fno_monitor`'s "no auto name in
+the monitor or the executor" still holds, and the core safety proof admits exactly the two
+spellings of the one flag (`BASKFY_FNO_F3_AUTO_EXIT`, the desk's `FNO_F3_AUTO_EXIT`).

@@ -8455,3 +8455,25 @@ executed as its own pack. Its judgement calls are numbered in **`docs/live/DECIS
 LV1.1 market data is `BASKFY_LIVE_QUOTES`, not `DRY_RUN` — which amends "Screens: a live price overlay"
 above: the overlay no longer goes dark under a rehearsal flag on a process with no execute route).
 Plan and contract: `docs/live/PLAN.md`; gates: `gates/live-*.md`.
+
+## LAYA-OFF — the Laya sidecar is removed, by Maulik's instruction in session (28 Sep 2026) ✅ decided by Maulik
+
+**Maulik's words:** *"It seems Lia is causing issues on AWS, is it?"* → *"leave it off"* → *"also
+remove laya completely."*
+
+**Why.** On the first live morning (DECISIONS-LV LV10.2) the sidecar's five-minute model reload
+against its 3 GB limit crash-looped on the 7.8 GB box and starved the desk: load 100–130, Docker
+DNS failing, the site unreachable 09:35–10:17 behind five real TWT positions, an EC2 reboot to
+recover. A display-only tagger took down the order path's host.
+
+**What is removed.** The `laya` compose service and the `baskfy-laya` volume
+(`infra/docker/compose.prod.yml`), `infra/laya/` (the loop, the pinned requirements, its tests),
+the deploy's S3 copies of the loop and requirements and the box's file list
+(`tools/deploy/deploy-swing.sh`); `ship.sh` expects fifteen services. On the box the container and
+the volume are removed at the next deploy (after the 28 Sep close).
+
+**What stays, deliberately.** The read side — `catalyst_tag.source = 'laya'` rows already stored,
+the overlap page's Laya panel (which now reads an empty cache and says so), `overlap_scan`'s
+Redis wake key (a no-op with no listener), the OV3/OV11 record above. Removing the vocabulary
+would need a migration over stored tags and buys nothing while the sidecar is gone; it is a
+follow-up if Maulik wants the panel gone too.

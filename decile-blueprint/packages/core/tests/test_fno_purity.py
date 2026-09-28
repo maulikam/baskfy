@@ -71,9 +71,12 @@ def test_nothing_imports_the_execution_package() -> None:
 
 
 def test_no_auto_execute_setting_exists() -> None:
-    """``02`` Track B: no ``BASKFY_FNO_*AUTO*`` name, and no field for one."""
+    """``02`` Track B: no ``BASKFY_FNO_*AUTO*`` name, and no field for one. The one admitted
+    spelling is F3's exit flag (M.5, Maulik, 28 Sep 2026), which the core may *name* — the config
+    docstring says it is the desk's env and never a field — but never read."""
     for path in modules():
-        text = path.read_text(encoding="utf-8").upper()
+        text = path.read_text(encoding="utf-8").upper().replace("BASKFY_FNO_F3_AUTO_EXIT", "")
         assert "AUTO_EXECUTE" not in text, path.name
         assert "AUTOEXECUTE" not in text, path.name
         assert not re.search(r"BASKFY_FNO_\w*AUTO", text), path.name
+        assert "AUTO_EXIT" not in text.replace("AUTO_EXIT_ENABLED", ""), path.name  # no field

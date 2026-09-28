@@ -346,7 +346,11 @@ class TestTheEveningPlansTheEntries:
     async def test_the_session_cap_counts_orders_already_confirmed_this_session(
         self, session: AsyncSession
     ) -> None:
-        """``04`` §6.3 — whatever plan they came from, so a rebuild cannot offer three more."""
+        """``04`` §6.3 — whatever plan they came from, so a rebuild cannot offer three more.
+
+        LV10.2: counted by the day the order was **sent**, on the day the plan executes — the
+        MORNING rebuild's own day. An order sent this morning (``created_at`` = the rebuild's
+        clock) spends one of today's three, whatever its signal date."""
         user_id = await _user(session, "already")
         await _breadth(session, user_id)
         first = await _signal(session, user_id, "AAA", rank=3)
@@ -356,19 +360,49 @@ class TestTheEveningPlansTheEntries:
             TwOrder(
                 user_id=user_id,
                 instrument_id=first,
-                signal_date=AS_OF,
+                signal_date=AS_OF,  # the row the FK needs; the count reads created_at
                 side="BUY",
                 quantity=10,
                 stop_price=Decimal("80.00"),
                 state="CONFIRMED",
+                created_at=NOW,
+            )
+        )
+        await session.flush()
+
+        report = await _plan(session, user_id, source=SOURCE_MORNING)
+
+        assert report is not None
+        assert report.entries == 2
+
+    async def test_the_evening_plan_counts_nothing_because_its_session_has_not_started(
+        self, session: AsyncSession
+    ) -> None:
+        """LV10.2: an EVENING plan executes at the next open; orders sent today belong to today's
+        session, not tomorrow's, so they do not spend tomorrow's three."""
+        user_id = await _user(session, "tonight")
+        await _breadth(session, user_id)
+        first = await _signal(session, user_id, "AAA", rank=3)
+        await _signal(session, user_id, "BBB", rank=2)
+        await _signal(session, user_id, "CCC", rank=1)
+        session.add(
+            TwOrder(
+                user_id=user_id,
+                instrument_id=first,
+                signal_date=AS_OF,  # the row the FK needs; the count reads created_at
+                side="BUY",
+                quantity=10,
+                stop_price=Decimal("80.00"),
+                state="FILLED",
+                # sent during AS_OF's own session (09:30 IST) — today's entry, not tomorrow's
+                created_at=dt.datetime.combine(AS_OF, dt.time(4, 0), tzinfo=dt.UTC),
             )
         )
         await session.flush()
 
         report = await _plan(session, user_id)
 
-        assert report is not None
-        assert report.entries == 2
+        assert report is not None and report.entries == 3
 
 
 @pytest.mark.db

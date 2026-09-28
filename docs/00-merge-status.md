@@ -1799,6 +1799,13 @@ order:** on 23 and 24 Sep `twt-auto` sent six MARKET buys and Zerodha rejected a
   re-entry after an exit on a new signal; never an add without a signal. `SizingConfig.pyramiding`
   (default true) per sleeve is the switch. Exit and raise lines name their position. No schema
   change.
+* **LV10.2 — the first live morning (28 Sep 09:07–10:17 IST).** Five TWT buys filled and were
+  GTT-protected within ten seconds each; the box then thrashed (the Laya sidecar's five-minute
+  model reload against its 3 GB limit) and the site was unreachable 09:35–10:17 until an EC2 reboot.
+  **Laya is off by Maulik's word** (compose profile `laya`; `ship.sh` expects fifteen services).
+  The morning exposed that the three-a-session cap counted by `signal_date`, so a MORNING and a
+  LIVE plan each got three; it now counts by the IST day the orders were **sent**, on both desks
+  and both planners (DECISIONS-LV LV10.2). Deploys after the 28 Sep close.
 
 **NOT done, and why.** Of the review's step 5, the live-entry TWT/VBT variant is LV8, the exits
 LV9 and pyramiding LV10 — all by his answers of 28 Sep, all without a backtest of the live system,

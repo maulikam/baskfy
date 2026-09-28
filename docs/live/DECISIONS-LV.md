@@ -484,3 +484,35 @@ leaves the stop where it was; the alert path is untouched). No live index level,
 
 **Not built.** A per-name exposure cap beyond the count (two full slots in one name is what he
 chose); adds at a fixed +R without a fresh signal (not his method).
+
+## LV10.2 — Incident, 28 Sep 2026 09:35–10:17 IST: the box thrashed behind five real TWT fills; Laya is off by Maulik's word; the TWT session cap counted by signal date · ✅ Laya decided by Maulik, ⚠ the cap fix UNREVIEWED
+
+**What happened.** Kite session at 09:07:22. The supervisor's drain sent the MORNING plan's two
+buys at 09:18 (LALPATHLAB, NAUKRI; the 09:15 loop's own attempt a second later was refused 409
+by `client_id` — the idempotency worked); the login-triggered live scan built a LIVE plan at 09:18
+and the drain sent its three at 09:35 (CUPID, ETERNAL, SYRMA). All five filled and every GTT was
+armed within ten seconds (non-negotiable 4 held; the reconciler reports no issues). From ~09:35
+the box starved: the Laya sidecar reloads its model every `LAYA_INTERVAL_SECONDS` (300 s) against
+a 3 GB limit beside Postgres (1.8 GB) and the compute worker (1.3 GB) on 7.8 GB; it crash-looped,
+free memory fell to 106 MB, load reached 100–130 on two vCPUs, Docker's DNS failed ("failed to
+resolve host 'postgres'" in the desk's logs), Caddy accepted connections it never answered and the
+SSM agent could not finish `uptime`. Maulik saw "took too long to respond" at ~09:55. Rebooted
+through the EC2 API at 10:12:43; the API answered at 10:17; fifteen services up; the sidecar
+stopped with restart disabled. Nothing was lost: no order was in flight, the books matched the
+broker, the Kite session re-attached at 10:17.
+
+**Maulik, in session:** *"It seems Lia is causing issues on AWS, is it?"* → *"leave it off."*
+Laya is behind the `laya` compose profile, out of `deploy-swing.sh`'s restart list, and `ship.sh`
+expects fifteen services. The way back is deliberate (`--profile laya`) and only onto a box with
+room for a resident model.
+
+**The defect the morning exposed (an agent's, from LV8).** `04` §6.3's "three new entries a
+session" is counted by `tw_order.signal_date` — right when every plan's signal was the last
+published session, wrong once LV8's LIVE plan carries today's date: the MORNING plan (signal
+25 Sep) and the LIVE plan (signal 28 Sep) each got a count of three, and five entries were sent in
+one trading day. **Fix (this entry):** the cap counts entries by the day they were **sent** — the
+desk's `entries_taken` by the IST date of `tw_order.created_at`, the planner's
+`entries_already_this_session` by the execution day (today for a LIVE plan, the next session for
+an EVENING/MORNING plan). Ships after today's close. Today no further TWT entry is possible: the
+LIVE plan expired at 09:48, the next morning loop is tomorrow, and a fresh live scan would count
+the three already taken under today's signal date.

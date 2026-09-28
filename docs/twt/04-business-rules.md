@@ -219,7 +219,11 @@ is the useful number for this signal count, not a round one.
 
 6.3 **At most `SizingConfig.max_new_entries_per_session` [3] new entries a session**, counted as
 lines in this plan **plus** the session's already-confirmed or sent orders, whatever plan they came
-from — so a fourth confirm of an evening is a refusal, not a surprise. When more signals than slots
+from — so a fourth confirm of an evening is a refusal, not a surprise. *(LV10.2, 28 Sep 2026: "the
+session" is the trading day the entries are **sent** on — counted by `tw_order.created_at` in IST,
+never by `signal_date`. A MORNING plan carries last session's signal and a LIVE plan today's; on
+28 Sep counting by signal let five through on one morning. The EVENING plan counts nothing, since
+its session has not started.)* When more signals than slots
 exist they are ranked by **`rank_key` descending, then symbol ascending**, and `rank_key` is
 `EntryConfig.rank_key = SIGNAL_TURNOVER`: the **signal session's own turnover**, `close_raw ×
 volume` of that day.

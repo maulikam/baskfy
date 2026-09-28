@@ -102,6 +102,7 @@ log = logging.getLogger(__name__)
 #: ``tw_plan.source`` — the two this job writes. ``MANUAL`` exists in the schema for a rebuild a
 #: person asks the desk for and is nobody's default.
 SOURCE_EVENING: Final = "EVENING"
+IST: Final = dt.timezone(dt.timedelta(hours=5, minutes=30), name="IST")
 SOURCE_MORNING: Final = "MORNING"
 
 #: What the ``tw_config_audit`` trail says when this job moves a system-owned field.
@@ -580,7 +581,17 @@ async def run_twt_evening(  # noqa: PLR0913 - one keyword per input the evening 
     gate = await gate_for_session(session, user_id, trade_date)
     sleeve = await load_sleeve(session, user_id, trade_date)
     equity = sleeve.value.quantize().equity_inr
-    book = await book_state(session, user_id=user_id, as_of=trade_date, signal_date=trade_date)
+    # LV10.2: the session cap counts entries sent on the day the plan executes — today for the
+    # MORNING (and a MANUAL) rebuild, the next session for the EVENING plan, where nothing has
+    # been sent yet.
+    entries_on = (
+        await next_trading_day(session, trade_date)
+        if source == SOURCE_EVENING
+        else stamp.astimezone(IST).date()
+    )
+    book = await book_state(
+        session, user_id=user_id, as_of=trade_date, signal_date=trade_date, entries_on=entries_on
+    )
     multiplier = await slot_multiplier(
         session, user_id=user_id, execution_enabled=execution_enabled, config=config
     )

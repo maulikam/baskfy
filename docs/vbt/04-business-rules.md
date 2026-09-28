@@ -204,6 +204,8 @@ the same plan is not spent twice.**
 fifteen cost 5.3, so ten is the useful number for this signal count, not a round one.
 `sizing.max_new_entries_per_session` [**3**] caps the `PLACE_LIMIT` lines of one plan, and counts
 lines **in this plan plus the session's `CONFIRMED`/`SENT` orders**, whatever plan they came from
+*(LV10.2, 28 Sep 2026: "the session" is the trading day the orders are **sent** on, by
+`vb_order.created_at` in IST — an EVENING plan and a LIVE plan drained on one day share one cap)*
 — so a fourth confirm of an evening is a refusal, not a fourth order. Ties are broken by §3.4's
 `rank_key`, descending, then by symbol.
 

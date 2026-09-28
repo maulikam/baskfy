@@ -113,6 +113,8 @@ from baskfy_worker.tasks.vbt import (
 
 log = logging.getLogger(__name__)
 
+_IST: Final = dt.timezone(dt.timedelta(hours=5, minutes=30), name="IST")
+
 #: Plan sources (``03`` §6). There is no live-trigger source: this is an end-of-day strategy and
 #: nothing about it fires inside a session.
 SOURCE_EVENING: Final = "EVENING"
@@ -530,17 +532,21 @@ async def _last_bar_dates(
     return {int(instrument_id): last for instrument_id, last in rows}
 
 
-async def entries_confirmed_today(session: AsyncSession, user_id: int, as_of: dt.date) -> int:
+async def entries_confirmed_today(session: AsyncSession, user_id: int, on: dt.date | None) -> int:
     """`04` §5.3: the session cap counts what the session has already committed to.
 
-    Orders whose signal is today's session and that a person has confirmed or the desk has sent —
-    whatever plan they came from. Without this, a second plan built after two confirms would
-    offer three more.
+    Orders **sent on** the execution day ``on`` (IST) that a person has confirmed or the desk
+    has sent — whatever plan they came from. Until LV10.2 this counted by ``signal_date``; LV8's
+    LIVE plan (today's signal) and the EVENING plan (last session's) are drained on the same day
+    and must share one cap (DECISIONS-LV LV10.2). ``None`` — a session that has not started —
+    is zero.
     """
+    if on is None:
+        return 0
     rows = await session.execute(
         select(VbOrder).where(
             VbOrder.user_id == user_id,
-            VbOrder.signal_date == as_of,
+            func.date(func.timezone("Asia/Kolkata", VbOrder.created_at)) == on,
             VbOrder.state.in_(
                 (OrderState.CONFIRMED.value, OrderState.SENT.value, OrderState.FILLED.value)
             ),
@@ -833,7 +839,15 @@ async def run_vbt_evening(  # noqa: PLR0913 - one keyword per input the evening 
         ),
         open_exposure_inr=sleeve.open_exposure_inr,
         cash_available_inr=sleeve.cash_available_inr,
-        entries_already_this_session=await entries_confirmed_today(session, user_id, trade_date),
+        # LV10.2: the day the plan executes — the next session for the EVENING plan, today for
+        # the MORNING rebuild.
+        entries_already_this_session=await entries_confirmed_today(
+            session,
+            user_id,
+            (calendar.advance(trade_date, 1) or await next_trading_day(session, trade_date))
+            if source == SOURCE_EVENING
+            else stamp.astimezone(_IST).date(),
+        ),
         positions_naked_of_gtt=naked_positions(positions, symbols),
     )
     entries, skips = build_entries(

@@ -486,7 +486,8 @@ class TestTheRealPathStillRefuses:
         assert statuses[:3] == ["SIMULATED"] * 3, report.attempts
         assert statuses[3] == "BLOCKED"
         assert store.lines[4]["note"].startswith("SESSION_CAP")
-        assert store.entries_taken(SESSION) == 3
+        # LV10.2: counted by the day the orders were sent — this morning, not the signal's date
+        assert store.entries_taken(OPEN.astimezone(IST).date()) == 3
         assert len(SpyGateway.tape) > tape_before, "the real gateway was not exercised"
 
     def test_re_running_does_not_double_send(self) -> None:

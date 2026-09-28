@@ -343,19 +343,24 @@ def config_for(row: TwConfig, base: TwtConfig = DEFAULT_TWT_CONFIG) -> TwtConfig
 
 
 async def entries_already_this_session(
-    session: AsyncSession, *, user_id: int, signal_date: dt.date
+    session: AsyncSession, *, user_id: int, on: dt.date | None
 ) -> int:
-    """``04`` §6.3's already-spent entries: the signal session's confirmed or sent buy orders.
+    """``04`` §6.3's already-spent entries: the buy orders **sent on** the execution day ``on``
+    (IST), confirmed or sent, whatever plan they came from.
 
-    Counted by ``signal_date`` rather than by a plan id, because the cap is the *session's* and
-    the point of it is that a fourth confirm is a refusal **whatever plan it came from**.
+    Until LV10.2 this counted by ``signal_date``, which was the same thing while every plan's
+    signal was the last published session. LV8's LIVE plan carries today's date, and on 28 Sep
+    2026 a MORNING plan and a LIVE plan each got a count of three on one morning (DECISIONS-LV
+    LV10.2). ``None`` — an EVENING plan for a session that has not started — is zero.
     """
+    if on is None:
+        return 0
     total = await session.execute(
         select(func.count())
         .select_from(TwOrder)
         .where(
             TwOrder.user_id == user_id,
-            TwOrder.signal_date == signal_date,
+            func.date(func.timezone("Asia/Kolkata", TwOrder.created_at)) == on,
             TwOrder.side == "BUY",
             TwOrder.state.in_(ENTERED_ORDER_STATES),
         )
@@ -369,6 +374,7 @@ async def book_state(
     user_id: int,
     as_of: dt.date,
     signal_date: dt.date | None = None,
+    entries_on: dt.date | None = None,
 ) -> BookState:
     """What the sleeve holds and what it has already done — the input ``04`` §10 reads.
 
@@ -455,8 +461,14 @@ async def book_state(
         open_entry_counts=dict(Counter(position.instrument_id for position in sleeve.positions)),
         open_exposure_inr=sleeve.value.open_exposure_inr,
         cash_available_inr=sleeve.value.cash_available_inr,
+        # LV10.2: the cap is the execution day's; ``entries_on`` names it (today for a MORNING
+        # or LIVE plan, the next session — nothing yet — for an EVENING one). A caller that
+        # still passes only ``signal_date`` gets the old reading, which is right when the two
+        # coincide.
         entries_already_this_session=await entries_already_this_session(
-            session, user_id=user_id, signal_date=signal_date if signal_date else as_of
+            session,
+            user_id=user_id,
+            on=entries_on if entries_on is not None else (signal_date if signal_date else as_of),
         ),
         positions_naked_of_gtt=tuple(naked),
         ratchets_due=tuple(ratchets),

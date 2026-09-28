@@ -101,6 +101,15 @@ SCAN_STALE_AFTER_SECONDS: Final = 600
 SCAN_MIN_INTERVAL_SECONDS: Final = 60
 
 
+def _ist_day(stamp: dt.datetime | None) -> dt.date | None:
+    """The IST calendar day of a stored timestamp (UTC when naive)."""
+    if stamp is None:
+        return None
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=dt.UTC)
+    return stamp.astimezone(dt.timezone(dt.timedelta(hours=5, minutes=30))).date()
+
+
 class ScanRefused(Exception):
     """:meth:`PgTwtStore.request_scan`'s two refusals, carrying the status the route answers with.
 
@@ -587,14 +596,21 @@ class PgTwtStore:
         )
 
     def entries_taken(self, day: dt.date) -> int:
-        """``04`` §6.3 — **whatever plan they came from**, so a fourth confirm is a refusal."""
+        """``04`` §6.3 — **whatever plan they came from**, so a fourth confirm is a refusal.
+
+        Counted by the IST day the order was **sent** (``created_at``), not by ``signal_date``:
+        since LV8 a MORNING plan (last session's signal) and a LIVE plan (today's) are drained on
+        the same trading day, and on 28 Sep 2026 counting by signal let five entries through
+        (DECISIONS-LV LV10.2). Filtered in Python so one query reads the same on Postgres and the
+        test SQLite.
+        """
         marks = ", ".join("?" for _ in ENTERED_ORDER_STATES)
-        row = self.conn.execute(
-            f"SELECT COUNT(*) AS n FROM {self.t('tw_order')} WHERE user_id = ? "
-            f"AND signal_date = ? AND side = 'BUY' AND state IN ({marks})",
-            (self.user_id, day, *ENTERED_ORDER_STATES),
-        ).fetchone()
-        return int(row["n"] or 0)
+        rows = self.conn.execute(
+            f"SELECT created_at FROM {self.t('tw_order')} WHERE user_id = ? "
+            f"AND side = 'BUY' AND state IN ({marks})",
+            (self.user_id, *ENTERED_ORDER_STATES),
+        ).fetchall()
+        return sum(1 for r in rows if _ist_day(_stamp(r["created_at"])) == day)
 
     # -- TwtStore: the session ---------------------------------------------------------------
 

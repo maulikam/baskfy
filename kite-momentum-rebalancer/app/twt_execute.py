@@ -294,6 +294,7 @@ class TwtStore(Protocol):
     def update_order(self, order_id: int, fields: dict) -> None: ...
 
     def entries_taken(self, day: dt.date) -> int:
+        """Buys sent on the IST day ``day``, whatever plan they came from (LV10.2)."""
         """``04`` §6.3 — this session's buy orders already CONFIRMED, SENT, PARTIAL or FILLED."""
         ...
 
@@ -643,7 +644,9 @@ async def _buy_at_open(  # noqa: PLR0913 - a confirm is its line, its money and 
     """
     day = plan["session_date"]
     cap = DEFAULT_TWT_CONFIG.sizing.max_new_entries_per_session
-    taken = store.entries_taken(day)
+    # LV10.2: the cap is the trading day's, counted by when orders were sent — a MORNING plan and
+    # a LIVE plan drained on one morning share it, whatever their signal dates.
+    taken = store.entries_taken(session_day(now))
     if taken >= cap:
         reason = f"SESSION_CAP: {taken} entries already taken this session; {cap} is the cap"
         store.set_line(line["id"], state="REJECTED", note=reason)
@@ -727,6 +730,7 @@ async def _buy_at_open(  # noqa: PLR0913 - a confirm is its line, its money and 
             "broker_order_id": result.get("order_id"),
             "client_id": line["client_id"],
             "simulated": gates.dry_run,
+            "created_at": _aware(now),
         }
     )
     store.set_line(

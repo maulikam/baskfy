@@ -639,7 +639,15 @@ services:
   # restart is warm; `mem_limit` keeps a CPU model from taking the box with it — the API only
   # ever reads a cache, so an OOM here is a missing chip, not an outage. The loop script is
   # shipped beside this file by `tools/deploy/deploy-swing.sh`.
+  # **OFF since 28 Sep 2026 — Maulik: "leave it off."** That morning the loop's model reload
+  # (every LAYA_INTERVAL_SECONDS, several GB against its 3 GB limit) crash-looped and starved the
+  # box: load 100-130 on two vCPUs, Docker DNS failing, the proxy accepting connections it never
+  # answered, five real TWT positions open behind a site nobody could reach, a reboot to recover
+  # (DECISIONS-LV LV10.2). The service is behind the `laya` compose profile, so a plain `up -d`
+  # never starts it; `docker compose --profile laya up -d laya` is the deliberate way back, and
+  # only once it can load its model once and stay resident on a box with room for it.
   laya:
+    profiles: ["laya"]
     image: python:3.12-slim
     restart: unless-stopped
     env_file: [.env.staging]

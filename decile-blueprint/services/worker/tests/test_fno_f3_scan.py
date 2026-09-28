@@ -26,6 +26,7 @@ from test_fno_scan_night import (
     requires_db,
 )
 
+from baskfy_api.seed import seed_reference
 from baskfy_core.fno.config import ScanState
 from baskfy_core.models import FoIndexDaily, Instrument, OpIndexMinute
 from baskfy_core.seed_data import NSE_EXCHANGE_ID
@@ -53,6 +54,14 @@ def _closes(*, dip: bool = True, flat: bool = False) -> list[Decimal]:
             level -= 300
         out.append(level)
     return out
+
+
+async def _ready(session: AsyncSession) -> None:
+    """The reference rows the fixture market's foreign keys need (the exchange, above all): the
+    migration suite drops them and only a worker `session` fixture reseeds them, so a test that
+    happens to run first — this file sorts before those — seeds them itself, idempotently."""
+    await seed_reference(session)
+    await _market(session)
 
 
 async def _index_history(session: AsyncSession, underlying: str, closes: list[Decimal]) -> None:
@@ -129,7 +138,7 @@ class TestF3Scan:
         fo_url: str,  # noqa: F811 - the module-scoped fixture
     ) -> None:
         async with _rolled_back(fo_url) as session:
-            await _market(session)
+            await _ready(session)
             await _index_history(session, "NIFTY", _closes())
             await _index_minutes(session, "NIFTY 50")
             user_id = await _user(session)
@@ -162,7 +171,7 @@ class TestF3Scan:
 
     async def test_no_index_history_is_no_data_that_names_the_backfill(self, fo_url: str) -> None:  # noqa: F811 - the module-scoped fixture
         async with _rolled_back(fo_url) as session:
-            await _market(session)
+            await _ready(session)
             user_id = await _user(session)
 
             out = await run_scan(session, T, user_ids=[user_id])
@@ -173,7 +182,7 @@ class TestF3Scan:
 
     async def test_no_minute_bars_is_no_data_not_an_unconfirmed_trade(self, fo_url: str) -> None:  # noqa: F811 - the module-scoped fixture
         async with _rolled_back(fo_url) as session:
-            await _market(session)
+            await _ready(session)
             await _index_history(session, "NIFTY", _closes())
             user_id = await _user(session)
 
@@ -186,7 +195,7 @@ class TestF3Scan:
 
     async def test_a_flat_tape_is_no_signal(self, fo_url: str) -> None:  # noqa: F811 - the module-scoped fixture
         async with _rolled_back(fo_url) as session:
-            await _market(session)
+            await _ready(session)
             await _index_history(session, "NIFTY", _closes(flat=True))
             await _index_minutes(session, "NIFTY 50")
             user_id = await _user(session)
@@ -202,7 +211,7 @@ class TestF3Scan:
         fo_url: str,  # noqa: F811 - the module-scoped fixture
     ) -> None:
         async with _rolled_back(fo_url) as session:
-            await _market(session)
+            await _ready(session)
             await _index_history(session, "NIFTY", _closes())
             await _index_minutes(session, "NIFTY 50")
             user_id = await _user(session)
@@ -217,7 +226,7 @@ class TestF3Scan:
 
     async def test_a_rerun_leaves_one_row_per_underlying(self, fo_url: str) -> None:  # noqa: F811 - the module-scoped fixture
         async with _rolled_back(fo_url) as session:
-            await _market(session)
+            await _ready(session)
             await _index_history(session, "NIFTY", _closes())
             await _index_minutes(session, "NIFTY 50")
             user_id = await _user(session)

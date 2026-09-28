@@ -42,11 +42,12 @@ grep -q '      OPTIONS_ENABLED: "false"' "$COMPOSE" && ok 'compose pins OPTIONS_
   || bad "compose does not pin OPTIONS_ENABLED false"
 grep -q '      INTRADAY_ENABLED: "false"' "$COMPOSE" && ok 'compose pins INTRADAY_ENABLED "false"' \
   || bad "compose does not pin INTRADAY_ENABLED false"
-# M.5 (Maulik, 28 Sep 2026): BASKFY_FNO_F3_AUTO_EXIT is the one admitted spelling — an exit only.
+# M.5 (Maulik, 28 Sep 2026): BASKFY_FNO_F3_AUTO_EXIT (the desk reads it as FNO_F3_AUTO_EXIT) is the one
+# admitted flag — an exit only. Any other FNO…AUTO spelling still fails here.
 if grep -rEh 'FNO[A-Z0-9_]*AUTO' "$COMPOSE" "$ROOT/kite-momentum-rebalancer/app" \
      "$ROOT/kite-momentum-rebalancer/scripts" "$ROOT/decile-blueprint/services" \
      "$ROOT/decile-blueprint/packages" --include='*.py' --include='*.yml' --exclude-dir=tests \
-     2>/dev/null | sed 's/BASKFY_FNO_F3_AUTO_EXIT//g' | grep -Eq 'FNO[A-Z0-9_]*AUTO'; then
+     2>/dev/null | sed -e 's/BASKFY_FNO_F3_AUTO_EXIT//g' -e 's/FNO_F3_AUTO_EXIT//g' | grep -Eq 'FNO[A-Z0-9_]*AUTO'; then
   bad "an FNO…AUTO name other than BASKFY_FNO_F3_AUTO_EXIT appears in compose or code (02 Track B)"
 else
   ok "no FNO…AUTO name but BASKFY_FNO_F3_AUTO_EXIT (M.5, an exit only) in compose, the desk, the services or the packages"

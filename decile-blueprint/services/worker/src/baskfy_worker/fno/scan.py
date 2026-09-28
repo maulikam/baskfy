@@ -57,6 +57,7 @@ from baskfy_core.fno.config import (
     FoSleeve,
     ScanState,
     f1_sleeve_for,
+    f3_sleeve_for,
 )
 from baskfy_core.fno.ledger import FoPause, column_pause_applies, evaluate_pauses, pauses_for
 from baskfy_core.fno.scan import (
@@ -1134,6 +1135,22 @@ async def run_scan(
                 ceilings=ceilings,
             )
             sleeve = f1_sleeve_for(underlying)
+            await write_rows(session, user_id, sleeve, trade_date, [row])
+            written[sleeve.value] = {row.state: 1}
+        for underlying in config.f3.underlyings:
+            # F3 (04 §11, M.5): imported here, not at the top, because f3_scan reads this
+            # module's Market, UserBook and ScanRow.
+            from baskfy_worker.fno.f3_scan import f3_row  # noqa: PLC0415 - a cycle otherwise
+
+            row = await f3_row(
+                session,
+                market=market,
+                book=book,
+                underlying=underlying,
+                config=config,
+                ceilings=ceilings,
+            )
+            sleeve = f3_sleeve_for(underlying)
             await write_rows(session, user_id, sleeve, trade_date, [row])
             written[sleeve.value] = {row.state: 1}
         f2 = _f2_rows(market, book, config, ceilings)

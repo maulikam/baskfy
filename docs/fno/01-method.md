@@ -75,6 +75,14 @@ entries and adds stay clicks), and **NIFTY on the weekly expiry, BANKNIFTY on th
 is in a bhavcopy, so the EOD re-test (F3-3) tests only the daily half - levels, direction and the
 next-session entry at settle - and says so. Paper first, like F1 (`02` §3).
 
+**What the EOD proxy found (F3-3, 28 Sep 2026; `evidence/f3-retest.md`).** Over 1,165 sessions
+2022-01-03 → 2026-09-22 the daily half alone loses after costs on both underlyings: NIFTY
+n = 206, −0.021R (t = −2.26, 67 % win); BANKNIFTY n = 166, −0.020R (t = −1.60, 57 % win); gross of
+costs near zero. The decay-target wins are small and the level breaks and loss cuts, exited at
+the settle, give back more. Whatever edge the method has must come from the intraday rules the
+closing file cannot test. Nothing in it is a reason to turn F3 on, and nothing disproves the
+intraday half; the paper period is the test.
+
 | | |
 |---|---|
 | Underlyings | NIFTY (`F3N`, weekly expiry) and BANKNIFTY (`F3B`, monthly expiry) |

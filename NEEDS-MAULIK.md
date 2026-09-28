@@ -2430,8 +2430,9 @@ from tonight's evening job.
   the signal's date and a MORNING plan and a LIVE plan carry different ones. Fixed to count by the
   day the entries are sent; deploys after 15:30 today. Tonight's evening job manages these five
   under the new exits.
-* **Laya:** off, by your "leave it off" — behind a compose profile, so no deploy revives it. Bring
-  it back only on a box with room for a resident model (`docker compose --profile laya up -d laya`).
+* **Laya:** removed from the repo at your "remove laya completely" (DECISIONS-MERGE LAYA-OFF); the
+  box's container and volume go at the 15:33 deploy. The overlap page's Laya panel stays and reads
+  empty — say the word if you want the panel gone too (that is a migration over stored tags).
 * **The box:** rebooted 10:12, back 10:17, fifteen services, 5 GB free. If it slows again during a
   session, the first read is `free -m`; the remedy that worked is an EC2 reboot (`aws ec2
   reboot-instances`), which the queued services survive.

@@ -112,7 +112,7 @@ class FakeConn:
             "pct_new_52w_high": 3.0, "pct_above_ma_slow": 40.0,
         }
         #: SW30: the benchmark's published levels before today, oldest first.
-        self.index_levels: list[float] = [100.0] * 19
+        self.index_levels: list[float] = [100.0] * 249
         self.index_reads = 0
         self.capital = capital
         self.held: list[dict] = []
@@ -1469,8 +1469,8 @@ IN_SESSION = dt.datetime(2026, 8, 19, 10, 30, tzinfo=swing_monitor.IST)
 class TestTheGateIsReReadLive:
     """SW30 (Maulik, 29 Sep 2026): "if the 10-day moving average is crossing the 20-day, the
     gate should automatically open" — both ways, the index live and breadth at the last close.
-    Nineteen published closes at 100: today at 101 puts the 10-day (100.10) over the 20-day
-    (100.05); at 99 under it; at 100 they are equal, which is neither."""
+    Published closes at 100: today at 101 puts EMA(10) (100 + 2/11) over EMA(20) (100 + 2/21,
+    SW31); at 99 under it; at 100 they are equal, which is neither."""
 
     def _ctx(self, conn: FakeConn, level: float | None, *, now: dt.datetime = IN_SESSION):
         asked: list[bool] = []
@@ -1488,8 +1488,8 @@ class TestTheGateIsReReadLive:
         assert ctx.tier.new_entries_allowed is True and ctx.tier.level == 0
         assert ctx.tier.max_open_positions == 2 and ctx.tier.max_exposure_pct == 25.0
         assert ctx.live is not None and ctx.live.index_slug == "nifty-smallcap-250"
-        assert ctx.live.reading.ma_fast == pytest.approx(100.10)
-        assert ctx.live.reading.ma_slow == pytest.approx(100.05)
+        assert ctx.live.reading.ma_fast == pytest.approx(100 + 2 / 11)  # EMA(10), SW31
+        assert ctx.live.reading.ma_slow == pytest.approx(100 + 2 / 21)  # EMA(20)
 
     def test_a_cross_down_closes_a_green_close(self):
         ctx, _ = self._ctx(FakeConn(gate="GREEN", rung=2), 99.0)
@@ -1542,7 +1542,7 @@ class TestTheGateIsReReadLive:
         conn = FakeConn(gate="RED", rung=0)
         self._ctx(conn, 101.0)
         (sql, params), = [(s_, p_) for s_, p_ in conn.statements if "index_snapshot_daily" in s_]
-        assert params == ("nifty-smallcap-250", DAY.isoformat(), 19)
+        assert params == ("nifty-smallcap-250", DAY.isoformat(), 249), "the EMAs' warm-up"
         assert "s.date < ?" in sql
 
     def test_a_trigger_after_the_cross_is_lined_where_before_it_was_refused(self, monkeypatch):

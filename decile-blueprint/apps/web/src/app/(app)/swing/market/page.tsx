@@ -22,7 +22,7 @@ import { breadthLine, indexWord, tierLine } from "../copy";
  *
  * SW14 completes `05` §2's list: the gate as a colour band over time, the rung and the
  * allocation's drawdown session by session with the lock-out shaded (`04` §8.5), the parabolic
- * count, and the index with its 10- and 20-day averages.
+ * count, and the index with its 10- and 20-day EMAs (SW31: exponential, his chart's).
  *
  * Read-only. No form, no action, nothing that reaches an order path.
  */
@@ -182,8 +182,8 @@ export default async function SwingMarketPage() {
                   <th className="py-2 pr-3 font-medium">Drawdown</th>
                   <th className="py-2 pr-3 font-medium">Parabolic</th>
                   <th className="py-2 pr-3 font-medium">Index</th>
-                  <th className="py-2 pr-3 font-medium">10-day</th>
-                  <th className="py-2 pr-3 font-medium">20-day</th>
+                  <th className="py-2 pr-3 font-medium">10-day EMA</th>
+                  <th className="py-2 pr-3 font-medium">20-day EMA</th>
                 </tr>
               </thead>
               <tbody>
@@ -231,7 +231,7 @@ export default async function SwingMarketPage() {
           </h2>
           <p className="max-w-[70ch] text-sm text-muted-foreground">
             {latest.index_slug} closed at {latest.index_close?.toFixed(2) ?? "—"}, against a
-            10-day average of {latest.index_ma_fast?.toFixed(2) ?? "—"} and a 20-day average of{" "}
+            10-day EMA of {latest.index_ma_fast?.toFixed(2) ?? "—"} and a 20-day EMA of{" "}
             {latest.index_ma_slow?.toFixed(2) ?? "—"} — {indexWord(latest)}. Breadth decides the
             gate; the index can only make it worse, never better.
           </p>

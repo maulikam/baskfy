@@ -2905,3 +2905,37 @@ heartbeat re-reads once a minute.
 **How to reverse.** Build the monitor and the desk store without a live level
 (`live_level=None`); every reader falls back to the last close.
 
+## SW31 — the gate's averages are exponential: EMA(10) and EMA(20) of the close; by Maulik's correction in session (30 Sep 2026) ✅ decided by Maulik
+
+**Context.** After SW30 reported the Smallcap 250's averages as 18,103.59 and 18,234.55, Maulik
+sent his TradingView chart: *"The current value of EMA 10 and EMA 20 is not the correct one which
+you have showcased"* — EMA(10, close) **18,086.77**, EMA(20, close) **18,173.17** on 29 Sep. The
+gate had always computed simple averages (`04` §8.2 said "SMAs"); his rule is the EMAs.
+
+**Checked before changing anything.** The stored closes are right: computed as EMAs, the box's
+`index_snapshot_daily` series reproduces his two numbers to the paisa from 120 sessions of history
+(60 sessions gives 18,174.08 for the 20 — too short a warm-up).
+
+**What changed.** `baskfy_core.swing.market.ema` (TradingView's `ta.ema`: `alpha = 2/(n+1)`,
+seeded with the simple average of the first n) and `index_reading` now returns the two EMAs;
+`INDEX_HISTORY_SESSIONS = 250` is how many closes every reader passes. All three readers use it:
+the worker's nightly and Scan now (`_index_reading`), the backtest (`_IndexSeries.reading_on`,
+the same 250-close window per session, so no look-ahead), and the desk's live gate (SW30: 249
+published closes plus today's quote — the value the chart shows on the forming bar). The web
+market page labels the columns "10-day EMA" / "20-day EMA".
+
+**What did not change.** The rule (fast above slow → long bias; below → RED), the lengths (10,
+20), the index (SW29), breadth. **Past `sw_market_daily` rows keep the simple averages they were
+decided on** — they are the record of what the gate read that night; rows from 30 Sep are EMAs.
+The backtest still reads NIFTY 500 (its own frame, STANDING-ANSWERS A12); only its averages
+changed.
+
+**Tests.** Core `test_the_reading_is_his_charts_ema_ten_and_twenty` pins 18,086.77 / 18,173.17
+on the real 150 closes to 29 Sep; the EMA seed and weight; the desk's live-gate tests at EMA values.
+
+**How to reverse.** `index_reading` back to simple means of the last 10/20 levels.
+
+**Found on the way, not changed:** `test_swing_goldens` `build_entries.case_*` drift on the
+`position_id` field SW28 added to plan lines; the goldens were not regenerated then. Unrelated to
+the index.
+

@@ -272,10 +272,13 @@ COMPLETE or a dead status. §9.4 says what each answer writes. The GTT is unchan
 `ret_20 ≥ strong_move_pct` [25]; `pct_new_52w_high` = share with `close ≥ high_1y`;
 `pct_above_ma_slow` = share with `close > ma_slow`.
 8.2 **Index reading:** **NIFTY Smallcap 250**'s (Kite `NIFTY SMLCAP 250`, instrument 267273)
-`index_ma_fast` [10]- and `index_ma_slow` [20]-bar SMAs (fallback NIFTY 500; none → the index is
-ignored). **SW29, Maulik, 29 Sep 2026** — *"use this index instead"*; it replaces SW17's NIFTY
+`index_ma_fast` [10]- and `index_ma_slow` [20]-bar **EMAs** of the close (fallback NIFTY 500; none →
+the index is ignored). **EMA, not SMA, since SW31 (Maulik, 30 Sep 2026)** — his chart's EMA(10,
+close) and EMA(20, close), `alpha = 2/(n+1)`, seeded with the simple average and warmed over the
+last `INDEX_HISTORY_SESSIONS` [250] closes; on 29 Sep they read 18,086.77 and 18,173.17, as the
+chart does. **SW29, Maulik, 29 Sep 2026** — *"use this index instead"*; it replaces SW17's NIFTY
 MidSmallcap 400. **During the session the index half is live (SW30, Maulik, 29 Sep 2026):**
-09:15–15:30 the averages end on today's Kite quote over the last 19 published closes, both ways,
+09:15–15:30 the EMAs end on today's Kite quote over the last 249 published closes, both ways,
 with breadth at the last close; the rung does not move intraday (`intraday_tier`). The history
 below is kept because the lesson in it still applies.
 

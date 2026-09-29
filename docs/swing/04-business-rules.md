@@ -274,7 +274,10 @@ COMPLETE or a dead status. §9.4 says what each answer writes. The GTT is unchan
 8.2 **Index reading:** **NIFTY Smallcap 250**'s (Kite `NIFTY SMLCAP 250`, instrument 267273)
 `index_ma_fast` [10]- and `index_ma_slow` [20]-bar SMAs (fallback NIFTY 500; none → the index is
 ignored). **SW29, Maulik, 29 Sep 2026** — *"use this index instead"*; it replaces SW17's NIFTY
-MidSmallcap 400. The history below is kept because the lesson in it still applies.
+MidSmallcap 400. **During the session the index half is live (SW30, Maulik, 29 Sep 2026):**
+09:15–15:30 the averages end on today's Kite quote over the last 19 published closes, both ways,
+with breadth at the last close; the rung does not move intraday (`intraday_tier`). The history
+below is kept because the lesson in it still applies.
 
 > ⚠ **This said NIFTY 500 until 9 Sep 2026 and that was stale, not the rule.** SW17 (`67df9b4`,
 > 3 Sep) changed the benchmark on Maulik's call — *"the book trades mid- and small-caps, so the

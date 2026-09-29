@@ -2862,3 +2862,46 @@ decision; `test_swing_scan_now` checks the benchmark has a Kite quote symbol.
 **How to reverse.** Set `BASKFY_SWING_INDEX_SLUG=nifty-mid-small-400` in the box's
 `.env.staging.compose` (no image needed), or revert the defaults.
 
+## SW30 — the gate is re-read on the live index during the session, both ways; by Maulik's instruction in session (29 Sep 2026) ✅ decided by Maulik
+
+**Context.** Maulik, in session: *"The gate we are checking is currently implemented as end of the
+day. The gate should be checked on live data. Let's say tomorrow, if the 10-day moving average is
+crossing the 20-day, the gate should automatically open."* The desk's `load_context` read the gate
+and rung from the last close's `sw_market_daily` row only; a live scan (9 Sep) could move the
+index half, but only when someone pressed Scan now, and the monitor and the confirm never read it.
+On 29 Sep the gate had been RED for weeks on the index alone (breadth 10.09 % against the 5 %
+floor).
+
+**His two answers (asked with options the same evening).** (1) **Both ways** — the live read
+opens the gate on a cross up and closes it on a cross back down. (2) **The index live, breadth at
+the last close** — breadth needs a scan of the whole liquid universe; the index is one quote.
+
+**What changed.**
+* Core (pure): `baskfy_core.swing.market.index_reading` (the 10/20 SMAs from levels, `None` when
+  short) and `intraday_tier` — the ladder never moves on a quote: a live RED is rung 0 with no
+  entries, a live GREEN/AMBER allows entries at the rung the close left (rung 0 after a closing
+  RED: 2 positions, 25 %), a drawdown lock holds whatever the index does.
+* Desk: `app/swing_live_gate.py`. Between 09:15 and 15:30 on a weekday, `load_context` (given a
+  live level) runs `market_gate` over the close's breadth and the benchmark's last 19 published
+  closes plus today's Kite quote (`SWING_INDEX_SLUG`, SW29's `nifty-smallcap-250` → `NIFTY SMLCAP
+  250`; `Kite.ltp`, cached and rate-limited). The monitor reads it per trigger and, since this
+  entry, once a minute in the heartbeat, which now says which gate is in force and from which data
+  and logs every change with the averages that caused it. The desk's confirm (`PgSwingStore`
+  on Postgres) reads the same, so the SIGNAL line and the confirm cannot disagree.
+* Outside the session, with no Kite session, with no quote symbol for the index, or with fewer
+  than 19 published closes, the gate is the last close's — exactly the behaviour before SW30.
+
+**What did not change.** The rule, the thresholds, breadth, the nightly row (`sw_market_daily` is
+still the closed day's record), the ladder's nightly steps, and every order path: this changes
+which entries the rules allow, never how an order is placed. A trigger refused `GATE_RED` before
+the cross is not re-raised by the cross.
+
+**Tests.** Core `test_swing_market` (7 new); desk `test_swing_monitor.TestTheGateIsReReadLive`
+and `TestTheKiteLevel` (16 new): the cross up opens at rung 0, the cross down closes, equal
+averages are AMBER, thin breadth stays RED, the lock holds, outside hours Kite is not asked, no
+level or too few closes keep the close, the store's per-trigger re-read flips with the level, the
+heartbeat re-reads once a minute.
+
+**How to reverse.** Build the monitor and the desk store without a live level
+(`live_level=None`); every reader falls back to the last close.
+

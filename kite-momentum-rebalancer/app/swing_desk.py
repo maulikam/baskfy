@@ -83,6 +83,7 @@ from baskfy_core.swing.plan import LineKind
 from . import config as C
 from .exit_rules import EXIT_RULES
 from .core.guards import UntouchableInstrumentError
+from .swing_live_gate import LiveLevel, desk_level
 from .swing_monitor import IST, SCHEMA, SignalContext, load_context
 
 log = logging.getLogger("swing_desk")
@@ -278,11 +279,15 @@ class PgSwingStore:
         schema: str = SCHEMA,
         *,
         broker_account_id: int | None = None,
+        live_level: LiveLevel | None = None,
     ) -> None:
         self.conn = conn
         self.user_id = int(user_id)
         self.schema = schema
         self.broker_account_id = broker_account_id
+        #: SW30: today's index level, so a confirm is re-sized against the same live gate the
+        #: monitor reads. ``None`` (the tests' sqlite twin) keeps the last close's gate.
+        self.live_level = live_level
 
     def t(self, table: str) -> str:
         """`schema.table`, or the bare name when the schema is empty (sqlite)."""
@@ -655,7 +660,10 @@ class PgSwingStore:
 
     def session_context(self, day: dt.date) -> SignalContext:
         """`load_context` over this store's schema: what the confirm is re-sized against."""
-        return load_context(self.conn, user_id=self.user_id, day=day, schema=self.schema)
+        return load_context(
+            self.conn, user_id=self.user_id, day=day, schema=self.schema,
+            live_level=self.live_level,
+        )
 
     def resize_line(
         self,
@@ -1501,6 +1509,7 @@ def open_store() -> Iterator[PgSwingStore]:
             user_id=C.SOLE_USER_ID,
             schema=schema,
             broker_account_id=C.SOLE_BROKER_ACCOUNT_ID,
+            live_level=desk_level() if schema else None,
         )
 
 

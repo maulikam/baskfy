@@ -120,6 +120,42 @@ def market_gate(
     return MarketGate.AMBER
 
 
+def index_reading(levels: Sequence[float], config: MarketConfig) -> IndexReading | None:
+    """The benchmark's newest level and its two SMAs (`04` §8.2), from levels oldest first.
+
+    ``None`` when there are fewer than ``index_ma_slow`` levels: an average of fewer closes than
+    it names is not that average. The session's live read (SW30) passes the last
+    ``index_ma_slow - 1`` published closes with today's quote appended, so both windows end on
+    today while the market is open.
+    """
+    if len(levels) < config.index_ma_slow:
+        return None
+    fast = sum(levels[-config.index_ma_fast :]) / config.index_ma_fast
+    slow = sum(levels[-config.index_ma_slow :]) / config.index_ma_slow
+    return IndexReading(close=float(levels[-1]), ma_fast=fast, ma_slow=slow)
+
+
+def intraday_tier(close: ExposureTier, gate: MarketGate, config: MarketConfig) -> ExposureTier:
+    """The rung while the gate is re-read on the live index during a session (SW30).
+
+    The ladder does not move intraday: its steps are "tomorrow's rung from today's results", and
+    a session has no results yet. Only the gate's two sides change what the rung allows:
+
+    * a drawdown lock-out holds whatever the index does — the lock is about the sleeve;
+    * a live RED is rung 0 with no new entries, as :func:`exposure_tier` makes a closing RED;
+    * a live GREEN or AMBER allows entries at the rung the last close left — rung 0 after a
+      closing RED, since the ladder climbs one step a night and never on a quote.
+    """
+    if close.drawdown_locked:
+        return close
+    if gate is MarketGate.RED:
+        positions, exposure = config.tiers[0]
+        return ExposureTier(0, positions, exposure, new_entries_allowed=False)
+    level = min(max(close.level, 0), len(config.tiers) - 1)
+    positions, exposure = config.tiers[level]
+    return ExposureTier(level, positions, exposure, new_entries_allowed=True)
+
+
 def _loss_streak(recent_r: Sequence[Decimal]) -> int:
     streak = 0
     for value in reversed(recent_r):

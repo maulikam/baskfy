@@ -11,6 +11,9 @@
 # history and visible in CloudTrail. Secrets are generated on the box by `provision-box.sh`, or
 # passed as a bcrypt hash, which is not reversible.
 set -euo pipefail
+# AWS CLI v2 pipes any output to a TTY through `less`. On 29 Sep 2026 a deploy sat at a pager's
+# ":" for twenty minutes, mid-seed, with every service still on the old image. Never page.
+export AWS_PAGER=""
 REGION="${AWS_REGION:-ap-south-1}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ID="${BASKFY_INSTANCE_ID:-$(cd "$ROOT/decile-blueprint/infra/terraform" && \

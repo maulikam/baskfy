@@ -83,7 +83,12 @@ from baskfy_core.swing.config import (
     SizingConfig,
     SwingConfig,
 )
-from baskfy_core.swing.market import BreadthSnapshot, ExposureTier, MarketGate
+from baskfy_core.swing.market import (
+    INDEX_HISTORY_SESSIONS,
+    BreadthSnapshot,
+    ExposureTier,
+    MarketGate,
+)
 from baskfy_core.swing.opening_range import Candle, TriggerState
 from baskfy_core.swing.plan import (
     PlanLine,
@@ -463,7 +468,7 @@ def read_live_gate(  # noqa: PLR0913 - one keyword per input the reading depends
         return None
     config = DEFAULT_SWING_CONFIG.market
     closes = published_levels(
-        conn, slug=C.SWING_INDEX_SLUG, before=day, count=config.index_ma_slow - 1, schema=schema
+        conn, slug=C.SWING_INDEX_SLUG, before=day, count=INDEX_HISTORY_SESSIONS - 1, schema=schema
     )
     breadth = BreadthSnapshot(
         constituent_count=int(market["constituent_count"]),

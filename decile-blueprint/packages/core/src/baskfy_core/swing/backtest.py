@@ -78,11 +78,13 @@ from baskfy_core.swing.config import DEFAULT_SWING_CONFIG, TRADEABLE_SETUPS, Set
 from baskfy_core.swing.indicators import liquid_expr, with_swing_indicators
 from baskfy_core.swing.journal import ClosedTrade, JournalStats, exit_average, summarize
 from baskfy_core.swing.market import (
+    INDEX_HISTORY_SESSIONS,
     BreadthSnapshot,
     ExposureTier,
     IndexReading,
     MarketGate,
     breadth_snapshot,
+    ema,
     exposure_tier,
     market_gate,
 )
@@ -491,11 +493,11 @@ class _Panel:
 
 @dataclass(frozen=True, slots=True)
 class _IndexSeries:
-    """The index closes, sorted, and the two SMA lengths of `04` §8.2.
+    """The index closes, sorted, and the two EMA lengths of `04` §8.2 (SW31).
 
-    :meth:`reading_on` mirrors the worker's ``load_index_reading``: the last ``slow`` closes
-    dated on or before the session, averaged; ``None`` (the index is ignored) until that many
-    exist. A close dated after the session is never in the window — house rule 5.
+    :meth:`reading_on` mirrors the worker's ``load_index_reading``: the EMAs of the closes dated
+    on or before the session (`market.index_reading`); ``None`` (the index is ignored) until
+    ``slow`` closes exist. A close dated after the session is never in the window — house rule 5.
     """
 
     days: np.ndarray
@@ -526,10 +528,9 @@ class _IndexSeries:
         n = int(np.searchsorted(self.days, day, side="right"))
         if n < self.slow:
             return None
+        window = [float(c) for c in self.closes[max(n - INDEX_HISTORY_SESSIONS, 0) : n]]
         return IndexReading(
-            close=float(self.closes[n - 1]),
-            ma_fast=float(self.closes[n - self.fast : n].mean()),
-            ma_slow=float(self.closes[n - self.slow : n].mean()),
+            close=window[-1], ma_fast=ema(window, self.fast), ma_slow=ema(window, self.slow)
         )
 
 

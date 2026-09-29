@@ -49,7 +49,7 @@ class BreadthSnapshot:
 
 @dataclass(frozen=True, slots=True)
 class IndexReading:
-    """The benchmark index at the close, with its two MAs."""
+    """The benchmark index at the close, with its two EMAs (SW31; simple averages until then)."""
 
     close: float
     ma_fast: float
@@ -120,19 +120,46 @@ def market_gate(
     return MarketGate.AMBER
 
 
-def index_reading(levels: Sequence[float], config: MarketConfig) -> IndexReading | None:
-    """The benchmark's newest level and its two SMAs (`04` §8.2), from levels oldest first.
+#: How many published closes an index reading is taken over. The averages are exponential
+#: (SW31), so the window is warm-up, not the average's length: 120 sessions already reproduce
+#: TradingView's EMA(10) and EMA(20) on NIFTY SMLCAP 250 to the paisa (29 Sep 2026: 18,086.77
+#: and 18,173.17); 250 leaves margin and is still one small query.
+INDEX_HISTORY_SESSIONS: Final = 250
 
-    ``None`` when there are fewer than ``index_ma_slow`` levels: an average of fewer closes than
-    it names is not that average. The session's live read (SW30) passes the last
-    ``index_ma_slow - 1`` published closes with today's quote appended, so both windows end on
-    today while the market is open.
+
+def ema(values: Sequence[float], length: int) -> float:
+    """The exponential moving average of ``values`` (oldest first) at the last value.
+
+    TradingView's `ta.ema`: ``alpha = 2 / (length + 1)``, seeded with the simple average of the
+    first ``length`` values. With fewer values than ``length`` it is their simple average.
+    """
+    if not values:
+        raise ValueError("an EMA of no values")
+    if len(values) <= length:
+        return sum(values) / len(values)
+    alpha = 2.0 / (length + 1)
+    value = sum(values[:length]) / length
+    for x in values[length:]:
+        value = alpha * x + (1.0 - alpha) * value
+    return value
+
+
+def index_reading(levels: Sequence[float], config: MarketConfig) -> IndexReading | None:
+    """The benchmark's newest level and its two EMAs (`04` §8.2), from levels oldest first.
+
+    **Exponential, by Maulik's correction (SW31, 30 Sep 2026)**: his chart's EMA(10, close) and
+    EMA(20, close); the simple averages this read until then were not the numbers he trades on.
+    ``None`` when there are fewer than ``index_ma_slow`` levels. Readers pass up to
+    :data:`INDEX_HISTORY_SESSIONS` closes; the session's live read (SW30) appends today's quote,
+    which is exactly the value the chart shows on the forming bar.
     """
     if len(levels) < config.index_ma_slow:
         return None
-    fast = sum(levels[-config.index_ma_fast :]) / config.index_ma_fast
-    slow = sum(levels[-config.index_ma_slow :]) / config.index_ma_slow
-    return IndexReading(close=float(levels[-1]), ma_fast=fast, ma_slow=slow)
+    return IndexReading(
+        close=float(levels[-1]),
+        ma_fast=ema(levels, config.index_ma_fast),
+        ma_slow=ema(levels, config.index_ma_slow),
+    )
 
 
 def intraday_tier(close: ExposureTier, gate: MarketGate, config: MarketConfig) -> ExposureTier:

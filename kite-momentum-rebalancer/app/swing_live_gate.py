@@ -9,8 +9,9 @@ What this does, and nothing more: between 09:15 and 15:30 on a weekday, the gate
 `load_context` hands the monitor and the confirm is `market_gate` over
 
 * the last close's breadth (`sw_market_daily`, the row the session's plan was built on), and
-* the benchmark's 10- and 20-day averages over the last 19 published closes plus today's
-  Kite quote — the index is `SWING_INDEX_SLUG` (SW29: NIFTY Smallcap 250).
+* the benchmark's EMA(10) and EMA(20) (SW31) over the last 249 published closes plus today's
+  Kite quote — the value his chart shows on the forming bar; the index is `SWING_INDEX_SLUG`
+  (SW29: NIFTY Smallcap 250).
 
 The rung comes from :func:`baskfy_core.swing.market.intraday_tier`: the ladder never moves on a
 quote. Outside the session, without a Kite session, without a quote symbol for the index or
@@ -133,10 +134,11 @@ def live_gate(  # noqa: PLR0913 - one keyword per input the reading depends on
 ) -> LiveGate | None:
     """The gate from the last close's breadth and the index with today's level appended.
 
-    ``closes`` are the published levels before today, oldest first. ``None`` when they are too
-    few for the slow average — the caller keeps the last close's gate.
+    ``closes`` are the published levels before today, oldest first (up to
+    ``INDEX_HISTORY_SESSIONS - 1``: the EMAs' warm-up). ``None`` when they are too few for the
+    slow average — the caller keeps the last close's gate.
     """
-    reading = index_reading([*closes[-(config.index_ma_slow - 1) :], level], config)
+    reading = index_reading([*closes, level], config)
     if reading is None:
         return None
     gate = market_gate(breadth, reading, config)

@@ -8,6 +8,7 @@ import {
   JournalTables,
   OpenStructures,
 } from "@/components/fno/overnight";
+import { F3Section } from "@/components/fno/f3";
 import { FnoRiskCaveat, ScanOnly } from "@/components/options/caveats";
 import { ToneBadge } from "@/components/options/state-chip";
 import { LiveMarksProvider } from "@/components/screens/live-price";
@@ -19,7 +20,7 @@ import { asOfClose, emptyReasonText } from "@/lib/fno/view";
 import { PAGES } from "@/lib/vocabulary";
 
 /**
- * `/options/overnight` — F1 and F2 (`docs/fno/05` §2, FO5). Read-only: the desk's F&O page is the
+ * `/options/overnight` — F1 and F2 (`docs/fno/05` §2, FO5), and F3 (DECISIONS-FO M.5, F3-7). Read-only: the desk's F&O page is the
  * only surface with a Confirm (`02` Track C §4), and this page binds no action.
  *
  * **The clock is on the page** (root `CLAUDE.md`'s two-clock table, Overnight row): the scan
@@ -86,8 +87,8 @@ export default async function OvernightPage() {
           <span data-testid="fno-empty-reason">{empty}</span>
         ) : (
           <>
-            F1&rsquo;s two underlyings and F2&rsquo;s candidates, from the last
-            close.
+            F1&rsquo;s two underlyings, F2&rsquo;s candidates and F3&rsquo;s
+            directional spreads, from the last close.
           </>
         )}
       </Answer>
@@ -130,6 +131,7 @@ export default async function OvernightPage() {
           <JournalTables rows={view.journal} title="F1 journal" />
           <EvidenceCard evidence={view.evidence} />
           <F2Section f2={view.f2} />
+          <F3Section f3={view.f3} />
         </>
       ) : null}
     </div>

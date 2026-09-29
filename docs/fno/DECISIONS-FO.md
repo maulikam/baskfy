@@ -968,3 +968,37 @@ exit judges the mark alone (the hard exit still fires).
 reads it; the monitor takes `exit_by_monitor` as a seam, so `test_fno_monitor`'s "no auto name in
 the monitor or the executor" still holds, and the core safety proof admits exactly the two
 spellings of the one flag (`BASKFY_FNO_F3_AUTO_EXIT`, the desk's `FNO_F3_AUTO_EXIT`).
+
+## F3-7 — F3 on the web page and in the quarterly re-test · ⚠ UNREVIEWED
+
+**Context.** F3-6 shipped F3 on paper with two things not built: the web app's card and F3 in
+`04` §6's quarterly re-test (the worker's option loader keeps only the expiries that have a
+future, so every NIFTY weekly is dropped). Maulik, 29 Sep 2026: *"Let's complete this task. and
+then deployed on AWS"*. Taken by the agent, each cheap to reverse:
+
+1. **Two families, `F3N` and `F3B`, with scope `DIRECTIONAL`,** run by F3-3's proxy
+   (`directional_retest.run_symbol`) — not a port into `research.py`. The proxy is the only code
+   that has ever priced F3 on the closing files, and one implementation cannot drift from itself.
+   Rejected: a new `research` family (a second copy of the rules).
+2. **A separate raw loader (`IndexLoader`)** rather than widening the research panel: the panel is
+   the golden's contract (`panels_from_contracts` reproduces `RESEARCH.md` exactly), and widening
+   it would move every index family's numbers. An F3 family without the loader raises instead of
+   running on the panel.
+3. **The trim** (expiries ≤ 70 days, strikes within 25 % of the front future) is sized so the
+   trades cannot change — the nearest monthly with five sessions is under 62 days away, and a leg a
+   quarter away broke its level long before — and a test asserts equal trades on the fixture.
+   Measured: ~1.2 GB above the worker's baseline and 18 s for a 2.1 M-row NIFTY chain (2022–2026),
+   once a quarter at 06:00 on a Saturday. Reverse: drop the two families from `FAMILIES`, or pass
+   `--families` to `fno_cli retest`.
+4. **Costs stay the proxy's (0.5 %, ₹0.05 floor), always `ASSUMED`,** with F3's own caveat naming the
+   four untested rules. FO3's measured medians are for the near monthly at 15:00, not the weekly
+   F3 sells; applying them would label a number `MEASURED` that was not measured for it.
+5. **`F3Config()`'s defaults, not a tenant's settings,** as every family runs the research's
+   parameters: the re-test tests the rule as written in `04` §11.
+6. **The card is read-only and reports the F3 gate** from a new API setting
+   `fno_f3_execution_enabled` (default false, reported only, like F1's and F2's). **The auto-exit
+   flag's value is not shown**: the API never reads the desk's env, and a page that printed a guess
+   would misstate a money path. The card says the rule in words instead; the desk's `/fno` shows
+   the flag's state.
+7. **The empty-page reason counts F3's scan too**, so a night on which only F3 wrote rows is not
+   described as "never scanned".

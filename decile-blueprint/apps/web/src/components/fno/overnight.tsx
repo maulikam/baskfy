@@ -35,14 +35,14 @@ import { UnderlyingLevel } from "./underlying-level";
  * Read-only: nothing here is a button, and every number is the last close or its settle.
  */
 
-interface Leg {
+export interface Leg {
   role: string;
   strike: string;
   option_type: string;
   settle?: string | null;
 }
 
-function legsOf(detail: Record<string, unknown>): Leg[] {
+export function legsOf(detail: Record<string, unknown>): Leg[] {
   const raw = detail.legs;
   if (!Array.isArray(raw)) return [];
   return raw.filter(
@@ -75,7 +75,7 @@ export function widths(legs: Leg[]): {
   };
 }
 
-function nested(
+export function nested(
   detail: Record<string, unknown>,
   key: string,
   field: string,
@@ -85,7 +85,7 @@ function nested(
   return detailStr(inner as Record<string, unknown>, field);
 }
 
-function Fact({ label, value }: { label: string; value: string }) {
+export function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col">
       <dt className="text-xs text-muted-foreground">{label}</dt>
@@ -94,7 +94,7 @@ function Fact({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Reasons({ reasons }: { reasons: string[] }) {
+export function Reasons({ reasons }: { reasons: string[] }) {
   if (reasons.length === 0) return null;
   return (
     <ul className="list-disc space-y-0.5 pl-5 text-xs text-muted-foreground">
@@ -228,7 +228,7 @@ export function F1Card({
   );
 }
 
-function PositionLegs({ legs }: { legs: Record<string, unknown> }) {
+export function PositionLegs({ legs }: { legs: Record<string, unknown> }) {
   const list = legsOf(legs);
   if (list.length === 0) return null;
   return (

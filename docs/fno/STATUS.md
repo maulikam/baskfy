@@ -37,6 +37,7 @@ the first module not marked ✅.
 | F3-3 — EOD re-test | ✅ | `fno.directional_retest` over the 1,165 archived bhavcopies: after costs NIFTY n=206 −0.021R, BANKNIFTY n=166 −0.020R; the four intraday rules untested and named (`evidence/f3-retest.md`). Not in the quarterly families |
 | F3-4 — Evening scan | ✅ | `fno.f3_scan` on the nightly `run_scan`: one row per underlying in 04 §8's states, the candidate with levels, confirm, expiry, legs, credit, max loss, lots (6 tests) |
 | F3-5 — Desk | ✅ | The 09:20 plan, the minute watch, the exit held for the click or sent under `BASKFY_FNO_F3_AUTO_EXIT`, the add, the nightly mark, `/fno`'s F3 blocks; the guard admits F3N/F3B (17 replay tests). **No web card** |
+| F3-7 — Web card + quarterly re-test | ✅ built, 🟡 not deployed | `/options/overnight`'s read-only F3 section (`GET /fno/overnight` `f3`); `F3N`/`F3B` in `retest.FAMILIES` on a raw loader with the weeklies (first run 3 Oct 2026 06:00 once deployed). DB-backed worker/API tests and the deploy not run from the cloud session (DECISIONS-FO F3-7) |
 
 States: ⬜ not started · 🔄 in progress · ✅ green · ⛔ blocked · 🟡 partial · ⛁ data-blocked.
 

@@ -2450,3 +2450,23 @@ Built as sleeve F3 of the F&O book on your three answers (DECISIONS-FO M.5); pap
   sizes to zero lots — the EOD re-test's finding (`evidence/f3-retest.md`: the daily half loses
   after costs on both underlyings) is a reason to leave it at ₹0 through the paper period.
 
+
+## 29 Sep 2026 night — F3-7 is built and pushed, but not deployed: the deploy needs your Mac
+
+F3's web section (`/options/overnight`) and `F3N`/`F3B` in the quarterly re-test are committed on
+`claude/jolly-brown-6aeyjb` (DECISIONS-FO F3-7). The session that built them ran in a cloud
+container that **cannot ship**: its AWS keys are refused by STS (`InvalidClientTokenId`) and it has
+no Docker daemon to build the three arm64 images. What is needed, from the Mac, outside the
+session and the 18:40–21:15 nightly window:
+
+    git fetch origin claude/jolly-brown-6aeyjb && git checkout claude/jolly-brown-6aeyjb
+    aws sso login --sso-session baskfy
+    bash tools/deploy/ship.sh
+
+* **Why before Saturday:** the quarterly re-test's Beat fires on the first Saturday of October
+  (**3 Oct, 06:00 IST**). Deployed before then, its first run includes F3's two families; after,
+  they wait for January unless run by hand (`fno_cli retest --force --families F3N,F3B`).
+* **Not run in that session:** the DB-backed worker and API tests (no TimescaleDB there). Run them
+  on the Mac before shipping: `make test-db` in `decile-blueprint` with the test database exported.
+* Nothing in F3-7 moves a flag, a capital figure or an order path. Q10 (F3's capital) and Q12
+  (its auto-exit flag) are still yours and unchanged.

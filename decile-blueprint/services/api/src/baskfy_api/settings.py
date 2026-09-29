@@ -484,6 +484,8 @@ class Settings(BaseSettings):
     # be added (``02`` Track B).
     fno_f1_execution_enabled: bool = False
     fno_f2_execution_enabled: bool = False
+    #: F3 (M.5). Reported only. Its exit flag is the desk's and is not read here.
+    fno_f3_execution_enabled: bool = False
     fno_carry_enabled: bool = False
     fno_scan_enabled: bool = False
     fno_monitor_enabled: bool = False

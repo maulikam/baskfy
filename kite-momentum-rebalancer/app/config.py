@@ -150,6 +150,9 @@ SWING_MONITOR_ENABLED = os.getenv("BASKFY_SWING_MONITOR_ENABLED", "false").lower
 # (non-negotiable 4) and every gateway guard apply exactly as they do to a human click. What
 # is removed is the human, and nothing else.
 SWING_AUTO_EXECUTE = os.getenv("BASKFY_SWING_AUTO_EXECUTE", "false").lower() == "true"
+# SW29/SW30: the benchmark the swing gate reads — the worker's `swing_index_slug`, read from the
+# same environment name so the nightly and the session's live re-read ask about the same index.
+SWING_INDEX_SLUG = os.getenv("BASKFY_SWING_INDEX_SLUG", "nifty-smallcap-250")
 # SW15 "Scan now" from the desk page: the same two rules the API applies, read from the same
 # environment names so the two buttons cannot disagree — at least this many seconds between
 # two requests, and a QUEUED/RUNNING run older than this no longer counts as in flight.

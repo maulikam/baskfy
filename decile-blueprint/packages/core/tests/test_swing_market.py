@@ -15,6 +15,8 @@ from baskfy_core.swing.market import (
     breadth_snapshot,
     drawdown_locked,
     exposure_tier,
+    index_reading,
+    intraday_tier,
     market_gate,
 )
 
@@ -156,3 +158,53 @@ def test_a_recovered_sleeve_resumes_at_the_bottom_rung() -> None:
     )
     assert t.drawdown_locked is False
     assert t.new_entries_allowed is True
+
+
+# --- SW30: the gate re-read on the live index (Maulik, 29 Sep 2026) --------------------------
+
+
+def test_index_reading_is_the_ten_and_twenty_day_simple_averages() -> None:
+    levels = [float(v) for v in range(1, 21)]  # 1 … 20, oldest first
+    reading = index_reading(levels, CONFIG)
+    assert reading == IndexReading(close=20.0, ma_fast=15.5, ma_slow=10.5)
+
+
+def test_index_reading_refuses_fewer_levels_than_the_slow_average_names() -> None:
+    assert index_reading([100.0] * 19, CONFIG) is None
+
+
+def test_a_live_level_above_a_flat_tape_crosses_the_ten_day_over_the_twenty() -> None:
+    """Nineteen closes at 100 and today at 101: the 10-day is 100.10, the 20-day 100.05 — the
+    cross he asked the gate to open on; at 99 it is the cross back down."""
+    up = index_reading([100.0] * 19 + [101.0], CONFIG)
+    down = index_reading([100.0] * 19 + [99.0], CONFIG)
+    assert up is not None and up.long_bias
+    assert down is not None and down.bearish
+    assert market_gate(snapshot(10.0), up, CONFIG) is MarketGate.GREEN
+    assert market_gate(snapshot(10.0), down, CONFIG) is MarketGate.RED
+
+
+def test_a_live_green_after_a_closing_red_allows_entries_at_the_bottom_rung() -> None:
+    close = exposure_tier(
+        current_level=2, closed_r_multiples=[], gate=MarketGate.RED, config=CONFIG
+    )
+    live = intraday_tier(close, MarketGate.GREEN, CONFIG)
+    assert live == ExposureTier(0, 2, 25.0, new_entries_allowed=True)
+
+
+def test_the_ladder_never_climbs_on_a_quote() -> None:
+    close = ExposureTier(1, 4, 50.0, new_entries_allowed=True)
+    assert intraday_tier(close, MarketGate.GREEN, CONFIG) == close
+    assert intraday_tier(close, MarketGate.AMBER, CONFIG) == close
+
+
+def test_a_live_red_refuses_entries_and_a_cross_back_restores_the_close_rung() -> None:
+    close = ExposureTier(2, 6, 75.0, new_entries_allowed=True)
+    red = intraday_tier(close, MarketGate.RED, CONFIG)
+    assert red == ExposureTier(0, 2, 25.0, new_entries_allowed=False)
+    assert intraday_tier(close, MarketGate.GREEN, CONFIG) == close
+
+
+def test_a_drawdown_lock_holds_whatever_the_index_does() -> None:
+    locked = ExposureTier(0, 2, 25.0, new_entries_allowed=False, drawdown_locked=True)
+    assert intraday_tier(locked, MarketGate.GREEN, CONFIG) == locked

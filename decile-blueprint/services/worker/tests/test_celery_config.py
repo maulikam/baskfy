@@ -300,17 +300,17 @@ class TestTheBrokerDoesNotRedeliverALongNight:
         assert timeout <= 12 * 60 * 60
 
 
-class TestTheMarketGateReadsTheMidSmallcap400:
-    """SW17's decision, and the guard against "fixing" it back (9 Sep 2026).
+class TestTheMarketGateReadsTheSmallcap250:
+    """SW29's decision, and the guard against "fixing" it back (29 Sep 2026).
 
-    `67df9b4`: *"Maulik's call: the book trades mid- and small-caps, so the tape it asks about is
-    nifty-mid-small-400, with nifty-500 as the fallback."* The book screens mid- and small-cap
-    breakouts; a large-cap-weighted index answers a question about somebody else's market.
+    Maulik, in session: *"Use this index as an underlying for the swing ... use this index
+    instead"* — NIFTY SMLCAP 250 (Kite 267273). It supersedes SW17 (`67df9b4`, 3 Sep 2026), which
+    had set `nifty-mid-small-400`.
 
-    M87 reverted that to `nifty-500` because `docs/swing/04` §8.2 still said so, and pinned the
-    wrong value with a test asserting the setting matched THE DOCUMENT. That is the failure this
-    class now guards against from the other side: the decision is the authority, and a doc that
-    disagrees is the thing to fix.
+    M87 once reverted SW17 to `nifty-500` because `docs/swing/04` §8.2 still said so, and pinned
+    the wrong value with a test asserting the setting matched THE DOCUMENT. This class guards
+    against that from the other side: the decision is the authority, and a doc that disagrees is
+    the thing to fix.
     """
 
     def test_worker_settings_index_slug_matches_deps(self) -> None:
@@ -321,10 +321,8 @@ class TestTheMarketGateReadsTheMidSmallcap400:
             "the benchmark the gate actually reads has drifted from the other default"
         )
 
-    def test_the_benchmark_is_the_midsmallcap_400(self) -> None:
-        """Pinned to SW17's decision. It changed the verdict when M87 undid it: on 3 Sep the
-        MidSmall 400 read GREEN (10-day 21,592.34 over 20-day 21,581.78) where the Nifty 500
-        read RED, and the gate decides whether the book may enter at all."""
-        assert WorkerSettings.model_fields["swing_index_slug"].default == "nifty-mid-small-400", (
-            "nifty-500 is the FALLBACK, not the benchmark — see SW17 and M87's reversal"
+    def test_the_benchmark_is_the_smallcap_250(self) -> None:
+        """Pinned to SW29's decision (Maulik, 29 Sep 2026), not to any document."""
+        assert WorkerSettings.model_fields["swing_index_slug"].default == "nifty-smallcap-250", (
+            "nifty-500 is the FALLBACK, not the benchmark — see SW29, SW17 and M87's reversal"
         )

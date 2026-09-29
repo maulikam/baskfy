@@ -281,10 +281,11 @@ class KiteProvider:
         return records
 
     #: Our universe slug -> Kite's own index tradingsymbol. Kite abbreviates; nothing derives one
-    #: name from the other, so the two the swing gate can ask about are written out. A slug that
+    #: name from the other, so the ones the swing gate can ask about are written out. A slug that
     #: is not here simply has no live level and the gate falls back to published closes, which is
     #: the pre-9-Sep-2026 behaviour and never wrong, only late.
     INDEX_QUOTE_SYMBOL: Final[dict[str, str]] = {
+        "nifty-smallcap-250": "NIFTY SMLCAP 250",
         "nifty-mid-small-400": "NIFTY MIDSML 400",
         "nifty-500": "NIFTY 500",
     }

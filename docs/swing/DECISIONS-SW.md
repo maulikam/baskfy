@@ -2834,3 +2834,31 @@ cap through `_held_refusal`. `manage_open_positions` manages each position and e
 raise line carries its `position_id` (`sw_plan_line.position_id`, already in the schema); the
 desk's `_sell` and `_raise_stop` act on the position the line names. **How to reverse:**
 `pyramiding=False`.
+
+## SW29 — the market gate reads NIFTY Smallcap 250; by Maulik's instruction in session (29 Sep 2026) ✅ decided by Maulik
+
+**Context.** Maulik, in session, linking Kite's chart of `NIFTY SMLCAP 250` (instrument 267273):
+*"Use this index as an underlying for the swing. Currently, we are using different indexes where we
+are checking the 10-day moving average and 20-day moving average, so use this index instead."*
+The gate (`04` §8.2) read NIFTY MidSmallcap 400 since SW17 (`67df9b4`, 3 Sep 2026).
+
+**What changed.** The benchmark slug is `nifty-smallcap-250` in every default that names it:
+`WorkerSettings.swing_index_slug`, `PipelineDependencies.swing_index_slug`, the API's
+`Settings.swing_index_slug`, `run_detect_swing`'s keyword default and both `.env.example`s (which
+still said `nifty-500`, stale since SW17). `KiteProvider.INDEX_QUOTE_SYMBOL` gains
+`nifty-smallcap-250 → NIFTY SMLCAP 250` so the live scan's intraday level (9 Sep) works for the
+new benchmark; the MidSmallcap 400 mapping stays. The box sets no `BASKFY_SWING_INDEX_SLUG`, so the
+code default is what runs. `index_snapshot_daily` on the box holds 2,415 Smallcap 250 sessions,
+2017-01-02 → 2026-09-29, so the 10/20-day averages are readable on the first night.
+
+**What did not change.** The rule (10-day SMA over the 20-day: long bias; under: RED), the
+fallback (NIFTY 500), breadth, and every other sleeve: VBT, TWT and the weekly desk's
+`structural_indices` are not the swing gate. Past `sw_market` rows keep the index they were read
+with (`index_slug` is stored per row).
+
+**Tests.** `test_celery_config.TestTheMarketGateReadsTheSmallcap250` pins the default to this
+decision; `test_swing_scan_now` checks the benchmark has a Kite quote symbol.
+
+**How to reverse.** Set `BASKFY_SWING_INDEX_SLUG=nifty-mid-small-400` in the box's
+`.env.staging.compose` (no image needed), or revert the defaults.
+

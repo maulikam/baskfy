@@ -828,7 +828,7 @@ async def run_detect_swing(  # noqa: PLR0913 - one keyword per input the day dep
     trade_date: dt.date,
     *,
     user_id: int,
-    index_slug: str = "nifty-mid-small-400",
+    index_slug: str = "nifty-smallcap-250",
     execution_enabled: bool = False,
     pipeline_run_id: int | None = None,
     extra_bars: pl.DataFrame | None = None,

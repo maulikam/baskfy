@@ -271,8 +271,10 @@ COMPLETE or a dead status. §9.4 says what each answer writes. The GTT is unchan
 8.1 **Breadth** over the liquid universe at the close: `pct_up_strong_1m` = share with
 `ret_20 ≥ strong_move_pct` [25]; `pct_new_52w_high` = share with `close ≥ high_1y`;
 `pct_above_ma_slow` = share with `close > ma_slow`.
-8.2 **Index reading:** **NIFTY MidSmallcap 400**'s `index_ma_fast` [10]- and `index_ma_slow`
-[20]-bar SMAs (fallback NIFTY 500; none → the index is ignored).
+8.2 **Index reading:** **NIFTY Smallcap 250**'s (Kite `NIFTY SMLCAP 250`, instrument 267273)
+`index_ma_fast` [10]- and `index_ma_slow` [20]-bar SMAs (fallback NIFTY 500; none → the index is
+ignored). **SW29, Maulik, 29 Sep 2026** — *"use this index instead"*; it replaces SW17's NIFTY
+MidSmallcap 400. The history below is kept because the lesson in it still applies.
 
 > ⚠ **This said NIFTY 500 until 9 Sep 2026 and that was stale, not the rule.** SW17 (`67df9b4`,
 > 3 Sep) changed the benchmark on Maulik's call — *"the book trades mid- and small-caps, so the

@@ -96,8 +96,11 @@ history; D3 is no longer the engineering blocker.
 **This cost two days and a wrong live trading gate. Read it before "fixing" a setting that
 disagrees with a document.**
 
-The swing market gate reads **NIFTY MidSmallcap 400** (`nifty-mid-small-400`), fallback NIFTY 500.
-Maulik set it in SW17 (`67df9b4`, 3 Sep 2026): *"the book trades mid- and small-caps, so the tape
+The swing market gate reads **NIFTY Smallcap 250** (`nifty-smallcap-250`), fallback NIFTY 500 —
+Maulik's instruction of 29 Sep 2026 (`docs/swing/DECISIONS-SW.md` SW29). The story below is
+about the gate it replaced, NIFTY MidSmallcap 400, and its lesson is unchanged.
+
+The gate read **NIFTY MidSmallcap 400** (`nifty-mid-small-400`) from 3 Sep. Maulik set it in SW17 (`67df9b4`, 3 Sep 2026): *"the book trades mid- and small-caps, so the tape
 it asks about is nifty-mid-small-400."* The book screens mid- and small-cap breakouts; a
 large-cap-weighted index answers a question about a market it does not trade.
 

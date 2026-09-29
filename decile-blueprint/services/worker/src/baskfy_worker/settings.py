@@ -58,21 +58,15 @@ class WorkerSettings(BaseSettings):
     swing_max_open_positions_max: int = Field(default=20, gt=0, le=50)
     #: The benchmark the market gate reads, with ``nifty-500`` as the fallback.
     #:
-    #: **`nifty-mid-small-400`, and M87 was WRONG to change it (9 Sep 2026).**
+    #: **`nifty-smallcap-250`, by Maulik's instruction (29 Sep 2026; DECISIONS-SW SW29).**
+    #: *"Use this index as an underlying for the swing ... use this index instead"* — NIFTY SMLCAP
+    #: 250, Kite instrument 267273. It supersedes SW17 (`67df9b4`, 3 Sep 2026), which had moved
+    #: the gate to `nifty-mid-small-400` because the book trades mid- and small-caps.
     #:
-    #: SW17 (`67df9b4`, 3 Sep 2026) set this deliberately: *"Maulik's call: the book trades mid-
-    #: and small-caps, so the tape it asks about is nifty-mid-small-400, with nifty-500 as the
-    #: fallback."* The book screens mid- and small-cap breakouts; asking a large-cap-weighted
-    #: index whether that tape is healthy is asking about somebody else's market.
-    #:
-    #: M87 reverted it to `nifty-500` because `docs/swing/04` §8.2 and STANDING-ANSWERS A12 still
-    #: said so — treating the disagreement as a bug in the code rather than as documentation that
-    #: SW17 had not updated. It even added a test pinning `nifty-500` "against the document",
-    #: which locked the wrong value in. The docs are now corrected to match the decision.
-    #:
-    #: **If this and the docs ever disagree again, the DECISION wins and the doc is the thing to
-    #: fix.** Do not "correct" this to nifty-500.
-    swing_index_slug: str = "nifty-mid-small-400"
+    #: History worth keeping: M87 once reverted SW17 to `nifty-500` because `docs/swing/04` §8.2
+    #: still named NIFTY 500, and pinned that "against the document". **If this and the docs ever
+    #: disagree again, the DECISION wins and the doc is the thing to fix** (root CLAUDE.md).
+    swing_index_slug: str = "nifty-smallcap-250"
     #: SW11 (STANDING-ANSWERS A4, MD5): the one-shot S2 Kite timing probe at 09:04. Off by
     #: default; on for the one morning Maulik has logged in to Kite before 09:00, and the task
     #: disables itself with a marker file after one good run.

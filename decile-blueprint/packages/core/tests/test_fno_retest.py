@@ -26,8 +26,9 @@ TABLE_FAMILIES = {"B4", "B1", "B2", "B3", "C1", "C2", "A0", "A1", "A1R", "A2", "
 
 
 class TestTheRegistry:
-    def test_every_research_family_is_registered_plus_f1_and_f2(self) -> None:
-        assert TABLE_FAMILIES | {"B4_LOSS_CLOSE", "F2"} == rt.FAMILY_KEYS
+    def test_every_research_family_is_registered_plus_f1_f2_and_f3(self) -> None:
+        # F3N/F3B: the directional credit spread's daily half (DECISIONS-FO M.5, F3-7).
+        assert TABLE_FAMILIES | {"B4_LOSS_CLOSE", "F2", "F3N", "F3B"} == rt.FAMILY_KEYS
 
     def test_b4_is_the_research_run(self) -> None:
         b4 = next(f for f in rt.FAMILIES if f.key == "B4")

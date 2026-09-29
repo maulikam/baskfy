@@ -48,6 +48,18 @@ would risk in ₹, and `REJECTED_SIZE` where the ceiling refuses it), open posit
 trailing stop, the GTT's state, next roll date, sessions held, P&L in ₹ and R), and closed trades
 with their rolls.
 
+**F3 section** (F3-7). One card per underlying — NIFTY on the weekly expiry (F3N), BANKNIFTY on
+the monthly (F3B): the session the desk may plan it at 09:20, the index level (the shared overlay,
+as F1), the night's state chip `As of close, <date>`, the reasons, the daily direction and the
+75-minute confirm's sentence, the levels (close, support, resistance, 20-day average, weekly
+range), and on a candidate the proposed spread (wing and short with settles, expiry, credit, max
+loss per lot, the decay-target and loss-cut prices, the key level, the sizing sentence). Below:
+open spreads `Marked at settle, <date>` (lots, legs, credit taken, price, P&L in ₹ and R, key level,
+target, cut, days held), closed spreads in R, and the evidence card — the EOD re-test's line, the
+four rules it cannot test, the latest `F3N`/`F3B` quarterly re-test with its caveat. The exits are
+said in words, with the auto-exit switch's rule; the page states no flag value it does not read,
+and binds no action.
+
 ## 3. `/options/fno` — Stock F&O information (web, read-only)
 
 The banner from `04` §5 ("None of these numbers predicted a profitable trade after costs in
@@ -91,4 +103,5 @@ Phone: the table collapses to symbol · IV ÷ RV · OI chg · ban, and a tap ope
 * **Exits and adds**: an F3 exit the monitor raised with the flag off shows `WAITS FOR YOUR CLICK`
   with a **Send the exit (paper)** button and its sentence (short first, then the wing); an add
   shows **Add (paper)** with its sentence. Both post to the one execute route and lapse with the
-  plan's expiry. The web app (`/options/overnight`) has no F3 card yet (F3-PLAN).
+  plan's expiry. The web app's `/options/overnight` carries F3 read-only (§2, F3-7); the buttons are
+  here only.

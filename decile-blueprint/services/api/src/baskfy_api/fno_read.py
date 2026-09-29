@@ -33,6 +33,7 @@ from pydantic import BaseModel
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from baskfy_core.fno import directional_retest
 from baskfy_core.fno.calendar import monthly_expiries
 from baskfy_core.fno.config import FoSleeve, FoSleeveGroup, group_of
 from baskfy_core.models import (
@@ -85,6 +86,23 @@ RESEARCH_F2_LINE: Final = (
     "F2, the long-only chandelier, re-costed with its rolls: n = 2,334, +0.017R (t = 0.71), "
     "win 39 %. By year: -0.026, +0.455, -0.129, -0.143, -0.141"
 )
+
+#: F3-3's EOD re-test of F3's daily rules (``docs/fno/evidence/f3-retest.md``, 28 Sep 2026).
+RESEARCH_F3_LINE: Final = (
+    "The daily half of F3's rules, re-tested on the closing files 3 Jan 2022 to 22 Sep 2026, "
+    "after costs: NIFTY n = 206, -0.021R a trade (t = -2.26, 67 % win); BANKNIFTY n = 166, "
+    "-0.020R (t = -1.60, 57 % win); near zero before costs. Whatever edge the method has must "
+    "come from the intraday rules, which only the paper period can test"
+)
+#: F3's underlyings in ``04`` §8's order, with the sleeve each trades (M.5).
+F3_UNDERLYINGS: Final[tuple[tuple[str, str], ...]] = (
+    ("NIFTY", FoSleeve.F3N.value),
+    ("BANKNIFTY", FoSleeve.F3B.value),
+)
+#: The four rules a closing file cannot test, as the proxy names them.
+F3_NOT_TESTED: Final[tuple[str, ...]] = directional_retest.NOT_TESTED
+#: The quarterly re-test's F3 families (``baskfy_core.fno.retest``, F3-7).
+F3_FAMILIES: Final = frozenset({"F3N", "F3B"})
 
 
 class VerdictRow(BaseModel):
@@ -382,6 +400,22 @@ class FnoF2Out(BaseModel):
     closed: list[FnoJournalOut]
 
 
+class FnoF3Out(BaseModel):
+    """F3, the directional index credit spread (M.5): what the night's scan read per underlying,
+    the open spreads marked at settle, the closed ones, and the evidence it stands on. Read-only
+    like the rest of the page: the desk's ``/fno`` holds the plan, the exit and the add."""
+
+    research_line: str
+    #: The rules a closing file cannot test (``directional_retest.NOT_TESTED``), named on the card.
+    not_tested: list[str]
+    scan_date: dt.date | None
+    underlyings: list[FnoUnderlyingOut]
+    open: list[FnoPositionOut]
+    closed: list[FnoJournalOut]
+    #: The latest ``F3N``/``F3B`` quarterly re-test rows, when one has run.
+    backtests: list[FnoBacktestOut]
+
+
 class FnoGateOut(BaseModel):
     group: str
     #: ``PAPER`` unless the sleeve's execution flag is on; reported, never branched on here.
@@ -403,6 +437,7 @@ class FnoOvernightOut(BaseModel):
     journal: list[FnoJournalOut]
     evidence: FnoEvidenceOut
     f2: FnoF2Out
+    f3: FnoF3Out
 
 
 class FnoInfoRowOut(BaseModel):

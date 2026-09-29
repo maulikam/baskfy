@@ -13,6 +13,14 @@ index condor, 3 % for stock options). Where FO3's 15:00 sample has at least
 ÷ mid replaces the assumption and the row says ``MEASURED``; otherwise ``ASSUMED``
 (DECISIONS-FO FO9.2 says how a family's many names become one number). Futures families keep the
 research's round-trip cost: FO3 samples options only.
+
+**F3** (``F3N`` NIFTY weekly, ``F3B`` BANKNIFTY monthly; DECISIONS-FO M.5) is the daily half of
+``04`` §11 run by :mod:`baskfy_core.fno.directional_retest` — the proxy F3-3 ran over the archive,
+now over the table. It needs the **weeklies**, which :func:`panels_from_contracts` drops (it keeps
+the two expiries that have a future), so its rows come through an :data:`IndexLoader` of raw
+bhavcopy rows, trimmed by :func:`trim_index_contracts`. Its costs are the proxy's own (0.5 % of
+premium per leg, ₹0.05 floor), always ``ASSUMED``, and its caveat names the four intraday rules
+a closing file cannot test.
 """
 
 from __future__ import annotations
@@ -26,7 +34,9 @@ from typing import Final
 
 import polars as pl
 
+from baskfy_core.fno import directional_retest as dr
 from baskfy_core.fno import research as r
+from baskfy_core.fno.config import F3Config
 
 #: ``07`` §4's Tier 2E caveat, verbatim. Every row and every card carries it (``07`` §4).
 TIER_2E_CAVEAT: Final = (
@@ -37,6 +47,13 @@ TIER_2E_CAVEAT: Final = (
 TIER_2E_CAVEAT_MEASURED: Final = (
     "End-of-day closes, not fills. Slippage is the measured 15:00 median half-spread of the "
     "names traded (FO3), not a fill. `n` legs were modelled because they did not trade."
+)
+#: F3's caveat: the proxy's own costs, and the four rules a closing file cannot see.
+TIER_2E_CAVEAT_F3: Final = (
+    "End-of-day closes, not fills. Slippage is an assumed 0.5 % of premium per leg per crossing "
+    "(₹0.05 floor), not measured. Only the daily half of 04 §11 is tested; not tested: "
+    + "; ".join(dr.NOT_TESTED)
+    + "."
 )
 #: ``04`` §6: the measured number replaces the assumption at 20 sessions.
 MIN_MEASURED_SESSIONS: Final = 20
@@ -88,6 +105,8 @@ class Scope(StrEnum):
     STOCK_OPTIONS = "STOCK_OPTIONS"
     FUTURES = "FUTURES"
     BASIS = "BASIS"
+    #: F3: one index's daily directional rules, on its raw rows (weeklies included).
+    DIRECTIONAL = "DIRECTIONAL"
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +119,8 @@ class Family:
     condor: r.CondorParams | None = None
     futures: tuple[r.FuturesFamily, r.FuturesParams] | None = None
     debit: r.DebitStructure | None = None
+    #: F3's underlying (``NIFTY`` or ``BANKNIFTY``) when ``scope`` is ``DIRECTIONAL``.
+    directional: str | None = None
 
 
 _STOCK = r.CondorParams(slip_pct=0.03)
@@ -193,6 +214,18 @@ FAMILIES: Final[tuple[Family, ...]] = (
         futures=(r.FuturesFamily.A4, r.FuturesParams(horizon=20, k_atr=2.0)),
     ),
     Family("E", "Cash-futures carry (front month, >= 5 days to expiry)", Scope.BASIS),
+    Family(
+        "F3N",
+        "F3 directional credit spread, NIFTY weekly: the daily half of 04 §11 (M.5)",
+        Scope.DIRECTIONAL,
+        directional="NIFTY",
+    ),
+    Family(
+        "F3B",
+        "F3 directional credit spread, BANKNIFTY monthly: the daily half of 04 §11 (M.5)",
+        Scope.DIRECTIONAL,
+        directional="BANKNIFTY",
+    ),
 )
 FAMILY_KEYS: Final = frozenset(f.key for f in FAMILIES)
 
@@ -208,6 +241,21 @@ class Panels:
 #: ``symbols -> options panel rows`` for those symbols (``panel.py``'s columns). The worker pages
 #: them out of Postgres; a test slices an in-memory panel.
 OptionsLoader = Callable[[frozenset[str]], pl.DataFrame]
+
+#: ``symbol -> that index's raw bhavcopy rows``: its FUTIDX rows and its OPTIDX rows of every
+#: listed expiry, weeklies included (``fo_contract_daily``'s columns, or the day files' with
+#: ``date``). F3's families read these; the other families never call it.
+IndexLoader = Callable[[str], pl.DataFrame]
+
+#: F3 trims an index's option rows to expiries at most this many days after the session. The
+#: nearest monthly with five sessions left is at most next month's last expiry (< 62 days away),
+#: so 70 days keeps the whole of this month's and next month's listings — and
+#: ``directional_retest.monthly_expiries`` never mistakes a cut month's weekly for its monthly.
+DIRECTIONAL_EXPIRY_DAYS: Final = 70
+#: ...and to strikes within this fraction of the session's front-month future close. The short
+#: sits ~1 % beyond the weekly range and the wing 2 % further; a leg a quarter away would have
+#: passed its level break many sessions earlier.
+DIRECTIONAL_STRIKE_BAND: Final = 0.25
 
 #: Stock option families run this many symbols at a time (DECISIONS-FO FO9.3). Every family's
 #: state is per symbol (a condor per (symbol, expiry), a debit trade per symbol's busy window,
@@ -233,6 +281,41 @@ def empty_options() -> pl.DataFrame:
             "volume": pl.Int64,
         }
     )
+
+
+def trim_index_contracts(contracts: pl.DataFrame, symbol: str) -> pl.DataFrame:
+    """``symbol``'s FUTIDX rows, and its OPTIDX rows within :data:`DIRECTIONAL_EXPIRY_DAYS` of the
+    session and :data:`DIRECTIONAL_STRIKE_BAND` of that session's front-month future close.
+
+    What the proxy never reads, dropped before it builds its per-strike maps, so a quarter's run
+    holds one index's near chain rather than every far strike NSE lists. The proxy's trades are
+    the same with or without the trim (``test_fno_directional_retest``'s F3 tests assert it).
+    """
+    frame = (
+        contracts.rename({"trade_date": "date"}) if "trade_date" in contracts.columns else contracts
+    ).filter(pl.col("symbol") == symbol)
+    futures = frame.filter(pl.col("instrument") == "FUTIDX")
+    front = (
+        futures.filter(pl.col("expiry") >= pl.col("date"))
+        .sort("date", "expiry")
+        .group_by("date", maintain_order=True)
+        .first()
+        .select("date", pl.col("close").cast(pl.Float64).alias("_front"))
+    )
+    band = DIRECTIONAL_STRIKE_BAND
+    options = (
+        frame.filter(
+            (pl.col("instrument") == "OPTIDX")
+            & (pl.col("expiry") <= pl.col("date") + pl.duration(days=DIRECTIONAL_EXPIRY_DAYS))
+        )
+        .join(front, on="date", how="inner")
+        .filter(
+            (pl.col("strike").cast(pl.Float64) >= pl.col("_front") * (1 - band))
+            & (pl.col("strike").cast(pl.Float64) <= pl.col("_front") * (1 + band))
+        )
+        .drop("_front")
+    )
+    return pl.concat([futures, options], how="diagonal_relaxed")
 
 
 def slice_loader(options: pl.DataFrame) -> OptionsLoader:
@@ -358,6 +441,25 @@ def _params(family: Family, slippage: Slippage) -> dict[str, object]:
         }
     if family.debit is not None:
         out |= {"structure": family.debit.value, "horizon": 10, "slip_pct": 0.03}
+    if family.directional is not None:
+        f3 = F3Config()
+        out |= {
+            "underlying": family.directional,
+            "expiry_kind": "weekly" if family.directional == "NIFTY" else "monthly",
+            "pivot_lookback": f3.pivot_lookback,
+            "trend_sessions": f3.trend_sessions,
+            "weekly_sessions": f3.weekly_sessions,
+            "distance_pct": str(f3.distance_pct),
+            "wing_pct": str(f3.wing_pct),
+            "short_premium_min_inr": str(f3.short_premium_min_inr),
+            "decay_target_pct": str(f3.decay_target_pct),
+            "loss_cut_mult": str(f3.loss_cut_mult),
+            "level_buffer_pct": str(f3.level_buffer_pct),
+            "add_working_pct": str(f3.add_working_pct),
+            "slip_pct": dr.INDEX_COSTS.slip_pct,
+            "slip_min_inr": dr.INDEX_COSTS.slip_min,
+            "not_tested": list(dr.NOT_TESTED),
+        }
     if slippage.source is SlippageSource.MEASURED:
         out["measured_names"] = slippage.names
     return out
@@ -370,7 +472,7 @@ def _per_year(summary: r.Summary) -> dict[str, object]:
     }
 
 
-def run_family(  # noqa: PLR0913 - the family, its data, its spreads and two sharing knobs
+def run_family(  # noqa: PLR0913 - the family, its data, its spreads and three sharing knobs
     family: Family,
     futures: pl.DataFrame,
     load_options: OptionsLoader,
@@ -378,8 +480,13 @@ def run_family(  # noqa: PLR0913 - the family, its data, its spreads and two sha
     *,
     cont: pl.DataFrame | None = None,
     batch: int = SYMBOL_BATCH,
+    load_index: IndexLoader | None = None,
 ) -> FamilyResult:
-    """Run one family. ``cont`` may be passed to share one continuous series between families."""
+    """Run one family. ``cont`` may be passed to share one continuous series between families.
+
+    F3's families need ``load_index`` (the raw rows with the weeklies); running one without it is
+    refused rather than run on the panel that dropped them.
+    """
     if futures.is_empty():
         raise ValueError("the re-test needs futures rows; the panel is empty")
     first, last = futures["date"].min(), futures["date"].max()
@@ -389,7 +496,8 @@ def run_family(  # noqa: PLR0913 - the family, its data, its spreads and two sha
     caveat = (
         TIER_2E_CAVEAT_MEASURED if slippage.source is SlippageSource.MEASURED else TIER_2E_CAVEAT
     )
-    series = cont if cont is not None else r.continuous(futures)
+    if family.scope is Scope.DIRECTIONAL:
+        caveat = TIER_2E_CAVEAT_F3
 
     def result(
         n: int, net: float | None, gross: float | None, per_year: dict[str, object]
@@ -425,6 +533,19 @@ def run_family(  # noqa: PLR0913 - the family, its data, its spreads and two sha
                 "share_net_above_7pct": round(study.share_net_above_7pct, 4),
             },
         )
+    if family.scope is Scope.DIRECTIONAL:
+        if family.directional is None or load_index is None:
+            raise ValueError(
+                f"family {family.key} needs the index's raw rows (load_index): the options panel "
+                "drops the weeklies F3 trades"
+            )
+        symbol = family.directional
+        contracts = trim_index_contracts(load_index(symbol), symbol)
+        if contracts.filter(pl.col("instrument") == "OPTIDX").is_empty():
+            return result(0, None, None, {})
+        got = dr.run_symbol(dr.index_panel(contracts, symbol), F3Config())
+        return result(got.summary.n, got.summary.exp_r, got.summary.gross_r, _per_year(got.summary))
+    series = cont if cont is not None else r.continuous(futures)
     if family.futures is not None:
         signal, params = family.futures
         panel = r.futures_panel(series)
@@ -471,19 +592,20 @@ def retest_due(today: dt.date, last_run: dt.date | None) -> bool:
 Progress = Callable[[FamilyResult], None]
 
 
-def run_all(
+def run_all(  # noqa: PLR0913 - the data, the spreads and three keyword knobs
     futures: pl.DataFrame,
     load_options: OptionsLoader,
     measured: Mapping[str, tuple[float, int]] | None = None,
     *,
     families: tuple[Family, ...] = FAMILIES,
     progress: Progress | None = None,
+    load_index: IndexLoader | None = None,
 ) -> list[FamilyResult]:
     """Every family, one continuous series shared between them."""
     cont = r.continuous(futures)
     out: list[FamilyResult] = []
     for family in families:
-        res = run_family(family, futures, load_options, measured, cont=cont)
+        res = run_family(family, futures, load_options, measured, cont=cont, load_index=load_index)
         if progress is not None:
             progress(res)
         out.append(res)

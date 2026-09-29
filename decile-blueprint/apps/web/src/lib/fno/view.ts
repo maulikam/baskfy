@@ -150,4 +150,25 @@ export const SLEEVE_NAME: Record<string, string> = {
   F1N: "NIFTY condor",
   F1B: "BANKNIFTY condor",
   F2: "Stock-futures breakout",
+  F3N: "NIFTY directional spread",
+  F3B: "BANKNIFTY directional spread",
 };
+
+/** F3's expiry per underlying (M.5's third answer): NIFTY weekly, BANKNIFTY monthly. */
+export function f3ExpiryKind(symbol: string): string {
+  return symbol === "NIFTY" ? "Weekly expiry" : "Monthly expiry";
+}
+
+/** F3's direction as a reader says it: `UP` sells a put spread, `DOWN` a call spread. */
+export function f3DirectionText(direction: string | null): string {
+  switch (direction) {
+    case "UP":
+      return "Up: sell a put spread below support";
+    case "DOWN":
+      return "Down: sell a call spread above resistance";
+    case "NONE":
+      return "No direction";
+    default:
+      return "Not read";
+  }
+}

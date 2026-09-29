@@ -1732,8 +1732,9 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * F1 and F2, read-only
-         * @description ``05`` §2 in one call: the header, the F1 cards, the evidence card and the F2 section.
+         * F1-F3, read-only
+         * @description ``05`` §2 in one call: the header, the F1 cards, the evidence card, the F2 section and
+         *     the F3 section (M.5, F3-7).
          */
         get: operations["getFnoOvernight"];
         put?: never;
@@ -7141,6 +7142,28 @@ export interface components {
                 [key: string]: number;
             };
         };
+        /**
+         * FnoF3Out
+         * @description F3, the directional index credit spread (M.5): what the night's scan read per underlying,
+         *     the open spreads marked at settle, the closed ones, and the evidence it stands on. Read-only
+         *     like the rest of the page: the desk's ``/fno`` holds the plan, the exit and the add.
+         */
+        FnoF3Out: {
+            /** Backtests */
+            backtests: components["schemas"]["FnoBacktestOut"][];
+            /** Closed */
+            closed: components["schemas"]["FnoJournalOut"][];
+            /** Not Tested */
+            not_tested: string[];
+            /** Open */
+            open: components["schemas"]["FnoPositionOut"][];
+            /** Research Line */
+            research_line: string;
+            /** Scan Date */
+            scan_date: string | null;
+            /** Underlyings */
+            underlyings: components["schemas"]["FnoUnderlyingOut"][];
+        };
         /** FnoFamilyOut */
         FnoFamilyOut: {
             latest_retest: components["schemas"]["FnoBacktestOut"] | null;
@@ -7291,6 +7314,7 @@ export interface components {
             empty_reason: string | null;
             evidence: components["schemas"]["FnoEvidenceOut"];
             f2: components["schemas"]["FnoF2Out"];
+            f3: components["schemas"]["FnoF3Out"];
             /** Gates */
             gates: components["schemas"]["FnoGateOut"][];
             /** Hard Exit Tomorrow */
@@ -7476,7 +7500,7 @@ export interface components {
          * @description How flags group the sleeves (``01`` §4): ``F1N`` and ``F1B`` are one flag, ``F1``.
          * @enum {string}
          */
-        FoSleeveGroup: "F1" | "F2";
+        FoSleeveGroup: "F1" | "F2" | "F3";
         /**
          * FragilityRunOut
          * @description docs/10 §"honesty features": one of the five runs in the fragility readout.

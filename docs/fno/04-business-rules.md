@@ -95,6 +95,13 @@ FO3 has ≥ 20 sessions of it, and the research default otherwise. Each run writ
 `fo_backtest_run` with the tier, the caveat text, n, net and gross R, per-year rows, and the
 slippage source. The page shows the latest run per family beside the original.
 
+**F3** (F3-7) is two families of the same run, `F3N` (NIFTY weekly) and `F3B` (BANKNIFTY monthly):
+the daily half of §11 as the EOD proxy of `evidence/f3-retest.md`, with `F3Config`'s defaults, over
+each index's raw rows **with the weeklies** (the option panel keeps only the expiries that have a
+future). Its slippage is the proxy's own 0.5 % of premium per leg (₹0.05 floor), always
+`ASSUMED`, and its caveat names the four intraday rules a closing file cannot test. The overnight
+page's F3 section shows its latest run.
+
 ## §7 — Loss limits
 
 F1, per underlying: pause after **3** consecutive trades closed by the loss close or worse

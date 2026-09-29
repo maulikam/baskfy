@@ -6523,6 +6523,73 @@
         "title": "FnoF2Out",
         "type": "object"
       },
+      "FnoF3Out": {
+        "description": "F3, the directional index credit spread (M.5): what the night's scan read per underlying,\nthe open spreads marked at settle, the closed ones, and the evidence it stands on. Read-only\nlike the rest of the page: the desk's ``/fno`` holds the plan, the exit and the add.",
+        "properties": {
+          "backtests": {
+            "items": {
+              "$ref": "#/components/schemas/FnoBacktestOut"
+            },
+            "title": "Backtests",
+            "type": "array"
+          },
+          "closed": {
+            "items": {
+              "$ref": "#/components/schemas/FnoJournalOut"
+            },
+            "title": "Closed",
+            "type": "array"
+          },
+          "not_tested": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Not Tested",
+            "type": "array"
+          },
+          "open": {
+            "items": {
+              "$ref": "#/components/schemas/FnoPositionOut"
+            },
+            "title": "Open",
+            "type": "array"
+          },
+          "research_line": {
+            "title": "Research Line",
+            "type": "string"
+          },
+          "scan_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scan Date"
+          },
+          "underlyings": {
+            "items": {
+              "$ref": "#/components/schemas/FnoUnderlyingOut"
+            },
+            "title": "Underlyings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "research_line",
+          "not_tested",
+          "scan_date",
+          "underlyings",
+          "open",
+          "closed",
+          "backtests"
+        ],
+        "title": "FnoF3Out",
+        "type": "object"
+      },
       "FnoFamilyOut": {
         "properties": {
           "latest_retest": {
@@ -7046,6 +7113,9 @@
           "f2": {
             "$ref": "#/components/schemas/FnoF2Out"
           },
+          "f3": {
+            "$ref": "#/components/schemas/FnoF3Out"
+          },
           "gates": {
             "items": {
               "$ref": "#/components/schemas/FnoGateOut"
@@ -7132,7 +7202,8 @@
           "open_structures",
           "journal",
           "evidence",
-          "f2"
+          "f2",
+          "f3"
         ],
         "title": "FnoOvernightOut",
         "type": "object"
@@ -7749,7 +7820,8 @@
         "description": "How flags group the sleeves (``01`` §4): ``F1N`` and ``F1B`` are one flag, ``F1``.",
         "enum": [
           "F1",
-          "F2"
+          "F2",
+          "F3"
         ],
         "title": "FoSleeveGroup",
         "type": "string"
@@ -39215,7 +39287,7 @@
     },
     "/api/v1/fno/overnight": {
       "get": {
-        "description": "``05`` §2 in one call: the header, the F1 cards, the evidence card and the F2 section.",
+        "description": "``05`` §2 in one call: the header, the F1 cards, the evidence card, the F2 section and\nthe F3 section (M.5, F3-7).",
         "operationId": "getFnoOvernight",
         "responses": {
           "200": {
@@ -39319,7 +39391,7 @@
             "description": "Data pipeline is degraded"
           }
         },
-        "summary": "F1 and F2, read-only",
+        "summary": "F1-F3, read-only",
         "tags": [
           "fno"
         ]

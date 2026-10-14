@@ -276,6 +276,9 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     # because it is served: the route runs the named screen server-side and stores what that
     # screen returned, so `source = 'SCREEN'` is a fact rather than a caller's claim.
     "/cb/baskets/from-screen": {"post"},
+    # Re-cut on demand (Maulik, 14 Oct 2026): re-runs a screen basket's own screen; previews, or
+    # writes the next version on confirm. Same catalog write, same order gate.
+    "/cb/baskets/{slug}/recut": {"post"},
     # T8.1: mark-as-invested records a broker book the user already traded. GET list/detail
     # and the accrued fee ledger. No execute — batch status on mark is always PLANNED.
     "/cb/investments": {"get"},

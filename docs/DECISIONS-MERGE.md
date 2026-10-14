@@ -8477,3 +8477,30 @@ the overlap page's Laya panel (which now reads an empty cache and says so), `ove
 Redis wake key (a no-op with no listener), the OV3/OV11 record above. Removing the vocabulary
 would need a migration over stored tags and buys nothing while the sidecar is gone; it is a
 follow-up if Maulik wants the panel gone too.
+
+## RECUT — a screen basket is re-cut on demand, by Maulik's choice in session (14 Oct 2026) ✅ decided by Maulik
+
+**What prompted it.** Maulik saved two baskets from screens and asked whether a basket "is linked to
+the screen always, so whenever the stock list changes in the screen it also reflects on the basket".
+It did not: `POST /cb/baskets/from-screen` writes a GENESIS version once, and `source_screen_id`
+(migration 0017, "what makes the re-cut possible") was never read by anything. Offered on-demand vs
+a scheduled re-cut, he chose **on demand** — "re-run the screen, see what was added and removed,
+and decide when to rebalance".
+
+**What was built.** `POST /cb/baskets/{slug}/recut` (`routers/curated_from_screen.py`): sole-tenant
+only, `source = 'SCREEN'` baskets only, re-runs the basket's own screen server-side.
+`confirm=false` previews added / removed / kept and writes nothing; `confirm=true` writes the next
+version (label `CHANGED`). A cut identical to the current version is never written, so a double
+click cannot stack versions. It keeps the current version's name count (trimmed if the screen now
+returns fewer) and the weight method recorded in its notes; `CUSTOM` falls back to `EQUAL` and the
+response says so. No order path — buying the new holdings is still the Invest hand-off. The web
+basket page shows a "Re-cut from screen" panel for screen baskets.
+
+**Done on the box the same day, outside the repo** (both reversible):
+- Baskets 102 `avg-sharp-12-1m` and 103 `maulik` set `PRIVATE` → `PUBLISHED` at his instruction.
+  Every read route filters on `visibility = 'PUBLISHED'` and `cb_basket` has no owner column, so a
+  basket saved from a screen is invisible everywhere, its own page included. **Still open:** the
+  next basket saved from a screen is hidden again, until an owner-aware read lands.
+- `BASKFY_KITE_PUBLISHER_API_KEY` set to the Kite **Connect** key: Kite answered `Invalid api_key`
+  for the Publisher key (tested from the box), and accepts the Connect key on the same form.
+  Backup: `/opt/baskfy/.env.staging.pre-publisher-key-*`.

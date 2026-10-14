@@ -850,6 +850,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cb/baskets/{slug}/recut": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Re-run a screen basket's screen; preview, or save it as the next version
+         * @description Re-cut a ``source = 'SCREEN'`` basket from the screen it was saved from (no order path).
+         */
+        post: operations["recutBasketFromScreen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cb/fees": {
         parameters: {
             query?: never;
@@ -10970,6 +10990,62 @@ export interface components {
          * @enum {string}
          */
         ReconciliationState: "OPEN" | "RESOLVED" | "DISMISSED";
+        /** RecutHoldingOut */
+        RecutHoldingOut: {
+            /** Previous Weight */
+            previous_weight: string | null;
+            /** Rank */
+            rank: number;
+            /** Symbol */
+            symbol: string;
+            /** Weight */
+            weight: string;
+        };
+        /**
+         * RecutIn
+         * @description ``confirm=false`` is a preview. Nothing else is required: the defaults keep the cut.
+         */
+        RecutIn: {
+            /**
+             * Confirm
+             * @default false
+             */
+            confirm: boolean;
+            /** Holdings */
+            holdings?: number | null;
+            method?: components["schemas"]["WeightMethod"] | null;
+        };
+        /** RecutOut */
+        RecutOut: {
+            /** Added */
+            added: string[];
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Changed */
+            changed: boolean;
+            /** Current Version No */
+            current_version_no: number;
+            /** Holdings */
+            holdings: components["schemas"]["RecutHoldingOut"][];
+            /** Kept */
+            kept: string[];
+            method: components["schemas"]["WeightMethod"];
+            /** Method Fell Back */
+            method_fell_back: boolean;
+            /** Removed */
+            removed: string[];
+            /** Screen Public Id */
+            screen_public_id: string;
+            /** Slug */
+            slug: string;
+            /** Version No */
+            version_no: number | null;
+            /** Written */
+            written: boolean;
+        };
         /** RegimeOut */
         RegimeOut: {
             /** Actual Equity Pct */
@@ -19111,6 +19187,113 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FromScreenOut"];
+                };
+            };
+            /** @description Bad request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Authentication required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Your plan does not include this feature */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description A scan is already in flight */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Setting exceeds the server's ceiling */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Too many requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Internal server error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+            /** @description Data pipeline is degraded */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ProblemOut"];
+                };
+            };
+        };
+    };
+    recutBasketFromScreen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecutIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecutOut"];
                 };
             };
             /** @description Bad request */

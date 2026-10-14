@@ -62,6 +62,8 @@ OpenApiSpec = dict[str, dict[str, dict[str, object]]]
 DELIBERATE_MUTATING_BASKET_ROUTES: dict[str, set[str]] = {
     "/api/v1/cb/baskets": {"post"},
     "/api/v1/cb/baskets/from-screen": {"post"},
+    #: Re-cut on demand (14 Oct 2026): the next version of a screen basket, from its own screen.
+    "/api/v1/cb/baskets/{slug}/recut": {"post"},
     "/api/v1/managers/me/baskets/{basket_slug}/publish": {"post", "delete"},
 }
 

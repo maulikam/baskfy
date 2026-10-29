@@ -30,7 +30,7 @@ use super::config::py::{add, mul, sub};
 use super::config::{CommonConfig, F3Config, FnoCeilings, FnoError, FnoResult, PlanState, py};
 use super::sizing::{FoSizing, size};
 use super::vol::OptionType;
-use crate::backtest::helpers::WideDecimal;
+use crate::decimal::WideDecimal;
 use crate::options::gating::Mode;
 
 const BAR_75_MINUTES: u32 = 75;
@@ -345,7 +345,7 @@ fn average_money(values: impl IntoIterator<Item = Decimal>, n: usize) -> FnoResu
         total,
         Decimal::from(n),
         -2,
-        crate::backtest::helpers::Rounding::HalfUp,
+        crate::decimal::Rounding::HalfUp,
     )
 }
 

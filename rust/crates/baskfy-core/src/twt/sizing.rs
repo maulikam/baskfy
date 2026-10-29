@@ -2,7 +2,7 @@
 //! (`docs/twt/04` §6).
 //!
 //! Money is `Decimal` (house rule 9). The arithmetic runs in
-//! [`WideDecimal`](crate::backtest::helpers::WideDecimal) — Python's `Decimal` in its default
+//! [`WideDecimal`](crate::decimal::WideDecimal) — Python's `Decimal` in its default
 //! context (28 significant digits, half-even) — so every intermediate rounds exactly where
 //! Python's does; the published fields are quantized to the paise (or passed through) and leave
 //! as `rust_decimal::Decimal`.
@@ -10,7 +10,7 @@
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use crate::backtest::helpers::{Rounding, WideDecimal};
+use crate::decimal::{Rounding, WideDecimal};
 use crate::error::{CoreError, CoreResult};
 use crate::twt::config::SizingConfig;
 

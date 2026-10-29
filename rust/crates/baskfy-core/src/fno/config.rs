@@ -91,9 +91,9 @@ pub mod py {
     use rust_decimal::Decimal;
 
     use super::{FnoError, FnoResult};
-    use crate::backtest::helpers::{Rounding, WideDecimal};
+    use crate::decimal::{Rounding, WideDecimal};
 
-    fn wide_error(e: &crate::backtest::helpers::BacktestError) -> FnoError {
+    fn wide_error(e: &crate::decimal::DecimalError) -> FnoError {
         FnoError::Decimal(e.to_string())
     }
 

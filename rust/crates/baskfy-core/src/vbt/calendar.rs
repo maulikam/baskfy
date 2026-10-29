@@ -30,7 +30,6 @@ const DATE: &str = "date";
 /// Shared frame helpers for the VBT ports (dates as polars day numbers, Python reprs, polars'
 /// total float order).
 pub(crate) mod frames {
-    use std::cmp::Ordering;
     use std::ops::Range;
 
     use chrono::{NaiveDate, TimeDelta};
@@ -118,24 +117,8 @@ pub(crate) mod frames {
         Ok(IdxCa::from_vec("".into(), v))
     }
 
-    /// polars' total order on floats: NaN equals NaN and sorts above every number.
-    pub(crate) fn tot_cmp(a: f64, b: f64) -> Ordering {
-        match (a.is_nan(), b.is_nan()) {
-            (true, true) => Ordering::Equal,
-            (true, false) => Ordering::Greater,
-            (false, true) => Ordering::Less,
-            (false, false) => a.partial_cmp(&b).unwrap_or(Ordering::Equal),
-        }
-    }
-
-    /// A polars float comparison under Kleene logic: null when either side is null.
-    pub(crate) fn cmp_opt(
-        a: Option<f64>,
-        b: Option<f64>,
-        accept: fn(Ordering) -> bool,
-    ) -> Option<bool> {
-        Some(accept(tot_cmp(a?, b?)))
-    }
+    /// polars' total order and its Kleene comparison, from the shared [`crate::pl`] (R3.1).
+    pub(crate) use crate::pl::{cmp as cmp_opt, tot_cmp};
 
     /// `.over(key)`'s groups: the runs of equal values of `key` in a frame sorted by it.
     pub(crate) fn runs(df: &DataFrame, key: &str) -> CoreResult<Vec<Range<usize>>> {

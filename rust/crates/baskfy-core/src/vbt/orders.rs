@@ -10,13 +10,12 @@
 //! `orders.apply_fill`.
 
 use std::cmp::Ordering;
-use std::str::FromStr;
 
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use crate::backtest::helpers::WideDecimal;
+use crate::decimal::WideDecimal;
 use crate::error::{CoreError, CoreResult};
 use crate::vbt::calendar::SessionCalendar;
 use crate::vbt::config::EntryConfig;
@@ -243,7 +242,7 @@ fn low_above_threshold(low: Decimal, limit: Decimal, fill_through_pct: f64) -> C
         // low > -inf is always true; low > +inf never.
         return Ok(threshold_negative);
     }
-    let through = WideDecimal::from_str(&format!("{fill_through_pct}"))
+    let through = crate::py::wide_from_float_str(fill_through_pct)
         .map_err(|e| CoreError::InvalidInput(e.to_string()))?;
     let share = through
         .div(&WideDecimal::from(100_i64))

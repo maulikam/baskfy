@@ -381,7 +381,10 @@ fn held_bars(rows: &[Row], config: &SeriesConfig) -> Vec<Held> {
                 go: ratio(r.open, *prev_settle),
                 gh: ratio(r.high, *prev_settle),
                 gl: ratio(r.low, *prev_settle),
-                ca_flag: gc > config.ca_up_ratio || gc < config.ca_down_ratio,
+                // polars' total order: a NaN `gc` (NaN settle, 0/0) is the largest value, so it
+                // flags the row as a corporate action and Python drops it (DECISIONS-RS R3.1).
+                ca_flag: crate::pl::gt(gc, config.ca_up_ratio)
+                    || crate::pl::lt(gc, config.ca_down_ratio),
             });
         }
     }

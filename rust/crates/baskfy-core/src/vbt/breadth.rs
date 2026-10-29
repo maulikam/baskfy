@@ -18,7 +18,7 @@ use polars::prelude::{DataFrame, IntoColumn, NamedFrom, Series};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use crate::backtest::helpers::{Rounding, WideDecimal};
+use crate::decimal::{Rounding, WideDecimal};
 use crate::error::{CoreError, CoreResult};
 use crate::swing::sizing::{ConfigNumber, config_number};
 use crate::vbt::calendar::frames;

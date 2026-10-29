@@ -519,11 +519,8 @@ pub fn continuous(futures: &DataFrame) -> FnoResult<DataFrame> {
             (Some(x), Some(y)) => Some(x.max(y)),
             (x, y) => x.or(y),
         };
-        // polars' `max` skips NaN (NaN only when every value is NaN).
-        a.spot = match (a.spot, r.underlying) {
-            (Some(x), Some(y)) => Some(if x.is_nan() || y > x { y } else { x }),
-            (x, y) => x.or(y),
-        };
+        // polars' `max` aggregation skips NaN (NaN only when every value is NaN; R3.1).
+        a.spot = crate::pl::nan_max([a.spot, r.underlying]);
         if a.instrument.is_none() {
             a.instrument = Some(r.instrument.clone());
         }
@@ -669,14 +666,16 @@ pub fn continuous(futures: &DataFrame) -> FnoResult<DataFrame> {
     )?)
 }
 
-/// `pl.max_horizontal(a, b)` of two non-null floats.
+/// `pl.max_horizontal("gc", 1.0)` of a non-null float: a broadcast literal runs polars'
+/// total-order kernel ([`crate::pl::max_horizontal_total`]).
 fn pmax_h(a: f64, b: f64) -> f64 {
-    if b > a { b } else { a }
+    crate::pl::max_horizontal_total([Some(a), Some(b)]).unwrap_or(a)
 }
 
-/// `pl.min_horizontal(a, b)` of two non-null floats.
+/// `pl.min_horizontal("gc", 1.0)` of a non-null float, the total-order kernel
+/// ([`crate::pl::min_horizontal_total`]).
 fn pmin_h(a: f64, b: f64) -> f64 {
-    if b < a { b } else { a }
+    crate::pl::min_horizontal_total([Some(a), Some(b)]).unwrap_or(a)
 }
 
 // =============================================================================================
@@ -1162,10 +1161,11 @@ pub fn futures_panel(cont: &DataFrame) -> FnoResult<DataFrame> {
                 (Some(x), Some(y)) => Some((x - y).abs()),
                 _ => None,
             };
-            let v = [a, b, cc]
-                .into_iter()
-                .flatten()
-                .reduce(|p, q| if q > p { q } else { p });
+            // `pl.max_horizontal(h - l, |h - c1|, |l - c1|)` over the frame: `c1` is a
+            // `shift(1).over("symbol")`, null on every symbol's first row, so both `|.. - c1|`
+            // columns hold a null, their pair's result holds one too, and every pair runs
+            // polars' total-order kernel (NaN the largest, a tie to the later value; R3.1).
+            let v = crate::pl::max_horizontal_total([a, b, cc]);
             trg.push(v);
         }
         let atrg = cols::rolling(&trg, cols::Roll::Mean, 14)?;
@@ -1341,16 +1341,8 @@ fn signals_frame(signals: &[Signal]) -> FnoResult<DataFrame> {
 }
 
 /// polars' float `>`: a total order in which every NaN equals every other NaN and sits above
-/// every number (`NaN > 0` is true, `1 > NaN` false), unlike IEEE.
-fn pl_gt(x: f64, y: f64) -> bool {
-    if x.is_nan() {
-        !y.is_nan()
-    } else if y.is_nan() {
-        false
-    } else {
-        x > y
-    }
-}
+/// every number (`NaN > 0` is true, `1 > NaN` false), unlike IEEE ([`crate::pl::gt`]).
+use crate::pl::gt as pl_gt;
 
 /// `a > b` in a polars filter: null is false, NaN the largest value.
 fn gt(a: Option<f64>, b: Option<f64>) -> bool {

@@ -18,7 +18,7 @@ use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use crate::backtest::helpers::{Rounding, WideDecimal};
+use crate::decimal::{Rounding, WideDecimal};
 use crate::error::CoreResult;
 use crate::vbt::config::ExitConfig;
 
@@ -205,8 +205,9 @@ pub(crate) mod wide {
 
     use rust_decimal::Decimal;
 
-    use crate::backtest::helpers::{Rounding, WideDecimal};
+    use crate::decimal::{Rounding, WideDecimal};
     use crate::error::{CoreError, CoreResult};
+    pub(crate) use crate::py::float_repr as py_float_repr;
 
     /// A decimal failure as the crate's arithmetic error.
     pub(crate) fn arith(e: impl std::fmt::Display) -> CoreError {
@@ -253,51 +254,6 @@ pub(crate) mod wide {
             .map_err(|e| CoreError::InvalidInput(format!("float({text}): {e}")))
     }
 
-    /// Python's `repr(float)`: the shortest round-tripping digits, fixed notation for decimal
-    /// exponents in `[-4, 16)` (always with a fractional part, `"12.0"`), scientific otherwise
-    /// (`"1e-05"`, `"1.5e+16"`).
-    pub(crate) fn py_float_repr(x: f64) -> String {
-        if x.is_nan() {
-            return "nan".to_owned();
-        }
-        if x.is_infinite() {
-            return if x > 0.0 { "inf" } else { "-inf" }.to_owned();
-        }
-        let sci = format!("{x:e}");
-        let (mantissa, exp) = sci.split_once('e').unwrap_or((sci.as_str(), "0"));
-        let exp: i64 = exp.parse().unwrap_or(0);
-        let (sign, mantissa) = match mantissa.strip_prefix('-') {
-            Some(m) => ("-", m),
-            None => ("", mantissa),
-        };
-        let digits: String = mantissa.chars().filter(char::is_ascii_digit).collect();
-        let n = i64::try_from(digits.len()).unwrap_or(i64::MAX);
-        if (-4..16).contains(&exp) {
-            if exp >= 0 {
-                let int_len = exp + 1;
-                if n <= int_len {
-                    let pad = usize::try_from(int_len - n).unwrap_or(0);
-                    format!("{sign}{digits}{}.0", "0".repeat(pad))
-                } else {
-                    let cut = usize::try_from(int_len).unwrap_or(0);
-                    format!("{sign}{}.{}", &digits[..cut], &digits[cut..])
-                }
-            } else {
-                let pad = usize::try_from(-exp - 1).unwrap_or(0);
-                format!("{sign}0.{}{digits}", "0".repeat(pad))
-            }
-        } else {
-            let (head, tail) = digits.split_at(1);
-            let point = if tail.is_empty() {
-                String::new()
-            } else {
-                format!(".{tail}")
-            };
-            let exp_sign = if exp < 0 { "-" } else { "+" };
-            format!("{sign}{head}{point}e{exp_sign}{:02}", exp.abs())
-        }
-    }
-
     /// `Decimal(str(x))` for a config float. A non-finite float is refused (Python would carry
     /// `Decimal('Infinity')`/`NaN` on, which no golden or real config does).
     pub(crate) fn from_py_float_str(x: f64) -> CoreResult<WideDecimal> {
@@ -307,7 +263,7 @@ pub(crate) mod wide {
                 py_float_repr(x)
             )));
         }
-        WideDecimal::from_str(&py_float_repr(x)).map_err(arith)
+        crate::py::wide_from_float_str(x).map_err(arith)
     }
 
     /// `Decimal(x)` for a float: its exact binary value (`n * 5**k` at exponent `-k`, as

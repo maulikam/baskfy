@@ -459,8 +459,8 @@ impl BacktestResult {
         if self.rebalance_dates.is_empty() {
             return Ok(WideDecimal::zero());
         }
-        WideDecimal::from(self.blind_rebalances.len())
-            .div(&WideDecimal::from(self.rebalance_dates.len()))
+        Ok(WideDecimal::from(self.blind_rebalances.len())
+            .div(&WideDecimal::from(self.rebalance_dates.len()))?)
     }
 }
 
@@ -491,49 +491,7 @@ pub type ProgressSink<'a> = &'a mut dyn FnMut(&BacktestProgress);
 // Python-value helpers
 // =============================================================================================
 
-/// Python's `repr(float)` (the shortest round-trip digits; scientific below 1e-4 and from
-/// 1e16; an integral value keeps `.0`).
-fn py_float_repr(v: f64) -> String {
-    if v.is_nan() {
-        return "nan".to_owned();
-    }
-    if v.is_infinite() {
-        return if v > 0.0 { "inf" } else { "-inf" }.to_owned();
-    }
-    let sign = if v.is_sign_negative() { "-" } else { "" };
-    if v.to_bits() << 1 == 0 {
-        return format!("{sign}0.0");
-    }
-    let sci = format!("{:e}", v.abs());
-    let (mantissa, exp) = sci.split_once('e').unwrap_or((sci.as_str(), "0"));
-    let exp: i64 = exp.parse().unwrap_or(0);
-    let digits: String = mantissa.chars().filter(char::is_ascii_digit).collect();
-    let len = i64::try_from(digits.len()).unwrap_or(i64::MAX);
-    if (-4..16).contains(&exp) {
-        if exp >= 0 {
-            let int_len = exp + 1;
-            if len <= int_len {
-                let pad = usize::try_from(int_len - len).unwrap_or(0);
-                format!("{sign}{digits}{}.0", "0".repeat(pad))
-            } else {
-                let cut = usize::try_from(int_len).unwrap_or(0);
-                format!("{sign}{}.{}", &digits[..cut], &digits[cut..])
-            }
-        } else {
-            let pad = usize::try_from(-exp - 1).unwrap_or(0);
-            format!("{sign}0.{}{digits}", "0".repeat(pad))
-        }
-    } else {
-        let (first, rest) = digits.split_at(1);
-        let frac = if rest.is_empty() {
-            String::new()
-        } else {
-            format!(".{rest}")
-        };
-        let esign = if exp < 0 { '-' } else { '+' };
-        format!("{sign}{first}{frac}e{esign}{:02}", exp.abs())
-    }
-}
+use crate::py::float_repr as py_float_repr;
 
 /// Python's `str(value)` of a polars cell as `to_list()`/`iter_rows()` hands it over; `None`
 /// for a null.
@@ -604,7 +562,7 @@ fn optional_decimal(value: &AnyValue<'_>) -> Result<Option<WideDecimal>, Backtes
         | AnyValue::Float32(_)
         | AnyValue::Float64(_)
         | AnyValue::String(_)
-        | AnyValue::StringOwned(_) => py_str(value).unwrap_or_default().parse().map(Some),
+        | AnyValue::StringOwned(_) => Ok(Some(py_str(value).unwrap_or_default().parse()?)),
         other => Err(BacktestError::Data(format!(
             "{other} is not a number the engine can weight by"
         ))),
@@ -625,7 +583,7 @@ fn wide(value: Decimal) -> WideDecimal {
 
 /// `_money(value)`, kept in Python's context.
 fn money(value: &WideDecimal) -> Result<WideDecimal, BacktestError> {
-    value.quantize(MONEY_EXPONENT, Rounding::HalfUp)
+    Ok(value.quantize(MONEY_EXPONENT, Rounding::HalfUp)?)
 }
 
 /// `int(value.to_integral_value(rounding=ROUND_DOWN))`.
@@ -638,7 +596,7 @@ fn int_down(value: &WideDecimal) -> Result<i64, BacktestError> {
 }
 
 fn out(value: &WideDecimal) -> Result<Decimal, BacktestError> {
-    value.try_to_decimal()
+    Ok(value.try_to_decimal()?)
 }
 
 fn days_to_date(days: i32) -> Option<NaiveDate> {
@@ -1046,7 +1004,7 @@ fn benchmark_growth(
     day: NaiveDate,
 ) -> Result<WideDecimal, BacktestError> {
     match (levels.get(&previous), levels.get(&day)) {
-        (Some(before), Some(after)) if *before > WideDecimal::zero() => after.div(before),
+        (Some(before), Some(after)) if *before > WideDecimal::zero() => Ok(after.div(before)?),
         _ => Ok(WideDecimal::from(1_i64)),
     }
 }

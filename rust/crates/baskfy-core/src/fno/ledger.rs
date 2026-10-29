@@ -17,9 +17,10 @@
 //!
 //! A pause stops new entries only; nothing here closes anything.
 //!
-//! The three pause predicates belong to `fno.exits` (another lane's port); they are carried
-//! here as private copies of `f1_paused`, `f2_month_paused` and `book_paused` (R2.3's rule)
-//! until `fno::exits` lands, and `options.journal.max_drawdown` likewise.
+//! The three pause predicates are `fno.exits`' own, imported as Python's `ledger.py` imports
+//! them ([`super::exits`]; a private copy until the wave-3 housekeeping, DECISIONS-RS R3.4).
+//! `options.journal.max_drawdown` is still a private copy until `options.journal` has a Rust
+//! module (R2.3's rule).
 //!
 //! Goldens: `L1/fno/ledger.<function>.case_NNN.json`.
 
@@ -31,11 +32,11 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer, ser::SerializeStru
 
 use super::config::py::{add, sub};
 use super::config::{
-    F1Config, F2Config, FnoCeilings, FnoConfig, FnoError, FnoResult, FoSleeve, FoSleeveGroup,
-    group_of, py,
+    FnoCeilings, FnoConfig, FnoError, FnoResult, FoSleeve, FoSleeveGroup, group_of, py,
 };
+use super::exits::{book_paused, f1_paused, f2_month_paused};
 use super::journal::CloseKind;
-use crate::backtest::helpers::WideDecimal;
+use crate::decimal::WideDecimal;
 
 /// F1's two sleeves, in the order the pauses are evaluated.
 ///
@@ -521,24 +522,6 @@ pub fn book_pause_limit(monthly_pause_inr: Decimal, ceilings: &FnoCeilings) -> D
         return ceiling;
     }
     py::min(monthly_pause_inr, ceiling)
-}
-
-/// `fno.exits.f1_paused`: the last `pause_consecutive` closed F1 trades were each ≤
-/// `pause_loss_r`.
-fn f1_paused(closed_r: &[Decimal], f1: &F1Config) -> bool {
-    let n = usize::try_from(f1.pause_consecutive).unwrap_or(0);
-    let tail = &closed_r[closed_r.len().saturating_sub(n)..];
-    tail.len() == n && tail.iter().all(|r| *r <= f1.pause_loss_r)
-}
-
-/// `fno.exits.f2_month_paused`: the month's closed F2 trades sum to ≤ `month_pause_r`.
-fn f2_month_paused(month_closed_r: &[Decimal], f2: &F2Config) -> FnoResult<bool> {
-    Ok(sum(month_closed_r.iter().copied())? <= f2.month_pause_r)
-}
-
-/// `fno.exits.book_paused`: the month's realised FO loss has reached `monthly_pause_inr`.
-fn book_paused(month_realised_inr: Decimal, monthly_pause_inr: Decimal) -> bool {
-    month_realised_inr <= -monthly_pause_inr
 }
 
 /// `04` §7 over one mode's closed trades up to `as_of`. Rows of the other mode are not read at

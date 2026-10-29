@@ -12,12 +12,11 @@
 //! Goldens: `sizing.size_entry`, `sizing.first_live_multiplier`.
 
 use std::cmp::Ordering;
-use std::str::FromStr;
 
 use rust_decimal::{Decimal, RoundingStrategy};
 use serde::{Deserialize, Serialize};
 
-use crate::backtest::helpers::{Rounding, WideDecimal};
+use crate::decimal::{Rounding, WideDecimal};
 use crate::error::{CoreError, CoreResult};
 use crate::options::costs::{mul, quantize, sub};
 use crate::vbt::config::SizingConfig;
@@ -117,7 +116,7 @@ impl PyDec {
         if x.is_infinite() {
             return Ok(Self::Inf { negative: x < 0.0 });
         }
-        WideDecimal::from_str(&format!("{x}"))
+        crate::py::wide_from_float_str(x)
             .map(Self::Finite)
             .map_err(|e| CoreError::InvalidInput(e.to_string()))
     }

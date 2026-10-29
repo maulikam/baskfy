@@ -1531,41 +1531,7 @@ mod numeric {
         format!("{x:.places$}").parse::<f64>().unwrap_or(x)
     }
 
-    /// `repr(float)`: shortest round-trip digits, positional for exponents -4..16 (always
-    /// with a decimal point), scientific otherwise.
-    pub(super) fn py_float_repr(x: f64) -> String {
-        let sci = format!("{x:e}");
-        let Some((mantissa, exp)) = sci.split_once('e') else {
-            return sci;
-        };
-        let Ok(exp) = exp.parse::<i64>() else {
-            return sci;
-        };
-        let sign = if mantissa.starts_with('-') { "-" } else { "" };
-        let digits: String = mantissa.chars().filter(char::is_ascii_digit).collect();
-        let n = i64::try_from(digits.len()).unwrap_or(i64::MAX);
-        if (-4..16).contains(&exp) {
-            if exp < 0 {
-                let zeros = "0".repeat(usize::try_from(-exp - 1).unwrap_or(0));
-                return format!("{sign}0.{zeros}{digits}");
-            }
-            let int_len = exp + 1;
-            if int_len >= n {
-                let zeros = "0".repeat(usize::try_from(int_len - n).unwrap_or(0));
-                return format!("{sign}{digits}{zeros}.0");
-            }
-            let cut = usize::try_from(int_len).unwrap_or(0);
-            return format!("{sign}{}.{}", &digits[..cut], &digits[cut..]);
-        }
-        let (head, rest) = digits.split_at(1);
-        let body = if rest.is_empty() {
-            head.to_owned()
-        } else {
-            format!("{head}.{rest}")
-        };
-        let esign = if exp < 0 { "-" } else { "+" };
-        format!("{sign}{body}e{esign}{:02}", exp.unsigned_abs())
-    }
+    pub(super) use crate::py::float_repr as py_float_repr;
 
     #[cfg(test)]
     mod tests {

@@ -145,17 +145,10 @@ impl SizedPosition {
     }
 }
 
-/// Python's `Decimal(str(x))` for a config float: the shortest round-trip digits of `x`.
+/// Python's `Decimal(str(x))` for a config float: `repr(x)`'s digits and scale (`1.0` is
+/// `Decimal("1.0")`, not `"1"` — DECISIONS-RS R3.2), through [`crate::py::decimal_from_float_str`].
 pub(crate) fn decimal_from_py_float(x: f64) -> CoreResult<Decimal> {
-    if !x.is_finite() {
-        return Err(CoreError::InvalidInput(format!(
-            "{x} is not a finite config number"
-        )));
-    }
-    let text = format!("{x}");
-    Decimal::from_str(&text)
-        .or_else(|_| Decimal::from_scientific(&format!("{x:e}")))
-        .map_err(|e| CoreError::InvalidInput(format!("{x} does not fit a Decimal: {e}")))
+    crate::py::decimal_from_float_str(x).map_err(|e| CoreError::InvalidInput(e.0))
 }
 
 /// A config float as Python's `Decimal(str(x))` sees it.

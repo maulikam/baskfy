@@ -42,7 +42,7 @@ use super::monitor::cost_reason;
 use super::series::{cols, continuous_futures};
 use super::sizing::{FoSizing, size};
 use super::vol::OptionType;
-use crate::backtest::helpers::{Rounding, WideDecimal};
+use crate::decimal::{Rounding, WideDecimal};
 use crate::options::costs::CostRates;
 use crate::options::gating::Mode;
 

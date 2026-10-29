@@ -40,7 +40,7 @@ stage() {
   # The box's env, with every money flag forced off and DRY_RUN forced on. Appended last so it
   # wins over the box's own lines (compose and env_file both take the last assignment).
   for f in .env.staging .env.staging.compose; do
-    { grep -Ev "$MONEY|^(DRY_RUN|BASKFY_DRY_RUN|BASKFY_DESK_DRY_RUN|BASKFY_(PY|WEB|DESK)_IMAGE|BASKFY_SITE_ADDRESS|BASKFY_DESK_SITE_ADDRESS|BASKFY_PUBLIC_URL|BASKFY_HTTPS?_PORT|BASKFY_ACME_[A-Z_]*)=" "$HOME_DIR/box/$f" || true
+    { grep -Ev "$MONEY|^(DRY_RUN|BASKFY_DRY_RUN|BASKFY_DESK_DRY_RUN|BASKFY_(PY|WEB|DESK)_IMAGE|BASKFY_SITE_ADDRESS|BASKFY_DESK_SITE_ADDRESS|BASKFY_PUBLIC_URL|BASKFY_DESK_HOST|BASKFY_HTTPS?_PORT|BASKFY_ACME_[A-Z_]*)=" "$HOME_DIR/box/$f" || true
       grep -oE "^[A-Z0-9_]+($MONEY)" "$HOME_DIR/box/$f" | sed 's/=$/=false/' || true
       cat <<EOF
 # --- local.sh: read-only on this Mac (no registered static IP) ---
@@ -59,6 +59,7 @@ BASKFY_DESK_IMAGE=baskfy-desk:$TAG
 BASKFY_SITE_ADDRESS=:80
 BASKFY_DESK_SITE_ADDRESS=:8081
 BASKFY_PUBLIC_URL=$URL
+BASKFY_DESK_HOST=$(echo "$URL" | sed -E 's|^[a-z]+://||; s|[:/].*$||')
 BASKFY_HTTP_PORT=8480
 BASKFY_HTTPS_PORT=8443
 EOF
@@ -143,7 +144,7 @@ tailscale)
   NOW=$(TZ=Asia/Kolkata date +%H%M)
   if [ "$NOW" -ge 1840 ] && [ "$NOW" -le 2120 ]; then
     echo "nightly window: not restarting now — run 'local.sh up' after 21:20 IST so the app uses this URL"
-  else exec "$0" up; fi
+  else exec bash "$0" up; fi
   ;;
 stage)   stage ;;
 down)    compose stop ;;

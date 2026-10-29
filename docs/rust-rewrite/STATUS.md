@@ -21,7 +21,10 @@ its golden tests run · `verified` — every golden for the module green, clippy
 | `cargo test --workspace` | **green** (RS4a): 45 test targets, 668 passed + 14 ignored (6 opt-in fuzz harnesses, 8 Parquet-fixture cases, R4.12); core 222, providers 437, testkit 9; **1,702 of 1,702 graded goldens** |
 | Pure core, golden-covered part (swing, options, backtest, ranking, twt, vbt, fno) | **complete** (RS3) — every committed golden green; the 128 `baskfy_core` modules with no goldens are still `not started` (table below) |
 | `baskfy-providers` (foundation RS4.0; kite, nse, archive, composite, fixtures, factory RS4a) | **ported** (RS4a): 437 tests green, 8 ignored until Parquet lands (R4.12); residuals below |
-| db, api (axum), worker, desk, execution, single binary | not started (next: `baskfy-db`, wave 4b) |
+| `baskfy-db` (read-only sqlx pool, typed rows; RS4b foundation) | **done** (RS4b): 10 unit + 8 bed tests green; every connection refuses writes (`25006`, proven on the bed) |
+| `baskfy-api` foundation (axum; settings, pipeline, problems, auth, CSRF check, rate limit, ETag, CORS, 44 route modules) | **done** (RS4b): 67 tests green (5 of them need the bed); `api_diff.py` **55 of 55 EQUAL** on `foundation.json` |
+| `cargo test --workspace` at RS4b | **green**: 58 test targets, 753 passed + 14 ignored (the same 14 as RS4a; built with `BASKFY_RS_TEST_DATABASE_URL` set, so no bed test is ignored); **1,702 of 1,702 graded goldens** |
+| API routes (the five lanes), worker, desk, execution, single binary | not started (next: the API lanes over `routes/*.rs`, graded by `tools/parity/api_diff.py`) |
 
 ## Wave 1 (RS1, RS1.1 — 29 Oct 2026) — swing and options ported, 126 of 126
 
@@ -506,6 +509,187 @@ Python imports that have no Rust home yet: `baskfy_core.tradebook` (`TradeFill`,
 kite.py) and `baskfy_core.universes.UNIVERSE_BY_SLUG` (nse.py; the screener has a private copy,
 R2.3) — port privately per R2.3 or ask the core lead.
 
+## Wave 4b foundation (RS4b, 29–30 Oct 2026) — `baskfy-db`, `baskfy-api`, the API harness
+
+**`baskfy-db`** (`rust/crates/baskfy-db`): one lazily-connected sqlx pool sized exactly as
+Python's `create_engine` (10 + 10, 5 s checkout, 1800 s recycle, pre-ping, statement cache 100;
+no statement timeout, as Python sets none — R5.2), **read-only on every connection**
+(`default_transaction_read_only=on` in the startup packet; `tests/bed.rs::a_write_is_refused`
+proves `UPDATE` and `CREATE TABLE` fail with SQLSTATE 25006), and typed row helpers: `numeric`
+decoded from the wire with asyncpg's scale (`0::numeric(10,2)` is `"0.00"`; sqlx's own decoder
+says `"0"` — R5.3), `timestamptz` as UTC, `date`, and `jsonb` as `OrderedJson` (Python's key order,
+Python's int/float split). Never migrates; Alembic owns the schema.
+
+**`baskfy-api`** (`rust/crates/baskfy-api`, binary `baskfy-api --host H --port P`):
+
+| Piece | Python | State |
+|---|---|---|
+| settings, 160 `BASKFY_*` fields, defaults, coercion, constraints, `require_configured` | `settings.py` | ported; field list held equal to Python's by a fixture |
+| problem+json, every type/status/title, extension members in Python's order | `problems.py`, `app.register_error_handlers` | ported |
+| validation errors (`400 invalid-screen-definition`, `errors[] {field, message, type}`), pydantic's date messages | `app._handle_validation` | ported for query parameters (`query.rs`); body validation arrives with the first write route |
+| request id, access log, JSON/text logging with redaction | `logging.py`, `app._request_context` | ported |
+| CORS (Starlette `CORSMiddleware`, hand-ported) | `app.register_middleware` | ported |
+| ETag / Cache-Control / Vary / 304 | `http_cache.py` | ported |
+| Starlette routing: decoded path, slash redirect (307), 404/405 problems, HEAD = 405 | Starlette `Router` | ported (R5.8) |
+| bearer JWT (PyJWT 2.13's rules), lifetime cap, unknown subject, **session epoch** | `auth.py` | ported (R5.5) |
+| principal + rate limit as the `/api/v1` router dependency (Python's Lua bucket, same keys) | `ratelimit.py` | ported; fails closed (503) without Redis |
+| entitlements (plan → overrides → the seven keys) | `entitlements.py`, `baskfy_core.entitlements` | ported |
+| CSRF double-submit check | `csrf.py` | check ported; cookie writers come with `/auth/refresh` |
+| `GET /health` | `app.py` | ported |
+| `GET /api/v1/me` | `routers/auth.py` | ported (R5.7: the staff-allowlist write is not performed) |
+| `GET /meta/factors`, `/meta/columns`, `/meta/trading-days` | `routers/meta.py` | ported |
+| `GET /meta/universes`, `/meta/ranking-presets`, `/meta/status`, `/meta/live-marks` | `routers/meta.py` | ported by the reference lane (below; `live_quotes` on the no-session path only, R5.11) |
+| `GET /metrics`, `/api/v1/openapi.json`, `/api/v1/docs` | `app.py`, FastAPI | **not started** |
+| every other router's GET routes | `routers/*.py` | ported by the five lanes (below) |
+
+**Tests ported:** `test_api_errors.py` (problem documents, authentication, request ids, rate
+limiting; `TestPipelineDegraded` waits for `/meta/status`), `test_api_auth.py`'s GET paths
+(`TestMe` read half, the token half of `TestSecurity`, the read half of `TestSessionEpoch`),
+`test_bad_request_problem.py`, `test_http_cache.py` (pure half and the wired half on
+`/meta/columns`), `test_log_redaction.py::TestTheFilter`, plus PyJWT's acceptance rules case by
+case (`tests/jwt.rs`, each checked against PyJWT 2.13). Not applicable yet: `test_security.py`
+(Argon2id/OTP/opaque tokens — no route that uses them is ported), `test_audit_auth_gates.py`
+(desk/baskets/kite routes not ported; their lanes inherit the cases).
+
+**Differential harness:** `tools/parity/api_diff.py` (README §"Grading the API") over
+`tools/parity/api_cases/foundation.json` — 55 cases, **55 EQUAL**: health, framework 404/405/307,
+decoded paths, HEAD, the three meta routes (incl. 304 revalidation), every token failure mode,
+`/me` for three real accounts plus anonymous and a stale-epoch token, CORS preflight and simple
+responses. The Python API boots against the bed with test settings only; its startup writes
+nothing (the bed's `pg_stat_user_tables` insert/update/delete total was unchanged across a full
+run).
+
+## API lanes (RS4b, 30 Oct 2026) — every GET route but one, 2,113 of 2,113 cases EQUAL
+
+Five lanes (reference, sleeves, derivatives, portfolio, accounts) ported the GET routes of the
+44 Python routers. Each lane then had an adversarial verifier, which fixed what it found and grew
+the case files. The integrator merged them (R5.10).
+
+**Grading.** `python3 tools/parity/api_diff.py --py-port 18001 --rs-port 18002 --env
+BASKFY_SOLE_USER_ID=1 --env BASKFY_FIXTURE_DIR=<an empty dir>` runs all six case files, 2,113
+cases, and gives **2,113 of 2,113 EQUAL**. Without `BASKFY_SOLE_USER_ID` (the 503 branch) it also
+gives **2,113 of 2,113 EQUAL**. Per case file: foundation 55, reference 810, sleeves 219,
+derivatives 230, portfolio 315, accounts 484.
+
+**Routes.** Python's routers declare 147 GET routes; 7 of them are `public` (never mounted, D9).
+Rust registers **139 of the 140 mounted router GETs**, plus `/health`. The one missing route is
+`GET /overlap` (R5.21). Not ported from `app.py`: `/metrics`, `/api/v1/openapi.json` and
+`/api/v1/docs`. Python's routers also declare **94 write routes** (60 POST, 16 DELETE, 11 PATCH,
+7 PUT); **none is registered** in Rust (the pool is read-only, R5.2). They are wave 4c.
+
+In the table below, cases are attributed to the router whose Python route they hit; framework
+cases are unrouted paths, the root and decoded-path probes.
+
+| Router | Lane | GET ported / total | Diff cases EQUAL / total | Write routes (wave 4c) |
+|---|---|---:|---:|---:|
+| `admin` | accounts | 9 / 9 | 93 / 93 | 5 |
+| `alerts` | accounts | 2 / 2 | 22 / 22 | 4 |
+| `api_keys` | accounts | 2 / 2 | 34 / 34 | 4 |
+| `auth` | foundation + accounts | 2 / 2 | 25 / 25 | 6 |
+| `backtests` | derivatives | 7 / 7 | 72 / 72 | 2 |
+| `baskets` | sleeves | 2 / 2 | 12 / 12 | 0 |
+| `billing` | portfolio | 3 / 3 | 40 / 40 | 2 |
+| `brokers` | portfolio | 3 / 3 | 33 / 33 | 2 |
+| `curated_costs` | accounts | 1 / 1 | 23 / 23 | 0 |
+| `curated_create` | accounts | — (no GET) | 0 / 0 | 1 |
+| `curated_customize` | accounts | — (no GET) | 0 / 0 | 1 |
+| `curated_drift` | accounts | — (no GET) | 0 / 0 | 2 |
+| `curated_engage` | accounts | 2 / 2 | 11 / 11 | 2 |
+| `curated_from_screen` | accounts | — (no GET) | 0 / 0 | 2 |
+| `curated_investments` | accounts | 3 / 3 | 67 / 67 | 3 |
+| `curated_plans` | accounts | — (no GET) | 0 / 0 | 3 |
+| `curated_sip` | accounts | 1 / 1 | 26 / 26 | 1 |
+| `curated_trending` | accounts | 1 / 1 | 6 / 6 | 0 |
+| `curated_versions` | accounts | 2 / 2 | 33 / 33 | 0 |
+| `desk` | reference | 5 / 5 | 51 / 51 | 0 |
+| `explore` | reference | 9 / 9 | 218 / 218 | 2 |
+| `fno` | derivatives | 3 / 3 | 16 / 16 | 1 |
+| `instruments` | reference | 6 / 6 | 180 / 180 | 0 |
+| `kite` | reference | 2 / 2 | 96 / 96 | 0 |
+| `managers` | accounts | 2 / 2 | 16 / 16 | 4 |
+| `market_data` | reference | 4 / 4 | 152 / 152 | 0 |
+| `meta` | reference + foundation | 7 / 7 | 55 / 55 | 0 |
+| `options` | derivatives | 9 / 9 | 124 / 124 | 3 |
+| `overlap` | derivatives | 3 / 4 — `GET /overlap` not ported (R5.21) | 17 / 17 | 5 |
+| `portfolio_overview` | portfolio | 7 / 7 | 118 / 118 | 3 |
+| `portfolios` | portfolio | 6 / 6 | 80 / 80 | 6 |
+| `public` | reference | 0 / 7 — never mounted (D9) | 6 / 6 | 0 |
+| `screens` | accounts | 4 / 4 | 108 / 108 | 8 |
+| `search` | reference | 1 / 1 | 77 / 77 | 0 |
+| `sleeve_state` | sleeves | 1 / 1 | 9 / 9 | 0 |
+| `sleeves` | sleeves | 2 / 2 | 25 / 25 | 1 |
+| `support` | — | — (no GET) | 0 / 0 | 1 |
+| `swing` | sleeves | 10 / 10 | 113 / 113 | 5 |
+| `track_b` | portfolio | 3 / 3 | 16 / 16 | 3 |
+| `trades` | portfolio | 1 / 1 | 27 / 27 | 2 |
+| `twt` | sleeves | 3 / 3 | 19 / 19 | 1 |
+| `vbt` | sleeves | 7 / 7 | 41 / 41 | 2 |
+| `watchlist` | accounts | 2 / 2 | 16 / 16 | 3 |
+| `webhook_endpoints` | accounts | 2 / 2 | 21 / 21 | 4 |
+| framework + `/health` (`app.py`) | foundation | 1 / 1 | 15 / 15 | — |
+| **total** | | **140 / 141** mounted (+7 public, never mounted) | **2113 / 2113** | **94** |
+
+**Audit at integration (30 Oct 2026):**
+* **No write and no order route is registered.** A source scan of every `.route(` in
+  `baskfy-api/src` finds 139 `get(...)` routes plus 14 empty `MethodRouter`s, the portfolio
+  lane's write-only paths, which answer 405 (R5.15). No `post`/`put`/`patch`/`delete`, and no
+  `place_order`/`modify_order`/`cancel_order`/`baskfy_execution` outside the tests that assert
+  their absence.
+* **The pool is read-only on every connection.** `baskfy_db::pool::READ_ONLY` is `true` and is sent
+  as `default_transaction_read_only=on` in the startup packet. No other pool is constructed, and no
+  SQL `INSERT`/`UPDATE`/`DELETE`/`SET ... READ WRITE` exists in the API.
+* **The public API is shut.** `routes::public` is never merged and its `router()` is empty; six
+  cases grade the 404s.
+* **No secrets in logs.** `Secret` redacts in `Debug`. The harness's server logs from both runs
+  were scanned for the JWT secret, any bearer token and the bed password: none found.
+
+**Cutover gates** (a route moves to Rust only when its gate is clear):
+* the live Kite overlay (R5.11);
+* `/baskets` without a snapshot (R5.17);
+* `/brokers/callback` (R5.27);
+* `/backtests/{id}/events` while a run is in flight (R5.22);
+* `GET /overlap` (R5.21);
+* every non-GET method (R5.15).
+
+R5.36 lists the residual differences no committed case reaches. R5.28 lists two **Python-side
+defects** the port reproduces on purpose (the `/trades` cross-tenant date leak and the
+unauthenticated rank-history read), to be fixed in Python first.
+
+**Tests:** `cargo test --workspace` with the bed URL: 61 targets, **928 passed, 0 failed,
+14 ignored** (the same 14 as RS4a). `baskfy-api` integration targets: `api_errors`, `jwt`,
+`pipeline`, `settings`, `reference` (19), `derivatives` (10), `portfolio` (12), plus the lanes'
+unit tests and the accounts bed HTTP tests in the lib.
+
+### Lane: derivatives — detail
+
+Every GET of the four routers except one, graded by `tools/parity/api_diff.py` over
+`tools/parity/api_cases/derivatives.json`: **230 of 230 EQUAL** (176 from the porter, 54 from the verifier) with `--env BASKFY_SOLE_USER_ID=1`
+(the bed's owner holds every options/FO row), and 230 of 230 without it (the 503 branch). Cases
+cover each route's parameters (dates, lax ints, bounds, `Literal`s, last-value-wins, blanks),
+the sole tenant and two other accounts, anonymous and bad tokens, 404s, 402s, 307s.
+
+| Route | Python | State |
+|---|---|---|
+| `GET /options/{today,scan/{sleeve},chain,positions,sessions,journal,backtest,calendar,config}` | `routers/options.py`, `options_read`, `options_settings` | ported (9 routes) |
+| `GET /fno/{overnight,info,config}` | `routers/fno.py`, `fno_read`, `fno_settings` | ported (3 routes) |
+| `GET /backtests`, `/{id}`, `/{id}/trades`, `/{id}/holdings`, `/{id}/export`, `/{id}/download/{artefact}`, `/{id}/events` | `routers/backtests.py`, `backtests` | ported (7 routes); `/events` of a run still in flight answers as Python's no-cache branch (R5.22) |
+| `GET /overlap/tags/export`, `/overlap/reviews/export`, `/overlap/catalyst-scan` | `routers/overlap.py`, `overlap`, `overlap_scan` | ported (3 routes) |
+| `GET /overlap` | `overlap.overlap` + `candidate_review` + `catalyst_tags` + live marks | **not ported** (R5.21): Python serves it |
+| every write of the four routers | — | **not registered** (R5.2): Python serves them |
+
+**What the bed cannot grade** (no rows): open/closed FO and options positions and journals
+(`fo_position`, `fo_journal`, `fo_mark`, `op_position`, `op_journal` are empty), options backtest
+runs, a finished backtest's artefacts and signed download, the corrections/labels exports. Their
+code follows Python line for line and the pure parts carry unit tests (`options_core`: roles,
+the never-pooled summary; `backtests`: the frame, the signature, the config re-dump, the CSV
+reader, the cursor), but no differential case has exercised them.
+
+**Tests:** `crates/baskfy-api/tests/derivatives.rs` (10: anonymous refusals and 405s for every
+path, no path names an order, no source names the execution package or a broker, the download
+link's refusals before any read; on the bed the sole-tenant guard, validation order, the
+entitlement gate, another account's 404, a failed run's artefacts and event stream) plus unit
+tests in the modules. Private ports of Python core: R5.20.
+
 ## Wave 3 answer keys (RS2) — ported at RS3
 
 Dumped from the live Python in the golden_ranking.py pattern (inputs round-tripped through JSON
@@ -554,8 +738,21 @@ separately), never ported blind.
 
 **Done at RS4a:** the wave-3 housekeeping below (R3.4, R3.1, the last R3.1 site in
 `fno::series` closed by the RS4a integrator) and wave-4 step 1, `baskfy-providers` (above).
-**Next is wave 4b:** `baskfy-db` (sqlx, read-only first, graded on a database copy), then
-`baskfy-api`.
+**Done at RS4b (foundation):** `baskfy-db` and the `baskfy-api` foundation with its harness
+(above). **Done at RS4b (lanes):** every GET route but `GET /overlap`, 2,113 of 2,113 cases
+EQUAL (above).
+
+**Next — wave 4c, the write routes** (94 of them). Run them on a **fresh bed copy** for every
+run, and compare the **database side effects** as well as the response: the rows each table
+gains, changes and loses, with the same masks discipline as the bodies. Wave 4c also needs a
+decision that lets the pool write (R5.2), one table at a time, idempotent (house rule 7). Before
+it starts:
+* collapse the lanes' duplicate helpers (R5.10);
+* add the big-integer `jsonb` variant (R5.36.1);
+* commit a fixture seed, so the paths the bed lacks are graded by committed cases (R5.30).
+
+Never a route that places, modifies or cancels an order (law 2: execution is the last wave).
+**Then the worker** (`baskfy-worker`, step 4 below).
 
 **Housekeeping step (R3.4, R3.1) — done:** collapse the R2.3/R3.4 copies
 (twt's `vbt_shared` config, calendar, breadth and indicator arithmetic onto `vbt::*`;

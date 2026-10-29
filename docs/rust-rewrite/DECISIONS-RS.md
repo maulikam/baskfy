@@ -101,6 +101,15 @@ swing`, commit with the reason, drop the `skip_serializing_if`, and delete the s
 test so it rejoins the main grading. Add a golden that sets `open_entry_counts` (LV10's per-name
 counts; today only the fuzz covers them — `golden.py`'s `_decode_build_entries` never passes it).
 
+
+**Resolved 29 Oct 2026, by Maulik's go-ahead** ("no need to wait on me, you can continue … regenerate
+the swing keys"): `tools/parity/golden.py swing` re-run from the live Python (byte-stable over two
+runs). It first had to be fixed: `_sub_config` handed a Decimal config field back as the string it
+is encoded as (`SizingConfig.min_trade_value_inr`), so the dumper crashed in `size_position`; it now
+decodes by the field's declared type. 49 swing goldens changed (new config fields echoed into the
+inputs; `build_entries` lines carry `"position_id": null`; case_010 is LV10's `BUY HELD`). Python's
+`test_swing_goldens.py` went from 13 red to green; Rust's `PlanLine.position_id` is always encoded
+and the stale-case split in `golden_swing_b.rs` is gone — 126 of 126 goldens green.
 ## R1.2 — Python's signed zero is reproduced (RS1, 29 Oct 2026) ⚠ UNREVIEWED
 
 **Context.** Differential fuzzing found that Python's `Decimal` keeps a negative zero

@@ -7,6 +7,7 @@
    "default_window_minutes": 5,
    "entry_limit_buffer_pct": 0.5,
    "entry_limit_max_adr": 0.25,
+   "entry_order_type": "MARKET",
    "fill_poll_interval_seconds": 0.5,
    "fill_poll_seconds": 10.0,
    "gtt_sweep_at": [
@@ -15,7 +16,13 @@
    ],
    "live_min_gap_pct": 10.0,
    "live_min_volume_pace": 3.0,
+   "market_protection_floor_pct": 0.05,
+   "market_protection_max_pct": 3.0,
    "monitor_close": [
+    15,
+    30
+   ],
+   "pending_cutoff_at": [
     10,
     45
    ],

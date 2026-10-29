@@ -1,0 +1,62 @@
+# Baskfy backend in Rust (docs/rust-rewrite/README.md, DECISIONS-RS R0.1/R0.2).
+# Every third-party version is pinned exactly ("=x.y.z"): a porter grading against a golden
+# must never see a dependency move underneath them. Bumping one is a DECISIONS-RS entry.
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.99"
+publish = false
+license = "UNLICENSED"
+
+[workspace.dependencies]
+baskfy-core = { path = "crates/baskfy-core" }
+baskfy-testkit = { path = "crates/baskfy-testkit" }
+
+# Computation only (law 1). polars: no IO, no parquet/csv, no default features; the features
+# below are the window/rolling/rank kernels baskfy_core's Python uses. Adding one is fine,
+# adding an IO feature (csv, parquet, json, ipc, cloud, http) is not — law_one.rs refuses it.
+polars = { version = "=0.55.2", default-features = false, features = [
+    "lazy",
+    "dtype-date",
+    "temporal",
+    "fmt_no_tty",
+    "rolling_window",
+    "ewma",
+    "cum_agg",
+    "round_series",
+    "abs",
+    "is_in",
+    "diff",
+    "pct_change",
+    "rank",
+    "strings",
+    "is_between",
+    "log",
+] }
+# serde-str: a Decimal serialises as "12.34" — exactly golden.py's encoding of Python Decimal.
+rust_decimal = { version = "=1.43.0", default-features = false, features = ["std", "serde-str", "maths"] }
+# No "clock" feature: Local::now/Utc::now do not exist in this build of chrono (law 1).
+chrono = { version = "=0.4.45", default-features = false, features = ["std", "serde"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.154" }
+thiserror = { version = "=2.0.21" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+# House rule 3 in Rust: no unwrap/expect/panic on paths that handle input. Tests opt out
+# file-by-file with an explicit #![allow(...)] at the top of the test crate.
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+float_cmp = "deny"

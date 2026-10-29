@@ -1,0 +1,30 @@
+{
+ "fn": "baskfy_core.screener.validate_definition",
+ "inputs": {
+  "definition": {
+   "index": "nifty-500",
+   "sort_by": "ret_12m"
+  },
+  "smuggle": {
+   "custom_filters": [
+    {
+     "enabled": false,
+     "left": "pg_sleep(10)",
+     "op": ">=",
+     "right": "ma_200"
+    }
+   ]
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "smuggled operand on a disabled slot is never looked at. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}} (pydantic: \"errors\" instead of \"message\"). Polars frames are {columns, dtypes, rows}; pandas frames add index and write NA/NaN/NaT as null. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `.venv/bin/python ../tools/parity/golden_ranking.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "valid": true
+ }
+}

@@ -1,0 +1,20 @@
+{
+ "fn": "baskfy_core.factor_registry.sql_for",
+ "inputs": {
+  "key": "nse_momentum_score"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "sql_for('nse_momentum_score'). Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}} (pydantic: \"errors\" instead of \"message\"). Polars frames are {columns, dtypes, rows}; pandas frames add index and write NA/NaN/NaT as null. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `.venv/bin/python ../tools/parity/golden_ranking.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "raises": {
+   "message": "'nse_momentum_score' is a computed ranking factor and has no SQL expression; it is ranked in-process (desk_score from desk_score_daily, nse_momentum_score by the ranking engine), never by SQL ROW_NUMBER",
+   "type": "ValueError"
+  }
+ }
+}

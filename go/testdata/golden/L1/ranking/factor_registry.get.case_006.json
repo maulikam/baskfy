@@ -1,0 +1,31 @@
+{
+ "fn": "baskfy_core.factor_registry.get",
+ "inputs": {
+  "key": "atr_14"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "get('atr_14'). Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}} (pydantic: \"errors\" instead of \"message\"). Polars frames are {columns, dtypes, rows}; pandas frames add index and write NA/NaN/NaT as null. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `.venv/bin/python ../tools/parity/golden_ranking.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "components": [],
+  "definition": "Wilder's 14-session average true range of the adjusted bars, seeded by a simple mean.",
+  "family": "non_momentum",
+  "higher_is_better": true,
+  "is_computed": false,
+  "is_stored": true,
+  "key": "atr_14",
+  "label": "ATR 14",
+  "null_policy": "insufficient_history",
+  "preference": "eligibility",
+  "rankable": false,
+  "sql_expr": "atr_14",
+  "unit": "price",
+  "validation_status": "research",
+  "weight_family": "risk_execution"
+ }
+}

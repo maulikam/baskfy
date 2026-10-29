@@ -1,0 +1,87 @@
+{
+ "fn": "baskfy_core.screener.build_screen_query",
+ "inputs": {
+  "as_of": "2026-08-18",
+  "definition": {
+   "custom_filters": [
+    {
+     "enabled": true,
+     "left": "ma_50",
+     "op": ">=",
+     "right": "ma_200"
+    },
+    {
+     "enabled": false,
+     "left": "close",
+     "op": "<=",
+     "right": "ma_20"
+    },
+    {
+     "enabled": true,
+     "left": "vol_avg_1w",
+     "op": "=",
+     "right": "vol_avg_12m"
+    }
+   ],
+   "index": "nifty-total-market",
+   "sort_by": "ret_3m"
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "custom filters, one disabled. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}} (pydantic: \"errors\" instead of \"message\"). Polars frames are {columns, dtypes, rows}; pandas frames add index and write NA/NaN/NaT as null. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `.venv/bin/python ../tools/parity/golden_ranking.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "as_of": "2026-08-18",
+  "columns": [
+   "symbol",
+   "name",
+   "sorting_factor",
+   "ret_12m",
+   "vol_12m",
+   "close_raw"
+  ],
+  "definition_hash": "d38fe7f1bcde45ac54c7b17b439905a2f94a7180f70014e384435cdb2fe29d23",
+  "index_id": 6,
+  "param_order": [
+   "param_1",
+   "param_2",
+   "index_id_1",
+   "date_1",
+   "date_2",
+   "series_1",
+   "param_3"
+  ],
+  "params": {
+   "date_1": "2026-08-18",
+   "date_2": "2026-08-18",
+   "index_id_1": 6,
+   "param_1": 0,
+   "param_2": 0,
+   "param_3": 4000,
+   "series_1": [
+    "EQ"
+   ]
+  },
+  "ranking_factors": [
+   {
+    "direction": "desc",
+    "key": "ret_3m",
+    "label": "ABSOLUTE RETURN 3 MONTHS",
+    "position": 1
+   }
+  ],
+  "sorting_factor": {
+   "direction": "desc",
+   "key": "ret_3m",
+   "label": "ABSOLUTE RETURN 3 MONTHS",
+   "position": 1
+  },
+  "sql": "WITH universe AS \n(SELECT index_member_daily.instrument_id AS instrument_id \nFROM index_member_daily \nWHERE index_member_daily.index_id = $3::SMALLINT AND index_member_daily.date = $4::DATE), \nbucketed AS \n(SELECT factor_daily.instrument_id AS instrument_id, factor_daily.date AS date, factor_daily.close AS close, factor_daily.close_raw AS close_raw, factor_daily.ret_1m AS ret_1m, factor_daily.ret_3m AS ret_3m, factor_daily.ret_6m AS ret_6m, factor_daily.ret_9m AS ret_9m, factor_daily.ret_12m AS ret_12m, factor_daily.ret_12m_minus_1m AS ret_12m_minus_1m, factor_daily.ret_12m_minus_2m AS ret_12m_minus_2m, factor_daily.vol_1m AS vol_1m, factor_daily.vol_3m AS vol_3m, factor_daily.vol_6m AS vol_6m, factor_daily.vol_9m AS vol_9m, factor_daily.vol_12m AS vol_12m, factor_daily.sharpe_1m AS sharpe_1m, factor_daily.sharpe_3m AS sharpe_3m, factor_daily.sharpe_6m AS sharpe_6m, factor_daily.sharpe_9m AS sharpe_9m, factor_daily.sharpe_12m AS sharpe_12m, factor_daily.rsi_1m AS rsi_1m, factor_daily.rsi_3m AS rsi_3m, factor_daily.rsi_6m AS rsi_6m, factor_daily.rsi_9m AS rsi_9m, factor_daily.rsi_12m AS rsi_12m, factor_daily.beta_12m AS beta_12m, factor_daily.ma_20 AS ma_20, factor_daily.ma_50 AS ma_50, factor_daily.ma_100 AS ma_100, factor_daily.ma_200 AS ma_200, factor_daily.high_1y AS high_1y, factor_daily.high_ath AS high_ath, factor_daily.away_high_1y AS away_high_1y, factor_daily.away_high_ath AS away_high_ath, factor_daily.pos_days_1m AS pos_days_1m, factor_daily.pos_days_3m AS pos_days_3m, factor_daily.pos_days_6m AS pos_days_6m, factor_daily.pos_days_9m AS pos_days_9m, factor_daily.pos_days_12m AS pos_days_12m, factor_daily.circuits_1m AS circuits_1m, factor_daily.circuits_3m AS circuits_3m, factor_daily.circuits_6m AS circuits_6m, factor_daily.circuits_9m AS circuits_9m, factor_daily.circuits_12m AS circuits_12m, factor_daily.vol_day_val AS vol_day_val, factor_daily.vol_avg_1w AS vol_avg_1w, factor_daily.vol_avg_1m AS vol_avg_1m, factor_daily.vol_avg_3m AS vol_avg_3m, factor_daily.vol_avg_6m AS vol_avg_6m, factor_daily.vol_avg_9m AS vol_avg_9m, factor_daily.vol_avg_12m AS vol_avg_12m, factor_daily.median_vol_12m AS median_vol_12m, factor_daily.marketcap_cr AS marketcap_cr, factor_daily.pe AS pe, factor_daily.series AS series, factor_daily.regime AS regime, factor_daily.atr_14 AS atr_14, factor_daily.atr_ext_20 AS atr_ext_20, factor_daily.ma50_slope_20 AS ma50_slope_20, factor_daily.eff_ratio_63 AS eff_ratio_63, factor_daily.max_dd_6m AS max_dd_6m, factor_daily.max_dd_12m AS max_dd_12m, factor_daily.downside_vol_6m AS downside_vol_6m, factor_daily.downside_vol_12m AS downside_vol_12m, factor_daily.sortino_6m AS sortino_6m, factor_daily.sortino_12m AS sortino_12m, factor_daily.underwater_12m AS underwater_12m, factor_daily.ret_ex_top3_12m AS ret_ex_top3_12m, factor_daily.accel_21_105 AS accel_21_105, factor_daily.accel_21_105_vs AS accel_21_105_vs, factor_daily.vol_exp_21_126 AS vol_exp_21_126, factor_daily.vol_persist_20 AS vol_persist_20, factor_daily.excess_ret_3m AS excess_ret_3m, factor_daily.excess_ret_6m AS excess_ret_6m, factor_daily.excess_ret_12m AS excess_ret_12m, factor_daily.resid_ret_12m AS resid_ret_12m, factor_daily.rs_persist_126 AS rs_persist_126, factor_daily.mom_pctile AS mom_pctile, factor_daily.rank_persist_20 AS rank_persist_20, factor_daily.nse_mr6 AS nse_mr6, factor_daily.nse_mr12 AS nse_mr12, factor_daily.universe_mask AS universe_mask, factor_daily.top_beta_mask AS top_beta_mask, factor_daily.top_volatility_mask AS top_volatility_mask \nFROM factor_daily JOIN universe ON factor_daily.instrument_id = universe.instrument_id \nWHERE factor_daily.date = $5::DATE), \nfiltered AS \n(SELECT bucketed.instrument_id AS instrument_id, bucketed.date AS date, bucketed.close AS close, bucketed.close_raw AS close_raw, bucketed.ret_1m AS ret_1m, bucketed.ret_3m AS ret_3m, bucketed.ret_6m AS ret_6m, bucketed.ret_9m AS ret_9m, bucketed.ret_12m AS ret_12m, bucketed.ret_12m_minus_1m AS ret_12m_minus_1m, bucketed.ret_12m_minus_2m AS ret_12m_minus_2m, bucketed.vol_1m AS vol_1m, bucketed.vol_3m AS vol_3m, bucketed.vol_6m AS vol_6m, bucketed.vol_9m AS vol_9m, bucketed.vol_12m AS vol_12m, bucketed.sharpe_1m AS sharpe_1m, bucketed.sharpe_3m AS sharpe_3m, bucketed.sharpe_6m AS sharpe_6m, bucketed.sharpe_9m AS sharpe_9m, bucketed.sharpe_12m AS sharpe_12m, bucketed.rsi_1m AS rsi_1m, bucketed.rsi_3m AS rsi_3m, bucketed.rsi_6m AS rsi_6m, bucketed.rsi_9m AS rsi_9m, bucketed.rsi_12m AS rsi_12m, bucketed.beta_12m AS beta_12m, bucketed.ma_20 AS ma_20, bucketed.ma_50 AS ma_50, bucketed.ma_100 AS ma_100, bucketed.ma_200 AS ma_200, bucketed.high_1y AS high_1y, bucketed.high_ath AS high_ath, bucketed.away_high_1y AS away_high_1y, bucketed.away_high_ath AS away_high_ath, bucketed.pos_days_1m AS pos_days_1m, bucketed.pos_days_3m AS pos_days_3m, bucketed.pos_days_6m AS pos_days_6m, bucketed.pos_days_9m AS pos_days_9m, bucketed.pos_days_12m AS pos_days_12m, bucketed.circuits_1m AS circuits_1m, bucketed.circuits_3m AS circuits_3m, bucketed.circuits_6m AS circuits_6m, bucketed.circuits_9m AS circuits_9m, bucketed.circuits_12m AS circuits_12m, bucketed.vol_day_val AS vol_day_val, bucketed.vol_avg_1w AS vol_avg_1w, bucketed.vol_avg_1m AS vol_avg_1m, bucketed.vol_avg_3m AS vol_avg_3m, bucketed.vol_avg_6m AS vol_avg_6m, bucketed.vol_avg_9m AS vol_avg_9m, bucketed.vol_avg_12m AS vol_avg_12m, bucketed.median_vol_12m AS median_vol_12m, bucketed.marketcap_cr AS marketcap_cr, bucketed.pe AS pe, bucketed.series AS series, bucketed.regime AS regime, bucketed.atr_14 AS atr_14, bucketed.atr_ext_20 AS atr_ext_20, bucketed.ma50_slope_20 AS ma50_slope_20, bucketed.eff_ratio_63 AS eff_ratio_63, bucketed.max_dd_6m AS max_dd_6m, bucketed.max_dd_12m AS max_dd_12m, bucketed.downside_vol_6m AS downside_vol_6m, bucketed.downside_vol_12m AS downside_vol_12m, bucketed.sortino_6m AS sortino_6m, bucketed.sortino_12m AS sortino_12m, bucketed.underwater_12m AS underwater_12m, bucketed.ret_ex_top3_12m AS ret_ex_top3_12m, bucketed.accel_21_105 AS accel_21_105, bucketed.accel_21_105_vs AS accel_21_105_vs, bucketed.vol_exp_21_126 AS vol_exp_21_126, bucketed.vol_persist_20 AS vol_persist_20, bucketed.excess_ret_3m AS excess_ret_3m, bucketed.excess_ret_6m AS excess_ret_6m, bucketed.excess_ret_12m AS excess_ret_12m, bucketed.resid_ret_12m AS resid_ret_12m, bucketed.rs_persist_126 AS rs_persist_126, bucketed.mom_pctile AS mom_pctile, bucketed.rank_persist_20 AS rank_persist_20, bucketed.nse_mr6 AS nse_mr6, bucketed.nse_mr12 AS nse_mr12, bucketed.universe_mask AS universe_mask, bucketed.top_beta_mask AS top_beta_mask, bucketed.top_volatility_mask AS top_volatility_mask \nFROM bucketed \nWHERE bucketed.series IN (__[POSTCOMPILE_series_1]) AND bucketed.ma_50 >= bucketed.ma_200 AND bucketed.vol_avg_1w = bucketed.vol_avg_12m), \nrelative AS \n(SELECT filtered.instrument_id AS instrument_id, filtered.date AS date, filtered.close AS close, filtered.close_raw AS close_raw, filtered.ret_1m AS ret_1m, filtered.ret_3m AS ret_3m, filtered.ret_6m AS ret_6m, filtered.ret_9m AS ret_9m, filtered.ret_12m AS ret_12m, filtered.ret_12m_minus_1m AS ret_12m_minus_1m, filtered.ret_12m_minus_2m AS ret_12m_minus_2m, filtered.vol_1m AS vol_1m, filtered.vol_3m AS vol_3m, filtered.vol_6m AS vol_6m, filtered.vol_9m AS vol_9m, filtered.vol_12m AS vol_12m, filtered.sharpe_1m AS sharpe_1m, filtered.sharpe_3m AS sharpe_3m, filtered.sharpe_6m AS sharpe_6m, filtered.sharpe_9m AS sharpe_9m, filtered.sharpe_12m AS sharpe_12m, filtered.rsi_1m AS rsi_1m, filtered.rsi_3m AS rsi_3m, filtered.rsi_6m AS rsi_6m, filtered.rsi_9m AS rsi_9m, filtered.rsi_12m AS rsi_12m, filtered.beta_12m AS beta_12m, filtered.ma_20 AS ma_20, filtered.ma_50 AS ma_50, filtered.ma_100 AS ma_100, filtered.ma_200 AS ma_200, filtered.high_1y AS high_1y, filtered.high_ath AS high_ath, filtered.away_high_1y AS away_high_1y, filtered.away_high_ath AS away_high_ath, filtered.pos_days_1m AS pos_days_1m, filtered.pos_days_3m AS pos_days_3m, filtered.pos_days_6m AS pos_days_6m, filtered.pos_days_9m AS pos_days_9m, filtered.pos_days_12m AS pos_days_12m, filtered.circuits_1m AS circuits_1m, filtered.circuits_3m AS circuits_3m, filtered.circuits_6m AS circuits_6m, filtered.circuits_9m AS circuits_9m, filtered.circuits_12m AS circuits_12m, filtered.vol_day_val AS vol_day_val, filtered.vol_avg_1w AS vol_avg_1w, filtered.vol_avg_1m AS vol_avg_1m, filtered.vol_avg_3m AS vol_avg_3m, filtered.vol_avg_6m AS vol_avg_6m, filtered.vol_avg_9m AS vol_avg_9m, filtered.vol_avg_12m AS vol_avg_12m, filtered.median_vol_12m AS median_vol_12m, filtered.marketcap_cr AS marketcap_cr, filtered.pe AS pe, filtered.series AS series, filtered.regime AS regime, filtered.atr_14 AS atr_14, filtered.atr_ext_20 AS atr_ext_20, filtered.ma50_slope_20 AS ma50_slope_20, filtered.eff_ratio_63 AS eff_ratio_63, filtered.max_dd_6m AS max_dd_6m, filtered.max_dd_12m AS max_dd_12m, filtered.downside_vol_6m AS downside_vol_6m, filtered.downside_vol_12m AS downside_vol_12m, filtered.sortino_6m AS sortino_6m, filtered.sortino_12m AS sortino_12m, filtered.underwater_12m AS underwater_12m, filtered.ret_ex_top3_12m AS ret_ex_top3_12m, filtered.accel_21_105 AS accel_21_105, filtered.accel_21_105_vs AS accel_21_105_vs, filtered.vol_exp_21_126 AS vol_exp_21_126, filtered.vol_persist_20 AS vol_persist_20, filtered.excess_ret_3m AS excess_ret_3m, filtered.excess_ret_6m AS excess_ret_6m, filtered.excess_ret_12m AS excess_ret_12m, filtered.resid_ret_12m AS resid_ret_12m, filtered.rs_persist_126 AS rs_persist_126, filtered.mom_pctile AS mom_pctile, filtered.rank_persist_20 AS rank_persist_20, filtered.nse_mr6 AS nse_mr6, filtered.nse_mr12 AS nse_mr12, filtered.universe_mask AS universe_mask, filtered.top_beta_mask AS top_beta_mask, filtered.top_volatility_mask AS top_volatility_mask \nFROM filtered), \nranked AS \n(SELECT relative.instrument_id AS instrument_id, relative.date AS date, relative.close AS close, relative.close_raw AS close_raw, relative.ret_1m AS ret_1m, relative.ret_3m AS ret_3m, relative.ret_6m AS ret_6m, relative.ret_9m AS ret_9m, relative.ret_12m AS ret_12m, relative.ret_12m_minus_1m AS ret_12m_minus_1m, relative.ret_12m_minus_2m AS ret_12m_minus_2m, relative.vol_1m AS vol_1m, relative.vol_3m AS vol_3m, relative.vol_6m AS vol_6m, relative.vol_9m AS vol_9m, relative.vol_12m AS vol_12m, relative.sharpe_1m AS sharpe_1m, relative.sharpe_3m AS sharpe_3m, relative.sharpe_6m AS sharpe_6m, relative.sharpe_9m AS sharpe_9m, relative.sharpe_12m AS sharpe_12m, relative.rsi_1m AS rsi_1m, relative.rsi_3m AS rsi_3m, relative.rsi_6m AS rsi_6m, relative.rsi_9m AS rsi_9m, relative.rsi_12m AS rsi_12m, relative.beta_12m AS beta_12m, relative.ma_20 AS ma_20, relative.ma_50 AS ma_50, relative.ma_100 AS ma_100, relative.ma_200 AS ma_200, relative.high_1y AS high_1y, relative.high_ath AS high_ath, relative.away_high_1y AS away_high_1y, relative.away_high_ath AS away_high_ath, relative.pos_days_1m AS pos_days_1m, relative.pos_days_3m AS pos_days_3m, relative.pos_days_6m AS pos_days_6m, relative.pos_days_9m AS pos_days_9m, relative.pos_days_12m AS pos_days_12m, relative.circuits_1m AS circuits_1m, relative.circuits_3m AS circuits_3m, relative.circuits_6m AS circuits_6m, relative.circuits_9m AS circuits_9m, relative.circuits_12m AS circuits_12m, relative.vol_day_val AS vol_day_val, relative.vol_avg_1w AS vol_avg_1w, relative.vol_avg_1m AS vol_avg_1m, relative.vol_avg_3m AS vol_avg_3m, relative.vol_avg_6m AS vol_avg_6m, relative.vol_avg_9m AS vol_avg_9m, relative.vol_avg_12m AS vol_avg_12m, relative.median_vol_12m AS median_vol_12m, relative.marketcap_cr AS marketcap_cr, relative.pe AS pe, relative.series AS series, relative.regime AS regime, relative.atr_14 AS atr_14, relative.atr_ext_20 AS atr_ext_20, relative.ma50_slope_20 AS ma50_slope_20, relative.eff_ratio_63 AS eff_ratio_63, relative.max_dd_6m AS max_dd_6m, relative.max_dd_12m AS max_dd_12m, relative.downside_vol_6m AS downside_vol_6m, relative.downside_vol_12m AS downside_vol_12m, relative.sortino_6m AS sortino_6m, relative.sortino_12m AS sortino_12m, relative.underwater_12m AS underwater_12m, relative.ret_ex_top3_12m AS ret_ex_top3_12m, relative.accel_21_105 AS accel_21_105, relative.accel_21_105_vs AS accel_21_105_vs, relative.vol_exp_21_126 AS vol_exp_21_126, relative.vol_persist_20 AS vol_persist_20, relative.excess_ret_3m AS excess_ret_3m, relative.excess_ret_6m AS excess_ret_6m, relative.excess_ret_12m AS excess_ret_12m, relative.resid_ret_12m AS resid_ret_12m, relative.rs_persist_126 AS rs_persist_126, relative.mom_pctile AS mom_pctile, relative.rank_persist_20 AS rank_persist_20, relative.nse_mr6 AS nse_mr6, relative.nse_mr12 AS nse_mr12, relative.universe_mask AS universe_mask, relative.top_beta_mask AS top_beta_mask, relative.top_volatility_mask AS top_volatility_mask, ret_3m AS sorting_factor, row_number() OVER (ORDER BY ret_3m DESC NULLS LAST, relative.instrument_id ASC) AS r1, $1::INTEGER AS r2, $2::INTEGER AS r3 \nFROM relative)\n SELECT row_number() OVER (ORDER BY ranked.r1 + ranked.r2 + ranked.r3 ASC, ranked.r1 ASC, ranked.instrument_id ASC) AS rank, ranked.instrument_id, ranked.r1 + ranked.r2 + ranked.r3 AS combined_rank, ranked.r1, ranked.r2, ranked.r3, instrument.symbol AS symbol, instrument.name AS name, ranked.sorting_factor AS sorting_factor, ranked.ret_12m AS ret_12m, ranked.vol_12m AS vol_12m, ranked.close_raw AS close_raw \nFROM ranked JOIN instrument ON instrument.id = ranked.instrument_id ORDER BY combined_rank ASC, ranked.r1 ASC, ranked.instrument_id ASC \n LIMIT $6::INTEGER",
+  "universe_slug": "nifty-total-market"
+ }
+}

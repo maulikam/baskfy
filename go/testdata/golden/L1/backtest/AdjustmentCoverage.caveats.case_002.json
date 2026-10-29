@@ -1,0 +1,27 @@
+{
+ "fn": "baskfy_core.backtest.AdjustmentCoverage.caveats",
+ "inputs": {
+  "coverage": {
+   "actions_from": "2024-01-02",
+   "actions_to": "2026-09-01",
+   "as_of_today": true,
+   "self_adjusted_from": "2024-01-01",
+   "splice_on": "2024-01-01"
+  },
+  "end": "2026-09-10",
+  "start": "2017-01-02"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "the deployed box: one-day gap (singular), splice, as-of-today. Decimals are strings; dates are ISO days; enums are their values; polars frames are {columns, dtypes, rows}. Prices: open/close are the adjusted series (house rule 6), price_open/price_close the raw print, read only when price_only is true. Config is BacktestConfig.model_dump(mode='json'). A raised engine error is {error: {type, message}}. Synthetic seeded fixtures (weekday calendar from 2024-01-01, holidays 2024-01-26 and 2024-03-25). Regenerate with `.venv/bin/python ../tools/parity/golden_backtest.py` from decile-blueprint; each case is computed from its stored inputs.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": [
+  "Corporate actions are on record only from 2024-01-02, and prices adjusted here begin 2024-01-01 — a gap of 1 day. Splits and bonuses inside it are not applied.",
+  "Prices before 2024-01-01 come from a different source and are adjusted for dividends as well as splits, while prices after it are not. Returns measured before that date are higher than the later convention would give, by roughly the dividend yield.",
+  "Prices are adjusted as of the day this ran, not as of each simulated day, so a corporate action is reflected in bars that predate it."
+ ]
+}

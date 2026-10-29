@@ -1,0 +1,35 @@
+{
+ "fn": "baskfy_core.factor_registry.get",
+ "inputs": {
+  "key": "avg_sharpe_12_6_3"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "get('avg_sharpe_12_6_3'). Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}} (pydantic: \"errors\" instead of \"message\"). Polars frames are {columns, dtypes, rows}; pandas frames add index and write NA/NaN/NaT as null. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `.venv/bin/python ../tools/parity/golden_ranking.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "components": [
+   "sharpe_12m",
+   "sharpe_6m",
+   "sharpe_3m"
+  ],
+  "definition": "Mean of the 12 6 3-month sharpe returns, NULL if any is NULL (docs/05 §4).",
+  "family": "sharpe_return",
+  "higher_is_better": true,
+  "is_computed": false,
+  "is_stored": false,
+  "key": "avg_sharpe_12_6_3",
+  "label": "AVERAGE SHARPE RETURN 12 6 3 MONTHS",
+  "null_policy": "null_if_any_component_null",
+  "preference": "higher",
+  "rankable": true,
+  "sql_expr": "((sharpe_12m + sharpe_6m + sharpe_3m) / 3.0)",
+  "unit": "ratio",
+  "validation_status": "legacy",
+  "weight_family": "momentum"
+ }
+}

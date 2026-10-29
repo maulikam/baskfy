@@ -1,0 +1,43 @@
+{
+ "fn": "baskfy_core.ranking_engine.add_nse_momentum_score",
+ "inputs": {
+  "frame": {
+   "columns": [
+    "instrument_id",
+    "nse_mr6",
+    "nse_mr12",
+    "in_nifty_200",
+    "is_fno"
+   ],
+   "rows": []
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "empty frame. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}} (pydantic: \"errors\" instead of \"message\"). Polars frames are {columns, dtypes, rows}; pandas frames add index and write NA/NaN/NaT as null. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `.venv/bin/python ../tools/parity/golden_ranking.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "columns": [
+   "instrument_id",
+   "nse_mr6",
+   "nse_mr12",
+   "in_nifty_200",
+   "is_fno",
+   "nse_momentum_score"
+  ],
+  "dtypes": {
+   "in_nifty_200": "object",
+   "instrument_id": "object",
+   "is_fno": "object",
+   "nse_momentum_score": "float64",
+   "nse_mr12": "object",
+   "nse_mr6": "object"
+  },
+  "index": [],
+  "rows": []
+ }
+}

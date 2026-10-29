@@ -1,0 +1,119 @@
+{
+ "fn": "baskfy_core.backtest_metrics.round_trips",
+ "inputs": {
+  "trades": [
+   {
+    "cost": "0.08",
+    "date": "2024-01-02",
+    "instrument_id": 101,
+    "notional": "30.00",
+    "price": "10.00",
+    "quantity": 3,
+    "realised_pnl": null,
+    "reason": "enter",
+    "side": "buy",
+    "symbol": "AAA"
+   },
+   {
+    "cost": "0.11",
+    "date": "2024-01-03",
+    "instrument_id": 104,
+    "notional": "40.00",
+    "price": "20.00",
+    "quantity": 2,
+    "realised_pnl": null,
+    "reason": "enter",
+    "side": "buy",
+    "symbol": "DDD"
+   },
+   {
+    "cost": "0.08",
+    "date": "2024-01-04",
+    "instrument_id": 101,
+    "notional": "30.00",
+    "price": "10.00",
+    "quantity": 3,
+    "realised_pnl": "-0.16",
+    "reason": "exit",
+    "side": "sell",
+    "symbol": "AAA"
+   },
+   {
+    "cost": "0.03",
+    "date": "2024-01-05",
+    "instrument_id": 101,
+    "notional": "11.00",
+    "price": "11.00",
+    "quantity": 1,
+    "realised_pnl": null,
+    "reason": "enter",
+    "side": "buy",
+    "symbol": "AAA"
+   },
+   {
+    "cost": "0.12",
+    "date": "2024-01-06",
+    "instrument_id": 104,
+    "notional": "42.00",
+    "price": "21.00",
+    "quantity": 2,
+    "realised_pnl": "1.77",
+    "reason": "exit",
+    "side": "sell",
+    "symbol": "DDD"
+   },
+   {
+    "cost": "0.03",
+    "date": "2024-01-07",
+    "instrument_id": 101,
+    "notional": "12.00",
+    "price": "12.00",
+    "quantity": 1,
+    "realised_pnl": "0.94",
+    "reason": "exit",
+    "side": "sell",
+    "symbol": "AAA"
+   }
+  ]
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "interleaved names; a re-entry is a new round trip; a zero-or-less P&L is not a win. Decimals are strings; dates are ISO days; enums are their values; polars frames are {columns, dtypes, rows}. Prices: open/close are the adjusted series (house rule 6), price_open/price_close the raw print, read only when price_only is true. Config is BacktestConfig.model_dump(mode='json'). A raised engine error is {error: {type, message}}. Synthetic seeded fixtures (weekday calendar from 2024-01-01, holidays 2024-01-26 and 2024-03-25). Regenerate with `.venv/bin/python ../tools/parity/golden_backtest.py` from decile-blueprint; each case is computed from its stored inputs.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": [
+  {
+   "closed_on": "2024-01-04",
+   "delisted": false,
+   "instrument_id": 101,
+   "invested": "30.08",
+   "is_win": false,
+   "opened_on": "2024-01-02",
+   "pnl": "-0.16",
+   "symbol": "AAA"
+  },
+  {
+   "closed_on": "2024-01-06",
+   "delisted": false,
+   "instrument_id": 104,
+   "invested": "40.11",
+   "is_win": true,
+   "opened_on": "2024-01-03",
+   "pnl": "1.77",
+   "symbol": "DDD"
+  },
+  {
+   "closed_on": "2024-01-07",
+   "delisted": false,
+   "instrument_id": 101,
+   "invested": "11.03",
+   "is_win": true,
+   "opened_on": "2024-01-05",
+   "pnl": "0.94",
+   "symbol": "AAA"
+  }
+ ]
+}

@@ -47,14 +47,13 @@ close heavy apps during the nightly (18:40–21:15 IST) if it is running then.
 
 ## Tailscale (phone and laptop)
 
-1. `brew install --cask tailscale`, open it, sign in. Install the app on your phone, same account.
-2. Enable HTTPS certificates in the Tailscale admin (DNS → HTTPS Certificates).
-3. ```bash
-   tailscale serve --bg --https=443  http://127.0.0.1:8480    # the app
-   tailscale serve --bg --https=8443 http://127.0.0.1:8481    # the desk
-   ```
-4. Set `BASKFY_LOCAL_URL=https://<mac-name>.<tailnet>.ts.net` and re-run `local.sh up`.
-5. Add the callback URLs, by hand:
+1. `brew install --cask tailscale-app` (asks for the Mac's password), open it, sign in. Install
+   the app on your phone, same account.
+2. Enable MagicDNS and HTTPS certificates in the Tailscale admin (DNS page).
+3. `bash tools/deploy/local.sh tailscale` — serves the app on `https://<mac>.<tailnet>.ts.net` and
+   the desk on `:8443`, writes that URL to `/Volumes/T7-Work/baskfy-local/public.url` so every
+   later `up` uses it, and restarts the stack (not inside the 18:40–21:20 IST nightly window).
+4. Add the callback URLs, by hand:
    * Kite developer console → redirect URL `https://<mac-name>.<tailnet>.ts.net/api/v1/brokers/callback`
    * Google Cloud console → OAuth client → authorised redirect URI
      `https://<mac-name>.<tailnet>.ts.net/api/auth/callback/google`

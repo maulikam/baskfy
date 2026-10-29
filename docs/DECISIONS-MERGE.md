@@ -8504,3 +8504,32 @@ basket page shows a "Re-cut from screen" panel for screen baskets.
 - `BASKFY_KITE_PUBLISHER_API_KEY` set to the Kite **Connect** key: Kite answered `Invalid api_key`
   for the Publisher key (tested from the box), and accepts the Connect key on the same form.
   Backup: `/opt/baskfy/.env.staging.pre-publisher-key-*`.
+
+## AWS-EXIT — off AWS, onto this Mac, read-only, by Maulik's instruction in session (29 Oct 2026) ✅ decided by Maulik
+
+*"I dont want to have aws anymore, and want to run everything locally, and save money."* His
+answers the same day: **read-only locally** (Kite takes API orders only from the registered static
+IP, which was the box's EIP — `07` §4a — so every execution and auto-execute flag is false on the
+Mac); **on demand**, not always on; **Tailscale** for remote access; **AWS torn down whole**, but
+*"I need all the data which are on aws here as well, once all A to Z completed, then lets start
+work on removing everything from aws"*; and *"no need to wait for nightly run on aws, lets do that
+here in mac tonight"*.
+
+- `tools/deploy/exit-aws.sh export` ran at 16:01 IST after the close: the box's thirteen app
+  services stopped (and stay stopped), Postgres dumped (`-Fc`, 3.5 GB → 471 MB) with a row count
+  per table, every Docker volume but pgdata, all of `/opt/baskfy` and every container's log packed,
+  sha256'd, uploaded; `fetch` verified all fifteen files. Bundle, S3 mirror, images, Route 53
+  records and the pre-destroy tfstate: `/Volumes/T7-Work/baskfy-aws-exit-20261029/`.
+- `tools/deploy/local.sh restore`: **186 tables, 13,035,906 rows, identical to the box**; alembic
+  `0059_f3_directional`, last bar 28 Oct, ohlcv_daily's compressed chunks intact. Stack up on
+  `127.0.0.1:8480` (app) / `:8481` (desk), images `d78907f` from ECR (= the box), Kite authed.
+- Found by rehearsal before the real run, and fixed: `pg_restore -j` breaks the Timescale
+  catalog's load order (ohlcv_daily came back empty and the row-count diff refused), so the
+  restore is single-threaded; and the flag check's `=(false|0|)$` is rejected by macOS grep, so it
+  passed without checking — now `=(false|0)?$`, proven to fail a container with an armed flag.
+- The 29 Oct nightly runs on the Mac (bhavcopy 18:15, chain 18:45 IST), not the box.
+- Reverse: `exit-aws.sh`'s bundle restores onto any box; re-arming execution needs a static IP
+  registered with Kite and Maulik's hand on the flags. Runbook: `docs/LOCAL.md`.
+- **Not yet done:** `terraform destroy`, emptying `baskfy-archive` and ECR, deleting the SES SMTP
+  user — after Maulik's go-ahead. `baskfy.com`'s nameservers point at Route 53
+  (`aws-metadata/route53-nameservers.txt`); the zone holds only the two staging A records.

@@ -160,9 +160,9 @@ pub struct PlanLine {
     /// Why, in words.
     pub note: String,
     /// LV10: the position an exit or a raise acts on, when the name holds more than one.
-    /// Entry lines never carry one; it is left out of the encoding when absent (the goldens
-    /// predate the field — see `docs/rust-rewrite` DECISIONS-RS for the swing-B port).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// Entry lines never carry one, and it is encoded as `null` then, exactly as Python's
+    /// `dataclasses.asdict` writes it (goldens regenerated after LV10, DECISIONS-RS R1.1).
+    #[serde(default)]
     pub position_id: Option<i64>,
 }
 

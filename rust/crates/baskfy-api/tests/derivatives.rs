@@ -55,9 +55,16 @@ async fn every_read_requires_an_authenticated_principal() {
 #[tokio::test]
 async fn every_other_verb_is_405() {
     // `test_every_other_verb_is_405`: method dispatch happens before authentication. The
-    // documented writes (`POST/DELETE /options/event-day`, `PATCH /options/config`,
-    // `PATCH /fno/config`, the overlap corrections, `POST/DELETE /backtests`) are not served by
-    // Rust yet, so they are 405 here too; Python serves them until the pool may write (R5.2).
+    // documented writes (`PATCH /options/config`, `PATCH /fno/config`,
+    // `POST /overlap/catalyst-scan`, `POST /backtests`, `DELETE /backtests/{id}`) are served
+    // since wave 4c (lane writes-sleeves) and are skipped, as Python's test skips them.
+    const WRITES: [(&str, &str); 5] = [
+        ("PATCH", "/api/v1/options/config"),
+        ("PATCH", "/api/v1/fno/config"),
+        ("POST", "/api/v1/overlap/catalyst-scan"),
+        ("POST", "/api/v1/backtests"),
+        ("DELETE", "/api/v1/backtests/aaaaaaaaaaaaaaaaaaaaaaaa"),
+    ];
     let app = app(settings(DEAD_DATABASE), None);
     let mut paths: Vec<&str> = READS.to_vec();
     paths.extend([
@@ -66,6 +73,9 @@ async fn every_other_verb_is_405() {
     ]);
     for path in paths {
         for verb in ["POST", "PUT", "PATCH", "DELETE"] {
+            if WRITES.contains(&(verb, path)) {
+                continue;
+            }
             let answer = call(&app, verb, path, &[]).await;
             answer.assert_problem(405, "internal-error");
             assert!(answer.header("allow").is_none(), "{verb} {path}");

@@ -332,6 +332,7 @@ fn to_payload(v: &OrderedJson) -> Payload {
         OrderedJson::UInt(u) => {
             i64::try_from(*u).map_or(Payload::Opaque("int".to_owned()), Payload::Int)
         }
+        OrderedJson::BigInt(_) => Payload::Opaque("int".to_owned()),
         OrderedJson::Float(f) => Payload::Float(*f),
         OrderedJson::Str(s) => Payload::Str(s.clone()),
         OrderedJson::Array(items) => Payload::List(items.iter().map(to_payload).collect()),
@@ -613,10 +614,11 @@ pub async fn get_appearances(
 /// screen returned, oldest first.
 ///
 /// # Errors
-/// 400 for a missing or bad parameter, 404 for an unknown symbol or screen, 500 for a database
-/// failure.
+/// 400 for a missing or bad parameter, 404 for an unknown symbol or a screen that is missing or
+/// not the caller's, 500 for a database failure.
 pub async fn get_rank_history(
     State(state): State<AppState>,
+    Extension(principal): Extension<Principal>,
     Path(symbol): Path<String>,
     RawQuery(raw): RawQuery,
 ) -> Result<Response, Problem> {
@@ -627,7 +629,7 @@ pub async fn get_rank_history(
     let screen = screen.unwrap_or_default();
     let limit = limit.flatten().unwrap_or(120);
     let instrument = instrument_or_404(&state, &symbol).await?;
-    let found = sqlx::query("SELECT id, public_id, name FROM screen WHERE public_id = $1")
+    let found = sqlx::query("SELECT id, public_id, name, user_id FROM screen WHERE public_id = $1")
         .bind(&screen)
         .fetch_all(state.db.pool())
         .await
@@ -638,6 +640,13 @@ pub async fn get_rank_history(
     let Some(found) = found.first() else {
         return Err(not_found("screen", &screen));
     };
+    // The screen's own visibility rule (`routers/screens.py`): a private screen's history is its
+    // owner's only, and not-yours is the same 404 as no-such-screen (DECISIONS-RS R5.28, fixed in
+    // Python first on 30 Oct 2026; until then the route had no principal at all).
+    let owner: Option<i64> = found.try_get("user_id").map_err(r::db)?;
+    if !super::screens::visible_to(owner, &principal) {
+        return Err(not_found("screen", &screen));
+    }
     let screen_id: i64 = found.try_get("id").map_err(r::db)?;
     let runs = sqlx::query(
         "SELECT as_of, result_count, results FROM screen_run WHERE screen_id = $1 \

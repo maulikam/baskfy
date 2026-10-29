@@ -1,6 +1,6 @@
 //! Double-submit CSRF for the two cookie-authenticated mutations (`POST /auth/refresh`,
-//! `POST /auth/logout`). Ports `baskfy_api.csrf`'s check and names; the cookie *writers* arrive
-//! with the auth lane (they belong to routes that write).
+//! `POST /auth/logout`). Ports `baskfy_api.csrf`: the check, the names, and the cookie writers
+//! (`set_auth_cookies`, `clear_auth_cookies`) with Starlette's `Set-Cookie` spelling.
 
 use subtle_free::constant_time_eq;
 
@@ -61,6 +61,96 @@ pub fn require_csrf(cookie_header: Option<&str>, csrf_header: Option<&str>) -> R
         .header("WWW-Authenticate", "Bearer"));
     }
     Ok(())
+}
+
+#[allow(clippy::too_many_arguments)] // one per `set_cookie` keyword Starlette takes
+/// One `Set-Cookie` value as Starlette's `Response.set_cookie` writes it: `http.cookies.Morsel`
+/// output, attributes in sorted key order (`Domain`, `expires`, `HttpOnly`, `Max-Age`, `Path`,
+/// `SameSite`, `Secure`), an empty value written `""`.
+fn morsel(
+    name: &str,
+    value: &str,
+    max_age: i64,
+    path: &str,
+    domain: Option<&str>,
+    expires_now: bool,
+    secure: bool,
+    httponly: bool,
+) -> String {
+    let mut out = format!("{name}={}", if value.is_empty() { "\"\"" } else { value });
+    if let Some(d) = domain {
+        out.push_str(&format!("; Domain={d}"));
+    }
+    if expires_now {
+        // `expires=0` -> `email.utils.formatdate(time.time() + 0, usegmt=True)`.
+        let now = crate::entitlements::utc_now();
+        out.push_str(&format!(
+            "; expires={}",
+            now.format("%a, %d %b %Y %H:%M:%S GMT")
+        ));
+    }
+    if httponly {
+        out.push_str("; HttpOnly");
+    }
+    out.push_str(&format!("; Max-Age={max_age}; Path={path}; SameSite=lax"));
+    if secure {
+        out.push_str("; Secure");
+    }
+    out
+}
+
+/// `set_auth_cookies(response, refresh_token=, csrf_token=, ttl_seconds=, settings=)`: the two
+/// `Set-Cookie` values, refresh first.
+#[must_use]
+pub fn set_auth_cookies(
+    refresh_token: &str,
+    csrf_token: &str,
+    ttl_seconds: i64,
+    settings: &crate::settings::Settings,
+) -> [String; 2] {
+    let domain = settings.cookie_domain.as_deref().filter(|d| !d.is_empty());
+    [
+        morsel(
+            REFRESH_COOKIE,
+            refresh_token,
+            ttl_seconds,
+            REFRESH_COOKIE_PATH,
+            domain,
+            false,
+            settings.cookie_secure,
+            true,
+        ),
+        morsel(
+            CSRF_COOKIE,
+            csrf_token,
+            ttl_seconds,
+            "/",
+            domain,
+            false,
+            settings.cookie_secure,
+            false,
+        ),
+    ]
+}
+
+/// `clear_auth_cookies(response, settings)`: Starlette's `delete_cookie` for both (an empty
+/// value, `expires` now, `Max-Age=0`, never `Secure`/`HttpOnly`).
+#[must_use]
+pub fn clear_auth_cookies(settings: &crate::settings::Settings) -> [String; 2] {
+    let domain = settings.cookie_domain.as_deref().filter(|d| !d.is_empty());
+    [
+        morsel(
+            REFRESH_COOKIE,
+            "",
+            0,
+            REFRESH_COOKIE_PATH,
+            domain,
+            true,
+            false,
+            false,
+        ),
+        morsel(CSRF_COOKIE, "", 0, "/", domain, true, false, false),
+    ]
 }
 
 mod subtle_free {

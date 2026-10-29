@@ -22,7 +22,7 @@
 use axum::Router;
 use axum::extract::{Extension, Path, RawQuery, State};
 use axum::response::Response;
-use axum::routing::get;
+use axum::routing::{get, post};
 use chrono::{Datelike, Duration};
 
 use crate::auth::{Principal, require_authenticated};
@@ -288,9 +288,17 @@ pub async fn get_options_config(
     Extension(principal): Extension<Principal>,
 ) -> Result<Response, Problem> {
     let principal = require_authenticated(&principal)?;
+    let user_id = scoped_sole_user_id(&state.db, principal.user_id, None).await?;
+    config_response(&state, user_id).await
+}
+
+/// `_config_out(...)` for `user_id`, read after any write committed.
+///
+/// # Errors
+/// 500.
+pub(crate) async fn config_response(state: &AppState, user_id: i64) -> Result<Response, Problem> {
     let db = &state.db;
     let settings = &state.settings;
-    let user_id = scoped_sole_user_id(db, principal.user_id, None).await?;
     let (book, sleeves) = match reads::read_config(db, user_id).await? {
         Some((book, sleeves)) => (Some(book), sleeves),
         None => (None, Vec::new()),
@@ -317,6 +325,11 @@ pub async fn get_options_config(
 /// The ported `/options` routes, relative to `/api/v1` (the writes stay on Python).
 pub fn router() -> Router<AppState> {
     Router::new()
+        .route(
+            "/options/event-day",
+            post(derivatives::config_writes::post_event_day)
+                .delete(derivatives::config_writes::delete_event_day),
+        )
         .route("/options/today", get(get_options_today))
         .route("/options/scan/{sleeve}", get(get_options_scan))
         .route("/options/chain", get(get_options_chain))
@@ -325,5 +338,8 @@ pub fn router() -> Router<AppState> {
         .route("/options/journal", get(get_options_journal))
         .route("/options/backtest", get(get_options_backtest))
         .route("/options/calendar", get(get_options_calendar))
-        .route("/options/config", get(get_options_config))
+        .route(
+            "/options/config",
+            get(get_options_config).patch(derivatives::config_writes::patch_options_config),
+        )
 }

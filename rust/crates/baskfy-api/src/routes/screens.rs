@@ -8,10 +8,10 @@
 //! * `GET /screens/{public_id}/runs` — keyset-paginated run summaries;
 //! * `GET /screens/{public_id}/csv` — the entitlement-gated export ([`csv`]).
 //!
-//! **Not ported in this wave** (they write, and the pool is read-only — the Python API keeps
-//! serving them): `POST /screens`, `PATCH`/`DELETE /screens/{public_id}`,
-//! `POST /screens/{public_id}/duplicate`, `POST /screens/preview`, `/explain`, `/selection` and
-//! `POST /screens/{public_id}/run` (records a run).
+//! The CRUD writes (`POST /screens`, `PATCH`/`DELETE /screens/{public_id}`,
+//! `POST /screens/{public_id}/duplicate`) are ported at wave 4c ([`writes`]). **Not ported** (they
+//! run the screener; the Python API keeps serving them, DECISIONS-RS, lane writes-screens R6.13):
+//! `POST /screens/preview`, `/explain`, `/selection` and `POST /screens/{public_id}/run`.
 //!
 //! Visibility, as Python states it once: a screen with `user_id IS NULL` is a system/example
 //! screen everyone can read; a screen with a `user_id` is visible only to that user, and
@@ -20,11 +20,14 @@
 
 #[path = "accounts/mod.rs"]
 pub(crate) mod accounts;
+pub(crate) mod body_model;
+pub(crate) mod write_kit;
+mod writes;
 
 use axum::Router;
 use axum::extract::{Extension, Path, RawQuery, State};
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{get, post};
 use baskfy_core::screener::{Payload, ScreenDefinition};
 use baskfy_db::{OrderedJson, row};
 use chrono::{DateTime, NaiveDate, Utc};
@@ -147,6 +150,7 @@ pub fn payload_of(value: &OrderedJson) -> Payload {
         OrderedJson::Int(i) => Payload::Int(*i),
         // Beyond i64: a Python int pydantic would see; no stored definition holds one.
         OrderedJson::UInt(u) => Payload::Opaque(format!("int:{u}")),
+        OrderedJson::BigInt(big) => Payload::Opaque(format!("int:{big}")),
         OrderedJson::Float(f) => Payload::Float(*f),
         OrderedJson::Str(s) => Payload::Str(s.clone()),
         OrderedJson::Array(items) => Payload::List(items.iter().map(payload_of).collect()),
@@ -235,7 +239,15 @@ pub fn stored_definition(value: &OrderedJson) -> Result<ScreenDefinition, Proble
 }
 
 fn is_visible(screen: &ScreenRow, principal: &Principal) -> bool {
-    screen.user_id.is_none() || screen.user_id == principal.user_id
+    visible_to(screen.user_id, principal)
+}
+
+/// `is_visible(screen, principal)` on the owner alone: a system screen (`user_id IS NULL`) is
+/// everyone's, a private one its owner's only. `GET /instruments/{symbol}/rank-history` uses it
+/// too (DECISIONS-RS R5.28).
+#[must_use]
+pub fn visible_to(owner: Option<i64>, principal: &Principal) -> bool {
+    owner.is_none() || owner == principal.user_id
 }
 
 fn is_editable(screen: &ScreenRow, principal: &Principal) -> bool {
@@ -635,11 +647,21 @@ pub async fn export_screen_csv(
     Ok(response)
 }
 
-/// The ported `/screens` GET routes, relative to `/api/v1`.
+/// The ported `/screens` routes (the GETs and the CRUD writes), relative to `/api/v1`.
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/screens", get(list_screens))
-        .route("/screens/{public_id}", get(get_screen))
+        .route(
+            "/screens/{public_id}/duplicate",
+            post(writes::duplicate_screen),
+        )
+        .route("/screens/{public_id}/run", super::common::write_only())
+        .route("/screens", get(list_screens).post(writes::create_screen))
+        .route(
+            "/screens/{public_id}",
+            get(get_screen)
+                .patch(writes::update_screen)
+                .delete(writes::delete_screen),
+        )
         .route("/screens/{public_id}/runs", get(list_screen_runs))
         .route("/screens/{public_id}/csv", get(export_screen_csv))
 }

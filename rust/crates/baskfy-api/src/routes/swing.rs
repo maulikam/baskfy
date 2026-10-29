@@ -16,10 +16,12 @@
 
 use std::collections::HashMap;
 
+pub(crate) mod writes;
+
 use axum::Router;
 use axum::extract::{Extension, Path, RawQuery, State};
 use axum::response::Response;
-use axum::routing::get;
+use axum::routing::{get, patch, post};
 use baskfy_db::OrderedJson;
 use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
@@ -776,6 +778,9 @@ fn py_float_or_zero(v: Option<&OrderedJson>) -> Result<f64, Problem> {
         Some(OrderedJson::Int(i)) => Ok(*i as f64),
         #[allow(clippy::cast_precision_loss)]
         Some(OrderedJson::UInt(u)) => Ok(*u as f64),
+        Some(OrderedJson::BigInt(big)) => big
+            .parse::<f64>()
+            .map_err(|_| crate::problems::internal_error()),
         Some(OrderedJson::Float(f)) => Ok(*f),
         Some(OrderedJson::Str(s)) if s.is_empty() => Ok(0.0),
         Some(OrderedJson::Str(s)) => s
@@ -917,23 +922,15 @@ async fn latest_closes(state: &AppState, ids: &[i64]) -> Result<HashMap<i64, Dec
     Ok(out)
 }
 
-/// `GET /swing/watch?state=` (`WATCHING` by default; `all` for every row).
+/// `list_watch(...)` rendered as `SwingWatchOut`s, each with its row id (newest first).
 ///
 /// # Errors
-/// 401, 404, 503, 500.
-pub async fn get_watch(
-    State(state): State<AppState>,
-    Extension(principal): Extension<Principal>,
-    RawQuery(raw): RawQuery,
-) -> Result<Response, Problem> {
-    require_authenticated(&principal)?;
-    let q = QueryParams::parse(raw.as_deref());
-    let wanted = match q.get("state") {
-        None => Some(WATCHING),
-        Some("all") => None,
-        Some(s) => Some(s),
-    };
-    let user_id = swing_tenant(&state, &principal).await?;
+/// 500.
+pub(crate) async fn watch_rows(
+    state: &AppState,
+    user_id: i64,
+    wanted: Option<&str>,
+) -> Result<Vec<(i64, J)>, Problem> {
     let mut sql = String::from(
         "SELECT w.id, w.instrument_id, i.symbol, i.name, w.setup, w.source, w.added_on, \
                 w.expires_on, w.trigger, w.stop_ref, w.note, w.catalyst, w.state, w.score, \
@@ -958,8 +955,8 @@ pub async fn get_watch(
         (HashMap::new(), HashMap::new())
     } else {
         (
-            latest_closes(&state, &ids).await?,
-            catalysts(&state, user_id, &ids).await?,
+            latest_closes(state, &ids).await?,
+            catalysts(state, user_id, &ids).await?,
         )
     };
     let mut data = Vec::with_capacity(rows.len());
@@ -967,9 +964,11 @@ pub async fn get_watch(
         let instrument_id: i64 = col(row, "instrument_id")?;
         let trigger = odec(row, "trigger")?;
         let last_close = closes.get(&instrument_id).copied();
-        data.push(
+        let id: i64 = col(row, "id")?;
+        data.push((
+            id,
             Obj::new()
-                .put("id", J::Int(col(row, "id")?))
+                .put("id", J::Int(id))
                 .put("instrument_id", J::Int(instrument_id))
                 .put("symbol", J::Str(col(row, "symbol")?))
                 .put("name", J::Str(col(row, "name")?))
@@ -998,8 +997,57 @@ pub async fn get_watch(
                     feed.get(&instrument_id).cloned().unwrap_or(J::Null),
                 )
                 .done(),
-        );
+        ));
     }
+    Ok(data)
+}
+
+/// `distance_to_trigger_pct` again, from a rendered row's own `trigger` and `last_close` (after
+/// a write overlaid the in-memory trigger).
+///
+/// # Errors
+/// 500 on arithmetic overflow.
+pub(crate) fn recompute_distance(fields: &mut [(String, J)]) -> Result<(), Problem> {
+    let get = |fields: &[(String, J)], key: &str| {
+        fields
+            .iter()
+            .find(|(k, _)| k == key)
+            .and_then(|(_, v)| match v {
+                J::Dec(d) => Some(*d),
+                _ => None,
+            })
+    };
+    let distance = pct_below(get(fields, "trigger"), get(fields, "last_close"))?.unwrap_or(J::Null);
+    for (k, v) in fields.iter_mut() {
+        if k == "distance_to_trigger_pct" {
+            *v = distance.clone();
+        }
+    }
+    Ok(())
+}
+
+/// `GET /swing/watch?state=` (`WATCHING` by default; `all` for every row).
+///
+/// # Errors
+/// 401, 404, 503, 500.
+pub async fn get_watch(
+    State(state): State<AppState>,
+    Extension(principal): Extension<Principal>,
+    RawQuery(raw): RawQuery,
+) -> Result<Response, Problem> {
+    require_authenticated(&principal)?;
+    let q = QueryParams::parse(raw.as_deref());
+    let wanted = match q.get("state") {
+        None => Some(WATCHING),
+        Some("all") => None,
+        Some(s) => Some(s),
+    };
+    let user_id = swing_tenant(&state, &principal).await?;
+    let data = watch_rows(&state, user_id, wanted)
+        .await?
+        .into_iter()
+        .map(|(_, j)| j)
+        .collect();
     Ok(canonical_response(
         &Obj::new().put("data", J::Arr(data)).done(),
     ))
@@ -1176,6 +1224,14 @@ pub async fn get_config(
 ) -> Result<Response, Problem> {
     require_authenticated(&principal)?;
     let user_id = swing_tenant(&state, &principal).await?;
+    config_response(&state, user_id).await
+}
+
+/// The `SwingConfigView` for `user_id`, read after any write committed.
+///
+/// # Errors
+/// 503 (not seeded), 500.
+pub(crate) async fn config_response(state: &AppState, user_id: i64) -> Result<Response, Problem> {
     let row = sqlx::query(
         "SELECT sleeve_capital_inr, risk_per_trade_pct, max_position_pct, \
                 max_open_positions::bigint AS max_open_positions, \
@@ -1618,15 +1674,20 @@ pub async fn get_journal(
 /// Python API until they are ported.
 pub fn router() -> Router<AppState> {
     Router::new()
+        .route("/swing/scan", post(writes::post_scan))
+        .route(
+            "/swing/watch/{watch_id}",
+            patch(writes::patch_watch).delete(writes::delete_watch),
+        )
         .route("/swing/setups", get(get_setups))
         .route("/swing/scan/{run_id}", get(get_scan))
         .route("/swing/setups/{instrument_id}/bars", get(get_bars))
         .route("/swing/market", get(get_market))
         .route("/swing/signals", get(get_signals))
         .route("/swing/sectors", get(get_sectors))
-        .route("/swing/watch", get(get_watch))
+        .route("/swing/watch", get(get_watch).post(writes::post_watch))
         .route("/swing/positions", get(get_positions))
-        .route("/swing/config", get(get_config))
+        .route("/swing/config", get(get_config).patch(writes::patch_config))
         .route("/swing/journal", get(get_journal))
 }
 

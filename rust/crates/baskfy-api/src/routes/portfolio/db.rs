@@ -9,6 +9,15 @@ use baskfy_core::decimal::WideDecimal;
 
 use crate::problems::Problem;
 
+/// One pooled connection on the read-only pool for a GET request: Python's `SessionDep` holds one
+/// connection for the whole request, and the lane's loaders run on whichever connection they are
+/// handed (a write route hands them its transaction, so its reads see its own writes).
+pub(crate) async fn acquire(
+    state: &crate::state::AppState,
+) -> Result<sqlx::pool::PoolConnection<sqlx::Postgres>, Problem> {
+    state.db.pool().acquire().await.map_err(fail)
+}
+
 /// A database failure as the API answers it.
 pub(crate) fn fail(e: impl Into<DbError>) -> Problem {
     crate::db_failure(&e.into())

@@ -19,4 +19,6 @@ use crate::state::AppState;
 /// The routes of `baskfy_api.routers.curated_from_screen`, relative to `/api/v1`. Empty until ported.
 pub fn router() -> Router<AppState> {
     Router::new()
+        .route("/cb/baskets/from-screen", super::common::write_only())
+        .route("/cb/baskets/{slug}/recut", super::common::write_only())
 }

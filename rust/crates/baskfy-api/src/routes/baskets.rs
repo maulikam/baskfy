@@ -82,6 +82,7 @@ fn as_float(v: Option<&OrderedJson>) -> Result<f64, Problem> {
         Some(OrderedJson::Int(i)) => Ok(*i as f64),
         #[allow(clippy::cast_precision_loss)]
         Some(OrderedJson::UInt(u)) => Ok(*u as f64),
+        Some(OrderedJson::BigInt(big)) => big.parse::<f64>().map_err(|_| invalid_payload()),
         Some(OrderedJson::Bool(b)) => Ok(if *b { 1.0 } else { 0.0 }),
         Some(OrderedJson::Float(f)) => Ok(*f),
         Some(OrderedJson::Str(s)) => lax_float_str(s).ok_or_else(invalid_payload),
@@ -253,6 +254,10 @@ fn weight_float(v: &OrderedJson) -> Result<Option<f64>, Problem> {
         OrderedJson::Int(i) => Ok(Some(*i as f64)),
         #[allow(clippy::cast_precision_loss)]
         OrderedJson::UInt(u) => Ok(Some(*u as f64)),
+        OrderedJson::BigInt(big) => big
+            .parse::<f64>()
+            .map(Some)
+            .map_err(|_| crate::problems::internal_error()),
         OrderedJson::Float(f) => Ok(Some(*f)),
         OrderedJson::Str(s) => py_float_str(s)
             .map(Some)

@@ -21,7 +21,7 @@ use rust_decimal::{Decimal, RoundingStrategy};
 use sqlx::Row;
 use sqlx::postgres::PgRow;
 
-use crate::problems::{ErrorEntry, Problem, ProblemType};
+use crate::problems::{ErrorEntry, Problem};
 use crate::state::AppState;
 use crate::wire;
 
@@ -223,6 +223,7 @@ fn write_raw(v: &OrderedJson, out: &mut String, pydantic: bool) {
         OrderedJson::UInt(u) => {
             let _ = write!(out, "{u}");
         }
+        OrderedJson::BigInt(big) => out.push_str(big),
         OrderedJson::Float(f) => out.push_str(&float_token(*f, pydantic)),
         OrderedJson::Str(s) => json_str(s, out),
         OrderedJson::Array(items) => {
@@ -377,52 +378,21 @@ pub(crate) enum LaxInt {
     Invalid,
 }
 
-/// pydantic-core's `str` → `int` (lax): trimmed, an optional sign, digits with single
-/// underscores between them, and an optional `.` followed only by zeros.
+/// pydantic-core's `str` → `int` (lax), in this lane's shape. The rule is
+/// [`crate::routes::common::lax_int`] (R5.10's collapse).
 pub(crate) fn lax_int(raw: &str) -> LaxInt {
-    let s = raw.trim();
-    let (negative, body) = match s.as_bytes().first() {
-        Some(b'-') => (true, &s[1..]),
-        Some(b'+') => (false, &s[1..]),
-        _ => (false, s),
-    };
-    let (int_part, frac) = match body.split_once('.') {
-        Some((i, f)) => (i, Some(f)),
-        None => (body, None),
-    };
-    if let Some(f) = frac
-        && (f.is_empty() || !f.bytes().all(|b| b == b'0'))
-    {
-        return LaxInt::Invalid;
-    }
-    if int_part.is_empty()
-        || int_part.starts_with('_')
-        || int_part.ends_with('_')
-        || int_part.contains("__")
-        || !int_part.bytes().all(|b| b.is_ascii_digit() || b == b'_')
-    {
-        return LaxInt::Invalid;
-    }
-    let digits: String = int_part.chars().filter(|c| *c != '_').collect();
-    let signed = if negative {
-        format!("-{digits}")
-    } else {
-        digits
-    };
-    match signed.parse::<i64>() {
-        Ok(v) => LaxInt::Small(v),
-        Err(_) => LaxInt::Big { negative },
+    match crate::routes::common::lax_int(raw) {
+        None => LaxInt::Invalid,
+        Some(p) => p.as_i64().map_or(
+            LaxInt::Big {
+                negative: p.negative,
+            },
+            LaxInt::Small,
+        ),
     }
 }
 
-/// pydantic-core's `str` → `bool` (lax).
-pub(crate) fn lax_bool(raw: &str) -> Option<bool> {
-    match raw.to_lowercase().as_str() {
-        "0" | "off" | "f" | "false" | "n" | "no" => Some(false),
-        "1" | "on" | "t" | "true" | "y" | "yes" => Some(true),
-        _ => None,
-    }
-}
+pub(crate) use crate::routes::common::lax_bool;
 
 /// Validates an `int` parameter into the accumulator: `int_parsing` on failure.
 pub(crate) fn int_param(
@@ -475,114 +445,18 @@ pub(crate) fn py_list_repr(items: &[&str]) -> String {
 // The sole tenant (`baskfy_api.curated_tenant`, `curated_seed.resolve_sole_user_id`)
 // ---------------------------------------------------------------------------------------------
 
-/// `baskfy_core.curated_baskets.SOLE_USER_ENV`.
-pub(crate) const SOLE_USER_ENV: &str = "BASKFY_SOLE_USER_ID";
-/// `baskfy_api.seed.E2E_PUBLIC_ID`.
-pub(crate) const E2E_PUBLIC_ID: &str = "e2e000000001";
-/// `curated_tenant.SOLE_TENANT_REFUSED`.
-pub(crate) const SOLE_TENANT_REFUSED: &str = "not-the-sole-tenant";
-
-/// What Python's `int(text)` made of `BASKFY_SOLE_USER_ID`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum SoleId {
-    /// An id a `bigint` can hold.
-    Id(i64),
-    /// A valid integer beyond `i64`: Python keeps it, so every caller is "not it" and a query
-    /// bound with it fails in asyncpg (the 500 catch-all).
-    Huge,
-}
-
-/// Python's `int(text)` for an already-stripped string (`+`/`-`, ASCII digits, single
-/// underscores); `None` when Python would raise `ValueError`.
-fn py_int(text: &str) -> Option<SoleId> {
-    let (negative, body) = match text.as_bytes().first() {
-        Some(b'-') => (true, &text[1..]),
-        Some(b'+') => (false, &text[1..]),
-        _ => (false, text),
-    };
-    if body.is_empty()
-        || body.starts_with('_')
-        || body.ends_with('_')
-        || body.contains("__")
-        || !body.chars().all(|c| c.is_ascii_digit() || c == '_')
-    {
-        return None;
-    }
-    let digits: String = body.chars().filter(|c| *c != '_').collect();
-    let signed = if negative {
-        format!("-{digits}")
-    } else {
-        digits
-    };
-    Some(signed.parse::<i64>().map_or(SoleId::Huge, SoleId::Id))
-}
-
-/// `resolve_sole_user_id(session)`: `BASKFY_SOLE_USER_ID` (stripped; blank or not a number is
-/// "unset", with Python's warning), else the seeded development account, else a 503.
-///
-/// # Errors
-/// `pipeline_degraded` when neither names an account; the 500 catch-all on a database failure.
-async fn resolve_sole_user_id(state: &AppState) -> Result<SoleId, Problem> {
-    let raw = std::env::var(SOLE_USER_ENV).unwrap_or_default();
-    let raw = raw.trim();
-    if !raw.is_empty() {
-        if let Some(id) = py_int(raw) {
-            return Ok(id);
-        }
-        crate::logging::warning(
-            "baskfy_api.curated_seed",
-            &format!(
-                "{SOLE_USER_ENV} is not a number ({}); reading it as 'no sole tenant configured', \
-                 which is what baskfy_worker.providers._sole_user_id does with the same value",
-                baskfy_providers::py::repr_str(raw)
-            ),
-            &[],
-        );
-    }
-    let found: Option<i64> = sqlx::query_scalar("SELECT id FROM app_user WHERE public_id = $1")
-        .bind(E2E_PUBLIC_ID)
-        .fetch_optional(state.db.pool())
-        .await
-        .map_err(db)?;
-    found.map(SoleId::Id).ok_or_else(|| {
-        crate::problems::pipeline_degraded(&format!(
-            "The sole-tenant account is not configured on this deployment. Set \
-             {SOLE_USER_ENV}, or run `make seed` to create the development account."
-        ))
-    })
-}
-
 /// `scoped_sole_user_id(session, principal_user_id, surface=None)`: the sole tenant, or a 404
-/// carrying `reason: not-the-sole-tenant` for any other caller.
+/// carrying `reason: not-the-sole-tenant` for any other caller. The rule is
+/// [`crate::routes::common::scoped_sole_user_id`] (R5.10's collapse, this lane's copy the model).
 ///
 /// # Errors
-/// As described, plus [`resolve_sole_user_id`]'s.
+/// As the shared function.
 pub(crate) async fn scoped_sole_user_id(
     state: &AppState,
     principal_user_id: Option<i64>,
     surface: Option<&str>,
 ) -> Result<i64, Problem> {
-    let sole = resolve_sole_user_id(state).await?;
-    if let Some(caller) = principal_user_id
-        && SoleId::Id(caller) != sole
-    {
-        let tail = surface.map_or_else(
-            || ".".to_owned(),
-            |s| format!(", so {s} is not readable here."),
-        );
-        return Err(Problem::new(
-            ProblemType::NotFound,
-            format!(
-                "This deployment serves a single account and this caller (user {caller}) is not \
-                 it{tail}"
-            ),
-        )
-        .with("reason", OrderedJson::Str(SOLE_TENANT_REFUSED.to_owned())));
-    }
-    match sole {
-        SoleId::Id(id) => Ok(id),
-        SoleId::Huge => Err(crate::problems::internal_error()),
-    }
+    crate::routes::common::scoped_sole_user_id(&state.db, principal_user_id, surface).await
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -661,6 +535,7 @@ pub(crate) fn py_repr_json(v: &OrderedJson) -> String {
         OrderedJson::Bool(b) => if *b { "True" } else { "False" }.to_owned(),
         OrderedJson::Int(i) => i.to_string(),
         OrderedJson::UInt(u) => u.to_string(),
+        OrderedJson::BigInt(big) => big.clone(),
         OrderedJson::Float(f) => {
             if f.is_nan() {
                 "nan".to_owned()
@@ -821,20 +696,8 @@ mod tests {
         assert!(from_isoformat("not a time").is_none());
     }
 
-    #[test]
-    fn the_sole_tenant_variable_is_read_as_pythons_int() {
-        assert_eq!(py_int("6"), Some(SoleId::Id(6)));
-        assert_eq!(py_int("+6"), Some(SoleId::Id(6)));
-        assert_eq!(py_int("-6"), Some(SoleId::Id(-6)));
-        assert_eq!(py_int("1_0"), Some(SoleId::Id(10)));
-        assert_eq!(py_int("-9223372036854775808"), Some(SoleId::Id(i64::MIN)));
-        assert_eq!(py_int("99999999999999999999"), Some(SoleId::Huge));
-        assert_eq!(py_int("abc"), None);
-        assert_eq!(py_int("1_0_"), None);
-        assert_eq!(py_int("_1"), None);
-        assert_eq!(py_int("1__0"), None);
-        assert_eq!(py_int("+-1"), None);
-    }
+    // `the_sole_tenant_variable_is_read_as_pythons_int` moved with the function to
+    // `routes::common` (R5.10's collapse).
 
     #[test]
     fn a_negative_value_that_rounds_to_zero_keeps_its_sign() {
@@ -861,33 +724,66 @@ mod tests {
 
     /// Ports the structural halves of `test_swing_readonly.py`, `test_twt_readonly.py`,
     /// `test_vbt_readonly.py`, `test_baskets_readonly.py` and `test_sleeves_are_not_orders.py`:
-    /// the lane's routers register GETs only, write no row, and name no execution path.
+    /// the lane's routers register **only** the money-free writes Python allows (wave 4c, lane
+    /// writes-sleeves) — `sleeve_state` and `baskets` none at all — and name no execution path.
     #[test]
-    fn the_lanes_routers_are_read_only_and_reach_no_order() {
-        for (name, source) in [
-            ("swing", include_str!("../swing.rs")),
-            ("twt", include_str!("../twt.rs")),
-            ("vbt", include_str!("../vbt.rs")),
-            ("sleeves", include_str!("../sleeves.rs")),
-            ("sleeve_state", include_str!("../sleeve_state.rs")),
-            ("baskets", include_str!("../baskets.rs")),
-            ("common", include_str!("common.rs")),
+    fn the_lanes_routers_write_only_what_python_allows_and_reach_no_order() {
+        for (name, source, writes) in [
+            (
+                "swing",
+                include_str!("../swing.rs"),
+                &[
+                    "post(writes::post_scan",
+                    "patch(writes::patch_watch",
+                    ".delete(writes::delete_watch",
+                    ".post(writes::post_watch",
+                    ".patch(writes::patch_config",
+                ][..],
+            ),
+            (
+                "twt",
+                include_str!("../twt.rs"),
+                &["post(writes::post_twt_scan"][..],
+            ),
+            (
+                "vbt",
+                include_str!("../vbt.rs"),
+                &[
+                    "post(writes::post_vbt_scan",
+                    ".patch(writes::patch_vbt_config",
+                ][..],
+            ),
+            (
+                "sleeves",
+                include_str!("../sleeves.rs"),
+                &[".put(replace::replace_sleeves"][..],
+            ),
+            ("sleeve_state", include_str!("../sleeve_state.rs"), &[][..]),
+            ("baskets", include_str!("../baskets.rs"), &[][..]),
+            ("common", include_str!("common.rs"), &[][..]),
         ] {
             let code = source.split("#[cfg(test)]").next().unwrap_or(source);
-            for routing in [
-                "routing::post",
-                "routing::put",
-                "routing::patch",
-                "routing::delete",
-            ] {
-                assert!(!code.contains(routing), "{name} imports {routing}");
+            let mut stripped = code.split_whitespace().collect::<String>();
+            for allowed in writes {
+                let allowed: String = allowed.split_whitespace().collect();
+                assert!(stripped.contains(&allowed), "{name} lost {allowed}");
+                stripped = stripped.replacen(&allowed, "", 1);
             }
-            for verb in ["post(", "patch(", "delete("] {
+            for verb in [
+                ".post(", ".patch(", ".delete(", "(post(", "(put(", "(patch(", "(delete(",
+            ] {
                 assert!(
-                    !code.contains(&format!(", {verb}")) && !code.contains(&format!(".{verb}")),
-                    "{name} registers a {verb}"
+                    !stripped.contains(verb),
+                    "{name} registers another write: {verb}"
                 );
             }
+            // `.put("key", value)` is the response builder; a `.put(` routing a handler is not.
+            assert!(
+                !stripped
+                    .match_indices(".put(")
+                    .any(|(i, _)| !stripped[i + 5..].starts_with('"')),
+                "{name} registers another write: put"
+            );
             for sql in ["INSERT ", "UPDATE ", "DELETE FROM", "TRUNCATE", "begin()"] {
                 assert!(!code.contains(sql), "{name} contains {sql}");
             }

@@ -15,10 +15,12 @@
 
 use std::collections::HashMap;
 
+pub(crate) mod writes;
+
 use axum::Router;
 use axum::extract::{Extension, Path, RawQuery, State};
 use axum::response::Response;
-use axum::routing::get;
+use axum::routing::{get, post};
 use baskfy_core::vbt::config::{BreadthConfig, DRY_RUN_SESSIONS_REQUIRED, EntryConfig};
 use baskfy_core::vbt::published::PUBLISHED;
 use chrono::{Duration, NaiveDate};
@@ -736,6 +738,14 @@ pub async fn get_config(
 ) -> Result<Response, Problem> {
     require_authenticated(&principal)?;
     let user_id = scoped_sole_user_id(&state, principal.user_id, None).await?;
+    config_response(&state, user_id).await
+}
+
+/// The `VbtConfigView` for `user_id`, read after any write committed.
+///
+/// # Errors
+/// 404 (not seeded), 500.
+pub(crate) async fn config_response(state: &AppState, user_id: i64) -> Result<Response, Problem> {
     let row = sqlx::query(
         "SELECT sleeve_capital_inr, max_open_positions::bigint AS max_open_positions, \
                 max_position_pct, stop_pct, dry_run_sessions::bigint AS dry_run_sessions, \
@@ -831,12 +841,16 @@ pub async fn get_scan(
 /// Python API until they are ported.
 pub fn router() -> Router<AppState> {
     Router::new()
+        .route("/vbt/scan", post(writes::post_vbt_scan))
         .route("/vbt/today", get(get_today))
         .route("/vbt/today/{instrument_id}/bars", get(get_bars))
         .route("/vbt/breadth", get(get_breadth))
         .route("/vbt/book", get(get_book))
         .route("/vbt/backtest", get(get_backtest))
-        .route("/vbt/config", get(get_config))
+        .route(
+            "/vbt/config",
+            get(get_config).patch(writes::patch_vbt_config),
+        )
         .route("/vbt/scan/{run_id}", get(get_scan))
 }
 

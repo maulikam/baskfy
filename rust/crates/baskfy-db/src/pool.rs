@@ -93,6 +93,14 @@ pub fn normalise_url(url: &str) -> String {
 /// # Errors
 /// [`DbError::Config`] when the URL does not parse (the URL itself is never in the message).
 pub fn connect_options(settings: &DbSettings) -> Result<PgConnectOptions, DbError> {
+    options_for(settings, READ_ONLY, APPLICATION_NAME)
+}
+
+fn options_for(
+    settings: &DbSettings,
+    read_only: bool,
+    application_name: &str,
+) -> Result<PgConnectOptions, DbError> {
     let url = normalise_url(settings.url.expose());
     let options = PgConnectOptions::from_str(&url).map_err(|_| {
         DbError::Config(
@@ -100,14 +108,14 @@ pub fn connect_options(settings: &DbSettings) -> Result<PgConnectOptions, DbErro
         )
     })?;
     let mut startup: Vec<(&str, String)> = Vec::new();
-    if READ_ONLY {
+    if read_only {
         startup.push(("default_transaction_read_only", "on".to_owned()));
     }
     if let Some(timeout) = STATEMENT_TIMEOUT {
         startup.push(("statement_timeout", timeout.as_millis().to_string()));
     }
     Ok(options
-        .application_name(APPLICATION_NAME)
+        .application_name(application_name)
         .statement_cache_capacity(settings.statement_cache_size)
         .options(startup))
 }
@@ -118,6 +126,28 @@ pub struct Db {
     pool: PgPool,
 }
 
+/// `create_engine`'s pool over `options`, connecting lazily (see [`Db::connect_lazy`]).
+fn lazy_pool(settings: &DbSettings, options: PgConnectOptions) -> Result<PgPool, DbError> {
+    if settings.pool_size == 0 {
+        return Err(DbError::Config(
+            "db_pool_size must be greater than 0".to_owned(),
+        ));
+    }
+    if !(settings.pool_timeout_seconds.is_finite() && settings.pool_timeout_seconds > 0.0) {
+        return Err(DbError::Config(
+            "db_pool_timeout_seconds must be greater than 0".to_owned(),
+        ));
+    }
+    Ok(PgPoolOptions::new()
+        .max_connections(settings.pool_size.saturating_add(settings.max_overflow))
+        .min_connections(0)
+        .acquire_timeout(Duration::from_secs_f64(settings.pool_timeout_seconds))
+        .max_lifetime(Some(Duration::from_secs(settings.pool_recycle_seconds)))
+        .idle_timeout(None)
+        .test_before_acquire(true)
+        .connect_lazy_with(options))
+}
+
 impl Db {
     /// Builds the pool without connecting: like SQLAlchemy's engine, the first query opens the
     /// first connection, so a process starts (and answers `/health`) with the database down.
@@ -125,25 +155,7 @@ impl Db {
     /// # Errors
     /// [`DbError::Config`] for an unusable URL or pool size.
     pub fn connect_lazy(settings: &DbSettings) -> Result<Self, DbError> {
-        if settings.pool_size == 0 {
-            return Err(DbError::Config(
-                "db_pool_size must be greater than 0".to_owned(),
-            ));
-        }
-        if !(settings.pool_timeout_seconds.is_finite() && settings.pool_timeout_seconds > 0.0) {
-            return Err(DbError::Config(
-                "db_pool_timeout_seconds must be greater than 0".to_owned(),
-            ));
-        }
-        let options = connect_options(settings)?;
-        let pool = PgPoolOptions::new()
-            .max_connections(settings.pool_size.saturating_add(settings.max_overflow))
-            .min_connections(0)
-            .acquire_timeout(Duration::from_secs_f64(settings.pool_timeout_seconds))
-            .max_lifetime(Some(Duration::from_secs(settings.pool_recycle_seconds)))
-            .idle_timeout(None)
-            .test_before_acquire(true)
-            .connect_lazy_with(options);
+        let pool = lazy_pool(settings, connect_options(settings)?)?;
         Ok(Self { pool })
     }
 
@@ -169,6 +181,51 @@ impl Db {
     pub async fn ping(&self) -> Result<(), DbError> {
         sqlx::query("SELECT 1").execute(&self.pool).await?;
         Ok(())
+    }
+
+    /// Closes every connection (`engine.dispose()`).
+    pub async fn close(&self) {
+        self.pool.close().await;
+    }
+}
+
+/// What a Rust process that may write reports as `application_name`, so an operator can tell
+/// its write connections from its reads (and from Python's) in `pg_stat_activity`.
+pub const WRITE_APPLICATION_NAME: &str = "baskfy-rs-write";
+
+/// The **read-write** pool (DECISIONS-RS R6.2). Ports the same `create_engine` as [`Db`] — the
+/// same sizing, checkout timeout, recycle age, pre-ping and statement cache — without the
+/// read-only startup option.
+///
+/// It is deliberately narrow: there is **no** `pool()` accessor and no way to run a statement
+/// outside a transaction. The only door is [`WriteDb::begin`], one transaction per request, which
+/// is Python's `get_session` (`async with maker() as session` … `commit()` on a clean return,
+/// `rollback()` on any exception). The API hands it only to write routes (`baskfy_api::session`);
+/// every GET keeps the read-only [`Db`].
+#[derive(Debug, Clone)]
+pub struct WriteDb {
+    pool: PgPool,
+}
+
+impl WriteDb {
+    /// Builds the read-write pool without connecting (like [`Db::connect_lazy`]).
+    ///
+    /// # Errors
+    /// [`DbError::Config`] for an unusable URL or pool size.
+    pub fn connect_lazy(settings: &DbSettings) -> Result<Self, DbError> {
+        let options = options_for(settings, false, WRITE_APPLICATION_NAME)?;
+        let pool = lazy_pool(settings, options)?;
+        Ok(Self { pool })
+    }
+
+    /// One transaction on one connection: the request's session. Dropping it without
+    /// [`Transaction::commit`] rolls it back, which is what Python's `get_session` does when the
+    /// handler raises.
+    ///
+    /// # Errors
+    /// [`DbError::Unavailable`] when no connection can be had.
+    pub async fn begin(&self) -> Result<Transaction<'static, Postgres>, DbError> {
+        Ok(self.pool.begin().await?)
     }
 
     /// Closes every connection (`engine.dispose()`).
@@ -208,6 +265,19 @@ mod tests {
             (s.pool_recycle_seconds, s.statement_cache_size),
             (1800, 100)
         );
+    }
+
+    #[test]
+    fn only_the_write_pool_drops_the_read_only_option() {
+        let s = DbSettings::with_url(Secret::new("postgresql://u:p@127.0.0.1:9/d"));
+        let read = format!("{:?}", connect_options(&s).unwrap());
+        let write = format!(
+            "{:?}",
+            options_for(&s, false, WRITE_APPLICATION_NAME).unwrap()
+        );
+        assert!(read.contains("default_transaction_read_only"), "{read}");
+        assert!(!write.contains("default_transaction_read_only"), "{write}");
+        assert!(write.contains(WRITE_APPLICATION_NAME), "{write}");
     }
 
     #[tokio::test]

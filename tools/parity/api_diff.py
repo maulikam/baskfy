@@ -45,6 +45,11 @@ Case file: a JSON list (or ``{"cases": [...]}``) of objects::
      "note": "why this case exists"}
 
 A mask entry is a key name (masked wherever it appears) or a JSON pointer (``/a/0/b``).
+
+Writes (``--writes --lane NAME``): a case file whose top level says ``"mode": "writes"`` is a
+**scenario** run against two fresh databases cloned from the bed, and graded on its side effects
+too — tables, sequences, Redis and mail. See ``api_writes.py`` for the mechanics. GET mode skips
+such files; writes mode accepts nothing else.
 """
 
 from __future__ import annotations
@@ -71,6 +76,9 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import api_writes as writes_mod  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
 BLUEPRINT = REPO / "decile-blueprint"
@@ -339,14 +347,33 @@ class Case:
     body: Any
     mask: list[str]
     note: str
+    capture: dict[str, str] = field(default_factory=dict)
+    raw_body: str | None = None
+    mail_mask: list[str] = field(default_factory=list)
 
 
-def load_cases(patterns: list[str]) -> list[Case]:
+def case_files(patterns: list[str], writes: bool) -> list[str]:
+    """The files the patterns name, keeping only GET-mode files or only writes-mode ones."""
     files: list[str] = []
     for pattern in patterns:
         files.extend(sorted(glob.glob(pattern)))
     if not files:
         raise SystemExit(f"no case files match {patterns}")
+    kept = []
+    for f in files:
+        raw = json.loads(Path(f).read_text())
+        is_writes = isinstance(raw, dict) and raw.get("mode") == "writes"
+        if is_writes == writes:
+            kept.append(f)
+        elif writes:
+            raise SystemExit(f"{f} is not a writes scenario (no \"mode\": \"writes\")")
+    if not kept:
+        raise SystemExit(f"no {'writes' if writes else 'GET'}-mode case files among {files}")
+    return kept
+
+
+def load_cases(patterns: list[str], writes: bool = False) -> list[Case]:
+    files = case_files(patterns, writes)
     cases: list[Case] = []
     for f in files:
         raw = json.loads(Path(f).read_text())
@@ -374,6 +401,9 @@ def load_cases(patterns: list[str]) -> list[Case]:
                     body=item.get("body"),
                     mask=list(item.get("mask", [])),
                     note=item.get("note", ""),
+                    capture=dict(item.get("capture", {})),
+                    raw_body=item.get("raw_body"),
+                    mail_mask=list(item.get("mail_mask", [])),
                 )
             )
     return cases
@@ -384,6 +414,7 @@ class Answer:
     status: int
     headers: dict[str, str]
     body: bytes
+    raw_headers: list[tuple[str, str]] = field(default_factory=list)
 
 
 def send(port: int, case: Case, token: str | None) -> Answer:
@@ -392,7 +423,9 @@ def send(port: int, case: Case, token: str | None) -> Answer:
     if token is not None:
         headers["Authorization"] = f"Bearer {token}"
     payload: bytes | None = None
-    if case.body is not None:
+    if case.raw_body is not None:
+        payload = case.raw_body.encode()
+    elif case.body is not None:
         payload = json.dumps(case.body).encode()
         headers.setdefault("Content-Type", "application/json")
     conn = http.client.HTTPConnection("127.0.0.1", port, timeout=60)
@@ -405,7 +438,7 @@ def send(port: int, case: Case, token: str | None) -> Answer:
         key = k.lower()
         merged[key] = f"{merged[key]}, {v}" if key in merged else v
     conn.close()
-    return Answer(response.status, merged, body)
+    return Answer(response.status, merged, body, list(response.getheaders()))
 
 
 # ---------------------------------------------------------------------------------------------
@@ -499,6 +532,20 @@ def compare(case: Case, py: Answer, rs: Answer, py_port: int, rs_port: int) -> R
     elif not case.mask and py.headers.get("etag") != rs.headers.get("etag"):
         problems.append(f"header etag: python {py.headers.get('etag')!r} != rust {rs.headers.get('etag')!r}")
 
+    cookie_masks = {m.split(":", 1)[1] for m in case.mask if m.startswith("cookie:")}
+    py_cookies = writes_mod.set_cookies(py.raw_headers)
+    rs_cookies = writes_mod.set_cookies(rs.raw_headers)
+    attr_masks = {m.split(":", 1)[1].lower() for m in case.mask if m.startswith("cookie-attr:")}
+    for jar in (py_cookies, rs_cookies):
+        for c in jar:
+            if c["name"] in cookie_masks and c["value"]:
+                c["value"] = "<masked>"
+            for attr in c["attrs"]:
+                if attr[0] in attr_masks and len(attr) == 2:
+                    attr[1] = "<masked>"
+    if py_cookies != rs_cookies:
+        problems.append(f"set-cookie: python {py_cookies!r} != rust {rs_cookies!r}")
+
     is_json = "json" in py.headers.get("content-type", "") or "json" in rs.headers.get("content-type", "")
     if is_json and py.body and rs.body:
         try:
@@ -564,6 +611,245 @@ def report_lines(results: list[Result], args: argparse.Namespace) -> Iterator[st
                 yield f"      ... ({len(r.diff) - 80} more diff lines)"
 
 
+def run_writes(args: argparse.Namespace, secret: str) -> int:
+    """Every writes scenario: clone, serve, send in order, stop, compare side effects."""
+    if not args.lane or not args.smtp_port:
+        raise SystemExit("--writes needs --lane and --smtp-port")
+    bed = urllib.parse.urlsplit(args.database_url.replace("+asyncpg", ""))
+    if args.allow_db_url or (bed.hostname, bed.port) != BED_DB_HOSTPORT:
+        raise SystemExit("--writes runs only on the bed's database (127.0.0.1:55432); --allow-db-url is refused")
+    lane = writes_mod.lane_ok(args.lane)
+    if args.redis_db_py == args.redis_db_rs or 0 in (args.redis_db_py, args.redis_db_rs):
+        raise SystemExit("--redis-db-py and --redis-db-rs must differ and neither may be 0")
+    if args.smtp_port in FORBIDDEN_PORTS or not writes_mod.port_free(args.smtp_port):
+        raise SystemExit(f"--smtp-port {args.smtp_port} is taken or forbidden")
+    writes_mod.check_container()
+    files = case_files(args.cases, writes=True)
+    if not args.no_build:
+        build_rust(args)
+    sink = writes_mod.MailSink(args.smtp_port)
+    sink.start()
+    lines: list[str] = []
+    all_equal = True
+    tpl = writes_mod.ensure_lane_template(lane, args.template_wait)
+    try:
+        for f in files:
+            equal, report = run_scenario(args, secret, f, tpl, lane, sink)
+            all_equal &= equal
+            lines.extend(report)
+    finally:
+        sink.stop()
+        if args.drop_template:
+            writes_mod.drop(tpl)
+    text = "\n".join(lines) + "\n"
+    sys.stdout.write(text)
+    if args.report:
+        Path(args.report).write_text(text)
+    return 0 if all_equal else 1
+
+
+def run_scenario(
+    args: argparse.Namespace, secret: str, path: str, tpl: str, lane: str, sink: Any
+) -> tuple[bool, list[str]]:
+    spec = json.loads(Path(path).read_text())
+    cases = load_cases([path], writes=True)
+    if args.only:
+        cases = [c for c in cases if args.only in c.name]
+    run = writes_mod.new_run_id()
+    names = {side: f"rsw_{lane}_{run}_{side}" for side in ("base", "py", "rs")}
+    db_mask: dict[str, list[str]] = {k: list(v) for k, v in spec.get("db_mask", {}).items()}
+    presence_only = list(writes_mod.DEFAULT_PRESENCE_ONLY) + list(spec.get("redis_presence_only", []))
+    extra_env = {str(k): str(v) for k, v in spec.get("env", {}).items()}
+    results: list[Result] = []
+    mail_problems: list[str] = []
+    effects: list[str] = []
+    servers = Servers()
+    try:
+        return _scenario(args, secret, path, spec, cases, run, names, db_mask, presence_only,
+                         extra_env, results, mail_problems, effects, servers, tpl, sink)
+    finally:
+        servers.stop()
+        if not args.keep_dbs:
+            for name in names.values():
+                writes_mod.drop(name)
+
+
+def _scenario(  # noqa: PLR0913 - the scenario's state, threaded through once
+    args: argparse.Namespace, secret: str, path: str, spec: dict[str, Any], cases: list[Case],
+    run: str, names: dict[str, str], db_mask: dict[str, list[str]], presence_only: list[str],
+    extra_env: dict[str, str], results: list[Result], mail_problems: list[str],
+    effects: list[str], servers: Servers, tpl: str, sink: Any,
+) -> tuple[bool, list[str]]:
+    try:
+        for name in names.values():
+            writes_mod.clone(tpl, name)
+            for statement in spec.get("seed_sql", []):
+                writes_mod.psql(name, statement if statement.rstrip().endswith(";") else statement + ";")
+        base_env = server_env(args, secret)
+        bed = urllib.parse.urlsplit(args.database_url.replace("+asyncpg", ""))
+        side_env = {}
+        for side, redis_db in (("py", args.redis_db_py), ("rs", args.redis_db_rs)):
+            db_url = f"postgresql+asyncpg://{bed.username}:{bed.password}@127.0.0.1:55432/{names[side]}"
+            side_env[side] = writes_mod.env_for_side(
+                base_env, db_url, args.redis_url, redis_db, args.smtp_port, extra_env
+            )
+            writes_mod.redis_flush(args.redis_url, redis_db)
+        log_dir = Path(args.log_dir)
+        start_python(args, side_env["py"], servers, log_dir)
+        start_rust(args, side_env["rs"], servers, log_dir)
+        for name, port in (("python", args.py_port), ("rust", args.rs_port)):
+            proc = next((p for n, p in servers.started if n == name), None)
+            wait_healthy(port, proc, args.startup_timeout)
+
+        variables: dict[str, dict[str, str]] = {"py": {}, "rs": {}}
+        for case in cases:
+            spec_user = USERS.get(case.user)
+            token = mint(spec_user, secret) if spec_user is not None else None
+            answers = {}
+            mails = {}
+            capture_failures: list[str] = []
+            for side, port in (("py", args.py_port), ("rs", args.rs_port)):
+                concrete = Case(
+                    **{
+                        **case.__dict__,
+                        "path": writes_mod.substitute(case.path, variables[side]),
+                        "query": writes_mod.substitute(case.query, variables[side]),
+                        "headers": writes_mod.substitute(case.headers, variables[side]),
+                        "body": writes_mod.substitute(case.body, variables[side]),
+                        "raw_body": writes_mod.substitute(case.raw_body, variables[side]),
+                    }
+                )
+                mark = sink.mark()
+                answers[side] = send(port, concrete, token)
+                sent = sink.since(mark)
+                mails[side] = [writes_mod.mail_view(m, case.mail_mask) for m in sent]
+                for var, where in case.capture.items():
+                    try:
+                        variables[side][var] = writes_mod.capture(
+                            where, answers[side].body, answers[side].raw_headers, sent
+                        )
+                    except (SystemExit, ValueError, KeyError, IndexError) as exc:
+                        capture_failures.append(f"{side}: {exc}")
+                        variables[side][var] = "<not-captured>"
+            if args.dump_dir:
+                dump = Path(args.dump_dir)
+                dump.mkdir(parents=True, exist_ok=True)
+                for side in ("py", "rs"):
+                    a = answers[side]
+                    (dump / f"{case.name}.{side}.txt").write_text(
+                        f"{a.status}\n"
+                        + "".join(f"{k}: {v}\n" for k, v in a.raw_headers)
+                        + "\n"
+                        + a.body.decode("utf-8", "replace")
+                        + "\n\n"
+                        + json.dumps(mails[side], indent=1, ensure_ascii=False)
+                    )
+            result = compare(case, answers["py"], answers["rs"], args.py_port, args.rs_port)
+            if capture_failures:
+                result.equal = False
+                result.problems.extend(f"capture failed on {f}" for f in capture_failures)
+            if mails["py"] != mails["rs"]:
+                result.equal = False
+                result.problems.append("mail differs")
+                result.diff.extend(
+                    difflib.unified_diff(
+                        json.dumps(mails["py"], indent=1, ensure_ascii=False).splitlines(),
+                        json.dumps(mails["rs"], indent=1, ensure_ascii=False).splitlines(),
+                        "python mail",
+                        "rust mail",
+                        lineterm="",
+                    )
+                )
+            elif mails["py"]:
+                result.problems.append(f"mail: {len(mails['py'])} message(s) per side, EQUAL")
+            results.append(result)
+    finally:
+        servers.stop()
+    # Side effects, with both servers gone (their backends have exited and flushed their stats).
+    time.sleep(1.5)
+    try:
+        touched = (
+            writes_mod.touched_tables(names["py"])
+            | writes_mod.touched_tables(names["rs"])
+            | set(spec.get("tables", []))
+        )
+        effects_equal = True
+        for table in sorted(touched):
+            key = writes_mod.primary_key(names["base"], table)
+            base = writes_mod.table_rows(names["base"], table, key)
+            masked = set(db_mask.get(table, []))
+            py_changes = writes_mod.change_set(base, writes_mod.table_rows(names["py"], table, key), masked)
+            rs_changes = writes_mod.change_set(base, writes_mod.table_rows(names["rs"], table, key), masked)
+            tag = "EQUAL" if py_changes == rs_changes else "DIFF "
+            effects_equal &= py_changes == rs_changes
+            effects.append(
+                f"{tag} table {table}: python {len(py_changes)} row change(s), rust {len(rs_changes)}"
+                + (f"; masked {', '.join(sorted(masked))}" if masked else "")
+            )
+            if py_changes != rs_changes:
+                effects.extend(
+                    "      " + line
+                    for line in list(
+                        difflib.unified_diff(
+                            [json.dumps(c, ensure_ascii=False) for c in py_changes],
+                            [json.dumps(c, ensure_ascii=False) for c in rs_changes],
+                            "python",
+                            "rust",
+                            lineterm="",
+                        )
+                    )[:120]
+                )
+            else:
+                effects.extend(f"      {json.dumps(c, ensure_ascii=False)}"[:400] for c in py_changes[:20])
+        seq_py, seq_rs = writes_mod.sequences(names["py"]), writes_mod.sequences(names["rs"])
+        moved = {k for k in seq_py if seq_py.get(k) != seq_rs.get(k)}
+        effects_equal &= not moved
+        effects.append(("DIFF  sequences: " + ", ".join(sorted(moved))) if moved else "EQUAL sequences")
+        r_py = writes_mod.redis_dump(args.redis_url, args.redis_db_py, presence_only)
+        r_rs = writes_mod.redis_dump(args.redis_url, args.redis_db_rs, presence_only)
+        # A value one side generated at random (a backtest's public id) and the scenario captured:
+        # the file's "redis_mask_captures" names it, and each side's own value reads "<name>".
+        for names_ in spec.get("redis_mask_captures", []):
+            for side, dump in (("py", r_py), ("rs", r_rs)):
+                value = variables[side].get(names_)
+                if value:
+                    text = json.dumps(dump).replace(value, f"<{names_}>")
+                    dump.clear()
+                    dump.update(json.loads(text))
+        effects_equal &= r_py == r_rs
+        effects.append(
+            f"{'EQUAL' if r_py == r_rs else 'DIFF '} redis: python {len(r_py)} key(s), rust {len(r_rs)}"
+            f"; presence only: {', '.join(presence_only)}"
+        )
+        if r_py != r_rs:
+            effects.extend(
+                "      " + line
+                for line in difflib.unified_diff(
+                    json.dumps(r_py, indent=1, sort_keys=True, default=str).splitlines(),
+                    json.dumps(r_rs, indent=1, sort_keys=True, default=str).splitlines(),
+                    "python",
+                    "rust",
+                    lineterm="",
+                )
+            )
+        for db in (args.redis_db_py, args.redis_db_rs):
+            writes_mod.redis_flush(args.redis_url, db)
+    finally:
+        pass
+    equal = all(r.equal for r in results) and effects_equal
+    header = [
+        f"api_diff --writes [{Path(path).name}] run {run}: "
+        f"{sum(r.equal for r in results)} of {len(results)} responses equal, "
+        f"side effects {'EQUAL' if effects_equal else 'DIFFERENT'}",
+        f"databases {', '.join(names.values())} cloned from {tpl}"
+        + (" (kept)" if args.keep_dbs else " (dropped)"),
+    ]
+    if db_mask:
+        header.append("db masks: " + "; ".join(f"{t}: {', '.join(c)}" for t, c in sorted(db_mask.items())))
+    body = list(report_lines(results, args))[3:]
+    return equal, header + body + ["", "side effects:"] + effects + mail_problems + [""]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--py-port", type=int, default=18001)
@@ -581,10 +867,23 @@ def main() -> int:
     parser.add_argument("--log-dir", default=tempfile.gettempdir(), help="server logs go here")
     parser.add_argument("--startup-timeout", type=float, default=90.0)
     parser.add_argument("--only", help="run only cases whose name contains this")
+    parser.add_argument("--writes", action="store_true", help="run writes scenarios (api_writes.py)")
+    parser.add_argument("--lane", help="writes: the lane name in every database it clones")
+    parser.add_argument("--smtp-port", type=int, help="writes: the mail sink's port (your lane's own)")
+    parser.add_argument("--redis-db-py", type=int, default=12, help="writes: Python's Redis db index")
+    parser.add_argument("--redis-db-rs", type=int, default=13, help="writes: Rust's Redis db index")
+    parser.add_argument("--keep-dbs", action="store_true", help="writes: keep the run's databases")
+    parser.add_argument("--drop-template", action="store_true", help="writes: drop the lane template after")
+    parser.add_argument("--dump-dir", help="writes: write each side's raw answer per case here")
+    parser.add_argument("--template-wait", type=float, default=900.0, help="writes: seconds to wait to clone")
     args = parser.parse_args()
 
     guard_urls(args)
     secret = load_secret(Path(args.secret_file))
+    if args.writes:
+        if args.attach:
+            raise SystemExit("--writes starts its own servers per scenario; --attach is refused")
+        return run_writes(args, secret)
     cases = load_cases(args.cases)
     if args.only:
         cases = [c for c in cases if args.only in c.name]

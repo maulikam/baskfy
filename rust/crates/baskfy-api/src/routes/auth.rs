@@ -3,9 +3,10 @@
 //! Ported (foundation, RS4b): `GET /me` — profile + entitlements. Ported (RS5, accounts lane):
 //! `GET /me/export` — the DPDP data export (read-only: it writes nothing in Python either).
 //!
-//! **Not yet ported** (every one of them writes, and this wave's pool is read-only): `POST
-//! /auth/google`, `POST /auth/refresh`, `POST /auth/logout` (cookie + CSRF, [`crate::csrf`]),
-//! `PATCH /me`, `DELETE /me`, `POST /me/restore`.
+//! Ported at wave 4c's foundation (RS4c.0, DECISIONS-RS R6.3), on the write pool: `POST
+//! /auth/google` (up to Google's verifier, which is not ported), `POST /auth/refresh`,
+//! `POST /auth/logout` (cookie + CSRF, [`crate::csrf`]), `PATCH /me`, `DELETE /me`,
+//! `POST /me/restore` — in `auth_writes.rs`.
 //!
 //! **One deliberate difference on a read-only pool** (DECISIONS-RS R5.7): Python's `GET /me`
 //! runs `ensure_staff_from_allowlist`, which *writes* `app_user.is_staff = true` for an
@@ -17,7 +18,7 @@
 use axum::Router;
 use axum::extract::{Extension, State};
 use axum::response::Response;
-use axum::routing::get;
+use axum::routing::{get, post};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use sqlx::Row;
@@ -29,6 +30,9 @@ use crate::entitlements::{EntitlementsOut, entitlements_for};
 use crate::problems::{Problem, unauthenticated};
 use crate::state::AppState;
 use crate::wire;
+
+#[path = "auth_writes.rs"]
+mod writes;
 
 /// `MeOut`, field for field in its declaration order.
 #[derive(Debug, Clone, Serialize)]
@@ -385,6 +389,15 @@ pub async fn export_me(
 /// The `/auth` and `/me` routes ported so far.
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/me", get(get_me))
+        .route(
+            "/me",
+            get(get_me)
+                .patch(writes::patch_me)
+                .delete(writes::delete_me),
+        )
+        .route("/me/restore", post(writes::restore_me))
+        .route("/auth/google", post(writes::sign_in_with_google))
+        .route("/auth/refresh", post(writes::refresh))
+        .route("/auth/logout", post(writes::logout))
         .route("/me/export", get(export_me))
 }

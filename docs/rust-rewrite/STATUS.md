@@ -24,7 +24,10 @@ its golden tests run · `verified` — every golden for the module green, clippy
 | `baskfy-db` (read-only sqlx pool, typed rows; RS4b foundation) | **done** (RS4b): 10 unit + 8 bed tests green; every connection refuses writes (`25006`, proven on the bed) |
 | `baskfy-api` foundation (axum; settings, pipeline, problems, auth, CSRF check, rate limit, ETag, CORS, 44 route modules) | **done** (RS4b): 67 tests green (5 of them need the bed); `api_diff.py` **55 of 55 EQUAL** on `foundation.json` |
 | `cargo test --workspace` at RS4b | **green**: 58 test targets, 753 passed + 14 ignored (the same 14 as RS4a; built with `BASKFY_RS_TEST_DATABASE_URL` set, so no bed test is ignored); **1,702 of 1,702 graded goldens** |
-| API routes (the five lanes), worker, desk, execution, single binary | not started (next: the API lanes over `routes/*.rs`, graded by `tools/parity/api_diff.py`) |
+| API GET routes (RS4b) | **139 of 140** mounted router GETs; 2,285 of 2,285 cases EQUAL at RS4c |
+| API write routes (RS4c) | **82 of 94 ported**, 1 partly, 11 on Python with reasons; 1,175 of 1,175 writes cases EQUAL with every side effect (section "Wave 4c integration") |
+| `cargo test --workspace` at RS4c | **green**: 64 test targets, 1,013 passed + 14 ignored (the same 14); **1,702 of 1,702 graded goldens** |
+| Worker, desk, execution, single binary | not started (next: **wave 5, the worker — the nightly first**) |
 
 ## Wave 1 (RS1, RS1.1 — 29 Oct 2026) — swing and options ported, 126 of 126
 
@@ -559,6 +562,315 @@ responses. The Python API boots against the bed with test settings only; its sta
 nothing (the bed's `pg_stat_user_tables` insert/update/delete total was unchanged across a full
 run).
 
+## Wave 4c integration (RS4c, 30 Oct 2026) — 82 of Python's 94 write routes ported, 1,175 of 1,175 writes cases EQUAL
+
+The foundation (RS4c.0) and four lanes (writes-accounts, writes-portfolio, writes-screens,
+writes-sleeves), each with an adversarial verifier, merged and graded together on the bed.
+
+**Gates, all green.** `cargo fmt --check`; `cargo clippy --workspace --all-targets -D warnings`;
+`cargo test --workspace` on the bed — 64 test targets, **1,013 passed, 0 failed, 14 ignored** (the
+same 14), 1,702 of 1,702 graded goldens.
+
+**GET.** `api_diff.py` over the six GET case files: **2,285 of 2,285 EQUAL** with
+`BASKFY_SOLE_USER_ID=1` and **2,285 of 2,285** without it.
+
+**Writes** (`api_diff.py --writes --lane rsint`, one lane template, three fresh clones per run;
+every response and every side effect — the scenario's tables row by row, every sequence, both
+Redis databases, outbound mail):
+
+| Scenario | Responses EQUAL | Side effects | Also run with `BASKFY_SOLE_USER_ID=1` |
+|---|---:|---|---|
+| `writes_foundation.json` | 74 / 74 | EQUAL | 74 / 74, EQUAL |
+| `writes_accounts.json` | 336 / 336 | EQUAL | 336 / 336, EQUAL |
+| `writes_portfolio.json` | 270 / 270 | EQUAL | 270 / 270, EQUAL |
+| `writes_screens.json` | 260 / 260 | EQUAL | (the file sets it) |
+| `writes_sleeves.json` | 217 / 217 | EQUAL | (the file sets it) |
+| `writes_sleeves_nobroker.json` | 9 / 9 | EQUAL | (the file sets it) |
+| `writes_sleeves_nobroker_ratelimit.json` (new, R6.40) | 9 / 9 | EQUAL | (the file sets it) |
+| **total** | **1,175 / 1,175** (1,166 before R6.40's file) | EQUAL | |
+
+**Write routes: 94 in Python** (decorators under `routers/`; `public` has none).
+
+| Lane | Python | Ported | Not ported, and why |
+|---|---:|---:|---|
+| foundation (`auth`) | 6 | 5 + `/auth/google` partly | Google's RS256 verifier and `link_google_identity` (R6.3, cutover gate) |
+| writes-accounts (`admin`, `alerts`, `api_keys`, `billing`, `support`, `webhook_endpoints`) | 20 | 20 | — |
+| writes-portfolio (`portfolios`, `portfolio_overview`, `trades`, `brokers`, `track_b`) | 16 | 15 | `POST /portfolios/{id}/rebalance` runs the screener (R6.23) |
+| writes-screens (`screens`, `watchlist`, `managers`, the `curated_*` routers) | 30 | 24 | `/screens/preview`, `/explain`, `/selection`, `/{id}/run`, `/cb/baskets/from-screen`, `/cb/baskets/{slug}/recut` run the screener (R6.13) |
+| writes-sleeves (`swing`, `twt`, `vbt`, `sleeves`, `options`, `fno`, `overlap`, `backtests`) | 20 | 18 | `PUT`/`DELETE /overlap/reviews` re-read through `GET /overlap`, itself unported (R5.21, R6.29) |
+| unassigned (`explore`) | 2 | 0 | `POST /watchlist`, `DELETE /watchlist/{slug}` were in no lane's brief (R6.40) |
+| **total** | **94** | **82 + 1 partly** | **11 on Python** |
+
+Ported, but with a gate before cutover: `POST /backtests` only with `BASKFY_BACKTEST_EXECUTOR=celery`
+(R6.28); `sync-holdings` and `sync-today` answer 503 where Python would read Kite live (R6.22);
+`/brokers/{id}/connect` must cut over with `/brokers/callback` or share the state file (R5.27);
+mailing routes on a STARTTLS/AUTH or Resend deployment (R6.6).
+
+**Fixed at integration (R6.40).** With no usable Redis URL, Python builds no rate limiter and
+serves unmetered; Rust refused every request with 503 (found by the writes-sleeves verifier,
+R6.32). Graded by the new `writes_sleeves_nobroker_ratelimit.json`.
+
+**Audit.**
+* **No order path.** No route places, modifies or cancels an order or GTT, and the API crate makes
+  no Kite call (`routes/kite.rs` serves two GETs that render a basket file). The only
+  `place_order`/`place_gtt` strings are the lanes' source tests asserting their absence
+  (`no_write_here_reaches_a_broker`, `no_module_of_this_lane_can_reach_an_order`, …).
+* **GET handlers cannot reach the write pool** (R6.2): `tests/write_access.rs` (every handler that
+  takes `WritePool` is mounted on a write verb only; nothing else touches the pool) and the unit
+  test that a GET request gets no pool — both green.
+* **No secret in any log.** Every harness server log (GET and writes runs) was scanned for the bed
+  JWT secret, the scenario's test Razorpay/webhook secrets and the bed password: none found.
+* **The public API is shut** (D9): `routes::public` is never merged; the GET cases grade its 404s.
+* **The bed.** Every harness-created database was dropped (the lanes' seven `rsw_tpl_*` templates
+  and this run's); `baskfy-rs-pg` holds only `baskfy`. Redis indices used are empty. `baskfy` itself
+  was not written: its `pg_stat_user_tables` insert/update/delete counters were identical before
+  and after every writes run, and the main tables' row counts unchanged. (Compared against
+  itself, not the live database — the bed rules forbid touching the live stack.)
+* **Python.** The R5.28 suites (`test_api_trades`, `test_rank_history_visibility`,
+  `test_api_instruments`, `test_broker_trades`, `test_instrument_appearances`, `test_api_screens`):
+  **65 passed** on a scratch database in the bed container, dropped afterwards.
+
+**Open, carried to the cutover list.**
+* **Body before token** (R6.17, R6.30): a refused token with a malformed JSON body is Python's 400
+  `json_invalid` and Rust's 401, and Python charges no rate limit for it. Foundation code
+  (`versioned_dependencies`); no case grades it. Must be fixed before any write route cuts over.
+* **Four pydantic emulations** (R6.12 `screens/body_model.rs`, R6.20 `portfolio/model.rs`, R6.25
+  `sleeves/pyd.rs`, R6.33 `api_keys/model.rs`) and **two Celery producers** (R6.26, R6.36) to
+  collapse — every case must stay EQUAL through it.
+* The screener path (11 routes above) is one port: `execute_screen`, `rank_definition`, the screen
+  cache, provenance and `record_run`.
+
+## Wave 4c foundation (RS4c.0, 30 Oct 2026) — the write pool, the writes harness, the session routes
+
+**Committed at RS4c** (the integration commit). Everything below is graded on the bed.
+
+| Piece | Python | State |
+|---|---|---|
+| R5.28's two tenant-isolation defects | `routers/trades.py`, `routers/instruments.py` | **fixed in Python first, then Rust** (R6.1); Python spec tests added and failing on the old code; the affected Python suites green on a scratch database |
+| shared helpers (sole tenant, pydantic lax `int`/`bool`, Python `int()`, IST clock, `latest_published_date`) | the lanes' five copies | **one `routes/common.rs`** (R6.9); the lanes' names delegate |
+| JSON integers of any size (`jsonb`, bodies) | `json.loads` | **exact** (`OrderedJson::BigInt`, R6.10) |
+| write-only Python paths | Starlette 405 | **405 in every lane** (37 registered empty, 4 real, 5 left to their GET route; R6.11) |
+| read-write pool | `db.create_engine` / `get_session` | **`baskfy_db::WriteDb`**, handed only to POST/PUT/PATCH/DELETE (`session::write_access`); one transaction per request, commit on `Ok`, rollback on `Err` (R6.2); a unit test proves a GET handler cannot obtain it, a source test that no other file names it |
+| request bodies | FastAPI + pydantic | `body.rs` (content-type rule, CPython's scanner positions, model errors), `email_address.rs` (`EmailStr`, ASCII exact over 4,064 Python vectors; R6.7) |
+| mail | `email.sender` | console + plain SMTP ported; STARTTLS/AUTH and Resend **not** (R6.6) |
+| `Idempotency-Key` | `idempotency.py` | ported (`idempotency.rs`, R6.8); no ported route uses it yet |
+| `POST /auth/refresh`, `POST /auth/logout`, `PATCH /me`, `DELETE /me`, `POST /me/restore` | `routers/auth.py`, `auth_service.py` | **ported** (R6.3) |
+| `POST /auth/google` | `routers/auth.py`, `auth_google.py` | refusals ported; **Google's RS256 verifier and `link_google_identity` not** (R6.3, a cutover gate) |
+
+**Graded.**
+* **GET** — `api_diff.py` over the six GET case files, **2,285 of 2,285 EQUAL** with
+  `BASKFY_SOLE_USER_ID=1` and **2,285 of 2,285** without it (2,113 at RS4b, plus 4 rank-history
+  cases and 168 write-only-path cases).
+* **Writes** — `api_diff.py --writes --lane wc --smtp-port 18313 --cases
+  tools/parity/api_cases/writes_foundation.json`: **74 of 74 responses EQUAL, side effects EQUAL**
+  — tables `app_user`, `refresh_token`, `account_deletion`, `auth_identity`, `consent_record`
+  (row changes against the run's base clone, masks printed), every sequence, both sides' Redis,
+  and the deletion mail. The scenario covers every body-validation shape (no body, `null`, bad
+  JSON at several positions, no/ wrong `Content-Type`, extras, lengths, `EmailStr` failures),
+  CSRF, logout, refresh rotation with a captured token, reuse, expiry, the deletion with its mail,
+  and the restore with the code captured from that mail.
+* **Python** — the R5.28 specs plus the affected API suites (135 tests) on a scratch database.
+
+**Found (for Maulik):** Python rolls back the refresh-token reuse revocation (R6.4) — reproduced.
+
+**Cutover gates added:** `/auth/google` (verifier), any mailing route on a STARTTLS/AUTH or Resend
+deployment (R6.6). Still open from RS4b: the live Kite overlay, `/baskets` without a snapshot,
+`/brokers/callback`, `/backtests/{id}/events` in flight, `GET /overlap`.
+
+## Wave 4c lane writes-screens (RS4c, 30 Oct 2026) — 24 of the lane's 30 write routes ported
+
+**Committed at RS4c** (the integration commit). Routers: `screens`, `watchlist`, `managers`,
+`curated_create`, `curated_engage`, `curated_plans`, `curated_customize`, `curated_investments`,
+`curated_sip`, `curated_drift`, `curated_from_screen`.
+
+| Route | State |
+|---|---|
+| `POST /screens` (Idempotency-Key), `PATCH`/`DELETE /screens/{public_id}`, `POST /screens/{public_id}/duplicate` (Idempotency-Key) | **ported** |
+| `POST /screens/preview`, `/explain`, `/selection`, `POST /screens/{public_id}/run` | **not ported** — they run the screener (R6.13); Python serves them |
+| `POST /watchlist/instruments`, `DELETE /watchlist/instruments/{symbol}`, `PUT /watchlist/discover-preferences` | **ported** |
+| `POST /managers/me`, `PATCH /managers/{slug}` (+ `PATCH /managers/me`, Starlette's routing), `POST`/`DELETE /managers/me/baskets/{basket_slug}/publish` | **ported** (with `manager_onboarding` and `sebi_registration`, privately) |
+| `POST /cb/baskets` | **ported** |
+| `POST /cb/pending-actions/{action_id}/dismiss`, `/resolve` | **ported** |
+| `POST /cb/plans/invest`, `/apply`, `/exit`, `POST /cb/investments/{id}/customize` | **ported** — previews, never orders (R6.16) |
+| `POST /cb/investments/mark` (+ its `GET`, Starlette's routing), `PUT`/`DELETE /cb/investments/{id}/portfolio` | **ported** |
+| `POST /cb/investments/{id}/sip` | **ported** (REMINDER only; AUTO refused) |
+| `POST /cb/investments/{id}/drift/scan`, `/drift/fix` | **ported** (R6.14) |
+| `POST /cb/baskets/from-screen`, `POST /cb/baskets/{slug}/recut` | **not ported** — they run the screener (R6.13) |
+
+**Graded.** `api_diff.py --writes --lane ws --smtp-port 18227 --py-port 18221 --rs-port 18222
+--redis-db-py 3 --redis-db-rs 4 --cases tools/parity/api_cases/writes_screens.json`: **221 of 221
+responses EQUAL, side effects EQUAL** (15 tables row by row, every sequence, both Redis databases —
+idempotency keys by presence, their values being each side's random public id — and mail: none).
+The scenario covers every route's body shapes (no body, `null`, a list, a non-JSON content type,
+extras forbidden and ignored, each field type's refusals), anonymous/expired/stale-epoch tokens,
+the other tenant (`not-the-sole-tenant`, not-yours 404s), staff-only review, idempotent replays
+(and a replay whose screen was deleted), 402 at the free plan's five screens, 409s, the 500s Python
+gives (a duplicate drift symbol, a bigint overflow), and the GETs that show each effect. The GET
+case files `foundation.json` + `accounts.json` stay **707 of 707 EQUAL** with the writes routed.
+
+**Adversarial review (30 Oct 2026).** The 30 write decorators of the eleven routers were listed
+again: 24 ported, 6 excluded with R6.13's reason. The reviewer added 39 cases (260 in all). They
+cover a cookie-only caller, a per-user idempotency scope, staff against a private screen, a
+refused definition, the duplicate of a deleted screen, the preferences INSERT branch (the seed
+removes the owner's row), the subscriber against the investment routes, column overflows midway
+through `POST /cb/baskets`, `/cb/investments/mark` and `/drift/fix`, a 31-digit amount, a zero
+broker lot, and validator probes (`_`, Unicode digits, non-finite and huge numbers, duplicate keys,
+charset and `+json` content types, dates from timestamps). Run on ports 18321/18322 with Redis
+14/15: **260 of 260 responses EQUAL, side effects EQUAL**. Three port defects were found and
+fixed (R6.18): rows were inserted one at a time where the ORM sends one multi-row INSERT
+(sequence parity on a failure); plan quantities went through `quantize(0)`; dates from numbers
+did not follow speedate's rules. One mismatch is still open, in the foundation: a refused token
+with a malformed body (R6.17).
+
+**Tests.** Unit tests per module (validator, manager state machine and SEBI formats, fee, weights
+and slugs, SIP calendar, drift detection and rebase, plan arithmetic and market hours against
+Python's answers, uuid4 shape) and a source test that no file of the lane names an order path.
+
+## Wave 4c lane writes-portfolio (RS4c, 30 Oct 2026) — 15 of the lane's 16 write routes ported
+
+**Committed at RS4c** (the integration commit). Routers: `portfolios`, `portfolio_overview`, `trades`,
+`brokers`, `track_b` (`kite` has no write route).
+
+| Route | State |
+|---|---|
+| `POST /portfolios` (Idempotency-Key), `PATCH`/`DELETE /portfolios/{id}`, `PUT /portfolios/{id}/holdings` | **ported** (symbol resolution's four tiers, `replace_holdings`, `check_move`) |
+| `POST /portfolios/import-csv` (multipart, Idempotency-Key) | **ported** (python-multipart's parser, `csv.reader`, `portfolio_csv`; GET/PATCH/DELETE on the path reach `/{portfolio_id}` as in Starlette) |
+| `POST /portfolios/{id}/rebalance` | **not ported** — it runs the screener (R6.23); Python serves it |
+| `POST /portfolio`, `POST /portfolio/{id}/holdings`, `POST /portfolio/reconciliation/{item_id}/resolve` | **ported** (`_apply_allocation` statement for statement; bookkeeping, never an order) |
+| `POST /trades/import` (multipart) | **ported** (`parse_tradebook_csv` with `csv.DictReader` and `strptime`, `store_fills`, `apply_trade_history`) |
+| `POST /trades/sync-today` | **ported up to Kite's read** — every no-session answer; with a fresh session, 503 (R6.22) |
+| `POST /brokers/{id}/connect` | **ported** — every refusal and the live branch (state minted, shared with Python's callback through `BASKFY_BROKER_OAUTH_STATE_PATH`) |
+| `POST /brokers/{id}/sync-holdings` | **ported up to the live read** — unwired, DRY_RUN, no key, no session, an unusable session, fixture rows; with a fresh session, 503 (R6.22) |
+| `POST /cb/paywall/checkout`, `/cb/public-signup`, `/cb/fees/collect` | **ported** (404 while their Track B flags stay false) |
+
+**Graded.** `api_diff.py --writes --lane wportfolio --smtp-port 18213 --redis-db-py 6 --redis-db-rs 7
+--py-port 18211 --rs-port 18212 --cases tools/parity/api_cases/writes_portfolio.json`: **188 of
+188 responses EQUAL, side effects EQUAL** (`portfolio`, `portfolio_holding`, `broker_account`,
+`broker_trade`, `reconciliation_item`, `symbol_alias` row by row, every sequence, both Redis
+databases — the idempotency records included) — both without `BASKFY_SOLE_USER_ID` and with it.
+The scenario covers every body shape (no body, `null`, a list, no content type, bad JSON before the
+401, each field type's refusals, extras forbidden and ignored), the multipart reader's refusals (no
+boundary, garbage, an unterminated body, a part with no name, a text field, url-encoded), the
+tradebook's and the portfolio CSV's refusals (and the `csv.Error` 500 of a lone CR),
+anonymous/expired/stale-epoch/garbage tokens, a cookie with no bearer, the other tenant on every
+route, idempotent replays (and another user's key), the depth cap and the move refusals, the
+allocation refusals, the reconciliation refusals, the 500s Python gives (one instrument reached by
+two symbols, a smallint benchmark id), and the GETs that show each effect (`/portfolios`, the
+roll-up, `/portfolio/{id}`, `/portfolio/holdings`, `/reconciliation`, `/activity`, `/overview`,
+`/trades`). Four scratch runs graded the broker branches the default environment cannot reach
+(a fixture file under `DRY_RUN`, `DRY_RUN=false` without a key, with a key and no session, with an
+unreadable session and a shared state file): all EQUAL. The GET case files `portfolio.json` +
+`foundation.json` stay **538 of 538 EQUAL** in both environments after the loaders moved onto one
+connection (R6.19).
+
+**Adversarial review (30 Oct 2026).** The reviewer appended 82 cases (Decimal and JSON edges —
+booleans, integers beyond u64, `1e-1000`, `NaN` literals, duplicate keys; idempotency after a delete
+and after a failed write; tenant probes against another user's portfolio on every route; ids beyond
+`bigint`; allocation precision past 28 digits; Starlette's form limits and `charset`). Four form
+cases differed — 1,001 multipart fields or files, 1,001 url-encoded fields and a `charset=latin-1`
+filename (Python refused the first three with Starlette's 400s where Rust **created the
+portfolio**) — and `multipart.rs` now ports Starlette's `max_fields`/`max_files`, `FormParser`'s
+limits, the streaming part-size check and `_user_safe_decode`'s charset (R6.21). The file now
+grades **270 of 270 EQUAL, side effects EQUAL**, with and without `BASKFY_SOLE_USER_ID`. Left
+open: a lone surrogate escape in a JSON body is Rust's 500 against pydantic's 400 `string_unicode`
+(the foundation's `body.rs`, R6.7 — not this lane's file).
+
+**Tests.** Unit tests per module, each expectation checked against the live Python (pydantic's int
+and Decimal rules, `csv.reader`, python-multipart, `portfolio_csv`, `parse_tradebook_csv` and
+`strptime`, `check_move`, `_name_from`, `_requested_quantities`), `tests/portfolio.rs` grading each
+write route's verb and 405s, and the order-path source scan over the new files.
+
+## Wave 4c lane writes-sleeves (RS4c, 30 Oct 2026) — 18 of the lane's 20 write routes ported
+
+**Committed at RS4c** (the integration commit). Routers: `swing`, `twt`, `vbt`, `sleeves`, `options`,
+`fno`, `overlap`, `backtests`. No route places, modifies or cancels an order or a GTT; none names
+the execution package (source-scanned by `no_write_here_reaches_a_broker`).
+
+| Route | State |
+|---|---|
+| `POST /swing/scan`, `POST /twt/scan`, `POST /vbt/scan` | **ported** (409 in flight, 429 inside the minute, the row, the Celery publish after commit and its `task_id` stamp) |
+| `POST /swing/watch`, `PATCH`/`DELETE /swing/watch/{id}` | **ported** (`add_manual`/`annotate`/`reconfirm`/`dismiss`, the trading-calendar expiry, the identity-map echo, R6.27) |
+| `PATCH /swing/config`, `PATCH /vbt/config` | **ported** (ceilings first, audit per field, net-change UPDATE) |
+| `PUT /portfolios/{id}/sleeves` | **ported** (`SleeveSetIn`, screens by public id, baskets by slug with the sole-tenant rule) |
+| `POST`/`DELETE /options/event-day`, `PATCH /options/config` | **ported** (NIFTY-only before-validators, every bound before any write) |
+| `PATCH /fno/config` | **ported** (the group bound, the ₹ risk ceiling, the last-group overlay, R6.27) |
+| `PUT`/`DELETE /overlap/tags`, `POST /overlap/catalyst-scan` | **ported** (`catalyst_tags` slice, R6.29; the scan's Redis lock, status and publish) |
+| `PUT`/`DELETE /overlap/reviews` | **not ported** — need `GET /overlap` (R5.21, R6.29); Python serves them |
+| `POST /backtests`, `DELETE /backtests/{id}` | **ported** — `POST` with the Celery executor only; `inline` is a 503 (R6.28, cutover gate) |
+
+**Graded.** `api_diff.py --writes --lane wsleeves --smtp-port 18233 --redis-db-py 10
+--redis-db-rs 11 --py-port 18231 --rs-port 18232 --cases tools/parity/api_cases/writes_sleeves.json`:
+**205 of 205 responses EQUAL, side effects EQUAL** (`sw_scan_run`, `tw_scan_run`, `vb_scan_run`,
+`sw_watch`, `sw_config`(+audit), `vb_config`(+audit), `op_event_day`, `op_book_config`,
+`op_sleeve_config`, `op_config_audit`, `fo_book_config`, `fo_sleeve_config`, `fo_config_audit`,
+`portfolio_sleeve`, `catalyst_tag_correction`, `backtest`, every sequence, both Redis databases —
+the Celery messages, kombu bindings, idempotency records and the wanted set). Covered: no body,
+`null`, a list, bad JSON before the 401, every field type's refusals, extras forbidden and ignored,
+anonymous/plain/stale-epoch/expired/garbage callers, the sole-tenant refusal, 404s, the
+ceilings (422) and engine bounds (400), atomicity, idempotent replays and in-flight keys, the
+concurrency caps, and the GETs that show each effect. The GET files `foundation.json`,
+`sleeves.json`, `derivatives.json`, `portfolio.json` stay **987 of 987 EQUAL** with
+`BASKFY_SOLE_USER_ID=1`. Not graded: a malformed body with a refused token (R6.30, foundation).
+
+**Adversarial review (R6.32).** The decorators count 20 writes (swing 5, twt 1, vbt 2, options 3,
+fno 1, overlap 5, backtests 2, sleeves 1): 18 ported, `PUT`/`DELETE /overlap/reviews` excluded.
+Two divergences fixed — `POST /backtests` with no broker now fails the row in the request as
+Python does, and `casefold` (a stored key) is exact. Re-graded on `--py-port 18331 --rs-port
+18332 --redis-db-py 14 --redis-db-rs 15`: `writes_sleeves.json` **217 of 217 EQUAL, side effects
+EQUAL** (12 cases added: cross-account sleeves writes and reads, a cross-account backtest read,
+the casefold put/delete, rollback beside a refused ceiling in the three config patches), and the
+new `writes_sleeves_nobroker.json` (no Redis: the failed backtest, the three scans, the filings
+scan's refusal, a tag correction) **9 of 9 EQUAL, side effects EQUAL**. One foundation divergence
+recorded for the integrator: Rust's limiter refuses everything without Redis; Python has none.
+
+**Tests.** Unit tests for the validator (Decimal spelling and comparison, error order, speedate
+shapes), the Celery message, the routing table, `cache_key`/`tag_headline`/`resolve_tag`, and the
+order-path source scan; the sleeve lane's read-only test and `tests/derivatives.rs`' 405 sweep
+updated to the write-wave spec (R6.31).
+
+## Wave 4c lane writes-accounts (RS4c, 30 Oct 2026) — 20 of the lane's 20 write routes ported
+
+**Committed at RS4c** (the integration commit). Routers: `api_keys`, `alerts`, `webhook_endpoints`,
+`support`, `admin`, `billing`. No route places, modifies or cancels an order or a GTT; none names
+the execution package (source-scanned by `no_module_of_this_lane_can_reach_an_order`, the Rust
+port of `test_admin_resync.py`'s `TestItCannotPlaceAnOrder`).
+
+| Route | State |
+|---|---|
+| `POST /keys`, `POST /keys/{id}/rotate`, `POST /keys/{id}/revoke`, `DELETE /keys/{id}` | **ported** (the secret in the create/rotate answer only, never stored or logged; scopes, ceiling, ten-key cap, idempotent revoke, delete-only-revoked; the FK 500 reproduced, R6.38) |
+| `POST /alerts`, `PATCH`/`DELETE /alerts/{id}`, `POST /alerts/unsubscribe` | **ported** (visibility, one per screen, derived unsubscribe token, net-change UPDATE; `/alerts/unsubscribe` under PATCH/DELETE as Starlette routes it, R6.38) |
+| `POST /webhook-endpoints`, `PATCH`/`DELETE /webhook-endpoints/{id}`, `POST …/rotate-secret` | **ported** (the SSRF guard, R6.35; the derived signing secret; the circuit-breaker reset) |
+| `POST /support` | **ported** (both templates byte for byte; `Reply-To` the sender; the 500 when support cannot be mailed) |
+| `POST /admin/pipeline/runs/{date}/rerun`, `POST /admin/instruments/{symbol}/reprocess`, `POST /admin/resync` | **ported** (the staff gate, pydantic's `date`, the Celery publish and the audit row, R6.36) |
+| `PUT`/`DELETE /admin/users/{id}/entitlements[/{feature}]` | **ported** (upsert with `previous`, the audit row, the effective detail from the transaction) |
+| `POST /checkout/session` | **ported** (Razorpay through the guarded client; graded on a closed port, and on a local stub off the record, R6.37) |
+| `POST /webhooks/razorpay` | **ported** (signature, dedupe, lifecycle, the captured payment and its GST invoice — number, split, PDF byte for byte, archive; R6.37) |
+
+**Graded.** `api_diff.py --writes --lane wacc --smtp-port 18203 --redis-db-py 8 --redis-db-rs 9
+--py-port 18201 --rs-port 18202 --cases tools/parity/api_cases/writes_accounts.json`:
+**321 of 321 responses EQUAL, side effects EQUAL** — tables `api_key`, `api_key_usage_daily`,
+`screen_alert`, `screen_alert_delivery`, `webhook_endpoint`, `webhook_delivery`, `admin_action`,
+`entitlement_override`, `subscription`, `payment`, `invoice_counter`, `webhook_event`, every
+sequence, both Redis databases (the Celery messages and kombu bindings), and the six support mails.
+Covered: no body, `null`, lists, text bodies, bad JSON before the 401, every field type's refusals
+(ints, bools, datetimes, literals, list items, emails, lengths), extras, anonymous/plain/stale/
+expired/other-tenant/non-staff callers, 404s, limits (ten keys, ten endpoints), idempotent
+revoke/unsubscribe/dedupe, the int32 and FK 500s, and the GETs that show each effect (lists,
+usage, deliveries, `/admin/users/{id}`, `/admin/actions`, `/invoices`, the invoice PDF). Off the
+record: the checkout success path against a local Razorpay stub (14 of 14, gateway requests
+byte-equal) and without keys (10 of 10). The GET files `foundation.json`, `accounts.json`,
+`portfolio.json` stay **1,022 of 1,022 EQUAL** with and without `BASKFY_SOLE_USER_ID=1`.
+
+**Tests.** 228 pydantic vectors (`datetime`, `date`), the golden invoice PDF, the SSRF refusals
+(`test_webhook_ssrf.py`'s URLs and more), scopes, the derived tokens/secrets, the Celery envelope
+and routes, the GST split, the support templates and the order-path source scan;
+`cargo test -p baskfy-api`: 285 passed, 0 failed.
+
+**Open:** the lane's pydantic emulation and Celery producer duplicate two other lanes' (R6.33,
+R6.36); a naive datetime is stored as UTC (R6.34, for Maulik); `DELETE /keys/{id}` after a
+rotation is a Python 500 reproduced (R6.38, for Maulik); the SSRF guard's non-ASCII host
+approximation (R6.35).
+
 ## API lanes (RS4b, 30 Oct 2026) — every GET route but one, 2,113 of 2,113 cases EQUAL
 
 Five lanes (reference, sleeves, derivatives, portfolio, accounts) ported the GET routes of the
@@ -575,59 +887,60 @@ derivatives 230, portfolio 315, accounts 484.
 Rust registers **139 of the 140 mounted router GETs**, plus `/health`. The one missing route is
 `GET /overlap` (R5.21). Not ported from `app.py`: `/metrics`, `/api/v1/openapi.json` and
 `/api/v1/docs`. Python's routers also declare **94 write routes** (60 POST, 16 DELETE, 11 PATCH,
-7 PUT); **none is registered** in Rust (the pool is read-only, R5.2). They are wave 4c.
+7 PUT); none was registered at RS4b (the pool was read-only, R5.2). **RS4c ported 82 of them**
+(section "Wave 4c integration" above; the last column of this table).
 
 In the table below, cases are attributed to the router whose Python route they hit; framework
 cases are unrouted paths, the root and decoded-path probes.
 
 | Router | Lane | GET ported / total | Diff cases EQUAL / total | Write routes (wave 4c) |
 |---|---|---:|---:|---:|
-| `admin` | accounts | 9 / 9 | 93 / 93 | 5 |
-| `alerts` | accounts | 2 / 2 | 22 / 22 | 4 |
-| `api_keys` | accounts | 2 / 2 | 34 / 34 | 4 |
-| `auth` | foundation + accounts | 2 / 2 | 25 / 25 | 6 |
-| `backtests` | derivatives | 7 / 7 | 72 / 72 | 2 |
+| `admin` | accounts | 9 / 9 | 93 / 93 | 5 — **5 ported** (writes-accounts) |
+| `alerts` | accounts | 2 / 2 | 22 / 22 | 4 — **4 ported** (writes-accounts) |
+| `api_keys` | accounts | 2 / 2 | 34 / 34 | 4 — **4 ported** (writes-accounts) |
+| `auth` | foundation + accounts | 2 / 2 | 25 / 25 | 6 — **5 ported at RS4c.0, `/auth/google` up to the verifier** (74 writes cases) |
+| `backtests` | derivatives | 7 / 7 | 72 / 72 | 2 — **2 ported** (writes-sleeves; `inline` executor 503s, R6.28) |
 | `baskets` | sleeves | 2 / 2 | 12 / 12 | 0 |
-| `billing` | portfolio | 3 / 3 | 40 / 40 | 2 |
-| `brokers` | portfolio | 3 / 3 | 33 / 33 | 2 |
+| `billing` | portfolio | 3 / 3 | 40 / 40 | 2 — **2 ported** (writes-accounts) |
+| `brokers` | portfolio | 3 / 3 | 33 / 33 | 2 — **2 ported** up to Kite's live read (writes-portfolio, R6.22) |
 | `curated_costs` | accounts | 1 / 1 | 23 / 23 | 0 |
-| `curated_create` | accounts | — (no GET) | 0 / 0 | 1 |
-| `curated_customize` | accounts | — (no GET) | 0 / 0 | 1 |
-| `curated_drift` | accounts | — (no GET) | 0 / 0 | 2 |
-| `curated_engage` | accounts | 2 / 2 | 11 / 11 | 2 |
-| `curated_from_screen` | accounts | — (no GET) | 0 / 0 | 2 |
-| `curated_investments` | accounts | 3 / 3 | 67 / 67 | 3 |
-| `curated_plans` | accounts | — (no GET) | 0 / 0 | 3 |
-| `curated_sip` | accounts | 1 / 1 | 26 / 26 | 1 |
+| `curated_create` | accounts | — (no GET) | 0 / 0 | 1 — **1 ported** (writes-screens) |
+| `curated_customize` | accounts | — (no GET) | 0 / 0 | 1 — **1 ported** (writes-screens) |
+| `curated_drift` | accounts | — (no GET) | 0 / 0 | 2 — **2 ported** (writes-screens) |
+| `curated_engage` | accounts | 2 / 2 | 11 / 11 | 2 — **2 ported** (writes-screens) |
+| `curated_from_screen` | accounts | — (no GET) | 0 / 0 | 2 — **0 ported**: both run the screener (R6.13) |
+| `curated_investments` | accounts | 3 / 3 | 67 / 67 | 3 — **3 ported** (writes-screens) |
+| `curated_plans` | accounts | — (no GET) | 0 / 0 | 3 — **3 ported** (writes-screens) |
+| `curated_sip` | accounts | 1 / 1 | 26 / 26 | 1 — **1 ported** (writes-screens) |
 | `curated_trending` | accounts | 1 / 1 | 6 / 6 | 0 |
 | `curated_versions` | accounts | 2 / 2 | 33 / 33 | 0 |
 | `desk` | reference | 5 / 5 | 51 / 51 | 0 |
-| `explore` | reference | 9 / 9 | 218 / 218 | 2 |
-| `fno` | derivatives | 3 / 3 | 16 / 16 | 1 |
-| `instruments` | reference | 6 / 6 | 180 / 180 | 0 |
+| `explore` | reference | 9 / 9 | 218 / 218 | 2 — **0 ported**: `POST /watchlist`, `DELETE /watchlist/{slug}` were in no lane (R6.40) |
+| `fno` | derivatives | 3 / 3 | 16 / 16 | 1 — **1 ported** (writes-sleeves) |
+| `instruments` | reference | 6 / 6 | 184 / 184 (rank-history scoped, R6.1) | 0 |
 | `kite` | reference | 2 / 2 | 96 / 96 | 0 |
-| `managers` | accounts | 2 / 2 | 16 / 16 | 4 |
+| `managers` | accounts | 2 / 2 | 16 / 16 | 4 — **4 ported** (writes-screens) |
 | `market_data` | reference | 4 / 4 | 152 / 152 | 0 |
 | `meta` | reference + foundation | 7 / 7 | 55 / 55 | 0 |
-| `options` | derivatives | 9 / 9 | 124 / 124 | 3 |
-| `overlap` | derivatives | 3 / 4 — `GET /overlap` not ported (R5.21) | 17 / 17 | 5 |
-| `portfolio_overview` | portfolio | 7 / 7 | 118 / 118 | 3 |
-| `portfolios` | portfolio | 6 / 6 | 80 / 80 | 6 |
+| `options` | derivatives | 9 / 9 | 124 / 124 | 3 — **3 ported** (writes-sleeves) |
+| `overlap` | derivatives | 3 / 4 — `GET /overlap` not ported (R5.21) | 17 / 17 | 5 — **3 ported**; `PUT`/`DELETE /overlap/reviews` wait for `GET /overlap` (R6.29) |
+| `portfolio_overview` | portfolio | 7 / 7 | 118 / 118 | 3 — **3 ported** (writes-portfolio) |
+| `portfolios` | portfolio | 6 / 6 | 80 / 80 | 6 — **5 ported**; `/rebalance` runs the screener (R6.23) |
 | `public` | reference | 0 / 7 — never mounted (D9) | 6 / 6 | 0 |
-| `screens` | accounts | 4 / 4 | 108 / 108 | 8 |
+| `screens` | accounts | 4 / 4 | 108 / 108 | 8 — **4 ported**; preview, explain, selection, run execute a screen (R6.13) |
 | `search` | reference | 1 / 1 | 77 / 77 | 0 |
 | `sleeve_state` | sleeves | 1 / 1 | 9 / 9 | 0 |
-| `sleeves` | sleeves | 2 / 2 | 25 / 25 | 1 |
-| `support` | — | — (no GET) | 0 / 0 | 1 |
-| `swing` | sleeves | 10 / 10 | 113 / 113 | 5 |
-| `track_b` | portfolio | 3 / 3 | 16 / 16 | 3 |
-| `trades` | portfolio | 1 / 1 | 27 / 27 | 2 |
-| `twt` | sleeves | 3 / 3 | 19 / 19 | 1 |
-| `vbt` | sleeves | 7 / 7 | 41 / 41 | 2 |
-| `watchlist` | accounts | 2 / 2 | 16 / 16 | 3 |
-| `webhook_endpoints` | accounts | 2 / 2 | 21 / 21 | 4 |
+| `sleeves` | sleeves | 2 / 2 | 25 / 25 | 1 — **1 ported** (writes-sleeves) |
+| `support` | — | — (no GET) | 0 / 0 | 1 — **1 ported** (writes-accounts) |
+| `swing` | sleeves | 10 / 10 | 113 / 113 | 5 — **5 ported** (writes-sleeves) |
+| `track_b` | portfolio | 3 / 3 | 16 / 16 | 3 — **3 ported** (writes-portfolio; 404 while Track B flags stay false) |
+| `trades` | portfolio | 1 / 1 | 27 / 27 | 2 — **2 ported**; `sync-today` up to Kite's live read (R6.22) |
+| `twt` | sleeves | 3 / 3 | 19 / 19 | 1 — **1 ported** (writes-sleeves) |
+| `vbt` | sleeves | 7 / 7 | 41 / 41 | 2 — **2 ported** (writes-sleeves) |
+| `watchlist` | accounts | 2 / 2 | 16 / 16 | 3 — **3 ported** (writes-screens) |
+| `webhook_endpoints` | accounts | 2 / 2 | 21 / 21 | 4 — **4 ported** (writes-accounts) |
 | framework + `/health` (`app.py`) | foundation | 1 / 1 | 15 / 15 | — |
-| **total** | | **140 / 141** mounted (+7 public, never mounted) | **2113 / 2113** | **94** |
+| **total** | | **140 / 141** mounted (+7 public, never mounted) | **2113 / 2113** (2,285 at RS4c) | **94 — 82 ported, 1 partly (`/auth/google`), 11 on Python** (RS4c) |
 
 **Audit at integration (30 Oct 2026):**
 * **No write and no order route is registered.** A source scan of every `.route(` in
@@ -651,9 +964,9 @@ cases are unrouted paths, the root and decoded-path probes.
 * `GET /overlap` (R5.21);
 * every non-GET method (R5.15).
 
-R5.36 lists the residual differences no committed case reaches. R5.28 lists two **Python-side
-defects** the port reproduces on purpose (the `/trades` cross-tenant date leak and the
-unauthenticated rank-history read), to be fixed in Python first.
+R5.36 lists the residual differences no committed case reaches. R5.28 listed two **Python-side
+defects** the port reproduced on purpose (the `/trades` cross-tenant date leak and the
+unauthenticated rank-history read); both are fixed at RS4c.0, Python first (R6.1).
 
 **Tests:** `cargo test --workspace` with the bed URL: 61 targets, **928 passed, 0 failed,
 14 ignored** (the same 14 as RS4a). `baskfy-api` integration targets: `api_errors`, `jwt`,
@@ -742,17 +1055,17 @@ separately), never ported blind.
 (above). **Done at RS4b (lanes):** every GET route but `GET /overlap`, 2,113 of 2,113 cases
 EQUAL (above).
 
-**Next — wave 4c, the write routes** (94 of them). Run them on a **fresh bed copy** for every
-run, and compare the **database side effects** as well as the response: the rows each table
-gains, changes and loses, with the same masks discipline as the bodies. Wave 4c also needs a
-decision that lets the pool write (R5.2), one table at a time, idempotent (house rule 7). Before
-it starts:
-* collapse the lanes' duplicate helpers (R5.10);
-* add the big-integer `jsonb` variant (R5.36.1);
-* commit a fixture seed, so the paths the bed lacks are graded by committed cases (R5.30).
+**Done at RS4c:** wave 4c, the write routes — 82 of 94 ported, 1 partly, 11 on Python with
+reasons (section "Wave 4c integration"). Before any write route cuts over: the body-before-token
+order (R6.17/R6.30), Google's verifier (R6.3), the mailer's STARTTLS/AUTH and Resend (R6.6), and
+the collapse of the duplicated validators and Celery producers.
+
+**Next — wave 5, the worker (`baskfy-worker`), the nightly first** (step 4 below): catch-up,
+publish and the quality gate, graded by `pipeline_run_step` rows equal to the Python run's on a
+bed clone (the writes harness's clones, R6.5, are the starting point). The screener port the 11
+remaining API write routes need (R6.13) is shared with the worker's screen runs and lands with it.
 
 Never a route that places, modifies or cancels an order (law 2: execution is the last wave).
-**Then the worker** (`baskfy-worker`, step 4 below).
 
 **Housekeeping step (R3.4, R3.1) — done:** collapse the R2.3/R3.4 copies
 (twt's `vbt_shared` config, calendar, breadth and indicator arithmetic onto `vbt::*`;

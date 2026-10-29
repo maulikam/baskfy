@@ -10,17 +10,21 @@
 //! (`dk_<prefix>`) and nothing else of the token; the hash column is never even selected. Every
 //! route requires a signed-in account, never a key.
 //!
-//! **Not ported in this wave** (they write; the Python API keeps serving them, and they are the
-//! only places a secret is ever shown): `POST /keys`, `POST /keys/{public_id}/rotate`,
-//! `POST /keys/{public_id}/revoke`, `DELETE /keys/{public_id}`. The public API itself stays shut
-//! (D9). **No route may place, modify or cancel an order** (law 2).
+//! The **writes** (`POST /keys`, `POST /keys/{public_id}/rotate`, `POST /keys/{public_id}/revoke`,
+//! `DELETE /keys/{public_id}`) are in [`writes`] (wave 4c, lane writes-accounts); the request
+//! models of the whole lane's writes are validated by [`model`]. A created or rotated key's secret
+//! appears once, in that response, and is never logged. The public API itself stays shut (D9).
+//! **No route may place, modify or cancel an order** (law 2).
+
+pub(crate) mod model;
+mod writes;
 
 use std::collections::HashMap;
 
 use axum::Router;
 use axum::extract::{Extension, Path, RawQuery, State};
 use axum::response::Response;
-use axum::routing::get;
+use axum::routing::{delete, get, post};
 use baskfy_db::{OrderedJson, row};
 use chrono::{DateTime, Duration, NaiveDate, Utc};
 use serde::Serialize;
@@ -298,9 +302,12 @@ pub async fn api_key_usage(
     }))
 }
 
-/// The ported `/keys` GET routes, relative to `/api/v1`.
+/// The ported `/keys` routes, relative to `/api/v1`.
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/keys", get(list_api_keys))
+        .route("/keys/{public_id}/rotate", post(writes::rotate_api_key))
+        .route("/keys/{public_id}/revoke", post(writes::revoke_api_key))
+        .route("/keys/{public_id}", delete(writes::delete_api_key))
+        .route("/keys", get(list_api_keys).post(writes::create_api_key))
         .route("/keys/{public_id}/usage", get(api_key_usage))
 }

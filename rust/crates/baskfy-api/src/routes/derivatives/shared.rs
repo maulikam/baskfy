@@ -3,18 +3,12 @@
 //! parsing for `int` and `Literal` parameters, the Redis `GET` Python's `app.state.cache` makes,
 //! and Python's `json.dumps` string escaping for the byte-compared bodies (SSE, NDJSON).
 
-use std::sync::Arc;
-
 use baskfy_core::decimal::WideDecimal;
-use baskfy_db::{Db, DbError, OrderedJson};
-use baskfy_providers::ratelimit::{RedisScriptBackend, ScriptBackend, ScriptValue};
-use baskfy_providers::secret::Secret;
+use baskfy_db::{Db, DbError};
 use chrono::{DateTime, FixedOffset, NaiveDate, Offset, TimeZone, Utc};
 use serde::Serializer;
-use tokio::sync::Mutex;
 
-use crate::logging;
-use crate::problems::{Problem, ProblemType, pipeline_degraded};
+use crate::problems::Problem;
 use crate::query::Validation;
 
 /// `IST`'s offset: Asia/Kolkata has had no DST since 1945, so a fixed +05:30 is exact.
@@ -132,152 +126,22 @@ pub(crate) mod col {
 
 // --- the sole tenant -----------------------------------------------------------------------
 
-/// `baskfy_core.curated_baskets.SOLE_USER_ENV`.
-pub(crate) const SOLE_USER_ENV: &str = "BASKFY_SOLE_USER_ID";
-/// `baskfy_api.seed.E2E_PUBLIC_ID`.
-pub(crate) const E2E_PUBLIC_ID: &str = "e2e000000001";
-/// `curated_tenant.SOLE_TENANT_REFUSED`.
-pub(crate) const SOLE_TENANT_REFUSED: &str = "not-the-sole-tenant";
-
-/// Python's `int(text)` for the decimal digits an env var holds: surrounding whitespace, a sign,
-/// and single underscores between digits. `None` is Python's `ValueError`.
-pub(crate) fn python_int(text: &str) -> Option<i64> {
-    let s = text.trim();
-    let (neg, body) = match s.as_bytes().first() {
-        Some(b'-') => (true, &s[1..]),
-        Some(b'+') => (false, &s[1..]),
-        _ => (false, s),
-    };
-    let digits = underscored_digits(body)?;
-    let value: i64 = digits.parse().ok()?;
-    Some(if neg { -value } else { value })
-}
-
-/// Digits with single `_` separators between them (Python's and pydantic's grouping rule), the
-/// separators removed; `None` when the text is not that.
-fn underscored_digits(body: &str) -> Option<String> {
-    if body.is_empty() || body.starts_with('_') || body.ends_with('_') || body.contains("__") {
-        return None;
-    }
-    if !body.chars().all(|c| c.is_ascii_digit() || c == '_') {
-        return None;
-    }
-    Some(body.replace('_', ""))
-}
-
-/// `resolve_sole_user_id(session)`: `BASKFY_SOLE_USER_ID` (stripped; blank or not a number is
-/// "unset", with a warning), else the seeded account's id, else 503. Reads only.
+/// `scoped_sole_user_id(session, principal_user_id, surface=)`, as
+/// [`crate::routes::common::scoped_sole_user_id`].
 ///
 /// # Errors
-/// 503 `pipeline-degraded` when neither names an account; 500 on a database failure.
-pub(crate) async fn resolve_sole_user_id(db: &Db) -> Result<i64, Problem> {
-    let raw = std::env::var(SOLE_USER_ENV).unwrap_or_default();
-    let raw = raw.trim();
-    if !raw.is_empty() {
-        if let Some(id) = python_int(raw) {
-            return Ok(id);
-        }
-        logging::warning(
-            "baskfy_api.curated_seed",
-            &format!(
-                "{SOLE_USER_ENV} is not a number ({}); reading it as 'no sole tenant configured', \
-                 which is what baskfy_worker.providers._sole_user_id does with the same value",
-                baskfy_providers::py::repr_str(raw)
-            ),
-            &[],
-        );
-    }
-    let found: Option<i64> = sqlx::query_scalar("SELECT id FROM app_user WHERE public_id = $1")
-        .bind(E2E_PUBLIC_ID)
-        .fetch_optional(db.pool())
-        .await
-        .map_err(db_err)?;
-    found.ok_or_else(|| {
-        pipeline_degraded(&format!(
-            "The sole-tenant account is not configured on this deployment. Set \
-             {SOLE_USER_ENV}, or run `make seed` to create the development account."
-        ))
-    })
-}
-
-/// `scoped_sole_user_id(session, principal_user_id, surface=)`: the sole tenant's id, or a 404
-/// carrying `reason: not-the-sole-tenant` for any other principal.
-///
-/// # Errors
-/// As described, plus [`resolve_sole_user_id`]'s.
+/// As described, plus [`crate::routes::common::resolve_sole_tenant`]'s.
 pub(crate) async fn scoped_sole_user_id(
     db: &Db,
     principal_user_id: Option<i64>,
     surface: Option<&str>,
 ) -> Result<i64, Problem> {
-    let sole = resolve_sole_user_id(db).await?;
-    if let Some(caller) = principal_user_id
-        && caller != sole
-    {
-        let tail = surface.map_or_else(
-            || ".".to_owned(),
-            |s| format!(", so {s} is not readable here."),
-        );
-        return Err(Problem::new(
-            ProblemType::NotFound,
-            format!(
-                "This deployment serves a single account and this caller (user {caller}) \
-                     is not it{tail}"
-            ),
-        )
-        .with("reason", OrderedJson::Str(SOLE_TENANT_REFUSED.to_owned())));
-    }
-    Ok(sole)
+    crate::routes::common::scoped_sole_user_id(db, principal_user_id, surface).await
 }
 
 // --- pydantic's lax query parsing -----------------------------------------------------------
 
-/// A Python `int` parsed from a query string: small enough for `i128`, or a sign and the fact
-/// that it is beyond any bound this API states.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct PyInt {
-    /// The value, when it fits `i128`.
-    pub(crate) value: Option<i128>,
-    /// Its sign (a zero is non-negative).
-    pub(crate) negative: bool,
-    /// `str(int(text))`: the canonical spelling Python would print.
-    pub(crate) canonical: String,
-}
-
-/// pydantic-core's lax `str -> int`: surrounding (Unicode) whitespace, a sign, digits with single
-/// underscores between them, and an optional fractional part of zeros only (`"2026.00"`).
-pub(crate) fn lax_int(raw: &str) -> Option<PyInt> {
-    let s = raw.trim();
-    let (neg, body) = match s.as_bytes().first() {
-        Some(b'-') => (true, &s[1..]),
-        Some(b'+') => (false, &s[1..]),
-        _ => (false, s),
-    };
-    let (int_part, frac) = match body.split_once('.') {
-        Some((i, f)) => (i, Some(f)),
-        None => (body, None),
-    };
-    if let Some(f) = frac
-        && (f.is_empty() || !f.chars().all(|c| c == '0'))
-    {
-        return None;
-    }
-    let digits = underscored_digits(int_part)?;
-    let trimmed = digits.trim_start_matches('0');
-    let magnitude = if trimmed.is_empty() { "0" } else { trimmed };
-    let negative = neg && magnitude != "0";
-    let canonical = if negative {
-        format!("-{magnitude}")
-    } else {
-        magnitude.to_owned()
-    };
-    let value = canonical.parse::<i128>().ok();
-    Some(PyInt {
-        value,
-        negative,
-        canonical,
-    })
-}
+pub(crate) use crate::routes::common::{PyInt, lax_int};
 
 /// An `int` query parameter with optional `ge`/`le` bounds, validated as FastAPI does; a failure
 /// is recorded on `v` with pydantic's type and message.
@@ -427,58 +291,9 @@ pub(crate) fn ser_wides<S: Serializer>(ds: &[WideDecimal], s: S) -> Result<S::Ok
     s.collect_seq(ds.iter().map(WideDecimal::to_sci_string))
 }
 
-// --- the process-wide Redis client (`app.state.cache`) ---------------------------------------
+// --- the process-wide Redis client: `crate::cache` (held once since wave 4c's foundation) ---
 
-/// `redis.call('GET', key)` — the one read the cache answers for these routers.
-const GET_SCRIPT: &str = "return redis.call('GET', KEYS[1])";
-
-static CACHE: Mutex<Option<Arc<RedisScriptBackend>>> = Mutex::const_new(None);
-
-async fn cache_client(url: &Secret) -> Option<Arc<RedisScriptBackend>> {
-    let mut slot = CACHE.lock().await;
-    if let Some(client) = slot.as_ref() {
-        return Some(Arc::clone(client));
-    }
-    match tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        RedisScriptBackend::connect(url),
-    )
-    .await
-    {
-        Ok(Ok(client)) => {
-            let client = Arc::new(client);
-            *slot = Some(Arc::clone(&client));
-            Some(client)
-        }
-        Ok(Err(e)) => {
-            logging::warning(
-                "baskfy_api.app",
-                "redis unavailable",
-                &[("error", &e.to_string())],
-            );
-            None
-        }
-        Err(_) => None,
-    }
-}
-
-/// `await cache.get(key)` as these routers use it: the stored text, or `None` when the key is
-/// absent **or** Redis failed (every caller treats a `RedisError` as "nothing stored").
-pub(crate) async fn cache_get(url: &Secret, key: &str) -> Option<Vec<u8>> {
-    let client = cache_client(url).await?;
-    match client.eval(GET_SCRIPT, &[key.to_owned()], &[]).await {
-        Ok(ScriptValue::Bytes(b)) => Some(b),
-        Ok(_) => None,
-        Err(e) => {
-            logging::warning(
-                "baskfy_api.app",
-                "redis read failed",
-                &[("error", &e.to_string())],
-            );
-            None
-        }
-    }
-}
+pub(crate) use crate::cache::cache_get;
 
 #[cfg(test)]
 mod tests {
@@ -572,11 +387,6 @@ mod tests {
         assert_eq!(py_json_str_utf8("é\u{7f}"), "\"é\u{7f}\"");
     }
 
-    #[test]
-    fn python_int_reads_the_env_var_as_python_does() {
-        assert_eq!(python_int(" 42 "), Some(42));
-        assert_eq!(python_int("1_000"), Some(1000));
-        assert_eq!(python_int("4.0"), None);
-        assert_eq!(python_int(""), None);
-    }
+    // `python_int_reads_the_env_var_as_python_does` moved with the function to
+    // `routes::common` (R5.10's collapse).
 }

@@ -173,7 +173,8 @@
    "name": "trades-owner-default",
    "method": "GET",
    "path": "/api/v1/trades",
-   "user": "owner"
+   "user": "owner",
+   "note": "R5.28 (fixed 30 Oct 2026, Python first): total and first/last_trade_on are the caller's own rows only"
   },
   {
    "name": "trades-owner-page",

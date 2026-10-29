@@ -1,17 +1,19 @@
 //! Trade history — what is stored in `broker_trade`, newest first. Ports the GET route of
 //! `baskfy_api.routers.trades` (Python declares `APIRouter(prefix="/trades", tags=["trades"])`).
 //!
-//! Ported: `GET /trades`. **Not ported** (they write `broker_trade` and holdings; Python keeps
-//! serving them): `POST /trades/import`, `POST /trades/sync-today`. Bookkeeping only — nothing
-//! here places, modifies or cancels an order (law 2).
+//! Ported: `GET /trades`, and (wave 4c, [`writes`]) `POST /trades/import` and
+//! `POST /trades/sync-today` (Kite's own read is a cutover gate, DECISIONS-RS R6.22). Bookkeeping
+//! only — nothing here places, modifies or cancels an order (law 2).
 
 use axum::Router;
 use axum::extract::{Extension, RawQuery, State};
 use axum::response::Response;
-use axum::routing::get;
+use axum::routing::{get, post};
 use baskfy_core::decimal::WideDecimal;
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::Serialize;
+
+mod writes;
 
 use crate::auth::{Principal, require_authenticated};
 use crate::problems::Problem;
@@ -110,16 +112,15 @@ pub async fn list_trades(
         .filter(|s| !s.is_empty())
         .map(|s| s.trim().to_uppercase());
     let pool = state.db.pool();
-    // KNOWN BUG (DECISIONS-RS, api-portfolio P6), reproduced: Python's bounds query is
-    // `select(count(), min(BrokerTrade.trade_date), max(...)).select_from(scope.subquery())`, and
-    // SQLAlchemy compiles the two aggregates against the *table*, not the subquery — `FROM
-    // (scope) AS anon_1, broker_trade`. So `total` is |caller's rows| x |every user's rows| and
-    // the two dates span every user's trades whenever the caller has any. Fix in Python first
-    // (aggregate the subquery's columns), then here.
+    // The bounds aggregate reads the scoped subquery's own columns, so `total` and the two dates
+    // are the caller's alone (DECISIONS-RS R5.28: Python's query named the table, which cross-
+    // joined every account's trades in; fixed in Python first on 30 Oct 2026, then here). The
+    // statement is what SQLAlchemy now compiles: `min(anon_1.trade_date)` over the subquery.
     let bounds = sqlx::query(
-        "SELECT count(*) AS n, min(bt.trade_date) AS first_on, max(bt.trade_date) AS last_on \
-         FROM (SELECT id FROM broker_trade WHERE user_id = $1 \
-               AND ($2::varchar IS NULL OR symbol = $2)) AS anon_1, broker_trade bt",
+        "SELECT count(*) AS n, min(anon_1.trade_date) AS first_on, \
+         max(anon_1.trade_date) AS last_on \
+         FROM (SELECT trade_date FROM broker_trade WHERE user_id = $1 \
+               AND ($2::varchar IS NULL OR symbol = $2)) AS anon_1",
     )
     .bind(user_id)
     .bind(symbol.as_deref())
@@ -170,6 +171,6 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/trades", get(list_trades))
         // The write routes' paths, with no method: a GET there is Starlette's 405.
-        .route("/trades/import", axum::routing::MethodRouter::new())
-        .route("/trades/sync-today", axum::routing::MethodRouter::new())
+        .route("/trades/import", post(writes::import_tradebook))
+        .route("/trades/sync-today", post(writes::sync_todays_trades))
 }

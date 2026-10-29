@@ -287,14 +287,22 @@ pub async fn get_fno_config(
     Extension(principal): Extension<Principal>,
 ) -> Result<Response, Problem> {
     let principal = require_authenticated(&principal)?;
+    let user_id = scoped_sole_user_id(&state.db, principal.user_id, None).await?;
+    Ok(wire::json(&config_body(&state, user_id).await?))
+}
+
+/// `_config_out(...)` for `user_id`, read after any write committed.
+///
+/// # Errors
+/// 500.
+pub(crate) async fn config_body(state: &AppState, user_id: i64) -> Result<FnoConfigOut, Problem> {
     let db = &state.db;
     let settings = &state.settings;
-    let user_id = scoped_sole_user_id(db, principal.user_id, None).await?;
     let (book, sleeves) = match reads::read_config(db, user_id).await? {
         Some((book, sleeves)) => (Some(book), sleeves),
         None => (None, Vec::new()),
     };
-    Ok(wire::json(&FnoConfigOut {
+    Ok(FnoConfigOut {
         seeded: book.is_some(),
         book,
         sleeves,
@@ -307,7 +315,7 @@ pub async fn get_fno_config(
         },
         gates: gates(settings),
         audit: reads::audit_trail(db, "fo_config_audit", user_id).await?,
-    }))
+    })
 }
 
 /// The ported `/fno` routes, relative to `/api/v1` (`PATCH /fno/config` stays on Python).
@@ -315,5 +323,8 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/fno/overnight", get(get_fno_overnight))
         .route("/fno/info", get(get_fno_info))
-        .route("/fno/config", get(get_fno_config))
+        .route(
+            "/fno/config",
+            get(get_fno_config).patch(super::options::derivatives::config_writes::patch_fno_config),
+        )
 }

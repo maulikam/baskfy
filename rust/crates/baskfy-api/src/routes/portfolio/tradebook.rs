@@ -11,7 +11,7 @@ use super::db;
 use super::ledger::DomainResult;
 use super::pydec::Dec;
 use crate::problems::Problem;
-use crate::state::AppState;
+use sqlx::PgConnection;
 
 /// `TradeFill` — the fields the overview reads.
 #[derive(Debug, Clone)]
@@ -27,6 +27,12 @@ pub(crate) struct TradeFill {
 /// `TradeHistory` — the fields the overview reads.
 pub(crate) struct TradeHistory {
     pub(crate) reconciles: bool,
+    /// `net_quantity`.
+    pub(crate) net_quantity: Dec,
+    /// `first_bought_on`: the oldest open lot's date, only when the history reconciles.
+    pub(crate) first_bought_on: Option<NaiveDate>,
+    /// `unmatched_sell_quantity`.
+    pub(crate) unmatched_sell_quantity: Dec,
 }
 
 /// `_ordered`: by date, execution time, buys before sells, trade id. Python cannot compare the
@@ -59,33 +65,41 @@ fn ordered(fills: &[TradeFill]) -> DomainResult<Vec<TradeFill>> {
 /// `history_for(fills, held_quantity)` — FIFO lots; reconciles when every sell matched a buy and
 /// the net is what is held.
 pub(crate) fn history_for(fills: &[TradeFill], held_quantity: &Dec) -> DomainResult<TradeHistory> {
-    let mut lots: Vec<Dec> = Vec::new();
+    let mut lots: Vec<(Dec, NaiveDate)> = Vec::new();
     let mut unmatched = Dec::lit("0");
     let mut net = Dec::lit("0");
     for fill in ordered(fills)? {
         if fill.is_buy {
-            lots.push(fill.quantity.clone());
+            lots.push((fill.quantity.clone(), fill.trade_date));
             net = net.add(&fill.quantity);
             continue;
         }
         net = net.sub(&fill.quantity);
         let mut remaining = fill.quantity.clone();
         while remaining > Dec::zero() && !lots.is_empty() {
-            let take = if lots[0] < remaining {
-                lots[0].clone()
+            let take = if lots[0].0 < remaining {
+                lots[0].0.clone()
             } else {
                 remaining.clone()
             };
-            lots[0] = lots[0].sub(&take);
+            lots[0].0 = lots[0].0.sub(&take);
             remaining = remaining.sub(&take);
-            if lots[0].is_zero() {
+            if lots[0].0.is_zero() {
                 lots.remove(0);
             }
         }
         unmatched = unmatched.add(&remaining);
     }
+    let reconciles = unmatched.is_zero() && net == *held_quantity;
     Ok(TradeHistory {
-        reconciles: unmatched.is_zero() && net == *held_quantity,
+        reconciles,
+        first_bought_on: if reconciles {
+            lots.iter().map(|(_, on)| *on).min()
+        } else {
+            None
+        },
+        net_quantity: net,
+        unmatched_sell_quantity: unmatched,
     })
 }
 
@@ -127,7 +141,7 @@ pub(crate) fn xirr_since_first_purchase(
 /// `fills_by_instrument(session, user_id=...)`: every resolved trade, grouped by instrument, in
 /// the order the database returns them (Python's query has no `ORDER BY` either; the replay sorts).
 pub(crate) async fn fills_by_instrument(
-    state: &AppState,
+    conn: &mut PgConnection,
     user_id: i64,
 ) -> Result<Vec<(i64, Vec<TradeFill>)>, Problem> {
     let rows = sqlx::query(
@@ -135,7 +149,7 @@ pub(crate) async fn fills_by_instrument(
          FROM broker_trade WHERE user_id = $1 AND instrument_id IS NOT NULL",
     )
     .bind(user_id)
-    .fetch_all(state.db.pool())
+    .fetch_all(&mut *conn)
     .await
     .map_err(db::fail)?;
     let mut order: Vec<i64> = Vec::new();

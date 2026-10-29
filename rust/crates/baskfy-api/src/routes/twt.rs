@@ -15,10 +15,12 @@
 
 use std::collections::HashMap;
 
+pub(crate) mod writes;
+
 use axum::Router;
 use axum::extract::{Extension, Path, RawQuery, State};
 use axum::response::Response;
-use axum::routing::get;
+use axum::routing::{get, post};
 use baskfy_db::OrderedJson;
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
@@ -506,10 +508,10 @@ pub async fn get_scan(
     Ok(canonical_response(&body))
 }
 
-/// The GET routes of `baskfy_api.routers.twt`, relative to `/api/v1`. `POST /twt/scan` stays on
-/// the Python API until writes are ported.
+/// The routes of `baskfy_api.routers.twt`, relative to `/api/v1`.
 pub fn router() -> Router<AppState> {
     Router::new()
+        .route("/twt/scan", post(writes::post_twt_scan))
         .route("/twt/today", get(get_today))
         .route("/twt/backtest", get(get_backtest))
         .route("/twt/scan/{run_id}", get(get_scan))

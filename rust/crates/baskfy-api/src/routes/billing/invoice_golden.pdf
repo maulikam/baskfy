@@ -1,0 +1,79 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [7 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Courier-Bold /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Title (Tax invoice DCL/2026-27/000007) /Producer (Baskfy) /Creator (Baskfy) /CreationDate (D:20261030000000+05'30') >>
+endobj
+6 0 obj
+<< /Length 2226 >>
+stream
+1.00 w 48.00 767.89 m 547.28 767.89 l S
+0.50 w 48.00 654.89 m 547.28 654.89 l S
+0.50 w 48.00 638.89 m 547.28 638.89 l S
+0.50 w 48.00 595.89 m 547.28 595.89 l S
+0.50 w 327.28 546.89 m 547.28 546.89 l S
+0.50 w 48.00 70.00 m 547.28 70.00 l S
+BT /F2 16.00 Tf 48.00 793.89 Td (TAX INVOICE) Tj ET
+BT /F2 12.00 Tf 417.68 793.89 Td (DCL/2026-27/000007) Tj ET
+BT /F1 9.00 Tf 460.88 779.89 Td (Date: 2026-10-30) Tj ET
+BT /F2 9.00 Tf 48.00 747.89 Td (Supplied by) Tj ET
+BT /F1 9.00 Tf 48.00 734.89 Td (Baskfy \(Test\) Pvt \\ Ltd) Tj ET
+BT /F1 9.00 Tf 48.00 723.89 Td (1 MG Road) Tj ET
+BT /F1 9.00 Tf 48.00 712.89 Td (Bengaluru 560001) Tj ET
+BT /F1 9.00 Tf 48.00 701.89 Td (Karnataka \(29\)) Tj ET
+BT /F1 9.00 Tf 48.00 690.89 Td (GSTIN: 29ABCDE1234F1Z5) Tj ET
+BT /F2 9.00 Tf 297.64 747.89 Td (Supplied to) Tj ET
+BT /F1 9.00 Tf 297.64 734.89 Td (Renu - INR  "Dave" ?) Tj ET
+BT /F1 9.00 Tf 297.64 723.89 Td (renu@example.com) Tj ET
+BT /F1 9.00 Tf 297.64 712.89 Td (GSTIN: Unregistered) Tj ET
+BT /F1 9.00 Tf 48.00 671.89 Td (Place of supply: Karnataka \(29\)) Tj ET
+BT /F1 9.00 Tf 48.00 660.89 Td (Whether tax is payable on reverse charge basis: No) Tj ET
+BT /F2 9.00 Tf 48.00 642.89 Td (Description) Tj ET
+BT /F2 9.00 Tf 348.00 642.89 Td (SAC) Tj ET
+BT /F2 9.00 Tf 514.88 642.89 Td (Amount) Tj ET
+BT /F1 9.00 Tf 48.00 623.89 Td (Baskfy Monthly subscription) Tj ET
+BT /F1 9.00 Tf 348.00 623.89 Td (998439) Tj ET
+BT /F1 9.00 Tf 482.48 623.89 Td (1,046,243.22) Tj ET
+BT /F1 8.00 Tf 56.00 611.89 Td (Period: 2026-10-01 to 2026-11-01) Tj ET
+BT /F1 9.00 Tf 387.08 579.89 Td (Taxable value) Tj ET
+BT /F1 9.00 Tf 482.48 579.89 Td (1,046,243.22) Tj ET
+BT /F1 9.00 Tf 408.68 566.89 Td (CGST @ 9%) Tj ET
+BT /F1 9.00 Tf 498.68 566.89 Td (94,161.89) Tj ET
+BT /F1 9.00 Tf 408.68 553.89 Td (SGST @ 9%) Tj ET
+BT /F1 9.00 Tf 498.68 553.89 Td (94,161.89) Tj ET
+BT /F2 10.00 Tf 391.28 532.89 Td (Total \(INR\)) Tj ET
+BT /F2 10.00 Tf 475.28 532.89 Td (1,234,567.00) Tj ET
+BT /F1 8.00 Tf 48.00 508.89 Td (Payment reference: pay_ABC123) Tj ET
+BT /F1 8.00 Tf 48.00 496.89 Td (Paid online. This is a computer-generated invoice.) Tj ET
+BT /F1 7.00 Tf 48.00 58.00 Td (Baskfy is not a SEBI-registered investment adviser. Nothing sold here is investment advice.) Tj ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 6 0 R >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000216 00000 n 
+0000000316 00000 n 
+0000000454 00000 n 
+0000002732 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R /Info 5 0 R >>
+startxref
+2874
+%%EOF

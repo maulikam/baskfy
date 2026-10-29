@@ -3,18 +3,22 @@
 //!
 //! Ported: `GET /plans` (public: `/pricing` renders signed out), `GET /invoices` (cursor-paginated
 //! on the payment id) and `GET /invoices/{invoice_number:path}/pdf` (streamed from the invoice
-//! archive, never a presigned URL). **Not ported** (write routes, Python keeps serving them):
-//! `POST /checkout/session`, `POST /webhooks/razorpay`.
+//! archive, never a presigned URL). The **writes** — `POST /checkout/session` and
+//! `POST /webhooks/razorpay` — are in [`writes`] (wave 4c, lane writes-accounts), with the GST
+//! tax invoice a captured payment raises in [`invoice`].
 //!
 //! The PDF route's `{invoice_number:path}` is Starlette's `.*`; axum has no mid-path catch-all,
 //! so the route is registered for invoice numbers of one to [`MAX_INVOICE_SEGMENTS`] segments
 //! (the real series is three: `DCL/2026-27/000001`). DECISIONS-RS, api-portfolio P4.
 
+mod invoice;
+mod writes;
+
 use axum::Router;
 use axum::extract::{Extension, Path, RawQuery, State};
 use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{get, post};
 use baskfy_core::decimal::WideDecimal;
 use baskfy_db::OrderedJson;
 use chrono::{DateTime, NaiveDate, Utc};
@@ -408,9 +412,8 @@ pub fn router() -> Router<AppState> {
     let mut router = Router::new()
         .route("/plans", get(list_plans))
         .route("/invoices", get(list_invoices))
-        // The write routes' paths, with no method: a GET there is Starlette's 405.
-        .route("/checkout/session", axum::routing::MethodRouter::new())
-        .route("/webhooks/razorpay", axum::routing::MethodRouter::new());
+        .route("/checkout/session", post(writes::create_checkout_session))
+        .route("/webhooks/razorpay", post(writes::razorpay_webhook));
     for depth in 1..=MAX_INVOICE_SEGMENTS {
         let segments: Vec<String> = (0..depth).map(|i| format!("{{s{i}}}")).collect();
         let path = format!("/invoices/{}/pdf", segments.join("/"));

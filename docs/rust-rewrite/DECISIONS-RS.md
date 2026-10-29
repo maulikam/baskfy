@@ -1065,7 +1065,7 @@ hash differently). The harness refuses any database other than the bed's port un
 `--allow-db-url`, refuses the live stack's ports outright, starts servers from empty working
 directories so no `.env` leaks in, and stops only the processes it started.
 
-## R5.10 — RS4b integration: the five API lanes merged, decision numbers assigned, one foundation test re-aimed (RS4b, 30 Oct 2026) ⚠ UNREVIEWED
+## R5.10 — RS4b integration: the five API lanes merged, decision numbers assigned, one foundation test re-aimed (RS4b, 30 Oct 2026) — **the helper collapse done at RS4c.0, R6.9** ⚠ UNREVIEWED
 
 **Context.** Five lanes (reference, sleeves, derivatives, portfolio, accounts) ported the GET
 routes of the 44 Python routers in parallel, each owning its `routes/*.rs` files and its
@@ -1172,7 +1172,7 @@ All 43 + 27 probe cases are EQUAL. Not graded: quantities beyond 4,300 digits (t
 Verified beyond the case file: 550 random-symbol factsheets and 19 heavy paths (500-row listings,
 every basket's performance and kite payload, a 1,000-row tradebook), all byte-equal.
 
-## R5.14 — The sole tenant is read from the process environment per request, with Python's `int()` (RS4b, 30 Oct 2026; lane labels derivatives R6.D1, sleeves (b), accounts R-acc.2/R-acc.11, portfolio P1) ⚠ UNREVIEWED
+## R5.14 — The sole tenant is read from the process environment per request, with Python's `int()` (RS4b, 30 Oct 2026; lane labels derivatives R6.D1, sleeves (b), accounts R-acc.2/R-acc.11, portfolio P1) — **one copy since RS4c.0, R6.9** ⚠ UNREVIEWED
 
 **Choice (all five copies agree).** `resolve_sole_user_id` reads `BASKFY_SOLE_USER_ID` from
 `os.environ`, not `Settings`. The rules, as Python's:
@@ -1194,7 +1194,7 @@ misconfiguring the variable can reach this; no request can.
 
 **How to reverse:** collapse the copies onto the sleeves one, the most complete (R5.10).
 
-## R5.15 — Paths that only have write routes in Python: 404 in four lanes, 405 in portfolio (RS4b, 30 Oct 2026; lane labels sleeves (g), accounts deviation 3, reference watchlist, portfolio P7) ⚠ UNREVIEWED
+## R5.15 — Paths that only have write routes in Python: 404 in four lanes, 405 in portfolio (RS4b, 30 Oct 2026; lane labels sleeves (g), accounts deviation 3, reference watchlist, portfolio P7) — **closed at RS4c.0, R6.11** ⚠ UNREVIEWED
 
 **Context.** Starlette answers 405 when a path matches but the method does not. A path that has
 only a POST/PUT/PATCH/DELETE in Python therefore answers 405 to a GET. Rust registers no write
@@ -1410,7 +1410,7 @@ sole-tenant 503/404 and the sign-off gate (17 cases under three env values). The
 writes the token and syncs holdings, so **the route stays on Python until wave 4c**, especially
 where `BASKFY_BROKER_OAUTH_STATE_PATH` shares state between processes.
 
-## R5.28 — Python-side defects found by the port and reproduced on purpose (RS4b, 30 Oct 2026; lane labels api-portfolio P6, reference verifier) ⚠ UNREVIEWED — **for Maulik**
+## R5.28 — Python-side defects found by the port and reproduced on purpose (RS4b, 30 Oct 2026; lane labels api-portfolio P6, reference verifier) — **decided: both fixed at RS4c.0 (R6.1, ⚠ UNREVIEWED), committed at RS4c**
 
 The strangler rule is "reproduce exactly", so Rust answers both of these the way Python does,
 byte for byte. Each should be **fixed in Python first, then in Rust**, with the case files'
@@ -1423,6 +1423,9 @@ expected answers changing in the same commit:
 2. **`GET /instruments/{symbol}/rank-history` has no auth dependency.** An anonymous caller who
    knows a private screen's `public_id` can read its rank history. The case
    `rank-history-other-tenant` covers it.
+
+**Closed at RS4c.0 (R6.1):** both are fixed, in Python first and then in Rust; the cases now
+grade the fixed behaviour.
 
 ## R5.29 — Portfolio lane: parameters, ordering and rounding (RS4b lane portfolio, 30 Oct 2026; lane labels api-portfolio P8, P9, P10) ⚠ UNREVIEWED
 
@@ -1518,7 +1521,7 @@ decimal. **Regenerate them** if the Python runtime moves to a newer Unicode vers
 ## R5.36 — Known residual differences, none reachable on the bed's data (RS4b, 30 Oct 2026) ⚠ UNREVIEWED
 
 Recorded so a cutover can decide route by route; each is outside every committed case.
-1. **JSON integers beyond u64** (R5.3). `OrderedJson` has no big-integer variant, so a stored
+1. **JSON integers beyond u64** (R5.3) — **closed at RS4c.0 (R6.10).** `OrderedJson` had no big-integer variant, so a stored
    `1000000000000000000000` (e.g. a metric float 1e21 that Postgres keeps as numeric) is echoed
    `1e+21`, where Python echoes the integer. It reaches every raw-echoed `jsonb`: backtest metrics
    and params, scan detail and funnel, `op_scan`/`fo_scan` numbers. Three verifiers hit it on
@@ -1532,6 +1535,734 @@ Recorded so a cutover can decide route by route; each is outside every committed
 4. **`GET /backtests/{id}/events` of a run in flight** (R5.22): two frames, not a 30-minute
    stream.
 5. **`GET /overlap`** (R5.21): Python serves it.
-6. **The write-only paths** (R5.15): 404, not 405.
+6. **The write-only paths** (R5.15): 404, not 405 — **closed at RS4c.0 (R6.11).**
 7. **`/metrics`, `/api/v1/openapi.json`, `/api/v1/docs`**: not ported, so Python serves them.
    The contract tests generated from `openapi.json` (README) wait for it.
+
+## R6.1 — R5.28's two tenant-isolation defects are fixed, in Python first, then in Rust (RS4c.0, 30 Oct 2026; decided by the lead under the autonomy charter — the stricter security boundary) ⚠ UNREVIEWED
+
+**Context.** R5.28 recorded two Python defects the port reproduced byte for byte: `GET /trades`'s
+bounds aggregate cross-joined every account's trades, and `GET /instruments/{symbol}/rank-history`
+had no principal at all. The strangler rule is "reproduce exactly", but a tenant-isolation leak is
+not a behaviour worth preserving, and the tie-break is the stricter security boundary.
+
+**Choice.**
+* **`GET /trades`** (`routers/trades.py`): the aggregate reads the scoped subquery's own columns
+  (`min(anon_1.trade_date)`), so `total`, `first_trade_on` and `last_trade_on` are the caller's
+  alone. Rust (`routes/trades.rs`) sends the statement SQLAlchemy now compiles.
+* **`GET /instruments/{symbol}/rank-history`** (`routers/instruments.py`): takes `PrincipalDep`, as
+  every read of a screen does, and applies the screen's own rule — a system screen
+  (`user_id IS NULL`) is everyone's, a private one its owner's only, and not-yours is the same
+  `404 not-found` as no-such-screen. `routers/screens.py`'s private `_is_visible` became the public
+  `is_visible` (same body) so both routers use one predicate; Rust's `screens::visible_to` is the
+  same. The explanation is a **code comment, not the docstring**: the docstring is the OpenAPI
+  description, and `packages/api-client/openapi.json` (and the generated client) stay unchanged.
+* **Python tests assert the spec** (house rule 2): `test_api_trades.py` gains
+  `test_the_list_counts_and_dates_only_the_callers_own_trades` (two accounts, the bounds and the
+  symbol filter) and `test_an_account_with_no_trades_sees_none_of_anyone_elses`;
+  `test_rank_history_visibility.py` asserts owner 200, anonymous 404, another account 404, the 404
+  indistinguishable from a missing screen, and a system screen readable by anyone. Both specs were
+  run against the unfixed code first and failed there. The affected suites (`test_api_trades`,
+  `test_api_instruments`, `test_api_screens`, `test_api_artifacts`, `test_audit_auth_gates`,
+  `test_instrument_appearances`, `test_api_auth`, `test_api_errors`, `test_broker_trades`, the new
+  file) are green on a scratch database created for the run in the bed container (`rs_wc_pytest`,
+  migrated with Alembic, dropped afterwards) — never the live database.
+* **Case files.** `reference.json`'s rank-history cases on the owner's private screens now run as
+  the owner (they were anonymous); four cases are added (anonymous and another account get the
+  404, user 6 reads its own screen, a system screen stays readable by another account). The trades
+  cases are unchanged in shape; their expected answers changed with the fix (the bed's owner now
+  gets `total` 10,222, not 10,222²).
+
+**How to reverse.** Revert the two Python hunks and the two Rust ones; the cases follow.
+
+## R6.2 — A read-write pool, reachable only by write routes, one transaction per request (RS4c.0, 30 Oct 2026) ⚠ UNREVIEWED
+
+**Context.** R5.2 made every connection read-only. Wave 4c ports the 94 write routes, and the
+brief requires that a GET handler **cannot** obtain a pool that writes.
+
+**Choice.**
+* `baskfy_db::WriteDb`: `create_engine`'s sizing again (10 + 10, 5 s checkout, 1800 s recycle,
+  pre-ping, statement cache), **without** `default_transaction_read_only`, `application_name =
+  baskfy-rs-write`. It has no `pool()` accessor and no way to run a statement outside a
+  transaction: `begin()` is the only door. `Db` (read-only) is unchanged and still serves every
+  read, including the reads inside a write route that Python makes after the flush.
+* `AppState.write` is an opaque `WriteAccess`; only `session.rs` reads it. The route layer
+  `session::write_access` (innermost on `/api/v1`, after the principal and the rate limit) inserts
+  a `WritePool` extension **for POST, PUT, PATCH and DELETE only**. A GET handler that asks for it
+  gets axum's missing-extension 500 and never runs (`session.rs` unit test); a source test
+  (`tests/write_access.rs`) proves no file outside `state.rs`/`session.rs` names the pool's
+  internals and every handler taking a `WritePool` is mounted on a write verb.
+* `session::run(pool, body)` is `db.get_session`: begin, run, **commit only on `Ok`**, roll back
+  on any `Err` (a `Problem` is a raised exception in Python, which unwinds through the session
+  dependency's `rollback()`). Graded by the writes harness, rows and all (R6.4 shows why it
+  matters).
+* `GET /me` still does not persist the staff-allowlist grant (R5.7): a GET never writes, by
+  construction now.
+
+**Known cost.** A process now holds two pools, so its peak connection count doubles (40, not 20,
+per API process). Nothing serves both from Rust yet. **How to reverse / tune:** size the write
+pool down (it serves a small fraction of requests), or route reads inside write requests through
+the write transaction and drop the second pool.
+
+## R6.3 — The session routes are ported; Google's verifier is not (RS4c.0, 30 Oct 2026) ⚠ UNREVIEWED
+
+`PATCH /me`, `DELETE /me`, `POST /me/restore`, `POST /auth/refresh` and `POST /auth/logout`
+(`routes/auth_writes.rs`) are ported in full with `auth_service`'s logic: `issue_session` (a
+refresh row in its family, the access token stamped with the epoch), `rotate_refresh` (reuse
+revokes the family, expiry, a vanished account, the rotation and `replaced_by_id`),
+`revoke_one`, `revoke_all_for_user` (**`session_epoch + 1`, then every live refresh token** — the
+"sign out everywhere" Python performs on `DELETE /me` and on restore; Python has no separate
+logout-all route), `request_deletion`/`cancel_deletion`, the restore code
+(`jwt.encode({sub, purpose, iat, exp})`, verified with `require=["exp","sub","purpose"]`), the
+double-submit CSRF check, Starlette's `Set-Cookie` spelling for `set_auth_cookies` and
+`clear_auth_cookies`, and the deletion mail. `writes_foundation.json`: **74 of 74 responses
+EQUAL, side effects EQUAL** (tables, sequences, Redis, mail).
+
+**`POST /auth/google`** is ported up to the verifier: body validation, the "not configured" 401
+(the bed's state), and the uniform 401 sentence. **Google's RS256 verification is not ported**: it
+needs the JWKS fetched from Google and an RSA verifier (`ring` is in the lock through rustls but
+not a declared dependency). With `BASKFY_GOOGLE_CLIENT_ID` set, Rust refuses every token with the
+same uniform 401 and logs why. **Cutover gate:** `/auth/google` stays on Python wherever sign-in is
+configured. `link_google_identity` (account creation, adoption, consent records) is therefore not
+ported either. **How to reverse:** pin `ring` (RSA PKCS#1 v1.5 SHA-256 over the JWKS `n`/`e`),
+fetch the JWKS through `baskfy-providers`' network chokepoint with PyJWKClient's 600 s cache,
+port `link_google_identity`, and grade it with a recorded JWKS.
+
+## R6.4 — Python rolls back the refresh-token reuse revocation (found by the writes harness; reproduced on purpose) ⚠ UNREVIEWED — **for Maulik**
+
+**Found.** `rotate_refresh` flushes its security writes and *then* raises: the family revocation
+on reuse (`revoke_family(..., "reuse")`), the `expired` stamp, and the family revocation for a
+vanished account. The `TokenReused`/`InvalidCredentials` it raises becomes a 401, and the
+exception unwinds through `get_session`, which **rolls the transaction back**. So a replayed
+refresh token is refused, but its family is **not** revoked: the thief's still-live successor
+token keeps working. The harness shows it (`refresh-revoked-user3`, `refresh-owner-reuse`: no row
+changes on either side). The same unwinding drops `clear_auth_cookies(response, ...)` on every
+refresh refusal (the 401 is a fresh response), which is harmless.
+
+**Choice.** Reproduced byte for byte (the strangler rule), with the session semantics that cause
+it (R6.2). **Fix in Python first:** commit the revocation before raising (a separate session, or
+`await session.commit()` before `raise`), then here.
+
+## R6.5 — The writes harness: lane templates, three clones per run, side effects compared (RS4c.0, 30 Oct 2026) ⚠ UNREVIEWED
+
+`tools/parity/api_diff.py --writes --lane L --smtp-port P` (mechanics in `api_writes.py`):
+* **Clones.** `CREATE DATABASE … TEMPLATE baskfy` needs the template to have no session, and the
+  bed always has one (TimescaleDB's scheduler, plus any lane's API servers). So the lane clones
+  `baskfy` **once** into `rsw_tpl_<lane>` at a quiet moment (it waits while other sessions are
+  connected and ends only the TimescaleDB scheduler of `baskfy`, a system worker the launcher
+  restarts at once — no data is touched), unschedules every TimescaleDB job in that copy (no
+  aggregate refresh or compression mid-scenario, no telemetry call), and closes it to
+  connections. Each run then clones three databases from it with `STRATEGY FILE_COPY` (about 3 s
+  each for the 3 GB bed): `…_base`, `…_py`, `…_rs`, all dropped at the end (`--keep-dbs` keeps
+  them). The brief's "clone from `baskfy`" is honoured once per lane; per-run clones come from the
+  lane copy. Every name created or dropped must start `rsw_`; `baskfy` is refused as a target; the
+  container must publish 127.0.0.1:55432.
+* **Tables.** After both servers stop (their backends exit and flush their counters), every
+  `public` table whose insert/update/delete count moved on either side, plus the case file's
+  `"tables"`, is diffed against base by primary key; each side's change set must be identical. A
+  masked column compares as `<null>`/`<unchanged>`/`<changed>`/`<set>`, so a server-stamped value
+  still has to be stamped by both. Sequences' `last_value` are compared too.
+* **Redis.** One database index per side (`--redis-db-py 12`, `--redis-db-rs 13`; never 0; flushed
+  before and after). Rate-limit buckets are compared by presence (their values hold a clock);
+  Celery messages have their task ids normalised.
+* **Mail.** One SMTP sink per lane; a message belongs to the case and side whose request was in
+  flight. Envelope, headers and each part's decoded text are compared; line endings are
+  normalised (a 7bit/QP part arrives CRLF, a base64 part decodes to what was encoded).
+* **Scenarios.** `"capture"` (`json:/ptr`, `cookie:NAME`, `header:NAME`, `mail:REGEX`) is per side;
+  `${name}` substitutes in path, query (raw or URL-encoded), headers and body. `"seed_sql"` runs in
+  all three clones before the servers start, so a fixture the bed lacks is baseline, never diff.
+  `"cookie-attr:expires"` masks a deleted cookie's wall-clock `expires`.
+* GET mode skips `"mode": "writes"` files; writes mode accepts nothing else. `--dump-dir` writes
+  each side's raw answer per case.
+
+**Webhooks.** None of the foundation routes sends one; outbound webhook delivery is the worker's
+(Celery, compared through Redis). An HTTP sink is left for the lane that ports a route that calls
+out synchronously.
+
+## R6.6 — Mail: console and plain SMTP ported; STARTTLS/AUTH and Resend are not (RS4c.0, 30 Oct 2026) ⚠ UNREVIEWED
+
+`mailer.rs` ports `Mailer` (never raises; a failure is logged `email delivery failed` and reported
+`false`), `ConsoleTransport`, and `SmtpTransport` for an unencrypted, unauthenticated relay: a
+`multipart/alternative` message, text first, each part base64 with `set_content`'s trailing
+newline, `MAIL FROM` the address inside `BASKFY_EMAIL_FROM`. Graded against Python's through the
+harness's sink. **Not ported:** `BASKFY_SMTP_STARTTLS`/a username (TLS and AUTH — what SES needs)
+and `resend` (an HTTPS API); both are reported as a failed send where Python would deliver.
+**Cutover gate:** a route that mails (`DELETE /me` today) stays on Python on a deployment
+configured that way. **How to reverse:** a TLS client (rustls is already in the tree) and
+`AUTH LOGIN`; Resend through `baskfy-providers`' network chokepoint.
+
+## R6.7 — Request bodies are read as FastAPI 0.13x reads them; three edges approximated (RS4c.0, 30 Oct 2026) ⚠ UNREVIEWED
+
+`body.rs` reproduces FastAPI's body read and pydantic's model validation for the write routes:
+`strict_content_type` (a body with **no** `Content-Type` is not parsed — this FastAPI defaults it
+on; graded), `application/*+json`, a JSON `null` read as the field missing, `json.detect_encoding`
+(UTF-8, UTF-8 BOM, UTF-16/32), CPython's C scanner with its exact error **positions** (26 cases
+pinned from CPython; the harness grades more), `NaN`/`Infinity`, Python's unbounded ints, the
+`int_max_str_digits` and recursion failures as Starlette's `400 There was an error parsing the
+body`, and pydantic's errors in field order then extras (`model_attributes_type`, `missing`,
+`string_type`, `string_too_short`/`_long` with pydantic's singular/plural). `email_address.rs` is
+pydantic's `EmailStr` (the pretty `Name <addr>` form, then email-validator 2.3) — **4,064 inputs
+dumped from the live Python, every ASCII one exact** (`tests/email_vectors.rs`).
+
+**Approximations, recorded:** (1) any non-ASCII email, and an ASCII domain with a Punycode
+(`xn--`) label, are refused with "…characters this deployment does not validate yet." where
+Python runs IDNA/UTS-46 and may accept them (`é@b.co`); both routes compare the address with the
+account's own, so such an input is refused either way, with a different body; an invalid
+`IPv6:` literal gets the same sentence instead of `ipaddress`'s. (2) A lone surrogate escape
+(`"\ud800"`) is the 500 catch-all: Python keeps it in a `str`, which no Rust `String` can hold.
+(3) The nesting depth at which Python's decoder raises `RecursionError` is approximated (980).
+
+## R6.8 — `Idempotency-Key` is ported, ready for the routes that create (RS4c.0, 30 Oct 2026) ⚠ UNREVIEWED
+
+`idempotency.rs` ports `reserve`/`release`/`remember`/`replay` with Python's key
+(`idempotency:api:<scope>:<key[:255]>`), `PENDING`, TTLs and the compare-and-delete release
+script verbatim; Redis failures degrade to no idempotency, logged. `reserve` runs `SET NX EX` and
+the `GET` in **one** script, so the "expired between the two calls" race resolves to the key's
+state at that instant instead of reserving — the three outcomes are Python's. No route ported so
+far takes the header (the session routes do not in Python either); `POST /screens` and
+`/screens/{id}/duplicate` will. `tests/idempotency.rs` runs the contract on the bed's Redis
+(database 14, its own keys deleted) and the no-Redis degradation. The process-wide Redis client
+moved from the derivatives lane into `cache.rs` (R5.19's copy) and is now keyed by URL.
+
+## R6.9 — R5.10's collapse: one `routes/common.rs` (RS4c.0, 30 Oct 2026) ⚠ UNREVIEWED
+
+The five lanes' copies are now one module, and the lanes' names delegate to it (no call site
+moved): pydantic's lax `int`/`bool` (`lax_int`, `lax_bool`), Python's `int()` (`python_int`, with
+R5.35's Unicode decimal-digit tables, now shared with the backtest cursor), the sole tenant
+(`resolve_sole_tenant`, `scoped_sole_user_id`), the IST clock (`ist`, `now_ist`, `today_ist`) and
+`latest_published_date`. Where the copies differed, the most complete won, which changes two
+unreachable-on-the-bed answers in four lanes toward Python's: a `BASKFY_SOLE_USER_ID` beyond
+`i64` now refuses every caller (404) or answers the 500 asyncpg would, instead of reading as
+"unset" (R5.14's sleeves rule); and non-ASCII decimal digits in it are read, as Python's `int()`
+reads them (R5.14's known limit, closed). The lanes' unit tests for the removed copies moved,
+unchanged, into `common.rs`. `resolve_as_of` (reference vs screens) differs in shape and is left.
+Both GET runs: **2,285 of 2,285 EQUAL**.
+
+## R6.10 — R5.36.1 closed: JSON integers of any size stay exact (RS4c.0, 30 Oct 2026) ⚠ UNREVIEWED
+
+`OrderedJson` gains `BigInt(String)` (canonical decimal digits) and `OrderedJson::parse` is now a
+hand-written parser (Python `json.loads`' grammar, key order, last-value-wins duplicates, ints of
+any size); serde's `Deserialize` reads a `RawValue` and goes through the same parser, so a `jsonb`
+column (sqlx's `Json<T>`) and any other caller agree. A stored `1000000000000000000000` now echoes
+as that integer, never `1e+21`. Every exhaustive match in the API handles the variant as Python's
+`int` would (`repr`, truthiness, `float()`, pydantic's `int`, the JWT claim checks). Still
+refused, unchanged: `NaN`/`Infinity` tokens and lone surrogates in stored JSON (R5.36.2).
+
+## R6.11 — R5.15 closed: every write-only Python path answers 405, in every lane (RS4c.0, 30 Oct 2026) ⚠ UNREVIEWED
+
+Enumerating the live app's routes found **46** paths Python serves only with write methods and
+Rust did not route (beyond the portfolio lane's 14). **37** are registered now with
+`common::write_only()` (an empty `MethodRouter`: Starlette's 405 for every method, decided by
+routing before the token), in the router that owns each in Python; **4** session paths
+(`/auth/google`, `/auth/refresh`, `/auth/logout`, `/me/restore`) got their real handlers (R6.3).
+**5** are deliberately not registered — `/screens/preview`, `/screens/explain`,
+`/screens/selection`, `/portfolios/import-csv` and `/cb/investments/mark` — because a Python GET
+route also matches each (`GET /screens/{public_id}`, `GET /portfolios/{portfolio_id}`,
+`GET /cb/investments/{investment_id}`), so Starlette serves that GET, and so does the Rust GET
+route; a static empty route would shadow it in axum. `foundation.json` gains 168 cases (GET as
+anonymous and as owner, HEAD, and the slash redirect for each of the 42 non-session paths), all
+EQUAL in both GET runs.
+
+
+## R6.12 — Lane writes-screens: pydantic's body validation for typed models (RS4c lane writes-screens, 30 Oct 2026) [lane label R-ws.1] ⚠ UNREVIEWED
+
+**Context.** `body.rs` validates the string-only models of the session routes. The lane's 30
+Python write routes declare `int`, `Decimal`, `bool`, `Literal`, `date`, `list[Model]`,
+`dict[str, int | Decimal]`, nested models and `ScreenDefinition`, mixed `extra="forbid"`
+(`schemas._In`) and `extra="ignore"` (plain `BaseModel`).
+
+**Choice.** A private validator, `routes/screens/body_model.rs` (shared by the lane's routers),
+written against probes of the live pydantic 2.13 / FastAPI 0.141 rather than from documentation:
+lax Python-mode rules (`int` takes a bool, an integral float and pydantic's lax string; `Decimal`
+takes int/float/str — `Decimal(str(f))`, Unicode digits and `_` — never a bool, never a non-finite
+value; `bool` takes 0/1, 0.0/1.0 and the lax string set), constraint messages with the bound's
+`str()`, `too_short` checked only when every item validated, nested non-objects as
+`model_attributes_type` (FastAPI's `from_attributes=True` propagates, so the core's
+`ScreenDefinition` `model_type` errors are renamed to it), path-parameter errors before body
+errors, and the body read **before** any dependency (a malformed body is a 400 even when
+anonymous — `get_request_handler` parses before `solve_dependencies`). `Decimal`s are carried as
+`WideDecimal` so a response echoes `str(Decimal)` exactly (`"1E+3"`, `"0.33333"`), and are bound as
+text cast to `numeric`, so the column rounds as it rounds asyncpg's value.
+
+**Approximations, recorded.** A float other than 0.0/1.0 for a `bool` is reported `bool_type`
+(pydantic may say `bool_parsing` for some); integers beyond `i128` saturate (Python's are
+unbounded: a `dict[str, int]` holding one would size a plan differently — both answers are
+nonsense, neither is reachable from the web app).
+
+**How to reverse.** Fold the validator into `body.rs` when a second lane needs it (the sleeves and
+api-keys lanes wrote their own copies in parallel — `sleeves/pyd.rs`, `api_keys/model.rs`; the
+integrator should collapse the three as R6.9 collapsed the GET helpers).
+
+## R6.13 — Lane writes-screens: the routes that run the screener are not ported (cutover gate) [lane label R-ws.2] ⚠ UNREVIEWED
+
+`POST /screens/preview`, `/screens/explain`, `/screens/selection`, `POST /screens/{public_id}/run`,
+`POST /cb/baskets/from-screen` and `POST /cb/baskets/{slug}/recut` all execute a screen
+(`baskfy_api.screener.execute_screen` / `run_screen` / `rank_definition`: the compiled query, the
+ranking-engine path, the desk-score columns, the Redis screen cache with its single-flight,
+`screen_provenance`, `record_run`, `screen_ranking.explain_symbol`, `ranking_selection`,
+`basket_sizing`). No Rust module executes a screen yet (the core builds the SQL and the payload;
+nothing runs it), and porting that service half-way would answer with numbers Python would not give.
+**They stay on Python**: in Rust, `/screens/{public_id}/run`, `/cb/baskets/from-screen` and
+`/cb/baskets/{slug}/recut` remain R6.11's empty 405 routes, and `preview`/`explain`/`selection`
+stay unregistered (their GET falls to `GET /screens/{public_id}`, as in Python). **Cutover gate**
+for all six. **How to reverse:** port `screener.py`'s execution half (and `screen_ranking.py`,
+`baskfy_core.ranking_selection`, `basket_sizing` with goldens first), then these routes.
+
+## R6.14 — Lane writes-screens: the drift routes' desk fallback is always empty in Python, so the port skips the read [lane label R-ws.3] ⚠ UNREVIEWED — **for Maulik**
+
+`routers/curated_drift._desk_holdings` reads `desk.snapshots.holdings_json` through a bare
+`text()` query. The column is `text` on the bed, and asyncpg returns an untyped `jsonb` as a `str`
+too, so `raw` is never a `list` and the function always returns `[]`: a scan or fix that declares
+no `broker_holdings` is always the 400 "declare broker_holdings or sync a desk holdings snapshot
+first". The port answers that 400 without the query (graded: `drift-nothing`,
+`drift-empty-list`). **Found:** the desk fallback documented by the router cannot work; fix in
+Python first (`json.loads` the text) if it is wanted. Also reproduced, not changed: a scan whose
+body names one symbol twice is an unhandled `ValueError` (`detect_drift`'s duplicate check), the
+500; the fix route de-duplicates (last wins) and answers 200.
+
+## R6.15 — Lane writes-screens: an UPDATE is sent only for a net change, as the ORM flushes (found by the writes harness) [lane label R-ws.4] ⚠ UNREVIEWED
+
+SQLAlchemy emits no `UPDATE` when an assigned attribute equals its loaded value (`portfolio_id`
+re-filed where it already sits, an unpublish of a PRIVATE basket, a manager resubmission that
+changes nothing, a drift payload that is unchanged, a holding whose quantity is numerically the
+same). A Rust `UPDATE` with the same value still writes a new tuple, and `GET /cb/investments` (no
+`ORDER BY` in Python either) then lists the investments in a different heap order — the harness
+caught exactly that. Every such Rust `UPDATE` carries `... IS DISTINCT FROM ...` (a row
+comparison for the manager), and `cb_investment_holding.updated_at` is stamped `now()` only with a
+real change (`onupdate`). **For Maulik:** `GET /cb/investments` and `GET /cb/fees`-adjacent reads
+have no `ORDER BY`; their order is the heap's.
+
+## R6.16 — Lane writes-screens: plan previews are graded on the clock the run sees [lane label R-ws.5] ⚠ UNREVIEWED
+
+`POST /cb/plans/{invest,apply,exit}` and `/cb/investments/{id}/customize` answer the
+closed-market body outside 09:15–15:30 IST and a preview inside it; Python reads the wall clock
+(`_now()`), with no override. The scenario grades whichever branch the run meets (the closed one
+at the lane's runs, `next_open_ist` masked only because a run may straddle a session boundary);
+the open branch's arithmetic (`curated_plans`, `shares_at_amount`, `market_hours_cb`) is graded by
+unit tests whose expected answers were dumped from the live Python (`curated_plans::core`
+tests). Plans are previews with a synthetic `cb-sim-{uuid4}` id: **no order, ever** (law 2).
+
+## R6.17 — Lane writes-screens: observations for the foundation and the lead [lane label R-ws.6] ⚠ UNREVIEWED
+
+* **Body before token.** FastAPI parses the body before it solves the router-level dependency that
+  resolves the principal, so a *refused token* plus a malformed body is Python's 400
+  `json_invalid`; the Rust pipeline resolves the principal in a layer before any handler, so it
+  answers the 401. No lane can fix that inside a route; the cases avoid the combination (an
+  anonymous caller with a malformed body is graded and equal: the lane reads the body first).
+* **Redis database indices.** A run that used `--redis-db-py 7` lost its Python-side idempotency
+  keys mid-scenario (another run flushed that index); `3`/`4` were clean. Lanes running at once need
+  distinct indices.
+* **Responses that echo the posted value, not the stored one.** `POST /cb/baskets` returns each
+  weight as posted (`"0.33333"`) while `cb_constituent.weight` stores four places; `POST
+  /cb/investments/{id}/sip` returns `amount` as posted while the column holds two places.
+  Reproduced (the ORM object after the flush), recorded.
+
+## R6.18 — Lane writes-screens: what the adversarial review found and fixed [lane label R-ws.7] ⚠ UNREVIEWED
+
+* **Multi-row INSERTs, as the ORM flushes them.** SQLAlchemy 2.0 sends the rows of one table in a
+  flush as one `INSERT ... VALUES (...), (...)` (insertmanyvalues, 1,000 rows a page). A value
+  the column cannot hold (`weight` 1000 in `numeric(7,4)`, `qty` 1E+17 in `numeric(20,4)`) makes
+  the whole statement fail when it is planned, before any identity value is drawn. The port
+  inserted rows one at a time, so the rows before the bad one used up ids. Python's
+  `cb_constituent_id_seq` stayed at 261; Rust's moved to 262 (`basket-create-overflow`). Now
+  `POST /cb/baskets` (constituents), `POST /cb/investments/mark` (holdings) and
+  `/drift/fix` (new holdings) send multi-row statements in pages of 1,000
+  (`write_kit::values_rows`). `/drift/fix` also follows `persistence.save_obj`'s order: UPDATEs
+  in primary-key order, then INSERTs, then DELETEs (`drift-fix-overflow-update`).
+* **Plan quantities.** `shares_at_amount` truncates with `to_integral_value`, which has no
+  28-digit limit. The port used `quantize(0)`, which raised for a quotient of 29 or more digits.
+  The open-market plan routes gave a 400 where Python gives an integer
+  (`150000000000000000000000000000` for 1.5E+29). This is fixed, and the unit tests check it
+  against the live Python's answers.
+* **Dates from numbers** now follow pydantic-core's `int_as_datetime`/`float_as_datetime` and
+  speedate: the millisecond watershed, the microsecond carry, the 0000/9999 range checked before
+  exactness, NaN, and a year-0 midnight refused as `date_parsing`. Before the fix, `1e400` was
+  reported as `date_from_datetime_inexact`, and an integer beyond `i128` was read as 0, which is
+  1970-01-01 (accepted). These rules were probed against the live pydantic 2.13.
+* **Still open (foundation, for the lead): R6.17's body-before-token order.** Confirmed on the
+  bed: `POST /screens` or `/cb/baskets` with an expired or garbage token and a malformed JSON body
+  gets Python's 400 `json_invalid` and Rust's 401. The fix belongs in `app.rs`'s
+  `versioned_dependencies`, not in a route. The rate-limit charge has the same order difference
+  (Python charges nothing when the body is malformed).
+
+## R6.19 — Lane writes-portfolio: the portfolio loaders run on the connection they are handed (RS4c lane writes-portfolio, 30 Oct 2026) [lane label R-wp.1] ⚠ UNREVIEWED
+
+**Context.** A write route answers with what Python reads *after* its flush on the same session
+(`_portfolio_out`, `portfolio_detail`, the refreshed ledger after a resolve). A read on the
+read-only pool would not see the transaction's own writes.
+**Choice.** Every loader of the lane (`routes/portfolio/load.rs`, `tradebook.rs`, the readers in
+`portfolios.rs` and `portfolio_overview.rs`) takes `&mut PgConnection` instead of `&AppState`.
+A GET route acquires one connection from the read-only pool (`db::acquire`) and hands it on —
+Python's session holds one connection per request too; a write route hands its transaction.
+`portfolio_detail`'s body is `detail_on(conn, ...)`. No SQL changed; the GET case files stay
+538 of 538 EQUAL in both environments. **Reverse:** wrap the old signatures back around
+`state.db.pool()` (the write routes would then need their own copies of the readers).
+
+## R6.20 — Lane writes-portfolio: request bodies, multipart forms, CSV and `strptime` reproduced privately [lane label R-wp.2] ⚠ UNREVIEWED
+
+* **Order of refusals** is FastAPI's: the body (JSON or form) is read and a syntax error answered
+  **before** any dependency, then the 401, then every validation error of path, query, header and
+  body together. (The foundation resolves a bad *token* in middleware, before the body; Python
+  answers a bad token after a bad body. No case of this lane combines the two.)
+* `routes/portfolio/model.rs`: pydantic 2.13's Python-mode `int` (a `bool` is an int; whole floats;
+  `int_from_float`, `int_parsing_size`, `finite_number`), `Decimal` (`Decimal(repr(f))` for floats,
+  whitespace and `_` in strings, `decimal_type`/`decimal_parsing`/`finite_number`), `Literal`
+  enums, lists (`list_type`, `too_short`) and nested models (`model_attributes_type`, extras last).
+  The writes-screens lane wrote its own (`screens/body_model.rs`, R6.12) in parallel; the
+  integrator should collapse the two.
+* `routes/portfolio/multipart.rs`: Starlette 1.6's `request.form()` with python-multipart 0.0.32's
+  state machine and `parse_options_header` (a type with parameters is not lower-cased; RFC 2231
+  `filename*` ignored; the last `file` wins; an unterminated body finishes no part; Starlette's own
+  messages for a missing boundary or `name`). No new dependency.
+* `routes/portfolio/pycsv.rs`: CPython 3.12's `_csv` reader (lazy, so a later row's `csv.Error`
+  does not pre-empt an earlier `TradebookError`); `tradebook_csv.rs`: `DictReader` (blank rows
+  skipped, `restkey`, duplicate field names) and `_strptime`'s regexes, ASCII digits only.
+
+## R6.21 — Lane writes-portfolio: two decimal edges in uploaded files are not Python's [lane label R-wp.3] ⚠ UNREVIEWED
+
+Python's `Decimal(text)` accepts non-ASCII digits (`"١٢"`) and the specials `NaN`/`Infinity`. Rust
+reads non-ASCII digits as unreadable everywhere (a CSV cell is then `unreadable_quantity`, a
+tradebook number a refusal, a JSON string `decimal_parsing`), and a portfolio-CSV `NaN`/`Infinity`
+cell as unreadable — where Python keeps `Decimal('NaN')` and writes it to `numeric(20,4)` (`NaN`
+is storable) or fails on `Infinity`. No broker export carries either. **Reverse:** a `WideDecimal`
+with special values, and Unicode digit tables (R5.35 has them for `int()`).
+
+**Adversarial review, 30 Oct 2026: the form reader missed Starlette's limits; fixed.** The review
+found the lane's `multipart.rs` had no `max_fields`/`max_files` (1,000 each), no `FormParser`
+limits (1,000 fields; a name plus value over 1 MiB), checked a text part's 1 MiB only once the part
+finished (Starlette checks while it streams, so an unterminated part is refused too), and decoded
+names, filenames and text values as UTF-8 whatever the `Content-Type`'s `charset` said. With 1,001
+text fields Python refused with a 400 and Rust **created the portfolio**; with `charset=latin-1`
+the two named it differently. All are now ported and graded (`mp-*` cases in
+`writes_portfolio.json`; the two 1 MiB cases are unit tests pinned from Starlette 1.6). One
+residual stays here: a `charset` naming a real codec other than UTF-8, ASCII or latin-1 (`cp1252`,
+`utf-16`, …) is read as latin-1, where Python would use that codec. **Reverse:** a codec table.
+
+## R6.22 — Lane writes-portfolio: the live broker reads are a cutover gate [lane label R-wp.4] ⚠ UNREVIEWED
+
+`POST /brokers/{id}/sync-holdings` and `POST /trades/sync-today` are ported for every answer that
+reads no broker. Where Python would read Kite (`DRY_RUN=false`, an app key, a stored session that
+loads and is fresh), Rust answers **503 `pipeline-degraded`** and logs why, instead of reading:
+the live holdings read and `broker_holdings_sync.sync_holdings_into_portfolio` (772 lines that write
+the broker's holding group) and Kite's `GET /trades` are not ported. Both routes stay on Python
+wherever a broker session exists. `POST /brokers/{id}/connect` is ported in full: with both Kite
+Connect credentials set it mints the one-time `state` and registers it exactly as
+`register_oauth_state` does — in this process and, when `BASKFY_BROKER_OAUTH_STATE_PATH` is set, in
+the same JSON file (Python's format, owner-only) that Python's callback re-reads (graded: Python
+and Rust appended to one file in the scratch run). Because the callback's success path stays on
+Python (R5.27), **connect and the callback must move together, or share that file.** Nothing here
+reaches an order path.
+
+## R6.23 — Lane writes-portfolio: `POST /portfolios/{id}/rebalance` is not ported [lane label R-wp.5] ⚠ UNREVIEWED
+
+It runs the screen (`screener.execute_screen`: the legacy statement or the ranking engine over
+`build_ranking_frame_query`) and `rank_buffer.plan_rebalance`, then records the payload. The same
+screener path is what R6.13 left on Python; the two should be ported together, once. Until then the
+path answers 405 in Rust for every verb and Python serves the POST (a cutover gate).
+
+## R6.24 — Lane writes-portfolio: Python behaviour reproduced on purpose, and one approximation [lane label R-wp.6] ⚠ UNREVIEWED — **for Maulik**
+
+* **One instrument reached by two symbols** in one `POST`/`PUT` body or CSV (`INFY` and an alias of
+  it) makes `replace_holdings` insert the same primary key twice: an `IntegrityError`, Python's 500.
+  Reproduced (`create-dup-instrument`, `put-dup-alias`). A fix in Python would merge the rows.
+* **A benchmark id beyond `smallint`** on `POST /portfolio` is asyncpg's `DataError` (500), not a
+  404. Reproduced.
+* **The reconciliation answer's `resolved_at`** is the application's wall clock (Python's
+  `datetime.now`), masked in the scenario.
+* **Approximation:** a `HoldingKeyIn` id beyond `bigint` is saturated, so a broker account that
+  large is the 404 "No broker account" where asyncpg would raise (500). Unreachable from a client
+  that read its ids from this API.
+
+## R6.25 — Lane writes-sleeves: a pydantic emulation for typed bodies, private to the sleeve routers (RS4c lane writes-sleeves, 30 Oct 2026) [lane label R-wsl.1] ⚠ UNREVIEWED
+
+**Context.** `body::validate_model` covers flat string models. The swing, TWT, VBT, sleeves,
+options, F&O, overlap and backtests write models carry `int`, `Decimal`, `bool`, `date`, `time`,
+`Literal`, `StrEnum`, nested models (`OptionsConfigPatch.book`, `BacktestConfig.costs`), lists,
+`dict[SleeveGroup, …]`, tuples and model validators (before and after).
+
+**Choice.** `routes/sleeves/pyd.rs`: a type-directed validator (`Ty`, `Model`, `PV`) reproducing
+pydantic-core's lax Python-mode rules as FastAPI calls them (`from_attributes=True`): fields in
+declaration order then extras, `missing`, `model_attributes_type`, `Value error, …` for an
+after-validator at the model's location, a before-validator's exception escaping as the response
+(`underlying-not-allowed`), dict keys at `<k>.[key]`, and every message probed against the tree's
+pydantic. `PyDec` keeps a `Decimal`'s Python spelling (`Decimal(repr(float))`, `1E+2`, scale), so
+`str(value)` in audit rows and problem details is Python's. Dates and times follow speedate's
+messages for the shapes probed (digits-only strings as unix timestamps, `T`/`t`/`_`/space
+separators, the range messages). Two other lanes built their own (`screens/body_model.rs`,
+`api_keys/model.rs`); **the three should be collapsed** at integration, as R6.9 did for reads.
+
+**Known limits.** A number a `numeric` column cannot hold (beyond `rust_decimal`'s 28 digits) is
+the 500 catch-all, as asyncpg's overflow is in Python; a timezone-aware `hard_exit_time`
+(`"14:00Z"`, or a number of seconds) is the 500 Python's naive/aware comparison raises; speedate
+shapes not probed (week dates, ordinal dates) are refused with the nearest message.
+
+## R6.26 — The Celery producer is Rust's; the harness normalises two values (RS4c lane writes-sleeves, 30 Oct 2026) [lane label R-wsl.2] ⚠ UNREVIEWED
+
+`routes/sleeves/writes.rs::send_task` writes what kombu's Redis transport writes for
+`CeleryTaskQueue.send_task(name, args)`: `SADD _kombu.binding.<queue>` and `LPUSH <queue>` of the
+protocol-2 JSON message (headers, properties, base64 body `[args, {}, {callbacks…}]`), queue from
+a copy of `PRODUCER_TASK_ROUTES`. Scan routes publish **after** the commit and stamp `task_id` in a
+second short transaction (`deferred_publish`); `POST /backtests` publishes after the commit
+(`BackgroundTasks`). Graded through Redis by the writes harness, all EQUAL.
+
+Harness edits (`tools/parity/api_writes.py`, `api_diff.py`; additive): Celery's `origin`
+(`gen<pid>@<host>`) is normalised, the producer pid differing by construction; and a writes file
+may name `"redis_mask_captures"` — captured per-side values (a backtest's random `public_id`) read
+as `<name>` in that side's Redis dump. **How to reverse:** drop both; nothing else depends on them.
+
+## R6.27 — The ORM's identity map is reproduced where a response reads it (RS4c lane writes-sleeves, 30 Oct 2026) [lane label R-wsl.3] ⚠ UNREVIEWED
+
+Found by the harness, reproduced on purpose:
+* `POST /swing/watch` answers with the row's **in-memory** `trigger`/`stop_ref` (the value sent,
+  `4100.005`), not the column's rounding, because `_one_watch` re-reads through the session's
+  identity map. `_one_watch` reads **every** state (`state=None` default), so a note on an EXPIRED
+  row is committed and answered.
+* `PATCH /fno/config` does not `refresh` (unlike the swing/VBT/options settings). The identity map
+  is weak, so CPython frees each row once nothing refers to it — except the **last** sleeve group
+  of the request, which the router's loop variable `current` still holds when `_config_out` runs.
+  That one group is answered with the values sent (`"0.5"`, `"100000.5"`); the book and every
+  earlier group are re-read from the table. A latent Python inconsistency — **for Maulik**: fix
+  in Python by `refresh`ing in `apply_*_patch`, then drop the overlay here.
+* Every config patch writes the ORM's way: an `UPDATE` only for attributes whose value changed
+  (numbers compared numerically), so `updated_at` moves only when one is emitted; an audit row is
+  written whenever `str(before) != str(value)` even when the number is equal (`0.500` → `0.5`).
+
+## R6.28 — `POST /backtests` refuses the in-process executor (RS4c lane writes-sleeves, 30 Oct 2026) [lane label R-wsl.4] ⚠ UNREVIEWED — **cutover gate**
+
+Python's default `BASKFY_BACKTEST_EXECUTOR=inline` runs the simulation inside the API process
+(`baskfy_worker.tasks.backtests.run_backtest_inline`). The worker is a later wave, so with
+`inline` Rust answers **503 pipeline-degraded before anything is reserved or written**, rather
+than accept a run that would never start. With `celery` the route is ported in full (validation of
+`BacktestConfig` and inline `ScreenDefinition`s, entitlement and universe gates, stale data
+version, `Idempotency-Key` reserve/replay/release/remember, the stale-run reaper rolled back with a
+429, both concurrency caps, the insert, the hand-off) and graded EQUAL. **Gate:** route
+`POST /backtests` to Rust only where the executor is `celery`.
+
+## R6.29 — `PUT`/`DELETE /overlap/reviews` stay on Python; the tag corrections port a slice of `catalyst_tags` (RS4c lane writes-sleeves, 30 Oct 2026) [lane label R-wsl.5] ⚠ UNREVIEWED
+
+The review labels re-read the row through `GET /overlap`'s view (`_row_on_the_list`), which is not
+ported (R5.21); they remain 405 in Rust and Python serves them. `PUT`/`DELETE /overlap/tags` need
+`tag_headline`, `tag_from_laya`, `resolve_tag` and `cache_key`: ported privately in
+`routes/overlap/tags.rs` with `RULES` and `TAG_SCHEMA` **generated** from the Python module
+(`rules_table.rs`), pending R5.21's move of `catalyst_tags` into `baskfy-core` with goldens.
+`str.casefold()` is reproduced **exactly** from `casefold_table.rs` (all 1,530 code points CPython
+3.12 / Unicode 15.0 folds to something else; the review replaced a lower-casing approximation
+that missed Greek iota-subscript, the symbol variants, `ǰ` and Cherokee — and the result is a
+**stored** key, `headline_key`, R6.32). The miss path
+writes `catalyst_tag:wanted` as Python does (graded through Redis); a cached Laya answer could not
+be seeded on the bed (each side's Redis database is flushed), so `tag_from_laya` is unit-tested only.
+
+## R6.30 — Found in the foundation: a refused token beats a malformed body in Rust, not in Python (RS4c lane writes-sleeves, 30 Oct 2026) [lane label R-wsl.6] ⚠ UNREVIEWED — **for the integrator**
+
+FastAPI parses a JSON body **before** solving dependencies, and the principal is a dependency
+(the `/api/v1` router dependency included). So a malformed JSON body with an expired, stale-epoch
+or forged token is Python's **400** `json_invalid`; `app.rs::versioned_dependencies` resolves the
+principal (and the rate limit) before any handler reads the body, so Rust answers **401**. Not
+reachable from a route file. The case (`sw-watch-expired-badjson`) was dropped from
+`writes_sleeves.json` rather than graded red. **Fix:** in `versioned_dependencies`, carry a
+token refusal as a pending problem for write methods with a JSON content type, and let
+`body::receive` run first.
+
+## R6.31 — Lane writes-sleeves: smaller calls (RS4c lane writes-sleeves, 30 Oct 2026) [lane label R-wsl.7] ⚠ UNREVIEWED
+
+* **Scan 429 timing.** `Retry-After`/`retry_after` are `int(wait + 0.999)` of each side's own
+  clock; Python and Rust are asked milliseconds apart, so a second boundary between them flips the
+  number (≈1–3 % of runs of `vb-scan-owner-too-soon`). A re-run settles it; no mask is used.
+* **Redis databases.** This lane grades on `--redis-db-py 10 --redis-db-rs 11`: 6/7 were in use by
+  another lane during the run (their keys appeared in this scenario's dump).
+* **Tests touched outside the lane's files**, both updated to the write-wave spec: the sleeve lane's
+  read-only source test (`sleeves/common.rs`) now asserts the exact writes Python allows, and
+  `tests/derivatives.rs`' 405 sweep skips the five writes now served.
+* `POST /overlap/catalyst-scan`'s Redis status and lock hold a timestamp, so they are graded by
+  presence; their content is graded through the response and `GET /overlap/catalyst-scan`.
+
+## R6.32 — Adversarial review of lane writes-sleeves: two divergences fixed, coverage widened (RS4c, 30 Oct 2026) [lane label R-wsl.8] ⚠ UNREVIEWED
+
+* **`POST /backtests` with the Celery executor and no broker** (no `BASKFY_REDIS_URL`, so Python's
+  `task_queue` is `None`): Python writes the row and fails it in the same request
+  (`_why_it_cannot_start`: `status='failed'`, the reason as `error`, `finished_at`) and answers
+  `202 {"status": "failed"}`; Rust inserted it `queued`, logged, and answered `queued` — a run that
+  would never start, the M42 bug Python fixed. Now the same INSERT + UPDATE in one transaction and
+  the same answer. Graded by the new scenario `writes_sleeves_nobroker.json` (9/9 EQUAL with side
+  effects; it also covers the three scan routes and the tag correction with no queue or cache).
+* **`casefold`** was an approximation, and `cache_key` is stored (`catalyst_tag_correction.
+  headline_key`) and used by `tag_headline`: a headline carrying a fold the approximation missed
+  was filed under a key Python never reads. Now exact (R6.29); graded by `ov-tag-fold` /
+  `ov-untag-fold` (a delete found by its folded spelling) and a unit test against CPython's output.
+* **Coverage added to `writes_sleeves.json`** (217 of 217 EQUAL, side effects EQUAL): tenant
+  isolation on `PUT /portfolios/{id}/sleeves` across two real accounts (owner on the subscriber's
+  portfolio, subscriber on the owner's, write and read refused, the second account's own write
+  accepted, the owner's division unchanged after); a second account reading the owner's backtest;
+  and rollback of valid changes beside a refused ceiling in each of `PATCH /swing/config`,
+  `/options/config` and `/fno/config`.
+* **Found in the foundation, not fixed here (for the integrator):** with no Redis URL Python builds
+  no rate limiter (`app.py`: `RateLimiter(cache, …) if cache is not None and …`) and serves
+  unmetered, while `state.rs` builds one whenever `rate_limit_enabled`, which then refuses
+  **every** request with 503 "Rate limiting is unavailable". The no-broker scenario runs with
+  `BASKFY_RATE_LIMIT_ENABLED=false` for that reason. **Fix:** in `AppState::from_settings`, build
+  the limiter only when `redis_url` is non-empty.
+
+## R6.33 — Lane writes-accounts: pydantic's lax rules for typed bodies, private to the lane, graded against pydantic's own output (RS4c lane writes-accounts, 30 Oct 2026) [lane label R-wa.1] ⚠ UNREVIEWED
+
+`body.rs` validates the two string kinds the session routes needed. The lane's twenty write
+routes also declare `int` (`ge`/`le`), `bool`, `datetime`, `Literal[...]`, `list[str]` and
+`list[Literal]`, and one path parameter is a `date`. `routes/api_keys/model.rs` (declared from
+`api_keys.rs`, used by all six of the lane's routers) reproduces them: pydantic-core's lax `int`
+(JSON ints of any size, bools, integral finite floats within `i64`, `lax_int` strings) and `bool`;
+speedate's RFC 3339 grammar and its error words; unix timestamps (seconds, or milliseconds beyond
+±2e10, and pydantic's own float arithmetic: the floor as the integer, the fraction's **magnitude**
+as microseconds — so `-1.25` reads as `-2 + 0.25` — and a fraction of a *millisecond* beyond the
+watershed); the lax fallback to a bare date, whose error is what a failing string reports; year 0;
+`Literal` wording (`'a', 'b' or 'c'`); `null` accepted only by `X | None`. **Graded by vectors
+dumped from pydantic 2.13**: 168 `datetime` inputs (`routes/api_keys/datetime_vectors.json`) and
+60 `date` strings (`date_vectors.json`), every one exact, plus the harness. A parsed `datetime`
+keeps its offset (or its absence): Python echoes the parsed object for a created key's
+`expires_at`, but answers the stored UTC instant for an entitlement override (graded both ways).
+
+**Overlap:** the sleeves lane (`sleeves/pyd.rs`, R6.25) and the screens lane
+(`screens/body_model.rs`) wrote their own emulations in parallel. **How to reverse / collapse:**
+one module under `crate::body`, keeping the vector tests.
+
+## R6.34 — A naive `datetime` is stored as UTC; the scenario runs both servers with `TZ=UTC` (RS4c lane writes-accounts, 30 Oct 2026) [lane label R-wa.2] ⚠ UNREVIEWED — **for Maulik**
+
+asyncpg encodes a **naive** `datetime` for a `timestamptz` column with `astimezone(utc)`, which
+reads it as the *process's local time*: a key created with `"expires_at": "2027-01-01 10:20"` is
+stored as 04:50 UTC by a Python API on an IST host and as 10:20 UTC in a UTC container, while the
+response (and `is_active`, which reads naive as UTC) say 10:20 either way. Rust has no clock-zone
+dependency (chrono is built without `clock`), so it stores naive as UTC — Python's behaviour in
+every container. `writes_accounts.json` sets `"env": {"TZ": "UTC"}` so both sides are graded on
+that behaviour. **Fix in Python (recommended):** refuse naive datetimes in the request models
+(`AwareDatetime`), or `replace(tzinfo=UTC)` before storing.
+
+## R6.35 — The webhook SSRF guard reproduces `urlsplit`, `ipaddress` 3.12 and the resolver (RS4c lane writes-accounts, 30 Oct 2026) [lane label R-wa.3] ⚠ UNREVIEWED
+
+`routes/webhook_endpoints/ssrf.rs`: CPython 3.12's `urlsplit` (leading C0/space stripped, tab/CR/LF
+removed, the scheme rule, `//netloc` up to `/?#`, the bracket checks), the `hostname`/`port`
+properties, `ipaddress.ip_address` (dotted-quad IPv4 with no leading zeros; IPv6 with a `%zone`),
+3.12.13's not-public sets (private with its exceptions, loopback, link-local, reserved, multicast,
+unspecified; an IPv4-mapped IPv6 by its IPv4; `100.64.0.0/10` passes, as in Python), and the name
+resolved with the system's `getaddrinfo` (tokio `lookup_host`, off the runtime), every returned
+address checked. The `ValueError`s Python does not catch (an unbalanced bracket, a bad port, an
+IPv4 in brackets, the `idna` codec's empty-label check) are the same 500. 30 graded URLs.
+**Approximated:** a non-ASCII network location is neither NFKC-checked nor IDNA-encoded before the
+lookup, and a name resolving to a scoped IPv6 address prints without its `%zone` in the refusal.
+Registering a hostname performs a DNS lookup, in Python and in Rust alike (the scenario uses IP
+literals and one `.invalid` name).
+
+## R6.36 — The admin actions publish through a second copy of the Celery producer (RS4c lane writes-accounts, 30 Oct 2026) [lane label R-wa.4] ⚠ UNREVIEWED
+
+`routes/admin/queue.rs` writes what kombu's Redis transport writes for `send_task` (the binding
+`SADD`, the `LPUSH` of the protocol-2 envelope, `PRODUCER_TASK_ROUTES`), in one Lua script through
+`cache::eval`. The re-run and the resync publish before their audit row, the reprocess after its
+instrument lookup — Python's order. `origin` is normalised by the harness (R6.26; the lane's own
+first edit for it was withdrawn in favour of that one). **Duplicate:** the sleeves lane's
+`sleeves/writes.rs::send_task` is the same producer; collapse onto one `crate::queue`.
+`POST /admin/resync` is graded only with `days=30` and `days=1` (R5.33: a wider window would probe
+NSE). `admin_action.detail` holds a random task id, so the table's `detail` is masked in the
+row diff and graded instead through `GET /admin/actions` (task ids masked by pointer).
+
+## R6.37 — Billing: the Razorpay client, the webhook and the GST invoice are ported (RS4c lane writes-accounts, 30 Oct 2026) [lane label R-wa.5] ⚠ UNREVIEWED
+
+* **Checkout.** The gateway is reached through `baskfy_providers::net::GuardedClient`, the
+  bodies serialised as httpx serialises `json=` (key order kept, compact separators). The
+  committed scenario points `BASKFY_RAZORPAY_API_BASE` at a closed local port, so a checkout that
+  reaches the gateway is refused by the connection (503) on both sides and nothing leaves the box.
+  The success path was graded separately against a local stub (not committed — the harness has no
+  HTTP sink): 14 of 14 responses and side effects EQUAL, the 10 gateway requests byte-equal
+  (path, `Authorization`, `Content-Type`, body); and the no-keys path (500) 10 of 10.
+* **Webhook.** Signature (constant-time), `request.json()` failures as the 500, `str()` of the
+  event name, `ON CONFLICT DO NOTHING` dedupe (the sequence moves on a replay, as in Python), the
+  lifecycle (`_period_end` reads a `bool` as an `int`), and the captured payment: the `payment`
+  row, `_grant_for` (promote or create the grant), and the invoice — `invoice_counter`'s gapless
+  number, `gst.split_inclusive`, `pdf.render_pdf`/`invoice.render_invoice_pdf` byte for byte (a
+  golden PDF dumped from Python, `routes/billing/invoice_golden.pdf`), stored in the same
+  `RawArchive` the download route reads, and the row stamped. Graded: 23 webhook deliveries and
+  the PDF download of the invoice each side raised, EQUAL.
+* **Known limit:** the taxable value divides with `rust_decimal`, not Python's 28-digit context;
+  the two can differ only on a quotient that rounds to a half-paisa tie at 28 digits, which an
+  inclusive split of a two-decimal amount cannot produce.
+
+## R6.38 — Lane writes-accounts: routing and Python behaviour reproduced on purpose (RS4c lane writes-accounts, 30 Oct 2026) [lane label R-wa.6] ⚠ UNREVIEWED — **for Maulik**
+
+* `PATCH`/`DELETE /alerts/unsubscribe` reach the `{public_id}` handlers with the id `unsubscribe`
+  (Starlette matches them there: a 404 "No alert with id 'unsubscribe'"); axum's static route
+  would otherwise answer 405. `POST /alerts/unsubscribe` takes no session but still resolves the
+  bearer (a stale token is a 401, as the router dependency makes it in Python).
+* **Python defect, reproduced:** `DELETE /keys/{id}` of a key that a rotation replaced always
+  fails with a 500 — `api_key.rotated_from_id` references it with no `ON DELETE`, so the delete
+  violates the foreign key (graded: `keys-delete-rotated-from`). Fix in Python first (`ON DELETE
+  SET NULL` on `rotated_from_id`, or refuse with a 400), then here.
+* Reproduced as Python answers them: `rotate_api_key` lets a `ValueError` other than
+  `KeyLimitReached` escape (a 500); a `PATCH /webhook-endpoints` whose URL collides with another
+  endpoint on the same screen is the unique-constraint 500; an `int` column value beyond int32
+  (`top_n`, `min_move`) is asyncpg's 500 before the statement is sent; the ORM writes only net
+  changes, so `updated_at` moves only with them; the body is parsed before the principal is
+  resolved (an anonymous caller with malformed JSON gets the 400), then the principal, then the
+  model — except where the principal is a router-level dependency that Rust resolves in middleware
+  for a *refused* token (R6.30).
+* **Harness hygiene:** seeds give every server-defaulted timestamp an explicit value (a clone made
+  a second later otherwise differs from base), and the lane ran on Redis databases 8/9 — an
+  earlier run on 6/7 lost a `_kombu.binding` key on the Python side mid-scenario, consistent with
+  another process flushing that database.
+
+## R6.39 — Adversarial review of lane writes-accounts: two billing divergences fixed, 15 cases added (RS4c review, 30 Oct 2026) [lane label R-wa.7] ⚠ UNREVIEWED
+
+* **Fixed — `_grant_for`'s `or`.** Python takes `_text(subscription, "id") or _text(payment,
+  "subscription_id")`: an *empty* subscription id is falsy, so the payment's `subscription_id`
+  names the grant. Rust used `Option::or_else`, which only falls through on a missing id, so such a
+  charge was refused as unattributable instead of being recorded against the subscription (graded
+  now: `rv-webhook-empty-sub-id-falls-to-payment`, which records `pay_rv_c5` against `sub_rsparity1`).
+* **Fixed — a 2xx gateway body that is not JSON.** `RazorpayGateway._post` calls
+  `response.json()` outside its `try`; the `JSONDecodeError` is not a `RazorpayError`, so Python
+  answers the 500 catch-all. Rust mapped it to the 503 "gateway is not responding". It is now its
+  own `GatewayError::Unhandled` (500). Graded off the record against a local stub (orders answer
+  HTML; customers `{"id": ""}`; subscriptions `{"id": 12345}`), because the committed scenario's
+  gateway is a closed port. Still open, by choice: `json.loads` accepts `NaN`/`Infinity` in a
+  gateway answer and `serde_json` does not — Razorpay never sends them.
+* **Cases added** (`rv-*` at the end of `writes_accounts.json`): `X-API-Key` alone is a 401 on the
+  account routes; an empty revoke reason is stored as `''`; tenant isolation on the second seeded
+  key, alert and endpoint; an upper-case signature does not verify; a lifecycle followed by a
+  payment that overflows `numeric(12,2)` (and one beyond int64) rolls the claim and the lifecycle
+  back, burning the same `payment` id on both sides; the same event id afterwards is a clean retry;
+  a period end past year 9999 is a 500 and one in year 5138 is processed; a non-staff `PUT` on
+  another account is a 404.
+* **Masks reviewed.** `admin_action.detail` is masked whole in the table diff because it carries the
+  random Celery `task_id`; every other member is graded through `admin-actions-after`, which masks
+  only `/data/N/detail/task_id`. The remaining masks are random ids, digests of random tokens, and
+  server clocks.
+
+## R6.40 — Wave 4c integration: renumbering, one foundation fix, the unassigned routes, the bed (RS4c, 30 Oct 2026) ⚠ UNREVIEWED
+
+* **Renumbering.** The lanes' labels became R6.12–R6.39 everywhere they appear (docs, code comments,
+  case notes): R-ws.1–7 → R6.12–R6.18, R-wp.1–6 → R6.19–R6.24, R-wsl.1–8 → R6.25–R6.32,
+  R-wa.1–7 → R6.33–R6.39. Each heading keeps its lane label in brackets.
+* **Fixed — the rate limiter with no usable Redis URL** (found by the writes-sleeves verifier,
+  R6.32). Python builds the limiter only when `_open_cache` returns a client, and
+  `Redis.from_url` raises `ValueError` unless the URL starts with `redis://`, `rediss://` or
+  `unix://` (case-sensitive; probed in the API venv). So with `BASKFY_REDIS_URL=""` Python serves
+  unmetered (after logging that requests "will be refused" — its own message, reproduced), while
+  Rust refused every request with 503. `AppState::from_settings` now builds the limiter only when
+  that prefix check passes. Not reproduced: redis-py's later `ValueError`s (a non-numeric port or
+  db path, a bad query argument), which no deployment's URL reaches. Graded by the new
+  `writes_sleeves_nobroker_ratelimit.json` (the no-broker scenario with rate limiting left on):
+  9 of 9 EQUAL, side effects EQUAL. Rejected: leaving it to the cutover list — it is a one-function
+  fix with a graded case, and the cheapest to reverse.
+* **Not fixed here — body before token** (R6.17, R6.30). FastAPI parses the JSON body before the
+  router-level principal and rate-limit dependency, so a refused token with a malformed body is
+  Python's 400 and Rust's 401. Changing the middleware order touches every route of every lane and
+  is not an integration fix; it is the first item on the write-cutover list. No case grades it.
+* **Unassigned routes.** `explore.py`'s `POST /watchlist` and `DELETE /watchlist/{slug}` were in
+  no wave-4c lane. Rust answers them as R6.11 left them (405, or the GET route Python also
+  matches); Python keeps serving them. They join the next write pass with the screener routes.
+* **Count.** Python's routers declare 94 write routes. Ported: 82. Partly: `/auth/google`
+  (R6.3). On Python with a reason: 11 — six screener routes (R6.13), `/portfolios/{id}/rebalance`
+  (R6.23), `/overlap/reviews` ×2 (R6.29), and the two `explore` routes above.
+* **The bed.** The lanes left seven `rsw_tpl_*` templates (~3 GB each); the integrator dropped
+  them and its own. The integration did not compare `baskfy`'s row counts with the live database,
+  because the bed rules forbid touching the live stack; it compared `baskfy` with itself before
+  and after the writes runs (row counts and `pg_stat_user_tables` write counters), unchanged.
+* **Python tests of the R5.28 fix.** `screener_helpers.migrate` shells out to `uv run alembic`,
+  which fails here because the editable installs point at an old path. The integrator ran the
+  suites with a test-environment shim (a `uv` on `PATH` that runs `python -m alembic` in the
+  venv) rather than editing the helper: 65 passed.
+

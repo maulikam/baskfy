@@ -5,6 +5,7 @@
 //! Declared once, from `routes/options.rs` (`#[path]`), because a lane may not edit
 //! `routes.rs`; the other three route files reach it as `super::options::derivatives`.
 
+pub(crate) mod config_writes;
 pub(crate) mod fno_read;
 pub(crate) mod options_core;
 pub(crate) mod options_read;

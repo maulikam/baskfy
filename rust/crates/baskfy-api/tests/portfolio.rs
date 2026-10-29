@@ -120,32 +120,52 @@ async fn an_invoice_number_with_a_newline_is_unrouted_as_in_starlette() {
 }
 
 #[tokio::test]
-async fn no_write_route_is_served_here_and_a_get_on_one_is_a_405() {
-    // The write routes stay on Python (this wave is read-only); Starlette answers a GET on a
-    // POST-only path with 405 before any dependency runs.
+async fn write_routes_answer_only_their_own_verb() {
+    // Wave 4c: the lane's write routes are served on their own verb (an anonymous call is the
+    // 401, or the Track B stub's 404 while its flag is off); every other verb is Starlette's 405,
+    // decided by routing before any dependency runs. `POST /portfolios/{id}/rebalance` is not
+    // ported (DECISIONS-RS R6.23): every verb there is a 405 and Python serves the POST.
     let app = offline();
-    for uri in [
-        "/api/v1/portfolio",
-        "/api/v1/portfolio/3/holdings",
-        "/api/v1/portfolio/reconciliation/1/resolve",
-        "/api/v1/portfolios/3/rebalance",
-        "/api/v1/trades/import",
-        "/api/v1/trades/sync-today",
-        "/api/v1/brokers/zerodha/connect",
-        "/api/v1/brokers/zerodha/sync-holdings",
-        "/api/v1/checkout/session",
-        "/api/v1/webhooks/razorpay",
-        "/api/v1/cb/paywall/checkout",
+    for (uri, served, anonymous) in [
+        ("/api/v1/portfolio", "POST", 401),
+        ("/api/v1/portfolio/3/holdings", "POST", 401),
+        ("/api/v1/portfolio/reconciliation/1/resolve", "POST", 401),
+        ("/api/v1/trades/import", "POST", 401),
+        ("/api/v1/trades/sync-today", "POST", 401),
+        ("/api/v1/brokers/zerodha/connect", "POST", 401),
+        ("/api/v1/brokers/zerodha/sync-holdings", "POST", 401),
+        ("/api/v1/cb/paywall/checkout", "POST", 404),
+        ("/api/v1/cb/public-signup", "POST", 404),
+        ("/api/v1/cb/fees/collect", "POST", 404),
+        ("/api/v1/portfolios/3/holdings", "PUT", 401),
+        ("/api/v1/portfolios/3/rebalance", "", 0),
     ] {
-        let a = get(&app, uri, None).await;
-        assert_eq!(a.status, 405, "{uri}");
+        if served != "PUT" {
+            assert_eq!(get(&app, uri, None).await.status, 405, "GET {uri}");
+        }
         for method in ["POST", "PUT", "PATCH", "DELETE"] {
             let w = call(&app, method, uri, &[]).await;
-            assert_eq!(
-                w.status, 405,
-                "{method} {uri} must not be served by this binary"
-            );
+            let want = if method == served { anonymous } else { 405 };
+            assert_eq!(w.status, want, "{method} {uri}");
         }
+    }
+    // `/portfolios/import-csv` takes POST; GET, PATCH and DELETE reach `/{portfolio_id}`, as in
+    // Starlette (its `int` refuses the segment once the caller is known: here, the 401 first).
+    assert_eq!(
+        call(&app, "POST", "/api/v1/portfolios/import-csv", &[])
+            .await
+            .status,
+        401
+    );
+    assert_eq!(
+        call(&app, "PUT", "/api/v1/portfolios/import-csv", &[])
+            .await
+            .status,
+        405
+    );
+    for method in ["PATCH", "DELETE"] {
+        let w = call(&app, method, "/api/v1/portfolios/import-csv", &[]).await;
+        assert_eq!(w.status, 401, "{method}");
     }
 }
 
@@ -161,6 +181,27 @@ fn the_routers_name_no_order_path() {
         ("trades.rs", include_str!("../src/routes/trades.rs")),
         ("brokers.rs", include_str!("../src/routes/brokers.rs")),
         ("billing.rs", include_str!("../src/routes/billing.rs")),
+        ("track_b.rs", include_str!("../src/routes/track_b.rs")),
+        (
+            "brokers/writes.rs",
+            include_str!("../src/routes/brokers/writes.rs"),
+        ),
+        (
+            "trades/writes.rs",
+            include_str!("../src/routes/trades/writes.rs"),
+        ),
+        (
+            "portfolio_overview/writes.rs",
+            include_str!("../src/routes/portfolio_overview/writes.rs"),
+        ),
+        (
+            "portfolio/portfolios_writes.rs",
+            include_str!("../src/routes/portfolio/portfolios_writes.rs"),
+        ),
+        (
+            "portfolio/symbols.rs",
+            include_str!("../src/routes/portfolio/symbols.rs"),
+        ),
     ] {
         for word in [
             "place_order",

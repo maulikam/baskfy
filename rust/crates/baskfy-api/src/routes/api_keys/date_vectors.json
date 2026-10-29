@@ -1,0 +1,317 @@
+[
+[
+"2026-10-29",
+"OK",
+"2026-10-29"
+],
+[
+"2026-10-29T00:00:00",
+"OK",
+"2026-10-29"
+],
+[
+"2026-10-29T10:00:00",
+"date_from_datetime_inexact",
+"Datetimes provided to dates should have zero time - e.g. be exact dates"
+],
+[
+"2026-10-29T00:00:00Z",
+"OK",
+"2026-10-29"
+],
+[
+"1700000000",
+"date_from_datetime_inexact",
+"Datetimes provided to dates should have zero time - e.g. be exact dates"
+],
+[
+"1761696000",
+"OK",
+"2025-10-29"
+],
+[
+"2026-1-1",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, input is too short"
+],
+[
+"x",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, input is too short"
+],
+[
+"2026-13-01",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, month value is outside expected range of 1-12"
+],
+[
+"2026-02-30",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, day value is outside expected range"
+],
+[
+"20261029",
+"date_from_datetime_inexact",
+"Datetimes provided to dates should have zero time - e.g. be exact dates"
+],
+[
+"2026-10-29 ",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, input is too short"
+],
+[
+"0000-01-01",
+"date_parsing",
+"Input should be a valid date in the format YYYY-MM-DD, year 0 is out of range"
+],
+[
+"2026-10-29T00:00",
+"OK",
+"2026-10-29"
+],
+[
+"99999999999999999999",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, invalid date separator, expected `-`"
+],
+[
+"-1",
+"date_from_datetime_inexact",
+"Datetimes provided to dates should have zero time - e.g. be exact dates"
+],
+[
+"1761696000000",
+"OK",
+"2025-10-29"
+],
+[
+"2026-10-29T00:00:00+05:30",
+"OK",
+"2026-10-29"
+],
+[
+"2026-10-29T",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, input is too short"
+],
+[
+"2026-10-29T1",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, input is too short"
+],
+[
+"2026-10-29Tab:00",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, invalid character in hour"
+],
+[
+"2026-10-29T24:00",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, hour value is outside expected range of 0-23"
+],
+[
+"2026-10-29T23-00",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, invalid time separator, expected `:`"
+],
+[
+"2026-10-29T23:ab",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, invalid character in minute"
+],
+[
+"2026-10-29T23:60",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, minute value is outside expected range of 0-59"
+],
+[
+"2026-10-29T00:00:ab",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, invalid character in second"
+],
+[
+"2026-10-29T00:00:60",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, second value is outside expected range of 0-59"
+],
+[
+"2026-10-29T00:00:00.",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, second fraction digits missing after `.`"
+],
+[
+"2026-10-29T00:00:00.000000",
+"OK",
+"2026-10-29"
+],
+[
+"2026-10-29T00:00:00.0000001",
+"OK",
+"2026-10-29"
+],
+[
+"2026-10-29T00:00:00+ab:00",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, invalid timezone hour"
+],
+[
+"2026-10-29T00:00:00+05",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, invalid timezone minute"
+],
+[
+"2026-10-29T00:00:00+05:ab",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, invalid timezone minute"
+],
+[
+"2026-10-29T00:00:00+05:60",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, timezone minute value is outside expected range of 0-59"
+],
+[
+"2026-10-29T00:00:00+24:00",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, timezone offset must be less than 24 hours"
+],
+[
+"2026-10-29T00:00:00+23:59",
+"OK",
+"2026-10-29"
+],
+[
+"2026-10-29T00:00:00Zx",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, unexpected extra characters at the end of the input"
+],
+[
+"2026-10-29X00:00",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, invalid datetime separator, expected `T`, `t`, `_` or space"
+],
+[
+"2026-10-29T00:00 ",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, invalid timezone sign"
+],
+[
+"2026/10/29",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, invalid date separator, expected `-`"
+],
+[
+"abcd-10-29",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, invalid character in year"
+],
+[
+"2026-1x-29",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, invalid character in month"
+],
+[
+"2026-10-2x",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, invalid character in day"
+],
+[
+"2026-10-29T00:00:00,0",
+"OK",
+"2026-10-29"
+],
+[
+"1761696000.0",
+"OK",
+"2025-10-29"
+],
+[
+"1761696000.5",
+"date_from_datetime_inexact",
+"Datetimes provided to dates should have zero time - e.g. be exact dates"
+],
+[
+"253402300800000",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, dates after 9999 are not supported as unix timestamps"
+],
+[
+".5",
+"date_from_datetime_inexact",
+"Datetimes provided to dates should have zero time - e.g. be exact dates"
+],
+[
+"0",
+"OK",
+"1970-01-01"
+],
+[
+"2026-10-29t00:00z",
+"OK",
+"2026-10-29"
+],
+[
+"2026-10-29_00:00",
+"OK",
+"2026-10-29"
+],
+[
+"2026-10-29 00:00",
+"OK",
+"2026-10-29"
+],
+[
+"2026-02-29",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, day value is outside expected range"
+],
+[
+"2024-02-29",
+"OK",
+"2024-02-29"
+],
+[
+"2026-10-29T00:00:00-00:00",
+"OK",
+"2026-10-29"
+],
+[
+"2026-10-29T00:00:00+0530",
+"OK",
+"2026-10-29"
+],
+[
+"2026-10-29T00:00:00+05:30:00",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, unexpected extra characters at the end of the input"
+],
+[
+"2026-10-29T00:00:00.000001",
+"date_from_datetime_inexact",
+"Datetimes provided to dates should have zero time - e.g. be exact dates"
+],
+[
+"",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, input is too short"
+],
+[
+"9999-12-31",
+"OK",
+"9999-12-31"
+],
+[
+"0001-01-01",
+"OK",
+"0001-01-01"
+],
+[
+"2026-00-10",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, month value is outside expected range of 1-12"
+],
+[
+"2026-10-00",
+"date_from_datetime_parsing",
+"Input should be a valid date or datetime, day value is outside expected range"
+]
+]

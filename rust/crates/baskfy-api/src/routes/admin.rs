@@ -16,23 +16,26 @@
 //! dependency) — 401 for an anonymous caller, **404** (not 403) for a signed-in non-staff one —
 //! before any parameter is validated.
 //!
-//! **Not ported in this wave** (they write or enqueue; the Python API keeps serving them):
-//! `POST /admin/pipeline/runs/{trade_date}/rerun`, `POST /admin/instruments/{symbol}/reprocess`,
-//! `POST /admin/resync`, `PUT /admin/users/{public_id}/entitlements`,
-//! `DELETE /admin/users/{public_id}/entitlements/{feature}`. **No route here can place, modify or
-//! cancel an order** (law 2).
+//! The **writes** — `POST /admin/pipeline/runs/{trade_date}/rerun`,
+//! `POST /admin/instruments/{symbol}/reprocess`, `POST /admin/resync`,
+//! `PUT /admin/users/{public_id}/entitlements` and
+//! `DELETE /admin/users/{public_id}/entitlements/{feature}` — are in [`writes`] (wave 4c, lane
+//! writes-accounts); the three that enqueue publish through [`queue`] (Celery's Redis transport).
+//! **No route here can place, modify or cancel an order** (law 2).
 
 #[path = "accounts/admin_providers.rs"]
 mod providers;
+mod queue;
 #[path = "accounts/admin_resync.rs"]
 mod resync;
+mod writes;
 
 use std::collections::HashMap;
 
 use axum::Router;
 use axum::extract::{Extension, Path, RawQuery, State};
 use axum::response::Response;
-use axum::routing::get;
+use axum::routing::{delete, get, post, put};
 use baskfy_core::factor_registry::FactorUnit;
 use baskfy_db::{OrderedJson, row};
 use chrono::{DateTime, NaiveDate, Utc};
@@ -767,12 +770,31 @@ pub async fn public_api_gate(
     }))
 }
 
-/// The ported `/admin` GET routes, relative to `/api/v1`.
+/// The ported `/admin` routes, relative to `/api/v1`.
 pub fn router() -> Router<AppState> {
     Router::new()
+        .route(
+            "/admin/pipeline/runs/{trade_date}/rerun",
+            post(writes::rerun_pipeline),
+        )
+        .route(
+            "/admin/instruments/{symbol}/reprocess",
+            post(writes::reprocess_instrument),
+        )
+        .route(
+            "/admin/users/{public_id}/entitlements",
+            put(writes::put_entitlement_override),
+        )
+        .route(
+            "/admin/users/{public_id}/entitlements/{feature}",
+            delete(writes::delete_entitlement_override),
+        )
         .route("/admin/pipeline/runs", get(list_pipeline_runs))
         .route("/admin/pipeline/runs/{run_id}", get(get_pipeline_run))
-        .route("/admin/resync", get(resync::inspect_resync))
+        .route(
+            "/admin/resync",
+            get(resync::inspect_resync).post(writes::start_resync),
+        )
         .route("/admin/data-versions", get(list_data_versions))
         .route("/admin/providers", get(providers::get_provider_health))
         .route("/admin/users", get(search_users))

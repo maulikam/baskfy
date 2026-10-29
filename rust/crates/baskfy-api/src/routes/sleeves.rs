@@ -18,6 +18,9 @@
 //! swing, TWT, VBT, sleeve-state and baskets routers use.
 
 pub(crate) mod common;
+pub(crate) mod pyd;
+mod replace;
+pub(crate) mod writes;
 
 use axum::Router;
 use axum::extract::{Extension, Path, RawQuery, State};
@@ -162,7 +165,15 @@ pub async fn list_sleeves(
     let user_id = principal.require_user()?;
     let id = id_or_500(id.unwrap_or(LaxInt::Invalid))?;
     owned_portfolio(&state, id, user_id).await?;
-    let rows = list_rows(&state, id).await?;
+    sleeves_response(&state, id).await
+}
+
+/// `list_sleeves(...)`'s body for a portfolio already checked, read after any write committed.
+///
+/// # Errors
+/// 500.
+pub(crate) async fn sleeves_response(state: &AppState, id: i64) -> Result<Response, Problem> {
+    let rows = list_rows(state, id).await?;
     let total = money(rows.iter().map(|r| r.capital).sum());
     Ok(pydantic_response(
         &Obj::new()
@@ -230,12 +241,9 @@ async fn stance(state: &AppState) -> Result<Option<(J, Option<Decimal>)>, Proble
     Ok(Some((out, cap)))
 }
 
-/// `latest_published_date(session)`.
+/// `latest_published_date(session)` ([`crate::routes::common::latest_published_date`]).
 async fn latest_published_date(state: &AppState) -> Result<Option<NaiveDate>, Problem> {
-    sqlx::query_scalar("SELECT max(trade_date) FROM pipeline_run WHERE data_version IS NOT NULL")
-        .fetch_one(state.db.pool())
-        .await
-        .map_err(db)
+    crate::routes::common::latest_published_date(&state.db).await
 }
 
 /// Whether a basket's live version has any constituent (`_basket_weights` non-empty).
@@ -389,7 +397,10 @@ pub async fn allocation(
 /// the Python API until writes are ported.
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/portfolios/{portfolio_id}/sleeves", get(list_sleeves))
+        .route(
+            "/portfolios/{portfolio_id}/sleeves",
+            get(list_sleeves).put(replace::replace_sleeves),
+        )
         .route("/portfolios/{portfolio_id}/allocation", get(allocation))
 }
 

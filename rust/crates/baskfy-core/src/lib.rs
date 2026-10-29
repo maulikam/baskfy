@@ -18,9 +18,12 @@ pub mod backtest_metrics;
 pub mod error;
 pub mod factor_registry;
 pub mod factors;
+pub mod fno;
 pub mod options;
 pub mod ranking_engine;
 pub mod screener;
 pub mod swing;
+pub mod twt;
+pub mod vbt;
 
 pub use error::CoreError;

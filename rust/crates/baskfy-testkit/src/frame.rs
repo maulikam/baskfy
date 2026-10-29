@@ -7,7 +7,9 @@
 //! which [`encode_frame`] does.
 
 use chrono::NaiveDate;
-use polars::prelude::{AnyValue, Column, DataFrame, DataType, IntoColumn, NamedFrom, Series};
+use polars::prelude::{
+    AnyValue, Column, DataFrame, DataType, IntoColumn, IntoSeries, ListChunked, NamedFrom, Series,
+};
 use serde_json::{Map, Value};
 
 use crate::error::TestkitError;
@@ -45,6 +47,7 @@ fn python_dtype_name(dt: &DataType) -> Result<&'static str, TestkitError> {
         DataType::String => "String",
         DataType::Date => "Date",
         DataType::Null => "Null",
+        DataType::List(inner) if **inner == DataType::String => "List(String)",
         other => return Err(TestkitError::UnsupportedDtype(other.to_string())),
     })
 }
@@ -71,7 +74,11 @@ fn num<T>(
 }
 
 /// Build one series named `name` from golden values of Python dtype `dtype`.
-fn series_from(name: &str, dtype: &str, values: &[Value]) -> Result<Series, TestkitError> {
+pub(crate) fn series_from(
+    name: &str,
+    dtype: &str,
+    values: &[Value],
+) -> Result<Series, TestkitError> {
     let n = name.into();
     Ok(match dtype {
         "Float64" => Series::new(n, num(name, values, serde_json::Number::as_f64)?),
@@ -144,6 +151,28 @@ fn series_from(name: &str, dtype: &str, values: &[Value]) -> Result<Series, Test
             Series::new(n, days).cast(&DataType::Date)?
         }
         "Null" => Series::new_null(n, values.len()),
+        // A list of strings per row (vbt's `failed_filters`); null stays a null row.
+        "List(String)" => {
+            let lists = values
+                .iter()
+                .enumerate()
+                .map(|(i, v)| match v {
+                    Value::Null => Ok(None),
+                    Value::Array(xs) => {
+                        series_from(&format!("{name}[{i}]"), "String", xs).map(Some)
+                    }
+                    o => Err(TestkitError::decode(
+                        format!("{name}[{i}]"),
+                        format!("not a list: {o}"),
+                    )),
+                })
+                .collect::<Result<Vec<Option<Series>>, _>>()?;
+            let mut ca: ListChunked = lists.into_iter().collect();
+            ca.rename(n);
+            // An all-null or all-empty column would otherwise infer List(Null).
+            ca.into_series()
+                .cast(&DataType::List(Box::new(DataType::String)))?
+        }
         other => return Err(TestkitError::UnsupportedDtype(other.to_owned())),
     })
 }
@@ -154,7 +183,8 @@ fn field<'a>(m: &'a Map<String, Value>, key: &str) -> Result<&'a Value, TestkitE
 }
 
 /// Decode a golden `{"columns", "dtypes", "rows"}` object into a `DataFrame` with the dumped
-/// dtypes (Float64, Float32, Int64, Int32, UInt64, UInt32, Boolean, String, Date, Null).
+/// dtypes (Float64, Float32, Int64, Int32, UInt64, UInt32, Boolean, String, Date, Null,
+/// List(String)).
 pub fn decode_frame(v: &Value) -> Result<DataFrame, TestkitError> {
     let m = v
         .as_object()
@@ -210,7 +240,7 @@ fn float(f: f64) -> Value {
     serde_json::Number::from_f64(f).map_or(Value::Null, Value::Number)
 }
 
-fn cell(av: AnyValue<'_>, at: &str) -> Result<Value, TestkitError> {
+pub(crate) fn cell(av: AnyValue<'_>, at: &str) -> Result<Value, TestkitError> {
     Ok(match av {
         AnyValue::Null => Value::Null,
         AnyValue::Boolean(b) => Value::Bool(b),
@@ -226,6 +256,13 @@ fn cell(av: AnyValue<'_>, at: &str) -> Result<Value, TestkitError> {
         AnyValue::UInt64(i) => Value::from(i),
         AnyValue::Float32(f) => float(f64::from(f)),
         AnyValue::Float64(f) => float(f),
+        AnyValue::List(inner) => {
+            let mut xs = Vec::with_capacity(inner.len());
+            for i in 0..inner.len() {
+                xs.push(cell(inner.get(i)?, at)?);
+            }
+            Value::Array(xs)
+        }
         AnyValue::Date(days) => {
             let d = epoch()?
                 .checked_add_signed(chrono::TimeDelta::days(i64::from(days)))

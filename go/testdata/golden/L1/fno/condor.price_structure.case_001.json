@@ -1,0 +1,40 @@
+{
+ "fn": "baskfy_core.fno.condor.price_structure",
+ "inputs": {
+  "mids": {
+   "LONG_CALL": "30",
+   "LONG_PUT": "35",
+   "SHORT_CALL": "60",
+   "SHORT_PUT": "70"
+  },
+  "strikes": {
+   "long_call": "21100",
+   "long_put": "18900",
+   "short_call": "20800",
+   "short_put": "19200"
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "clean: credit 65, loss 235. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "credit": "65",
+  "max_loss_per_unit": "235",
+  "reasons": [],
+  "state": null,
+  "strikes": {
+   "call_width": "300",
+   "long_call": "21100",
+   "long_put": "18900",
+   "max_width": "300",
+   "put_width": "300",
+   "short_call": "20800",
+   "short_put": "19200"
+  }
+ }
+}

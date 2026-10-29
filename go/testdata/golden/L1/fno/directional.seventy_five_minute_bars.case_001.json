@@ -1,0 +1,80 @@
+{
+ "fn": "baskfy_core.fno.directional.seventy_five_minute_bars",
+ "inputs": {
+  "minutes": [
+   {
+    "close": "24800.00",
+    "high": "24803.00",
+    "low": "24797.00",
+    "open": "24800.00",
+    "ts": "2026-10-12T09:15:00"
+   },
+   {
+    "close": "24830.00",
+    "high": "24833.00",
+    "low": "24827.00",
+    "open": "24830.00",
+    "ts": "2026-10-12T09:50:00"
+   },
+   {
+    "close": "24815.00",
+    "high": "24818.00",
+    "low": "24812.00",
+    "open": "24815.00",
+    "ts": "2026-10-12T10:29:00"
+   },
+   {
+    "close": "24816.00",
+    "high": "24819.00",
+    "low": "24813.00",
+    "open": "24816.00",
+    "ts": "2026-10-12T10:30:00"
+   },
+   {
+    "close": "24790.00",
+    "high": "24793.00",
+    "low": "24787.00",
+    "open": "24790.00",
+    "ts": "2026-10-12T11:44:00"
+   },
+   {
+    "close": "24795.00",
+    "high": "24798.00",
+    "low": "24792.00",
+    "open": "24795.00",
+    "ts": "2026-10-12T11:45:00"
+   },
+   {
+    "close": "24805.00",
+    "high": "24808.00",
+    "low": "24802.00",
+    "open": "24805.00",
+    "ts": "2026-10-12T12:30:00"
+   }
+  ]
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "two complete bars; the third still forming is left out. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": [
+  {
+   "close": "24815.00",
+   "high": "24833.00",
+   "low": "24797.00",
+   "open": "24800.00",
+   "start": "2026-10-12T09:15:00"
+  },
+  {
+   "close": "24790.00",
+   "high": "24819.00",
+   "low": "24787.00",
+   "open": "24816.00",
+   "start": "2026-10-12T10:30:00"
+  }
+ ]
+}

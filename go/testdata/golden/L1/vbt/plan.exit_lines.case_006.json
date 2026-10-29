@@ -1,0 +1,67 @@
+{
+ "fn": "baskfy_core.vbt.plan.exit_lines",
+ "inputs": {
+  "book": {
+   "cash_available_inr": "1000000",
+   "entries_already_this_session": 0,
+   "open_entry_counts": {},
+   "open_exposure_inr": "0",
+   "open_instrument_ids": [],
+   "positions_naked_of_gtt": [],
+   "working_instrument_ids": []
+  },
+  "expired": [],
+  "managed": [
+   [
+    4,
+    "DDD",
+    70,
+    {
+     "action": "RAISE_STOP",
+     "new_stop": "210.00",
+     "note": "to breakeven",
+     "price": null,
+     "quantity": null,
+     "reason": null
+    },
+    504
+   ],
+   [
+    5,
+    "EEE",
+    70,
+    {
+     "action": "RAISE_STOP",
+     "new_stop": null,
+     "note": "nothing to raise to",
+     "price": null,
+     "quantity": null,
+     "reason": null
+    }
+   ]
+  ]
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "a raise with a stop is a line; one without is not. Inputs are JSON and each function is called from them after a JSON round trip. Decimals are strings; dates are ISO days; enums are their values; polars frames are {columns, dtypes, rows}; numpy matrices are row lists with NaN as null. config is a whole VbtConfig decoded by each sub-dataclass's declared field types (exits.qulla is the swing StopConfig). A SessionCalendar is {sessions, dropped, counts}. A raise is {raises: {type, message}}. Expression-valued functions are golden as their value over inputs.frame. Synthetic seeded fixtures, rounded before they are written. Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_vbt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": [
+  {
+   "cap": null,
+   "instrument_id": 4,
+   "kind": "RAISE_GTT_STOP",
+   "limit_price": null,
+   "note": "to breakeven",
+   "position_id": 504,
+   "quantity": 70,
+   "reason": null,
+   "stop_price": "210.00",
+   "symbol": "DDD",
+   "value_inr": "0"
+  }
+ ]
+}

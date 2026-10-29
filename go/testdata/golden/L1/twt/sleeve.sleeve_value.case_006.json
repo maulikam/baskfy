@@ -1,0 +1,53 @@
+{
+ "fn": "baskfy_core.twt.sleeve.sleeve_value",
+ "inputs": {
+  "capital_inr": "1000000.005",
+  "open_positions": [
+   {
+    "entry_avg": "333.3333",
+    "instrument_id": 1,
+    "mark": "333.3366",
+    "mark_source": "SESSION_CLOSE",
+    "quantity_open": 3
+   }
+  ],
+  "realised_inr": "12.3456"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "sub-paise arithmetic: quantize rounds every rupee to the paise. Inputs are JSON and each case is recomputed from them; Decimals are strings, dates ISO days, enums their values; a config is its field dict, decoded by each field's default type. Polars frames are {columns, dtypes, rows}; a Panel matrix is rows=instruments x cols=sessions with null for NaN; NaN/inf floats are null; a raise is {\"raises\": {\"type\", \"message\"}}. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_twt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "derived": {
+   "cash_available_inr": "999012.3507",
+   "cash_inr": "999012.3507",
+   "equity_inr": "1000012.3605",
+   "has_capital": true,
+   "open_exposure_inr": "1000.0098",
+   "quantize": {
+    "capital_inr": "1000000.00",
+    "cost_of_open_inr": "1000.00",
+    "realised_inr": "12.35",
+    "value_of_open_inr": "1000.01"
+   },
+   "unrealised_inr": "0.0099"
+  },
+  "positions": [
+   {
+    "cost": "999.9999",
+    "is_stale_mark": false,
+    "value": "1000.0098"
+   }
+  ],
+  "value": {
+   "capital_inr": "1000000.005",
+   "cost_of_open_inr": "999.9999",
+   "realised_inr": "12.3456",
+   "value_of_open_inr": "1000.0098"
+  }
+ }
+}

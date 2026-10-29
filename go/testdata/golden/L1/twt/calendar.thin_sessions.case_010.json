@@ -1,0 +1,26 @@
+{
+ "fn": "baskfy_core.twt.calendar.thin_sessions",
+ "inputs": {
+  "bars": {
+   "columns": [
+    "instrument_id",
+    "date"
+   ],
+   "dtypes": {
+    "date": "Date",
+    "instrument_id": "Int64"
+   },
+   "rows": []
+  },
+  "config": null
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "an empty frame. Inputs are JSON and each case is recomputed from them; Decimals are strings, dates ISO days, enums their values; a config is its field dict, decoded by each field's default type. Polars frames are {columns, dtypes, rows}; a Panel matrix is rows=instruments x cols=sessions with null for NaN; NaN/inf floats are null; a raise is {\"raises\": {\"type\", \"message\"}}. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_twt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": []
+}

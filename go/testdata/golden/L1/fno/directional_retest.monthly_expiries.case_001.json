@@ -1,0 +1,25 @@
+{
+ "fn": "baskfy_core.fno.directional_retest.monthly_expiries",
+ "inputs": {
+  "listed": [
+   "2026-10-06",
+   "2026-10-13",
+   "2026-10-27",
+   "2026-11-24",
+   "2026-12-29"
+  ]
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "the last listed of each month. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": [
+  "2026-10-27",
+  "2026-11-24",
+  "2026-12-29"
+ ]
+}

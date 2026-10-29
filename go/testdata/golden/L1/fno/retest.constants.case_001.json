@@ -1,0 +1,336 @@
+{
+ "fn": "baskfy_core.fno.retest.constants",
+ "inputs": {},
+ "meta": {
+  "known_bug": null,
+  "notes": "every family with its parameters, the caveats and the knobs. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "DIRECTIONAL_EXPIRY_DAYS": 70,
+  "DIRECTIONAL_STRIKE_BAND": 0.25,
+  "FAMILIES": [
+   {
+    "condor": {
+     "defend": false,
+     "exit_n": 1,
+     "k_short": 1.0,
+     "k_wing": 0.5,
+     "loss_mult": 0.0,
+     "mode": "condor",
+     "n_before": 15,
+     "profit_take": 0.5,
+     "slip_min": 0.05,
+     "slip_pct": 0.005,
+     "symbols": [
+      "BANKNIFTY",
+      "NIFTY"
+     ],
+     "top_n": 0
+    },
+    "debit": null,
+    "directional": null,
+    "futures": null,
+    "key": "B4",
+    "label": "Index monthly iron condor, N = 15",
+    "scope": "INDEX_OPTIONS"
+   },
+   {
+    "condor": {
+     "defend": false,
+     "exit_n": 1,
+     "k_short": 1.0,
+     "k_wing": 0.5,
+     "loss_mult": 1.5,
+     "mode": "condor",
+     "n_before": 15,
+     "profit_take": 0.5,
+     "slip_min": 0.05,
+     "slip_pct": 0.005,
+     "symbols": [
+      "BANKNIFTY",
+      "NIFTY"
+     ],
+     "top_n": 0
+    },
+    "debit": null,
+    "directional": null,
+    "futures": null,
+    "key": "B4_LOSS_CLOSE",
+    "label": "B4 with the 1.5x-credit loss close (F1, M.1)",
+    "scope": "INDEX_OPTIONS"
+   },
+   {
+    "condor": {
+     "defend": false,
+     "exit_n": 1,
+     "k_short": 1.0,
+     "k_wing": 0.5,
+     "loss_mult": 0.0,
+     "mode": "condor",
+     "n_before": 10,
+     "profit_take": 0.5,
+     "slip_min": 0.05,
+     "slip_pct": 0.03,
+     "symbols": null,
+     "top_n": 30
+    },
+    "debit": null,
+    "directional": null,
+    "futures": null,
+    "key": "B1",
+    "label": "Stock iron condors, top 30, N = 10",
+    "scope": "STOCK_OPTIONS"
+   },
+   {
+    "condor": {
+     "defend": false,
+     "exit_n": 1,
+     "k_short": 0.5,
+     "k_wing": 0.5,
+     "loss_mult": 0.0,
+     "mode": "trend_credit",
+     "n_before": 15,
+     "profit_take": 0.5,
+     "slip_min": 0.05,
+     "slip_pct": 0.03,
+     "symbols": null,
+     "top_n": 60
+    },
+    "debit": null,
+    "directional": null,
+    "futures": null,
+    "key": "B2",
+    "label": "Stock credit spreads on the trend's side, top 60, N = 15, 0.5 sigma",
+    "scope": "STOCK_OPTIONS"
+   },
+   {
+    "condor": {
+     "defend": false,
+     "exit_n": 4,
+     "k_short": 1.0,
+     "k_wing": 0.5,
+     "loss_mult": 0.0,
+     "mode": "condor",
+     "n_before": 15,
+     "profit_take": 0.5,
+     "slip_min": 0.05,
+     "slip_pct": 0.03,
+     "symbols": null,
+     "top_n": 30
+    },
+    "debit": null,
+    "directional": null,
+    "futures": null,
+    "key": "B3",
+    "label": "Stock iron condors exiting at E-4, top 30, N = 15",
+    "scope": "STOCK_OPTIONS"
+   },
+   {
+    "condor": null,
+    "debit": "spread",
+    "directional": null,
+    "futures": null,
+    "key": "C1",
+    "label": "Debit spreads on the breakout signal, 10 sessions",
+    "scope": "STOCK_OPTIONS"
+   },
+   {
+    "condor": null,
+    "debit": "long",
+    "directional": null,
+    "futures": null,
+    "key": "C2",
+    "label": "Long ATM option on the breakout signal, 10 sessions",
+    "scope": "STOCK_OPTIONS"
+   },
+   {
+    "condor": null,
+    "debit": null,
+    "directional": null,
+    "futures": [
+     "A0_LONG",
+     {
+      "charge_rolls": true,
+      "cost": 0.0012,
+      "horizon": 40,
+      "k_atr": 3.0,
+      "trail": true
+     }
+    ],
+    "key": "F2",
+    "label": "Stock-futures breakout, long only, 3 ATR chandelier, 40 sessions, rolls costed (F2)",
+    "scope": "FUTURES"
+   },
+   {
+    "condor": null,
+    "debit": null,
+    "directional": null,
+    "futures": [
+     "A0",
+     {
+      "charge_rolls": false,
+      "cost": 0.0012,
+      "horizon": 40,
+      "k_atr": 3.0,
+      "trail": true
+     }
+    ],
+    "key": "A0",
+    "label": "Stock-futures breakout aligned, no OI filter, both sides, 3 ATR chandelier, 40 sessions",
+    "scope": "FUTURES"
+   },
+   {
+    "condor": null,
+    "debit": null,
+    "directional": null,
+    "futures": [
+     "A1",
+     {
+      "charge_rolls": false,
+      "cost": 0.0012,
+      "horizon": 10,
+      "k_atr": 2.0,
+      "trail": false
+     }
+    ],
+    "key": "A1",
+    "label": "Stock-futures breakout with OI rising, 10 sessions, 2 ATR",
+    "scope": "FUTURES"
+   },
+   {
+    "condor": null,
+    "debit": null,
+    "directional": null,
+    "futures": [
+     "A1R",
+     {
+      "charge_rolls": false,
+      "cost": 0.0012,
+      "horizon": 10,
+      "k_atr": 2.0,
+      "trail": false
+     }
+    ],
+    "key": "A1R",
+    "label": "A1 aligned with NIFTY's regime, 10 sessions, 2 ATR",
+    "scope": "FUTURES"
+   },
+   {
+    "condor": null,
+    "debit": null,
+    "directional": null,
+    "futures": [
+     "A3",
+     {
+      "charge_rolls": false,
+      "cost": 0.0012,
+      "horizon": 5,
+      "k_atr": 2.0,
+      "trail": false
+     }
+    ],
+    "key": "A3",
+    "label": "One-day long/short buildup, 5 sessions, 2 ATR",
+    "scope": "FUTURES"
+   },
+   {
+    "condor": null,
+    "debit": null,
+    "directional": null,
+    "futures": [
+     "A2",
+     {
+      "charge_rolls": false,
+      "cost": 0.0012,
+      "horizon": 5,
+      "k_atr": 3.0,
+      "trail": false
+     }
+    ],
+    "key": "A2",
+    "label": "Weekly cross-sectional momentum, top/bottom 10, 5 sessions, 3 ATR",
+    "scope": "FUTURES"
+   },
+   {
+    "condor": null,
+    "debit": null,
+    "directional": null,
+    "futures": [
+     "A4",
+     {
+      "charge_rolls": false,
+      "cost": 0.0012,
+      "horizon": 20,
+      "k_atr": 2.0,
+      "trail": false
+     }
+    ],
+    "key": "A4",
+    "label": "Index futures 20-day breakout with 50-day average, 20 sessions, 2 ATR",
+    "scope": "FUTURES"
+   },
+   {
+    "condor": null,
+    "debit": null,
+    "directional": null,
+    "futures": null,
+    "key": "E",
+    "label": "Cash-futures carry (front month, >= 5 days to expiry)",
+    "scope": "BASIS"
+   },
+   {
+    "condor": null,
+    "debit": null,
+    "directional": "NIFTY",
+    "futures": null,
+    "key": "F3N",
+    "label": "F3 directional credit spread, NIFTY weekly: the daily half of 04 §11 (M.5)",
+    "scope": "DIRECTIONAL"
+   },
+   {
+    "condor": null,
+    "debit": null,
+    "directional": "BANKNIFTY",
+    "futures": null,
+    "key": "F3B",
+    "label": "F3 directional credit spread, BANKNIFTY monthly: the daily half of 04 §11 (M.5)",
+    "scope": "DIRECTIONAL"
+   }
+  ],
+  "FAMILY_KEYS": [
+   "A0",
+   "A1",
+   "A1R",
+   "A2",
+   "A3",
+   "A4",
+   "B1",
+   "B2",
+   "B3",
+   "B4",
+   "B4_LOSS_CLOSE",
+   "C1",
+   "C2",
+   "E",
+   "F2",
+   "F3B",
+   "F3N"
+  ],
+  "MIN_MEASURED_NAMES": 20,
+  "MIN_MEASURED_SESSIONS": 20,
+  "RETEST_MONTHS": [
+   1,
+   10,
+   4,
+   7
+  ],
+  "SYMBOL_BATCH": 20,
+  "TIER_2E_CAVEAT": "End-of-day closes, not fills. Slippage is an assumed 3 % of premium per leg per crossing (0.03 % for futures), not measured. `n` legs were modelled because they did not trade.",
+  "TIER_2E_CAVEAT_F3": "End-of-day closes, not fills. Slippage is an assumed 0.5 % of premium per leg per crossing (₹0.05 floor), not measured. Only the daily half of 04 §11 is tested; not tested: the 75-minute confirm; the intraday alignment with the session's open; the intraday cut at the moment the level breaks (the proxy exits at that session's settle); the loss cut read from a live mark (the proxy reads the settle).",
+  "TIER_2E_CAVEAT_MEASURED": "End-of-day closes, not fills. Slippage is the measured 15:00 median half-spread of the names traded (FO3), not a fill. `n` legs were modelled because they did not trade."
+ }
+}

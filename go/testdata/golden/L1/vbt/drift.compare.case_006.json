@@ -1,0 +1,51 @@
+{
+ "fn": "baskfy_core.vbt.drift.compare",
+ "inputs": {
+  "cagr_pct": 12.0,
+  "max_drawdown_pct": -20.0,
+  "study": {
+   "avg_hold_sessions": 10.0,
+   "cagr_pct": 12.5,
+   "end": "2021-01-01",
+   "exposure_pct": 50.0,
+   "in_sample_cagr_pct": 10.0,
+   "in_sample_dd_pct": -15.0,
+   "max_drawdown_pct": -18.25,
+   "modelled_fill_rate_pct": 80.0,
+   "out_of_sample_cagr_pct": 15.0,
+   "out_of_sample_dd_pct": -18.25,
+   "profit_factor": 1.2,
+   "sharpe": 0.8,
+   "start": "2020-01-01",
+   "trades": 90,
+   "win_rate_pct": 40.0,
+   "years": 1.0
+  },
+  "threshold": null,
+  "trades": 100
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "against another study. Inputs are JSON and each function is called from them after a JSON round trip. Decimals are strings; dates are ISO days; enums are their values; polars frames are {columns, dtypes, rows}; numpy matrices are row lists with NaN as null. config is a whole VbtConfig decoded by each sub-dataclass's declared field types (exits.qulla is the swing StopConfig). A SessionCalendar is {sessions, dropped, counts}. A raise is {raises: {type, message}}. Expression-valued functions are golden as their value over inputs.frame. Synthetic seeded fixtures, rounded before they are written. Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_vbt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "drift": {
+   "cagr_pct_delta": -0.5,
+   "flagged": false,
+   "max_dd_pct_delta": -1.75,
+   "threshold_cagr_points": 1.0,
+   "trades_delta": 10
+  },
+  "json": {
+   "cagr_pct_delta": -0.5,
+   "flagged": false,
+   "max_dd_pct_delta": -1.75,
+   "threshold_cagr_points": 1.0,
+   "trades_delta": 10
+  }
+ }
+}

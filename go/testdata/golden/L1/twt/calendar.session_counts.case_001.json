@@ -1,0 +1,117 @@
+{
+ "fn": "baskfy_core.twt.calendar.session_counts",
+ "inputs": {
+  "bars": {
+   "columns": [
+    "instrument_id",
+    "date"
+   ],
+   "dtypes": {
+    "date": "Date",
+    "instrument_id": "Int64"
+   },
+   "rows": [
+    [
+     1,
+     "2024-01-01"
+    ],
+    [
+     2,
+     "2024-01-01"
+    ],
+    [
+     3,
+     "2024-01-01"
+    ],
+    [
+     1,
+     "2024-01-02"
+    ],
+    [
+     2,
+     "2024-01-02"
+    ],
+    [
+     3,
+     "2024-01-02"
+    ],
+    [
+     1,
+     "2024-01-03"
+    ],
+    [
+     2,
+     "2024-01-03"
+    ],
+    [
+     3,
+     "2024-01-03"
+    ],
+    [
+     1,
+     "2024-01-04"
+    ],
+    [
+     2,
+     "2024-01-04"
+    ],
+    [
+     3,
+     "2024-01-04"
+    ],
+    [
+     1,
+     "2024-01-05"
+    ],
+    [
+     2,
+     "2024-01-05"
+    ],
+    [
+     3,
+     "2024-01-05"
+    ]
+   ]
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "a full 3-name universe over 5 sessions. Inputs are JSON and each case is recomputed from them; Decimals are strings, dates ISO days, enums their values; a config is its field dict, decoded by each field's default type. Polars frames are {columns, dtypes, rows}; a Panel matrix is rows=instruments x cols=sessions with null for NaN; NaN/inf floats are null; a raise is {\"raises\": {\"type\", \"message\"}}. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_twt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "columns": [
+   "date",
+   "traded"
+  ],
+  "dtypes": {
+   "date": "Date",
+   "traded": "Int64"
+  },
+  "rows": [
+   [
+    "2024-01-01",
+    3
+   ],
+   [
+    "2024-01-02",
+    3
+   ],
+   [
+    "2024-01-03",
+    3
+   ],
+   [
+    "2024-01-04",
+    3
+   ],
+   [
+    "2024-01-05",
+    3
+   ]
+  ]
+ }
+}

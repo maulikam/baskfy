@@ -128,7 +128,7 @@ change for a cosmetic difference the API already serialises.
 
 **How to reverse.** Remove the sign restoration; the fuzz will then show the mismatches again.
 
-## R1.3 — Decimals beyond `rust_decimal`'s scale 28 (RS1, 29 Oct 2026) ⚠ UNREVIEWED — needs a decision
+## R1.3 — Decimals beyond `rust_decimal`'s scale 28 (RS1, 29 Oct 2026; resolved RS2) ⚠ UNREVIEWED
 
 **Context.** Python's default context keeps 28 *significant* digits, so a quotient below 0.1
 prints at scale 29+ (`"0.02384192989230769230769230769"`); `rust_decimal` caps scale at 28.
@@ -152,6 +152,22 @@ leaves Python and every published number unchanged.
 **How to reverse.** Remove the `WideDecimal` variant and the pinned list; the proof fails again
 on `year_fraction.case_004`.
 
+**Resolved at RS2 (29 Oct 2026) as option (b), by the wave-2 lead ⚠ UNREVIEWED.** Python and
+every published number stay unchanged; Rust reproduces the wide values exactly.
+`backtest::helpers::WideDecimal` is Python's `Decimal` in its default context — a sign, a
+coefficient of any length, an exponent, a signed zero — with `add`/`sub`/`mul`/`div`/`quantize`
+written step for step from CPython's `_pydecimal` (28 significant digits, half-even, the
+specification's ideal exponents, so `Decimal(0) / Decimal("365.25")` is `0E+2`).
+`year_fraction.case_004` grades green on it, and `run_backtest`'s whole day walk computes in it
+(every division rounds where Python's does); values leave as `rust_decimal::Decimal` once they
+are quantized. The screener needed the same thing for pydantic inputs (`Decimal('1E+300')`,
+40-digit strings) and carries its own exact `(sign, digits, exponent)` `DecimalValue` with
+libmpdec's exponent limits. **Not yet moved onto it:** `options::execution::simulate_fill`
+(fuzz-only gap, no golden red). Wave 3 lifts one of the two into a shared module first, since
+46 twt/vbt keys print scale-29 values (`r_multiple`, `years`; pinned in `every_golden.rs`).
+Rejected: (a) quantizing in Python (changes the answer key and the API's bytes); `bigdecimal`
+(a new dependency, and its division does not round like Python's context).
+
 ## R1.4 — Regime columns' look-ahead is recorded, not fixed (RS1, 29 Oct 2026) ⚠ UNREVIEWED
 
 **Context.** The ranking dumper found `compute_factors` does not bound `regime`,
@@ -171,3 +187,156 @@ relaxes for `known_bug`); a fix is a Python change first, then a golden regenera
 the ranking goldens' pandas input shape `{columns, date_columns, rows}` matched and failed.
 The test now uses the decoder's own rule (`columns` + `dtypes` + `rows`, exactly). Pandas shapes
 decode as maps until wave 2 adds their decoder (STATUS, "Testkit gaps").
+
+## R2.1 — serde_json parses floats exactly (`float_roundtrip`) (RS2, 29 Oct 2026) ⚠ UNREVIEWED
+
+**Context.** Three wave-2 lanes found independently that `serde_json` without `float_roundtrip`
+parses many 16–17-digit JSON floats one ulp off (a probe: 59,216 of ~200k random f64;
+`123456789.12345679` → `123456789.1234568`). Every golden is therefore decoded onto slightly
+perturbed inputs, and expected outputs are read back perturbed; the default 1e-9 tolerance hid
+it. The factors lane showed it matters: with exact parsing, 10,904 rank_frame/explain cases and
+640 factor cases grade bit-equal; without it, a zero-tolerance comparison fails on values Python
+and Rust compute identically.
+
+**Choice.** The integrator enabled `features = ["float_roundtrip"]` on the existing exact pin
+(`serde_json =1.0.154`) in `rust/Cargo.toml`. No new crate, no version move; `law_one.rs` is
+unaffected. All 455 goldens stay green with it (none passed by a lucky perturbation).
+
+**Rejected.** Leaving it off (golden inputs are not what the file says); passing floats as
+strings in tests (fixes the tests, not any future JSON ingress in the API).
+
+**How to reverse.** Drop the feature; the goldens still pass at 1e-9, inexactly.
+
+## R2.2 — Python's numeric kernels are reproduced, not approximated (RS2, 29 Oct 2026) ⚠ UNREVIEWED
+
+**Context.** Wave 2 is mostly floats. Agreement within 1e-9 is not enough where a float feeds
+a ten-decimal rounding and a SHA-256 hash (`metrics_hash`), a rank tie, or a stored factor.
+
+**Choice.** Each port reproduces the exact operation order of the Python library underneath:
+numpy's pairwise summation for `sum/mean/std/var`; Python 3.12's compensated (Neumaier)
+built-in `sum()` (`ranking_engine::py_sum`; a plain fold gave `0.6000000000000001` for
+`0.1+0.2+0.3`); `np.quantile`'s linear method as NumPy 2.5.2 implements it, `(n-1)*q`;
+polars' scalar division as multiplication by the reciprocal (`pos_days_N`: `10/22*100` is
+`45.45454545454546`); `np.percentile`'s `_lerp`; CPython's `bisect_left` loop; numpy's size-1
+broadcasting (`benchmark_returns - rf_daily`); Python's `float ** float` raising
+(`TypeError`/`OverflowError`) as `CoreError::Arithmetic` instead of NaN/inf (`py_pow`); a
+rounded negative mean keeping its sign (`"-0.00"`, extending R1.2). The rolling statistics call
+polars' own kernels per instrument, which is what `.over` does.
+
+**Residual, recorded.** `np.cov` sums through BLAS (Accelerate gemm) in an order that cannot be
+reproduced; beta/alpha can differ by ~1 ulp (inside 1e-9; no case of 403 shows it). And
+`rust_decimal` keeps 28 decimal *places* where Python keeps 28 significant digits, which can
+move a `float()` conversion by an ulp (no case shows it).
+
+**How to reverse.** Each kernel is one helper; replacing it with the idiomatic Rust call is
+local, and the zero-tolerance fuzz will show the drift.
+
+## R2.3 — Python modules with no Rust home live as private submodules (RS2, 29 Oct 2026) ⚠ UNREVIEWED
+
+**Context.** Porters own one file each (RS2.0) and may not edit `lib.rs`, but `factors` needs
+`windows`, `circuits`, `momentum`, `precision`, `instrument_regime` and `factors_ranking`;
+`factor_registry` needs `blends`, `windows`, `ranking.FactorPreference`; `screener` needs
+`screen_definition`, `universes`, `models`' column types and ranking constants; the backtest
+engine needs `rank_buffer.plan_rebalance`'s union of entries/holds/inside_wrh.
+
+**Choice.** Each lives as a private submodule of the port that needs it, ported only as far as
+that port reads it. `backtest_metrics` takes its own `BacktestOutcome`/`MetricsConfig`/`Trade`
+subset instead of depending on the engine port, so the two lanes ran in parallel. `windows` is
+therefore ported twice (factors, factor_registry).
+
+**How to close.** When a module's own port lands (its goldens first), the private copies are
+replaced by `use` of it, and the duplicates disappear. STATUS keeps these Python modules at
+`not started` until then.
+
+## R2.4 — The screener reproduces pydantic-core, speedate, SQLAlchemy and CPython reprs byte for byte (RS2, 29 Oct 2026) ⚠ UNREVIEWED
+
+**Context.** `validate_definition` publishes pydantic's error list (type, loc, message), and the
+query builders publish SQLAlchemy's rendered text; both are graded byte-exact, and a 30,000-case
+differential fuzz found 11 classes of divergence no golden caught.
+
+**Choice.** Reproduce the libraries at the versions the Python pins: pydantic-core 2.46.4 over
+speedate 0.17.0 (int/float/bool/date coercion, underscores, `'.0'` tails, timestamps,
+`year 0 is out of range`), alias handling (the loc names the key actually read; both `from` and
+`from_` is `extra_forbidden`), Python's `Decimal(str)` grammar (Unicode whitespace and Nd digits,
+`_`, NaN payloads), CPython 3.12 / Unicode 15.0 `repr` (a generated 712-range non-printable
+table), `float.__repr__` including the power-of-two boundary (checked on 428,927 floats),
+SQLAlchemy's `BIGINT` for an int bind with `bit_length() >= 32`, and `str(container)` as its
+repr. An opaque object's repr carries a memory address no port can reproduce; it renders as
+`<type object>`.
+
+**Consequence.** A pydantic, SQLAlchemy or Python minor bump on the Python side means
+regenerating the ranking goldens and re-running the fuzz before the Rust screener is trusted.
+
+**How to reverse.** Not sensibly — these strings are the API's bytes.
+
+## R2.5 — Python ints wider than i64 in a screen definition: open (RS2, 29 Oct 2026) ⚠ UNREVIEWED — needs a decision
+
+**Context.** pydantic accepts an arbitrarily large int for `median_volume_1y`,
+`ignore_above_beta`, circuits, the top-risk count, and the bounded `positive_days`/
+`away_from_high` (where Python's message is a `value_error` naming the number). Rust refuses
+them with `int_parsing_size`. It is the only class left in the 30,000-case fuzz (15 cases). A
+JSON number that large cannot reach Rust as an int anyway (no `arbitrary_precision`).
+
+**Options.** (a) a `PyInt` type through `ScreenDefinition` and the SQL binds — exact, invasive;
+(b) bound these fields in Python (`le=2**63-1`) so both refuse — changes the answer key and
+the API's validation, Maulik's call; (c) leave the divergence documented. **Taken for now:
+(c)** — no real definition carries such a value, and the screener does not strangle its
+Python twin until this is settled. Recommended: (b).
+
+**How to reverse.** Either fix closes it; the fuzz case list is in the screener lane's report.
+
+## R2.6 — ranking_engine edges no frame exercises are left as they are (RS2, 29 Oct 2026) ⚠ UNREVIEWED
+
+`_numeric` on a String column always raises (pandas' `to_numeric` would parse `'1.5'`); a
+polars Datetime `last_bar_date` is refused where `pd.Timestamp(str(x))` accepts it; under
+`within_sector` a non-string sector is stringified; `explain` takes a `usize` position (no
+negative `iloc`); `int(inf)` saturates instead of raising `OverflowError`. The test harness, not
+the port, supplies the output pandas dtype names (`rank=Int64`, `excluded_reason=object`,
+bool-with-null `object`) — representation only. Two real ones were fixed: `explain` with a
+missing `instrument_id` raises Python's `ValueError` (float column) or 3.12's `TypeError`
+wording. **How to reverse/close:** each is one function; add a golden first, then match it.
+
+## R2.7 — A benchmark level beyond scale 28 is refused (RS2, 29 Oct 2026) ⚠ UNREVIEWED
+
+`BacktestResult.benchmark` (and equity, cash) is `rust_decimal::Decimal`, converted from
+`Decimal(str(float))`. A level needing scale > 28 (|level| < ~1e-12 at full float digits, or
+> ~7.9e28) is `BacktestError::Decimal` in Rust where Python returns a value. Stored levels are
+`numeric(18,4)`, so real data cannot reach it; widening the type would change what
+`backtest_metrics` reads. **How to close:** move the result's money onto the shared wide decimal
+when wave 3 creates it (R1.3).
+
+## R2.8 — Wave-3 answer keys: integrator fixes before the first commit (RS2, 29 Oct 2026) ⚠ UNREVIEWED
+
+**Context.** The twt, vbt and fno keys (1,247) arrived uncommitted; the harness proof
+(`every_golden.rs`) failed on them three ways.
+
+**Choice.**
+
+* **fno: whole-number floats written as ints.** `golden_fno.py`'s `frame_doc` wrote rows by
+  hand, so a whole-number spot in a `Float64` column printed `50000` where golden.py writes a
+  polars float as `50000.0` — the frame did not round-trip (19 files: `underlying` in
+  `research.*`, `retest.run_family`, `scan.f2_signals`, `series.continuous_futures`).
+  `frame_doc` now writes a Float64 cell as a float, and the fno keys were regenerated: exactly
+  those 19 files changed, the rest byte-identical, and two more runs (one under another
+  `PYTHONHASHSEED`) byte-stable. Python reads both forms into the same Float64, so no output
+  moved. These keys had never been committed, so this is the dumper's fix before publication,
+  not an edit of an answer key.
+* **vbt: `List(String)`** (`failed_filters`) — the testkit's frame codec learned it.
+* **46 new wide decimals** (twt/vbt `r_multiple` and `years`, unquantised in Python) were
+  reviewed and pinned in `KNOWN_WIDE_DECIMALS`; the wave-3 porters reproduce them with the
+  shared wide decimal (R1.3).
+
+**How to reverse.** Revert the `frame_doc` change and regenerate; drop the `List(String)` arm.
+
+## R2.9 — Python behaviour the wave-3 keys lock in (RS2, 29 Oct 2026) ⚠ UNREVIEWED
+
+Recorded, not changed (a Python fix first, then a regeneration — same rule as R1.4):
+`vbt.backtest.yearly` raises `IndexError` on a result with no sessions (`summarise` returns
+`None` for the same input) — `yearly.case_003`, `known_bug`; `fno.research.summarise` raises
+`TypeError` on a one-trade frame (`std` of one value is null), unguarded in
+`retest.run_family` — `summarise.case_005`, `run_family.case_003`, `known_bug`;
+`twt.breadth.breadth_above_dma(as_of=None)` counts every row of the frame and labels the result
+with the latest session (inherited from VBT's shared code); `twt.exits.tick_floor` on a negative
+price rounds toward zero; vbt `detect_signals` sorts a null `rank_key` first even descending;
+`vbt.drift.compare` can return `-0.0`. A port reproduces each; grading never relaxes for
+`known_bug`.

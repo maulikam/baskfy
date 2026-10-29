@@ -1,0 +1,37 @@
+{
+ "fn": "baskfy_core.vbt.calendar.SessionCalendar.index_of",
+ "inputs": {
+  "calendar": {
+   "counts": {
+    "2024-01-01": 10,
+    "2024-01-02": 10,
+    "2024-01-04": 10,
+    "2024-01-05": 10,
+    "2024-01-08": 10,
+    "2024-01-09": 10,
+    "2024-01-10": 10
+   },
+   "dropped": [
+    "2024-01-05"
+   ],
+   "sessions": [
+    "2024-01-01",
+    "2024-01-02",
+    "2024-01-04",
+    "2024-01-08",
+    "2024-01-09",
+    "2024-01-10"
+   ]
+  },
+  "session": "2024-01-05"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "a dropped thin session is not a session: -1. Inputs are JSON and each function is called from them after a JSON round trip. Decimals are strings; dates are ISO days; enums are their values; polars frames are {columns, dtypes, rows}; numpy matrices are row lists with NaN as null. config is a whole VbtConfig decoded by each sub-dataclass's declared field types (exits.qulla is the swing StopConfig). A SessionCalendar is {sessions, dropped, counts}. A raise is {raises: {type, message}}. Expression-valued functions are golden as their value over inputs.frame. Synthetic seeded fixtures, rounded before they are written. Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_vbt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": -1
+}

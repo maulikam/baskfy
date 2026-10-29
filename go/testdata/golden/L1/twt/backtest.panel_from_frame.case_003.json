@@ -1,0 +1,280 @@
+{
+ "fn": "baskfy_core.twt.backtest.panel_from_frame",
+ "inputs": {
+  "indicated": {
+   "columns": [
+    "instrument_id",
+    "symbol",
+    "date",
+    "open",
+    "high",
+    "low",
+    "close",
+    "turnover_inr",
+    "turnover_avg_20",
+    "entry_event",
+    "signal_state"
+   ],
+   "dtypes": {
+    "close": "Float64",
+    "date": "Date",
+    "entry_event": "Boolean",
+    "high": "Float64",
+    "instrument_id": "Int64",
+    "low": "Float64",
+    "open": "Float64",
+    "signal_state": "String",
+    "symbol": "String",
+    "turnover_avg_20": "Float64",
+    "turnover_inr": "Float64"
+   },
+   "rows": [
+    [
+     2,
+     "BBB",
+     "2024-01-01",
+     50.0,
+     51.0,
+     49.0,
+     50.5,
+     5000000.0,
+     null,
+     false,
+     null
+    ],
+    [
+     1,
+     "AAA",
+     "2024-01-02",
+     10.0,
+     10.5,
+     9.5,
+     10.2,
+     1000000.0,
+     900000.0,
+     true,
+     "SIGNAL"
+    ],
+    [
+     1,
+     "AAA",
+     "2024-01-01",
+     10.1,
+     10.6,
+     9.9,
+     10.0,
+     1100000.0,
+     800000.0,
+     false,
+     null
+    ],
+    [
+     2,
+     null,
+     "2024-01-03",
+     51.0,
+     52.0,
+     50.0,
+     51.5,
+     5200000.0,
+     4000000.0,
+     null,
+     "SCAN_ONLY"
+    ],
+    [
+     1,
+     "AAA",
+     "2024-01-04",
+     10.4,
+     10.9,
+     10.3,
+     10.8,
+     1300000.0,
+     1000000.0,
+     true,
+     "SIGNAL"
+    ],
+    [
+     3,
+     "CCC",
+     "2024-01-04",
+     7.0,
+     7.0,
+     7.0,
+     7.0,
+     700000.0,
+     null,
+     true,
+     "SCAN_ONLY"
+    ]
+   ]
+  },
+  "signal_column": "nope"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "a signal column the frame lacks: all false. Inputs are JSON and each case is recomputed from them; Decimals are strings, dates ISO days, enums their values; a config is its field dict, decoded by each field's default type. Polars frames are {columns, dtypes, rows}; a Panel matrix is rows=instruments x cols=sessions with null for NaN; NaN/inf floats are null; a raise is {\"raises\": {\"type\", \"message\"}}. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_twt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "close": [
+   [
+    10.0,
+    10.2,
+    null,
+    10.8
+   ],
+   [
+    50.5,
+    null,
+    51.5,
+    null
+   ],
+   [
+    null,
+    null,
+    null,
+    7.0
+   ]
+  ],
+  "high": [
+   [
+    10.6,
+    10.5,
+    null,
+    10.9
+   ],
+   [
+    51.0,
+    null,
+    52.0,
+    null
+   ],
+   [
+    null,
+    null,
+    null,
+    7.0
+   ]
+  ],
+  "instrument_ids": [
+   1,
+   2,
+   3
+  ],
+  "low": [
+   [
+    9.9,
+    9.5,
+    null,
+    10.3
+   ],
+   [
+    49.0,
+    null,
+    50.0,
+    null
+   ],
+   [
+    null,
+    null,
+    null,
+    7.0
+   ]
+  ],
+  "open": [
+   [
+    10.1,
+    10.0,
+    null,
+    10.4
+   ],
+   [
+    50.0,
+    null,
+    51.0,
+    null
+   ],
+   [
+    null,
+    null,
+    null,
+    7.0
+   ]
+  ],
+  "sessions": [
+   "2024-01-01",
+   "2024-01-02",
+   "2024-01-03",
+   "2024-01-04"
+  ],
+  "signal": [
+   [
+    false,
+    false,
+    false,
+    false
+   ],
+   [
+    false,
+    false,
+    false,
+    false
+   ],
+   [
+    false,
+    false,
+    false,
+    false
+   ]
+  ],
+  "symbols": [
+   "AAA",
+   "BBB",
+   "CCC"
+  ],
+  "turnover_avg_20": [
+   [
+    800000.0,
+    900000.0,
+    null,
+    1000000.0
+   ],
+   [
+    null,
+    null,
+    4000000.0,
+    null
+   ],
+   [
+    null,
+    null,
+    null,
+    null
+   ]
+  ],
+  "turnover_inr": [
+   [
+    1100000.0,
+    1000000.0,
+    null,
+    1300000.0
+   ],
+   [
+    5000000.0,
+    null,
+    5200000.0,
+    null
+   ],
+   [
+    null,
+    null,
+    null,
+    700000.0
+   ]
+  ]
+ }
+}

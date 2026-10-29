@@ -1,0 +1,54 @@
+{
+ "fn": "baskfy_core.fno.directional.choose_expiry",
+ "inputs": {
+  "entry": "2026-10-13",
+  "expiries": [
+   "2026-10-13",
+   "2026-10-20",
+   "2026-10-27",
+   "2026-11-03"
+  ],
+  "min_sessions": 2,
+  "sessions": [
+   "2026-10-01",
+   "2026-10-02",
+   "2026-10-05",
+   "2026-10-06",
+   "2026-10-07",
+   "2026-10-08",
+   "2026-10-09",
+   "2026-10-12",
+   "2026-10-13",
+   "2026-10-14",
+   "2026-10-15",
+   "2026-10-16",
+   "2026-10-19",
+   "2026-10-20",
+   "2026-10-21",
+   "2026-10-22",
+   "2026-10-23",
+   "2026-10-26",
+   "2026-10-27",
+   "2026-10-28",
+   "2026-10-29",
+   "2026-10-30",
+   "2026-11-02",
+   "2026-11-03",
+   "2026-11-04",
+   "2026-11-05",
+   "2026-11-06",
+   "2026-11-09",
+   "2026-11-10",
+   "2026-11-11"
+  ]
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "an expiry on the entry day has zero sessions. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": "2026-10-20"
+}

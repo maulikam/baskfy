@@ -13,8 +13,17 @@
 //! | NaN / inf | `null` | — |
 //! | polars `DataFrame` | `{"columns", "dtypes", "rows"}` (polars dtype names) | [`Golden::input_frame`], [`decode_frame`] |
 //! | polars `Series` | `{"dtype", "values"}` | [`decode_series`] |
+//! | pandas `DataFrame` (ranking goldens) | inputs `{"columns", "rows"}` / `{"columns", "date_columns", "rows"}`; outputs `{"columns", "dtypes", "index", "rows"}` | [`Golden::input_pandas_frame`], [`decode_pandas_frame`]; grade with [`encode_pandas_frame`] |
+//! | pandas `Series` | `{"dtype", "index", "values"}` | [`decode_pandas_series`]; grade with [`encode_pandas_series`] |
 //! | dataclass / pydantic | object with sorted keys | [`Golden::input_as`] into a serde struct |
 //! | `StrEnum` | its value | serde `rename_all` on the Rust enum |
+//!
+//! Pandas frames carry an index and pandas dtype names (`object` vs `bool`/`str`) a polars
+//! frame cannot hold, so they decode to a [`PandasFrame`] — the polars frame plus both — and a
+//! port grades a pandas output by re-encoding its polars result with
+//! [`encode_pandas_frame`]`(df, index, dtypes)` and [`Golden::check_value`]. The `pandas`
+//! module docs give the dtype mapping (`object` columns are inferred from their values; an
+//! inferred input column of integers beside a `null` becomes `Float64`, as pandas would).
 //!
 //! Grading ([`compare`], [`Golden::check_output`], [`Golden::assert_output`]):
 //!
@@ -34,12 +43,17 @@ mod compare;
 mod error;
 mod frame;
 mod golden;
+mod pandas;
 mod scalar;
 
 pub use compare::{Mismatch, Mismatches, compare};
 pub use error::TestkitError;
 pub use frame::{decode_frame, decode_series, encode_frame, encode_series};
 pub use golden::{Golden, Meta, Tolerance, all_cases, cases_for, golden_root, load};
+pub use pandas::{
+    PandasFrame, decode_pandas_frame, decode_pandas_series, encode_pandas_frame,
+    encode_pandas_series, float_series, is_pandas_frame, is_pandas_series, pandas_dtype_name,
+};
 pub use scalar::{
     Decoded, date, datetime, decimal, decode_value, naive_datetime, time, wide_decimals,
 };

@@ -1,0 +1,47 @@
+{
+ "fn": "baskfy_core.fno.directional.intraday_aligned",
+ "inputs": {
+  "cases": [
+   {
+    "direction": "UP",
+    "last_price": "24810",
+    "session_open": "24800"
+   },
+   {
+    "direction": "UP",
+    "last_price": "24800",
+    "session_open": "24800"
+   },
+   {
+    "direction": "DOWN",
+    "last_price": "24790",
+    "session_open": "24800"
+   },
+   {
+    "direction": "DOWN",
+    "last_price": "24810",
+    "session_open": "24800"
+   },
+   {
+    "direction": "NONE",
+    "last_price": "24810",
+    "session_open": "24800"
+   }
+  ]
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "above the open for UP, below for DOWN, at the open neither. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": [
+  true,
+  false,
+  true,
+  false,
+  false
+ ]
+}

@@ -1,0 +1,63 @@
+{
+ "fn": "baskfy_core.fno.journal.journal_figures",
+ "inputs": {
+  "fills": [
+   {
+    "filled_at": "2026-10-06T09:21:00",
+    "kind": "ENTRY",
+    "plan_id": "F1",
+    "price": "2450.5",
+    "quantity": 250,
+    "side": "BUY"
+   },
+   {
+    "filled_at": "2026-11-02T15:00:00",
+    "kind": "EXIT",
+    "plan_id": "F9",
+    "price": "2610.25",
+    "quantity": 250,
+    "side": "SELL"
+   }
+  ],
+  "future_rates": {
+   "brokerage_per_order_inr": "20",
+   "exchange_txn_pct": "0.00173",
+   "gst_pct": "18",
+   "slippage_pct": "0.03",
+   "stamp_buy_pct": "0.002",
+   "stt_sell_pct": "0.05"
+  },
+  "marks_inr": [],
+  "option_rates": {
+   "auto_squareoff_inr": "50",
+   "brokerage_per_order_inr": "20",
+   "exchange_txn_pct": "0.03553",
+   "gst_pct": "18",
+   "ipft_per_crore_inr": "0.01",
+   "review_after_days": 90,
+   "reviewed_on": "2026-09-22",
+   "sebi_per_crore_inr": "10",
+   "stamp_buy_pct": "0.003",
+   "stt_exercise_intrinsic_pct": "0.15",
+   "stt_sell_premium_pct": "0.15",
+   "synthetic_half_spread_min_inr": "0.10",
+   "synthetic_half_spread_pct": "1.5"
+  },
+  "r_inr": "0",
+  "structure": "FUTURE"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "a zero R raises. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "raises": {
+   "message": "R must be positive",
+   "type": "ValueError"
+  }
+ }
+}

@@ -1,0 +1,62 @@
+{
+ "fn": "baskfy_core.fno.exits.f1_exit",
+ "inputs": {
+  "close_cost": "300",
+  "common": {
+   "hard_exit_before_expiry": 1,
+   "hard_exit_time": "15:00:00",
+   "latest_window_end": "15:00:00",
+   "market_open": "09:15:00",
+   "max_lots": 2,
+   "max_lots_ceiling": 10,
+   "plan_ttl_minutes": 30
+  },
+  "entry_credit": "65",
+  "f1": {
+   "entry_sessions_before": 15,
+   "entry_window_end": "10:30:00",
+   "index_underlyings": [
+    "NIFTY",
+    "BANKNIFTY"
+   ],
+   "loss_close_mult": "1.5",
+   "max_cost_share_pct": "25",
+   "max_open_per_underlying": 1,
+   "max_spread_pct": "5",
+   "min_short_oi_lots": 500,
+   "pause_consecutive": 3,
+   "pause_loss_r": "-0.6",
+   "plan_time": "09:20:00",
+   "profit_take_pct": "50",
+   "risk_per_trade_pct": "1.0",
+   "short_sigma": "1.0",
+   "slippage_min_inr": "0.05",
+   "slippage_pct": "0.5",
+   "underlyings": [
+    "NIFTY",
+    "BANKNIFTY"
+   ],
+   "wing_sigma": "0.5"
+  },
+  "hard_exit_date": "2026-10-26",
+  "now": "2026-10-20T11:00:00",
+  "strikes": {
+   "long_call": "21100",
+   "long_put": "18900",
+   "short_call": "20800",
+   "short_put": "19200"
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "LOSS_CLOSE at the clamped width. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "message": "cost to close 300 ≥ (1 + 1.5) x credit 65",
+  "reason": "LOSS_CLOSE"
+ }
+}

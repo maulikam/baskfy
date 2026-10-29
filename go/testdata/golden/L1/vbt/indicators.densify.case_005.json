@@ -1,0 +1,263 @@
+{
+ "fn": "baskfy_core.vbt.indicators.densify",
+ "inputs": {
+  "bars": {
+   "columns": [
+    "instrument_id",
+    "symbol",
+    "date",
+    "open",
+    "high",
+    "low",
+    "close",
+    "close_raw",
+    "volume",
+    "upper_circuit",
+    "adj_factor"
+   ],
+   "dtypes": {
+    "adj_factor": "Float64",
+    "close": "Float64",
+    "close_raw": "Float64",
+    "date": "Date",
+    "high": "Float64",
+    "instrument_id": "Int64",
+    "low": "Float64",
+    "open": "Float64",
+    "symbol": "String",
+    "upper_circuit": "Float64",
+    "volume": "Float64"
+   },
+   "rows": [
+    [
+     1,
+     "ALPHA",
+     "2024-01-01",
+     100.01,
+     102.34,
+     99.52,
+     101.84,
+     101.84,
+     243443.0,
+     null,
+     1.0
+    ],
+    [
+     1,
+     "ALPHA",
+     "2024-01-02",
+     101.75,
+     101.98,
+     101.08,
+     101.31,
+     101.31,
+     255573.0,
+     null,
+     1.0
+    ],
+    [
+     1,
+     "ALPHA",
+     "2024-01-03",
+     101.54,
+     102.18,
+     98.87,
+     99.49,
+     99.49,
+     301367.0,
+     null,
+     1.0
+    ],
+    [
+     1,
+     "ALPHA",
+     "2024-01-04",
+     99.69,
+     99.88,
+     99.54,
+     99.73,
+     99.73,
+     334565.0,
+     null,
+     1.0
+    ],
+    [
+     1,
+     "ALPHA",
+     "2024-01-05",
+     99.98,
+     100.04,
+     99.88,
+     99.94,
+     99.94,
+     305889.0,
+     null,
+     1.0
+    ],
+    [
+     1,
+     "ALPHA",
+     "2024-01-08",
+     99.68,
+     99.84,
+     97.92,
+     98.07,
+     98.07,
+     298035.0,
+     null,
+     1.0
+    ]
+   ]
+  },
+  "calendar": {
+   "counts": {
+    "2024-01-01": 10,
+    "2024-01-02": 10,
+    "2024-01-03": 10,
+    "2024-01-04": 10,
+    "2024-01-05": 10,
+    "2024-01-08": 10,
+    "2024-01-09": 10
+   },
+   "dropped": [],
+   "sessions": [
+    "2024-01-01",
+    "2024-01-02",
+    "2024-01-03",
+    "2024-01-04",
+    "2024-01-05",
+    "2024-01-08",
+    "2024-01-09"
+   ]
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "a calendar with a session no name printed: all-null rows. Inputs are JSON and each function is called from them after a JSON round trip. Decimals are strings; dates are ISO days; enums are their values; polars frames are {columns, dtypes, rows}; numpy matrices are row lists with NaN as null. config is a whole VbtConfig decoded by each sub-dataclass's declared field types (exits.qulla is the swing StopConfig). A SessionCalendar is {sessions, dropped, counts}. A raise is {raises: {type, message}}. Expression-valued functions are golden as their value over inputs.frame. Synthetic seeded fixtures, rounded before they are written. Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_vbt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "columns": [
+   "instrument_id",
+   "symbol",
+   "date",
+   "open",
+   "high",
+   "low",
+   "close",
+   "close_raw",
+   "volume",
+   "upper_circuit",
+   "adj_factor"
+  ],
+  "dtypes": {
+   "adj_factor": "Float64",
+   "close": "Float64",
+   "close_raw": "Float64",
+   "date": "Date",
+   "high": "Float64",
+   "instrument_id": "Int64",
+   "low": "Float64",
+   "open": "Float64",
+   "symbol": "String",
+   "upper_circuit": "Float64",
+   "volume": "Float64"
+  },
+  "rows": [
+   [
+    1,
+    "ALPHA",
+    "2024-01-01",
+    100.01,
+    102.34,
+    99.52,
+    101.84,
+    101.84,
+    243443.0,
+    null,
+    1.0
+   ],
+   [
+    1,
+    "ALPHA",
+    "2024-01-02",
+    101.75,
+    101.98,
+    101.08,
+    101.31,
+    101.31,
+    255573.0,
+    null,
+    1.0
+   ],
+   [
+    1,
+    "ALPHA",
+    "2024-01-03",
+    101.54,
+    102.18,
+    98.87,
+    99.49,
+    99.49,
+    301367.0,
+    null,
+    1.0
+   ],
+   [
+    1,
+    "ALPHA",
+    "2024-01-04",
+    99.69,
+    99.88,
+    99.54,
+    99.73,
+    99.73,
+    334565.0,
+    null,
+    1.0
+   ],
+   [
+    1,
+    "ALPHA",
+    "2024-01-05",
+    99.98,
+    100.04,
+    99.88,
+    99.94,
+    99.94,
+    305889.0,
+    null,
+    1.0
+   ],
+   [
+    1,
+    "ALPHA",
+    "2024-01-08",
+    99.68,
+    99.84,
+    97.92,
+    98.07,
+    98.07,
+    298035.0,
+    null,
+    1.0
+   ],
+   [
+    1,
+    "ALPHA",
+    "2024-01-09",
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ]
+  ]
+ }
+}

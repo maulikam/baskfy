@@ -1,0 +1,65 @@
+{
+ "fn": "baskfy_core.fno.directional.f3_marks",
+ "inputs": {
+  "credits": [
+   "28.3",
+   "10",
+   "33.335",
+   "0"
+  ],
+  "f3": {
+   "add_working_pct": "20",
+   "confirm_bars": 10,
+   "decay_target_pct": "80",
+   "distance_pct": "1.0",
+   "entry_share_pct": "25",
+   "entry_window_end": "10:30:00",
+   "full_share_pct": "50",
+   "level_buffer_pct": "0.10",
+   "loss_cut_mult": "2.0",
+   "max_open_per_underlying": 1,
+   "min_sessions_monthly": 5,
+   "min_sessions_weekly": 2,
+   "pivot_lookback": 60,
+   "pivot_width": 3,
+   "plan_time": "09:20:00",
+   "risk_per_trade_pct": "1.0",
+   "short_premium_min_inr": "10",
+   "slippage_min_inr": "0.05",
+   "slippage_pct": "0.5",
+   "trend_sessions": 20,
+   "underlyings": [
+    "NIFTY",
+    "BANKNIFTY"
+   ],
+   "weekly_sessions": 5,
+   "wing_pct": "2.0"
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "decay target 20 % of credit, loss cut 2 x, to the paisa. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "0": {
+   "decay_target_mark": "0.00",
+   "loss_cut_mark": "0.00"
+  },
+  "10": {
+   "decay_target_mark": "2.00",
+   "loss_cut_mark": "20.00"
+  },
+  "28.3": {
+   "decay_target_mark": "5.66",
+   "loss_cut_mark": "56.60"
+  },
+  "33.335": {
+   "decay_target_mark": "6.67",
+   "loss_cut_mark": "66.67"
+  }
+ }
+}

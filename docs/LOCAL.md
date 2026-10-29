@@ -36,7 +36,16 @@ bash tools/deploy/local.sh status
 bash tools/deploy/local.sh down     # data stays in the baskfy-local_* Docker volumes
 ```
 
-App `http://localhost:8480`, desk `http://localhost:8481` — bound to 127.0.0.1 only. Runtime files
+**One address** (Maulik, 29 Oct 2026): the app at `http://localhost:8480`, the desk at
+`http://localhost:8480/desk` — the same port, bound to 127.0.0.1 only. Caddy routes `/desk/*` to the
+desk, and the desk's `DESK_PATH_PREFIX=/desk` keeps every link it renders under `/desk`. The desk
+still asks for its own password (HTTP basic auth, unchanged from AWS).
+
+**No Google on this Mac** (Maulik, 29 Oct 2026: "since it is on localhost, no google login
+required"): the login page shows *Continue on this Mac*, which signs in as the account in
+`/Volumes/T7-Work/baskfy-local/signin.public_id` (`2fe482ed2015`, mdave.5191@gmail.com). Anyone who
+can reach the address can press it — which is why the address is reachable only from 127.0.0.1
+and your own Tailscale devices. Runtime files
 (sanitised env, the box's original config) live in `/Volumes/T7-Work/baskfy-local/`, mode 600,
 never in git. Images are `baskfy-{py,web,desk}:d78907f`, pulled from ECR before teardown and also
 saved in `/Volumes/T7-Work/baskfy-aws-exit-20261029/images/`. To run newer code, build the three
@@ -50,13 +59,12 @@ close heavy apps during the nightly (18:40–21:15 IST) if it is running then.
 1. `brew install --cask tailscale-app` (asks for the Mac's password), open it, sign in. Install
    the app on your phone, same account.
 2. Enable MagicDNS and HTTPS certificates in the Tailscale admin (DNS page).
-3. `bash tools/deploy/local.sh tailscale` — serves the app on `https://<mac>.<tailnet>.ts.net` and
-   the desk on `:8443`, writes that URL to `/Volumes/T7-Work/baskfy-local/public.url` so every
+3. `bash tools/deploy/local.sh tailscale` — serves `https://<mac>.<tailnet>.ts.net` (the desk at
+   `/desk` on the same address), writes that URL to `/Volumes/T7-Work/baskfy-local/public.url` so every
    later `up` uses it, and restarts the stack (not inside the 18:40–21:20 IST nightly window).
-4. Add the callback URLs, by hand:
-   * Kite developer console → redirect URL `https://<mac-name>.<tailnet>.ts.net/api/v1/brokers/callback`
-   * Google Cloud console → OAuth client → authorised redirect URI
-     `https://<mac-name>.<tailnet>.ts.net/api/auth/callback/google`
+4. Kite developer console → redirect URL
+   `https://mauliks-macbook-pro.tail6c95b5.ts.net/api/v1/brokers/callback` (by hand). No Google
+   console change is needed: this Mac does not use Google sign-in.
 
 ## How it got here
 

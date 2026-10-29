@@ -1,0 +1,25 @@
+{
+ "fn": "baskfy_core.screener.canonical_json",
+ "inputs": {
+  "payload": {
+   "d": {
+    "$date": "2026-08-18"
+   },
+   "f": false,
+   "i": 42,
+   "n": null,
+   "s": "Bajaj Auto — ₹",
+   "t": true,
+   "x": 0.1
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "dates, bools, null, ints, floats, unicode. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}} (pydantic: \"errors\" instead of \"message\"). Polars frames are {columns, dtypes, rows}; pandas frames add index and write NA/NaN/NaT as null. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `.venv/bin/python ../tools/parity/golden_ranking.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": "{\"d\":\"2026-08-18\",\"f\":false,\"i\":42,\"n\":null,\"s\":\"Bajaj Auto — ₹\",\"t\":true,\"x\":0.1}"
+}

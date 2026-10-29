@@ -1,0 +1,49 @@
+{
+ "fn": "baskfy_core.ranking_engine.rank_frame",
+ "inputs": {
+  "frame": {
+   "columns": [
+    "instrument_id",
+    "ret_12m"
+   ],
+   "rows": [
+    [
+     1,
+     2.0
+    ]
+   ]
+  },
+  "spec": {
+   "family_weights": null,
+   "missing_data": "penalize",
+   "mode": "composite",
+   "scope": "filtered_results",
+   "terms": [
+    {
+     "key": "ret_12m",
+     "label": "ABSOLUTE RETURN 1 YEAR",
+     "null_policy": "insufficient_history",
+     "preference": "higher",
+     "target_max": null,
+     "target_min": null,
+     "weight": 1.0,
+     "weight_family": "momentum"
+    }
+   ]
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "a frame without passes_filters is refused. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}} (pydantic: \"errors\" instead of \"message\"). Polars frames are {columns, dtypes, rows}; pandas frames add index and write NA/NaN/NaT as null. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `.venv/bin/python ../tools/parity/golden_ranking.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "raises": {
+   "message": "ranking frame lacks ['passes_filters'], needed for ranking",
+   "type": "ValueError"
+  }
+ }
+}

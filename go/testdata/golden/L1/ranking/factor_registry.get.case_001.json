@@ -1,0 +1,31 @@
+{
+ "fn": "baskfy_core.factor_registry.get",
+ "inputs": {
+  "key": "ret_12m"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "get('ret_12m'). Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}} (pydantic: \"errors\" instead of \"message\"). Polars frames are {columns, dtypes, rows}; pandas frames add index and write NA/NaN/NaT as null. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `.venv/bin/python ../tools/parity/golden_ranking.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "components": [],
+  "definition": "Percent change of the adjusted close over the 12-month calendar window (docs/05 §1).",
+  "family": "absolute_return",
+  "higher_is_better": true,
+  "is_computed": false,
+  "is_stored": true,
+  "key": "ret_12m",
+  "label": "ABSOLUTE RETURN 1 YEAR",
+  "null_policy": "insufficient_history",
+  "preference": "higher",
+  "rankable": true,
+  "sql_expr": "ret_12m",
+  "unit": "percent",
+  "validation_status": "legacy",
+  "weight_family": "momentum"
+ }
+}

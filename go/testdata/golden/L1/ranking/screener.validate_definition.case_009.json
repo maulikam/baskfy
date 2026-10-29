@@ -1,0 +1,38 @@
+{
+ "fn": "baskfy_core.screener.validate_definition",
+ "inputs": {
+  "definition": {
+   "factor_three": {
+    "enabled": false,
+    "sort_by": "rsi_1m"
+   },
+   "factor_two": {
+    "enabled": true,
+    "sort_by": "pos_days_12m"
+   },
+   "index": "nifty-200",
+   "sort_by": "sharpe_12m"
+  },
+  "smuggle": {
+   "factor_two": {
+    "enabled": true,
+    "sort_by": "nope",
+    "sort_direction": "desc"
+   }
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "smuggled factor_two key while enabled. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}} (pydantic: \"errors\" instead of \"message\"). Polars frames are {columns, dtypes, rows}; pandas frames add index and write NA/NaN/NaT as null. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `.venv/bin/python ../tools/parity/golden_ranking.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "raises": {
+   "message": "factor_two.sort_by: 'nope' is not a factor-registry key, so no SQL will be built for it",
+   "type": "ScreenQueryError"
+  }
+ }
+}

@@ -1,0 +1,81 @@
+{
+ "fn": "baskfy_core.ranking_engine.effective_weights",
+ "inputs": {
+  "spec": {
+   "family_weights": {
+    "momentum": 60,
+    "path_quality": 20
+   },
+   "missing_data": "penalize",
+   "mode": "composite",
+   "scope": "filtered_results",
+   "terms": [
+    {
+     "key": "ret_12m",
+     "label": "ABSOLUTE RETURN 1 YEAR",
+     "null_policy": "insufficient_history",
+     "preference": "higher",
+     "target_max": null,
+     "target_min": null,
+     "weight": 1.0,
+     "weight_family": "momentum"
+    },
+    {
+     "key": "sharpe_12m",
+     "label": "SHARPE RETURN 1 YEAR",
+     "null_policy": "null_on_undefined_ratio",
+     "preference": "higher",
+     "target_max": null,
+     "target_min": null,
+     "weight": 1.0,
+     "weight_family": "momentum"
+    },
+    {
+     "key": "eff_ratio_63",
+     "label": "EFFICIENCY RATIO 63 SESSIONS",
+     "null_policy": "null_on_undefined_ratio",
+     "preference": "higher",
+     "target_max": null,
+     "target_min": null,
+     "weight": 1.0,
+     "weight_family": "path_quality"
+    },
+    {
+     "key": "vol_12m",
+     "label": "VOLATILITY 1 YEAR",
+     "null_policy": "insufficient_history",
+     "preference": "lower",
+     "target_max": null,
+     "target_min": null,
+     "weight": 1.0,
+     "weight_family": "risk_execution"
+    },
+    {
+     "key": "ma_dist_50",
+     "label": "DISTANCE FROM MA 50",
+     "null_policy": "null_on_undefined_ratio",
+     "preference": "target_range",
+     "target_max": 15.0,
+     "target_min": 0.0,
+     "weight": 1.0,
+     "weight_family": "trend_structure"
+    }
+   ]
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "explicit momentum 60 / path 20; unset families take the mean of the explicit. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}} (pydantic: \"errors\" instead of \"message\"). Polars frames are {columns, dtypes, rows}; pandas frames add index and write NA/NaN/NaT as null. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `.venv/bin/python ../tools/parity/golden_ranking.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "eff_ratio_63": 0.125,
+  "ma_dist_50": 0.25,
+  "ret_12m": 0.1875,
+  "sharpe_12m": 0.1875,
+  "vol_12m": 0.25
+ }
+}

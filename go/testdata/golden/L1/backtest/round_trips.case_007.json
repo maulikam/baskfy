@@ -1,0 +1,51 @@
+{
+ "fn": "baskfy_core.backtest_metrics.round_trips",
+ "inputs": {
+  "trades": [
+   {
+    "cost": "0.28",
+    "date": "2024-01-02",
+    "instrument_id": 106,
+    "notional": "100.00",
+    "price": "25.00",
+    "quantity": 4,
+    "realised_pnl": null,
+    "reason": "enter",
+    "side": "buy",
+    "symbol": "FFF"
+   },
+   {
+    "cost": "0.28",
+    "date": "2024-01-09",
+    "instrument_id": 106,
+    "notional": "100.28",
+    "price": "25.07",
+    "quantity": 4,
+    "realised_pnl": "0.00",
+    "reason": "exit",
+    "side": "sell",
+    "symbol": "FFF"
+   }
+  ]
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "break-even (pnl 0) counts as a loss. Decimals are strings; dates are ISO days; enums are their values; polars frames are {columns, dtypes, rows}. Prices: open/close are the adjusted series (house rule 6), price_open/price_close the raw print, read only when price_only is true. Config is BacktestConfig.model_dump(mode='json'). A raised engine error is {error: {type, message}}. Synthetic seeded fixtures (weekday calendar from 2024-01-01, holidays 2024-01-26 and 2024-03-25). Regenerate with `.venv/bin/python ../tools/parity/golden_backtest.py` from decile-blueprint; each case is computed from its stored inputs.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": [
+  {
+   "closed_on": "2024-01-09",
+   "delisted": false,
+   "instrument_id": 106,
+   "invested": "100.28",
+   "is_win": false,
+   "opened_on": "2024-01-02",
+   "pnl": "0",
+   "symbol": "FFF"
+  }
+ ]
+}

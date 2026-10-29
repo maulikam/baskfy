@@ -1,0 +1,62 @@
+{
+ "fn": "baskfy_core.screener.build_screen_query",
+ "inputs": {
+  "as_of": "2026-08-18",
+  "definition": {
+   "family_weights": {
+    "momentum": 60,
+    "path_quality": 20
+   },
+   "index": "nifty-500",
+   "min_return_1y": "0",
+   "missing_data": "neutral",
+   "ranking_mode": "composite",
+   "ranking_scope": "filtered_results",
+   "ranking_terms": [
+    {
+     "factor": "ret_12m",
+     "preference": "higher",
+     "weight": 2
+    },
+    {
+     "factor": "nse_momentum_score",
+     "preference": "higher"
+    },
+    {
+     "factor": "desk_score",
+     "preference": "higher"
+    },
+    {
+     "factor": "ma_dist_50",
+     "preference": "target_range",
+     "target_max": 15,
+     "target_min": 0
+    },
+    {
+     "factor": "eff_ratio_63",
+     "preference": "higher"
+    },
+    {
+     "factor": "vol_12m",
+     "preference": "lower",
+     "weight": 0.5
+    }
+   ],
+   "sort_by": "ret_12m"
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "ranking_terms refuse the legacy SQL. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}} (pydantic: \"errors\" instead of \"message\"). Polars frames are {columns, dtypes, rows}; pandas frames add index and write NA/NaN/NaT as null. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `.venv/bin/python ../tools/parity/golden_ranking.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "raises": {
+   "message": "build_screen_query: ranking_terms are ranked by baskfy_core.ranking_engine over build_ranking_frame_query, not by the legacy SQL ranking",
+   "type": "ScreenQueryError"
+  }
+ }
+}

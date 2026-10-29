@@ -1,0 +1,26 @@
+{
+ "fn": "baskfy_core.screener.canonical_json",
+ "inputs": {
+  "payload": {
+   "empty": [],
+   "obj": {},
+   "rows": [
+    {
+     "rank": 1,
+     "v": {
+      "$decimal": "2.10"
+     }
+    }
+   ]
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "nested. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}} (pydantic: \"errors\" instead of \"message\"). Polars frames are {columns, dtypes, rows}; pandas frames add index and write NA/NaN/NaT as null. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `.venv/bin/python ../tools/parity/golden_ranking.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": "{\"empty\":[],\"obj\":{},\"rows\":[{\"rank\":1,\"v\":2.10}]}"
+}

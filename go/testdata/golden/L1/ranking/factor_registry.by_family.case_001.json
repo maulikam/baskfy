@@ -1,0 +1,143 @@
+{
+ "fn": "baskfy_core.factor_registry.by_family",
+ "inputs": {},
+ "meta": {
+  "known_bug": null,
+  "notes": "factor keys grouped by family, every family present. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}} (pydantic: \"errors\" instead of \"message\"). Polars frames are {columns, dtypes, rows}; pandas frames add index and write NA/NaN/NaT as null. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `.venv/bin/python ../tools/parity/golden_ranking.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "absolute_return": [
+   "ret_1m",
+   "ret_3m",
+   "ret_6m",
+   "ret_9m",
+   "ret_12m",
+   "avg_return_12_9_6_3_1",
+   "avg_return_12_9_6_3",
+   "avg_return_12_9_6",
+   "avg_return_12_9",
+   "avg_return_12_6_3_1",
+   "avg_return_12_6_3",
+   "avg_return_12_6",
+   "avg_return_12_3_1",
+   "avg_return_12_3",
+   "avg_return_12_9_3_1",
+   "avg_return_12_9_3"
+  ],
+  "momentum_quality": [
+   "accel_21_105",
+   "accel_21_105_vs",
+   "excess_ret_3m",
+   "excess_ret_6m",
+   "excess_ret_12m",
+   "resid_ret_12m",
+   "rs_persist_126",
+   "mom_pctile",
+   "rank_persist_20",
+   "nse_mr6",
+   "nse_mr12",
+   "nse_momentum_score"
+  ],
+  "non_momentum": [
+   "vol_12m",
+   "beta_12m",
+   "pe",
+   "marketcap_cr",
+   "close",
+   "close_raw",
+   "away_high_ath",
+   "away_high_1y",
+   "vol_1m",
+   "vol_3m",
+   "vol_6m",
+   "vol_9m",
+   "desk_score",
+   "atr_14",
+   "downside_vol_6m",
+   "downside_vol_12m",
+   "sortino_6m",
+   "sortino_12m"
+  ],
+  "participation": [
+   "vol_expansion_1w_12m",
+   "vol_exp_21_126",
+   "vol_persist_20"
+  ],
+  "path_quality": [
+   "pos_days_1m",
+   "pos_days_3m",
+   "pos_days_6m",
+   "pos_days_9m",
+   "pos_days_12m",
+   "eff_ratio_63",
+   "max_dd_6m",
+   "max_dd_12m",
+   "underwater_12m",
+   "ret_ex_top3_12m"
+  ],
+  "risk_adjusted": [
+   "abs_div_beta_12m",
+   "sharpe_div_beta_12m",
+   "avg_sharpe_div_beta_12_9_6_3",
+   "avg_sharpe_div_beta_12_6_3",
+   "avg_sharpe_div_beta_12_6"
+  ],
+  "rsi": [
+   "rsi_1m",
+   "rsi_3m",
+   "rsi_6m",
+   "rsi_9m",
+   "rsi_12m",
+   "avg_rsi_12_9_6_3_1",
+   "avg_rsi_12_9_6_3",
+   "avg_rsi_12_9_6",
+   "avg_rsi_12_9",
+   "avg_rsi_12_6_3_1",
+   "avg_rsi_12_6_3",
+   "avg_rsi_12_6",
+   "avg_rsi_12_3_1",
+   "avg_rsi_12_3",
+   "avg_rsi_12_9_3_1",
+   "avg_rsi_12_9_3"
+  ],
+  "sharpe_return": [
+   "sharpe_1m",
+   "sharpe_3m",
+   "sharpe_6m",
+   "sharpe_9m",
+   "sharpe_12m",
+   "avg_sharpe_12_9_6_3_1",
+   "avg_sharpe_12_9_6_3",
+   "avg_sharpe_12_9_6",
+   "avg_sharpe_12_9",
+   "avg_sharpe_12_6_3_1",
+   "avg_sharpe_12_6_3",
+   "avg_sharpe_12_6",
+   "avg_sharpe_12_3_1",
+   "avg_sharpe_12_3",
+   "avg_sharpe_12_9_3_1",
+   "avg_sharpe_12_9_3",
+   "avg_sharpe_6_3",
+   "avg_sharpe_3_1",
+   "avg_sharpe_6_1"
+  ],
+  "skip_month": [
+   "ret_12m_minus_1m",
+   "ret_12m_minus_2m"
+  ],
+  "trend_structure": [
+   "ma_dist_20",
+   "ma_dist_50",
+   "ma_dist_100",
+   "ma_dist_200",
+   "ma_stack_score",
+   "atr_ext_20",
+   "ma50_slope_20",
+   "regime_priority"
+  ]
+ }
+}

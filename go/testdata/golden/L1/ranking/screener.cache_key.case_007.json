@@ -1,0 +1,67 @@
+{
+ "fn": "baskfy_core.screener.cache_key",
+ "inputs": {
+  "as_of": "2026-08-18",
+  "data_version": 3,
+  "definition": {
+   "apply_filters_on": "decile_1",
+   "away_from_high": {
+    "ath": 25,
+    "one_year": 30
+   },
+   "circuits": {
+    "m1": 250,
+    "m12": 5
+   },
+   "historical_date": "2026-08-14",
+   "ignore_above_beta": 2,
+   "ignore_top_beta": {
+    "count": 0,
+    "enabled": true
+   },
+   "ignore_top_volatility": {
+    "count": 10,
+    "enabled": true
+   },
+   "index": "nifty-500",
+   "marketcap": {
+    "from": "500",
+    "to": "50000.00"
+   },
+   "median_volume_1y": 10000000,
+   "min_return_1y": "10.5",
+   "moving_average": {
+    "above_200": true,
+    "above_50": true,
+    "below_20": true,
+    "enabled": true
+   },
+   "pe": {
+    "enabled": true,
+    "from": "0",
+    "to": "40"
+   },
+   "positive_days": {
+    "m1": 40,
+    "m12": 50
+   },
+   "price": {
+    "from": "50"
+   },
+   "series": [
+    "EQ",
+    "BE"
+   ],
+   "sort_by": "avg_sharpe_12_6_3_1"
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "every filter. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}} (pydantic: \"errors\" instead of \"message\"). Polars frames are {columns, dtypes, rows}; pandas frames add index and write NA/NaN/NaT as null. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `.venv/bin/python ../tools/parity/golden_ranking.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": "screen:301d33d5195260c8d4d799703c271179e1bfaf21d7c2c9fc7e411b3639991cfe:2026-08-18:3"
+}

@@ -1,0 +1,39 @@
+{
+ "fn": "baskfy_core.backtest_metrics.rolling_distribution",
+ "inputs": {
+  "dates": [],
+  "equity": []
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "empty. Decimals are strings; dates are ISO days; enums are their values; polars frames are {columns, dtypes, rows}. Prices: open/close are the adjusted series (house rule 6), price_open/price_close the raw print, read only when price_only is true. Config is BacktestConfig.model_dump(mode='json'). A raised engine error is {error: {type, message}}. Synthetic seeded fixtures (weekday calendar from 2024-01-01, holidays 2024-01-26 and 2024-03-25). Regenerate with `.venv/bin/python ../tools/parity/golden_backtest.py` from decile-blueprint; each case is computed from its stored inputs.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "as_dict": {
+   "count": 0,
+   "max": null,
+   "median": null,
+   "min": null,
+   "negative_share": null,
+   "p05": null,
+   "p25": null,
+   "p75": null,
+   "p95": null
+  },
+  "raw": {
+   "count": 0,
+   "maximum": null,
+   "median": null,
+   "minimum": null,
+   "negative_share": null,
+   "p05": null,
+   "p25": null,
+   "p75": null,
+   "p95": null
+  }
+ }
+}

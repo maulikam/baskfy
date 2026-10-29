@@ -88,7 +88,7 @@ verify() {
       echo "  ^ in $(docker inspect -f '{{.Name}}' "$c")"; bad=1; fi
     if docker exec "$c" env 2>/dev/null | grep -E '^DRY_RUN=' | grep -viE '=true$'; then bad=1; fi
   done
-  [ "$bad" = 0 ] || { echo "✗ a money flag is not false — stopping the stack" >&2; return 1; }; echo "✓ read-only: every money flag false, DRY_RUN true"
+  [ "$bad" = 0 ] || { echo "✗ a money flag is not false" >&2; return 1; }; echo "✓ read-only: every money flag false, DRY_RUN true"
 }
 
 case "${1:-}" in
@@ -123,7 +123,7 @@ up)
   compose up -d --wait postgres redis
   compose run --rm migrate
   compose up -d $SVC
-  verify || { compose stop $SVC; exit 1; }
+  verify || { echo "✗ stopping the stack" >&2; compose stop $SVC; exit 1; }
   echo "app  http://localhost:8480    desk http://localhost:8481"
   echo "remote (after 'tailscale serve' — see docs/LOCAL.md): $URL"
   ;;

@@ -20,7 +20,9 @@ DOCK="$ROOT/decile-blueprint/infra/docker"
 BUNDLE="${BASKFY_EXIT_BUNDLE:-/Volumes/T7-Work/baskfy-aws-exit-20261029/bundle}"
 HOME_DIR="${BASKFY_LOCAL_DIR:-/Volumes/T7-Work/baskfy-local}"
 TAG="${BASKFY_LOCAL_TAG:-d78907f}"
-URL="${BASKFY_LOCAL_URL:-http://localhost:8480}"
+# The public URL (NEXTAUTH_URL, the Kite callback's origin). `tailscale` writes it to public.url
+# once, so a plain `up` keeps using it; BASKFY_LOCAL_URL still overrides for one run.
+URL="${BASKFY_LOCAL_URL:-$(cat "$HOME_DIR/public.url" 2>/dev/null || echo http://localhost:8480)}"
 P="${BASKFY_LOCAL_PROJECT:-baskfy-local}"
 SVC="caddy web api worker ingest-worker beat desk desk-daily swing-monitor twt-auto session-supervisor options-monitor fno-monitor"
 
@@ -127,10 +129,26 @@ up)
   echo "app  http://localhost:8480    desk http://localhost:8481"
   echo "remote (after 'tailscale serve' — see docs/LOCAL.md): $URL"
   ;;
+tailscale)
+  # Maulik, 29 Oct 2026: reach it from the phone over Tailscale, never the public internet.
+  # `serve` proxies the tailnet's HTTPS to the 127.0.0.1 ports; Caddy stays bound to localhost.
+  TS="$(command -v tailscale || echo /Applications/Tailscale.app/Contents/MacOS/Tailscale)"
+  [ -x "$TS" ] || die "Tailscale is not installed: brew install --cask tailscale-app"
+  NAME="$("$TS" status --json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))' 2>/dev/null || true)"
+  [ -n "$NAME" ] || die "Tailscale is not signed in: open the Tailscale app and log in"
+  "$TS" serve --bg --https=443 http://127.0.0.1:8480 || die "serve refused — enable HTTPS certificates: https://login.tailscale.com/admin/dns"
+  "$TS" serve --bg --https=8443 http://127.0.0.1:8481
+  echo "https://$NAME" > "$HOME_DIR/public.url"
+  echo "app  https://$NAME"; echo "desk https://$NAME:8443"
+  NOW=$(TZ=Asia/Kolkata date +%H%M)
+  if [ "$NOW" -ge 1840 ] && [ "$NOW" -le 2120 ]; then
+    echo "nightly window: not restarting now — run 'local.sh up' after 21:20 IST so the app uses this URL"
+  else exec "$0" up; fi
+  ;;
 stage)   stage ;;
 down)    compose stop ;;
 verify)  verify ;;
 status)  compose ps --format '{{.Service}}\t{{.Status}}' ;;
 rowcounts) rowcounts ;;
-*) echo "usage: $0 restore|up|down|verify|status|rowcounts" >&2; exit 64 ;;
+*) echo "usage: $0 restore|up|down|verify|status|rowcounts|tailscale" >&2; exit 64 ;;
 esac

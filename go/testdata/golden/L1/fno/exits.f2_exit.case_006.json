@@ -1,0 +1,31 @@
+{
+ "fn": "baskfy_core.fno.exits.f2_exit",
+ "inputs": {
+  "common": {
+   "hard_exit_before_expiry": 1,
+   "hard_exit_time": "15:00:00",
+   "latest_window_end": "15:00:00",
+   "market_open": "09:15:00",
+   "max_lots": 2,
+   "max_lots_ceiling": 10,
+   "plan_ttl_minutes": 30
+  },
+  "now": "2026-10-26T15:00:00",
+  "price": "2500",
+  "roll_date": "2026-10-26",
+  "stop": "2400",
+  "time_exit_date": null
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "15:00 on the roll date: ROLL. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "message": "15:00 on E - n: sell the held month, buy the next",
+  "reason": "ROLL"
+ }
+}

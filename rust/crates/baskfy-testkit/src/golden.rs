@@ -249,6 +249,11 @@ impl Golden {
         decode_frame(self.input(key)?).map_err(|e| self.at(key, e))
     }
 
+    /// Input `key` as a pandas frame (any of the three shapes; see the `pandas` module).
+    pub fn input_pandas_frame(&self, key: &str) -> Result<crate::PandasFrame, TestkitError> {
+        crate::decode_pandas_frame(self.input(key)?).map_err(|e| self.at(key, e))
+    }
+
     /// The expected output deserialised into a serde type.
     pub fn output_as<T: DeserializeOwned>(&self) -> Result<T, TestkitError> {
         serde_json::from_value(self.output.clone())

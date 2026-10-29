@@ -1,0 +1,159 @@
+{
+ "fn": "baskfy_core.twt.signals.liquidity_floor",
+ "inputs": {
+  "config": {
+   "backtest": {
+    "initial_capital_inr": "1000000",
+    "is_oos_split": "2023-01-01",
+    "start": "2017-10-16"
+   },
+   "breadth": {
+    "dma_bars": 200,
+    "min_pct_above_dma": 40.0,
+    "pct_decimals": 4
+   },
+   "costs": {
+    "cost_bps_per_side": "25.0"
+   },
+   "data": {
+    "bars_required": 260,
+    "etf_name_pattern": "\\bETF\\b",
+    "etf_symbol_pattern": "(BEES|ETF|IETF)$",
+    "etf_universe_slug": "etf",
+    "instrument_type": "EQ",
+    "keep_null_series": true,
+    "rolling_min_share": 0.9,
+    "series_allowed": [
+     "EQ",
+     "BE",
+     "BZ"
+    ],
+    "thin_session_min_periods": 5,
+    "thin_session_min_share": 0.25,
+    "thin_session_window_bars": 41
+   },
+   "entry": {
+    "entry": "NEXT_OPEN",
+    "entry_min_sessions_out": 5,
+    "min_turnover_inr": "10000000",
+    "rank_key": "SIGNAL_TURNOVER",
+    "research_min_turnover_inr": "20000000",
+    "turnover_avg_bars": 20
+   },
+   "exits": {
+    "close_clamp_fallback": "0.999",
+    "close_clamp_fraction": "0.9999",
+    "gtt_band_max_pct": "0.30",
+    "gtt_band_min_pct": "0.005",
+    "gtt_limit_fraction": "0.97",
+    "no_bar_sessions": 5,
+    "qulla": {
+     "breakeven_after_r": 1.0,
+     "fast_trail_min_adr_pct": 6.0,
+     "max_stop_adr_multiple": 1.0,
+     "max_stop_distance_pct": 10.0,
+     "partial_denominator": 3,
+     "partial_earliest_bar": 3,
+     "partial_latest_bar": 5,
+     "partial_numerator": 1
+    },
+    "qulla_exits": true,
+    "stop_pct": "20.0",
+    "trail_pct": "20.0"
+   },
+   "scan": {
+    "min_close_raw": "30.0",
+    "min_vol_sma": "10000.0",
+    "month_low_months_back": 3,
+    "month_low_multiple": "1.3",
+    "tight_band_pct": "3.01",
+    "tight_weeks": 3,
+    "vol_sma_bars": 50
+   },
+   "sizing": {
+    "first_live_entries": 10,
+    "max_entries_per_name": 2,
+    "max_new_entries_per_session": 3,
+    "max_position_pct": "12.5",
+    "max_position_vs_turnover": "0.01",
+    "max_slots": 10,
+    "min_trade_value_inr": "10000",
+    "pyramiding": true,
+    "risk_multiplier_first_live": "0.5"
+   }
+  },
+  "floor_inr": null,
+  "frame": {
+   "columns": [
+    "turnover_avg_20"
+   ],
+   "dtypes": {
+    "turnover_avg_20": "Float64"
+   },
+   "rows": [
+    [
+     null
+    ],
+    [
+     0.0
+    ],
+    [
+     19999999.99
+    ],
+    [
+     20000000.0
+    ],
+    [
+     20000000.01
+    ],
+    [
+     50000000.0
+    ]
+   ]
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "a config floor of 1 crore. Inputs are JSON and each case is recomputed from them; Decimals are strings, dates ISO days, enums their values; a config is its field dict, decoded by each field's default type. Polars frames are {columns, dtypes, rows}; a Panel matrix is rows=instruments x cols=sessions with null for NaN; NaN/inf floats are null; a raise is {\"raises\": {\"type\", \"message\"}}. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_twt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "columns": [
+   "turnover_avg_20",
+   "passes"
+  ],
+  "dtypes": {
+   "passes": "Boolean",
+   "turnover_avg_20": "Float64"
+  },
+  "rows": [
+   [
+    null,
+    false
+   ],
+   [
+    0.0,
+    false
+   ],
+   [
+    19999999.99,
+    true
+   ],
+   [
+    20000000.0,
+    true
+   ],
+   [
+    20000000.01,
+    true
+   ],
+   [
+    50000000.0,
+    true
+   ]
+  ]
+ }
+}

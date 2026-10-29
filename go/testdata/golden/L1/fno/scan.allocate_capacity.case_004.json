@@ -1,0 +1,54 @@
+{
+ "fn": "baskfy_core.fno.scan.allocate_capacity",
+ "inputs": {
+  "f2": {
+   "atr_sessions": 14,
+   "breakout_sessions": 20,
+   "max_open": 5,
+   "max_per_industry": 2,
+   "max_sessions": 40,
+   "month_pause_r": "-6",
+   "near_month_min_sessions": 3,
+   "risk_per_trade_pct": "1.0",
+   "roll_before_expiry": 1,
+   "stop_atr": "3.0",
+   "trail": true,
+   "trend_sessions": 50,
+   "turnover_sessions": 20,
+   "universe_turnover_pct": "60"
+  },
+  "open_industries": [
+   "X",
+   "Y",
+   "Z",
+   null
+  ],
+  "ordered": [
+   [
+    "A",
+    null
+   ],
+   [
+    "B",
+    null
+   ],
+   [
+    "C",
+    null
+   ]
+  ]
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "f2_max_open 5 counts the book. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "A": null,
+  "B": "the book holds 5 of f2_max_open 5 positions",
+  "C": "the book holds 5 of f2_max_open 5 positions"
+ }
+}

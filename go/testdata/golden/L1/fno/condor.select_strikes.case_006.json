@@ -1,0 +1,108 @@
+{
+ "fn": "baskfy_core.fno.condor.select_strikes",
+ "inputs": {
+  "call_strikes": [
+   "42000",
+   "42500",
+   "43000",
+   "43500",
+   "44000",
+   "44500",
+   "45000",
+   "45500",
+   "46000",
+   "46500",
+   "47000",
+   "47500",
+   "48000",
+   "48500",
+   "49000",
+   "49500",
+   "50000",
+   "50500",
+   "51000",
+   "51500",
+   "52000",
+   "52500",
+   "53000",
+   "53500",
+   "54000",
+   "54500",
+   "55000"
+  ],
+  "config": {
+   "entry_sessions_before": 15,
+   "entry_window_end": "10:30:00",
+   "index_underlyings": [
+    "NIFTY",
+    "BANKNIFTY"
+   ],
+   "loss_close_mult": "1.5",
+   "max_cost_share_pct": "25",
+   "max_open_per_underlying": 1,
+   "max_spread_pct": "5",
+   "min_short_oi_lots": 500,
+   "pause_consecutive": 3,
+   "pause_loss_r": "-0.6",
+   "plan_time": "09:20:00",
+   "profit_take_pct": "50",
+   "risk_per_trade_pct": "1.0",
+   "short_sigma": "1.5",
+   "slippage_min_inr": "0.05",
+   "slippage_pct": "0.5",
+   "underlyings": [
+    "NIFTY",
+    "BANKNIFTY"
+   ],
+   "wing_sigma": "1.0"
+  },
+  "days_to_expiry": 30,
+  "forward": "48000",
+  "iv": 0.18,
+  "put_strikes": [
+   "42000",
+   "42500",
+   "43000",
+   "43500",
+   "44000",
+   "44500",
+   "45000",
+   "45500",
+   "46000",
+   "46500",
+   "47000",
+   "47500",
+   "48000",
+   "48500",
+   "49000",
+   "49500",
+   "50000",
+   "50500",
+   "51000",
+   "51500",
+   "52000",
+   "52500",
+   "53000",
+   "53500",
+   "54000",
+   "54500",
+   "55000"
+  ]
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "wider sigmas from config: the long put falls off the grid. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "reasons": [
+   "no listed strike for the long put"
+  ],
+  "sd": "2477.011013629902048000",
+  "state": "REJECTED_STRUCTURE",
+  "strikes": null
+ }
+}

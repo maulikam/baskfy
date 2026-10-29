@@ -1,0 +1,47 @@
+{
+ "fn": "baskfy_core.twt.sizing.size_entry",
+ "inputs": {
+  "cash_available": "2500000",
+  "config": {
+   "first_live_entries": 10,
+   "max_entries_per_name": 2,
+   "max_new_entries_per_session": 3,
+   "max_position_pct": "12.5",
+   "max_position_vs_turnover": "0.01",
+   "max_slots": 10,
+   "min_trade_value_inr": "10000",
+   "pyramiding": true,
+   "risk_multiplier_first_live": "0.5"
+  },
+  "entry_price": "412.35",
+  "equity": "2500000",
+  "slot_multiplier": "1",
+  "stop_price": "329.85",
+  "turnover_avg_inr": "500000000"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "the slot: a tenth of 25 lakh. Inputs are JSON and each case is recomputed from them; Decimals are strings, dates ISO days, enums their values; a config is its field dict, decoded by each field's default type. Polars frames are {columns, dtypes, rows}; a Panel matrix is rows=instruments x cols=sessions with null for NaN; NaN/inf floats are null; a raise is {\"raises\": {\"type\", \"message\"}}. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_twt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "derived": {
+   "placed": true,
+   "turnover_capped": false
+  },
+  "sized": {
+   "cap": "SLOT",
+   "caps_applied": [],
+   "entry_price": "412.35",
+   "position_pct": "10.00",
+   "quantity": 606,
+   "refusal": null,
+   "risk_inr": "49995.00",
+   "stop_price": "329.85",
+   "value_inr": "249884.10"
+  }
+ }
+}

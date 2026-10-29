@@ -1,0 +1,69 @@
+{
+ "fn": "baskfy_core.vbt.sleeve.sleeve_value",
+ "inputs": {
+  "capital_inr": "1000000",
+  "open_positions": [
+   {
+    "entry_avg": "101.50",
+    "instrument_id": 1,
+    "mark": "111.25",
+    "quantity_open": 10
+   },
+   {
+    "entry_avg": "102.50",
+    "instrument_id": 2,
+    "mark": "112.25",
+    "quantity_open": 20
+   },
+   {
+    "entry_avg": "103.50",
+    "instrument_id": 3,
+    "mark": "113.25",
+    "quantity_open": 30
+   },
+   {
+    "entry_avg": "104.50",
+    "instrument_id": 4,
+    "mark": "114.25",
+    "quantity_open": 40
+   },
+   {
+    "entry_avg": "105.50",
+    "instrument_id": 5,
+    "mark": "115.25",
+    "quantity_open": 50
+   }
+  ],
+  "realised_inr": "250000.125",
+  "working_orders": []
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "five positions in profit, a fractional realised figure. Inputs are JSON and each function is called from them after a JSON round trip. Decimals are strings; dates are ISO days; enums are their values; polars frames are {columns, dtypes, rows}; numpy matrices are row lists with NaN as null. config is a whole VbtConfig decoded by each sub-dataclass's declared field types (exits.qulla is the swing StopConfig). A SessionCalendar is {sessions, dropped, counts}. A raise is {raises: {type, message}}. Expression-valued functions are golden as their value over inputs.frame. Synthetic seeded fixtures, rounded before they are written. Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_vbt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "cash_available_inr": "1234375.125",
+  "cash_inr": "1234375.125",
+  "equity_inr": "1251462.625",
+  "open_exposure_inr": "17087.50",
+  "quantized": {
+   "capital_inr": "1000000.00",
+   "committed_inr": "0.00",
+   "cost_of_open_inr": "15625.00",
+   "realised_inr": "250000.12",
+   "value_of_open_inr": "17087.50"
+  },
+  "unrealised_inr": "1462.50",
+  "value": {
+   "capital_inr": "1000000",
+   "committed_inr": "0",
+   "cost_of_open_inr": "15625.00",
+   "realised_inr": "250000.125",
+   "value_of_open_inr": "17087.50"
+  }
+ }
+}

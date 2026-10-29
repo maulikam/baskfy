@@ -1,0 +1,19 @@
+{
+ "fn": "baskfy_core.fno.sizing.margin_check",
+ "inputs": {
+  "free_inr": "200000",
+  "required_inr": "150000"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "inside free margin. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "message": "₹150000.00 within free ₹200000.00",
+  "verdict": "OK"
+ }
+}

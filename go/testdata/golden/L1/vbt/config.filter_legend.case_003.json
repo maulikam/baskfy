@@ -1,0 +1,55 @@
+{
+ "fn": "baskfy_core.vbt.config.filter_legend",
+ "inputs": {
+  "trend": {
+   "breakout_high_bars": 55,
+   "dma_bars": 150,
+   "max_change_pct": 12.0,
+   "max_ret_20_pct": 22.5,
+   "min_close_position": 0.55,
+   "min_turnover_avg_inr": 15000000.0,
+   "ret_bars": 10,
+   "turnover_bars": 10
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "a recalibrated legend: Rs 1.5 crore, 22.5%, 0.55, 12%. Inputs are JSON and each function is called from them after a JSON round trip. Decimals are strings; dates are ISO days; enums are their values; polars frames are {columns, dtypes, rows}; numpy matrices are row lists with NaN as null. config is a whole VbtConfig decoded by each sub-dataclass's declared field types (exits.qulla is the swing StopConfig). A SessionCalendar is {sessions, dropped, counts}. A raise is {raises: {type, message}}. Expression-valued functions are golden as their value over inputs.frame. Synthetic seeded fixtures, rounded before they are written. Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_vbt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": [
+  {
+   "code": "A",
+   "label": "Above its 150-day average",
+   "rule": "close > SMA(close, 150)"
+  },
+  {
+   "code": "B",
+   "label": "New 55-day high",
+   "rule": "close > the highest high of the prior 55 sessions (today excluded)"
+  },
+  {
+   "code": "C",
+   "label": "Not already extended",
+   "rule": "10-day return < 22.5%"
+  },
+  {
+   "code": "D",
+   "label": "Closed strong",
+   "rule": "(close - low) / (high - low) >= 0.55"
+  },
+  {
+   "code": "E",
+   "label": "Not a spike",
+   "rule": "the day's change <= 12%"
+  },
+  {
+   "code": "F",
+   "label": "Liquid enough to exit",
+   "rule": "10-day average turnover >= Rs 1.5 crore"
+  }
+ ]
+}

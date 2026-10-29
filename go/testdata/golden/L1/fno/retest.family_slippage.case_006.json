@@ -1,0 +1,161 @@
+{
+ "fn": "baskfy_core.fno.retest.family_slippage",
+ "inputs": {
+  "families": [
+   "B4",
+   "B4_LOSS_CLOSE",
+   "B1",
+   "B2",
+   "C1",
+   "F2",
+   "A0",
+   "E",
+   "F3N"
+  ],
+  "measured": {
+   "NIFTY": [
+    0.004,
+    25
+   ],
+   "S00": [
+    0.01,
+    25
+   ],
+   "S01": [
+    0.011,
+    25
+   ],
+   "S02": [
+    0.012,
+    25
+   ],
+   "S03": [
+    0.013000000000000001,
+    25
+   ],
+   "S04": [
+    0.014,
+    25
+   ],
+   "S05": [
+    0.015,
+    25
+   ],
+   "S06": [
+    0.016,
+    25
+   ],
+   "S07": [
+    0.017,
+    25
+   ],
+   "S08": [
+    0.018000000000000002,
+    25
+   ],
+   "S09": [
+    0.019,
+    25
+   ],
+   "S10": [
+    0.02,
+    25
+   ],
+   "S11": [
+    0.020999999999999998,
+    25
+   ],
+   "S12": [
+    0.022,
+    25
+   ],
+   "S13": [
+    0.023,
+    25
+   ],
+   "S14": [
+    0.024,
+    25
+   ],
+   "S15": [
+    0.025,
+    25
+   ],
+   "S16": [
+    0.026000000000000002,
+    25
+   ],
+   "S17": [
+    0.027000000000000003,
+    25
+   ],
+   "S18": [
+    0.027999999999999997,
+    25
+   ],
+   "S19": [
+    0.028999999999999998,
+    25
+   ],
+   "S99": [
+    0.5,
+    5
+   ]
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "a name below 20 sessions and an index are not stock names. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "A0": {
+   "names": 0,
+   "pct": null,
+   "source": "ASSUMED"
+  },
+  "B1": {
+   "names": 20,
+   "pct": 0.0195,
+   "source": "MEASURED"
+  },
+  "B2": {
+   "names": 20,
+   "pct": 0.0195,
+   "source": "MEASURED"
+  },
+  "B4": {
+   "names": 0,
+   "pct": null,
+   "source": "ASSUMED"
+  },
+  "B4_LOSS_CLOSE": {
+   "names": 0,
+   "pct": null,
+   "source": "ASSUMED"
+  },
+  "C1": {
+   "names": 20,
+   "pct": 0.0195,
+   "source": "MEASURED"
+  },
+  "E": {
+   "names": 0,
+   "pct": null,
+   "source": "ASSUMED"
+  },
+  "F2": {
+   "names": 0,
+   "pct": null,
+   "source": "ASSUMED"
+  },
+  "F3N": {
+   "names": 0,
+   "pct": null,
+   "source": "ASSUMED"
+  }
+ }
+}

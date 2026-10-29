@@ -1,0 +1,51 @@
+{
+ "fn": "baskfy_core.vbt.sleeve.sleeve_value",
+ "inputs": {
+  "capital_inr": "500000",
+  "open_positions": [
+   {
+    "entry_avg": "123.456",
+    "instrument_id": 1,
+    "mark": "123.454",
+    "quantity_open": 33
+   }
+  ],
+  "realised_inr": "0",
+  "working_orders": [
+   {
+    "instrument_id": 2,
+    "limit_price": "99.995",
+    "quantity": 7
+   }
+  ]
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "sub-paise amounts: quantize rounds half-even to the paise. Inputs are JSON and each function is called from them after a JSON round trip. Decimals are strings; dates are ISO days; enums are their values; polars frames are {columns, dtypes, rows}; numpy matrices are row lists with NaN as null. config is a whole VbtConfig decoded by each sub-dataclass's declared field types (exits.qulla is the swing StopConfig). A SessionCalendar is {sessions, dropped, counts}. A raise is {raises: {type, message}}. Expression-valued functions are golden as their value over inputs.frame. Synthetic seeded fixtures, rounded before they are written. Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_vbt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "cash_available_inr": "495225.987",
+  "cash_inr": "495925.952",
+  "equity_inr": "499999.934",
+  "open_exposure_inr": "4773.947",
+  "quantized": {
+   "capital_inr": "500000.00",
+   "committed_inr": "699.96",
+   "cost_of_open_inr": "4074.05",
+   "realised_inr": "0.00",
+   "value_of_open_inr": "4073.98"
+  },
+  "unrealised_inr": "-0.066",
+  "value": {
+   "capital_inr": "500000",
+   "committed_inr": "699.965",
+   "cost_of_open_inr": "4074.048",
+   "realised_inr": "0",
+   "value_of_open_inr": "4073.982"
+  }
+ }
+}

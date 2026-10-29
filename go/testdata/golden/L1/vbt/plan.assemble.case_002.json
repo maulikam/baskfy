@@ -1,0 +1,310 @@
+{
+ "fn": "baskfy_core.vbt.plan.assemble",
+ "inputs": {
+  "entries": [
+   {
+    "cap": "CASH",
+    "instrument_id": 3,
+    "kind": "BUY_AT_MARKET",
+    "limit_price": "64.85",
+    "note": "",
+    "position_id": null,
+    "quantity": 100,
+    "reason": null,
+    "stop_price": "57.05",
+    "symbol": "CCC",
+    "value_inr": "6485.00"
+   },
+   {
+    "cap": "SLOT",
+    "instrument_id": 1,
+    "kind": "PLACE_LIMIT",
+    "limit_price": "250.00",
+    "note": "limit at the signal close; slot bound the size",
+    "position_id": null,
+    "quantity": 400,
+    "reason": null,
+    "stop_price": "220.00",
+    "symbol": "AAA",
+    "value_inr": "100000.00"
+   }
+  ],
+  "equity": "1000000",
+  "exits": [
+   {
+    "cap": null,
+    "instrument_id": 7,
+    "kind": "ARM_GTT",
+    "limit_price": null,
+    "note": "",
+    "position_id": null,
+    "quantity": 25,
+    "reason": null,
+    "stop_price": "301.15",
+    "symbol": "GGG",
+    "value_inr": "0"
+   },
+   {
+    "cap": null,
+    "instrument_id": 5,
+    "kind": "RAISE_GTT_STOP",
+    "limit_price": null,
+    "note": "",
+    "position_id": 55,
+    "quantity": 66,
+    "reason": null,
+    "stop_price": "100.25",
+    "symbol": "EEE",
+    "value_inr": "0"
+   },
+   {
+    "cap": null,
+    "instrument_id": 5,
+    "kind": "SELL_AT_OPEN",
+    "limit_price": null,
+    "note": "",
+    "position_id": 55,
+    "quantity": 33,
+    "reason": "PARTIAL",
+    "stop_price": null,
+    "symbol": "EEE",
+    "value_inr": "0"
+   },
+   {
+    "cap": null,
+    "instrument_id": 6,
+    "kind": "CANCEL_LIMIT",
+    "limit_price": "100.00",
+    "note": "",
+    "position_id": null,
+    "quantity": 100,
+    "reason": null,
+    "stop_price": null,
+    "symbol": "FFF",
+    "value_inr": "0"
+   },
+   {
+    "cap": null,
+    "instrument_id": 4,
+    "kind": "SELL_AT_OPEN",
+    "limit_price": null,
+    "note": "close below the EMA",
+    "position_id": null,
+    "quantity": 70,
+    "reason": "EMA_EXIT",
+    "stop_price": null,
+    "symbol": "DDD",
+    "value_inr": "0"
+   }
+  ],
+  "gate": "OPEN",
+  "session": "2026-10-27",
+  "skips": [],
+  "source": "LIVE"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "every kind: LINE_ORDER decides, symbol breaks the tie; a live market buy counts as an entry. Inputs are JSON and each function is called from them after a JSON round trip. Decimals are strings; dates are ISO days; enums are their values; polars frames are {columns, dtypes, rows}; numpy matrices are row lists with NaN as null. config is a whole VbtConfig decoded by each sub-dataclass's declared field types (exits.qulla is the swing StopConfig). A SessionCalendar is {sessions, dropped, counts}. A raise is {raises: {type, message}}. Expression-valued functions are golden as their value over inputs.frame. Synthetic seeded fixtures, rounded before they are written. Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_vbt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "canonical": [
+   {
+    "instrument_id": 4,
+    "kind": "SELL_AT_OPEN",
+    "limit_price": "",
+    "position_id": "",
+    "quantity": 70,
+    "stop_price": "",
+    "symbol": "DDD"
+   },
+   {
+    "instrument_id": 5,
+    "kind": "SELL_AT_OPEN",
+    "limit_price": "",
+    "position_id": 55,
+    "quantity": 33,
+    "stop_price": "",
+    "symbol": "EEE"
+   },
+   {
+    "instrument_id": 6,
+    "kind": "CANCEL_LIMIT",
+    "limit_price": "100.00",
+    "position_id": "",
+    "quantity": 100,
+    "stop_price": "",
+    "symbol": "FFF"
+   },
+   {
+    "instrument_id": 7,
+    "kind": "ARM_GTT",
+    "limit_price": "",
+    "position_id": "",
+    "quantity": 25,
+    "stop_price": "301.15",
+    "symbol": "GGG"
+   },
+   {
+    "instrument_id": 5,
+    "kind": "RAISE_GTT_STOP",
+    "limit_price": "",
+    "position_id": 55,
+    "quantity": 66,
+    "stop_price": "100.25",
+    "symbol": "EEE"
+   },
+   {
+    "instrument_id": 1,
+    "kind": "PLACE_LIMIT",
+    "limit_price": "250.00",
+    "position_id": "",
+    "quantity": 400,
+    "stop_price": "220.00",
+    "symbol": "AAA"
+   },
+   {
+    "instrument_id": 3,
+    "kind": "BUY_AT_MARKET",
+    "limit_price": "64.85",
+    "position_id": "",
+    "quantity": 100,
+    "stop_price": "57.05",
+    "symbol": "CCC"
+   }
+  ],
+  "entries": [
+   {
+    "cap": "SLOT",
+    "instrument_id": 1,
+    "kind": "PLACE_LIMIT",
+    "limit_price": "250.00",
+    "note": "limit at the signal close; slot bound the size",
+    "position_id": null,
+    "quantity": 400,
+    "reason": null,
+    "stop_price": "220.00",
+    "symbol": "AAA",
+    "value_inr": "100000.00"
+   },
+   {
+    "cap": "CASH",
+    "instrument_id": 3,
+    "kind": "BUY_AT_MARKET",
+    "limit_price": "64.85",
+    "note": "",
+    "position_id": null,
+    "quantity": 100,
+    "reason": null,
+    "stop_price": "57.05",
+    "symbol": "CCC",
+    "value_inr": "6485.00"
+   }
+  ],
+  "plan": {
+   "gate": "OPEN",
+   "generated_from": "LIVE",
+   "lines": [
+    {
+     "cap": null,
+     "instrument_id": 4,
+     "kind": "SELL_AT_OPEN",
+     "limit_price": null,
+     "note": "close below the EMA",
+     "position_id": null,
+     "quantity": 70,
+     "reason": "EMA_EXIT",
+     "stop_price": null,
+     "symbol": "DDD",
+     "value_inr": "0"
+    },
+    {
+     "cap": null,
+     "instrument_id": 5,
+     "kind": "SELL_AT_OPEN",
+     "limit_price": null,
+     "note": "",
+     "position_id": 55,
+     "quantity": 33,
+     "reason": "PARTIAL",
+     "stop_price": null,
+     "symbol": "EEE",
+     "value_inr": "0"
+    },
+    {
+     "cap": null,
+     "instrument_id": 6,
+     "kind": "CANCEL_LIMIT",
+     "limit_price": "100.00",
+     "note": "",
+     "position_id": null,
+     "quantity": 100,
+     "reason": null,
+     "stop_price": null,
+     "symbol": "FFF",
+     "value_inr": "0"
+    },
+    {
+     "cap": null,
+     "instrument_id": 7,
+     "kind": "ARM_GTT",
+     "limit_price": null,
+     "note": "",
+     "position_id": null,
+     "quantity": 25,
+     "reason": null,
+     "stop_price": "301.15",
+     "symbol": "GGG",
+     "value_inr": "0"
+    },
+    {
+     "cap": null,
+     "instrument_id": 5,
+     "kind": "RAISE_GTT_STOP",
+     "limit_price": null,
+     "note": "",
+     "position_id": 55,
+     "quantity": 66,
+     "reason": null,
+     "stop_price": "100.25",
+     "symbol": "EEE",
+     "value_inr": "0"
+    },
+    {
+     "cap": "SLOT",
+     "instrument_id": 1,
+     "kind": "PLACE_LIMIT",
+     "limit_price": "250.00",
+     "note": "limit at the signal close; slot bound the size",
+     "position_id": null,
+     "quantity": 400,
+     "reason": null,
+     "stop_price": "220.00",
+     "symbol": "AAA",
+     "value_inr": "100000.00"
+    },
+    {
+     "cap": "CASH",
+     "instrument_id": 3,
+     "kind": "BUY_AT_MARKET",
+     "limit_price": "64.85",
+     "note": "",
+     "position_id": null,
+     "quantity": 100,
+     "reason": null,
+     "stop_price": "57.05",
+     "symbol": "CCC",
+     "value_inr": "6485.00"
+    }
+   ],
+   "session": "2026-10-27",
+   "skips": [],
+   "sleeve_equity_inr": "1000000"
+  },
+  "plan_hash": "a543ad2ca7d6fd0be8e8b876b22fea36bf3b5356ef22f2f13fb218e71412afca",
+  "total_new_exposure_inr": "106485.00"
+ }
+}

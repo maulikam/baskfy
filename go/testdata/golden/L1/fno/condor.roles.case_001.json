@@ -1,0 +1,38 @@
+{
+ "fn": "baskfy_core.fno.condor.roles",
+ "inputs": {},
+ "meta": {
+  "known_bug": null,
+  "notes": "entry/exit sequences, option type and sign of every leg. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "ENTRY_SEQUENCE": [
+   "LONG_PUT",
+   "LONG_CALL",
+   "SHORT_PUT",
+   "SHORT_CALL"
+  ],
+  "EXIT_SEQUENCE": [
+   "SHORT_CALL",
+   "SHORT_PUT",
+   "LONG_CALL",
+   "LONG_PUT"
+  ],
+  "option_type_of": {
+   "LONG_CALL": "CE",
+   "LONG_PUT": "PE",
+   "SHORT_CALL": "CE",
+   "SHORT_PUT": "PE"
+  },
+  "sign_of": {
+   "LONG_CALL": 1,
+   "LONG_PUT": 1,
+   "SHORT_CALL": -1,
+   "SHORT_PUT": -1
+  }
+ }
+}

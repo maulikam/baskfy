@@ -1,0 +1,44 @@
+{
+ "fn": "baskfy_core.fno.sizing.size",
+ "inputs": {
+  "capital_inr": "0",
+  "ceilings": {
+   "book_monthly_loss_inr_max": "75000",
+   "max_open_positions_max": 10,
+   "max_per_underlying_max": 1,
+   "risk_pct_max": "1.0",
+   "risk_per_trade_inr_max": "25000"
+  },
+  "common": {
+   "hard_exit_before_expiry": 1,
+   "hard_exit_time": "15:00:00",
+   "latest_window_end": "15:00:00",
+   "market_open": "09:15:00",
+   "max_lots": 2,
+   "max_lots_ceiling": 10,
+   "plan_ttl_minutes": 30
+  },
+  "lot_size": 25,
+  "mode": "LIVE",
+  "risk_pct": "1.0",
+  "risk_per_unit": "235"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "live at ₹0: NO_SLEEVE_CAPITAL. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "lots": 0,
+  "lots_at_ceiling": null,
+  "max_loss_inr": "0",
+  "message": "sleeve capital is ₹0; a live plan needs capital Maulik has set",
+  "risk_budget_inr": "0",
+  "risk_per_lot_inr": "5875",
+  "sizing_mode": "BUDGET",
+  "state": "NO_SLEEVE_CAPITAL"
+ }
+}

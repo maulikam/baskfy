@@ -1,0 +1,69 @@
+{
+ "fn": "baskfy_core.fno.condor.select_strikes",
+ "inputs": {
+  "call_strikes": [
+   "21100",
+   "20800",
+   "20800",
+   "22000",
+   "20900"
+  ],
+  "config": {
+   "entry_sessions_before": 15,
+   "entry_window_end": "10:30:00",
+   "index_underlyings": [
+    "NIFTY",
+    "BANKNIFTY"
+   ],
+   "loss_close_mult": "1.5",
+   "max_cost_share_pct": "25",
+   "max_open_per_underlying": 1,
+   "max_spread_pct": "5",
+   "min_short_oi_lots": 500,
+   "pause_consecutive": 3,
+   "pause_loss_r": "-0.6",
+   "plan_time": "09:20:00",
+   "profit_take_pct": "50",
+   "risk_per_trade_pct": "1.0",
+   "short_sigma": "1.0",
+   "slippage_min_inr": "0.05",
+   "slippage_pct": "0.5",
+   "underlyings": [
+    "NIFTY",
+    "BANKNIFTY"
+   ],
+   "wing_sigma": "0.5"
+  },
+  "days_to_expiry": 21,
+  "forward": "20000",
+  "iv": 0.15,
+  "put_strikes": [
+   "18900",
+   "19200",
+   "18000",
+   "19200"
+  ]
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "unsorted, duplicated listed strikes. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "reasons": [],
+  "sd": "719.588923746108120000",
+  "state": null,
+  "strikes": {
+   "call_width": "300",
+   "long_call": "21100",
+   "long_put": "18900",
+   "max_width": "300",
+   "put_width": "300",
+   "short_call": "20800",
+   "short_put": "19200"
+  }
+ }
+}

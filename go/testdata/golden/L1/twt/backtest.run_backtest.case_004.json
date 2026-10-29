@@ -1,0 +1,434 @@
+{
+ "fn": "baskfy_core.twt.backtest.run_backtest",
+ "inputs": {
+  "gate_open": [
+   true,
+   true,
+   true,
+   true,
+   true,
+   true,
+   true,
+   true
+  ],
+  "panel": {
+   "close": [
+    [
+     100.0,
+     85.0,
+     100.0,
+     100.0,
+     100.0,
+     100.0,
+     100.0,
+     100.0
+    ],
+    [
+     30.0,
+     30.0,
+     30.0,
+     30.0,
+     30.0,
+     30.0,
+     30.0,
+     30.0
+    ]
+   ],
+   "high": [
+    [
+     101.0,
+     101.0,
+     101.0,
+     101.0,
+     101.0,
+     101.0,
+     101.0,
+     101.0
+    ],
+    [
+     30.3,
+     30.3,
+     30.3,
+     30.3,
+     30.3,
+     30.3,
+     30.3,
+     30.3
+    ]
+   ],
+   "instrument_ids": [
+    1,
+    2
+   ],
+   "low": [
+    [
+     99.0,
+     79.0,
+     99.0,
+     99.0,
+     99.0,
+     99.0,
+     99.0,
+     99.0
+    ],
+    [
+     29.7,
+     29.7,
+     29.7,
+     29.7,
+     29.7,
+     29.7,
+     29.7,
+     29.7
+    ]
+   ],
+   "open": [
+    [
+     100.0,
+     100.0,
+     100.0,
+     100.0,
+     100.0,
+     100.0,
+     100.0,
+     100.0
+    ],
+    [
+     30.0,
+     30.0,
+     30.0,
+     30.0,
+     30.0,
+     30.0,
+     30.0,
+     30.0
+    ]
+   ],
+   "sessions": [
+    "2024-01-01",
+    "2024-01-02",
+    "2024-01-03",
+    "2024-01-04",
+    "2024-01-05",
+    "2024-01-08",
+    "2024-01-09",
+    "2024-01-10"
+   ],
+   "signal": [
+    [
+     true,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ],
+    [
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false,
+     false
+    ]
+   ],
+   "symbols": [
+    "DAY0",
+    "BG"
+   ],
+   "turnover_avg_20": [
+    [
+     1000000000.0,
+     1000000000.0,
+     1000000000.0,
+     1000000000.0,
+     1000000000.0,
+     1000000000.0,
+     1000000000.0,
+     1000000000.0
+    ],
+    [
+     1000000000.0,
+     1000000000.0,
+     1000000000.0,
+     1000000000.0,
+     1000000000.0,
+     1000000000.0,
+     1000000000.0,
+     1000000000.0
+    ]
+   ],
+   "turnover_inr": [
+    [
+     50000000.0,
+     50000000.0,
+     50000000.0,
+     50000000.0,
+     50000000.0,
+     50000000.0,
+     50000000.0,
+     50000000.0
+    ],
+    [
+     50000000.0,
+     50000000.0,
+     50000000.0,
+     50000000.0,
+     50000000.0,
+     50000000.0,
+     50000000.0,
+     50000000.0
+    ]
+   ]
+  },
+  "params": {
+   "config": {
+    "backtest": {
+     "initial_capital_inr": "1000000",
+     "is_oos_split": "2023-01-01",
+     "start": "2017-10-16"
+    },
+    "breadth": {
+     "dma_bars": 200,
+     "min_pct_above_dma": 40.0,
+     "pct_decimals": 4
+    },
+    "costs": {
+     "cost_bps_per_side": "25.0"
+    },
+    "data": {
+     "bars_required": 260,
+     "etf_name_pattern": "\\bETF\\b",
+     "etf_symbol_pattern": "(BEES|ETF|IETF)$",
+     "etf_universe_slug": "etf",
+     "instrument_type": "EQ",
+     "keep_null_series": true,
+     "rolling_min_share": 0.9,
+     "series_allowed": [
+      "EQ",
+      "BE",
+      "BZ"
+     ],
+     "thin_session_min_periods": 5,
+     "thin_session_min_share": 0.25,
+     "thin_session_window_bars": 41
+    },
+    "entry": {
+     "entry": "NEXT_OPEN",
+     "entry_min_sessions_out": 5,
+     "min_turnover_inr": "20000000",
+     "rank_key": "SIGNAL_TURNOVER",
+     "research_min_turnover_inr": "20000000",
+     "turnover_avg_bars": 20
+    },
+    "exits": {
+     "close_clamp_fallback": "0.999",
+     "close_clamp_fraction": "0.9999",
+     "gtt_band_max_pct": "0.30",
+     "gtt_band_min_pct": "0.005",
+     "gtt_limit_fraction": "0.97",
+     "no_bar_sessions": 5,
+     "qulla": {
+      "breakeven_after_r": 1.0,
+      "fast_trail_min_adr_pct": 6.0,
+      "max_stop_adr_multiple": 1.0,
+      "max_stop_distance_pct": 10.0,
+      "partial_denominator": 3,
+      "partial_earliest_bar": 3,
+      "partial_latest_bar": 5,
+      "partial_numerator": 1
+     },
+     "qulla_exits": true,
+     "stop_pct": "20.0",
+     "trail_pct": "20.0"
+    },
+    "scan": {
+     "min_close_raw": "30.0",
+     "min_vol_sma": "10000.0",
+     "month_low_months_back": 3,
+     "month_low_multiple": "1.3",
+     "tight_band_pct": "3.01",
+     "tight_weeks": 3,
+     "vol_sma_bars": 50
+    },
+    "sizing": {
+     "first_live_entries": 10,
+     "max_entries_per_name": 2,
+     "max_new_entries_per_session": 3,
+     "max_position_pct": "12.5",
+     "max_position_vs_turnover": "0.01",
+     "max_slots": 10,
+     "min_trade_value_inr": "10000",
+     "pyramiding": true,
+     "risk_multiplier_first_live": "0.5"
+    }
+   },
+   "cost_pct_per_side": "0.25",
+   "end": null,
+   "label": "full",
+   "sleeve_inr": "1000000",
+   "start": null,
+   "tick": "0.05"
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "the entry session's own low takes it out: STOP_DAY0 at the stop. Inputs are JSON and each case is recomputed from them; Decimals are strings, dates ISO days, enums their values; a config is its field dict, decoded by each field's default type. Polars frames are {columns, dtypes, rows}; a Panel matrix is rows=instruments x cols=sessions with null for NaN; NaN/inf floats are null; a raise is {\"raises\": {\"type\", \"message\"}}. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_twt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "clamped_below_stop": 0,
+  "equity": [
+   "1000000",
+   "979611.350000",
+   "979611.350000",
+   "979611.350000",
+   "979611.350000",
+   "979611.350000",
+   "979611.350000",
+   "979611.350000"
+  ],
+  "open_positions": [
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0,
+   0
+  ],
+  "params": {
+   "config": {
+    "backtest": {
+     "initial_capital_inr": "1000000",
+     "is_oos_split": "2023-01-01",
+     "start": "2017-10-16"
+    },
+    "breadth": {
+     "dma_bars": 200,
+     "min_pct_above_dma": 40.0,
+     "pct_decimals": 4
+    },
+    "costs": {
+     "cost_bps_per_side": "25.0"
+    },
+    "data": {
+     "bars_required": 260,
+     "etf_name_pattern": "\\bETF\\b",
+     "etf_symbol_pattern": "(BEES|ETF|IETF)$",
+     "etf_universe_slug": "etf",
+     "instrument_type": "EQ",
+     "keep_null_series": true,
+     "rolling_min_share": 0.9,
+     "series_allowed": [
+      "EQ",
+      "BE",
+      "BZ"
+     ],
+     "thin_session_min_periods": 5,
+     "thin_session_min_share": 0.25,
+     "thin_session_window_bars": 41
+    },
+    "entry": {
+     "entry": "NEXT_OPEN",
+     "entry_min_sessions_out": 5,
+     "min_turnover_inr": "20000000",
+     "rank_key": "SIGNAL_TURNOVER",
+     "research_min_turnover_inr": "20000000",
+     "turnover_avg_bars": 20
+    },
+    "exits": {
+     "close_clamp_fallback": "0.999",
+     "close_clamp_fraction": "0.9999",
+     "gtt_band_max_pct": "0.30",
+     "gtt_band_min_pct": "0.005",
+     "gtt_limit_fraction": "0.97",
+     "no_bar_sessions": 5,
+     "qulla": {
+      "breakeven_after_r": 1.0,
+      "fast_trail_min_adr_pct": 6.0,
+      "max_stop_adr_multiple": 1.0,
+      "max_stop_distance_pct": 10.0,
+      "partial_denominator": 3,
+      "partial_earliest_bar": 3,
+      "partial_latest_bar": 5,
+      "partial_numerator": 1
+     },
+     "qulla_exits": true,
+     "stop_pct": "20.0",
+     "trail_pct": "20.0"
+    },
+    "scan": {
+     "min_close_raw": "30.0",
+     "min_vol_sma": "10000.0",
+     "month_low_months_back": 3,
+     "month_low_multiple": "1.3",
+     "tight_band_pct": "3.01",
+     "tight_weeks": 3,
+     "vol_sma_bars": 50
+    },
+    "sizing": {
+     "first_live_entries": 10,
+     "max_entries_per_name": 2,
+     "max_new_entries_per_session": 3,
+     "max_position_pct": "12.5",
+     "max_position_vs_turnover": "0.01",
+     "max_slots": 10,
+     "min_trade_value_inr": "10000",
+     "pyramiding": true,
+     "risk_multiplier_first_live": "0.5"
+    }
+   },
+   "cost_pct_per_side": "0.25",
+   "end": null,
+   "label": "full",
+   "sleeve_inr": "1000000",
+   "start": null,
+   "tick": "0.05"
+  },
+  "sessions": [
+   "2024-01-01",
+   "2024-01-02",
+   "2024-01-03",
+   "2024-01-04",
+   "2024-01-05",
+   "2024-01-08",
+   "2024-01-09",
+   "2024-01-10"
+  ],
+  "skipped": {
+   "cash": 0,
+   "gate_shut": 0,
+   "locked": 0,
+   "no_bar": 0,
+   "session_cap": 0,
+   "slots_full": 0,
+   "turnover": 0
+  },
+  "trades": [
+   {
+    "cap": "SLOT",
+    "entry_date": "2024-01-02",
+    "entry_price": "100.25000",
+    "exit_date": "2024-01-02",
+    "exit_price": "80.00",
+    "hold_sessions": 0,
+    "instrument_id": 1,
+    "pnl_inr": "-20388.650000",
+    "quantity": 997,
+    "r_multiple": "-1.009876543209876543209876543",
+    "reason": "STOP_DAY0",
+    "return_pct": "-20.39900249376558603491271820",
+    "symbol": "DAY0"
+   }
+  ]
+ }
+}

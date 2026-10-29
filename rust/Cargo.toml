@@ -41,7 +41,10 @@ rust_decimal = { version = "=1.43.0", default-features = false, features = ["std
 # No "clock" feature: Local::now/Utc::now do not exist in this build of chrono (law 1).
 chrono = { version = "=0.4.45", default-features = false, features = ["std", "serde"] }
 serde = { version = "=1.0.229", features = ["derive"] }
-serde_json = { version = "=1.0.154" }
+# float_roundtrip: parse every JSON float to the nearest f64, as Python's json does (the default
+# parser can land 1 ulp off on 16-17 digit floats, so a golden would be graded on perturbed
+# inputs). DECISIONS-RS R2.1.
+serde_json = { version = "=1.0.154", features = ["float_roundtrip"] }
 thiserror = { version = "=2.0.21" }
 
 [workspace.lints.rust]

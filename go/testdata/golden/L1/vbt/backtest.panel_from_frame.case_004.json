@@ -1,0 +1,70 @@
+{
+ "fn": "baskfy_core.vbt.backtest.panel_from_frame",
+ "inputs": {
+  "column_of": [
+   "2024-06-03",
+   "2024-06-06",
+   "2024-06-01",
+   "2024-06-20"
+  ],
+  "frame": {
+   "columns": [
+    "instrument_id",
+    "symbol",
+    "date",
+    "open",
+    "high",
+    "low",
+    "close",
+    "ema_exit",
+    "turnover_avg",
+    "turnover_inr",
+    "state"
+   ],
+   "dtypes": {
+    "close": "Float64",
+    "date": "Date",
+    "ema_exit": "Float64",
+    "high": "Float64",
+    "instrument_id": "Int64",
+    "low": "Float64",
+    "open": "Float64",
+    "state": "String",
+    "symbol": "String",
+    "turnover_avg": "Float64",
+    "turnover_inr": "Float64"
+   },
+   "rows": []
+  },
+  "signal_column": "state"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "an empty frame: an empty panel. Inputs are JSON and each function is called from them after a JSON round trip. Decimals are strings; dates are ISO days; enums are their values; polars frames are {columns, dtypes, rows}; numpy matrices are row lists with NaN as null. config is a whole VbtConfig decoded by each sub-dataclass's declared field types (exits.qulla is the swing StopConfig). A SessionCalendar is {sessions, dropped, counts}. A raise is {raises: {type, message}}. Expression-valued functions are golden as their value over inputs.frame. Synthetic seeded fixtures, rounded before they are written. Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_vbt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "column_of": {
+   "2024-06-01": 0,
+   "2024-06-03": 0,
+   "2024-06-06": 0,
+   "2024-06-20": 0
+  },
+  "panel": {
+   "close": [],
+   "ema_exit": [],
+   "high": [],
+   "instrument_ids": [],
+   "low": [],
+   "open": [],
+   "sessions": [],
+   "signal": [],
+   "symbols": [],
+   "turnover_avg": [],
+   "turnover_inr": []
+  }
+ }
+}

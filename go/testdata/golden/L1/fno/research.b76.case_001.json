@@ -1,0 +1,62 @@
+{
+ "fn": "baskfy_core.fno.research.b76",
+ "inputs": {
+  "forward": [
+   1000.0,
+   1000.0,
+   1000.0,
+   1000.0,
+   1000.0,
+   1000.0
+  ],
+  "kind": [
+   "CE",
+   "CE",
+   "CE",
+   "PE",
+   "PE",
+   "PE"
+  ],
+  "rate": 0.065,
+  "strike": [
+   900.0,
+   1000.0,
+   1100.0,
+   900.0,
+   1000.0,
+   1100.0
+  ],
+  "vol": [
+   0.2,
+   0.2,
+   0.2,
+   0.2,
+   0.2,
+   0.2
+  ],
+  "years": [
+   0.08,
+   0.08,
+   0.08,
+   0.08,
+   0.08,
+   0.08
+  ]
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "calls and puts across moneyness at the research rate. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": [
+  100.13127730889136,
+  22.44754344839061,
+  1.1195041963062855,
+  0.6499276493146882,
+  22.44754344839061,
+  100.6008538558829
+ ]
+}

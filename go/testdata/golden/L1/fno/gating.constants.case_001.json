@@ -1,0 +1,35 @@
+{
+ "fn": "baskfy_core.fno.gating.constants",
+ "inputs": {},
+ "meta": {
+  "known_bug": null,
+  "notes": "the env names and the safe default flags. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "CARRY_FLAG_ENV": "BASKFY_FNO_CARRY_ENABLED",
+  "DESK_SWITCH_ENV": [
+   "OPTIONS_ENABLED"
+  ],
+  "EXECUTION_FLAG_ENV": {
+   "F1": "BASKFY_FNO_F1_EXECUTION_ENABLED",
+   "F2": "BASKFY_FNO_F2_EXECUTION_ENABLED",
+   "F3": "BASKFY_FNO_F3_EXECUTION_ENABLED"
+  },
+  "OPERATIONAL_FLAG_ENV": [
+   "BASKFY_FNO_SCAN_ENABLED",
+   "BASKFY_FNO_MONITOR_ENABLED"
+  ],
+  "default_flags": {
+   "dry_run": true,
+   "f1_execution_enabled": false,
+   "f2_execution_enabled": false,
+   "f3_execution_enabled": false,
+   "fno_carry_enabled": false,
+   "options_enabled": false
+  }
+ }
+}

@@ -1,0 +1,41 @@
+{
+ "fn": "baskfy_core.fno.ledger.figures",
+ "inputs": {
+  "as_of": "2026-10-14",
+  "marks": [
+   {
+    "pnl_inr": "-1200",
+    "position_id": 10,
+    "r_inr": "9000",
+    "simulated": false,
+    "sleeve": "F1B",
+    "symbol": "BANKNIFTY",
+    "trade_date": "2026-10-14"
+   }
+  ],
+  "trades": []
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "marks only, live. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "closed": 0,
+  "max_drawdown_inr": "0",
+  "max_drawdown_r": "0",
+  "mtd_closed": 0,
+  "mtd_realised_inr": "0",
+  "mtd_realised_r": "0",
+  "open_marked_inr": "-1200",
+  "open_positions": 1,
+  "realised_inr": "0",
+  "realised_r": "0",
+  "total_inr": "-1200",
+  "win_rate": null,
+  "wins": 0
+ }
+}

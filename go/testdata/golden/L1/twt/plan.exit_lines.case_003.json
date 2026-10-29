@@ -1,0 +1,110 @@
+{
+ "fn": "baskfy_core.twt.plan.exit_lines",
+ "inputs": {
+  "book": {
+   "cash_available_inr": "2500000",
+   "entries_already_this_session": 0,
+   "open_entry_counts": {},
+   "open_exposure_inr": "0",
+   "open_instrument_ids": [],
+   "positions_naked_of_gtt": [],
+   "ratchets_due": [
+    {
+     "gtt_trigger": "400.00",
+     "high_since": "520.10",
+     "instrument_id": 1,
+     "next_trigger": "416.05",
+     "next_trigger_for": "2024-05-20",
+     "note": "",
+     "position_id": null,
+     "quantity": 300,
+     "symbol": "UP"
+    },
+    {
+     "gtt_trigger": "400.00",
+     "high_since": "520.10",
+     "instrument_id": 2,
+     "next_trigger": "400.00",
+     "next_trigger_for": "2024-05-20",
+     "note": "",
+     "position_id": null,
+     "quantity": 300,
+     "symbol": "SAME"
+    },
+    {
+     "gtt_trigger": "400.00",
+     "high_since": "520.10",
+     "instrument_id": 3,
+     "next_trigger": "399.95",
+     "next_trigger_for": "2024-05-20",
+     "note": "",
+     "position_id": null,
+     "quantity": 300,
+     "symbol": "DOWN"
+    },
+    {
+     "gtt_trigger": "400.00",
+     "high_since": "520.10",
+     "instrument_id": 4,
+     "next_trigger": "430.00",
+     "next_trigger_for": "2024-05-17",
+     "note": "",
+     "position_id": null,
+     "quantity": 300,
+     "symbol": "STALE"
+    },
+    {
+     "gtt_trigger": "100.00",
+     "high_since": "520.10",
+     "instrument_id": 5,
+     "next_trigger": "101.00",
+     "next_trigger_for": "2024-05-20",
+     "note": "breakeven",
+     "position_id": 9,
+     "quantity": 300,
+     "symbol": "NOTED"
+    }
+   ],
+   "sells_due": []
+  },
+  "session": "2024-05-20"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "ratchets: higher and for this session is a line; equal, lower or stale is not. Inputs are JSON and each case is recomputed from them; Decimals are strings, dates ISO days, enums their values; a config is its field dict, decoded by each field's default type. Polars frames are {columns, dtypes, rows}; a Panel matrix is rows=instruments x cols=sessions with null for NaN; NaN/inf floats are null; a raise is {\"raises\": {\"type\", \"message\"}}. Prices: close is adjusted, close_raw is the exchange print (house rule 6). Regenerate with `PYTHONPATH=..:packages/core/src:packages/providers/src:packages/execution/src .venv/bin/python ../tools/parity/golden_twt.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": [
+  {
+   "cap": null,
+   "entry_price": null,
+   "high_since": "520.10",
+   "instrument_id": 1,
+   "kind": "RAISE_GTT_STOP",
+   "note": "the stop moves on 2024-05-20",
+   "position_id": null,
+   "previous_stop": "400.00",
+   "quantity": 300,
+   "stop_price": "416.05",
+   "symbol": "UP",
+   "value_inr": "0"
+  },
+  {
+   "cap": null,
+   "entry_price": null,
+   "high_since": "520.10",
+   "instrument_id": 5,
+   "kind": "RAISE_GTT_STOP",
+   "note": "breakeven",
+   "position_id": 9,
+   "previous_stop": "100.00",
+   "quantity": 300,
+   "stop_price": "101.00",
+   "symbol": "NOTED",
+   "value_inr": "0"
+  }
+ ]
+}

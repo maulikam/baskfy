@@ -1,0 +1,23 @@
+{
+ "fn": "baskfy_core.fno.config.construct",
+ "inputs": {
+  "class": "CommonConfig",
+  "overrides": {
+   "plan_ttl_minutes": 0
+  }
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "CommonConfig: a zero-minute plan refused. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "raises": {
+   "message": "a plan must live for a positive number of minutes",
+   "type": "ValueError"
+  }
+ }
+}

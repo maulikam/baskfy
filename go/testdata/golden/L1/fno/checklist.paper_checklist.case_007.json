@@ -1,0 +1,294 @@
+{
+ "fn": "baskfy_core.fno.checklist.paper_checklist",
+ "inputs": {
+  "as_of": "2026-08-18",
+  "f1_cycles": [
+   {
+    "entry_session": "2026-04-14",
+    "outcome": "OPENED",
+    "sleeve": "F1N"
+   },
+   {
+    "entry_session": "2026-05-12",
+    "outcome": "SKIPPED",
+    "sleeve": "F1N"
+   },
+   {
+    "entry_session": "2026-06-15",
+    "outcome": "OPENED",
+    "sleeve": "F1N"
+   },
+   {
+    "entry_session": "2026-07-13",
+    "outcome": "SKIPPED",
+    "sleeve": "F1N"
+   },
+   {
+    "entry_session": "2026-08-11",
+    "outcome": "OPENED",
+    "sleeve": "F1N"
+   },
+   {
+    "entry_session": "2026-09-14",
+    "outcome": "SKIPPED",
+    "sleeve": "F1N"
+   },
+   {
+    "entry_session": "2026-04-14",
+    "outcome": "OPENED",
+    "sleeve": "F1B"
+   },
+   {
+    "entry_session": "2026-05-12",
+    "outcome": "SKIPPED",
+    "sleeve": "F1B"
+   },
+   {
+    "entry_session": "2026-06-15",
+    "outcome": "OPENED",
+    "sleeve": "F1B"
+   },
+   {
+    "entry_session": "2026-07-13",
+    "outcome": "SKIPPED",
+    "sleeve": "F1B"
+   },
+   {
+    "entry_session": "2026-08-11",
+    "outcome": "OPENED",
+    "sleeve": "F1B"
+   },
+   {
+    "entry_session": "2026-09-14",
+    "outcome": "SKIPPED",
+    "sleeve": "F1B"
+   }
+  ],
+  "f2_closes": [
+   {
+    "closed_on": "2026-04-08",
+    "rolls": 1
+   },
+   {
+    "closed_on": "2026-04-14",
+    "rolls": 1
+   },
+   {
+    "closed_on": "2026-04-20",
+    "rolls": 1
+   },
+   {
+    "closed_on": "2026-04-24",
+    "rolls": 0
+   },
+   {
+    "closed_on": "2026-04-30",
+    "rolls": 0
+   },
+   {
+    "closed_on": "2026-05-06",
+    "rolls": 0
+   },
+   {
+    "closed_on": "2026-05-12",
+    "rolls": 0
+   },
+   {
+    "closed_on": "2026-05-18",
+    "rolls": 0
+   },
+   {
+    "closed_on": "2026-05-22",
+    "rolls": 0
+   },
+   {
+    "closed_on": "2026-05-28",
+    "rolls": 0
+   },
+   {
+    "closed_on": "2026-06-03",
+    "rolls": 0
+   },
+   {
+    "closed_on": "2026-06-09",
+    "rolls": 0
+   },
+   {
+    "closed_on": "2026-06-15",
+    "rolls": 0
+   },
+   {
+    "closed_on": "2026-06-19",
+    "rolls": 0
+   },
+   {
+    "closed_on": "2026-06-25",
+    "rolls": 0
+   }
+  ],
+  "f2_start": "2026-04-01",
+  "sessions": [
+   "2026-04-01",
+   "2026-04-02",
+   "2026-04-03",
+   "2026-04-06",
+   "2026-04-07",
+   "2026-04-08",
+   "2026-04-09",
+   "2026-04-10",
+   "2026-04-13",
+   "2026-04-14",
+   "2026-04-15",
+   "2026-04-16",
+   "2026-04-17",
+   "2026-04-20",
+   "2026-04-21",
+   "2026-04-22",
+   "2026-04-23",
+   "2026-04-24",
+   "2026-04-27",
+   "2026-04-28",
+   "2026-04-29",
+   "2026-04-30",
+   "2026-05-01",
+   "2026-05-04",
+   "2026-05-05",
+   "2026-05-06",
+   "2026-05-07",
+   "2026-05-08",
+   "2026-05-11",
+   "2026-05-12",
+   "2026-05-13",
+   "2026-05-14",
+   "2026-05-15",
+   "2026-05-18",
+   "2026-05-19",
+   "2026-05-20",
+   "2026-05-21",
+   "2026-05-22",
+   "2026-05-25",
+   "2026-05-26",
+   "2026-05-27",
+   "2026-05-28",
+   "2026-05-29",
+   "2026-06-01",
+   "2026-06-02",
+   "2026-06-03",
+   "2026-06-04",
+   "2026-06-05",
+   "2026-06-08",
+   "2026-06-09",
+   "2026-06-10",
+   "2026-06-11",
+   "2026-06-12",
+   "2026-06-15",
+   "2026-06-16",
+   "2026-06-17",
+   "2026-06-18",
+   "2026-06-19",
+   "2026-06-22",
+   "2026-06-23",
+   "2026-06-24",
+   "2026-06-25",
+   "2026-06-26",
+   "2026-06-29",
+   "2026-06-30",
+   "2026-07-01",
+   "2026-07-02",
+   "2026-07-03",
+   "2026-07-06",
+   "2026-07-07",
+   "2026-07-08",
+   "2026-07-09",
+   "2026-07-10",
+   "2026-07-13",
+   "2026-07-14",
+   "2026-07-15",
+   "2026-07-16",
+   "2026-07-17",
+   "2026-07-20",
+   "2026-07-21",
+   "2026-07-22",
+   "2026-07-23",
+   "2026-07-24",
+   "2026-07-27",
+   "2026-07-28",
+   "2026-07-29",
+   "2026-07-30",
+   "2026-07-31",
+   "2026-08-03",
+   "2026-08-04",
+   "2026-08-05",
+   "2026-08-06",
+   "2026-08-07",
+   "2026-08-10",
+   "2026-08-11",
+   "2026-08-12",
+   "2026-08-13",
+   "2026-08-14",
+   "2026-08-17",
+   "2026-08-18"
+  ],
+  "violations": [
+   {
+    "kind": "NAKED_FUTURE",
+    "message": "m",
+    "on": "2026-08-18",
+    "ref": "r",
+    "sleeve": "F2"
+   }
+  ]
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "an F2 violation on the last calendar session: start null. Inputs are JSON and each case is recomputed from them; a raise is stored as {\"raises\": {\"type\", \"message\"}}. Decimals are strings, enums their values, times HH:MM:SS, naive datetimes IST. Config dicts decode by each field's declared type. Polars frames are {columns, dtypes, rows}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_fno.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "checklist": {
+   "as_of": "2026-08-18",
+   "f1": [
+    {
+     "cycles": 5,
+     "opened": 3,
+     "since": null,
+     "sleeve": "F1N"
+    },
+    {
+     "cycles": 5,
+     "opened": 3,
+     "since": null,
+     "sleeve": "F1B"
+    }
+   ],
+   "f1_met": false,
+   "f1_opened": 6,
+   "f2": {
+    "closed": 0,
+    "rolls": 0,
+    "sessions": 0,
+    "since": null
+   },
+   "f2_met": false,
+   "violations": [
+    {
+     "kind": "NAKED_FUTURE",
+     "message": "m",
+     "on": "2026-08-18",
+     "ref": "r",
+     "sleeve": "F2"
+    }
+   ]
+  },
+  "violations_by_kind": {
+   "NAKED_FUTURE": 1
+  },
+  "violations_by_kind_f1": {},
+  "violations_by_kind_f2": {
+   "NAKED_FUTURE": 1
+  }
+ }
+}

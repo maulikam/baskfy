@@ -13,8 +13,14 @@
 //! declared in the parent module file (`swing.rs`, `options.rs`), never by editing this file
 //! for areas already declared.
 
+pub mod backtest;
+pub mod backtest_metrics;
 pub mod error;
+pub mod factor_registry;
+pub mod factors;
 pub mod options;
+pub mod ranking_engine;
+pub mod screener;
 pub mod swing;
 
 pub use error::CoreError;

@@ -269,7 +269,7 @@ regenerating the ranking goldens and re-running the fuzz before the Rust screene
 
 **How to reverse.** Not sensibly — these strings are the API's bytes.
 
-## R2.5 — Python ints wider than i64 in a screen definition: open (RS2, 29 Oct 2026) ⚠ UNREVIEWED — needs a decision
+## R2.5 — Python ints wider than i64 in a screen definition (RS2, 29 Oct 2026; decided RS3) ⚠ UNREVIEWED
 
 **Context.** pydantic accepts an arbitrarily large int for `median_volume_1y`,
 `ignore_above_beta`, circuits, the top-risk count, and the bounded `positive_days`/
@@ -284,6 +284,16 @@ the API's validation, Maulik's call; (c) leave the divergence documented. **Take
 Python twin until this is settled. Recommended: (b).
 
 **How to reverse.** Either fix closes it; the fuzz case list is in the screener lane's report.
+
+**Decided at RS3 (29 Oct 2026), by the wave-3 integrator under the autonomy charter ⚠ UNREVIEWED:
+option (c), a documented divergence.** Rust refuses an int wider than `i64` in a screen
+definition with `int_parsing_size`; Python accepts it. Why (c) over the recommended (b): (b)
+changes the Python API's validation and the answer key, which is Maulik's call, not an agent's;
+(c) changes nothing that is live. A JSON number that large cannot reach Rust as an int at all
+(`serde_json` without `arbitrary_precision`), no real definition carries one, and the refusal is
+loud, never a wrong screen. **How to reverse:** add `num-bigint` parsing (a new dependency, an
+R-entry) behind a `PyInt` type for these fields, or take (b) in Python and regenerate the ranking
+keys. The screener still does not strangle its Python twin until Maulik has reviewed this.
 
 ## R2.6 — ranking_engine edges no frame exercises are left as they are (RS2, 29 Oct 2026) ⚠ UNREVIEWED
 
@@ -340,3 +350,168 @@ with the latest session (inherited from VBT's shared code); `twt.exits.tick_floo
 price rounds toward zero; vbt `detect_signals` sorts a null `rank_key` first even descending;
 `vbt.drift.compare` can return `-0.0`. A port reproduces each; grading never relaxes for
 `known_bug`.
+
+## R3.1 — twt compares floats IEEE-style; NaN-free input frames are a precondition (RS3, 29 Oct 2026) ⚠ UNREVIEWED
+
+**Context.** The twt reviewer found that a literal NaN in an input bar frame is handled
+differently. Python's polars compares floats in a total order (NaN largest, NaN == NaN,
+`NaN > 1.0` true; `max_horizontal`/`min_horizontal` fold like x86 `maxsd`, so argument order
+matters; group `min` skips NaN). The twt port uses IEEE comparisons in `cmp_f` (the tight band,
+`close >= month_low*multiple`, `close_raw > min`, `vol_sma >= min`), `liquidity_floor`, breadth's
+`breadth_above_dma`/`breadth_series`, `limit_locked` (`frame::same`), `month_low_back`'s min and
+`tight_state`'s `f64::max/min`. Verified live: with `close = NaN`, `sma_dma = 1.0`, polars counts
+the name as above the DMA and Rust does not. vbt (`vbt::calendar::frames`) and fno research
+(`pl_gt`) already port the total order.
+
+**Choice.** Not fixed at RS3 (the integrator fixes only mechanical issues). Recorded as a
+**precondition: twt's functions take NaN-free float columns.** Real input cannot violate it:
+bars come from Postgres `numeric` through Kite/NSE ingestion and `_prepare` casts to Float64,
+which yields no NaN; every derived column is finite on positive prices; the only derived NaN,
+`tight_range_pct = 0/0`, compares false in both. The golden and fuzz encoders cannot express a
+NaN input (NaN encodes as `null`). The backtest panel path tests `math.isfinite` in both.
+
+**Rejected.** Shipping it as "sound" without a record (it is a real semantic gap); porting the
+total order inside the integrator commit (a behaviour change across seven call sites with no
+NaN-capable test to grade it).
+
+**How to close (before the TWT plan strangles its Python twin).** Reuse vbt's total-order
+helpers in the listed twt call sites, port the horizontal fold and the NaN-skipping group min,
+and add a NaN-capable differential test (inputs built in-process, not via the JSON encoder).
+
+## R3.2 — vbt prints a config float with Python's `repr`, not Rust's `Display` (RS3, 29 Oct 2026) ⚠ UNREVIEWED
+
+**Context.** The vbt reviewer's fuzz found `first_live_multiplier` (72 of 1,600 cases) and
+`PublishedStudy::cagr` turning a whole-number float into `"1"` / `"26"` where Python's
+`Decimal(str(1.0))` is `"1.0"`: both went through `swing::sizing::decimal_from_py_float`, which
+formats with Rust's `{x}`. No golden covered it.
+
+**Choice.** Both now go through `vbt::exits::wide::from_py_float_str` (Python's `float.__repr__`)
+and then to `Decimal`. Share counts never moved (the multiplier scales a budget that is then
+floored); the printed multiplier and CAGR now match. `swing::sizing::decimal_from_py_float`
+keeps the gap in general — it belongs to the swing lane and no swing golden or fuzz case shows
+a printed whole float through it — and is left untouched.
+
+**How to close fully.** Route `decimal_from_py_float` through the same repr helper (one function;
+re-run the swing goldens and fuzz). **How to reverse:** restore the old call; the fuzz shows it.
+
+## R3.3 — Python errors map onto `CoreError`/`FnoError`; unreachable integer and index edges (RS3, 29 Oct 2026) ⚠ UNREVIEWED
+
+**Context.** Goldens store a raise as `{"raises": {type, message}}`. twt and vbt grade raises
+through `CoreError` (the twt porter mapped `IndexError`, `DivisionByZero` and `InvalidOperation`
+all onto it); fno carries `FnoError`, one variant per Python exception class it raises
+(`ValueError`, `KeyError`, `TypeError`, `PooledRows`, decimal errors, `Core`), with
+`type_name()` giving the Python class name.
+
+**Choice.** Kept as the porters built them. Two twt edges are left as they are:
+`SessionCalendar::advance` with a step below `-len` returns `None` where Python's tuple indexing
+raises `IndexError` (inside `-len..0` Rust mirrors Python's negative indexing; no caller passes a
+negative step); `size_entry` returns `CoreError::Arithmetic` for a share count above `i64::MAX`
+where Python returns a big int (needs, e.g., ₹1e15 equity at a price of 1e-4). `FnoError` has no
+`SchemaError` variant, so `retest::concat`'s polars schema mismatch raises where Python raises but
+reports the type as `CoreError` (R3.7).
+
+**How to close.** One shared Python-exception enum across `CoreError` and `FnoError` (a crate-wide
+change, best done with the R3.4 housekeeping) would make the type names exact everywhere.
+
+## R3.4 — Wave 3 reused `WideDecimal` in place and duplicated shared VBT/fno code (RS3, 29 Oct 2026) ⚠ UNREVIEWED
+
+**Context.** STATUS asked wave 3 to lift `WideDecimal` into a shared module first. The lanes ran
+in parallel and each owned only its own files.
+
+**Choice (as landed).** Every lane imports `crate::backtest::helpers::WideDecimal` where it is,
+with vbt layering its Python-float helpers on top (`vbt::exits::wide`, shared with `vbt::plan`
+and `vbt::sizing`). twt carries private copies, written before the vbt lane landed, of VBT's
+config shape (`twt::config::vbt_shared`), calendar (`twt::calendar::shared`), breadth
+(`twt::breadth::shared`) and indicator arithmetic; `fno::ledger` carries private copies of
+`fno::exits`' `f1_paused`/`f2_month_paused`/`book_paused`; `fno::costs` takes a role→price map in
+`LegRole`'s declaration order instead of `fno::condor::LegRole`; `fno::ledger` ports
+`options.journal.max_drawdown` privately. twt and vbt plan hashes reuse the screener's SHA-256,
+so the integrator widened `screener::sha256` to `pub(crate)` (the one edit outside the three
+areas). All R2.3's pattern; every copy is graded by its own goldens, so none can drift silently.
+
+**Rejected.** Collapsing them inside the integrator commit (not mechanical: it rewires call
+sites in three lanes at once).
+
+**How to close.** The housekeeping step before wave 4 (STATUS): move `WideDecimal` and the
+py-float helpers to a shared module, re-export `vbt::{config, calendar, breadth, indicators}` from
+twt, point `fno::ledger` and `fno::costs` at `fno::exits` and `fno::condor`, and keep 1,702 of
+1,702 green throughout.
+
+## R3.5 — Polars-expression functions are graded as the expression applied to a frame (RS3, 29 Oct 2026) ⚠ UNREVIEWED
+
+`vbt.signals.chartink_scan`/`trend_filters` and twt's `bucket_keys`/`liquidity_floor` return
+polars *expressions* in Python; the Rust ports return them **evaluated over a frame** (a
+`Boolean` series), which is what every caller does and what the dumpers store. A null on either
+side of a comparison is a fail (Kleene logic, then `fill_null(False)`), as in Python. vbt's
+calendar refuses a null `date` where Python would carry a `None` "session" into the calendar
+(every caller and golden passes a polars `Date`). **How to reverse:** return lazy `Expr`s if a
+caller ever needs to compose them; the goldens grade the evaluated result either way.
+
+## R3.6 — vbt parses some config floats with Rust's `Display` where they are only compared (RS3, 29 Oct 2026) ⚠ UNREVIEWED
+
+`vbt::orders::fill_if_touched`'s threshold and `vbt::sizing::size_entry`'s `PyDec::from_float`
+parse a config float via `format!("{x}")` rather than Python's `repr`. The values are compared or
+floored, never printed, so they agree in value (the fuzz with 1e30 thresholds agreed). A finite
+`fill_through_pct` near 1e300 could fail `WideDecimal` parsing where Python returns `None`. Left as
+is; no real config is near it. **How to close:** use `from_py_float_str` there too (R3.2).
+
+## R3.7 — fno research reproduces polars' NaN order, null-dtype concat and schema inference (RS3, 29 Oct 2026) ⚠ UNREVIEWED
+
+**Context.** The research reviewer's fuzz found four classes no golden caught.
+
+**Choice (all fixed).** (1) `futures_signals`' `gt`/`lt` now use `pl_gt`, polars' total order:
+`oi5`/`oi1` are `oi_total / oi_total.shift(k) - 1`, and `oi_total` is 0 whenever OI is 0 or null,
+so `0/0 = NaN` fires A1/A1R/A3 in Python — with IEEE comparisons `futures_signals` passed 18 of
+40 fuzz cases, `simulate_futures` 19 and `run_family` 32; now 40 of 40 each. (2) `retest::concat`
+follows strict `pl.concat`: the first part sets the dtypes, a later `Null` column is cast to them,
+any other mismatch is a polars `SchemaMismatch` with polars' message (the reported type name is
+`CoreError`, R3.3). (3) `frames::from_rows` infers a dtype from the first 100 rows, as
+`infer_schema_length` does, and refuses a column that is all-null there and valued later
+(`ComputeError`); polars' silent int→float truncation past row 100 is not reproduced (no caller
+mixes int and float in one column). (4) `settle > 0` filters keep NaN settles (`pl_positive`),
+`continuous`' spot max skips NaN, and `rank_average` canonicalises NaN payloads and `-0.0` before
+ranking, as live polars does. **How to reverse:** each is one helper; the fuzz shows the drift.
+
+## R3.8 — fno: two R1.3-class limits left loud (RS3, 29 Oct 2026) ⚠ UNREVIEWED
+
+`fno::sizing::size` given an exponent-form capital (`"1E+7"`) prints `risk_budget_inr` as
+`"100000.0"` where Python prints `"100000"` (and `"0.100000"` vs `"0.1"`): `rust_decimal` has no
+positive exponent, so it parses as exponent 0 — 28 of 600 reviewer fuzz cases, all exponent-form;
+lots, state and every comparison agree. `fno::condor::one_sd` at `iv = 1e-12` raises
+`InvalidOperation` ("does not fit a 96-bit, scale-28 decimal") where Python returns a scale-29–31
+value (36 cases) — loud, never a wrong value. Postgres `numeric` and Kite never produce either.
+**How to close:** carry these values in `WideDecimal` (R3.4's shared module) end to end.
+
+## R3.9 — fno research: unreachable deviations and the `erf` ulp (RS3, 29 Oct 2026) ⚠ UNREVIEWED
+
+Left as they are and documented: `leg_costs` with `lot = 0` returns `inf` where Python raises
+(lots fall back to 500); `simulate_futures`' `pnl/e` with `e = 0` reports `ValueError` where
+Python raises `ZeroDivisionError` (`continuous` replaces `o <= 0` with 1.0, so `e` is never 0); a
+negative horizon is clamped to 0 where numpy would index from the end (`FAMILIES` fixes every
+horizon positive); `trading_days_before(n < 0)` returns `None` where Python raises `IndexError`;
+polars' **unstable** sort on ties in `simulate_futures`' signal `di` (A2 can give one symbol both
+sides on one `di` when fewer than 20 names trade) is matched only where polars falls back to its
+stable small-slice sort. `fno::vol::greeks::erf` is FreeBSD's fdlibm `s_erf.c`: CPython's
+`math.erf` calls the platform libm, which stable Rust does not expose and the `unsafe` ban keeps
+out of reach; it can differ from Apple's libm by 1–2 ulp, so an implied-vol bisection branch can
+flip only within 1 ulp of the root. **How to close:** each is one function; add a golden first.
+
+## R3.10 — Wave 4 order: providers → db → api → worker → desk → execution last (RS3, 29 Oct 2026) ⚠ UNREVIEWED
+
+**Context.** The README's step table put `baskfy-execution` third, straight after providers.
+The wave-3 workflow brief ordered the I/O layers providers → db layer → api → worker → desk →
+execution **last**.
+
+**Choice.** Execution last, and a `baskfy-db` step (sqlx against the existing schema, read-only
+first, graded on a DB copy) added between providers and the API; README and STATUS updated. Why:
+law 2 makes execution the one path to an order, so it should be built when everything that
+*plans* orders already reproduces the Python byte for byte, against the most evidence, and it
+carries the most risk if wrong. The desk's Rust port runs its two shadow Fridays in `DRY_RUN`
+comparing plans only; no Rust order path exists until step 7, and the Python execution package
+keeps placing the desk's orders until Maulik's explicit cutover.
+
+**Rejected.** Execution third (it would sit unused, with nothing upstream in Rust to feed it, and
+ages its review before it is exercised); skipping a separate db crate (every service would carry
+its own queries and the read-only-first discipline would be per-service, not enforced once).
+
+**How to reverse.** Swap the README rows back; no code depends on the order yet.

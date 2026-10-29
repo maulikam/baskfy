@@ -19,16 +19,17 @@ is measured against those four.
 
 Python stays live — serving, scheduling, and (for the desk) placing orders — until each Rust
 module **reproduces it exactly**, graded by goldens. Nothing turns a Python path off until its
-Rust replacement has passed its gate. Order:
+Rust replacement has passed its gate. Order (reordered at RS3 so execution comes last — DECISIONS-RS R3.10):
 
 | Step | Rust crate (planned) | Python it replaces | Gate |
 |---|---|---|---|
 | 1 | `baskfy-core` (now) | `decile-blueprint/packages/core` (`baskfy_core`) | every golden for the module green; law 1 test green |
 | 2 | `baskfy-providers` | `packages/providers` (Kite, NSE, bhavcopy) | recorded-fixture goldens; same rate limits (Kite ~3 req/s historical; NSE cookie/header discipline) |
-| 3 | `baskfy-execution` | `packages/execution` (guards → risk → rate limit → journal → broker) | law 2 tests; the seven non-negotiables as tests; `DRY_RUN=true` end to end; **no live order, ever, from an agent** |
+| 3 | `baskfy-db` | the SQLAlchemy reads/writes in `services/` against the existing Postgres schema | `sqlx`, read-only first; row sets equal to the Python's against a **copy** of the DB; writes one table at a time, idempotent |
 | 4 | `baskfy-api` (axum) | `services/api` | serves `openapi.json` unchanged; JSON bodies equal after normalisation (docs/go-rewrite/03 §Tolerances) |
 | 5 | `baskfy-worker` | `services/worker` (nightly, catch-up, publish) | `pipeline_run_step` rows equal to the Python run's against a **copy** of the DB |
 | 6 | `baskfy-desk` | `kite-momentum-rebalancer/app` | two shadow Fridays in DRY_RUN with byte-equal plans; cutover only on Maulik's explicit go |
+| 7 (last) | `baskfy-execution` | `packages/execution` (guards → risk → rate limit → journal → broker) | law 2 tests; the seven non-negotiables as tests; `DRY_RUN=true` end to end; **no live order, ever, from an agent** |
 | end | `baskfy` (one binary) | all of the above | subcommands `api`, `worker`, `desk`; one process image, one deploy |
 
 Unchanged by the rewrite: `apps/web` (held to `openapi.json`), the Postgres schema (the second

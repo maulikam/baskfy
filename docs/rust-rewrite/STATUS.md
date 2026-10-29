@@ -7,7 +7,7 @@ whoever changes a module's state; loud about what is **not** done.
 no Rust yet · `declared` — the Rust module file exists (empty) · `ported` — Rust compiles and
 its golden tests run · `verified` — every golden for the module green, clippy clean, reviewed.
 
-## Foundation (29 Oct 2026; RS2)
+## Foundation (29 Oct 2026; RS2, RS3)
 
 | Item | State |
 |---|---|
@@ -15,10 +15,11 @@ its golden tests run · `verified` — every golden for the module green, clippy
 | `baskfy-core` crate, module stubs, `CoreError` | done |
 | `baskfy-core/tests/law_one.rs` (law 1 in Rust) | green |
 | `baskfy-testkit` (load, decode, encode, grade; polars and pandas frames; `List(String)` at RS2) | done |
-| Harness proof: all 1,702 goldens parse and decode; every polars and pandas frame round-trips exactly; 47 wide decimals pinned (R1.3, R2.8) | green (RS2) |
+| Harness proof: all 1,702 goldens parse and decode; every polars and pandas frame round-trips exactly; 47 wide decimals pinned (R1.3, R2.8) | green (RS3) |
 | `serde_json` with `float_roundtrip` (golden floats decode to the nearest f64, as Python's `json`) | done (RS2, R2.1) |
-| `cargo fmt` / `clippy --all-targets -D warnings` | green (RS2) |
-| `cargo test --workspace` | **green** (RS2): 17 test binaries, 455 of 455 graded goldens |
+| `cargo fmt` / `clippy --all-targets -D warnings` | green (RS3) |
+| `cargo test --workspace` | **green** (RS3): 24 test targets, 221 passed + 5 ignored fuzz harnesses, **1,702 of 1,702 graded goldens** |
+| Pure core, golden-covered part (swing, options, backtest, ranking, twt, vbt, fno) | **complete** (RS3) — every committed golden green; the 128 `baskfy_core` modules with no goldens are still `not started` (table below) |
 | providers, execution, api (axum), worker, desk, single binary | not started |
 
 ## Wave 1 (RS1, RS1.1 — 29 Oct 2026) — swing and options ported, 126 of 126
@@ -119,7 +120,8 @@ the committed answer key is what the live code produces today.
 **What is still not exact (no golden is red because of it).**
 
 * Screener: Python ints wider than i64 in a screen definition are accepted by pydantic and
-  refused by Rust (`int_parsing_size`) — 15 of 30,000 fuzz cases. Needs a decision (R2.5).
+  refused by Rust (`int_parsing_size`) — 15 of 30,000 fuzz cases. Decided at RS3 as a
+  documented divergence (R2.5, ⚠ UNREVIEWED).
 * `backtest_metrics`: `np.cov` sums through BLAS in an order that cannot be reproduced; beta/
   alpha can differ by ~1 ulp (far inside 1e-9; no case shows it). Residual (R2.2).
 * `backtest::engine`: a benchmark level needing scale > 28 (|level| < ~1e-12 with full float
@@ -129,7 +131,324 @@ the committed answer key is what the live code produces today.
 * Two exact-decimal types now exist (`backtest::helpers::WideDecimal`, `screener`'s
   `DecimalValue`); wave 3 should lift one into a shared module first (R1.3, R2.8).
 
-## Wave 3 answer keys (RS2) — ready to port
+## Wave 3 (RS3, 29 Oct 2026) — the three sleeves' pure cores ported, 1,247 of 1,247
+
+Four lanes (twt, vbt, fno core+trade, fno research), each graded by its own test files —
+`rust/crates/baskfy-core/tests/golden_{twt_a,twt_b,vbt_a,vbt_b,fno_a,fno_b,fno_c}.rs` — and
+each then checked by a differential fuzz against the live Python at zero float tolerance (the
+five `#[ignore]`d tests in those files are the fuzz harnesses, which need a generated directory;
+they are not golden cases). The integrator checked that every one of the 240 golden function
+names is graded by a test file; fno-a and fno-b (`table_covers_every_golden_function`) and twt-b
+(`every_lane_b_golden_is_graded`) also assert it in code. The fuzz found and the lanes fixed defects no golden caught (R3.2, R3.6, R3.7).
+
+**Integrator's run (RS3):** `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`
+and `cargo test --workspace` green — 24 test targets, 221 tests passed, 5 ignored (the fuzz
+harnesses), **1,702 of 1,702 graded goldens** (455 from waves 1–2, 1,247 new). Python's golden
+suites (`test_{swing,options,twt,vbt}_goldens.py`, `test_factors_golden.py`): 295 passed, 15
+data-gated skips. `golden_{twt,vbt,fno}.py` re-run from the live Python into a scratch
+directory: all 1,247 keys byte-identical with the committed ones.
+
+| Lane | Rust | goldens | passing |
+|---|---|---:|---:|
+| twt (12 modules) | `twt::*` | 306 | 306 |
+| vbt (13 modules) | `vbt::*` | 326 | 326 |
+| fno core + trade (17 modules) | `fno::*` | 538 | 538 |
+| fno research (`research`, `retest`, `directional_retest`) | `fno::*` | 77 | 77 |
+| **total** | | **1,247** | **1,247** |
+
+The fno-b porter reported 309 goldens; the directory holds 303 (condor 46, exits 53, covered 22,
+checklist 22, monitor 39, directional 91, scan 30) and the runner table asserts exactly that —
+a reporting slip, no code change.
+
+**`L1/twt` — 306 goldens**
+
+| Python function | Rust | goldens | passing |
+|---|---|---:|---:|
+| `twt.backtest.gate_vector` | `twt::backtest` | 4 | 4 |
+| `twt.backtest.panel_from_frame` | `twt::backtest` | 5 | 5 |
+| `twt.backtest.run_backtest` | `twt::backtest` | 15 | 15 |
+| `twt.backtest.summarise` | `twt::backtest` | 11 | 11 |
+| `twt.backtest.yearly` | `twt::backtest` | 6 | 6 |
+| `twt.breadth.as_shared_config` | `twt::breadth` | 2 | 2 |
+| `twt.breadth.breadth_above_dma` | `twt::breadth` | 7 | 7 |
+| `twt.breadth.breadth_series` | `twt::breadth` | 5 | 5 |
+| `twt.breadth.gate_for` | `twt::breadth` | 7 | 7 |
+| `twt.calendar.as_shared_config` | `twt::calendar` | 2 | 2 |
+| `twt.calendar.build_calendar` | `twt::calendar` | 6 | 6 |
+| `twt.calendar.drop_thin_sessions` | `twt::calendar` | 5 | 5 |
+| `twt.calendar.session_counts` | `twt::calendar` | 5 | 5 |
+| `twt.calendar.thin_sessions` | `twt::calendar` | 10 | 10 |
+| `twt.drift.compare` | `twt::drift` | 8 | 8 |
+| `twt.exits.clamp_under_close` | `twt::exits` | 7 | 7 |
+| `twt.exits.fill_day_stop` | `twt::exits` | 6 | 6 |
+| `twt.exits.initial_stop` | `twt::exits` | 6 | 6 |
+| `twt.exits.manage` | `twt::exits` | 9 | 9 |
+| `twt.exits.on_adjustment` | `twt::exits` | 5 | 5 |
+| `twt.exits.r_multiple` | `twt::exits` | 7 | 7 |
+| `twt.exits.ratchet` | `twt::exits` | 8 | 8 |
+| `twt.exits.stop_fill` | `twt::exits` | 7 | 7 |
+| `twt.exits.stop_is_below_entry` | `twt::exits` | 6 | 6 |
+| `twt.exits.tick` | `twt::exits` | 3 | 3 |
+| `twt.exits.tick_floor` | `twt::exits` | 7 | 7 |
+| `twt.exits.trail_from` | `twt::exits` | 3 | 3 |
+| `twt.indicators.bucket_keys` | `twt::indicators` | 4 | 4 |
+| `twt.indicators.require_columns` | `twt::indicators` | 5 | 5 |
+| `twt.indicators.with_twt_indicators` | `twt::indicators` | 9 | 9 |
+| `twt.plan.assemble` | `twt::plan` | 4 | 4 |
+| `twt.plan.build_entries` | `twt::plan` | 19 | 19 |
+| `twt.plan.client_id_for` | `twt::plan` | 4 | 4 |
+| `twt.plan.exit_lines` | `twt::plan` | 5 | 5 |
+| `twt.plan.gtt_limit_price` | `twt::plan` | 4 | 4 |
+| `twt.plan.stop_for` | `twt::plan` | 3 | 3 |
+| `twt.published.PUBLISHED` | `twt::published` | 1 | 1 |
+| `twt.signals.detect_signals` | `twt::signals` | 5 | 5 |
+| `twt.signals.entry_events` | `twt::signals` | 7 | 7 |
+| `twt.signals.liquidity_floor` | `twt::signals` | 3 | 3 |
+| `twt.signals.month_low_back` | `twt::signals` | 5 | 5 |
+| `twt.signals.signal_mask` | `twt::signals` | 3 | 3 |
+| `twt.signals.tight_state` | `twt::signals` | 5 | 5 |
+| `twt.signals.weekly_closes` | `twt::signals` | 8 | 8 |
+| `twt.signals.weekly_column` | `twt::signals` | 4 | 4 |
+| `twt.signals.with_twt_columns` | `twt::signals` | 8 | 8 |
+| `twt.sizing.first_live_multiplier` | `twt::sizing` | 6 | 6 |
+| `twt.sizing.size_entry` | `twt::sizing` | 15 | 15 |
+| `twt.sleeve.sleeve_value` | `twt::sleeve` | 7 | 7 |
+| **total** | | **306** | **306** |
+
+**`L1/vbt` — 326 goldens**
+
+| Python function | Rust | goldens | passing |
+|---|---|---:|---:|
+| `vbt.backtest.BacktestResult.fill_rate_pct` | `vbt::backtest` | 4 | 4 |
+| `vbt.backtest.gate_vector` | `vbt::backtest` | 5 | 5 |
+| `vbt.backtest.panel_from_frame` | `vbt::backtest` | 5 | 5 |
+| `vbt.backtest.run_backtest` | `vbt::backtest` | 14 | 14 |
+| `vbt.backtest.summarise` | `vbt::backtest` | 9 | 9 |
+| `vbt.backtest.yearly` | `vbt::backtest` | 5 | 5 |
+| `vbt.breadth.breadth_above_dma` | `vbt::breadth` | 8 | 8 |
+| `vbt.breadth.breadth_series` | `vbt::breadth` | 4 | 4 |
+| `vbt.breadth.gate_for` | `vbt::breadth` | 7 | 7 |
+| `vbt.calendar.SessionCalendar.advance` | `vbt::calendar` | 5 | 5 |
+| `vbt.calendar.SessionCalendar.index_of` | `vbt::calendar` | 6 | 6 |
+| `vbt.calendar.SessionCalendar.sessions_between` | `vbt::calendar` | 5 | 5 |
+| `vbt.calendar.build_calendar` | `vbt::calendar` | 5 | 5 |
+| `vbt.calendar.drop_thin_sessions` | `vbt::calendar` | 4 | 4 |
+| `vbt.calendar.session_counts` | `vbt::calendar` | 5 | 5 |
+| `vbt.calendar.thin_sessions` | `vbt::calendar` | 8 | 8 |
+| `vbt.config.DataConfig.min_samples` | `vbt::config` | 11 | 11 |
+| `vbt.config.VbtConfig.bars_required` | `vbt::config` | 5 | 5 |
+| `vbt.config.filter_legend` | `vbt::config` | 4 | 4 |
+| `vbt.drift.compare` | `vbt::drift` | 7 | 7 |
+| `vbt.exits.apply_stop` | `vbt::exits` | 4 | 4 |
+| `vbt.exits.initial_stop` | `vbt::exits` | 6 | 6 |
+| `vbt.exits.manage` | `vbt::exits` | 12 | 12 |
+| `vbt.exits.r_multiple` | `vbt::exits` | 6 | 6 |
+| `vbt.exits.stop_fill` | `vbt::exits` | 7 | 7 |
+| `vbt.exits.tick_floor` | `vbt::exits` | 6 | 6 |
+| `vbt.indicators.densify` | `vbt::indicators` | 5 | 5 |
+| `vbt.indicators.require_columns` | `vbt::indicators` | 3 | 3 |
+| `vbt.indicators.with_vbt_indicators` | `vbt::indicators` | 7 | 7 |
+| `vbt.orders.advance_session` | `vbt::orders` | 3 | 3 |
+| `vbt.orders.apply_fill` | `vbt::orders` | 4 | 4 |
+| `vbt.orders.expire_orders` | `vbt::orders` | 5 | 5 |
+| `vbt.orders.expires_after` | `vbt::orders` | 7 | 7 |
+| `vbt.orders.fill_if_touched` | `vbt::orders` | 11 | 11 |
+| `vbt.orders.is_expired` | `vbt::orders` | 6 | 6 |
+| `vbt.orders.sessions_since` | `vbt::orders` | 5 | 5 |
+| `vbt.plan.BookState` | `vbt::plan` | 5 | 5 |
+| `vbt.plan.assemble` | `vbt::plan` | 5 | 5 |
+| `vbt.plan.build_entries` | `vbt::plan` | 17 | 17 |
+| `vbt.plan.exit_lines` | `vbt::plan` | 10 | 10 |
+| `vbt.plan.to_tick` | `vbt::plan` | 8 | 8 |
+| `vbt.published.PUBLISHED` | `vbt::published` | 1 | 1 |
+| `vbt.signals.chartink_scan` | `vbt::signals` | 9 | 9 |
+| `vbt.signals.detect_signals` | `vbt::signals` | 6 | 6 |
+| `vbt.signals.signal_mask` | `vbt::signals` | 3 | 3 |
+| `vbt.signals.trend_filters` | `vbt::signals` | 7 | 7 |
+| `vbt.signals.with_signal_columns` | `vbt::signals` | 4 | 4 |
+| `vbt.sizing.first_live_multiplier` | `vbt::sizing` | 6 | 6 |
+| `vbt.sizing.size_entry` | `vbt::sizing` | 15 | 15 |
+| `vbt.sleeve.sleeve_value` | `vbt::sleeve` | 7 | 7 |
+| **total** | | **326** | **326** |
+
+**`L1/fno` — 615 goldens**
+
+| Python function | Rust | goldens | passing |
+|---|---|---:|---:|
+| `fno.calendar.entry_session` | `fno::calendar` | 3 | 3 |
+| `fno.calendar.f2_contract_expiry` | `fno::calendar` | 5 | 5 |
+| `fno.calendar.hard_exit_at` | `fno::calendar` | 3 | 3 |
+| `fno.calendar.hard_exit_session` | `fno::calendar` | 4 | 4 |
+| `fno.calendar.held_expiry` | `fno::calendar` | 3 | 3 |
+| `fno.calendar.in_entry_window` | `fno::calendar` | 1 | 1 |
+| `fno.calendar.is_entry_day` | `fno::calendar` | 3 | 3 |
+| `fno.calendar.is_late_exit` | `fno::calendar` | 3 | 3 |
+| `fno.calendar.monthly_expiries` | `fno::calendar` | 3 | 3 |
+| `fno.calendar.monthly_expiry` | `fno::calendar` | 3 | 3 |
+| `fno.calendar.next_entry` | `fno::calendar` | 5 | 5 |
+| `fno.calendar.plan_expires_at` | `fno::calendar` | 4 | 4 |
+| `fno.calendar.roll_session` | `fno::calendar` | 3 | 3 |
+| `fno.calendar.sessions_before` | `fno::calendar` | 5 | 5 |
+| `fno.calendar.sessions_between` | `fno::calendar` | 3 | 3 |
+| `fno.checklist.into_expiry` | `fno::checklist` | 5 | 5 |
+| `fno.checklist.journal_gap` | `fno::checklist` | 2 | 2 |
+| `fno.checklist.mark_gaps` | `fno::checklist` | 2 | 2 |
+| `fno.checklist.missed_cycles` | `fno::checklist` | 1 | 1 |
+| `fno.checklist.paper_checklist` | `fno::checklist` | 7 | 7 |
+| `fno.checklist.uncovered_steps` | `fno::checklist` | 5 | 5 |
+| `fno.condor.LegQuote` | `fno::condor` | 1 | 1 |
+| `fno.condor.cost_to_close` | `fno::condor` | 5 | 5 |
+| `fno.condor.credit` | `fno::condor` | 4 | 4 |
+| `fno.condor.levels` | `fno::condor` | 7 | 7 |
+| `fno.condor.liquidity_refusals` | `fno::condor` | 6 | 6 |
+| `fno.condor.max_loss_per_unit` | `fno::condor` | 3 | 3 |
+| `fno.condor.one_sd` | `fno::condor` | 6 | 6 |
+| `fno.condor.price_structure` | `fno::condor` | 5 | 5 |
+| `fno.condor.roles` | `fno::condor` | 1 | 1 |
+| `fno.condor.select_strikes` | `fno::condor` | 8 | 8 |
+| `fno.config.FnoConfig.risk_per_trade_pct` | `fno::config` | 2 | 2 |
+| `fno.config.ceiling_violations` | `fno::config` | 5 | 5 |
+| `fno.config.construct` | `fno::config` | 19 | 19 |
+| `fno.config.f1_sleeve_for` | `fno::config` | 4 | 4 |
+| `fno.config.f3_sleeve_for` | `fno::config` | 3 | 3 |
+| `fno.config.group_of` | `fno::config` | 1 | 1 |
+| `fno.costs.condor_fills` | `fno::costs` | 2 | 2 |
+| `fno.costs.condor_round_trip` | `fno::costs` | 7 | 7 |
+| `fno.costs.crossing_cost` | `fno::costs` | 2 | 2 |
+| `fno.costs.future_charges` | `fno::costs` | 5 | 5 |
+| `fno.costs.future_roll` | `fno::costs` | 2 | 2 |
+| `fno.costs.future_round_trip` | `fno::costs` | 3 | 3 |
+| `fno.covered.assess_step` | `fno::covered` | 5 | 5 |
+| `fno.covered.book_after` | `fno::covered` | 1 | 1 |
+| `fno.covered.net_of_plan` | `fno::covered` | 4 | 4 |
+| `fno.covered.uncovered` | `fno::covered` | 12 | 12 |
+| `fno.directional.add_decision` | `fno::directional` | 11 | 11 |
+| `fno.directional.bars_needed` | `fno::directional` | 2 | 2 |
+| `fno.directional.choose_expiry` | `fno::directional` | 6 | 6 |
+| `fno.directional.confirm_75` | `fno::directional` | 6 | 6 |
+| `fno.directional.daily_direction` | `fno::directional` | 6 | 6 |
+| `fno.directional.direction_for` | `fno::directional` | 3 | 3 |
+| `fno.directional.f3_exit` | `fno::directional` | 10 | 10 |
+| `fno.directional.f3_marks` | `fno::directional` | 1 | 1 |
+| `fno.directional.intraday_aligned` | `fno::directional` | 1 | 1 |
+| `fno.directional.key_level` | `fno::directional` | 1 | 1 |
+| `fno.directional.level_broken` | `fno::directional` | 2 | 2 |
+| `fno.directional.levels` | `fno::directional` | 6 | 6 |
+| `fno.directional.pivots` | `fno::directional` | 5 | 5 |
+| `fno.directional.propose_spread` | `fno::directional` | 10 | 10 |
+| `fno.directional.seventy_five_minute_bars` | `fno::directional` | 5 | 5 |
+| `fno.directional.size_entry` | `fno::directional` | 6 | 6 |
+| `fno.directional.spread_arith` | `fno::directional` | 3 | 3 |
+| `fno.directional.spread_strikes` | `fno::directional` | 7 | 7 |
+| `fno.directional_retest.choose_expiry` | `fno::directional_retest` | 3 | 3 |
+| `fno.directional_retest.constants` | `fno::directional_retest` | 1 | 1 |
+| `fno.directional_retest.index_panel` | `fno::directional_retest` | 2 | 2 |
+| `fno.directional_retest.monthly_expiries` | `fno::directional_retest` | 2 | 2 |
+| `fno.directional_retest.run_f3_retest` | `fno::directional_retest` | 2 | 2 |
+| `fno.directional_retest.run_symbol` | `fno::directional_retest` | 9 | 9 |
+| `fno.directional_retest.sessions_left` | `fno::directional_retest` | 1 | 1 |
+| `fno.directional_retest.strike_step` | `fno::directional_retest` | 4 | 4 |
+| `fno.exits.book_paused` | `fno::exits` | 4 | 4 |
+| `fno.exits.f1_exit` | `fno::exits` | 10 | 10 |
+| `fno.exits.f1_paused` | `fno::exits` | 7 | 7 |
+| `fno.exits.f2_exit` | `fno::exits` | 11 | 11 |
+| `fno.exits.f2_initial_stop` | `fno::exits` | 3 | 3 |
+| `fno.exits.f2_month_paused` | `fno::exits` | 4 | 4 |
+| `fno.exits.f2_time_exit_session` | `fno::exits` | 5 | 5 |
+| `fno.exits.f2_trail` | `fno::exits` | 4 | 4 |
+| `fno.exits.gtt_trigger` | `fno::exits` | 3 | 3 |
+| `fno.exits.stop_from_vol` | `fno::exits` | 2 | 2 |
+| `fno.gating.FnoFlags.execution_enabled` | `fno::gating` | 4 | 4 |
+| `fno.gating.constants` | `fno::gating` | 1 | 1 |
+| `fno.gating.fno_gates` | `fno::gating` | 24 | 24 |
+| `fno.journal.future_costs` | `fno::journal` | 2 | 2 |
+| `fno.journal.journal_figures` | `fno::journal` | 6 | 6 |
+| `fno.journal.one_pool` | `fno::journal` | 4 | 4 |
+| `fno.journal.option_costs` | `fno::journal` | 2 | 2 |
+| `fno.journal.r_multiple` | `fno::journal` | 6 | 6 |
+| `fno.ledger.book_pause_limit` | `fno::ledger` | 4 | 4 |
+| `fno.ledger.build_ledger` | `fno::ledger` | 3 | 3 |
+| `fno.ledger.column_pause_applies` | `fno::ledger` | 1 | 1 |
+| `fno.ledger.evaluate_pauses` | `fno::ledger` | 10 | 10 |
+| `fno.ledger.figures` | `fno::ledger` | 7 | 7 |
+| `fno.ledger.mode_tag` | `fno::ledger` | 1 | 1 |
+| `fno.ledger.month_bounds` | `fno::ledger` | 1 | 1 |
+| `fno.ledger.pauses_for` | `fno::ledger` | 2 | 2 |
+| `fno.monitor.f1_close_cost` | `fno::monitor` | 2 | 2 |
+| `fno.monitor.f1_pnl_inr` | `fno::monitor` | 3 | 3 |
+| `fno.monitor.f2_action` | `fno::monitor` | 8 | 8 |
+| `fno.monitor.f2_pnl_inr` | `fno::monitor` | 2 | 2 |
+| `fno.monitor.f2_trail_step` | `fno::monitor` | 5 | 5 |
+| `fno.monitor.reprice_condor` | `fno::monitor` | 9 | 9 |
+| `fno.monitor.reprice_future` | `fno::monitor` | 10 | 10 |
+| `fno.research.b76` | `fno::research` | 2 | 2 |
+| `fno.research.basis_study` | `fno::research` | 3 | 3 |
+| `fno.research.build_option_panel` | `fno::research` | 1 | 1 |
+| `fno.research.condor_trades` | `fno::research` | 7 | 7 |
+| `fno.research.constants` | `fno::research` | 1 | 1 |
+| `fno.research.continuous` | `fno::research` | 3 | 3 |
+| `fno.research.debit_trades` | `fno::research` | 1 | 1 |
+| `fno.research.f2_trades` | `fno::research` | 1 | 1 |
+| `fno.research.futures_panel` | `fno::research` | 1 | 1 |
+| `fno.research.futures_signals` | `fno::research` | 1 | 1 |
+| `fno.research.implied` | `fno::research` | 2 | 2 |
+| `fno.research.leg_costs` | `fno::research` | 2 | 2 |
+| `fno.research.liquid_base` | `fno::research` | 1 | 1 |
+| `fno.research.liquid_symbols` | `fno::research` | 1 | 1 |
+| `fno.research.simulate_futures` | `fno::research` | 2 | 2 |
+| `fno.research.summarise` | `fno::research` | 5 | 5 |
+| `fno.retest.constants` | `fno::retest` | 1 | 1 |
+| `fno.retest.empty_options` | `fno::retest` | 1 | 1 |
+| `fno.retest.family_slippage` | `fno::retest` | 6 | 6 |
+| `fno.retest.panels_from_contracts` | `fno::retest` | 2 | 2 |
+| `fno.retest.retest_due` | `fno::retest` | 1 | 1 |
+| `fno.retest.run_family` | `fno::retest` | 6 | 6 |
+| `fno.retest.trim_index_contracts` | `fno::retest` | 2 | 2 |
+| `fno.scan.allocate_capacity` | `fno::scan` | 7 | 7 |
+| `fno.scan.f2_signals` | `fno::scan` | 7 | 7 |
+| `fno.scan.propose_condor` | `fno::scan` | 10 | 10 |
+| `fno.scan.propose_future` | `fno::scan` | 6 | 6 |
+| `fno.series.continuous_futures` | `fno::series` | 7 | 7 |
+| `fno.sizing.margin_check` | `fno::sizing` | 4 | 4 |
+| `fno.sizing.risk_budget` | `fno::sizing` | 6 | 6 |
+| `fno.sizing.size` | `fno::sizing` | 14 | 14 |
+| `fno.underlying.derive_underlying` | `fno::underlying` | 7 | 7 |
+| `fno.vol.atm_iv` | `fno::vol` | 6 | 6 |
+| `fno.vol.iv_atm_frame` | `fno::vol` | 3 | 3 |
+| `fno.vol.iv_expiry` | `fno::vol` | 4 | 4 |
+| **total** | | **615** | **615** |
+
+**What is still not exact (no golden is red because of it; DECISIONS-RS R3.x).**
+
+* **twt: a literal NaN in an input bar frame** is compared with IEEE semantics in Rust and in
+  polars' total order in Python (NaN largest, NaN == NaN; `max_horizontal` folds like `maxsd`;
+  group `min` skips NaN) — `signals`, `breadth`, `indicators`, `liquidity_floor`,
+  `limit_locked`, `month_low_back`, `tight_state`. Verified live (`close = NaN`, `sma_dma = 1.0`:
+  polars counts the name above, Rust does not). Unreachable from real data (Postgres numeric →
+  Float64 has no NaN; the only derived NaN, `tight_range_pct = 0/0`, compares the same in both),
+  and the goldens cannot encode a NaN input. Documented as a precondition, to be closed before
+  the TWT plan strangles its Python twin (R3.1). vbt and fno already port the total order.
+* twt: `SessionCalendar::advance` with a step below `-len` returns `None` where Python raises
+  `IndexError` (no caller passes a negative step); `size_entry` refuses a share count above
+  `i64::MAX` where Python returns a big int (R3.3).
+* vbt: config floats parsed with Rust's `{x}` rather than Python's `repr` in `fill_if_touched`
+  and `size_entry` — compared or floored, never printed; a ~1e300 `fill_through_pct` could fail
+  to parse where Python returns `None` (R3.6).
+* fno: an exponent-form capital (`"1E+7"`) prints `risk_budget_inr` at another scale
+  (`100000.0` vs `100000`; 28 of 600 fuzz cases) — `rust_decimal` has no positive exponent;
+  `condor.one_sd` at `iv = 1e-12` raises `InvalidOperation` where Python returns a scale-31
+  value (36 fuzz cases). Both R1.3's class; fail loudly or differ only in printed scale (R3.8).
+* fno research: unreachable deviations — `leg_costs` with `lot = 0`, `simulate_futures` with an
+  entry of 0, negative horizons, `trading_days_before(n < 0)`, polars' unstable sort on A2 ties
+  (matched where polars falls back to its stable small-slice sort), and the fdlibm `erf` vs
+  Apple libm (1–2 ulp) (R3.9).
+* **Duplicated code (R2.3's pattern, to collapse):** twt carries private copies of VBT's config
+  shape (`twt::config::vbt_shared`), calendar, breadth and indicator arithmetic, written before
+  the vbt lane landed; `fno::ledger` carries private copies of `fno::exits`' pause predicates;
+  `fno::costs` takes role→price maps instead of `fno::condor::LegRole`. Each now has a real
+  home in the crate (R3.4).
+
+## Wave 3 answer keys (RS2) — ported at RS3
 
 Dumped from the live Python in the golden_ranking.py pattern (inputs round-tripped through JSON
 before the call; a raise stored as `{"raises": {type, message}}`; `stable=True`). Each dumper
@@ -169,21 +488,51 @@ instruments × columns = sessions with `null` for NaN; fno bundles several runs 
 
 ## What comes next
 
-1. **Wave 3 — the three sleeves' pure cores**, in parallel lanes, after one shared step: lift
-   `WideDecimal` (or the screener's `DecimalValue`) into a shared `baskfy_core` module and
-   reuse swing's `StopConfig`/`qulla` (twt and vbt both decode `exits.qulla` as swing's
-   `StopConfig`). Then **twt** (306) and **vbt** (326) — each split calendar/indicators/
-   signals/breadth → sizing/exits/orders/sleeve/plan/drift → backtest; and **fno** (615), the
-   largest, split money paths first (config, gating, costs, sizing, exits, ledger, journal,
-   covered, checklist, monitor, calendar, condor) → directional/scan/series/underlying/vol →
-   research/retest/directional_retest last (frame-heavy, numpy). Each lane ends with a
-   differential fuzz at zero float tolerance, as wave 2's did.
-2. **Then the I/O layers, in order:** `providers` (Kite/NSE clients, rate-limited exactly as the
-   Python's) → **`execution`** (law 2, the order path: guards → risk → rate limit → journal →
-   broker; ported **last of the libraries and most carefully** — `DRY_RUN` default, every
-   non-negotiable's test ported before any code, never run against live credentials) →
-   `api` (axum) → `worker` → `desk`. Each strangles its Python twin only after its goldens and
-   its contract tests pass.
+Wave 3 is done (above). The golden-covered pure core is complete; **128 `baskfy_core` modules
+with no goldens are still `not started`** (models, curated_*, portfolio_*, allocation_ledger,
+reconcile, exposure, options' plan/scan/structures, swing.backtest, …). They are pulled in by
+the I/O layer that first needs them, **goldens first** (a dumper in `tools/parity/`, committed
+separately), never ported blind.
+
+**Before wave 4 starts — one housekeeping step (R3.4, R3.1):** collapse the R2.3/R3.4 copies
+(twt's `vbt_shared` config, calendar, breadth and indicator arithmetic onto `vbt::*`;
+`fno::ledger`'s pause predicates onto `fno::exits`; the two `windows` copies), lift
+`WideDecimal` out of `backtest::helpers` into a shared `baskfy_core` module, and give twt the
+polars total-order comparisons vbt already has. Every golden must stay green through it.
+
+**Wave 4 — the I/O layers, strictly in this order** (R3.10). Each gets its own crate, added by
+the step that needs it; law 1 keeps every one of them out of `baskfy-core`.
+
+1. **`baskfy-providers`** — Kite and NSE clients (historical, quotes, instruments, bhavcopy
+   download/parse), rate-limited exactly as the Python's (Kite ~3 req/s historical; NSE's
+   cookie/header discipline). Graded by **recorded-fixture goldens** (request → response pairs
+   captured from the Python clients against recorded HTTP, never live), plus the rate limiter's
+   timing as a test with an injected clock. No live network in any test.
+2. **`baskfy-db`** — `sqlx` against the **existing** Postgres schema (Alembic stays the
+   migration tool). **Read-only first**: every query the API and worker read with, typed rows
+   whose `numeric` columns decode to `rust_decimal`, graded against a **copy** of the database
+   (never the live `baskfy-local` containers) by comparing row sets with the Python's. Writes
+   come later, one table at a time, each proven idempotent (house rule 7) on the copy.
+3. **`baskfy-api`** (axum) — route for route against the FastAPI app: serves `openapi.json`
+   unchanged, with **contract tests generated from that OpenAPI** and JSON bodies equal after
+   normalisation (docs/go-rewrite/03 §Tolerances). The public API stays shut (D9). The web app
+   never gains an execute route. Cut over one Caddy route at a time.
+4. **`baskfy-worker`** — the Celery jobs, the nightly first (catch-up, publish, the quality
+   gate); graded by `pipeline_run_step` rows equal to the Python run's against a DB copy. The
+   two clocks (CLAUDE.md, "Which date the product shows") are preserved exactly: published
+   series never claim today while today is running.
+5. **`baskfy-desk`** — `kite-momentum-rebalancer/app`: plans, monitors, the sleeves' services;
+   two shadow Fridays in `DRY_RUN` with byte-equal plans; cutover only on Maulik's explicit go.
+   `portfolio.db` is never touched without the verified backup the safety rails require.
+6. **`baskfy-execution` — LAST** (law 2): guards → risk → rate limit → journal → broker, the
+   only path to an order. **Every non-negotiable's test is ported before any code**; `DRY_RUN`
+   defaults true and must simulate end to end; `client_id = plan_id:symbol`; SGB*/G-sec and
+   `EXCLUDED_SYMBOLS` refused before any network call; CNC-only with the MIS/NFO gates off by
+   default; the three auto-execute flags (swing SW25/26, TWT TW17–20, F3 auto-exit M.5) ported
+   with their defaults **false** and never widened. Never run against live credentials; no agent
+   places a live order.
+
+Then the single `baskfy` binary (`api`, `worker`, `desk` subcommands).
 
 ## `baskfy_core` — every Python module
 
@@ -191,7 +540,8 @@ Line counts are `wc -l` of the Python file (comments and docstrings included), m
 29 Oct 2026. Rust modules declared in `baskfy-core` today: `swing::{config, indicators, market,
 opening_range, plan, setups, sizing, stops}`, `options::{condor, config, costs, execution,
 gating, ledger}`, `backtest::{helpers, engine}`, `backtest_metrics`, `factor_registry`,
-`factors`, `ranking_engine`, `screener` (RS2). Python modules with no Rust module of their own
+`factors`, `ranking_engine`, `screener` (RS2), and every module of `twt` (12), `vbt` (13) and
+`fno` (20) (RS3). Python modules with no Rust module of their own
 that a port needed (`windows`, `circuits`, `momentum`, `precision`, `instrument_regime`,
 `factors_ranking`, `blends`, `ranking`, `screen_definition`, `universes`, `rank_buffer`'s
 subset) live as private submodules of the port that needed them (R2.3) and are still `not
@@ -239,26 +589,26 @@ started` here.
 | `baskfy_core.factors` | 672 | ported — 15/15 |
 | `baskfy_core.factors_ranking` | 872 | not started |
 | `baskfy_core.fno` | 8 | not started |
-| `baskfy_core.fno.calendar` | 148 | goldens exist (L1/fno), not ported |
-| `baskfy_core.fno.checklist` | 284 | goldens exist (L1/fno), not ported |
-| `baskfy_core.fno.condor` | 274 | goldens exist (L1/fno), not ported |
-| `baskfy_core.fno.config` | 486 | goldens exist (L1/fno), not ported |
-| `baskfy_core.fno.costs` | 131 | goldens exist (L1/fno), not ported |
-| `baskfy_core.fno.covered` | 125 | goldens exist (L1/fno), not ported |
-| `baskfy_core.fno.directional` | 639 | goldens exist (L1/fno), not ported |
-| `baskfy_core.fno.directional_retest` | 495 | goldens exist (L1/fno), not ported |
-| `baskfy_core.fno.exits` | 167 | goldens exist (L1/fno), not ported |
-| `baskfy_core.fno.gating` | 106 | goldens exist (L1/fno), not ported |
-| `baskfy_core.fno.journal` | 279 | goldens exist (L1/fno), not ported |
-| `baskfy_core.fno.ledger` | 347 | goldens exist (L1/fno), not ported |
-| `baskfy_core.fno.monitor` | 312 | goldens exist (L1/fno), not ported |
-| `baskfy_core.fno.research` | 1021 | goldens exist (L1/fno), not ported |
-| `baskfy_core.fno.retest` | 612 | goldens exist (L1/fno), not ported |
-| `baskfy_core.fno.scan` | 448 | goldens exist (L1/fno), not ported |
-| `baskfy_core.fno.series` | 217 | goldens exist (L1/fno), not ported |
-| `baskfy_core.fno.sizing` | 144 | goldens exist (L1/fno), not ported |
-| `baskfy_core.fno.underlying` | 123 | goldens exist (L1/fno), not ported |
-| `baskfy_core.fno.vol` | 187 | goldens exist (L1/fno), not ported |
+| `baskfy_core.fno.calendar` | 148 | ported — 51/51 |
+| `baskfy_core.fno.checklist` | 284 | ported — 22/22 |
+| `baskfy_core.fno.condor` | 274 | ported — 46/46 |
+| `baskfy_core.fno.config` | 486 | ported — 34/34 |
+| `baskfy_core.fno.costs` | 131 | ported — 21/21 |
+| `baskfy_core.fno.covered` | 125 | ported — 22/22 |
+| `baskfy_core.fno.directional` | 639 | ported — 91/91 |
+| `baskfy_core.fno.directional_retest` | 495 | ported — 24/24 |
+| `baskfy_core.fno.exits` | 167 | ported — 53/53 |
+| `baskfy_core.fno.gating` | 106 | ported — 29/29 |
+| `baskfy_core.fno.journal` | 279 | ported — 20/20 |
+| `baskfy_core.fno.ledger` | 347 | ported — 29/29 |
+| `baskfy_core.fno.monitor` | 312 | ported — 39/39 |
+| `baskfy_core.fno.research` | 1021 | ported — 34/34 |
+| `baskfy_core.fno.retest` | 612 | ported — 19/19 |
+| `baskfy_core.fno.scan` | 448 | ported — 30/30 |
+| `baskfy_core.fno.series` | 217 | ported — 7/7 |
+| `baskfy_core.fno.sizing` | 144 | ported — 24/24 |
+| `baskfy_core.fno.underlying` | 123 | ported — 7/7 |
+| `baskfy_core.fno.vol` | 187 | ported — 13/13 |
 | `baskfy_core.grouping_suggestions` | 939 | not started |
 | `baskfy_core.gst` | 125 | not started |
 | `baskfy_core.instrument_regime` | 166 | not started |
@@ -364,36 +714,36 @@ started` here.
 | `baskfy_core.tradebook` | 347 | not started |
 | `baskfy_core.trading_calendar` | 185 | not started |
 | `baskfy_core.twt` | 282 | not started |
-| `baskfy_core.twt.backtest` | 756 | goldens exist (L1/twt), not ported |
-| `baskfy_core.twt.breadth` | 130 | goldens exist (L1/twt), not ported |
-| `baskfy_core.twt.calendar` | 95 | goldens exist (L1/twt), not ported |
-| `baskfy_core.twt.config` | 396 | goldens exist (L1/twt), not ported |
-| `baskfy_core.twt.drift` | 104 | goldens exist (L1/twt), not ported |
-| `baskfy_core.twt.exits` | 379 | goldens exist (L1/twt), not ported |
-| `baskfy_core.twt.indicators` | 184 | goldens exist (L1/twt), not ported |
-| `baskfy_core.twt.plan` | 550 | goldens exist (L1/twt), not ported |
-| `baskfy_core.twt.published` | 111 | goldens exist (L1/twt), not ported |
-| `baskfy_core.twt.signals` | 318 | goldens exist (L1/twt), not ported |
-| `baskfy_core.twt.sizing` | 184 | goldens exist (L1/twt), not ported |
-| `baskfy_core.twt.sleeve` | 148 | goldens exist (L1/twt), not ported |
+| `baskfy_core.twt.backtest` | 756 | ported — 41/41 |
+| `baskfy_core.twt.breadth` | 130 | ported — 21/21 |
+| `baskfy_core.twt.calendar` | 95 | ported — 28/28 |
+| `baskfy_core.twt.config` | 396 | ported (exercised through other goldens) |
+| `baskfy_core.twt.drift` | 104 | ported — 8/8 |
+| `baskfy_core.twt.exits` | 379 | ported — 74/74 |
+| `baskfy_core.twt.indicators` | 184 | ported — 18/18 |
+| `baskfy_core.twt.plan` | 550 | ported — 39/39 |
+| `baskfy_core.twt.published` | 111 | ported — 1/1 |
+| `baskfy_core.twt.signals` | 318 | ported — 48/48 |
+| `baskfy_core.twt.sizing` | 184 | ported — 21/21 |
+| `baskfy_core.twt.sleeve` | 148 | ported — 7/7 |
 | `baskfy_core.universes` | 192 | not started |
 | `baskfy_core.vbt` | 236 | not started |
-| `baskfy_core.vbt.backtest` | 727 | goldens exist (L1/vbt), not ported |
-| `baskfy_core.vbt.breadth` | 123 | goldens exist (L1/vbt), not ported |
-| `baskfy_core.vbt.calendar` | 128 | goldens exist (L1/vbt), not ported |
-| `baskfy_core.vbt.config` | 384 | goldens exist (L1/vbt), not ported |
-| `baskfy_core.vbt.drift` | 78 | goldens exist (L1/vbt), not ported |
-| `baskfy_core.vbt.exits` | 182 | goldens exist (L1/vbt), not ported |
-| `baskfy_core.vbt.indicators` | 201 | goldens exist (L1/vbt), not ported |
-| `baskfy_core.vbt.orders` | 196 | goldens exist (L1/vbt), not ported |
-| `baskfy_core.vbt.plan` | 445 | goldens exist (L1/vbt), not ported |
-| `baskfy_core.vbt.published` | 86 | goldens exist (L1/vbt), not ported |
-| `baskfy_core.vbt.signals` | 138 | goldens exist (L1/vbt), not ported |
-| `baskfy_core.vbt.sizing` | 161 | goldens exist (L1/vbt), not ported |
-| `baskfy_core.vbt.sleeve` | 135 | goldens exist (L1/vbt), not ported |
+| `baskfy_core.vbt.backtest` | 727 | ported — 42/42 |
+| `baskfy_core.vbt.breadth` | 123 | ported — 19/19 |
+| `baskfy_core.vbt.calendar` | 128 | ported — 38/38 |
+| `baskfy_core.vbt.config` | 384 | ported — 20/20 |
+| `baskfy_core.vbt.drift` | 78 | ported — 7/7 |
+| `baskfy_core.vbt.exits` | 182 | ported — 41/41 |
+| `baskfy_core.vbt.indicators` | 201 | ported — 15/15 |
+| `baskfy_core.vbt.orders` | 196 | ported — 41/41 |
+| `baskfy_core.vbt.plan` | 445 | ported — 45/45 |
+| `baskfy_core.vbt.published` | 86 | ported — 1/1 |
+| `baskfy_core.vbt.signals` | 138 | ported — 29/29 |
+| `baskfy_core.vbt.sizing` | 161 | ported — 21/21 |
+| `baskfy_core.vbt.sleeve` | 135 | ported — 7/7 |
 | `baskfy_core.windows` | 211 | not started |
 
 193 modules, 67550 lines in total. Goldens: 1,702 cases (swing 79, options 47, backtest 139,
-ranking 190, twt 306, vbt 326, fno 615). Ported: 21 modules (17 with goldens + 4 configs/
-indicators/engine halves), **455 of 455** of their goldens green. Not yet marked `verified`:
-that needs Maulik's review of the R1.x/R2.x entries.
+ranking 190, twt 306, vbt 326, fno 615). Ported: 65 modules (RS3; twt 12, vbt 13 and fno 20 added),
+**1,702 of 1,702** of their goldens green; 128 not started. Not yet marked `verified`: that
+needs Maulik's review of the R1.x/R2.x/R3.x entries.

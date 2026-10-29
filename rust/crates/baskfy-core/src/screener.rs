@@ -2449,7 +2449,7 @@ mod payload {
 // SHA-256 (FIPS 180-4), for cache_key and definition_hash
 // ---------------------------------------------------------------------------
 
-mod sha256 {
+pub(crate) mod sha256 {
     use std::fmt::Write as _;
 
     const K: [u32; 64] = [

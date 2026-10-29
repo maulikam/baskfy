@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { LoginForm } from "@/app/(auth)/login/login-form";
+import { localSignInPublicId } from "@/lib/auth/api-auth";
 
 export const metadata: Metadata = {
   title: "Sign in",
@@ -22,13 +23,16 @@ export default async function LoginPage({
   const params = await searchParams;
   const next = typeof params.next === "string" ? params.next : undefined;
   const deleted = params.deleted === "1";
+  const local = localSignInPublicId() !== undefined;
 
   return (
     <main className="space-y-6">
       <div className="space-y-1">
         <h1 className="text-xl font-semibold tracking-tight">Sign in</h1>
         <p className="text-sm text-muted-foreground">
-          Continue with Google. If you have not been here before, this creates your account.
+          {local
+            ? "This is your own Mac, so there is no Google step."
+            : "Continue with Google. If you have not been here before, this creates your account."}
         </p>
       </div>
 
@@ -43,7 +47,7 @@ export default async function LoginPage({
         </p>
       ) : null}
 
-      <LoginForm next={next} />
+      <LoginForm next={next} local={local} />
 
       {/*
         The consent line. docs/11 §Compliance carries a DPDP consent record, and until this change

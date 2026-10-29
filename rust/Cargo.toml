@@ -44,7 +44,7 @@ serde = { version = "=1.0.229", features = ["derive"] }
 # float_roundtrip: parse every JSON float to the nearest f64, as Python's json does (the default
 # parser can land 1 ulp off on 16-17 digit floats, so a golden would be graded on perturbed
 # inputs). DECISIONS-RS R2.1.
-serde_json = { version = "=1.0.154", features = ["float_roundtrip"] }
+serde_json = { version = "=1.0.154", features = ["float_roundtrip", "raw_value"] }
 thiserror = { version = "=2.0.21" }
 
 # ---------------------------------------------------------------------------------------------
@@ -81,6 +81,24 @@ sha2 = { version = "=0.10.9" }
 hmac = { version = "=0.12.1" }
 # Test-only: temporary directories for the token store and the raw archive.
 tempfile = { version = "=3.27.0" }
+
+# ---------------------------------------------------------------------------------------------
+# Wave 4b: the database and the HTTP API (DECISIONS-RS R5.1). Never dependencies of baskfy-core.
+# ---------------------------------------------------------------------------------------------
+baskfy-db = { path = "crates/baskfy-db" }
+baskfy-api = { path = "crates/baskfy-api" }
+# Postgres only, runtime queries only (no macros: Alembic owns the schema and no build may need a
+# live database), rustls over ring with webpki roots (no OpenSSL). rust_decimal/chrono/json are
+# the numeric, timestamptz/date and jsonb decoders.
+sqlx = { version = "=0.8.6", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-webpki", "postgres", "rust_decimal", "chrono", "json"] }
+# The HTTP server. http1 only (uvicorn serves HTTP/1.1), no json/query/form extractors: the API
+# parses query strings and renders bodies itself so they match Starlette and pydantic exactly.
+axum = { version = "=0.8.9", default-features = false, features = ["tokio", "http1", "matched-path", "original-uri"] }
+# The `Service` trait, to dispatch a probe through the router for Starlette's slash redirect
+# (DECISIONS-RS R5.1); already in the lock through axum.
+tower = { version = "=0.5.3", default-features = false }
+# JWT segments are base64url (PyJWT's base64url_decode); already in the lock through reqwest.
+base64 = { version = "=0.22.1" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

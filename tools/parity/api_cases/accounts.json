@@ -1,0 +1,3443 @@
+{
+ "lane": "api-accounts",
+ "note": "RS5 lane api-accounts: the GET routes of screens, curated_investments/costs/engage/sip/trending/versions, managers, watchlist, alerts, api_keys, webhook_endpoints, admin, auth (/me/export). Graded twice: --env BASKFY_SOLE_USER_ID=1 (the bed's owner is the sole tenant, as on the box) and with no sole tenant (the 503 path); both with --env BASKFY_FIXTURE_DIR=<an empty dir> because the Rust fixture adapter cannot read Parquet yet (DECISIONS-RS R4.12), which only /admin/providers reports. /admin/resync is graded on windows with no inferred holiday only: a wider window makes Python probe NSE live.",
+ "cases": [
+  {
+   "name": "screens-anonymous",
+   "method": "GET",
+   "path": "/api/v1/screens",
+   "note": "examples only"
+  },
+  {
+   "name": "screens-owner",
+   "method": "GET",
+   "path": "/api/v1/screens",
+   "user": "owner",
+   "note": "examples + owner's screens, editable flags"
+  },
+  {
+   "name": "screens-subscriber",
+   "method": "GET",
+   "path": "/api/v1/screens",
+   "user": "subscriber"
+  },
+  {
+   "name": "screens-plain",
+   "method": "GET",
+   "path": "/api/v1/screens",
+   "user": "plain",
+   "note": "no own screens"
+  },
+  {
+   "name": "screens-garbage-token",
+   "method": "GET",
+   "path": "/api/v1/screens",
+   "user": "garbage"
+  },
+  {
+   "name": "screen-example-anon",
+   "method": "GET",
+   "path": "/api/v1/screens/exmpl0000001"
+  },
+  {
+   "name": "screen-example-owner",
+   "method": "GET",
+   "path": "/api/v1/screens/exmpl0000003",
+   "user": "owner"
+  },
+  {
+   "name": "screen-own",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf",
+   "user": "owner"
+  },
+  {
+   "name": "screen-own-2",
+   "method": "GET",
+   "path": "/api/v1/screens/5e733f84e8c1",
+   "user": "owner"
+  },
+  {
+   "name": "screen-subscriber-own",
+   "method": "GET",
+   "path": "/api/v1/screens/8eb9259c87e9",
+   "user": "subscriber"
+  },
+  {
+   "name": "screen-other-tenant",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf",
+   "user": "plain",
+   "note": "not yours: 404, not 403"
+  },
+  {
+   "name": "screen-anon-private",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf"
+  },
+  {
+   "name": "screen-missing",
+   "method": "GET",
+   "path": "/api/v1/screens/nope'x",
+   "user": "owner"
+  },
+  {
+   "name": "screen-preview-is-an-id",
+   "method": "GET",
+   "path": "/api/v1/screens/preview",
+   "note": "GET on a POST-only static sibling falls to /{public_id}"
+  },
+  {
+   "name": "screen-runs-own",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "user": "owner"
+  },
+  {
+   "name": "screen-runs-page",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "query": {
+    "limit": "3"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "screen-runs-limit-1",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "query": {
+    "limit": "1"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "screen-runs-limit-max",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "query": {
+    "limit": "500"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "screen-runs-limit-over",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "query": {
+    "limit": "501"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "screen-runs-limit-zero",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "query": {
+    "limit": "0"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "screen-runs-limit-junk",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "query": {
+    "limit": "ten"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "screen-runs-limit-float",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "query": {
+    "limit": "2.0"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "screen-runs-limit-last-wins",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "query": "limit=x&limit=2",
+   "user": "owner"
+  },
+  {
+   "name": "screen-runs-cursor",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "query": {
+    "limit": "2",
+    "cursor": "1000000"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "screen-runs-cursor-bad",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "query": {
+    "cursor": "abc"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "screen-runs-cursor-zero",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "query": {
+    "cursor": "0"
+   },
+   "user": "owner",
+   "note": "empty page"
+  },
+  {
+   "name": "screen-runs-bad-limit-missing-screen",
+   "method": "GET",
+   "path": "/api/v1/screens/nothere/runs",
+   "query": {
+    "limit": "0"
+   },
+   "user": "owner",
+   "note": "validation before the 404"
+  },
+  {
+   "name": "screen-runs-bad-cursor-missing-screen",
+   "method": "GET",
+   "path": "/api/v1/screens/nothere/runs",
+   "query": {
+    "cursor": "x"
+   },
+   "user": "owner",
+   "note": "404 screen before the cursor"
+  },
+  {
+   "name": "screen-runs-example",
+   "method": "GET",
+   "path": "/api/v1/screens/exmpl0000001/runs"
+  },
+  {
+   "name": "screen-runs-other-tenant",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "user": "plain"
+  },
+  {
+   "name": "screen-runs-subscriber",
+   "method": "GET",
+   "path": "/api/v1/screens/8eb9259c87e9/runs",
+   "user": "subscriber",
+   "query": {
+    "limit": "2"
+   }
+  },
+  {
+   "name": "admin-runs-anon",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs",
+   "note": "401 before anything"
+  },
+  {
+   "name": "admin-runs-plain",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs",
+   "user": "plain",
+   "note": "non-staff: 404, not 403"
+  },
+  {
+   "name": "admin-runs-plain-bad-limit",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs",
+   "query": {
+    "limit": "0"
+   },
+   "user": "plain",
+   "note": "the staff gate runs before validation"
+  },
+  {
+   "name": "admin-runs-owner",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs",
+   "user": "owner"
+  },
+  {
+   "name": "admin-runs-subscriber",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs",
+   "query": {
+    "limit": "3"
+   },
+   "user": "subscriber",
+   "note": "staff by the stored bit"
+  },
+  {
+   "name": "admin-runs-limit-1",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs",
+   "query": {
+    "limit": "1"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "admin-runs-limit-max",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs",
+   "query": {
+    "limit": "365"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "admin-runs-limit-over",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs",
+   "query": {
+    "limit": "366"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "admin-runs-limit-junk",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs",
+   "query": {
+    "limit": "1e2"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "admin-run-one",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs/103",
+   "user": "owner"
+  },
+  {
+   "name": "admin-run-failed",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs/100",
+   "user": "owner",
+   "note": "a failed run: no latency, error detail"
+  },
+  {
+   "name": "admin-run-first",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs/1",
+   "user": "owner"
+  },
+  {
+   "name": "admin-run-missing",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs/99999",
+   "user": "owner"
+  },
+  {
+   "name": "admin-run-zero",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs/0",
+   "user": "owner",
+   "note": "Path(ge=1)"
+  },
+  {
+   "name": "admin-run-junk",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs/abc",
+   "user": "owner"
+  },
+  {
+   "name": "admin-run-plain",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs/103",
+   "user": "plain"
+  },
+  {
+   "name": "admin-data-versions",
+   "method": "GET",
+   "path": "/api/v1/admin/data-versions",
+   "user": "owner"
+  },
+  {
+   "name": "admin-data-versions-limit",
+   "method": "GET",
+   "path": "/api/v1/admin/data-versions",
+   "query": {
+    "limit": "2"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "admin-data-versions-bad",
+   "method": "GET",
+   "path": "/api/v1/admin/data-versions",
+   "query": {
+    "limit": "-1"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "admin-data-versions-anon",
+   "method": "GET",
+   "path": "/api/v1/admin/data-versions"
+  },
+  {
+   "name": "admin-users-q",
+   "method": "GET",
+   "path": "/api/v1/admin/users",
+   "query": {
+    "q": "gmail"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "admin-users-public-id",
+   "method": "GET",
+   "path": "/api/v1/admin/users",
+   "query": {
+    "q": "a0a1fd14fa3e"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "admin-users-limit",
+   "method": "GET",
+   "path": "/api/v1/admin/users",
+   "query": {
+    "q": "@",
+    "limit": "2"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "admin-users-wildcard",
+   "method": "GET",
+   "path": "/api/v1/admin/users",
+   "query": {
+    "q": "_"
+   },
+   "user": "owner",
+   "note": "Python leaves % and _ unescaped"
+  },
+  {
+   "name": "admin-users-space",
+   "method": "GET",
+   "path": "/api/v1/admin/users",
+   "query": {
+    "q": "   "
+   },
+   "user": "owner",
+   "note": "strip() to empty: []"
+  },
+  {
+   "name": "admin-users-none",
+   "method": "GET",
+   "path": "/api/v1/admin/users",
+   "query": {
+    "q": "no-such-person-xyz"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "admin-users-missing-q",
+   "method": "GET",
+   "path": "/api/v1/admin/users",
+   "user": "owner"
+  },
+  {
+   "name": "admin-users-empty-q",
+   "method": "GET",
+   "path": "/api/v1/admin/users",
+   "query": {
+    "q": ""
+   },
+   "user": "owner"
+  },
+  {
+   "name": "admin-users-long-q",
+   "method": "GET",
+   "path": "/api/v1/admin/users",
+   "query": {
+    "q": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "admin-users-bad-limit",
+   "method": "GET",
+   "path": "/api/v1/admin/users",
+   "query": {
+    "q": "a",
+    "limit": "51"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "admin-users-both-bad",
+   "method": "GET",
+   "path": "/api/v1/admin/users",
+   "query": "limit=0",
+   "user": "owner",
+   "note": "two errors, q then limit"
+  },
+  {
+   "name": "admin-users-plain",
+   "method": "GET",
+   "path": "/api/v1/admin/users",
+   "query": {
+    "q": "a"
+   },
+   "user": "plain"
+  },
+  {
+   "name": "admin-user-owner",
+   "method": "GET",
+   "path": "/api/v1/admin/users/2fe482ed2015",
+   "user": "owner",
+   "note": "overrides, effective entitlements"
+  },
+  {
+   "name": "admin-user-subscriber",
+   "method": "GET",
+   "path": "/api/v1/admin/users/0159baaac142",
+   "user": "owner",
+   "note": "an active plan"
+  },
+  {
+   "name": "admin-user-plain",
+   "method": "GET",
+   "path": "/api/v1/admin/users/a0a1fd14fa3e",
+   "user": "owner"
+  },
+  {
+   "name": "admin-user-other",
+   "method": "GET",
+   "path": "/api/v1/admin/users/444d51f0463c",
+   "user": "subscriber"
+  },
+  {
+   "name": "admin-user-missing",
+   "method": "GET",
+   "path": "/api/v1/admin/users/nobody'here",
+   "user": "owner"
+  },
+  {
+   "name": "admin-user-as-plain",
+   "method": "GET",
+   "path": "/api/v1/admin/users/2fe482ed2015",
+   "user": "plain"
+  },
+  {
+   "name": "admin-actions",
+   "method": "GET",
+   "path": "/api/v1/admin/actions",
+   "user": "owner"
+  },
+  {
+   "name": "admin-actions-limit",
+   "method": "GET",
+   "path": "/api/v1/admin/actions",
+   "query": {
+    "limit": "3"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "admin-actions-limit-over",
+   "method": "GET",
+   "path": "/api/v1/admin/actions",
+   "query": {
+    "limit": "201"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "admin-actions-plain",
+   "method": "GET",
+   "path": "/api/v1/admin/actions",
+   "user": "plain"
+  },
+  {
+   "name": "admin-public-api",
+   "method": "GET",
+   "path": "/api/v1/admin/public-api",
+   "user": "owner"
+  },
+  {
+   "name": "admin-public-api-anon",
+   "method": "GET",
+   "path": "/api/v1/admin/public-api"
+  },
+  {
+   "name": "admin-public-api-plain",
+   "method": "GET",
+   "path": "/api/v1/admin/public-api",
+   "user": "plain"
+  },
+  {
+   "name": "admin-providers",
+   "method": "GET",
+   "path": "/api/v1/admin/providers",
+   "user": "owner",
+   "note": "providers doctor; no network"
+  },
+  {
+   "name": "admin-providers-plain",
+   "method": "GET",
+   "path": "/api/v1/admin/providers",
+   "user": "plain"
+  },
+  {
+   "name": "admin-resync-30",
+   "method": "GET",
+   "path": "/api/v1/admin/resync",
+   "query": {
+    "days": "30"
+   },
+   "user": "owner",
+   "note": "a window with no inferred holiday: neither side may probe NSE"
+  },
+  {
+   "name": "admin-resync-1",
+   "method": "GET",
+   "path": "/api/v1/admin/resync",
+   "query": {
+    "days": "1"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "admin-resync-bad",
+   "method": "GET",
+   "path": "/api/v1/admin/resync",
+   "query": {
+    "days": "0"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "admin-resync-over",
+   "method": "GET",
+   "path": "/api/v1/admin/resync",
+   "query": {
+    "days": "6001"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "admin-resync-junk",
+   "method": "GET",
+   "path": "/api/v1/admin/resync",
+   "query": {
+    "days": "x"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "admin-resync-plain",
+   "method": "GET",
+   "path": "/api/v1/admin/resync",
+   "query": {
+    "days": "30"
+   },
+   "user": "plain"
+  },
+  {
+   "name": "admin-resync-anon",
+   "method": "GET",
+   "path": "/api/v1/admin/resync"
+  },
+  {
+   "name": "alerts-owner",
+   "method": "GET",
+   "path": "/api/v1/alerts",
+   "user": "owner"
+  },
+  {
+   "name": "alerts-plain",
+   "method": "GET",
+   "path": "/api/v1/alerts",
+   "user": "plain"
+  },
+  {
+   "name": "alerts-subscriber",
+   "method": "GET",
+   "path": "/api/v1/alerts",
+   "user": "subscriber"
+  },
+  {
+   "name": "alerts-anon",
+   "method": "GET",
+   "path": "/api/v1/alerts"
+  },
+  {
+   "name": "alert-deliveries-missing",
+   "method": "GET",
+   "path": "/api/v1/alerts/nope/deliveries",
+   "user": "owner"
+  },
+  {
+   "name": "alert-deliveries-anon",
+   "method": "GET",
+   "path": "/api/v1/alerts/nope/deliveries"
+  },
+  {
+   "name": "keys-owner",
+   "method": "GET",
+   "path": "/api/v1/keys",
+   "user": "owner"
+  },
+  {
+   "name": "keys-plain",
+   "method": "GET",
+   "path": "/api/v1/keys",
+   "user": "plain"
+  },
+  {
+   "name": "keys-anon",
+   "method": "GET",
+   "path": "/api/v1/keys"
+  },
+  {
+   "name": "key-usage-missing",
+   "method": "GET",
+   "path": "/api/v1/keys/nope/usage",
+   "user": "owner"
+  },
+  {
+   "name": "key-usage-days-zero",
+   "method": "GET",
+   "path": "/api/v1/keys/nope/usage",
+   "query": {
+    "days": "0"
+   },
+   "user": "owner",
+   "note": "the range check runs before the key lookup"
+  },
+  {
+   "name": "key-usage-days-over",
+   "method": "GET",
+   "path": "/api/v1/keys/nope/usage",
+   "query": {
+    "days": "367"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "key-usage-days-huge",
+   "method": "GET",
+   "path": "/api/v1/keys/nope/usage",
+   "query": {
+    "days": "99999999999999999999999"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "key-usage-days-junk",
+   "method": "GET",
+   "path": "/api/v1/keys/nope/usage",
+   "query": {
+    "days": "seven"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "key-usage-days-ok",
+   "method": "GET",
+   "path": "/api/v1/keys/nope/usage",
+   "query": {
+    "days": "366"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "key-usage-anon",
+   "method": "GET",
+   "path": "/api/v1/keys/nope/usage",
+   "query": {
+    "days": "0"
+   }
+  },
+  {
+   "name": "webhooks-owner",
+   "method": "GET",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "owner"
+  },
+  {
+   "name": "webhooks-plain",
+   "method": "GET",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain"
+  },
+  {
+   "name": "webhooks-anon",
+   "method": "GET",
+   "path": "/api/v1/webhook-endpoints"
+  },
+  {
+   "name": "webhook-deliveries-missing",
+   "method": "GET",
+   "path": "/api/v1/webhook-endpoints/nope/deliveries",
+   "user": "owner"
+  },
+  {
+   "name": "webhook-deliveries-anon",
+   "method": "GET",
+   "path": "/api/v1/webhook-endpoints/nope/deliveries"
+  },
+  {
+   "name": "me-export-owner",
+   "method": "GET",
+   "path": "/api/v1/me/export",
+   "user": "owner",
+   "mask": [
+    "exported_at"
+   ],
+   "note": "exported_at is the wall clock"
+  },
+  {
+   "name": "me-export-subscriber",
+   "method": "GET",
+   "path": "/api/v1/me/export",
+   "user": "subscriber",
+   "mask": [
+    "exported_at"
+   ],
+   "note": "exported_at is the wall clock"
+  },
+  {
+   "name": "me-export-plain",
+   "method": "GET",
+   "path": "/api/v1/me/export",
+   "user": "plain",
+   "mask": [
+    "exported_at"
+   ],
+   "note": "exported_at is the wall clock"
+  },
+  {
+   "name": "me-export-anon",
+   "method": "GET",
+   "path": "/api/v1/me/export"
+  },
+  {
+   "name": "me-export-stale",
+   "method": "GET",
+   "path": "/api/v1/me/export",
+   "user": "stale_epoch"
+  },
+  {
+   "name": "watchlist-owner",
+   "method": "GET",
+   "path": "/api/v1/watchlist/instruments",
+   "user": "owner",
+   "note": "sole tenant = user 1"
+  },
+  {
+   "name": "watchlist-plain",
+   "method": "GET",
+   "path": "/api/v1/watchlist/instruments",
+   "user": "plain",
+   "note": "not the sole tenant: 404 reason not-the-sole-tenant"
+  },
+  {
+   "name": "watchlist-anon",
+   "method": "GET",
+   "path": "/api/v1/watchlist/instruments"
+  },
+  {
+   "name": "prefs-owner",
+   "method": "GET",
+   "path": "/api/v1/watchlist/discover-preferences",
+   "user": "owner"
+  },
+  {
+   "name": "prefs-subscriber",
+   "method": "GET",
+   "path": "/api/v1/watchlist/discover-preferences",
+   "user": "subscriber"
+  },
+  {
+   "name": "prefs-anon",
+   "method": "GET",
+   "path": "/api/v1/watchlist/discover-preferences"
+  },
+  {
+   "name": "manager-me-owner",
+   "method": "GET",
+   "path": "/api/v1/managers/me",
+   "user": "owner"
+  },
+  {
+   "name": "manager-me-plain",
+   "method": "GET",
+   "path": "/api/v1/managers/me",
+   "user": "plain"
+  },
+  {
+   "name": "manager-me-anon",
+   "method": "GET",
+   "path": "/api/v1/managers/me"
+  },
+  {
+   "name": "manager-revenue-owner",
+   "method": "GET",
+   "path": "/api/v1/managers/me/revenue-share",
+   "user": "owner",
+   "note": "fee collection dark: 404 route fee-collect"
+  },
+  {
+   "name": "manager-revenue-anon",
+   "method": "GET",
+   "path": "/api/v1/managers/me/revenue-share"
+  },
+  {
+   "name": "pending-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/pending-actions",
+   "user": "owner"
+  },
+  {
+   "name": "pending-plain",
+   "method": "GET",
+   "path": "/api/v1/cb/pending-actions",
+   "user": "plain"
+  },
+  {
+   "name": "pending-anon",
+   "method": "GET",
+   "path": "/api/v1/cb/pending-actions"
+  },
+  {
+   "name": "updates-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/updates",
+   "user": "owner"
+  },
+  {
+   "name": "updates-plain",
+   "method": "GET",
+   "path": "/api/v1/cb/updates",
+   "user": "plain"
+  },
+  {
+   "name": "trending-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/trending",
+   "user": "owner"
+  },
+  {
+   "name": "trending-plain",
+   "method": "GET",
+   "path": "/api/v1/cb/trending",
+   "user": "plain"
+  },
+  {
+   "name": "trending-anon",
+   "method": "GET",
+   "path": "/api/v1/cb/trending"
+  },
+  {
+   "name": "versions-trend-stack",
+   "method": "GET",
+   "path": "/api/v1/explore/trend-stack/versions",
+   "user": "owner"
+  },
+  {
+   "name": "versions-maulik",
+   "method": "GET",
+   "path": "/api/v1/explore/maulik/versions",
+   "user": "plain",
+   "note": "not sole-tenant scoped"
+  },
+  {
+   "name": "versions-missing",
+   "method": "GET",
+   "path": "/api/v1/explore/no-such-basket/versions",
+   "user": "owner"
+  },
+  {
+   "name": "versions-anon",
+   "method": "GET",
+   "path": "/api/v1/explore/trend-stack/versions"
+  },
+  {
+   "name": "versions-long-slug",
+   "method": "GET",
+   "path": "/api/v1/explore/sssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss/versions",
+   "user": "owner"
+  },
+  {
+   "name": "diff-same",
+   "method": "GET",
+   "path": "/api/v1/explore/trend-stack/versions/diff",
+   "query": {
+    "from": "1",
+    "to": "1"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "diff-missing-version",
+   "method": "GET",
+   "path": "/api/v1/explore/trend-stack/versions/diff",
+   "query": {
+    "from": "1",
+    "to": "2"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "diff-missing-from-version",
+   "method": "GET",
+   "path": "/api/v1/explore/trend-stack/versions/diff",
+   "query": {
+    "from": "3",
+    "to": "1"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "diff-missing-params",
+   "method": "GET",
+   "path": "/api/v1/explore/trend-stack/versions/diff",
+   "user": "owner"
+  },
+  {
+   "name": "diff-bad-params",
+   "method": "GET",
+   "path": "/api/v1/explore/trend-stack/versions/diff",
+   "query": {
+    "from": "0",
+    "to": "x"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "diff-missing-basket",
+   "method": "GET",
+   "path": "/api/v1/explore/nope/versions/diff",
+   "query": {
+    "from": "1",
+    "to": "2"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "diff-anon",
+   "method": "GET",
+   "path": "/api/v1/explore/trend-stack/versions/diff",
+   "query": {
+    "from": "1",
+    "to": "2"
+   }
+  },
+  {
+   "name": "diff-long-slug-and-params",
+   "method": "GET",
+   "path": "/api/v1/explore/sssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss/versions/diff",
+   "query": {
+    "from": "0"
+   },
+   "user": "owner",
+   "note": "path error first, then query errors"
+  },
+  {
+   "name": "investments-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/investments",
+   "user": "owner",
+   "note": "the sole tenant's book (empty on the bed)"
+  },
+  {
+   "name": "investments-unassigned",
+   "method": "GET",
+   "path": "/api/v1/cb/investments",
+   "query": {
+    "unassigned": "true"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "investments-unassigned-false",
+   "method": "GET",
+   "path": "/api/v1/cb/investments",
+   "query": {
+    "unassigned": "off"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "investments-unassigned-bad",
+   "method": "GET",
+   "path": "/api/v1/cb/investments",
+   "query": {
+    "unassigned": "maybe"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "investments-portfolio",
+   "method": "GET",
+   "path": "/api/v1/cb/investments",
+   "query": {
+    "portfolio_id": "1"
+   },
+   "user": "owner",
+   "note": "portfolio 1 does not exist: 404 portfolio"
+  },
+  {
+   "name": "investments-portfolio-zero",
+   "method": "GET",
+   "path": "/api/v1/cb/investments",
+   "query": {
+    "portfolio_id": "0"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "investments-portfolio-junk",
+   "method": "GET",
+   "path": "/api/v1/cb/investments",
+   "query": {
+    "portfolio_id": "x",
+    "unassigned": "x"
+   },
+   "user": "owner",
+   "note": "two errors"
+  },
+  {
+   "name": "investments-both",
+   "method": "GET",
+   "path": "/api/v1/cb/investments",
+   "query": {
+    "portfolio_id": "1",
+    "unassigned": "true"
+   },
+   "user": "owner",
+   "note": "mutually exclusive"
+  },
+  {
+   "name": "investments-plain",
+   "method": "GET",
+   "path": "/api/v1/cb/investments",
+   "user": "plain",
+   "note": "not the sole tenant"
+  },
+  {
+   "name": "investments-plain-bad",
+   "method": "GET",
+   "path": "/api/v1/cb/investments",
+   "query": {
+    "portfolio_id": "0"
+   },
+   "user": "plain",
+   "note": "validation before the tenant gate"
+  },
+  {
+   "name": "investments-anon",
+   "method": "GET",
+   "path": "/api/v1/cb/investments"
+  },
+  {
+   "name": "investment-missing",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/12345",
+   "user": "owner"
+  },
+  {
+   "name": "investment-junk-id",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/abc",
+   "user": "owner"
+  },
+  {
+   "name": "investment-plain",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/12345",
+   "user": "plain"
+  },
+  {
+   "name": "investment-anon",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/abc"
+  },
+  {
+   "name": "costs-missing",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/12345/costs",
+   "user": "owner"
+  },
+  {
+   "name": "costs-junk",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/1.5/costs",
+   "user": "owner"
+  },
+  {
+   "name": "costs-float-id",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/7.0/costs",
+   "user": "owner",
+   "note": "pydantic accepts 7.0 as 7"
+  },
+  {
+   "name": "costs-plain",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/1/costs",
+   "user": "plain"
+  },
+  {
+   "name": "sip-missing",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/12345/sip",
+   "user": "owner"
+  },
+  {
+   "name": "sip-junk",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/x/sip",
+   "user": "owner"
+  },
+  {
+   "name": "sip-plain",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/1/sip",
+   "user": "plain"
+  },
+  {
+   "name": "fees-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/fees",
+   "user": "owner"
+  },
+  {
+   "name": "fees-plain",
+   "method": "GET",
+   "path": "/api/v1/cb/fees",
+   "user": "plain"
+  },
+  {
+   "name": "fees-anon",
+   "method": "GET",
+   "path": "/api/v1/cb/fees"
+  },
+  {
+   "name": "investments-portfolio-owned",
+   "method": "GET",
+   "path": "/api/v1/cb/investments",
+   "query": {
+    "portfolio_id": "3"
+   },
+   "user": "owner",
+   "note": "the tenant's own portfolio: empty list, not 404"
+  },
+  {
+   "name": "investments-portfolio-foreign",
+   "method": "GET",
+   "path": "/api/v1/cb/investments",
+   "query": {
+    "portfolio_id": "2"
+   },
+   "user": "owner",
+   "note": "another user's portfolio: 404, never 403"
+  },
+  {
+   "name": "csv-example-owner",
+   "method": "GET",
+   "path": "/api/v1/screens/exmpl0000001/csv",
+   "user": "owner",
+   "note": "the 93-column export, byte for byte"
+  },
+  {
+   "name": "csv-example-2",
+   "method": "GET",
+   "path": "/api/v1/screens/exmpl0000002/csv",
+   "user": "owner"
+  },
+  {
+   "name": "csv-example-3",
+   "method": "GET",
+   "path": "/api/v1/screens/exmpl0000003/csv",
+   "user": "owner"
+  },
+  {
+   "name": "csv-example-4",
+   "method": "GET",
+   "path": "/api/v1/screens/exmpl0000004/csv",
+   "user": "owner"
+  },
+  {
+   "name": "csv-example-5",
+   "method": "GET",
+   "path": "/api/v1/screens/exmpl0000005/csv",
+   "user": "owner"
+  },
+  {
+   "name": "csv-example-6",
+   "method": "GET",
+   "path": "/api/v1/screens/exmpl0000006/csv",
+   "user": "owner"
+  },
+  {
+   "name": "csv-own-rsi",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/csv",
+   "user": "owner"
+  },
+  {
+   "name": "csv-own-sharp",
+   "method": "GET",
+   "path": "/api/v1/screens/d3d692da645c/csv",
+   "user": "owner"
+  },
+  {
+   "name": "csv-own-momentum",
+   "method": "GET",
+   "path": "/api/v1/screens/1db2573befaa/csv",
+   "user": "owner"
+  },
+  {
+   "name": "csv-own-mom-fo",
+   "method": "GET",
+   "path": "/api/v1/screens/5e733f84e8c1/csv",
+   "user": "owner"
+  },
+  {
+   "name": "csv-subscriber-custom-columns",
+   "method": "GET",
+   "path": "/api/v1/screens/8eb9259c87e9/csv",
+   "user": "subscriber",
+   "note": "custom columns, granted by the forever plan"
+  },
+  {
+   "name": "csv-as-of-past",
+   "method": "GET",
+   "path": "/api/v1/screens/exmpl0000001/csv",
+   "query": {
+    "as_of": "2026-10-01"
+   },
+   "user": "owner",
+   "note": "historical ranks granted"
+  },
+  {
+   "name": "csv-as-of-weekend",
+   "method": "GET",
+   "path": "/api/v1/screens/exmpl0000001/csv",
+   "query": {
+    "as_of": "2026-10-04"
+   },
+   "user": "owner",
+   "note": "snaps back to Friday"
+  },
+  {
+   "name": "csv-as-of-latest",
+   "method": "GET",
+   "path": "/api/v1/screens/exmpl0000001/csv",
+   "query": {
+    "as_of": "2026-10-29"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "csv-as-of-future",
+   "method": "GET",
+   "path": "/api/v1/screens/exmpl0000001/csv",
+   "query": {
+    "as_of": "2027-01-01"
+   },
+   "user": "owner",
+   "note": "422 no-trading-day"
+  },
+  {
+   "name": "csv-as-of-before-start",
+   "method": "GET",
+   "path": "/api/v1/screens/exmpl0000001/csv",
+   "query": {
+    "as_of": "2024-10-31"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "csv-as-of-bad",
+   "method": "GET",
+   "path": "/api/v1/screens/exmpl0000001/csv",
+   "query": {
+    "as_of": "2026-13-01"
+   },
+   "user": "owner"
+  },
+  {
+   "name": "csv-plain",
+   "method": "GET",
+   "path": "/api/v1/screens/exmpl0000001/csv",
+   "user": "plain",
+   "note": "402 export_csv"
+  },
+  {
+   "name": "csv-anon",
+   "method": "GET",
+   "path": "/api/v1/screens/exmpl0000001/csv",
+   "note": "402 for anonymous too"
+  },
+  {
+   "name": "csv-anon-bad-as-of",
+   "method": "GET",
+   "path": "/api/v1/screens/exmpl0000001/csv",
+   "query": {
+    "as_of": "x"
+   },
+   "note": "validation before the 402"
+  },
+  {
+   "name": "csv-missing",
+   "method": "GET",
+   "path": "/api/v1/screens/nothere/csv",
+   "user": "owner"
+  },
+  {
+   "name": "csv-other-tenant",
+   "method": "GET",
+   "path": "/api/v1/screens/8eb9259c87e9/csv",
+   "user": "owner",
+   "note": "the subscriber's screen: 404"
+  },
+  {
+   "name": "rv-v-alerts-owner",
+   "method": "GET",
+   "path": "/api/v1/alerts",
+   "user": "owner",
+   "note": "Reviewer cases (RS5 adversarial review): tenant isolation and every token failure on each lane route, ids beyond bigint (the sole-tenant gate answers before the bind 500, as in Python), lax int/bool edge strings. Graded on the bed both empty and with rows seeded into screen_alert/api_key/webhook_endpoint/cb_investment/cb_fee_ledger/cb_sip_plan/cb_pending_action/cb_update_post/payment (ids >= 990001, removed afterwards)."
+  },
+  {
+   "name": "rv-v-keys-owner",
+   "method": "GET",
+   "path": "/api/v1/keys",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-hooks-owner",
+   "method": "GET",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-pending-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/pending-actions",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-updates-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/updates",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-inv-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/investments",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-fees-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/fees",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-trending-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/trending",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-export-owner",
+   "method": "GET",
+   "path": "/api/v1/me/export",
+   "user": "owner",
+   "mask": [
+    "exported_at"
+   ]
+  },
+  {
+   "name": "rv-v-alerts-subscriber",
+   "method": "GET",
+   "path": "/api/v1/alerts",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-keys-subscriber",
+   "method": "GET",
+   "path": "/api/v1/keys",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-hooks-subscriber",
+   "method": "GET",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-pending-subscriber",
+   "method": "GET",
+   "path": "/api/v1/cb/pending-actions",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-updates-subscriber",
+   "method": "GET",
+   "path": "/api/v1/cb/updates",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-inv-subscriber",
+   "method": "GET",
+   "path": "/api/v1/cb/investments",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-fees-subscriber",
+   "method": "GET",
+   "path": "/api/v1/cb/fees",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-trending-subscriber",
+   "method": "GET",
+   "path": "/api/v1/cb/trending",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-export-subscriber",
+   "method": "GET",
+   "path": "/api/v1/me/export",
+   "user": "subscriber",
+   "mask": [
+    "exported_at"
+   ]
+  },
+  {
+   "name": "rv-v-alerts-plain",
+   "method": "GET",
+   "path": "/api/v1/alerts",
+   "user": "plain"
+  },
+  {
+   "name": "rv-v-keys-plain",
+   "method": "GET",
+   "path": "/api/v1/keys",
+   "user": "plain"
+  },
+  {
+   "name": "rv-v-hooks-plain",
+   "method": "GET",
+   "path": "/api/v1/webhook-endpoints",
+   "user": "plain"
+  },
+  {
+   "name": "rv-v-pending-plain",
+   "method": "GET",
+   "path": "/api/v1/cb/pending-actions",
+   "user": "plain"
+  },
+  {
+   "name": "rv-v-updates-plain",
+   "method": "GET",
+   "path": "/api/v1/cb/updates",
+   "user": "plain"
+  },
+  {
+   "name": "rv-v-inv-plain",
+   "method": "GET",
+   "path": "/api/v1/cb/investments",
+   "user": "plain"
+  },
+  {
+   "name": "rv-v-fees-plain",
+   "method": "GET",
+   "path": "/api/v1/cb/fees",
+   "user": "plain"
+  },
+  {
+   "name": "rv-v-trending-plain",
+   "method": "GET",
+   "path": "/api/v1/cb/trending",
+   "user": "plain"
+  },
+  {
+   "name": "rv-v-export-plain",
+   "method": "GET",
+   "path": "/api/v1/me/export",
+   "user": "plain",
+   "mask": [
+    "exported_at"
+   ]
+  },
+  {
+   "name": "rv-v-alert-del1-owner",
+   "method": "GET",
+   "path": "/api/v1/alerts/zzalrt000001/deliveries",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-key-usage1-owner",
+   "method": "GET",
+   "path": "/api/v1/keys/zzkey0000001/usage",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-hook-del1-owner",
+   "method": "GET",
+   "path": "/api/v1/webhook-endpoints/zzhook000001/deliveries",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-inv1-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990001",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-cost1-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990001/costs",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-sip1-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990001/sip",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-screens-owner",
+   "method": "GET",
+   "path": "/api/v1/screens",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-screen-own-owner",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-csv-own-owner",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/csv",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-runs-own-owner",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "user": "owner",
+   "query": {
+    "limit": "2"
+   }
+  },
+  {
+   "name": "rv-v-admin-runs-owner",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs",
+   "user": "owner",
+   "query": {
+    "limit": "2"
+   }
+  },
+  {
+   "name": "rv-v-mgr-owner",
+   "method": "GET",
+   "path": "/api/v1/managers/me",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-wl-owner",
+   "method": "GET",
+   "path": "/api/v1/watchlist/instruments",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-alert-del1-subscriber",
+   "method": "GET",
+   "path": "/api/v1/alerts/zzalrt000001/deliveries",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-key-usage1-subscriber",
+   "method": "GET",
+   "path": "/api/v1/keys/zzkey0000001/usage",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-hook-del1-subscriber",
+   "method": "GET",
+   "path": "/api/v1/webhook-endpoints/zzhook000001/deliveries",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-inv1-subscriber",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990001",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-cost1-subscriber",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990001/costs",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-sip1-subscriber",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990001/sip",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-screens-subscriber",
+   "method": "GET",
+   "path": "/api/v1/screens",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-screen-own-subscriber",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-csv-own-subscriber",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/csv",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-runs-own-subscriber",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "user": "subscriber",
+   "query": {
+    "limit": "2"
+   }
+  },
+  {
+   "name": "rv-v-admin-runs-subscriber",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs",
+   "user": "subscriber",
+   "query": {
+    "limit": "2"
+   }
+  },
+  {
+   "name": "rv-v-mgr-subscriber",
+   "method": "GET",
+   "path": "/api/v1/managers/me",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-wl-subscriber",
+   "method": "GET",
+   "path": "/api/v1/watchlist/instruments",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-alert-del1-plain",
+   "method": "GET",
+   "path": "/api/v1/alerts/zzalrt000001/deliveries",
+   "user": "plain"
+  },
+  {
+   "name": "rv-v-key-usage1-plain",
+   "method": "GET",
+   "path": "/api/v1/keys/zzkey0000001/usage",
+   "user": "plain"
+  },
+  {
+   "name": "rv-v-hook-del1-plain",
+   "method": "GET",
+   "path": "/api/v1/webhook-endpoints/zzhook000001/deliveries",
+   "user": "plain"
+  },
+  {
+   "name": "rv-v-inv1-plain",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990001",
+   "user": "plain"
+  },
+  {
+   "name": "rv-v-cost1-plain",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990001/costs",
+   "user": "plain"
+  },
+  {
+   "name": "rv-v-sip1-plain",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990001/sip",
+   "user": "plain"
+  },
+  {
+   "name": "rv-v-screens-plain",
+   "method": "GET",
+   "path": "/api/v1/screens",
+   "user": "plain"
+  },
+  {
+   "name": "rv-v-screen-own-plain",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf",
+   "user": "plain"
+  },
+  {
+   "name": "rv-v-csv-own-plain",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/csv",
+   "user": "plain"
+  },
+  {
+   "name": "rv-v-runs-own-plain",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "user": "plain",
+   "query": {
+    "limit": "2"
+   }
+  },
+  {
+   "name": "rv-v-admin-runs-plain",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs",
+   "user": "plain",
+   "query": {
+    "limit": "2"
+   }
+  },
+  {
+   "name": "rv-v-mgr-plain",
+   "method": "GET",
+   "path": "/api/v1/managers/me",
+   "user": "plain"
+  },
+  {
+   "name": "rv-v-wl-plain",
+   "method": "GET",
+   "path": "/api/v1/watchlist/instruments",
+   "user": "plain"
+  },
+  {
+   "name": "rv-v-alert-del1-stale_epoch",
+   "method": "GET",
+   "path": "/api/v1/alerts/zzalrt000001/deliveries",
+   "user": "stale_epoch"
+  },
+  {
+   "name": "rv-v-key-usage1-stale_epoch",
+   "method": "GET",
+   "path": "/api/v1/keys/zzkey0000001/usage",
+   "user": "stale_epoch"
+  },
+  {
+   "name": "rv-v-hook-del1-stale_epoch",
+   "method": "GET",
+   "path": "/api/v1/webhook-endpoints/zzhook000001/deliveries",
+   "user": "stale_epoch"
+  },
+  {
+   "name": "rv-v-inv1-stale_epoch",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990001",
+   "user": "stale_epoch"
+  },
+  {
+   "name": "rv-v-cost1-stale_epoch",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990001/costs",
+   "user": "stale_epoch"
+  },
+  {
+   "name": "rv-v-sip1-stale_epoch",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990001/sip",
+   "user": "stale_epoch"
+  },
+  {
+   "name": "rv-v-screens-stale_epoch",
+   "method": "GET",
+   "path": "/api/v1/screens",
+   "user": "stale_epoch"
+  },
+  {
+   "name": "rv-v-screen-own-stale_epoch",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf",
+   "user": "stale_epoch"
+  },
+  {
+   "name": "rv-v-csv-own-stale_epoch",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/csv",
+   "user": "stale_epoch"
+  },
+  {
+   "name": "rv-v-runs-own-stale_epoch",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "user": "stale_epoch",
+   "query": {
+    "limit": "2"
+   }
+  },
+  {
+   "name": "rv-v-admin-runs-stale_epoch",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs",
+   "user": "stale_epoch",
+   "query": {
+    "limit": "2"
+   }
+  },
+  {
+   "name": "rv-v-mgr-stale_epoch",
+   "method": "GET",
+   "path": "/api/v1/managers/me",
+   "user": "stale_epoch"
+  },
+  {
+   "name": "rv-v-wl-stale_epoch",
+   "method": "GET",
+   "path": "/api/v1/watchlist/instruments",
+   "user": "stale_epoch"
+  },
+  {
+   "name": "rv-v-alert-del1-expired",
+   "method": "GET",
+   "path": "/api/v1/alerts/zzalrt000001/deliveries",
+   "user": "expired"
+  },
+  {
+   "name": "rv-v-key-usage1-expired",
+   "method": "GET",
+   "path": "/api/v1/keys/zzkey0000001/usage",
+   "user": "expired"
+  },
+  {
+   "name": "rv-v-hook-del1-expired",
+   "method": "GET",
+   "path": "/api/v1/webhook-endpoints/zzhook000001/deliveries",
+   "user": "expired"
+  },
+  {
+   "name": "rv-v-inv1-expired",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990001",
+   "user": "expired"
+  },
+  {
+   "name": "rv-v-cost1-expired",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990001/costs",
+   "user": "expired"
+  },
+  {
+   "name": "rv-v-sip1-expired",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990001/sip",
+   "user": "expired"
+  },
+  {
+   "name": "rv-v-screens-expired",
+   "method": "GET",
+   "path": "/api/v1/screens",
+   "user": "expired"
+  },
+  {
+   "name": "rv-v-screen-own-expired",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf",
+   "user": "expired"
+  },
+  {
+   "name": "rv-v-csv-own-expired",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/csv",
+   "user": "expired"
+  },
+  {
+   "name": "rv-v-runs-own-expired",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "user": "expired",
+   "query": {
+    "limit": "2"
+   }
+  },
+  {
+   "name": "rv-v-admin-runs-expired",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs",
+   "user": "expired",
+   "query": {
+    "limit": "2"
+   }
+  },
+  {
+   "name": "rv-v-mgr-expired",
+   "method": "GET",
+   "path": "/api/v1/managers/me",
+   "user": "expired"
+  },
+  {
+   "name": "rv-v-wl-expired",
+   "method": "GET",
+   "path": "/api/v1/watchlist/instruments",
+   "user": "expired"
+  },
+  {
+   "name": "rv-v-alert-del1-wrong_key",
+   "method": "GET",
+   "path": "/api/v1/alerts/zzalrt000001/deliveries",
+   "user": "wrong_key"
+  },
+  {
+   "name": "rv-v-key-usage1-wrong_key",
+   "method": "GET",
+   "path": "/api/v1/keys/zzkey0000001/usage",
+   "user": "wrong_key"
+  },
+  {
+   "name": "rv-v-hook-del1-wrong_key",
+   "method": "GET",
+   "path": "/api/v1/webhook-endpoints/zzhook000001/deliveries",
+   "user": "wrong_key"
+  },
+  {
+   "name": "rv-v-inv1-wrong_key",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990001",
+   "user": "wrong_key"
+  },
+  {
+   "name": "rv-v-cost1-wrong_key",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990001/costs",
+   "user": "wrong_key"
+  },
+  {
+   "name": "rv-v-sip1-wrong_key",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990001/sip",
+   "user": "wrong_key"
+  },
+  {
+   "name": "rv-v-screens-wrong_key",
+   "method": "GET",
+   "path": "/api/v1/screens",
+   "user": "wrong_key"
+  },
+  {
+   "name": "rv-v-screen-own-wrong_key",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf",
+   "user": "wrong_key"
+  },
+  {
+   "name": "rv-v-csv-own-wrong_key",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/csv",
+   "user": "wrong_key"
+  },
+  {
+   "name": "rv-v-runs-own-wrong_key",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "user": "wrong_key",
+   "query": {
+    "limit": "2"
+   }
+  },
+  {
+   "name": "rv-v-admin-runs-wrong_key",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs",
+   "user": "wrong_key",
+   "query": {
+    "limit": "2"
+   }
+  },
+  {
+   "name": "rv-v-mgr-wrong_key",
+   "method": "GET",
+   "path": "/api/v1/managers/me",
+   "user": "wrong_key"
+  },
+  {
+   "name": "rv-v-wl-wrong_key",
+   "method": "GET",
+   "path": "/api/v1/watchlist/instruments",
+   "user": "wrong_key"
+  },
+  {
+   "name": "rv-v-alert-del1-unknown",
+   "method": "GET",
+   "path": "/api/v1/alerts/zzalrt000001/deliveries",
+   "user": "unknown"
+  },
+  {
+   "name": "rv-v-key-usage1-unknown",
+   "method": "GET",
+   "path": "/api/v1/keys/zzkey0000001/usage",
+   "user": "unknown"
+  },
+  {
+   "name": "rv-v-hook-del1-unknown",
+   "method": "GET",
+   "path": "/api/v1/webhook-endpoints/zzhook000001/deliveries",
+   "user": "unknown"
+  },
+  {
+   "name": "rv-v-inv1-unknown",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990001",
+   "user": "unknown"
+  },
+  {
+   "name": "rv-v-cost1-unknown",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990001/costs",
+   "user": "unknown"
+  },
+  {
+   "name": "rv-v-sip1-unknown",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990001/sip",
+   "user": "unknown"
+  },
+  {
+   "name": "rv-v-screens-unknown",
+   "method": "GET",
+   "path": "/api/v1/screens",
+   "user": "unknown"
+  },
+  {
+   "name": "rv-v-screen-own-unknown",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf",
+   "user": "unknown"
+  },
+  {
+   "name": "rv-v-csv-own-unknown",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/csv",
+   "user": "unknown"
+  },
+  {
+   "name": "rv-v-runs-own-unknown",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "user": "unknown",
+   "query": {
+    "limit": "2"
+   }
+  },
+  {
+   "name": "rv-v-admin-runs-unknown",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs",
+   "user": "unknown",
+   "query": {
+    "limit": "2"
+   }
+  },
+  {
+   "name": "rv-v-mgr-unknown",
+   "method": "GET",
+   "path": "/api/v1/managers/me",
+   "user": "unknown"
+  },
+  {
+   "name": "rv-v-wl-unknown",
+   "method": "GET",
+   "path": "/api/v1/watchlist/instruments",
+   "user": "unknown"
+  },
+  {
+   "name": "rv-v-alert-del1-alg_none",
+   "method": "GET",
+   "path": "/api/v1/alerts/zzalrt000001/deliveries",
+   "user": "alg_none"
+  },
+  {
+   "name": "rv-v-key-usage1-alg_none",
+   "method": "GET",
+   "path": "/api/v1/keys/zzkey0000001/usage",
+   "user": "alg_none"
+  },
+  {
+   "name": "rv-v-hook-del1-alg_none",
+   "method": "GET",
+   "path": "/api/v1/webhook-endpoints/zzhook000001/deliveries",
+   "user": "alg_none"
+  },
+  {
+   "name": "rv-v-inv1-alg_none",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990001",
+   "user": "alg_none"
+  },
+  {
+   "name": "rv-v-cost1-alg_none",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990001/costs",
+   "user": "alg_none"
+  },
+  {
+   "name": "rv-v-sip1-alg_none",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990001/sip",
+   "user": "alg_none"
+  },
+  {
+   "name": "rv-v-screens-alg_none",
+   "method": "GET",
+   "path": "/api/v1/screens",
+   "user": "alg_none"
+  },
+  {
+   "name": "rv-v-screen-own-alg_none",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf",
+   "user": "alg_none"
+  },
+  {
+   "name": "rv-v-csv-own-alg_none",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/csv",
+   "user": "alg_none"
+  },
+  {
+   "name": "rv-v-runs-own-alg_none",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "user": "alg_none",
+   "query": {
+    "limit": "2"
+   }
+  },
+  {
+   "name": "rv-v-admin-runs-alg_none",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs",
+   "user": "alg_none",
+   "query": {
+    "limit": "2"
+   }
+  },
+  {
+   "name": "rv-v-mgr-alg_none",
+   "method": "GET",
+   "path": "/api/v1/managers/me",
+   "user": "alg_none"
+  },
+  {
+   "name": "rv-v-wl-alg_none",
+   "method": "GET",
+   "path": "/api/v1/watchlist/instruments",
+   "user": "alg_none"
+  },
+  {
+   "name": "rv-v-alert-del1-empty_bearer",
+   "method": "GET",
+   "path": "/api/v1/alerts/zzalrt000001/deliveries",
+   "user": "empty_bearer"
+  },
+  {
+   "name": "rv-v-key-usage1-empty_bearer",
+   "method": "GET",
+   "path": "/api/v1/keys/zzkey0000001/usage",
+   "user": "empty_bearer"
+  },
+  {
+   "name": "rv-v-hook-del1-empty_bearer",
+   "method": "GET",
+   "path": "/api/v1/webhook-endpoints/zzhook000001/deliveries",
+   "user": "empty_bearer"
+  },
+  {
+   "name": "rv-v-inv1-empty_bearer",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990001",
+   "user": "empty_bearer"
+  },
+  {
+   "name": "rv-v-cost1-empty_bearer",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990001/costs",
+   "user": "empty_bearer"
+  },
+  {
+   "name": "rv-v-sip1-empty_bearer",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990001/sip",
+   "user": "empty_bearer"
+  },
+  {
+   "name": "rv-v-screens-empty_bearer",
+   "method": "GET",
+   "path": "/api/v1/screens",
+   "user": "empty_bearer"
+  },
+  {
+   "name": "rv-v-screen-own-empty_bearer",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf",
+   "user": "empty_bearer"
+  },
+  {
+   "name": "rv-v-csv-own-empty_bearer",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/csv",
+   "user": "empty_bearer"
+  },
+  {
+   "name": "rv-v-runs-own-empty_bearer",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "user": "empty_bearer",
+   "query": {
+    "limit": "2"
+   }
+  },
+  {
+   "name": "rv-v-admin-runs-empty_bearer",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs",
+   "user": "empty_bearer",
+   "query": {
+    "limit": "2"
+   }
+  },
+  {
+   "name": "rv-v-mgr-empty_bearer",
+   "method": "GET",
+   "path": "/api/v1/managers/me",
+   "user": "empty_bearer"
+  },
+  {
+   "name": "rv-v-wl-empty_bearer",
+   "method": "GET",
+   "path": "/api/v1/watchlist/instruments",
+   "user": "empty_bearer"
+  },
+  {
+   "name": "rv-v-alert-del3-owner",
+   "method": "GET",
+   "path": "/api/v1/alerts/zzalrt000003/deliveries",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-alert-del2-owner",
+   "method": "GET",
+   "path": "/api/v1/alerts/zzalrt000002/deliveries",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-key-usage3-owner",
+   "method": "GET",
+   "path": "/api/v1/keys/zzkey0000003/usage",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-key-usage2-owner",
+   "method": "GET",
+   "path": "/api/v1/keys/zzkey0000002/usage",
+   "user": "owner",
+   "query": {
+    "days": "60"
+   }
+  },
+  {
+   "name": "rv-v-hook-del3-owner",
+   "method": "GET",
+   "path": "/api/v1/webhook-endpoints/zzhook000003/deliveries",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-hook-del2-owner",
+   "method": "GET",
+   "path": "/api/v1/webhook-endpoints/zzhook000002/deliveries",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-inv990002-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990002",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-cost990002-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990002/costs",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-sip990002-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990002/sip",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-inv990003-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990003",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-cost990003-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990003/costs",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-sip990003-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990003/sip",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-inv990004-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990004",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-cost990004-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990004/costs",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-sip990004-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990004/sip",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-alert-del3-subscriber",
+   "method": "GET",
+   "path": "/api/v1/alerts/zzalrt000003/deliveries",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-alert-del2-subscriber",
+   "method": "GET",
+   "path": "/api/v1/alerts/zzalrt000002/deliveries",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-key-usage3-subscriber",
+   "method": "GET",
+   "path": "/api/v1/keys/zzkey0000003/usage",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-key-usage2-subscriber",
+   "method": "GET",
+   "path": "/api/v1/keys/zzkey0000002/usage",
+   "user": "subscriber",
+   "query": {
+    "days": "60"
+   }
+  },
+  {
+   "name": "rv-v-hook-del3-subscriber",
+   "method": "GET",
+   "path": "/api/v1/webhook-endpoints/zzhook000003/deliveries",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-hook-del2-subscriber",
+   "method": "GET",
+   "path": "/api/v1/webhook-endpoints/zzhook000002/deliveries",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-inv990002-subscriber",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990002",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-cost990002-subscriber",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990002/costs",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-sip990002-subscriber",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990002/sip",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-inv990003-subscriber",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990003",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-cost990003-subscriber",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990003/costs",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-sip990003-subscriber",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990003/sip",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-inv990004-subscriber",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990004",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-cost990004-subscriber",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990004/costs",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-sip990004-subscriber",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990004/sip",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-key-usage1-days",
+   "method": "GET",
+   "path": "/api/v1/keys/zzkey0000001/usage",
+   "user": "owner",
+   "query": {
+    "days": "45"
+   }
+  },
+  {
+   "name": "rv-v-key-usage1-days1",
+   "method": "GET",
+   "path": "/api/v1/keys/zzkey0000001/usage",
+   "user": "owner",
+   "query": {
+    "days": "1"
+   }
+  },
+  {
+   "name": "rv-v-key-usage1-days-plus",
+   "method": "GET",
+   "path": "/api/v1/keys/zzkey0000001/usage",
+   "user": "owner",
+   "query": {
+    "days": "+7"
+   }
+  },
+  {
+   "name": "rv-v-key-usage1-days-space",
+   "method": "GET",
+   "path": "/api/v1/keys/zzkey0000001/usage",
+   "user": "owner",
+   "query": {
+    "days": " 7 "
+   }
+  },
+  {
+   "name": "rv-v-inv-port3",
+   "method": "GET",
+   "path": "/api/v1/cb/investments",
+   "user": "owner",
+   "query": {
+    "portfolio_id": "3"
+   }
+  },
+  {
+   "name": "rv-v-inv-port2-sub",
+   "method": "GET",
+   "path": "/api/v1/cb/investments",
+   "user": "subscriber",
+   "query": {
+    "portfolio_id": "2"
+   }
+  },
+  {
+   "name": "rv-v-inv-port3-sub",
+   "method": "GET",
+   "path": "/api/v1/cb/investments",
+   "user": "subscriber",
+   "query": {
+    "portfolio_id": "3"
+   }
+  },
+  {
+   "name": "rv-v-inv-unassigned",
+   "method": "GET",
+   "path": "/api/v1/cb/investments",
+   "user": "owner",
+   "query": {
+    "unassigned": "1"
+   }
+  },
+  {
+   "name": "rv-v-inv-unassigned-yes",
+   "method": "GET",
+   "path": "/api/v1/cb/investments",
+   "user": "owner",
+   "query": {
+    "unassigned": "YES"
+   }
+  },
+  {
+   "name": "rv-v-inv-port-big",
+   "method": "GET",
+   "path": "/api/v1/cb/investments",
+   "user": "owner",
+   "query": {
+    "portfolio_id": "99999999999999999999"
+   }
+  },
+  {
+   "name": "rv-v-inv-id-big",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/99999999999999999999",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-inv-id-neg",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/-1",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-inv-id-under",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990_001",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-admin-user-sub-anon",
+   "method": "GET",
+   "path": "/api/v1/admin/users/0159baaac142"
+  },
+  {
+   "name": "rv-v-admin-users-q-pct",
+   "method": "GET",
+   "path": "/api/v1/admin/users",
+   "user": "owner",
+   "query": {
+    "q": "%"
+   }
+  },
+  {
+   "name": "rv-v-admin-users-q-bs",
+   "method": "GET",
+   "path": "/api/v1/admin/users",
+   "user": "owner",
+   "query": {
+    "q": "\\"
+   }
+  },
+  {
+   "name": "rv-v-admin-users-q-case",
+   "method": "GET",
+   "path": "/api/v1/admin/users",
+   "user": "owner",
+   "query": {
+    "q": "GMAIL"
+   }
+  },
+  {
+   "name": "rv-v-admin-users-q-trim",
+   "method": "GET",
+   "path": "/api/v1/admin/users",
+   "user": "owner",
+   "query": {
+    "q": "  2fe482ed2015 "
+   }
+  },
+  {
+   "name": "rv-v-versions-all-slugs-maulik",
+   "method": "GET",
+   "path": "/api/v1/explore/maulik/versions",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-versions-momentum-scan",
+   "method": "GET",
+   "path": "/api/v1/explore/momentum-scan/versions",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-diff-momentum-scan",
+   "method": "GET",
+   "path": "/api/v1/explore/momentum-scan/versions/diff",
+   "user": "owner",
+   "query": {
+    "from": "1",
+    "to": "1"
+   }
+  },
+  {
+   "name": "rv-v-versions-quality-momentum",
+   "method": "GET",
+   "path": "/api/v1/explore/quality-momentum/versions",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-diff-quality-momentum",
+   "method": "GET",
+   "path": "/api/v1/explore/quality-momentum/versions/diff",
+   "user": "owner",
+   "query": {
+    "from": "1",
+    "to": "1"
+   }
+  },
+  {
+   "name": "rv-v-versions-avg-sharp-12-1m",
+   "method": "GET",
+   "path": "/api/v1/explore/avg-sharp-12-1m/versions",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-diff-avg-sharp-12-1m",
+   "method": "GET",
+   "path": "/api/v1/explore/avg-sharp-12-1m/versions/diff",
+   "user": "owner",
+   "query": {
+    "from": "1",
+    "to": "1"
+   }
+  },
+  {
+   "name": "rv-v-versions-broad-market-sharpe",
+   "method": "GET",
+   "path": "/api/v1/explore/broad-market-sharpe/versions",
+   "user": "owner"
+  },
+  {
+   "name": "rv-v-diff-broad-market-sharpe",
+   "method": "GET",
+   "path": "/api/v1/explore/broad-market-sharpe/versions/diff",
+   "user": "owner",
+   "query": {
+    "from": "1",
+    "to": "1"
+   }
+  },
+  {
+   "name": "rv-v-diff-reversed",
+   "method": "GET",
+   "path": "/api/v1/explore/trend-stack/versions/diff",
+   "user": "owner",
+   "query": {
+    "from": "2",
+    "to": "1"
+   }
+  },
+  {
+   "name": "rv-v-diff-neg",
+   "method": "GET",
+   "path": "/api/v1/explore/trend-stack/versions/diff",
+   "user": "owner",
+   "query": {
+    "from": "-1",
+    "to": "1"
+   }
+  },
+  {
+   "name": "rv-v-diff-big",
+   "method": "GET",
+   "path": "/api/v1/explore/trend-stack/versions/diff",
+   "user": "owner",
+   "query": {
+    "from": "99999999999",
+    "to": "1"
+   }
+  },
+  {
+   "name": "rv-v-screens-sub-other",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-runs-sub-other",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-csv-sub-other",
+   "method": "GET",
+   "path": "/api/v1/screens/d3d692da645c/csv",
+   "user": "plain"
+  },
+  {
+   "name": "rv-v-csv-as-of-ws",
+   "method": "GET",
+   "path": "/api/v1/screens/exmpl0000001/csv",
+   "user": "owner",
+   "query": {
+    "as_of": " 2026-10-01"
+   }
+  },
+  {
+   "name": "rv-v-csv-as-of-dt",
+   "method": "GET",
+   "path": "/api/v1/screens/exmpl0000001/csv",
+   "user": "owner",
+   "query": {
+    "as_of": "2026-10-01T00:00:00"
+   }
+  },
+  {
+   "name": "rv-v-csv-as-of-empty",
+   "method": "GET",
+   "path": "/api/v1/screens/exmpl0000001/csv",
+   "user": "owner",
+   "query": {
+    "as_of": ""
+   }
+  },
+  {
+   "name": "rv-v-csv-as-of-twice",
+   "method": "GET",
+   "path": "/api/v1/screens/exmpl0000001/csv",
+   "user": "owner",
+   "query": "as_of=2026-10-01&as_of=2026-10-02"
+  },
+  {
+   "name": "rv-v-runs-cursor-neg",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "user": "owner",
+   "query": {
+    "cursor": "-5"
+   }
+  },
+  {
+   "name": "rv-v-runs-cursor-big",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "user": "owner",
+   "query": {
+    "cursor": "99999999999999999999"
+   }
+  },
+  {
+   "name": "rv-v-runs-cursor-plus",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "user": "owner",
+   "query": {
+    "cursor": "+100000",
+    "limit": "2"
+   }
+  },
+  {
+   "name": "rv-v-runs-cursor-under",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "user": "owner",
+   "query": {
+    "cursor": "1_000_000",
+    "limit": "2"
+   }
+  },
+  {
+   "name": "rv-v-revenue-plain",
+   "method": "GET",
+   "path": "/api/v1/managers/me/revenue-share",
+   "user": "plain"
+  },
+  {
+   "name": "rv-v-revenue-sub",
+   "method": "GET",
+   "path": "/api/v1/managers/me/revenue-share",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-v-prefs-plain",
+   "method": "GET",
+   "path": "/api/v1/watchlist/discover-preferences",
+   "user": "plain"
+  },
+  {
+   "name": "rv-v-admin-runs-cursor",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs",
+   "user": "owner",
+   "query": {
+    "limit": "5",
+    "before": "50"
+   }
+  },
+  {
+   "name": "rv-v-admin-resync-2",
+   "method": "GET",
+   "path": "/api/v1/admin/resync",
+   "user": "owner",
+   "query": {
+    "days": "2"
+   }
+  },
+  {
+   "name": "rv-v-admin-resync-7",
+   "method": "GET",
+   "path": "/api/v1/admin/resync",
+   "user": "owner",
+   "query": {
+    "days": "7"
+   }
+  },
+  {
+   "name": "rv-v-admin-dv-max",
+   "method": "GET",
+   "path": "/api/v1/admin/data-versions",
+   "user": "owner",
+   "query": {
+    "limit": "365"
+   }
+  },
+  {
+   "name": "rv-v-admin-actions-sub",
+   "method": "GET",
+   "path": "/api/v1/admin/actions",
+   "user": "subscriber",
+   "query": {
+    "limit": "1"
+   }
+  },
+  {
+   "name": "rv-v-fees-plus",
+   "method": "GET",
+   "path": "/api/v1/cb/fees",
+   "user": "owner",
+   "query": {
+    "limit": "1"
+   }
+  },
+  {
+   "name": "rv-w-inv-big-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/99999999999999999999",
+   "user": "owner"
+  },
+  {
+   "name": "rv-w-cost-big-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/99999999999999999999/costs",
+   "user": "owner"
+  },
+  {
+   "name": "rv-w-sip-big-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/99999999999999999999/sip",
+   "user": "owner"
+  },
+  {
+   "name": "rv-w-inv-port-big-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/investments",
+   "user": "owner",
+   "query": {
+    "portfolio_id": "99999999999999999999"
+   }
+  },
+  {
+   "name": "rv-w-inv-port-big-un-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/investments",
+   "user": "owner",
+   "query": {
+    "portfolio_id": "99999999999999999999",
+    "unassigned": "true"
+   }
+  },
+  {
+   "name": "rv-w-admin-run-big-owner",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs/99999999999999999999",
+   "user": "owner"
+  },
+  {
+   "name": "rv-w-admin-run-junk-owner",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs/abc",
+   "user": "owner"
+  },
+  {
+   "name": "rv-w-admin-runs-junk-owner",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs",
+   "user": "owner",
+   "query": {
+    "limit": "x"
+   }
+  },
+  {
+   "name": "rv-w-diff-big-missing-owner",
+   "method": "GET",
+   "path": "/api/v1/explore/nope/versions/diff",
+   "user": "owner",
+   "query": {
+    "from": "99999999999999999999",
+    "to": "1"
+   }
+  },
+  {
+   "name": "rv-w-diff-big-owner",
+   "method": "GET",
+   "path": "/api/v1/explore/trend-stack/versions/diff",
+   "user": "owner",
+   "query": {
+    "from": "99999999999999999999",
+    "to": "99999999999999999999"
+   }
+  },
+  {
+   "name": "rv-w-runs-cursor-big-missing-owner",
+   "method": "GET",
+   "path": "/api/v1/screens/nothere/runs",
+   "user": "owner",
+   "query": {
+    "cursor": "99999999999999999999"
+   }
+  },
+  {
+   "name": "rv-w-runs-cursor-big-other-owner",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "user": "owner",
+   "query": {
+    "cursor": "99999999999999999999"
+   }
+  },
+  {
+   "name": "rv-w-key-usage-big-owner",
+   "method": "GET",
+   "path": "/api/v1/keys/zzkey0000001/usage",
+   "user": "owner",
+   "query": {
+    "days": "99999999999999999999"
+   }
+  },
+  {
+   "name": "rv-w-admin-user-x-owner",
+   "method": "GET",
+   "path": "/api/v1/admin/users/zzz",
+   "user": "owner"
+  },
+  {
+   "name": "rv-w-admin-resync-junk-owner",
+   "method": "GET",
+   "path": "/api/v1/admin/resync",
+   "user": "owner",
+   "query": {
+    "days": "x"
+   }
+  },
+  {
+   "name": "rv-w-inv1-sub-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990003",
+   "user": "owner"
+  },
+  {
+   "name": "rv-w-sip-990003-owner",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990003/sip",
+   "user": "owner"
+  },
+  {
+   "name": "rv-w-inv-big-plain",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/99999999999999999999",
+   "user": "plain"
+  },
+  {
+   "name": "rv-w-cost-big-plain",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/99999999999999999999/costs",
+   "user": "plain"
+  },
+  {
+   "name": "rv-w-sip-big-plain",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/99999999999999999999/sip",
+   "user": "plain"
+  },
+  {
+   "name": "rv-w-inv-port-big-plain",
+   "method": "GET",
+   "path": "/api/v1/cb/investments",
+   "user": "plain",
+   "query": {
+    "portfolio_id": "99999999999999999999"
+   }
+  },
+  {
+   "name": "rv-w-inv-port-big-un-plain",
+   "method": "GET",
+   "path": "/api/v1/cb/investments",
+   "user": "plain",
+   "query": {
+    "portfolio_id": "99999999999999999999",
+    "unassigned": "true"
+   }
+  },
+  {
+   "name": "rv-w-admin-run-big-plain",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs/99999999999999999999",
+   "user": "plain"
+  },
+  {
+   "name": "rv-w-admin-run-junk-plain",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs/abc",
+   "user": "plain"
+  },
+  {
+   "name": "rv-w-admin-runs-junk-plain",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs",
+   "user": "plain",
+   "query": {
+    "limit": "x"
+   }
+  },
+  {
+   "name": "rv-w-diff-big-missing-plain",
+   "method": "GET",
+   "path": "/api/v1/explore/nope/versions/diff",
+   "user": "plain",
+   "query": {
+    "from": "99999999999999999999",
+    "to": "1"
+   }
+  },
+  {
+   "name": "rv-w-diff-big-plain",
+   "method": "GET",
+   "path": "/api/v1/explore/trend-stack/versions/diff",
+   "user": "plain",
+   "query": {
+    "from": "99999999999999999999",
+    "to": "99999999999999999999"
+   }
+  },
+  {
+   "name": "rv-w-runs-cursor-big-missing-plain",
+   "method": "GET",
+   "path": "/api/v1/screens/nothere/runs",
+   "user": "plain",
+   "query": {
+    "cursor": "99999999999999999999"
+   }
+  },
+  {
+   "name": "rv-w-runs-cursor-big-other-plain",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "user": "plain",
+   "query": {
+    "cursor": "99999999999999999999"
+   }
+  },
+  {
+   "name": "rv-w-key-usage-big-plain",
+   "method": "GET",
+   "path": "/api/v1/keys/zzkey0000001/usage",
+   "user": "plain",
+   "query": {
+    "days": "99999999999999999999"
+   }
+  },
+  {
+   "name": "rv-w-admin-user-x-plain",
+   "method": "GET",
+   "path": "/api/v1/admin/users/zzz",
+   "user": "plain"
+  },
+  {
+   "name": "rv-w-admin-resync-junk-plain",
+   "method": "GET",
+   "path": "/api/v1/admin/resync",
+   "user": "plain",
+   "query": {
+    "days": "x"
+   }
+  },
+  {
+   "name": "rv-w-inv1-sub-plain",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990003",
+   "user": "plain"
+  },
+  {
+   "name": "rv-w-sip-990003-plain",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990003/sip",
+   "user": "plain"
+  },
+  {
+   "name": "rv-w-inv-big-subscriber",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/99999999999999999999",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-w-cost-big-subscriber",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/99999999999999999999/costs",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-w-sip-big-subscriber",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/99999999999999999999/sip",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-w-inv-port-big-subscriber",
+   "method": "GET",
+   "path": "/api/v1/cb/investments",
+   "user": "subscriber",
+   "query": {
+    "portfolio_id": "99999999999999999999"
+   }
+  },
+  {
+   "name": "rv-w-inv-port-big-un-subscriber",
+   "method": "GET",
+   "path": "/api/v1/cb/investments",
+   "user": "subscriber",
+   "query": {
+    "portfolio_id": "99999999999999999999",
+    "unassigned": "true"
+   }
+  },
+  {
+   "name": "rv-w-admin-run-big-subscriber",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs/99999999999999999999",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-w-admin-run-junk-subscriber",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs/abc",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-w-admin-runs-junk-subscriber",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs",
+   "user": "subscriber",
+   "query": {
+    "limit": "x"
+   }
+  },
+  {
+   "name": "rv-w-diff-big-missing-subscriber",
+   "method": "GET",
+   "path": "/api/v1/explore/nope/versions/diff",
+   "user": "subscriber",
+   "query": {
+    "from": "99999999999999999999",
+    "to": "1"
+   }
+  },
+  {
+   "name": "rv-w-diff-big-subscriber",
+   "method": "GET",
+   "path": "/api/v1/explore/trend-stack/versions/diff",
+   "user": "subscriber",
+   "query": {
+    "from": "99999999999999999999",
+    "to": "99999999999999999999"
+   }
+  },
+  {
+   "name": "rv-w-runs-cursor-big-missing-subscriber",
+   "method": "GET",
+   "path": "/api/v1/screens/nothere/runs",
+   "user": "subscriber",
+   "query": {
+    "cursor": "99999999999999999999"
+   }
+  },
+  {
+   "name": "rv-w-runs-cursor-big-other-subscriber",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "user": "subscriber",
+   "query": {
+    "cursor": "99999999999999999999"
+   }
+  },
+  {
+   "name": "rv-w-key-usage-big-subscriber",
+   "method": "GET",
+   "path": "/api/v1/keys/zzkey0000001/usage",
+   "user": "subscriber",
+   "query": {
+    "days": "99999999999999999999"
+   }
+  },
+  {
+   "name": "rv-w-admin-user-x-subscriber",
+   "method": "GET",
+   "path": "/api/v1/admin/users/zzz",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-w-admin-resync-junk-subscriber",
+   "method": "GET",
+   "path": "/api/v1/admin/resync",
+   "user": "subscriber",
+   "query": {
+    "days": "x"
+   }
+  },
+  {
+   "name": "rv-w-inv1-sub-subscriber",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990003",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-w-sip-990003-subscriber",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990003/sip",
+   "user": "subscriber"
+  },
+  {
+   "name": "rv-w-inv-big-anon",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/99999999999999999999"
+  },
+  {
+   "name": "rv-w-cost-big-anon",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/99999999999999999999/costs"
+  },
+  {
+   "name": "rv-w-sip-big-anon",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/99999999999999999999/sip"
+  },
+  {
+   "name": "rv-w-inv-port-big-anon",
+   "method": "GET",
+   "path": "/api/v1/cb/investments",
+   "query": {
+    "portfolio_id": "99999999999999999999"
+   }
+  },
+  {
+   "name": "rv-w-inv-port-big-un-anon",
+   "method": "GET",
+   "path": "/api/v1/cb/investments",
+   "query": {
+    "portfolio_id": "99999999999999999999",
+    "unassigned": "true"
+   }
+  },
+  {
+   "name": "rv-w-admin-run-big-anon",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs/99999999999999999999"
+  },
+  {
+   "name": "rv-w-admin-run-junk-anon",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs/abc"
+  },
+  {
+   "name": "rv-w-admin-runs-junk-anon",
+   "method": "GET",
+   "path": "/api/v1/admin/pipeline/runs",
+   "query": {
+    "limit": "x"
+   }
+  },
+  {
+   "name": "rv-w-diff-big-missing-anon",
+   "method": "GET",
+   "path": "/api/v1/explore/nope/versions/diff",
+   "query": {
+    "from": "99999999999999999999",
+    "to": "1"
+   }
+  },
+  {
+   "name": "rv-w-diff-big-anon",
+   "method": "GET",
+   "path": "/api/v1/explore/trend-stack/versions/diff",
+   "query": {
+    "from": "99999999999999999999",
+    "to": "99999999999999999999"
+   }
+  },
+  {
+   "name": "rv-w-runs-cursor-big-missing-anon",
+   "method": "GET",
+   "path": "/api/v1/screens/nothere/runs",
+   "query": {
+    "cursor": "99999999999999999999"
+   }
+  },
+  {
+   "name": "rv-w-runs-cursor-big-other-anon",
+   "method": "GET",
+   "path": "/api/v1/screens/da1dae3992bf/runs",
+   "query": {
+    "cursor": "99999999999999999999"
+   }
+  },
+  {
+   "name": "rv-w-key-usage-big-anon",
+   "method": "GET",
+   "path": "/api/v1/keys/zzkey0000001/usage",
+   "query": {
+    "days": "99999999999999999999"
+   }
+  },
+  {
+   "name": "rv-w-admin-user-x-anon",
+   "method": "GET",
+   "path": "/api/v1/admin/users/zzz"
+  },
+  {
+   "name": "rv-w-admin-resync-junk-anon",
+   "method": "GET",
+   "path": "/api/v1/admin/resync",
+   "query": {
+    "days": "x"
+   }
+  },
+  {
+   "name": "rv-w-inv1-sub-anon",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990003"
+  },
+  {
+   "name": "rv-w-sip-990003-anon",
+   "method": "GET",
+   "path": "/api/v1/cb/investments/990003/sip"
+  }
+ ]
+}

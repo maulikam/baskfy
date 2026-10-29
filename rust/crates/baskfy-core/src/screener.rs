@@ -42,7 +42,7 @@ use crate::factor_registry::{
 pub use definition::{
     AwayFromHighFilter, CircuitsFilter, CustomFilter, ExtraFactor, FactorRange, FamilyWeights,
     MovingAverageFilter, PeFilter, PositiveDaysFilter, RangeFilter, RankingTerm, ScreenDefinition,
-    TopRiskFilter,
+    TopRiskFilter, lax_date_from_str,
 };
 pub use payload::{DecimalValue, Payload, PyDecimal, py_float_repr};
 
@@ -4520,6 +4520,30 @@ mod definition {
                 v.err("decimal_parsing", loc, "Input should be a valid decimal");
                 None
             }
+        }
+    }
+
+    /// A `datetime.date` query or body field given as a **string**, in pydantic's lax mode:
+    /// the date, or `(error type, message)` exactly as pydantic reports them. The string branch
+    /// of [`p_date`], public for the API's query parameters (DECISIONS-RS R5.6) — FastAPI
+    /// validates `?from=2026-10-01` with this same code path.
+    pub fn lax_date_from_str(s: &str) -> Result<NaiveDate, (&'static str, String)> {
+        match speedate::date_from_str(s.as_bytes()) {
+            Ok(date) => Ok(date),
+            Err(speedate::DateError::Parsing(why)) => Err((
+                "date_from_datetime_parsing",
+                format!("Input should be a valid date or datetime, {why}"),
+            )),
+            Err(speedate::DateError::Inexact) => Err((
+                "date_from_datetime_inexact",
+                "Datetimes provided to dates should have zero time - e.g. be exact dates"
+                    .to_owned(),
+            )),
+            Err(speedate::DateError::YearZero) => Err((
+                "date_parsing",
+                "Input should be a valid date in the format YYYY-MM-DD, year 0 is out of range"
+                    .to_owned(),
+            )),
         }
     }
 

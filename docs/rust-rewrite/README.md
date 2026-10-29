@@ -82,6 +82,61 @@ Frames: `g.input_frame("bars")` gives a polars `DataFrame` with the dumped dtype
 included); grade a frame output with `g.assert_frame(&df)` — column order, dtype names and
 values all count. Full API: `rust/crates/baskfy-testkit/src/lib.rs` crate docs.
 
+## Grading the API: `tools/parity/api_diff.py`
+
+Every API route is graded **differentially**: the same request to the Python API and to the Rust
+API, both on the **test bed** (a copy of the database in `baskfy-rs-pg`, port 55432, and Redis
+`baskfy-rs-redis`, port 56379 — never the live `baskfy-local-*` stack, never ports 5432/8480),
+with the same test settings and the same test JWT secret.
+
+```bash
+cd /Volumes/T7-Work/Dev/projects/baskfy
+python3 tools/parity/api_diff.py --py-port 18111 --rs-port 18112 \
+    --cases tools/parity/api_cases/<lane>.json --report /tmp/<lane>-report.txt
+```
+
+* It builds `baskfy-api` (skip with `--no-build`), starts uvicorn and the Rust binary on **your**
+  ports from empty working directories (no `.env` can leak in), waits for `/health`, sends every
+  case to both, stops **only the processes it started**, and exits non-zero on any difference.
+  It refuses a port that is already listening — pick your own pair, or pass `--attach` to use
+  servers you started yourself. Five lanes run it at once; never use another lane's ports.
+* The secret is generated once into the untracked `rust/target/parity-jwt-secret` (mode 0600)
+  and never printed. Tokens are minted per case for the bed's real accounts: `owner`
+  (2fe482ed2015, staff, overrides), `subscriber` (forever plan), `plain` (the tenant-isolation
+  counterpart), and the failure modes `stale_epoch`, `expired`, `too_long`, `wrong_key`,
+  `unknown`, `alg_none`, `garbage`, `empty_bearer` (`USERS` in the script). Omit `user` for an
+  anonymous call.
+* Compared: status; `content-type`, `cache-control`, `vary`, `www-authenticate`, `retry-after`,
+  `allow`, `location` (port-normalised), the CORS headers, `x-baskfy-as-of`/`-data-version`
+  by value; `etag` by presence, and by value too when the case has no mask; `x-request-id` by
+  presence; the body as JSON **with key order** (`1` ≠ `1.0` ≠ `true`, `"5.10"` ≠ `"5.1"`), or
+  byte for byte when it is not JSON.
+* A volatile field (a `served_at`, a wall-clock) is masked **only** by the case's `"mask"` list —
+  a key name or a JSON pointer (`/quotes/0/as_of`) — and the report prints every mask. Never mask
+  a field to make a port pass; a mask is for a value that differs between two correct runs.
+* Rate limits are set high on both servers (they share one bucket per caller in Redis, R5.9);
+  the 429 shape is graded by the crate's own tests. `--env KEY=VALUE` sets a `BASKFY_*` for both.
+* Cases live in `tools/parity/api_cases/<lane>.json` (one file per lane — `foundation.json` is
+  the pipeline's own): `{"cases": [{"name", "method", "path", "query", "user", "headers",
+  "body", "mask", "note"}]}`. A route is done when every case for it is EQUAL; put the failure
+  modes in too (anonymous, another tenant, a bad parameter), not only the happy path.
+
+**The whole API at once** (what the integrator runs; R5.10). Omit `--cases` and every file in
+`tools/parity/api_cases/` is graded in one run (2,113 cases at RS4b). Run it twice: once with
+`--env BASKFY_SOLE_USER_ID=1` (the bed's owner as sole tenant, as on the box), and once without
+it (the 503 path). Both runs pass `--env BASKFY_FIXTURE_DIR=<an empty dir>` (R5.33). Every case
+must be EQUAL in both runs.
+
+**Porting a router** (the five lanes): own `rust/crates/baskfy-api/src/routes/<router>.rs`
+(the stub lists the Python routes) and your case file; never edit `app.rs`, `routes.rs`, `lib.rs`
+or `Cargo.toml` (a new dependency is a DECISIONS-RS entry the integrator applies). Read the
+principal from `Extension<Principal>`, parse queries with `query::{QueryParams, Validation}`
+(FastAPI's last-value-wins and error accumulation), return `Result<Response, Problem>`, and
+serialise with `wire` (`ser::decimal`, `ser::datetime`, `ser::date`, `ser::float`; `OrderedJson`
+for a `dict` built at runtime or read from `jsonb`). Query the database through `state.db` —
+read-only; a route that writes waits for the decision that lets the pool write its table.
+**No route may place, modify or cancel an order** (law 2); `routes::public` is never mounted (D9).
+
 ## Building — the only invocation
 
 ```bash

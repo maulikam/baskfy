@@ -887,3 +887,651 @@ covered `Debug` derives, `format!` of credentials, error strings and print calls
 sensitive `Authorization` header (R4.10) and the redacted Redis URL (R4.13). Every
 non-loopback URL in `tests/` is either a string under test or a call the armed block refuses
 (`network_is_blocked.rs`, `nse_http_wire.rs`). Every test file calls `arm()`.
+
+## R5.1 — Wave 4b's dependencies: sqlx, axum, tower, base64, and serde_json's `raw_value` (RS4b, 29 Oct 2026) ⚠ UNREVIEWED
+
+**Context.** `baskfy-db` and `baskfy-api` are the first crates that talk to Postgres and serve
+HTTP. Five API lanes follow in parallel and must not edit `rust/Cargo.toml`.
+
+**Choice.** In `[workspace.dependencies]`, exact pins: **sqlx 0.8.6** with
+`default-features = false` and only `runtime-tokio`, `tls-rustls-ring-webpki` (no OpenSSL),
+`postgres`, `rust_decimal`, `chrono`, `json` — **no `macros`/`migrate`**: queries are runtime
+strings, so no build ever needs a live database, and Alembic stays the only schema owner.
+**axum 0.8.9** with `default-features = false` and `tokio`, `http1`, `matched-path`,
+`original-uri` — no `json`/`query`/`form` extractors, because the API parses query strings and
+renders bodies itself to match Starlette and pydantic exactly (R5.8). **tower 0.5.3** (no
+features; already in the lock through axum) for the `Service` trait the slash-redirect probe
+uses. **base64 0.22.1** (already in the lock through reqwest) for JWT segments. `serde_json`
+gains **`raw_value`**, so a Python `float` is written with `repr` (`1e-05`, `1e+16`) instead of
+ryu's spelling. No `jsonwebtoken` (R5.5), no `tower-http` (CORS hand-ported, R5.8), no
+`tracing` (a 150-line logger reproduces Python's records and redaction), no `uuid` (a request id
+is 16 random bytes with the v4 bits set).
+
+**Known side effect.** sqlx's `chrono` feature enables chrono's `clock` in a **workspace** build
+by feature unification (as R4.2 noted for polars' IO features). `baskfy-core`'s manifest still
+declares chrono without it, `law_one.rs` still passes, and its source scan still refuses
+`Utc::now`/`Local::now`; `cargo test -p baskfy-core` builds without the clock.
+
+**Rejected.** sqlx 0.9.0 (a new major line; 0.8.6 is the established one, and the one the
+Postgres numeric decoding was checked against on the bed); sqlx `macros` (compile-time checking needs
+`DATABASE_URL` at build time — the live database must never be one); `tokio-postgres` (no pool,
+no typed decimals); actix-web (axum is tower-native and already shares tokio/hyper with
+reqwest).
+
+**How to reverse.** Each is one line in `rust/Cargo.toml`.
+
+## R5.2 — The pool is read-only on every connection, with Python's sizing and no statement timeout (RS4b, 29 Oct 2026) ⚠ UNREVIEWED
+
+**Choice.** `baskfy_db::Db` sends `default_transaction_read_only=on` in the **startup packet**
+(not a `SET` after connect, which a pool reset could lose), so no statement on any connection can
+write; `tests/bed.rs::a_write_is_refused` proves `UPDATE` and `CREATE TABLE` (also inside an
+explicit transaction) fail with SQLSTATE `25006`. `READ_ONLY` is a constant, not a setting:
+turning it off is a code change with its own entry, one table at a time (README step 3).
+Sizing is `create_engine`'s: `max_connections = db_pool_size + db_max_overflow`,
+`acquire_timeout = db_pool_timeout_seconds`, `max_lifetime = db_pool_recycle_seconds`,
+pre-ping, statement cache `db_statement_cache_size`, lazy connect (the app starts and answers
+`/health` with the database down). **Statement timeout: none**, because `db.py` sets neither
+`statement_timeout` nor asyncpg's `command_timeout` — the brief's "statement timeouts matching
+db.py" is therefore "none"; inventing one would change which requests fail. Idle connections are
+never reaped (SQLAlchemy's `QueuePool` keeps `pool_size` of them; sqlx's default would close
+them after 10 minutes). `application_name = baskfy-rs`.
+
+**Consequence.** Every write route waits: `PATCH /me`, `/auth/*`, the settings PATCHes, scans.
+The one read route Python makes write (`GET /me`'s staff grant) is R5.7.
+
+**How to reverse.** Flip `READ_ONLY`, per crate feature or per table, with an entry.
+
+## R5.3 — `numeric` is decoded from the wire, `jsonb` into `OrderedJson` (RS4b, 29 Oct 2026) ⚠ UNREVIEWED
+
+**Context.** asyncpg gives `Decimal` with the column's display scale, so the API prints
+`"0.00"` for `0::numeric(10,2)`. sqlx's `rust_decimal` decoder returns `0` (scale lost) for a
+zero — found by `tests/bed.rs::numeric_keeps_its_scale`. And `serde_json::Value` sorts object
+keys (the workspace has no `preserve_order`), where Python's `json.loads` keeps jsonb's stored
+order and FastAPI writes it back in that order.
+
+**Choice.** `row::decimal` decodes Postgres's binary `numeric` itself (`ndigits, weight, sign,
+dscale`, base-10000 digits) into a `Decimal` with exactly `dscale` places; NaN/±Infinity and
+anything beyond 28 digits are **errors, never rounded** (the R1.3 class). `row::jsonb` decodes
+into `baskfy_db::OrderedJson`: keys in arrival order, a repeated key keeps its first place and
+last value (Python's `dict`), an integer literal stays an int, any other number is a float
+written back with `repr` (so jsonb `1.50` echoes as `1.5`, as `json.dumps(json.loads(...))`
+does). **Known limit:** an integer outside `i64`/`u64` becomes a float (Python keeps an exact
+`int`); no jsonb column holds one today.
+
+**Rejected.** `serde_json`'s `preserve_order` workspace-wide (changes `Value` iteration for the
+testkit and every golden decoder); `arbitrary_precision` (changes number handling everywhere).
+
+**How to reverse.** Use sqlx's decoder once it keeps a zero's scale.
+
+## R5.4 — Database tests run on the bed, and are reported *ignored with the reason* elsewhere (RS4b, 29 Oct 2026) ⚠ UNREVIEWED
+
+`baskfy-db` and `baskfy-api` each have a `build.rs` that sets `cfg(bed)` when
+`BASKFY_RS_TEST_DATABASE_URL` is non-empty at **build** time (rerun when it changes). Every test
+that needs the database carries `#[cfg_attr(not(bed), ignore = "BASKFY_RS_TEST_DATABASE_URL is
+unset at build time: the bed tests are skipped")]`, so without the bed they show up in the
+summary as ignored with that sentence — never as a silent pass, which an early `return` would
+have been. Run the full suite with
+`BASKFY_RS_TEST_DATABASE_URL=postgres://baskfy:rs-test-only@127.0.0.1:55432/baskfy` set. The
+database-free API tests point at a dead loopback port (`127.0.0.1:9`), so they never need it.
+
+## R5.5 — PyJWT's acceptance rules are reimplemented, not delegated to a JWT crate (RS4b, 29 Oct 2026) ⚠ UNREVIEWED
+
+**Context.** Which tokens the API accepts is the contract, and PyJWT 2.13 has specific opinions:
+`require=["exp","iat","sub"]` means present and non-null; `iat` and `nbf` are checked against
+the leeway; `int("1790000500")` is a valid `exp` and `int([1])` escapes as a `TypeError` (a 500);
+an `aud` claim with no configured audience is refused, an empty one is not; `kid` must be a
+string; `crit` may name only `b64`; `sub` and `jti` must be strings.
+
+**Choice.** `auth::pyjwt_decode` reproduces those rules in order with `hmac`/`sha2`/`base64`;
+`tests/jwt.rs` holds about forty assertions; every decode outcome in it was first run
+against PyJWT 2.13 in the decile-blueprint venv (except the `exp == now - leeway` boundary,
+which follows PyJWT's `<=` in its source; the epoch reading is the API's `_token_epoch`). Errors carry PyJWT's class name for the log line; the client sees one sentence (no oracle).
+Approximations, recorded: base64's non-strict decode discards characters outside the alphabet
+(binascii's exact padding edge cases are not reproduced); a header or payload with `NaN`/
+`Infinity` tokens (Python's `json` accepts them) is refused as undecodable. Both need a
+correctly signed token to reach, i.e. the shared secret.
+
+**Rejected.** `jsonwebtoken` 11 (different `aud`/`iat` semantics, a crypto backend choice, and
+its own error taxonomy to map back).
+
+## R5.6 — `baskfy_core::screener::lax_date_from_str` is public (RS4b, 29 Oct 2026) ⚠ UNREVIEWED
+
+FastAPI validates a `datetime.date` query parameter with pydantic's lax string parse
+(`2026-10-01`, a midnight datetime, a midnight Unix timestamp; speedate's error messages). The
+screener port already reproduces that byte for byte in a private `speedate` module (R2.4). A
+public wrapper, `lax_date_from_str(s) -> Result<NaiveDate, (type, message)>`, now exposes the
+string branch; `baskfy_api::query::Validation::date` uses it. Pure, so law 1 holds; no golden
+changed. **How to reverse:** move the module out of the screener into a shared `pydantic` module.
+
+## R5.7 — `GET /me` does not persist the staff-allowlist grant on the read-only pool (RS4b, 29 Oct 2026) ⚠ UNREVIEWED
+
+**Context.** Python's `GET /me` calls `ensure_staff_from_allowlist`, which **writes**
+`app_user.is_staff = true` for an allowlisted address not yet marked staff, then answers
+`is_staff: true`. R5.2 forbids writes.
+
+**Choice.** The Rust route answers `is_staff = stored || settings.is_staff_email(email)` — the
+same response — without the write; every later request computes it again, so the answer never
+diverges, only the stored bit lags. On the bed all three allowlisted accounts are already staff,
+so the parity cases are byte-equal either way. The write moves into the route when the pool may
+write `app_user` (and the never-demote rule comes with it).
+
+**How to reverse.** Add the `UPDATE` once `app_user` is writable.
+
+## R5.8 — Starlette's and FastAPI's framework behaviour is reproduced in the pipeline (RS4b, 29 Oct 2026) ⚠ UNREVIEWED
+
+What a client can observe of the framework, each found by probing the Python API on the bed:
+
+* **Routing on the decoded path** (`/api/v1/meta%2Fcolumns` reaches `/meta/columns`): the URI is
+  rewritten to the decoded path before routing (re-encoding only what a URI cannot carry, `%`
+  included, so axum's `Path` decodes once to Python's value). This wraps the router as a service:
+  axum's `Router::layer` runs *after* routing.
+* **`redirect_slashes`**: an unmatched path whose slash-toggled twin matches any route (any
+  method — a partial match counts) is a `307` with Starlette's absolute, quoted `location` and
+  the query kept; `/` never redirects; a `405` wins over a redirect. Implemented by probing the
+  router with a marker request that the outermost route layer answers before any dependency or
+  handler runs.
+* **404/405 problems**: `detail` `Not Found` / `Method Not Allowed`; 405 is `internal-error`
+  with status 405 and **no `Allow` header** (axum adds one; it is removed). **`HEAD`** is never
+  served (FastAPI's GET routes are `{"GET"}` only): 405 on a known path, 404 otherwise.
+* **The `Exception` catch-all** runs in Starlette's `ServerErrorMiddleware`, outside every user
+  middleware, so a 500 carries neither `X-Request-Id` nor CORS headers; `Problem::outside_middleware`
+  reproduces that. A database error is such a 500 (`SQLAlchemyError` has no handler).
+* **CORS** is Starlette's `CORSMiddleware`, hand-ported: preflight `200 "OK"`/`400 "Disallowed
+  CORS …"` with the safelisted headers merged and sorted, `Vary: Origin` appended, credentials and
+  expose headers on every simple response.
+* **The `/api/v1` router dependency** (principal, then rate limit) runs only for matched routes,
+  so an unrouted path never touches the database or the bucket, and a bad token is refused before
+  the limit is charged.
+
+**Known difference for porters.** Starlette serves the first route that matches in registration
+order; axum prefers a static segment over a parameter. Where a Python router registers `/{id}`
+before a static sibling, the lane checks what Python actually serves and records it.
+
+**Not ported yet:** `/metrics`, `/api/v1/openapi.json`, `/api/v1/docs` (the OpenAPI gate in the
+README step table is still open).
+
+## R5.9 — The API harness: high limits, a fixed account roster, explicit masks (RS4b, 29 Oct 2026) ⚠ UNREVIEWED
+
+`tools/parity/api_diff.py` (README §"Grading the API") starts both servers with rate limits of
+1,000,000/min: the Python and Rust processes share one Redis bucket per caller (by design,
+R4.4's caveat on a native-Mac clock aside) and five lanes share the bed's Redis, so real limits
+would make results depend on run order. The 429 shape is graded in `tests/api_errors.rs` against
+the in-memory Lua backend on paused time. Accounts are a fixed roster of the bed's real users
+(`USERS`), chosen for what the foundation cases need (staff with overrides, a paying
+subscriber, a plain account for tenant isolation) plus every token failure mode. A mask is the
+only way to ignore a field and is printed in the report; `location` is compared with the port
+replaced; `etag` is compared by value unless a mask applies (a masked body would legitimately
+hash differently). The harness refuses any database other than the bed's port unless
+`--allow-db-url`, refuses the live stack's ports outright, starts servers from empty working
+directories so no `.env` leaks in, and stops only the processes it started.
+
+## R5.10 — RS4b integration: the five API lanes merged, decision numbers assigned, one foundation test re-aimed (RS4b, 30 Oct 2026) ⚠ UNREVIEWED
+
+**Context.** Five lanes (reference, sleeves, derivatives, portfolio, accounts) ported the GET
+routes of the 44 Python routers in parallel, each owning its `routes/*.rs` files and its
+`tools/parity/api_cases/<lane>.json`, none allowed to edit `routes.rs`, `app.rs`, the shared
+modules, `baskfy-db` or the docs. Each lane then had an adversarial verifier, which fixed what it
+found and grew the case files. The lanes proposed their judgement calls under private labels
+(reference R6.4/R6.5, derivatives R6.D1–D5 written into this file, sleeves "lane api-sleeves"
+(a)–(g), portfolio "api-portfolio P1–P12", accounts R-acc.1–12).
+
+**Choice.**
+* Every lane call is numbered here as **R5.11–R5.36**, the lane's own label kept in the title so
+  a code comment citing it (`api-portfolio P3`, `lane api-sleeves`) still resolves by search.
+  R6.D1–D5 became R5.19–R5.23. The code comments that cited R6.4, R6.5 and R6.D2–D4 now cite the
+  new numbers.
+* `tests/api_errors.rs::every_problem_carries_the_instance_and_the_request_id` asked
+  `GET /api/v1/screens/unknown-id` against a **dead** database, as an unrouted path. The accounts
+  lane routed `/screens/{public_id}`, so it now answers the database-failure 500, which carries
+  no request id, exactly as Python's does. The test now asks `/api/v1/still-unrouted/unknown-id`. It
+  asks the same property (a problem carries `instance` and a fresh or echoed uuid4 request id), so
+  it is not weakened. Python's own test asks `/screens/unknown-id` with a live database (a 404 from
+  the route), and the bed's `/screens/{id}` 404 is graded by the accounts case file.
+* Nothing else needed integration work. With all five lanes merged, `cargo fmt --check`,
+  `clippy --workspace --all-targets -D warnings` and `cargo test --workspace` (bed URL set) were
+  green at the first try, apart from the test above.
+* **Grading the whole API.** `api_diff.py` runs over all six case files in one run (2,113 cases),
+  twice: once with `--env BASKFY_SOLE_USER_ID=1` and once with nothing set (the 503 path). Both runs
+  set `--env BASKFY_FIXTURE_DIR=<an empty dir>` (R5.33). Both runs: **2,113 of 2,113 EQUAL**.
+
+**Left for later (not changed here, to keep this an integration):** the lanes wrote four or five
+private copies of the same helpers. These are `scoped_sole_user_id`/`resolve_sole_user_id`
+(reference, sleeves, derivatives, portfolio `tenant.rs`, accounts), pydantic's lax int/bool/str
+parsers (reference, sleeves, accounts, portfolio `params.rs`), `today_ist`, and
+`resolve_as_of`/`latest_published_date`. Collapse them into one `routes/common` module (or
+`query.rs`) before wave 4c adds more. Every copy is graded EQUAL today, so the collapse must keep
+all 2,113 cases EQUAL.
+
+## R5.11 — The live Kite overlay is ported on its no-session path only, in every router (RS4b, 30 Oct 2026; lane labels reference R6.4, sleeves (c), portfolio P3, accounts R-acc.3) ⚠ UNREVIEWED
+
+**Context.** Python overlays live Kite marks in several places when a broker session exists:
+`/meta/status` and `/meta/live-marks` (`live_quotes`); the `last_price` column of the swing,
+watch, positions, TWT and VBT pages; `/portfolio/overview`, `/portfolio/holdings` and
+`/portfolio/{id}` (`live_prices_by_instrument`: the holdings read, then quotes); and the curated
+investments and costs. The Rust API has no Kite quote or holdings read path. `baskfy-providers`
+`KiteProvider` has no quotes call, and the token-store "is there a usable session" check is only
+partly wired. The bed has no session, and live Kite must never be called from it.
+
+**Choice.** Every one of these answers Python's **no-session** branch:
+* `quotes_permitted` is false whenever `BASKFY_KITE_API_KEY` is set;
+* `last_price` is `null`;
+* the portfolio money figures are the close (a warning is logged when a session *might* exist);
+* the curated overlay is `{}`, so `marked_at_cost` is true whenever there are holdings.
+
+`/sleeves/state` reads the local token blob through `baskfy_providers::tokens`. Its verifier
+checked a real, a `sim_`, an expired, a garbage and a missing blob, all EQUAL.
+
+**Consequence — a cutover gate.** These routes must **not** move to Rust on any host where a
+Kite session can exist (the Mac, the box) until a quote/holdings read path is ported:
+`/meta/status`, `/meta/live-marks`, `/swing/{setups,watch,positions}`, `/twt/today`,
+`/vbt/today`, `/portfolio/*`, `/cb/investments*`. **How to reverse:** port the Kite quote and
+holdings reads (rate-limited, through `baskfy-providers`) and the token-store session check, then
+grade them on recorded fixtures.
+
+## R5.12 — Decimal query values are held exactly; amounts produce Python's unbounded integers (RS4b lane reference, 30 Oct 2026; supersedes the proposed R6.5) ⚠ UNREVIEWED
+
+**Context.** The porter proposed (as R6.5) that a Decimal query value with an exponent of five or
+more digits keep only its sign and answer 500 when used. The verifier found that wrong, and found
+two real status differences hiding behind it:
+* `GET /explore/{slug}/kite?amount=1e30` (and anything from about 5e27): Rust 400, Python 200 with
+  26-to-4,300-digit share quantities;
+* `GET /explore?max_min_amount=`: SQLAlchemy binds it as `$n::NUMERIC(20, 2)` (the model type),
+  so Python 500s from 1e18 and accepts `1e-10000`.
+
+**Choice.**
+* `PyDec` keeps `str(d)` (exact, scientific) for finite and extreme values.
+* Share quantities are Python ints held as digit strings and written as bare JSON numbers. The
+  integral value is taken as Python takes it (`to_integral_value(ROUND_DOWN)`).
+* Python's Emax `Overflow` is a 500 and `ValueError` a 400.
+* `max_min_amount` is cast to `numeric(20, 2)` and answers asyncpg's encode limits (an exponent
+  below −16383 is a 500) and the certain overflow directly.
+
+All 43 + 27 probe cases are EQUAL. Not graded: quantities beyond 4,300 digits (they need Python's
+`-X int_max_str_digits=0`), and amounts ≥ 1e999999, where Python hangs.
+
+## R5.13 — How the reference lane reproduces Python's arithmetic and order (RS4b lane reference, 30 Oct 2026) ⚠ UNREVIEWED
+
+* **Medians and percentiles.** SQLAlchemy's result processor turns `percentile_cont`'s float8
+  into `Decimal("%.{scale}f")` using the ordered column's own scale. A bigint column stays a
+  float and becomes `Decimal(repr)`. `percent_rank()` goes through `Decimal("%.10f")` and then
+  `float()`.
+* **Regime distances.** numpy 2.5 is reproduced operation for operation: pairwise summation; the
+  default argsort, an unstable introsort transcribed from `aquicksort`/`aheapsort` (a tie-order
+  unit test matches numpy); linear quantile with `_lerp`; `linspace`; Python `round()`.
+* **Curated decimals.** Chained NAV, coverage, `weight_pct` and share counts go through
+  `WideDecimal` (prec 28, half-even).
+* **Desk.** `numeric` is read as `::text` then `float()`, because unconstrained numeric can
+  exceed 28 digits. CPython 3.12's Neumaier `sum()` is reproduced. `datetime.fromtimestamp` uses
+  modf with half-even microseconds.
+* **Listings cursor.** CPython's lax `a2b_base64` is ported, and `date.fromisoformat` accepts all
+  of 3.12's forms.
+* **Error order is FastAPI's.** The auth dependency (401) comes before path/query validation;
+  validation errors accumulate path then query in signature order; the desk router checks the
+  desk schema before validating `limit`.
+
+Verified beyond the case file: 550 random-symbol factsheets and 19 heavy paths (500-row listings,
+every basket's performance and kite payload, a 1,000-row tradebook), all byte-equal.
+
+## R5.14 — The sole tenant is read from the process environment per request, with Python's `int()` (RS4b, 30 Oct 2026; lane labels derivatives R6.D1, sleeves (b), accounts R-acc.2/R-acc.11, portfolio P1) ⚠ UNREVIEWED
+
+**Choice (all five copies agree).** `resolve_sole_user_id` reads `BASKFY_SOLE_USER_ID` from
+`os.environ`, not `Settings`. The rules, as Python's:
+* the value is stripped, with Python's `int()` underscore rule;
+* blank or not a number counts as unset, with a warning;
+* unset falls back to the seeded `e2e000000001` account, then a 503 `pipeline-degraded`;
+* a principal who is not the tenant gets a 404 with `reason: not-the-sole-tenant`.
+
+The sleeves copy also handles an id beyond i64. Python then refuses every caller with the 404, or
+answers 500 where asyncpg cannot bind it; Rust does the same (`SoleId::Huge`). Its verifier
+graded 133 cases under that env, all EQUAL. Graded under `1`, `6`, `' +6 '`, `'abc'`, `'1_0_'`,
+blank and unset. The sleeves porter also checked the no-tenant path with `--attach` (blank on Python,
+`"abc"` on Rust, 25 routes): 25 of 25 EQUAL. One harness run carries one environment, so that
+case file is scratch-only.
+
+**Known limit.** Python's `int()` also reads non-ASCII decimal digits (`'١'`). The derivatives and
+accounts copies read ASCII only, and fall back to "unset" for such a value. Only an operator
+misconfiguring the variable can reach this; no request can.
+
+**How to reverse:** collapse the copies onto the sleeves one, the most complete (R5.10).
+
+## R5.15 — Paths that only have write routes in Python: 404 in four lanes, 405 in portfolio (RS4b, 30 Oct 2026; lane labels sleeves (g), accounts deviation 3, reference watchlist, portfolio P7) ⚠ UNREVIEWED
+
+**Context.** Starlette answers 405 when a path matches but the method does not. A path that has
+only a POST/PUT/PATCH/DELETE in Python therefore answers 405 to a GET. Rust registers no write
+route.
+
+**State.**
+* The portfolio lane registers its write-only paths with an empty `MethodRouter`, so a GET gets
+  Starlette's 405, decided by routing before the token is read. This covers `/portfolio`,
+  `/portfolio/{id}/holdings`, `/portfolio/reconciliation/{id}/resolve`,
+  `/portfolios/{id}/rebalance`, `/trades/import`, `/trades/sync-today`,
+  `/brokers/{id}/{connect,sync-holdings}`, `/checkout/session`, `/webhooks/razorpay`,
+  `/cb/paywall/checkout`, `/cb/public-signup` and `/cb/fees/collect`; 14 cases are graded EQUAL.
+* The other lanes leave those paths unrouted, so Rust answers 404 where Python answers 405. This
+  covers `GET /swing/scan`, `/twt/scan`, `/vbt/scan`, `/alerts/{id}`, `/managers/{slug}`,
+  `/keys/{id}`, `/webhook-endpoints/{id}`, `/cb/investments/mark` and
+  `/watchlist/{anything but instruments|discover-preferences}`. Not graded.
+* `POST /watchlist/instruments` gets Rust 405 where Python answers 400.
+* The reference verifier tried an inert DELETE on `/watchlist/{slug}`. It broke the lane's
+  read-only structural test, so it was reverted rather than weakening the test.
+
+**Choice.** Left as is, because wave 4c registers every one of those paths with its real method
+and the difference disappears. **Cutover rule until then:** Caddy routes by method and path, and
+every non-GET stays on Python.
+
+## R5.16 — The sleeves lane: two JSON spellings, negative zero, pydantic's lax parsing (RS4b lane sleeves, 30 Oct 2026; lane labels (b), verifier fixes) ⚠ UNREVIEWED
+
+* `routes/sleeves/common.rs` holds one value tree `J`/`Obj` with two spellings:
+  * `canonical_json` (swing, VBT, `/twt/scan`): decimals unquoted at stored scale, isoformat
+    `+00:00`, `NaN`;
+  * pydantic JSON (`/twt/today`, `/twt/backtest`, `/sleeves/state`, portfolios, baskets):
+    `str(Decimal)` quoted, UTC `Z`, `NaN` → `null`.
+* **Negative zero.** `rust_decimal` has none, but `Decimal.quantize` keeps the operand's sign, so a
+  negative value rounding to zero is `-0.00`. `J::NegZero(dp)` and `quantize_j` reproduce it in
+  journal R and P&L, the by-setup expectancy, distances, `pct_above_dma`, `r_multiple` and
+  `unrealised_*`. It was found on seeded data and checked against
+  `baskfy_core.swing.journal.summarize`.
+* **Lax parsing.** pydantic-core's lax int and bool, and `lax_float_str` for numeric strings in a
+  `basket_snapshot` payload: the trimmed text first, then the untrimmed text without underscores.
+  Python's `float()` underscore rule is used for string weights.
+* **Bigint casts.** Every integer column is cast to `::bigint` in SQL, so sqlx decodes it one way.
+  An int that pydantic accepts but i64 cannot hold answers the 500 at the point asyncpg would
+  refuse it.
+
+## R5.17 — The sleeves lane refuses with a 503 rather than serve an ungraded number (RS4b lane sleeves, 30 Oct 2026; lane labels (d), (e)) ⚠ UNREVIEWED
+
+None of these is reachable on the bed. Each answers 503 `pipeline-degraded` naming the gap:
+* `/swing/journal` when a finished `sw_backtest_run` with stats exists (the backtest card's
+  transform is not ported);
+* `/portfolios/{id}/allocation` for a screen sleeve that names a screen (needs `run_screen`);
+* `/portfolios/{id}/allocation` for a basket sleeve whose live version has constituents (needs
+  `portfolio_units.allocate_units`).
+
+`GET /baskets` serves `basket_snapshot` only. With no snapshot, Python builds the basket live
+from the desk's config and its newest uploads CSV. On the bed that took 69 s and still returned
+200, despite its own 3 s budget. Rust answers the budget's 404 instead, because momentum_scan and
+the basket engine arrive with the desk wave. So only `/baskets`' 401/400 cases and eight seeded
+snapshot cases are graded. **Cutover:** `/baskets` stays on Python until the desk wave.
+
+## R5.18 — The sleeves lane: small reproductions that look like choices (RS4b lane sleeves, 30 Oct 2026; lane label (f)) ⚠ UNREVIEWED
+
+* `_found_in`/`_funnel_count` treat a JSON bool as an int, as Python's `isinstance` does.
+* Sector numbers follow `float(x or 0.0)` and `int(x or 0)`.
+* `created_at` uses `fromtimestamp`'s half-even microseconds.
+* `planned_ref_price` goes str → f64.
+* `datetime.fromisoformat` is reproduced only for the shapes the workers write. Anything else,
+  or a naive time, is `null`, where Python would raise or keep it naive. No worker stores one.
+* The verifier graded the data paths the bed lacks by **seeding temporary rows into the bed copy**
+  and deleting them afterwards (every count back to 0). Those rows were `sw_position`,
+  `vb_order`/`vb_position`, `vb`/`tw_backtest_run`, `portfolio_sleeve` and `basket_snapshot`.
+  The seeded case files are scratch-only.
+* One exploratory case sent `PUT /portfolios/3/sleeves {"sleeves":[]}` to the Python server on
+  the bed. It was a no-op (portfolio 3 had no sleeves) and is not in the committed file.
+
+## R5.19 — The derivatives lane's shared code lives in `routes/derivatives/`, declared from `options.rs` (RS4b lane derivatives, 30 Oct 2026; lane label R6.D1) ⚠ UNREVIEWED
+
+**Context.** The lane owns `routes/{options,fno,overlap,backtests}.rs` and may not edit
+`routes.rs`, but the four routers share the sole-tenant guard (`curated_tenant.scoped_sole_user_id`
+/ `curated_seed.resolve_sole_user_id`), the IST clock, pydantic's lax `int`/`Literal` query
+parsing, Python's `json.dumps` escaping and the Redis `GET` Python's `app.state.cache` makes.
+
+**Choice.** `routes/options.rs` declares `#[path = "derivatives/mod.rs"] pub(crate) mod
+derivatives;` and the other three reach it as `super::options::derivatives`. The sole tenant is
+read from the **process environment per request** (`BASKFY_SOLE_USER_ID`, stripped, Python's
+`int()` grouping rule; blank or not a number is "unset" with a warning), then the seeded
+`e2e000000001` account, else 503 — exactly `resolve_sole_user_id`, which reads `os.environ`, not
+`Settings`. A non-tenant principal gets the 404 with `reason: not-the-sole-tenant`. Redis is read
+through `baskfy_providers::ratelimit::RedisScriptBackend` with a one-line Lua `GET` (the API crate
+has no `redis` dependency), one lazily connected client per process; a failure reads as "nothing
+stored", as every Python caller treats `RedisError`.
+
+**Grading.** `tools/parity/api_diff.py --env BASKFY_SOLE_USER_ID=1` (the bed's owner holds every
+options/FO row) for the data paths; the same 176 cases without the variable are all EQUAL too
+(the 503 branch), and with a malformed value (`" 1x"`).
+
+**Known overlap.** Another lane's in-progress `routes/reference` carries its own sole-tenant
+helper; the integrator should keep one (this one, or theirs) in a shared module.
+
+**How to reverse.** Move `derivatives/` under a shared `routes/common` once `routes.rs` can be
+edited.
+
+## R5.20 — Python core modules the options tab needs, ported privately (RS4b lane derivatives, 30 Oct 2026; lane label R6.D2) ⚠ UNREVIEWED
+
+`baskfy_core.options.calendar` (`role`, `next_session`, over the expiry dates `op_expiry` lists —
+`options_read._stub`'s one contract per expiry), `options.journal` (`summarize`: the `04` §12
+summary, Python's `Decimal` division, `sum(..., Decimal(0))`, `max`'s first-wins on ties and
+`min`'s, all through `WideDecimal`), `market_hours_cb.is_nse_session_open`, and
+`OptionsConfig.tier3_min_sessions` have no Rust port, so they live in
+`routes/derivatives/options_core.rs` (R2.3's rule). `options_read.thresholds()` — 148
+`(section, key, str(value), anchor)` rows over `DEFAULT_OPTIONS_CONFIG` — is a **table generated
+from the live Python**, because Rust's `options::config` does not expose every field with
+Python's `str()`; a DECISIONS-OP change to a threshold must regenerate it (the test pins the
+first and last rows and the count). **How to reverse:** move them into `baskfy-core` with goldens
+when wave 5 ports `options.calendar`/`options.journal`.
+
+## R5.21 — `GET /overlap` (the overlap read itself) is not ported yet (RS4b lane derivatives, 30 Oct 2026; lane label R6.D3) ⚠ UNREVIEWED
+
+**Context.** The read needs `baskfy_core.candidate_review` (~590 lines: the row's state in words,
+`review_key`, `rules_opinion` with its English reasons) and `baskfy_core.catalyst_tags` (~620:
+the keyword tagger, `resolve_tag`, `cache_key`), `ScreenDefinition.definition_hash`, the shared
+live-marks overlay (`live_prices.live_marks_for_symbols`, Kite), and it **writes to Redis on the
+read path** (`SADD catalyst_tag:wanted`, `HSET candidate_review:wanted`). On the bed it returns
+real rows (all three sleeves, ~10 screens, 169k catalyst rows), so a partial port would be graded
+red.
+
+**Choice.** Not registered; Python keeps serving `GET /api/v1/overlap` (Caddy keeps that one route
+on Python). Ported: `GET /overlap/tags/export`, `GET /overlap/reviews/export`,
+`GET /overlap/catalyst-scan`. `validate_literal` (the `scope` parameter) is in place and tested.
+**Next:** port `candidate_review` and `catalyst_tags` into `baskfy-core` with goldens first, then
+the read; the Redis writes need a decision (a write on a read path).
+
+## R5.22 — A backtest still in flight answers its event stream as Python's no-cache branch (RS4b lane derivatives, 30 Oct 2026; lane label R6.D4) ⚠ UNREVIEWED
+
+**Context.** `GET /backtests/{id}/events` streams Redis pub/sub frames for up to 30 minutes for a
+queued or running run. `baskfy-api` has neither a pub/sub client nor a streaming-body dependency
+(`futures-util` / `tokio-stream`; axum's `Body::from_stream` needs a `Stream`).
+
+**Choice.** A finished run (`done`/`failed`) is byte-identical to Python: `event: progress` then
+`event: end` with the frame synthesised from the row (`json.dumps(sort_keys=True)`, ASCII-escaped),
+`text/event-stream; charset=utf-8`, `Cache-Control: no-store`, `X-Accel-Buffering: no`. A run in
+flight answers the same two frames with the stored (or synthesised) frame — what Python itself
+does when it has no Redis (`terminal or cache is None`); the web client reconnects on its own.
+**Proposed for the integrator:** pin `tokio-stream` (or `futures-util`) and a pub/sub connection,
+then port the live loop (heartbeat every 15 s, 30-minute cap). Until then keep `/events` of
+running runs on Python if the progress bar matters.
+
+## R5.23 — The derivatives lane's reads: what is reproduced and how (RS4b lane derivatives, 30 Oct 2026; lane label R6.D5) ⚠ UNREVIEWED
+
+* **Writes are not registered** (R5.2): `POST`/`DELETE /options/event-day`, `PATCH
+  /options/config`, `PATCH /fno/config`, `POST`/`DELETE /backtests`, the overlap corrections,
+  labels and `POST /catalyst-scan`. Python serves them. No route here places, modifies or cancels
+  an order; the execution flags are only reported.
+* **Bodies.** The options/fno routers answer `model_dump_json()` (pydantic's own JSON), whose float
+  spelling (`1e-5` → `0.00001`) differs from `repr` but parses equal — the harness compares parsed
+  values, and every number on these pages is a `Decimal` string or an int. The overlap routes
+  answer `canonical_json` (decimals unquoted in fixed notation, insertion order).
+* **Stored JSON re-validated.** `BacktestOut.config` is `BacktestConfig.model_validate(row.config)`
+  dumped again: Rust re-dumps the stored `jsonb` through the model's field list (order, defaults,
+  `Decimal` re-printed as `str(Decimal)`, unknown keys → the 500 Python raises). The equity/
+  drawdown/fragility points and the CSV artefacts (`csv.DictReader`, `_blanks_to_none`) go through
+  the same closed-model coercion.
+* **Order.** Enum columns (`fo_sleeve`, `op_sleeve`) are ordered by the enum, as SQLAlchemy orders
+  them; `skips_by_reason` keeps the order of an unordered `SELECT op_session.*`, the statement
+  SQLAlchemy sends, so both read the heap in the same order (graded on 37 skipped sessions).
+* **Validation order** is FastAPI's: the principal (401) before the query (400), the query before
+  the handler's tenant check (404), entitlement (402) and sleeve check (404).
+* **Clock.** `today`, `market_open`, `live`, `stale` and the export link's `expires` are wall-clock
+  reads, as in Python; two servers asked within the same minute agree (no case needed a mask).
+
+## R5.24 — The portfolio lane's core logic lives privately under `routes/portfolio/` (RS4b lane portfolio, 30 Oct 2026; lane labels api-portfolio P1, P12) ⚠ UNREVIEWED
+
+Several Python core modules have no Rust port in `baskfy-core`: `allocation_ledger`,
+`cash_ledger` (with `curated_accounting.xirr`), `portfolio_nav`, `reconciliation`,
+`grouping_suggestions`, `portfolio_costs` (with `costs.order_cost`), the tradebook subset and
+`portfolio_graph`. They are ported line for line as crate-private modules under
+`routes/portfolio/`, mounted with `#[path]` from `portfolios.rs`, because `routes.rs` was not the
+lane's to edit. `RebalanceOut.model_validate` is there too. **How to reverse:** move them into
+`baskfy-core` together with goldens (R2.3's rule), which is wave-5 material.
+
+## R5.25 — A decimal with adjustable precision for NAV chain-linking and XIRR (RS4b lane portfolio, 30 Oct 2026; lane label api-portfolio P2) ⚠ UNREVIEWED
+
+`WideDecimal` is fixed at precision 28. `portfolio_nav` chain-links under
+`localcontext(prec=60)`, and the XIRR solver raises a Decimal to non-integer powers.
+`routes/portfolio/pydec.rs::Dec` is WideDecimal's algorithm with the precision as a parameter.
+Its `pow` is `exp(y·ln x)` computed with 20 extra digits and rounded half-even to 28, which
+matches libmpdec ("correctly rounded in almost all cases"). Above Emax it errors, giving Python's
+`decimal.Overflow` 500. Graded against the live Python, all equal:
+* 60 random powers, digit for digit;
+* 40 random XIRR solves, including 8 overflows;
+* 30 random NAV series (daily P&L, drawdown, maximum drawdown).
+
+That data lives in `routes/portfolio/golden.rs`. **Risk:** "almost all cases" means a rare
+double-rounding difference remains possible; move it into `baskfy-core` with a dumper.
+
+## R5.26 — `GET /invoices/{invoice_number:path}/pdf` is registered for 1–8 path segments (RS4b lane portfolio, 30 Oct 2026; lane label api-portfolio P4, rewritten by the verifier) ⚠ UNREVIEWED
+
+Starlette's `:path` converter matches `.*` in the middle of a path, and axum cannot express that.
+The route is registered for invoice numbers of 1 to 8 segments; real numbers have 3. A number
+containing `\n` is answered Starlette's plain 404 before the token check, because Python's `.`
+never matches a newline. **What differs** (the porter's first description was wrong; empty
+segments and `%2F` are EQUAL):
+* more than 8 segments: Python's 404 "No invoice with id …", Rust's generic 404 "Not Found";
+* a `%0A`-containing number with a trailing slash: Python 404, Rust 307 (the slash probe matches);
+* the same number with a non-GET method: Python 404, Rust 405.
+
+None is reachable with a real invoice number. **How to reverse:** a mid-path catch-all in the
+router, or a change to the probe layer in `app.rs`.
+
+## R5.27 — `GET /brokers/callback` serves only its refusals (RS4b lane portfolio, 30 Oct 2026; lane label api-portfolio P5) ⚠ UNREVIEWED
+
+Rust never mints an OAuth state, because connect is a POST and is not ported, so every state it
+sees is "Invalid or expired OAuth state.". The refusals are EQUAL: validation, 401, the
+sole-tenant 503/404 and the sign-off gate (17 cases under three env values). The success path
+writes the token and syncs holdings, so **the route stays on Python until wave 4c**, especially
+where `BASKFY_BROKER_OAUTH_STATE_PATH` shares state between processes.
+
+## R5.28 — Python-side defects found by the port and reproduced on purpose (RS4b, 30 Oct 2026; lane labels api-portfolio P6, reference verifier) ⚠ UNREVIEWED — **for Maulik**
+
+The strangler rule is "reproduce exactly", so Rust answers both of these the way Python does,
+byte for byte. Each should be **fixed in Python first, then in Rust**, with the case files'
+expected answers changing in the same commit:
+1. **`GET /trades` leaks other tenants' trade dates.** SQLAlchemy compiles the bounds aggregate
+   against the table instead of the subquery: `FROM (scope) AS anon_1, broker_trade` (confirmed by
+   compiling it). So `total` = (caller's rows) × (every user's rows), and `first_trade_on` /
+   `last_trade_on` span every user's trades. The query is parameterised, so no injection, but it
+   is a tenant-isolation leak of dates and a wrong count.
+2. **`GET /instruments/{symbol}/rank-history` has no auth dependency.** An anonymous caller who
+   knows a private screen's `public_id` can read its rank history. The case
+   `rank-history-other-tenant` covers it.
+
+## R5.29 — Portfolio lane: parameters, ordering and rounding (RS4b lane portfolio, 30 Oct 2026; lane labels api-portfolio P8, P9, P10) ⚠ UNREVIEWED
+
+* **P8 — parameters.** Parameters follow pydantic's lax int: trimmed, `1_000` and `12.0`
+  accepted, `12.` refused, big values kept. A value beyond bigint is the 500 at the point the
+  query runs, where Python raises asyncpg's unhandled `DataError`. Cursors use Python's `int()`.
+* **P9 — tradebook ordering.** Python sorts with a naive midnight when `executed_at` is missing.
+  When one instrument has both kinds on the same day, Python raises `TypeError` (500), and Rust
+  answers a 500 too. This approximates exactly when Python would compare the two (8 mixed cases
+  EQUAL).
+* **P10 — charge amounts.** Charge amounts are floats rounded with `Decimal(str(round(x, 2)))`.
+  `round` is reproduced on the float's exact decimal expansion, half-even, so
+  `round(0.125, 2)` = 0.12.
+
+## R5.30 — Lanes graded data paths the bed lacks on temporary data (RS4b, 30 Oct 2026; lane labels api-portfolio P11, sleeves/accounts/derivatives verifiers) ⚠ UNREVIEWED
+
+The bed copy has empty tables for much of what the routes serve, such as cash flows,
+reconciliation items, payments, investments, alerts, keys, webhooks, positions and done
+backtests. The lanes graded those paths in two ways, and **neither result can be committed**,
+because the harness grades against the bed as it is:
+* **Side databases.** The portfolio porter and its verifier each built a temporary database inside
+  the bed container (`baskfy_pf_lane`, `baskfy_rv_pf`) from a schema dump plus synthetic rows.
+  63 + 347 cases were EQUAL. Both databases were dropped.
+* **Seeded rows in the bed copy.** The sleeves, accounts and derivatives verifiers inserted
+  temporary rows into the bed copy itself (ids ≥ 990001, or user 6's rows) and deleted them
+  afterwards, reporting the counts back at their earlier values. Results: accounts 292 cases;
+  derivatives 303 cases, under four env values, plus a local archive dir; sleeves' seeded files.
+  Everything was EQUAL except R5.3's big-integer class, and the derivatives backtest cursor,
+  which was fixed.
+
+This was the bed (a copy), never the live database. **Recommendation for wave 4c:** commit a
+**fixture seed** (an SQL file applied to a fresh bed copy), so these paths are graded by
+committed cases instead of scratch ones.
+
+## R5.31 — Accounts lane: private helpers, exact decimals, trending (RS4b lane accounts, 30 Oct 2026; lane labels R-acc.1, R-acc.4, R-acc.8) ⚠ UNREVIEWED
+
+* The lane's shared helpers live in `routes/accounts/`, declared from `screens.rs` with `#[path]`.
+  `admin.rs` pulls in `admin_providers.rs` and `admin_resync.rs` the same way (R5.10 for the
+  collapse).
+* **Exact decimals.** The snapshot math (`money` = half-up to 2), the fee and net-worth totals,
+  `moved_pct` and the detail's weight go through `WideDecimal`. The weight is a 28-digit quotient
+  serialised with `str()` (the R1.3 class).
+* **Trending.** `baskfy_core.curated_trending` (pure, no goldens) is ported as
+  `accounts/trending.rs`. The `curated_metrics` return-convention constants are copied by hand.
+  Move it into `baskfy-core` once a dumper grades it.
+* **Verifier fix: error order.** An `investment_id` beyond bigint answered the 500 before the
+  sole-tenant gate; Python resolves the tenant first. It now carries `Option<i64>` and fails after
+  the tenant check (68 ordering cases EQUAL under three env values).
+
+## R5.32 — `GET /screens/{id}/csv` compiles the export query exactly as SQLAlchemy + asyncpg do (RS4b lane accounts, 30 Oct 2026; lane label R-acc.5) ⚠ UNREVIEWED
+
+* **The query.** `baskfy_core::build_export_query` is compiled, then SQLAlchemy's expanding
+  `IN (__[POSTCOMPILE_x])` is expanded into one `$n::VARCHAR` per element, renumbering every later
+  `$n`, as asyncpg does. Decimals are bound as their `str()` against the `::NUMERIC` casts.
+* **The columns.** `EXPORT_COLUMNS` and `FACTOR_COLUMN_MAP` are copied by hand, and a test checks
+  the header against the committed reference CSV.
+* **The body.** It is built in full rather than streamed (same bytes, at most 4,000 rows).
+
+All 22 cases are byte-equal, including real exports and `as_of` snapping.
+
+## R5.33 — `/admin/providers` and `/admin/resync` are graded under conditions that keep them off the network (RS4b lane accounts, 30 Oct 2026; lane labels R-acc.6, R-acc.7) ⚠ UNREVIEWED
+
+* **`/admin/providers`** is graded with `BASKFY_FIXTURE_DIR` pointing at an empty directory. With
+  the default directory, Python reports the fixture provider available with 8 `serves_now`
+  entries; Rust reports it unavailable because it cannot read Parquet (R4.12). **This is a real
+  field difference**, and it disappears when polars' `parquet` feature is pinned for
+  `baskfy-providers`.
+* **`/admin/resync`** is ported in full (the publication probe through
+  `bhavcopy_publication_check`, the token-store arithmetic). It is graded only with `days=30` and
+  `days=1`, because a wider window holds inferred holidays (the bed has 83), and Python would then
+  probe NSE live, which the bed forbids.
+
+## R5.34 — Accounts lane: unordered reads, `/me/export`, bind limits (RS4b lane accounts, 30 Oct 2026; lane labels R-acc.9, R-acc.10, R-acc.12) ⚠ UNREVIEWED
+
+* **Unordered reads.** Reads Python makes without `ORDER BY` stay without one: the export lists,
+  the investment list, holdings and unordered batches. Both sides see heap order.
+* **`GET /me/export`** is added to `auth.rs` (read-only). It reports the stored `is_staff` (the
+  export does not apply the allowlist, unlike `GET /me`, R5.7), and its datetimes use isoformat
+  with `+00:00`.
+* **Bind limits.** An integer that cannot be bound as bigint/int4 (`run_id`, `investment_id`,
+  version numbers, the cursor) answers the 500 catch-all, which is asyncpg's bind error in Python.
+
+## R5.35 — Derivatives: the backtest cursor reads Unicode digits as Python does (RS4b lane derivatives verifier, 30 Oct 2026) ⚠ UNREVIEWED
+
+Python's `_page` runs `cursor.isdigit()` and then `int(cursor)`, so:
+* `'١'` (Arabic-Indic one) is offset 1;
+* `'²'` passes `isdigit()` but makes `int()` raise, a 500.
+
+Rust read ASCII only, so it gave 404 in both. `cursor_offset()` now uses two tables generated from
+CPython 3.12 (Unicode 15.0.0): 68 runs of decimal digits, and 20 ranges that are digits but not
+decimal. **Regenerate them** if the Python runtime moves to a newer Unicode version.
+
+## R5.36 — Known residual differences, none reachable on the bed's data (RS4b, 30 Oct 2026) ⚠ UNREVIEWED
+
+Recorded so a cutover can decide route by route; each is outside every committed case.
+1. **JSON integers beyond u64** (R5.3). `OrderedJson` has no big-integer variant, so a stored
+   `1000000000000000000000` (e.g. a metric float 1e21 that Postgres keeps as numeric) is echoed
+   `1e+21`, where Python echoes the integer. It reaches every raw-echoed `jsonb`: backtest metrics
+   and params, scan detail and funnel, `op_scan`/`fo_scan` numbers. Three verifiers hit it on
+   seeded data. **Fix next:** an arbitrary-digit integer variant in `baskfy-db::json`.
+2. **Desk JSON.** An integer literal beyond i64 is a 500, as is a `NaN`/`Infinity` literal in
+   `holdings_json`/`reasons_json` (Python's `json` accepts both). `float()` of a holdings string
+   is approximated by an f64 parse.
+3. **Starlette's `$` matches before a trailing newline.** `GET /api/v1/plans%0A` is Python 200,
+   Rust 404; `/portfolio/overview%0A` is Python 200, Rust 400. Python also drops CR/LF from a
+   problem's `instance`, and Rust keeps them. This is foundation routing, not graded.
+4. **`GET /backtests/{id}/events` of a run in flight** (R5.22): two frames, not a 30-minute
+   stream.
+5. **`GET /overlap`** (R5.21): Python serves it.
+6. **The write-only paths** (R5.15): 404, not 405.
+7. **`/metrics`, `/api/v1/openapi.json`, `/api/v1/docs`**: not ported, so Python serves them.
+   The contract tests generated from `openapi.json` (README) wait for it.

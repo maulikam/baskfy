@@ -2,8 +2,8 @@
 //! (`docs/twt/04` §2, §3).
 //!
 //! One frame in, one frame out. The frame is **densified first** (one row per instrument and
-//! calendar session, nulls where no bar printed — `baskfy_core.vbt.indicators.densify`, ported
-//! privately here until the VBT lane lands it), so a rolling window counts sessions, not rows,
+//! calendar session, nulls where no bar printed — `baskfy_core.vbt.indicators.densify`, called
+//! as Python calls it), so a rolling window counts sessions, not rows,
 //! and every rolling statistic carries `min_samples` from `DataConfig.rolling_min_share`. The
 //! rolling means call polars' own kernel on each instrument's slice, which is what Python's
 //! `.over("instrument_id")` does.
@@ -17,7 +17,7 @@ use crate::error::{CoreError, CoreResult};
 use crate::twt::calendar::SessionCalendar;
 use crate::twt::config::TwtConfig;
 
-use self::frame::{F, bools, column_names, dates, floats, has, ints, put, py_list, strings};
+use self::frame::{F, bools, column_names, dates, floats, has, ints, put, py_list};
 
 /// Ports `REQUIRED_COLUMNS`: the columns [`with_twt_indicators`] requires.
 pub const REQUIRED_COLUMNS: [&str; 8] = [
@@ -108,109 +108,10 @@ pub fn bucket_keys(frame: &DataFrame) -> CoreResult<(Column, Column)> {
     ))
 }
 
-/// Ports `baskfy_core.vbt.indicators.densify`: one row per (instrument, calendar session),
-/// nulls where the name did not print.
-///
-/// Identity columns (`instrument_id`, `symbol` — the first non-null symbol per instrument) are
-/// carried onto the blank rows; every other column of `bars` is left-joined on
-/// `(instrument_id, date)`; the result is sorted by `(instrument_id, date)`.
-///
-/// # Errors
-/// When `instrument_id` or `date` is missing or not castable.
-pub fn densify(bars: &DataFrame, calendar: &SessionCalendar) -> CoreResult<DataFrame> {
-    let ids = ints(bars, "instrument_id")?;
-    let bar_dates = dates(bars, "date")?;
-    let with_symbol = has(bars, "symbol");
-
-    // names = unique instrument ids, sorted (a null id sorts first).
-    let mut names: Vec<Option<i64>> = ids.clone();
-    names.sort_by(frame::cmp_nulls_first);
-    names.dedup();
-
-    // The first non-null symbol of each instrument, in the frame's order.
-    let mut symbol_of: std::collections::HashMap<Option<i64>, String> =
-        std::collections::HashMap::new();
-    if with_symbol {
-        let symbols = strings(bars, "symbol")?;
-        for (id, sym) in ids.iter().zip(symbols) {
-            if let Some(s) = sym {
-                symbol_of.entry(*id).or_insert(s);
-            }
-        }
-    }
-
-    // Bars by (instrument, date), in the frame's order (a duplicate bar gives two rows).
-    let mut by_key: std::collections::HashMap<(i64, i32), Vec<usize>> =
-        std::collections::HashMap::new();
-    for (row, (id, day)) in ids.iter().zip(&bar_dates).enumerate() {
-        if let (Some(id), Some(day)) = (id, day) {
-            by_key.entry((*id, *day)).or_default().push(row);
-        }
-    }
-
-    let sessions: Vec<i32> = calendar
-        .sessions
-        .iter()
-        .map(|d| frame::days_of(*d))
-        .collect();
-    // grid = names x sessions, then the left join; sorted by (instrument_id, date), stable.
-    let mut grid: Vec<(Option<i64>, i32, Option<usize>)> = Vec::new();
-    for name in &names {
-        for &day in &sessions {
-            match name.and_then(|id| by_key.get(&(id, day))) {
-                Some(rows) => {
-                    for &r in rows {
-                        grid.push((*name, day, Some(r)));
-                    }
-                }
-                None => grid.push((*name, day, None)),
-            }
-        }
-    }
-    grid.sort_by(|a, b| frame::cmp_nulls_first(&a.0, &b.0).then(a.1.cmp(&b.1)));
-
-    let height = grid.len();
-    let mut columns: Vec<Column> = Vec::with_capacity(bars.width() + 1);
-    let id_dtype = bars.column("instrument_id")?.dtype().clone();
-    columns.push(
-        Series::new(
-            "instrument_id".into(),
-            grid.iter().map(|g| g.0).collect::<Vec<_>>(),
-        )
-        .cast(&id_dtype)?
-        .into_column(),
-    );
-    if with_symbol {
-        columns.push(
-            Series::new(
-                "symbol".into(),
-                grid.iter()
-                    .map(|g| symbol_of.get(&g.0).cloned())
-                    .collect::<Vec<Option<String>>>(),
-            )
-            .into_column(),
-        );
-    }
-    let date_dtype = bars.column("date")?.dtype().clone();
-    columns.push(
-        Series::new(
-            "date".into(),
-            grid.iter().map(|g| g.1).collect::<Vec<i32>>(),
-        )
-        .cast(&DataType::Date)?
-        .cast(&date_dtype)?
-        .into_column(),
-    );
-    let idx = frame::nullable_idx(grid.iter().map(|g| g.2))?;
-    for c in bars.columns() {
-        let name = c.name().as_str();
-        if name == "instrument_id" || name == "date" || name == "symbol" {
-            continue;
-        }
-        columns.push(c.as_materialized_series().take(&idx)?.into_column());
-    }
-    Ok(DataFrame::new(height, columns)?)
-}
+/// Ports `baskfy_core.vbt.indicators.densify`, which `twt.indicators` imports: one row per
+/// (instrument, calendar session), nulls where the name did not print. VBT's own function (a
+/// private copy until the wave-3 housekeeping, DECISIONS-RS R3.4).
+pub use crate::vbt::indicators::densify;
 
 /// Ports `_prepare`: the optional columns added as typed nulls when absent (in
 /// [`OPTIONAL_COLUMNS`] order), prices and volume cast to `Float64`, `adj_factor` null-filled
@@ -308,7 +209,7 @@ pub fn with_twt_indicators(
     let low = floats(&frame, "low")?;
     let locked: Vec<bool> = (0..frame.height())
         .map(|i| match (open[i], high[i], low[i]) {
-            (Some(o), Some(h), Some(l)) => frame::same(o, h) && frame::same(h, l),
+            (Some(o), Some(h), Some(l)) => crate::pl::eq(o, h) && crate::pl::eq(h, l),
             _ => false,
         })
         .collect();
@@ -406,16 +307,6 @@ pub(crate) mod frame {
             .ok_or_else(|| CoreError::InvalidInput(format!("date out of range: {days}")))
     }
 
-    /// A date to days since the epoch.
-    pub(crate) fn days_of(day: NaiveDate) -> i32 {
-        i32::try_from(day.signed_duration_since(epoch()).num_days()).unwrap_or(i32::MAX)
-    }
-
-    /// A date column from days since the epoch.
-    pub(crate) fn date_series(name: &str, days: Vec<Option<i32>>) -> CoreResult<Series> {
-        Ok(Series::new(name.into(), days).cast(&DataType::Date)?)
-    }
-
     /// `with_columns(col)`: replaces a column of the same name in place, else appends.
     pub(crate) fn put(df: &mut DataFrame, col: Column) -> CoreResult<()> {
         df.with_column(col)?;
@@ -432,15 +323,6 @@ pub(crate) mod frame {
         Ok(IdxCa::from_vec("".into(), v))
     }
 
-    /// Nullable take indices: `None` gathers a null.
-    pub(crate) fn nullable_idx(rows: impl Iterator<Item = Option<usize>>) -> CoreResult<IdxCa> {
-        let v = rows
-            .map(|r| r.map(IdxSize::try_from).transpose())
-            .collect::<Result<Vec<Option<IdxSize>>, _>>()
-            .map_err(|e| CoreError::InvalidInput(format!("row index: {e}")))?;
-        Ok(IdxCa::new("".into(), v))
-    }
-
     /// `df` reordered (or filtered) to `rows`.
     pub(crate) fn take_rows(df: &DataFrame, rows: &[usize]) -> CoreResult<DataFrame> {
         Ok(df.take(&idx(rows)?)?)
@@ -454,11 +336,6 @@ pub(crate) mod frame {
             (Some(_), None) => Ordering::Greater,
             (Some(x), Some(y)) => x.partial_cmp(y).unwrap_or(Ordering::Equal),
         }
-    }
-
-    /// Float equality without the `float_cmp` lint (`==` in polars; -0.0 equals 0.0).
-    pub(crate) fn same(a: f64, b: f64) -> bool {
-        a.partial_cmp(&b) == Some(Ordering::Equal)
     }
 
     /// Contiguous runs of equal instrument ids — the groups of `.over("instrument_id")` on a

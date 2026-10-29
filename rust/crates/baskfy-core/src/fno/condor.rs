@@ -27,17 +27,18 @@ use serde::{Deserialize, Serialize, Serializer, ser::SerializeStruct};
 use super::config::py::{add, mul, sub};
 use super::config::{F1Config, FnoError, FnoResult, PlanState, py};
 use super::vol::OptionType;
-use crate::backtest::helpers::{Rounding, WideDecimal};
+use crate::decimal::{Rounding, WideDecimal};
 
 /// Python numeric helpers the F&O decision ports share (float `repr`, `round`, `quantize`).
 pub(crate) mod num {
     use rust_decimal::Decimal;
 
     use super::super::config::{FnoError, FnoResult};
-    use crate::backtest::helpers::{BacktestError, Rounding, WideDecimal};
+    use crate::decimal::{DecimalError, Rounding, WideDecimal};
+    pub(crate) use crate::py::float_repr as py_float_repr;
 
     /// A `WideDecimal` failure as the fno lane's error.
-    pub(crate) fn wide_err(e: &BacktestError) -> FnoError {
+    pub(crate) fn wide_err(e: &DecimalError) -> FnoError {
         FnoError::Decimal(e.to_string())
     }
 
@@ -93,50 +94,6 @@ pub(crate) mod num {
             return x;
         }
         format!("{x:.ndigits$}").parse::<f64>().unwrap_or(x)
-    }
-
-    /// `repr(float)`: shortest round-trip digits, positional for decimal exponents in
-    /// `[-4, 16)` (always with a fractional part), scientific otherwise (`1e-05`).
-    pub(crate) fn py_float_repr(x: f64) -> String {
-        if x.is_nan() {
-            return "nan".to_owned();
-        }
-        if x.is_infinite() {
-            return if x > 0.0 { "inf" } else { "-inf" }.to_owned();
-        }
-        let sci = format!("{x:e}");
-        let (mantissa, exp) = sci.split_once('e').unwrap_or((sci.as_str(), "0"));
-        let exp: i64 = exp.parse().unwrap_or(0);
-        let (sign, mantissa) = match mantissa.strip_prefix('-') {
-            Some(m) => ("-", m),
-            None => ("", mantissa),
-        };
-        let digits: String = mantissa.chars().filter(char::is_ascii_digit).collect();
-        let n = i64::try_from(digits.len()).unwrap_or(i64::MAX);
-        if (-4..16).contains(&exp) {
-            if exp >= 0 {
-                let int_len = exp + 1;
-                if n <= int_len {
-                    let pad = usize::try_from(int_len - n).unwrap_or(0);
-                    format!("{sign}{digits}{}.0", "0".repeat(pad))
-                } else {
-                    let cut = usize::try_from(int_len).unwrap_or(0);
-                    format!("{sign}{}.{}", &digits[..cut], &digits[cut..])
-                }
-            } else {
-                let pad = usize::try_from(-exp - 1).unwrap_or(0);
-                format!("{sign}0.{}{digits}", "0".repeat(pad))
-            }
-        } else {
-            let (head, tail) = digits.split_at(1);
-            let point = if tail.is_empty() {
-                String::new()
-            } else {
-                format!(".{tail}")
-            };
-            let exp_sign = if exp < 0 { "-" } else { "+" };
-            format!("{sign}{head}{point}e{exp_sign}{:02}", exp.abs())
-        }
     }
 
     /// `Decimal(repr(x))`, kept wide (a tiny float prints at a scale `rust_decimal` lacks).

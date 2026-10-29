@@ -14,7 +14,7 @@
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use crate::backtest::helpers::{Rounding, WideDecimal};
+use crate::decimal::{Rounding, WideDecimal};
 use crate::error::{CoreError, CoreResult};
 
 /// Ports `MarkSource`: where a position's mark came from (`04` §9.1).

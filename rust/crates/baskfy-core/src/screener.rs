@@ -2214,8 +2214,8 @@ mod payload {
         Opaque(String),
     }
 
-    /// Python's `repr(float)` (and `json.dumps` of a float): shortest round-trip digits, fixed
-    /// notation for exponents in `[-4, 16)`, `1e+16` / `1.5e-07` outside it.
+    /// Python's `repr(float)` as `json.dumps` writes a float: [`crate::py::float_repr`], with
+    /// `NaN` / `Infinity` / `-Infinity` for the non-finite values.
     pub fn py_float_repr(x: f64) -> String {
         if x.is_nan() {
             return "NaN".to_owned();
@@ -2223,63 +2223,7 @@ mod payload {
         if x.is_infinite() {
             return if x > 0.0 { "Infinity" } else { "-Infinity" }.to_owned();
         }
-        // Rust's shortest form gives the shortest round-trip *length*; among candidates of that
-        // length Python takes the one closest to the exact value, which is the correctly
-        // rounded print at that precision.
-        let shortest = format!("{x:e}");
-        let length = shortest
-            .split('e')
-            .next()
-            .unwrap_or("")
-            .chars()
-            .filter(char::is_ascii_digit)
-            .count();
-        // At a power of two the rounding interval is lopsided, and the correctly rounded print
-        // may fall outside it; then the shortest form (which round-trips by construction) is
-        // the only candidate of that length, and Python prints it too.
-        let rounded = format!("{x:.*e}", length.saturating_sub(1));
-        let sci = if rounded
-            .parse::<f64>()
-            .is_ok_and(|y| y.to_bits() == x.to_bits())
-        {
-            rounded
-        } else {
-            shortest
-        };
-        let (mantissa, exp) = sci.split_once('e').unwrap_or((sci.as_str(), "0"));
-        let exp: i64 = exp.parse().unwrap_or(0);
-        let (sign, mantissa) = match mantissa.strip_prefix('-') {
-            Some(m) => ("-", m),
-            None => ("", mantissa),
-        };
-        let digits: String = mantissa.chars().filter(char::is_ascii_digit).collect();
-        let ndigits = i64::try_from(digits.len()).unwrap_or(1);
-        if (-4..16).contains(&exp) {
-            let point = exp + 1;
-            let body = if point <= 0 {
-                format!(
-                    "0.{}{digits}",
-                    "0".repeat(usize::try_from(-point).unwrap_or(0))
-                )
-            } else if point >= ndigits {
-                format!(
-                    "{digits}{}.0",
-                    "0".repeat(usize::try_from(point - ndigits).unwrap_or(0))
-                )
-            } else {
-                let (a, b) = digits.split_at(usize::try_from(point).unwrap_or(0));
-                format!("{a}.{b}")
-            };
-            return format!("{sign}{body}");
-        }
-        let (head, tail) = digits.split_at(1);
-        let point = if tail.is_empty() {
-            String::new()
-        } else {
-            format!(".{tail}")
-        };
-        let exp_sign = if exp < 0 { "-" } else { "+" };
-        format!("{sign}{head}{point}e{exp_sign}{:02}", exp.abs())
+        crate::py::float_repr(x)
     }
 
     /// `json.dumps(text, ensure_ascii=False)`.

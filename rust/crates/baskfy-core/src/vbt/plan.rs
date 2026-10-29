@@ -20,7 +20,7 @@ use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize, Serializer};
 
-use crate::backtest::helpers::{Rounding, WideDecimal};
+use crate::decimal::{Rounding, WideDecimal};
 use crate::error::{CoreError, CoreResult};
 use crate::screener::sha256;
 use crate::vbt::config::{Gate, TICK_INR, VbtConfig};

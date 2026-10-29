@@ -33,7 +33,7 @@ use super::research::frames::{self, Cell};
 use super::research::{CondorParams, Summary, leg_costs, summarise};
 use super::series::cols;
 use super::vol::OptionType;
-use crate::backtest::helpers::WideDecimal;
+use crate::decimal::WideDecimal;
 
 /// The research's index-option cost knobs (`RESEARCH.md` method; `04` §3).
 ///
@@ -407,7 +407,7 @@ fn legs(
     Ok(Some((short, wing)))
 }
 
-fn wide_err(e: &crate::backtest::helpers::BacktestError) -> FnoError {
+fn wide_err(e: &crate::decimal::DecimalError) -> FnoError {
     FnoError::Decimal(e.to_string())
 }
 

@@ -225,48 +225,7 @@ fn py_decimal_str(d: Decimal) -> String {
     format!("{sign}{body}E{adjusted}")
 }
 
-/// `repr(float)`: the shortest round-trip digits, positional for exponents -4..16 (always with
-/// a decimal point), scientific otherwise.
-fn py_float_repr(x: f64) -> String {
-    if x.is_nan() {
-        return "nan".to_owned();
-    }
-    if x.is_infinite() {
-        return if x > 0.0 { "inf" } else { "-inf" }.to_owned();
-    }
-    let sci = format!("{x:e}");
-    let Some((mantissa, exp)) = sci.split_once('e') else {
-        return sci;
-    };
-    let Ok(exp) = exp.parse::<i64>() else {
-        return sci;
-    };
-    let negative = mantissa.starts_with('-');
-    let digits: String = mantissa.chars().filter(char::is_ascii_digit).collect();
-    let sign = if negative { "-" } else { "" };
-    let n = i64::try_from(digits.len()).unwrap_or(i64::MAX);
-    if (-4..16).contains(&exp) {
-        if exp < 0 {
-            let zeros = "0".repeat(usize::try_from(-exp - 1).unwrap_or(0));
-            return format!("{sign}0.{zeros}{digits}");
-        }
-        let int_len = exp + 1;
-        if int_len >= n {
-            let zeros = "0".repeat(usize::try_from(int_len - n).unwrap_or(0));
-            return format!("{sign}{digits}{zeros}.0");
-        }
-        let cut = usize::try_from(int_len).unwrap_or(0);
-        return format!("{sign}{}.{}", &digits[..cut], &digits[cut..]);
-    }
-    let (head, rest) = digits.split_at(1);
-    let body = if rest.is_empty() {
-        head.to_owned()
-    } else {
-        format!("{head}.{rest}")
-    };
-    let esign = if exp < 0 { "-" } else { "+" };
-    format!("{sign}{body}e{esign}{:02}", exp.unsigned_abs())
-}
+use crate::py::float_repr as py_float_repr;
 
 /// `d.quantize(Decimal("0.01"))` under the default context (ROUND_HALF_EVEN).
 fn gate_value(gate: MarketGate) -> &'static str {

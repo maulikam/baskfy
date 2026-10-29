@@ -8,7 +8,7 @@
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use crate::backtest::helpers::{Rounding, WideDecimal};
+use crate::decimal::{Rounding, WideDecimal};
 use crate::error::{CoreError, CoreResult};
 use crate::twt::published::{PublishedStudy, decimal_of_float};
 

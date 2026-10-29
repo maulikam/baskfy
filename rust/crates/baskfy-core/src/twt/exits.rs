@@ -5,7 +5,7 @@
 //!
 //! Money and every level are `Decimal` (house rule 9). The public API speaks
 //! `rust_decimal::Decimal`; the arithmetic runs in
-//! [`WideDecimal`](crate::backtest::helpers::WideDecimal) — Python's `Decimal` in its default
+//! [`WideDecimal`](crate::decimal::WideDecimal) — Python's `Decimal` in its default
 //! context — so every product, quotient and tick floor rounds (and keeps its exponent) exactly
 //! where Python's does. The backtest reuses the wide core directly (the `wide` items below), so
 //! the study and the book walk the same arithmetic.
@@ -17,7 +17,7 @@ use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use crate::backtest::helpers::{Rounding, WideDecimal};
+use crate::decimal::{Rounding, WideDecimal};
 use crate::error::{CoreError, CoreResult};
 use crate::twt::config::{ExitConfig, TICK_INR};
 
@@ -183,7 +183,7 @@ pub(crate) mod wide {
     use chrono::NaiveDate;
 
     use super::{Action, ExitReason, arith};
-    use crate::backtest::helpers::{Rounding, WideDecimal};
+    use crate::decimal::{Rounding, WideDecimal};
     use crate::error::CoreResult;
     use crate::twt::config::ExitConfig;
 

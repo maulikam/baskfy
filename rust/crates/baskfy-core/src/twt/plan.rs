@@ -16,7 +16,7 @@ use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use crate::backtest::helpers::WideDecimal;
+use crate::decimal::WideDecimal;
 use crate::error::{CoreError, CoreResult};
 use crate::screener::sha256;
 use crate::twt::config::{Gate, TICK_INR, TwtConfig};

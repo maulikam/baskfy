@@ -26,7 +26,7 @@ use chrono::{Datelike, NaiveDate};
 use polars::prelude::{DataFrame, DataType};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::backtest::helpers::{Rounding, WideDecimal};
+use crate::decimal::{Rounding, WideDecimal};
 use crate::error::{CoreError, CoreResult};
 use crate::vbt::calendar::frames;
 use crate::vbt::config::{Gate, VbtConfig};

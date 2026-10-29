@@ -47,6 +47,41 @@ serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.154", features = ["float_roundtrip"] }
 thiserror = { version = "=2.0.21" }
 
+# ---------------------------------------------------------------------------------------------
+# I/O stack for baskfy-providers and every wave-4 crate after it (DECISIONS-RS R4.1). Never a
+# dependency of baskfy-core: law_one.rs refuses each of these in the core's manifest.
+# ---------------------------------------------------------------------------------------------
+baskfy-providers = { path = "crates/baskfy-providers" }
+# The async runtime. "test-util" (paused virtual time) is added by test crates only.
+tokio = { version = "=1.54.1", default-features = false, features = ["rt-multi-thread", "macros", "time", "sync", "net", "fs", "io-util"] }
+# HTTP for Kite and NSE: rustls (no OpenSSL), a cookie jar (NSE's session discipline), and the
+# content codings httpx decodes (gzip, deflate, brotli).
+reqwest = { version = "=0.12.28", default-features = false, features = ["rustls-tls", "cookies", "gzip", "brotli", "deflate", "json", "http2", "charset"] }
+# The shared rate-limit clocks live in Redis (ratelimit.rs runs Python's own Lua scripts).
+redis = { version = "=0.32.7", default-features = false, features = ["script", "tokio-comp", "connection-manager"] }
+# dyn-compatible async ports (BarsProvider, ReferenceProvider, HoldingsProvider, ...).
+async-trait = { version = "=0.1.92" }
+# The Kite access token at rest, byte-compatible with Python's cryptography.fernet.
+fernet = { version = "=0.2.2", default-features = false, features = ["rustcrypto"] }
+# Full jitter (random.uniform) in retry and the token bucket.
+rand = { version = "=0.9.5" }
+# The process-wide monotonic clock Python's time.monotonic reads (CLOCK_MONOTONIC on Linux), so
+# a Rust and a Python process can share one Redis token bucket. Safe API, no `unsafe`.
+rustix = { version = "=1.1.6", default-features = false, features = ["std", "time"] }
+# NSE bhavcopies arrive zipped; pure-Rust inflate.
+zip = { version = "=9.1.3", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+# Kite's instrument dump is CSV (the kiteconnect client parses it with Python's csv module).
+csv = { version = "=1.4.0" }
+# NSE's parsers use Python's `re`; urllib.parse.quote for symbols in NSE URLs.
+regex = { version = "=1.13.1" }
+percent-encoding = { version = "=2.3.2" }
+# SHA-256 (archive metadata, Kite's login checksum) and HMAC (an S3 SigV4 signer, if the archive
+# port signs by hand). The 0.10/0.12 lines are the ones fernet already builds.
+sha2 = { version = "=0.10.9" }
+hmac = { version = "=0.12.1" }
+# Test-only: temporary directories for the token store and the raw archive.
+tempfile = { version = "=3.27.0" }
+
 [workspace.lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"

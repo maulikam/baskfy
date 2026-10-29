@@ -17,10 +17,11 @@ its golden tests run · `verified` — every golden for the module green, clippy
 | `baskfy-testkit` (load, decode, encode, grade; polars and pandas frames; `List(String)` at RS2) | done |
 | Harness proof: all 1,702 goldens parse and decode; every polars and pandas frame round-trips exactly; 47 wide decimals pinned (R1.3, R2.8) | green (RS3) |
 | `serde_json` with `float_roundtrip` (golden floats decode to the nearest f64, as Python's `json`) | done (RS2, R2.1) |
-| `cargo fmt` / `clippy --all-targets -D warnings` | green (RS3) |
-| `cargo test --workspace` | **green** (RS3): 24 test targets, 221 passed + 5 ignored fuzz harnesses, **1,702 of 1,702 graded goldens** |
+| `cargo fmt` / `clippy --all-targets -D warnings` | green (RS4a) |
+| `cargo test --workspace` | **green** (RS4a): 45 test targets, 668 passed + 14 ignored (6 opt-in fuzz harnesses, 8 Parquet-fixture cases, R4.12); core 222, providers 437, testkit 9; **1,702 of 1,702 graded goldens** |
 | Pure core, golden-covered part (swing, options, backtest, ranking, twt, vbt, fno) | **complete** (RS3) — every committed golden green; the 128 `baskfy_core` modules with no goldens are still `not started` (table below) |
-| providers, execution, api (axum), worker, desk, single binary | not started |
+| `baskfy-providers` (foundation RS4.0; kite, nse, archive, composite, fixtures, factory RS4a) | **ported** (RS4a): 437 tests green, 8 ignored until Parquet lands (R4.12); residuals below |
+| db, api (axum), worker, desk, execution, single binary | not started (next: `baskfy-db`, wave 4b) |
 
 ## Wave 1 (RS1, RS1.1 — 29 Oct 2026) — swing and options ported, 126 of 126
 
@@ -448,6 +449,63 @@ a reporting slip, no code change.
   `fno::costs` takes role→price maps instead of `fno::condor::LegRole`. Each now has a real
   home in the crate (R3.4).
 
+## Wave 4, step 1 — `baskfy-providers` (foundation RS4.0; adapters RS4a, 29 Oct 2026)
+
+The I/O stack is pinned once for every wave-4 porter (DECISIONS-RS R4.1, R4.2). The crate has no
+goldens: Python's own provider tests are ported case for case, plus cross-checks against the live
+Python (messages, formatting, the Lua scripts, a Python-written token blob).
+
+| Python module | Rust | state | tests |
+|---|---|---|---|
+| `errors` | `errors` (R4.3) | ported | 3 unit |
+| `records` | `records` (R4.6) | ported | `records_and_ports.rs` 24 (all of `test_records_and_ports.py` that does not need kite/nse/fixtures, plus holdings and timestamps) |
+| `ports` | `ports` (async traits) | ported | in `records_and_ports.rs` |
+| `settings` | `settings` (R4.7) | ported | `settings.rs` 8 |
+| `ratelimit` | `ratelimit` (R4.8) | ported | `ratelimit.rs` 19 (every `test_ratelimit.py` case + spacer, lanes, script identity, opt-in real Redis) |
+| `retry` | `retry` | ported | `retry_and_tokens.rs` (every case) |
+| `circuit` | `circuit` | ported | `circuit_and_publication.rs` 11 (the `CircuitBreaker` cases of `test_composite.py`) |
+| `tokens` | `tokens` (R4.9) | ported | `retry_and_tokens.rs` 30 in all (every case + Python interop) |
+| `publication` | `publication` | ported | in `circuit_and_publication.rs` |
+| `reference_export_io` | `reference_export_io` | **path half only** — `reference_rows()` waits on core's `reference_export` (`read_export`/`to_rows`, not ported) | — |
+| `network_guard.py` (suite) | `net` (R4.5) | ported | `network_is_blocked.rs` 13 (Python's cases + two source scans) |
+| (none) | `clock`, `secret`, `py` | new seams | 6 unit |
+| `kite` (+ kiteconnect 5.2.1's read-only REST half) | `kite` (R4.10) | ported (RS4a) | `kite_provider.rs` 58 (incl. ~140 live-Python coercions, 24 SDK CSV bodies), `kite_http.rs` 24, `kite_options.rs` 16, `kite_holdings_port.rs` 5, `kite_fno_master.rs` 3, `kite_timeout.rs` 3 |
+| `nse` | `nse` (R4.11) | ported (RS4a) | `nse_provider.rs` 71 (all 58 `test_nse.py` cases, plus review additions), `nse_catalyst.rs` 21, `nse_fo_ban_list.rs` 12, `nse_fo_bhavcopy.rs` 7, `nse_http_wire.rs` 5; 229-file differential: 215 identical, the rest R4.11's documented deviations |
+| `archive` | `archive` (R4.14) | ported (RS4a) | `nse_archive.rs` 22 (all 19 `test_archive.py` cases, plus review additions) |
+| `composite` | `composite` | ported (RS4a) | `nse_composite.rs` 25 (+ breaker cases in `circuit_and_publication.rs`) |
+| `fixtures` | `fixtures` (R4.12) | ported, **in-memory frames only** | `nse_fixtures.rs` 27 + 8 ignored (file-backed, need `parquet`); `TestAnchoredToRealData` (4) and `TestDeterminism` (1) have no counterpart yet |
+| `factory` | `factory` (R4.13) | ported (RS4a), production wiring with Kite | `nse_factory.rs` 17 |
+| `fixture_builder`, `cli` | — | not started | not declared yet |
+
+**RS4a residuals (open, all recorded in DECISIONS-RS):**
+
+* **Parquet (R4.12):** `FixtureProvider` cannot read its files, so docs/03's `local` environment
+  does not run on the Rust stack yet; 8 file-backed cases are ignored until the feature is declared.
+* **S3 retries (R4.14):** `SigV4S3Client` has botocore's 60 s timeouts but none of boto3's
+  retries; one transient R2 error fails archive-then-parse. Must close before the worker's nightly
+  runs on Rust.
+* **Kite known bug, reproduced (R4.10):** transport timeouts/refusals are untranslated and not
+  retried, in both languages; fix both together later.
+* **Kite `check()` (R4.10):** every token-store error becomes a health string; Python lets an
+  `OSError` raise. Needs a `HealthReporting` trait change.
+* **`records::conform` (R4.10, R4.11h):** panics on a current-thread tokio runtime (polars' lazy
+  `block_in_place`), and maps every polars failure to `InvalidOperationError` (Python:
+  `ComputeError` for a precision overflow). Foundation-owner items; adapters avoid `conform`.
+* **NSE deviations (R4.11 a–g):** error classes/texts on refused values, R1.3-class limits,
+  `1E+5` printing, Unicode digits, redirect cap 10 (httpx 20), `raw` key order — none changes a
+  stored value.
+* **`reference_export_io.reference_rows()`** still waits on core's `reference_export`.
+* **Secret audit (R4.15):** clean; the Kite `Authorization` header is now sensitive and an
+  unparseable Redis URL is never quoted.
+
+**For the kite and nse porters (they run in parallel and own one file each):** never edit
+`Cargo.toml` or `lib.rs`; build HTTP clients only from `net::client_builder()` /
+`net::GuardedClient`; begin every test with `common::arm()` (`tests/common/mod.rs`; a scan fails
+otherwise); take rates and keys from `ProviderSettings` and the factory constants, never a literal.
+Python imports that have no Rust home yet: `baskfy_core.tradebook` (`TradeFill`, `TradeSide`, used by
+kite.py) and `baskfy_core.universes.UNIVERSE_BY_SLUG` (nse.py; the screener has a private copy,
+R2.3) — port privately per R2.3 or ask the core lead.
+
 ## Wave 3 answer keys (RS2) — ported at RS3
 
 Dumped from the live Python in the golden_ranking.py pattern (inputs round-tripped through JSON
@@ -494,7 +552,12 @@ reconcile, exposure, options' plan/scan/structures, swing.backtest, …). They a
 the I/O layer that first needs them, **goldens first** (a dumper in `tools/parity/`, committed
 separately), never ported blind.
 
-**Before wave 4 starts — one housekeeping step (R3.4, R3.1):** collapse the R2.3/R3.4 copies
+**Done at RS4a:** the wave-3 housekeeping below (R3.4, R3.1, the last R3.1 site in
+`fno::series` closed by the RS4a integrator) and wave-4 step 1, `baskfy-providers` (above).
+**Next is wave 4b:** `baskfy-db` (sqlx, read-only first, graded on a database copy), then
+`baskfy-api`.
+
+**Housekeeping step (R3.4, R3.1) — done:** collapse the R2.3/R3.4 copies
 (twt's `vbt_shared` config, calendar, breadth and indicator arithmetic onto `vbt::*`;
 `fno::ledger`'s pause predicates onto `fno::exits`; the two `windows` copies), lift
 `WideDecimal` out of `backtest::helpers` into a shared `baskfy_core` module, and give twt the

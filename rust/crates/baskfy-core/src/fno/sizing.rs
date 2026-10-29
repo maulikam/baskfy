@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 
 use super::config::py::mul;
 use super::config::{CommonConfig, FnoCeilings, FnoError, FnoResult, PlanState, py};
-use crate::backtest::helpers::Rounding;
+use crate::decimal::Rounding;
 use crate::options::gating::Mode;
 
 /// `04` §7.3 / PACK.6 — the journal never pools the two.

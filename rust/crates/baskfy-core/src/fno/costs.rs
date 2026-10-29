@@ -14,9 +14,9 @@
 //! Every component is rounded to the paisa, as a contract note rounds it (house rule 8).
 //!
 //! **Leg roles.** Python keys the condor's prices by `fno.condor.LegRole`, a `StrEnum`, so a
-//! mapping keyed by the role's string value is the same mapping. `fno::condor` is another lane's
-//! port, so this file takes [`RolePrices`] (role value → price) and walks the roles in
-//! `LegRole`'s declaration order with `sign_of`'s signs (DECISIONS-RS R3.x).
+//! mapping keyed by the role's string value is the same mapping. This file takes [`RolePrices`]
+//! (role value → price, the golden encoding) and walks [`LegRole::ALL`] in declaration order with
+//! [`sign_of`]'s signs — `fno::condor`'s own, not a copy (DECISIONS-RS R3.4).
 //!
 //! Goldens: `L1/fno/costs.<function>.case_NNN.json`.
 
@@ -25,21 +25,20 @@ use std::collections::BTreeMap;
 use rust_decimal::Decimal;
 use serde::{Serialize, Serializer, ser::SerializeStruct};
 
+use super::condor::{LegRole, sign_of};
 use super::config::py::{add, mul};
 use super::config::{F1Config, FnoError, FnoResult, FutureCostRates, PlanState, py};
-use crate::backtest::helpers::{Rounding, WideDecimal};
+use crate::decimal::{Rounding, WideDecimal};
 use crate::options::costs::{ChargeBreakdown, CostFill, CostRates, Side, charges, paise};
 
 /// A condor's per-unit prices keyed by `LegRole`'s value (`"LONG_PUT"`, ...).
 pub type RolePrices = BTreeMap<String, Decimal>;
 
-/// `fno.condor.LegRole` in declaration order, with `sign_of` (+1 long, -1 short).
-pub const LEG_ROLES: [(&str, i64); 4] = [
-    ("LONG_PUT", 1),
-    ("LONG_CALL", 1),
-    ("SHORT_PUT", -1),
-    ("SHORT_CALL", -1),
-];
+/// `[(role.value, sign_of(role)) for role in LegRole]`: the roles in declaration order, with
+/// `sign_of` (+1 long, -1 short).
+fn leg_roles() -> [(&'static str, i64); 4] {
+    LegRole::ALL.map(|role| (role.value(), sign_of(role)))
+}
 
 fn price_of(prices: &RolePrices, role: &str) -> FnoResult<Decimal> {
     prices
@@ -93,7 +92,7 @@ pub fn condor_fills(
     quantity: i64,
 ) -> FnoResult<Vec<CostFill>> {
     let mut fills = Vec::with_capacity(8);
-    for (role, sign) in LEG_ROLES {
+    for (role, sign) in leg_roles() {
         let opening = if sign > 0 { Side::Buy } else { Side::Sell };
         let closing = if opening == Side::Buy {
             Side::Sell
@@ -172,7 +171,7 @@ pub fn condor_round_trip(
     let closing = exit.unwrap_or(entry);
     let breakdown = charges(&condor_fills(entry, closing, quantity)?, rates)?;
     let mut slip_units = Decimal::ZERO;
-    for (role, _) in LEG_ROLES {
+    for (role, _) in leg_roles() {
         let leg = add(
             crossing_cost(price_of(entry, role)?, config)?,
             crossing_cost(price_of(closing, role)?, config)?,
@@ -183,7 +182,7 @@ pub fn condor_round_trip(
     let slippage = paise(mul(slip_units, qty)?)?;
     let round_trip = add(breakdown.total()?, slippage)?;
     let mut credit = Decimal::ZERO;
-    for (role, sign) in LEG_ROLES {
+    for (role, sign) in leg_roles() {
         credit = add(credit, mul(Decimal::from(-sign), price_of(entry, role)?)?)?;
     }
     let credit_inr = paise(mul(credit, qty)?)?;

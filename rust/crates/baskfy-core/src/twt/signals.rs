@@ -14,6 +14,7 @@ use polars::prelude::{BooleanChunked, DataFrame, IntoColumn, IntoSeries, NamedFr
 use rust_decimal::Decimal;
 
 use crate::error::{CoreError, CoreResult};
+use crate::pl;
 use crate::twt::calendar::SessionCalendar;
 use crate::twt::config::{SignalState, TwtConfig};
 use crate::twt::indicators::frame::{
@@ -144,19 +145,19 @@ pub fn month_low_back(indicated: &DataFrame, config: &TwtConfig) -> CoreResult<D
     let ids = ints(indicated, "instrument_id")?;
     let month = ints(indicated, "month_key")?;
     let low = floats(indicated, "low")?;
-    let mut lows: HashMap<(i64, i64), f64> = HashMap::new();
+    // `group_by(...).agg(low.min())` over the printed lows: polars' aggregation skips NaN
+    // unless the month holds nothing else (R3.1).
+    let mut month_lows: HashMap<(i64, i64), Vec<F>> = HashMap::new();
     for i in 0..indicated.height() {
         let (Some(id), Some(m), Some(l)) = (ids[i], month[i], low[i]) else {
             continue;
         };
-        lows.entry((id, m))
-            .and_modify(|v| {
-                if l < *v {
-                    *v = l;
-                }
-            })
-            .or_insert(l);
+        month_lows.entry((id, m)).or_default().push(Some(l));
     }
+    let lows: HashMap<(i64, i64), f64> = month_lows
+        .into_iter()
+        .filter_map(|(key, values)| pl::nan_min(values).map(|v| (key, v)))
+        .collect();
     let back = config.scan.month_low_months_back;
     let values: Vec<F> = (0..indicated.height())
         .map(|i| {
@@ -183,7 +184,8 @@ fn and3(a: Option<bool>, b: Option<bool>) -> Option<bool> {
     }
 }
 
-/// `a >= b` / `a > b` / `a <= b` on nullable floats (null in, null out).
+/// `a >= b` / `a > b` / `a <= b` on nullable floats as polars compares them: null in, null
+/// out; NaN equal to NaN and above every number (R3.1).
 fn cmp_f(a: F, b: F, op: fn(f64, f64) -> bool) -> Option<bool> {
     Some(op(a?, b?))
 }
@@ -205,15 +207,20 @@ pub fn tight_state(framed: &DataFrame, config: &TwtConfig) -> CoreResult<DataFra
     let min_close_raw = as_float(scan.min_close_raw)?;
     let min_vol_sma = as_float(scan.min_vol_sma)?;
 
+    // polars' horizontal reductions over the whole columns: the kernel each pair runs depends
+    // on the columns' nulls, so a NaN week can win or lose by position (R3.1, `crate::pl`).
+    let week_cols: Vec<&[F]> = weeks.iter().map(Vec::as_slice).collect();
+    let widest_col = pl::max_horizontal(&week_cols);
+    let narrowest_col = pl::min_horizontal(&week_cols);
+
     let mut range_pct: Vec<F> = Vec::with_capacity(height);
     let mut tight: Vec<bool> = Vec::with_capacity(height);
     for i in 0..height {
         let row: Vec<F> = weeks.iter().map(|w| w[i]).collect();
         // `pl.all_horizontal` of zero columns is true; max/min of nothing is null.
         let have_all = row.iter().all(Option::is_some);
-        let present: Vec<f64> = row.iter().filter_map(|v| *v).collect();
-        let widest = present.iter().copied().reduce(f64::max);
-        let narrowest = present.iter().copied().reduce(f64::min);
+        let widest = widest_col.get(i).copied().flatten();
+        let narrowest = narrowest_col.get(i).copied().flatten();
         let pct = if have_all {
             match (widest, narrowest) {
                 (Some(hi), Some(lo)) => Some((hi / lo - 1.0) * 100.0),
@@ -223,7 +230,7 @@ pub fn tight_state(framed: &DataFrame, config: &TwtConfig) -> CoreResult<DataFra
             None
         };
         range_pct.push(pct);
-        tight.push(and3(Some(have_all), cmp_f(pct, Some(band), |a, b| a <= b)) == Some(true));
+        tight.push(and3(Some(have_all), cmp_f(pct, Some(band), pl::le)) == Some(true));
     }
 
     let close = floats(framed, "close")?;
@@ -231,7 +238,7 @@ pub fn tight_state(framed: &DataFrame, config: &TwtConfig) -> CoreResult<DataFra
     let above_month_low: Vec<bool> = (0..height)
         .map(|i| {
             let threshold = month_low[i].map(|m| m * multiple);
-            cmp_f(close[i], threshold, |a, b| a >= b) == Some(true)
+            cmp_f(close[i], threshold, pl::ge) == Some(true)
         })
         .collect();
     let close_raw = floats(framed, "close_raw")?;
@@ -240,8 +247,8 @@ pub fn tight_state(framed: &DataFrame, config: &TwtConfig) -> CoreResult<DataFra
     let state: Vec<bool> = (0..height)
         .map(|i| {
             let parts = [
-                cmp_f(close_raw[i], Some(min_close_raw), |a, b| a > b),
-                cmp_f(vol_sma[i], Some(min_vol_sma), |a, b| a >= b),
+                cmp_f(close_raw[i], Some(min_close_raw), pl::gt),
+                cmp_f(vol_sma[i], Some(min_vol_sma), pl::ge),
                 Some(tight[i]),
                 Some(above_month_low[i]),
                 is_etf[i].map(|e| !e),
@@ -376,7 +383,7 @@ pub fn liquidity_floor(
     let floor = floor_of(config, floor_inr)?;
     let passes: Vec<bool> = floats(frame, "turnover_avg_20")?
         .into_iter()
-        .map(|t| t.is_some_and(|t| t >= floor))
+        .map(|t| t.is_some_and(|t| pl::ge(t, floor)))
         .collect();
     Ok(BooleanChunked::new("turnover_avg_20".into(), passes).into_series())
 }

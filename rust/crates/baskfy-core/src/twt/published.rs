@@ -3,13 +3,12 @@
 //! measured once, read off `research/tight-close/out/final_metrics.json` on 11 Sep 2026 (plus the
 //! two gate-off and three ₹5-crore-floor figures from `01` §7).
 
-use std::str::FromStr;
-
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use crate::backtest::helpers::WideDecimal;
+use crate::decimal::WideDecimal;
 use crate::error::{CoreError, CoreResult};
+use crate::py::float_repr as py_float_repr;
 
 /// Ports `baskfy_core.twt.published.PublishedStudy` — `out/final_metrics.json`, typed.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -119,79 +118,5 @@ pub(crate) fn decimal_of_float(x: f64) -> CoreResult<WideDecimal> {
             py_float_repr(x)
         )));
     }
-    WideDecimal::from_str(&py_float_repr(x)).map_err(|e| CoreError::Arithmetic(e.to_string()))
-}
-
-/// Python's `repr(float)`: the shortest round-trip digits (the correctly rounded one among
-/// equals), positional for decimal exponents in `[-4, 16)` with a `.0` on an integer value,
-/// scientific (`1e+16`, `1.5e-07`) outside it.
-pub(crate) fn py_float_repr(x: f64) -> String {
-    if x.is_nan() {
-        return "nan".to_owned();
-    }
-    if x.is_infinite() {
-        return if x > 0.0 { "inf" } else { "-inf" }.to_owned();
-    }
-    let shortest = format!("{x:e}");
-    let length = shortest
-        .split('e')
-        .next()
-        .unwrap_or("")
-        .chars()
-        .filter(char::is_ascii_digit)
-        .count();
-    let rounded = format!("{x:.*e}", length.saturating_sub(1));
-    let sci = if rounded
-        .parse::<f64>()
-        .is_ok_and(|y| y.to_bits() == x.to_bits())
-    {
-        rounded
-    } else {
-        shortest
-    };
-    let (mantissa, exp) = sci.split_once('e').unwrap_or((sci.as_str(), "0"));
-    let exp: i64 = exp.parse().unwrap_or(0);
-    let (sign, mantissa) = match mantissa.strip_prefix('-') {
-        Some(m) => ("-", m),
-        None => ("", mantissa),
-    };
-    let digits: String = mantissa.chars().filter(char::is_ascii_digit).collect();
-    let n = i64::try_from(digits.len()).unwrap_or(1);
-    if (-4..16).contains(&exp) {
-        if exp < 0 {
-            let zeros = "0".repeat(usize::try_from(-exp - 1).unwrap_or(0));
-            return format!("{sign}0.{zeros}{digits}");
-        }
-        let int_len = exp + 1;
-        if int_len >= n {
-            let zeros = "0".repeat(usize::try_from(int_len - n).unwrap_or(0));
-            return format!("{sign}{digits}{zeros}.0");
-        }
-        let cut = usize::try_from(int_len).unwrap_or(0);
-        return format!("{sign}{}.{}", &digits[..cut], &digits[cut..]);
-    }
-    let (head, rest) = digits.split_at(1.min(digits.len()));
-    let body = if rest.is_empty() {
-        head.to_owned()
-    } else {
-        format!("{head}.{rest}")
-    };
-    let esign = if exp < 0 { "-" } else { "+" };
-    format!("{sign}{body}e{esign}{:02}", exp.unsigned_abs())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::py_float_repr;
-
-    #[test]
-    fn repr_matches_python() {
-        assert_eq!(py_float_repr(20.0), "20.0");
-        assert_eq!(py_float_repr(20.92), "20.92");
-        assert_eq!(py_float_repr(-0.0), "-0.0");
-        assert_eq!(py_float_repr(1e16), "1e+16");
-        assert_eq!(py_float_repr(1.5e-7), "1.5e-07");
-        assert_eq!(py_float_repr(0.0001), "0.0001");
-        assert_eq!(py_float_repr(123_456_789_012_345.6), "123456789012345.6");
-    }
+    crate::py::wide_from_float_str(x).map_err(|e| CoreError::Arithmetic(e.to_string()))
 }

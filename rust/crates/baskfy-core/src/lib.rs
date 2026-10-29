@@ -12,14 +12,22 @@
 //! [`swing::stops`]). Porters add code inside the declared module files; new modules are
 //! declared in the parent module file (`swing.rs`, `options.rs`), never by editing this file
 //! for areas already declared.
+//!
+//! Three modules have no Python twin: they hold the Python and polars semantics every lane
+//! reproduces, written once (DECISIONS-RS R3.1, R3.2, R3.4) — [`decimal`] (Python's `Decimal`
+//! in its default context), [`py`] (Python's float `repr` and `Decimal(str(float))`) and [`pl`]
+//! (polars' float order, horizontal folds and NaN-skipping aggregates).
 
 pub mod backtest;
 pub mod backtest_metrics;
+pub mod decimal;
 pub mod error;
 pub mod factor_registry;
 pub mod factors;
 pub mod fno;
 pub mod options;
+pub mod pl;
+pub mod py;
 pub mod ranking_engine;
 pub mod screener;
 pub mod swing;

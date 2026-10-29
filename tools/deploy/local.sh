@@ -12,14 +12,21 @@
 # Screens, bars, the nightly catch-up, holdings and live quotes need no registered IP and work.
 #
 # Same compose.prod.yml as the box, unmodified, with one override: Docker Desktop cannot bind
-# /opt, so the SSH bind comes from the bundle; Caddy serves the app on :8480 and the desk on :8481
-# (host-based vhosts need DNS this Mac does not have). Tailscale serves both over HTTPS.
+# /opt, so the SSH bind comes from the bundle; Caddy serves the app on :8480 with the desk at
+# /desk on the same port (one address, Maulik, 29 Oct 2026). Tailscale serves it over HTTPS.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DOCK="$ROOT/decile-blueprint/infra/docker"
 BUNDLE="${BASKFY_EXIT_BUNDLE:-/Volumes/T7-Work/baskfy-aws-exit-20261029/bundle}"
 HOME_DIR="${BASKFY_LOCAL_DIR:-/Volumes/T7-Work/baskfy-local}"
 TAG="${BASKFY_LOCAL_TAG:-d78907f}"
+# The web image is rebuilt here (its NEXT_PUBLIC_* origins are baked at build time, and the box's
+# named staging.baskfy.com); `web.tag` holds the local build's tag, else the box's.
+WEB_TAG="${BASKFY_LOCAL_WEB_TAG:-$(cat "$HOME_DIR/web.tag" 2>/dev/null || echo "$TAG")}"
+# The desk likewise, once it gained the /desk prefix layer (core/path_prefix.py): `desk.tag`.
+DESK_TAG="${BASKFY_LOCAL_DESK_TAG:-$(cat "$HOME_DIR/desk.tag" 2>/dev/null || echo "$TAG")}"
+# Sign-in without Google (Maulik, 29 Oct 2026): the one account this Mac signs in as.
+SIGNIN_ID="${BASKFY_LOCAL_SIGNIN_PUBLIC_ID:-$(cat "$HOME_DIR/signin.public_id" 2>/dev/null || true)}"
 # The public URL (NEXTAUTH_URL, the Kite callback's origin). `tailscale` writes it to public.url
 # once, so a plain `up` keeps using it; BASKFY_LOCAL_URL still overrides for one run.
 URL="${BASKFY_LOCAL_URL:-$(cat "$HOME_DIR/public.url" 2>/dev/null || echo http://localhost:8480)}"
@@ -40,7 +47,7 @@ stage() {
   # The box's env, with every money flag forced off and DRY_RUN forced on. Appended last so it
   # wins over the box's own lines (compose and env_file both take the last assignment).
   for f in .env.staging .env.staging.compose; do
-    { grep -Ev "$MONEY|^(DRY_RUN|BASKFY_DRY_RUN|BASKFY_DESK_DRY_RUN|BASKFY_(PY|WEB|DESK)_IMAGE|BASKFY_SITE_ADDRESS|BASKFY_DESK_SITE_ADDRESS|BASKFY_PUBLIC_URL|BASKFY_DESK_HOST|BASKFY_HTTPS?_PORT|BASKFY_ACME_[A-Z_]*)=" "$HOME_DIR/box/$f" || true
+    { grep -Ev "$MONEY|^(DRY_RUN|BASKFY_DRY_RUN|BASKFY_DESK_DRY_RUN|BASKFY_(PY|WEB|DESK)_IMAGE|BASKFY_SITE_ADDRESS|BASKFY_DESK_SITE_ADDRESS|BASKFY_PUBLIC_URL|BASKFY_DESK_HOST|BASKFY_LOCAL_SIGNIN_PUBLIC_ID|DESK_PATH_PREFIX|BASKFY_HTTPS?_PORT|BASKFY_ACME_[A-Z_]*)=" "$HOME_DIR/box/$f" || true
       grep -oE "^[A-Z0-9_]+($MONEY)" "$HOME_DIR/box/$f" | sed 's/=$/=false/' || true
       cat <<EOF
 # --- local.sh: read-only on this Mac (no registered static IP) ---
@@ -54,20 +61,25 @@ BASKFY_TWT_AUTO_EXECUTE=false
 BASKFY_VBT_EXECUTION_ENABLED=false
 BASKFY_FNO_F3_AUTO_EXIT=false
 BASKFY_PY_IMAGE=baskfy-py:$TAG
-BASKFY_WEB_IMAGE=baskfy-web:$TAG
-BASKFY_DESK_IMAGE=baskfy-desk:$TAG
+BASKFY_WEB_IMAGE=baskfy-web:$WEB_TAG
+BASKFY_DESK_IMAGE=baskfy-desk:$DESK_TAG
 BASKFY_SITE_ADDRESS=:80
 BASKFY_DESK_SITE_ADDRESS=:8081
 BASKFY_PUBLIC_URL=$URL
 BASKFY_DESK_HOST=$(echo "$URL" | sed -E 's|^[a-z]+://||; s|[:/].*$||')
 BASKFY_HTTP_PORT=8480
 BASKFY_HTTPS_PORT=8443
+BASKFY_LOCAL_SIGNIN_PUBLIC_ID=$SIGNIN_ID
+DESK_PATH_PREFIX=/desk
 EOF
     } > "$HOME_DIR/$f.tmp" && mv "$HOME_DIR/$f.tmp" "$HOME_DIR/$f" && chmod 600 "$HOME_DIR/$f"
   done
   cat > "$HOME_DIR/compose.local.yml" <<EOF
 services:
-  caddy: {ports: !override ["127.0.0.1:8480:80", "127.0.0.1:8481:8081"]}
+  # One address (Maulik, 29 Oct 2026): the desk is /desk on the app's port; its own vhost is not published.
+  caddy: {ports: !override ["127.0.0.1:8480:80"]}
+  # The web service takes no env_file, so the local sign-in account is named here, for it alone.
+  web:           {environment: {BASKFY_LOCAL_SIGNIN_PUBLIC_ID: "\${BASKFY_LOCAL_SIGNIN_PUBLIC_ID:-}"}}
   api:           {volumes: ["$HOME_DIR/box/secrets/ssh:/var/lib/baskfy/.ssh:ro"]}
   worker:        {volumes: ["$HOME_DIR/box/secrets/ssh:/var/lib/baskfy/.ssh:ro"]}
   ingest-worker: {volumes: ["$HOME_DIR/box/secrets/ssh:/var/lib/baskfy/.ssh:ro"]}
@@ -127,7 +139,7 @@ up)
   compose run --rm migrate
   compose up -d $SVC
   verify || { echo "✗ stopping the stack" >&2; compose stop $SVC; exit 1; }
-  echo "app  http://localhost:8480    desk http://localhost:8481"
+  echo "app  http://localhost:8480    desk http://localhost:8480/desk"
   echo "remote (after 'tailscale serve' — see docs/LOCAL.md): $URL"
   ;;
 tailscale)
@@ -138,9 +150,9 @@ tailscale)
   NAME="$("$TS" status --json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))' 2>/dev/null || true)"
   [ -n "$NAME" ] || die "Tailscale is not signed in: open the Tailscale app and log in"
   "$TS" serve --bg --https=443 http://127.0.0.1:8480 || die "serve refused — enable HTTPS certificates: https://login.tailscale.com/admin/dns"
-  "$TS" serve --bg --https=8443 http://127.0.0.1:8481
+  "$TS" serve --https=8443 off >/dev/null 2>&1 || true   # the desk lives at /desk now
   echo "https://$NAME" > "$HOME_DIR/public.url"
-  echo "app  https://$NAME"; echo "desk https://$NAME:8443"
+  echo "app  https://$NAME"; echo "desk https://$NAME/desk"
   NOW=$(TZ=Asia/Kolkata date +%H%M)
   if [ "$NOW" -ge 1840 ] && [ "$NOW" -le 2120 ]; then
     echo "nightly window: not restarting now — run 'local.sh up' after 21:20 IST so the app uses this URL"

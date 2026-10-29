@@ -30,6 +30,9 @@ FORCE_IPV4 = os.getenv("FORCE_IPV4", "true").lower() != "false"
 # "testserver" is the Host the test client sends. It is not a public name and nothing can
 # resolve to it, so allowing it costs nothing and keeps the suite honest about the rest.
 DESK_ALLOWED_HOSTS = os.getenv("DESK_ALLOWED_HOSTS", "127.0.0.1,localhost,testserver")
+# Mount the desk under a path on the web app's own address (core/path_prefix.py). Empty = served
+# at the root of its own host, as on every deployment before 29 Oct 2026.
+DESK_PATH_PREFIX = os.getenv("DESK_PATH_PREFIX", "")
 DESK_PORT = int(os.getenv("DESK_PORT", "8420"))
 # Empty means no password, which is right for a laptop on loopback. Set it on any shared
 # or hosted box: loopback is not a boundary between users of the same machine.

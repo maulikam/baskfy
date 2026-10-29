@@ -398,6 +398,7 @@ fn py_repr(value: &OrderedJson) -> String {
         OrderedJson::Bool(false) => "False".to_owned(),
         OrderedJson::Int(i) => i.to_string(),
         OrderedJson::UInt(u) => u.to_string(),
+        OrderedJson::BigInt(big) => big.clone(),
         OrderedJson::Float(f) => baskfy_core::py::float_repr(*f),
         OrderedJson::Str(s) => baskfy_providers::py::repr_str(s),
         OrderedJson::Array(items) => {
@@ -474,7 +475,17 @@ pub async fn inspect_resync(
     RawQuery(raw): RawQuery,
 ) -> Result<Response, Problem> {
     require_staff(&principal)?;
-    let q = QueryParams::parse(raw.as_deref());
+    let days = days_param(raw.as_deref())?;
+    Ok(wire::json(&build_plan(&state, days).await?))
+}
+
+/// The `days` query parameter of `GET`/`POST /admin/resync`: `ge=1, le=MAX_LOOKBACK_DAYS`,
+/// default `DEFAULT_LOOKBACK_DAYS`.
+///
+/// # Errors
+/// FastAPI's 400 for a bad value.
+pub(crate) fn days_param(raw: Option<&str>) -> Result<i64, Problem> {
+    let q = QueryParams::parse(raw);
     let mut v = Validation::new();
     let days = int_param(
         &mut v,
@@ -484,9 +495,17 @@ pub async fn inspect_resync(
         Some(MAX_LOOKBACK_DAYS),
     );
     v.finish()?;
-    let days = days
+    Ok(days
         .and_then(|n| i64::try_from(n).ok())
-        .unwrap_or(DEFAULT_LOOKBACK_DAYS);
+        .unwrap_or(DEFAULT_LOOKBACK_DAYS))
+}
+
+/// `inspect_pending(session, settings=, publication=, days=)` plus the last outcome: the plan
+/// both the inspection and the acting half (`POST /admin/resync`) are built from.
+///
+/// # Errors
+/// 500.
+pub(crate) async fn build_plan(state: &AppState, days: i64) -> Result<ResyncPlanOut, Problem> {
     let now = utc_now().with_timezone(&ist());
     let (start, end) = window_for(&state.settings.publish_deadline_ist, days, now);
     let pool = state.db.pool();
@@ -604,7 +623,7 @@ pub async fn inspect_resync(
         (a.trade_date.unwrap_or(NaiveDate::MAX), a.kind)
             .cmp(&(b.trade_date.unwrap_or(NaiveDate::MAX), b.kind))
     });
-    let last_resync = last_outcome(&state).await?;
+    let last_resync = last_outcome(state).await?;
     let findings: Vec<ResyncFindingOut> = findings
         .into_iter()
         .map(|f| ResyncFindingOut {
@@ -616,7 +635,7 @@ pub async fn inspect_resync(
             expected_bars: f.expected_bars,
         })
         .collect();
-    Ok(wire::json(&ResyncPlanOut {
+    Ok(ResyncPlanOut {
         window_start: start,
         window_end: end,
         trading_days_checked: i64::try_from(open_days.len()).unwrap_or(i64::MAX),
@@ -624,7 +643,7 @@ pub async fn inspect_resync(
         findings,
         unresolved,
         last_resync,
-    }))
+    })
 }
 
 #[cfg(test)]

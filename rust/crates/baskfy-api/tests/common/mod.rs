@@ -58,6 +58,7 @@ pub fn app(settings: Settings, limiter: Option<RateLimiter>) -> Router {
         settings: Arc::new(settings),
         db,
         limiter: limiter.map(Arc::new),
+        write: baskfy_api::state::WriteAccess::none(),
     })
 }
 

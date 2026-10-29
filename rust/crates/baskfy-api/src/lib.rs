@@ -20,15 +20,22 @@
 
 pub mod app;
 pub mod auth;
+pub mod body;
+pub mod cache;
 pub mod cors;
 pub mod csrf;
+pub mod email_address;
 pub mod entitlements;
 pub mod http_cache;
+pub mod idempotency;
 pub mod logging;
+pub mod mailer;
 pub mod problems;
 pub mod query;
 pub mod ratelimit;
 pub mod routes;
+pub mod security;
+pub mod session;
 pub mod settings;
 pub mod state;
 pub mod wire;

@@ -12,16 +12,18 @@
 //! session reader, so the overlay is empty — Python's own answer without a session
 //! ([`accounts::investments::live_prices_by_instrument`]) — and `marked_at_cost` says so.
 //!
-//! **Not ported in this wave** (they write; the Python API keeps serving them):
-//! `POST /cb/investments/mark`, `PUT`/`DELETE /cb/investments/{investment_id}/portfolio`. Marking
-//! an investment never reaches a broker, and nothing here does (law 2).
+//! The writes (`POST /cb/investments/mark`, `PUT`/`DELETE /cb/investments/{investment_id}/portfolio`)
+//! are ported at wave 4c ([`writes`]). Marking an investment never reaches a broker, and nothing
+//! here does (law 2).
+
+mod writes;
 
 use std::collections::{HashMap, HashSet};
 
 use axum::Router;
 use axum::extract::{Extension, Path, RawQuery, State};
 use axum::response::Response;
-use axum::routing::get;
+use axum::routing::{get, post, put};
 use baskfy_core::decimal::WideDecimal;
 use baskfy_db::row;
 use chrono::{DateTime, Utc};
@@ -653,6 +655,15 @@ pub async fn list_fees(
 /// The ported investment GET routes, relative to `/api/v1`.
 pub fn router() -> Router<AppState> {
     Router::new()
+        .route(
+            "/cb/investments/{investment_id}/portfolio",
+            put(writes::link_investment_to_portfolio)
+                .delete(writes::unlink_investment_from_portfolio),
+        )
+        .route(
+            "/cb/investments/mark",
+            post(writes::mark_as_invested).get(writes::get_mark),
+        )
         .route("/cb/investments", get(list_investments))
         .route("/cb/investments/{investment_id}", get(get_investment))
         .route("/cb/fees", get(list_fees))

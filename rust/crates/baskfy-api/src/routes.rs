@@ -22,6 +22,7 @@ pub mod backtests;
 pub mod baskets;
 pub mod billing;
 pub mod brokers;
+pub mod common;
 pub mod curated_costs;
 pub mod curated_create;
 pub mod curated_customize;

@@ -8,14 +8,18 @@
 //!
 //! Both need a signed-in account (401 otherwise); another account's alert is a 404.
 //!
-//! **Not ported in this wave** (they write; the Python API keeps serving them): `POST /alerts`,
-//! `PATCH`/`DELETE /alerts/{public_id}`, `POST /alerts/unsubscribe` (the session-less
-//! one-click unsubscribe). **No route may place, modify or cancel an order** (law 2).
+//! The **writes** — `POST /alerts`, `PATCH`/`DELETE /alerts/{public_id}`, and the session-less
+//! one-click `POST /alerts/unsubscribe` — are in [`writes`] (wave 4c, lane writes-accounts).
+//! `PATCH`/`DELETE /alerts/unsubscribe` reach the `{public_id}` handlers with the id
+//! `unsubscribe`, as Starlette's routing does. **No route may place, modify or cancel an order**
+//! (law 2).
+
+mod writes;
 
 use axum::Router;
 use axum::extract::{Extension, Path, State};
 use axum::response::Response;
-use axum::routing::get;
+use axum::routing::{get, patch, post};
 use baskfy_db::{OrderedJson, row};
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::Serialize;
@@ -212,9 +216,22 @@ pub async fn alert_deliveries(
     Ok(wire::json(&ScreenAlertDeliveryListOut { deliveries }))
 }
 
-/// The ported `/alerts` GET routes, relative to `/api/v1`.
+/// The ported `/alerts` routes, relative to `/api/v1`.
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/alerts", get(list_screen_alerts))
+        .route(
+            "/alerts/{public_id}",
+            patch(writes::update_screen_alert).delete(writes::delete_screen_alert),
+        )
+        .route(
+            "/alerts/unsubscribe",
+            post(writes::unsubscribe_from_alert)
+                .patch(writes::update_unsubscribe_path)
+                .delete(writes::delete_unsubscribe_path),
+        )
+        .route(
+            "/alerts",
+            get(list_screen_alerts).post(writes::create_screen_alert),
+        )
         .route("/alerts/{public_id}/deliveries", get(alert_deliveries))
 }

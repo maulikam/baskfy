@@ -8,14 +8,16 @@
 //! * `GET /cb/updates` — the 50 newest manager/engine update posts (a global feed, read only by
 //!   a signed-in sole tenant in Track A).
 //!
-//! **Not ported in this wave** (they write; the Python API keeps serving them):
-//! `POST /cb/pending-actions/{action_id}/dismiss` and `/resolve`. They never place orders
-//! (Track C / PACK.2), and nothing here does either (law 2).
+//! The writes (`POST /cb/pending-actions/{action_id}/dismiss` and `/resolve`) are ported at wave
+//! 4c ([`writes`]). They never place orders (Track C / PACK.2), and nothing here does either
+//! (law 2).
+
+mod writes;
 
 use axum::Router;
 use axum::extract::{Extension, State};
 use axum::response::Response;
-use axum::routing::get;
+use axum::routing::{get, post};
 use baskfy_db::{OrderedJson, row};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
@@ -150,6 +152,14 @@ pub async fn list_update_posts(
 /// The ported curated-engagement GET routes, relative to `/api/v1`.
 pub fn router() -> Router<AppState> {
     Router::new()
+        .route(
+            "/cb/pending-actions/{action_id}/dismiss",
+            post(writes::dismiss_pending_action),
+        )
+        .route(
+            "/cb/pending-actions/{action_id}/resolve",
+            post(writes::resolve_pending_action),
+        )
         .route("/cb/pending-actions", get(list_pending_actions))
         .route("/cb/updates", get(list_update_posts))
 }

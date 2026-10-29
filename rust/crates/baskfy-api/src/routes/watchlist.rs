@@ -11,19 +11,21 @@
 //! Both are sole-tenant surfaces (`scoped_sole_user_id`): a signed-in account that is not the
 //! deployment's tenant gets a 404 with `reason: not-the-sole-tenant`.
 //!
-//! **Not ported in this wave** (they write; the Python API keeps serving them):
-//! `POST /watchlist/instruments`, `DELETE /watchlist/instruments/{symbol}`,
-//! `PUT /watchlist/discover-preferences`. **No order or execute route** (law 2).
+//! The writes (`POST /watchlist/instruments`, `DELETE /watchlist/instruments/{symbol}`,
+//! `PUT /watchlist/discover-preferences`) are ported at wave 4c ([`writes`]). **No order or
+//! execute route** (law 2).
 
 use axum::Router;
 use axum::extract::{Extension, State};
 use axum::response::Response;
-use axum::routing::get;
+use axum::routing::{delete, get};
 use baskfy_db::row;
 use chrono::{DateTime, Utc};
 use rust_decimal::{Decimal, RoundingStrategy};
 use serde::Serialize;
 use sqlx::Row;
+
+mod writes;
 
 use super::screens::accounts::{db, dbe, scoped_sole_user_id};
 use crate::auth::{Principal, require_authenticated};
@@ -196,13 +198,21 @@ pub async fn get_discover_preferences(
     Ok(wire::json(&out))
 }
 
-/// The ported watchlist GET routes, relative to `/api/v1`.
+/// The watchlist routes, relative to `/api/v1`.
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/watchlist/instruments", get(list_instrument_watchlist))
+        .route("/watchlist/{slug}", super::common::write_only())
+        .route(
+            "/watchlist/instruments/{symbol}",
+            delete(writes::remove_instrument_watch),
+        )
+        .route(
+            "/watchlist/instruments",
+            get(list_instrument_watchlist).post(writes::add_instrument_watch),
+        )
         .route(
             "/watchlist/discover-preferences",
-            get(get_discover_preferences),
+            get(get_discover_preferences).put(writes::put_discover_preferences),
         )
 }
 

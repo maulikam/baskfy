@@ -20,7 +20,7 @@ use axum::Router;
 use axum::extract::{Extension, Path, RawQuery, State};
 use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{get, post};
 use baskfy_core::decimal::WideDecimal;
 use baskfy_db::OrderedJson;
 use chrono::{DateTime, NaiveDate, Utc};
@@ -31,6 +31,8 @@ use self::portfolio::{db, num, params};
 use crate::auth::{Principal, require_authenticated};
 use crate::problems::{Problem, ProblemType, not_found};
 use crate::query::{QueryParams, Validation};
+use sqlx::PgConnection;
+
 use crate::state::AppState;
 use crate::wire;
 
@@ -244,7 +246,7 @@ fn path_int(v: &mut Validation, field: &str, raw: &str) -> Option<params::PyInt>
 
 /// `_graph_rows`: the caller's portfolios newest first, and their creation times.
 pub(crate) async fn graph_rows(
-    state: &AppState,
+    conn: &mut PgConnection,
     user_id: i64,
 ) -> Result<(Vec<PortfolioNode>, HashMap<i64, DateTime<Utc>>), Problem> {
     let rows = sqlx::query(
@@ -252,7 +254,7 @@ pub(crate) async fn graph_rows(
          WHERE user_id = $1 ORDER BY created_at DESC, id DESC",
     )
     .bind(user_id)
-    .fetch_all(state.db.pool())
+    .fetch_all(&mut *conn)
     .await
     .map_err(db::fail)?;
     let mut nodes = Vec::with_capacity(rows.len());
@@ -282,7 +284,7 @@ pub(crate) struct OwnedPortfolio {
 
 /// `_load` / `service.load_portfolio`: the caller's portfolio, or `No portfolio with id '7'.`
 pub(crate) async fn load(
-    state: &AppState,
+    conn: &mut PgConnection,
     portfolio_id: params::PyInt,
     user_id: i64,
 ) -> Result<OwnedPortfolio, Problem> {
@@ -293,7 +295,7 @@ pub(crate) async fn load(
     )
     .bind(id)
     .bind(user_id)
-    .fetch_optional(state.db.pool())
+    .fetch_optional(&mut *conn)
     .await
     .map_err(db::fail)?
     .ok_or_else(|| not_found("portfolio", &portfolio_id.to_string()))?;
@@ -331,14 +333,17 @@ fn node_out(
     })
 }
 
-async fn holdings_out(state: &AppState, portfolio_id: i64) -> Result<Vec<HoldingOut>, Problem> {
+async fn holdings_out(
+    conn: &mut PgConnection,
+    portfolio_id: i64,
+) -> Result<Vec<HoldingOut>, Problem> {
     let rows = sqlx::query(
         "SELECT h.instrument_id, h.quantity, h.avg_price, h.added_on, i.symbol, i.name, \
          i.delisted_on FROM portfolio_holding h JOIN instrument i ON i.id = h.instrument_id \
          WHERE h.portfolio_id = $1 ORDER BY i.symbol",
     )
     .bind(portfolio_id)
-    .fetch_all(state.db.pool())
+    .fetch_all(&mut *conn)
     .await
     .map_err(db::fail)?;
     let mut out = Vec::with_capacity(rows.len());
@@ -380,13 +385,14 @@ pub async fn list_portfolios(
     Extension(principal): Extension<Principal>,
 ) -> Result<Response, Problem> {
     let user_id = require_authenticated(&principal)?.require_user()?;
-    let (nodes, created) = graph_rows(&state, user_id).await?;
+    let mut conn = db::acquire(&state).await?;
+    let (nodes, created) = graph_rows(&mut conn, user_id).await?;
     let count_rows = sqlx::query(
         "SELECT h.portfolio_id, count(*) AS holdings FROM portfolio_holding h \
          JOIN portfolio p ON p.id = h.portfolio_id WHERE p.user_id = $1 GROUP BY h.portfolio_id",
     )
     .bind(user_id)
-    .fetch_all(state.db.pool())
+    .fetch_all(&mut *conn)
     .await
     .map_err(db::fail)?;
     let mut counts = HashMap::new();
@@ -422,14 +428,15 @@ pub async fn get_portfolio(
     let portfolio_id = path_int(&mut v, "portfolio_id", &raw_id);
     v.finish()?;
     let user_id = principal.require_user()?;
-    let portfolio = load(&state, portfolio_id.unwrap_or_default(), user_id).await?;
-    let (nodes, _) = graph_rows(&state, portfolio.user_id).await?;
+    let mut conn = db::acquire(&state).await?;
+    let portfolio = load(&mut conn, portfolio_id.unwrap_or_default(), user_id).await?;
+    let (nodes, _) = graph_rows(&mut conn, portfolio.user_id).await?;
     let depth = graph::depth_of(&nodes, portfolio.id).map_err(|e| refuse(&e))?;
     let out = PortfolioDetailOut {
         id: portfolio.id,
         name: portfolio.name,
         created_at: portfolio.created_at,
-        holdings: holdings_out(&state, portfolio.id).await?,
+        holdings: holdings_out(&mut conn, portfolio.id).await?,
         parent_id: portfolio.parent_id,
         broker_account_id: portfolio.broker_account_id,
         depth,
@@ -464,8 +471,9 @@ pub async fn holdings_rollup(
     let portfolio_id = path_int(&mut v, "portfolio_id", &raw_id);
     v.finish()?;
     let user_id = principal.require_user()?;
-    let portfolio = load(&state, portfolio_id.unwrap_or_default(), user_id).await?;
-    let (nodes, _) = graph_rows(&state, user_id).await?;
+    let mut conn = db::acquire(&state).await?;
+    let portfolio = load(&mut conn, portfolio_id.unwrap_or_default(), user_id).await?;
+    let (nodes, _) = graph_rows(&mut conn, user_id).await?;
     let inside = graph::descendant_ids(&nodes, portfolio.id).map_err(|e| refuse(&e))?;
     let rows = sqlx::query(
         "SELECT h.portfolio_id, h.instrument_id, h.broker_account_id, h.quantity, h.avg_price, \
@@ -474,7 +482,7 @@ pub async fn holdings_rollup(
          ORDER BY h.portfolio_id, i.symbol, h.broker_account_id",
     )
     .bind(&inside)
-    .fetch_all(state.db.pool())
+    .fetch_all(&mut *conn)
     .await
     .map_err(db::fail)?;
     let mut out_rows = Vec::with_capacity(rows.len());
@@ -503,7 +511,7 @@ pub async fn holdings_rollup(
     let account_rows =
         sqlx::query("SELECT id, broker_id, label FROM broker_account WHERE user_id = $1")
             .bind(user_id)
-            .fetch_all(state.db.pool())
+            .fetch_all(&mut *conn)
             .await
             .map_err(db::fail)?;
     let mut accounts: HashMap<i64, (String, String)> = HashMap::new();
@@ -582,8 +590,9 @@ pub async fn list_rebalances(
     let cursor = q.get("cursor").map(str::to_owned);
     v.finish()?;
     let limit = limit.unwrap_or(DEFAULT_PAGE_SIZE);
+    let mut conn = db::acquire(&state).await?;
     let portfolio = load(
-        &state,
+        &mut conn,
         portfolio_id.unwrap_or_default(),
         principal.require_user()?,
     )
@@ -608,7 +617,7 @@ pub async fn list_rebalances(
     .bind(portfolio.id)
     .bind(cursor_id)
     .bind(i64::try_from(limit + 1).unwrap_or(i64::MAX))
-    .fetch_all(state.db.pool())
+    .fetch_all(&mut *conn)
     .await
     .map_err(db::fail)?;
     let page_len = usize::try_from(limit).unwrap_or(usize::MAX).min(rows.len());
@@ -656,8 +665,9 @@ pub async fn get_rebalance(
     let portfolio_id = path_int(&mut v, "portfolio_id", &raw_portfolio);
     let rebalance_id = path_int(&mut v, "rebalance_id", &raw_rebalance);
     v.finish()?;
+    let mut conn = db::acquire(&state).await?;
     let portfolio = load(
-        &state,
+        &mut conn,
         portfolio_id.unwrap_or_default(),
         principal.require_user()?,
     )
@@ -669,7 +679,7 @@ pub async fn get_rebalance(
     )
     .bind(params::bigint(rebalance_id)?)
     .bind(portfolio.id)
-    .fetch_optional(state.db.pool())
+    .fetch_optional(&mut *conn)
     .await
     .map_err(db::fail)?
     .ok_or_else(|| not_found("rebalance", &rebalance_id.to_string()))?;
@@ -690,13 +700,72 @@ pub async fn get_rebalance(
     Ok(wire::json(&out))
 }
 
-/// The GET routes of `baskfy_api.routers.portfolios`, relative to `/api/v1`.
+/// `/portfolios/import-csv` read as `/portfolios/{portfolio_id}`: Starlette serves a GET, PATCH or
+/// DELETE there through the `{portfolio_id}` route (whose `int` refuses it); axum prefers the
+/// static path, so these hand the literal segment to the same handlers.
+async fn import_csv_as_id_get(
+    state: State<AppState>,
+    principal: Extension<Principal>,
+) -> Result<Response, Problem> {
+    get_portfolio(state, principal, Path("import-csv".to_owned())).await
+}
+
+async fn import_csv_as_id_patch(
+    state: State<AppState>,
+    principal: Extension<Principal>,
+    write: Option<Extension<crate::session::WritePool>>,
+    request: axum::extract::Request,
+) -> Result<Response, Problem> {
+    portfolio::portfolios_writes::update_portfolio(
+        state,
+        principal,
+        write,
+        Path("import-csv".to_owned()),
+        request,
+    )
+    .await
+}
+
+async fn import_csv_as_id_delete(
+    state: State<AppState>,
+    principal: Extension<Principal>,
+    write: Option<Extension<crate::session::WritePool>>,
+) -> Result<Response, Problem> {
+    portfolio::portfolios_writes::delete_portfolio(
+        state,
+        principal,
+        write,
+        Path("import-csv".to_owned()),
+    )
+    .await
+}
+
+/// The routes of `baskfy_api.routers.portfolios`, relative to `/api/v1`.
 pub fn router() -> Router<AppState> {
+    use self::portfolio::portfolios_writes as w;
     Router::new()
         .route("/portfolios/sample-csv", get(sample_csv))
-        .route("/portfolios", get(list_portfolios))
-        .route("/portfolios/{portfolio_id}", get(get_portfolio))
-        .route("/portfolios/{portfolio_id}/holdings", get(holdings_rollup))
+        .route(
+            "/portfolios",
+            get(list_portfolios).post(w::create_portfolio),
+        )
+        .route(
+            "/portfolios/import-csv",
+            post(w::import_csv)
+                .get(import_csv_as_id_get)
+                .patch(import_csv_as_id_patch)
+                .delete(import_csv_as_id_delete),
+        )
+        .route(
+            "/portfolios/{portfolio_id}",
+            get(get_portfolio)
+                .patch(w::update_portfolio)
+                .delete(w::delete_portfolio),
+        )
+        .route(
+            "/portfolios/{portfolio_id}/holdings",
+            get(holdings_rollup).put(w::put_holdings),
+        )
         .route(
             "/portfolios/{portfolio_id}/rebalances",
             get(list_rebalances),
@@ -705,8 +774,8 @@ pub fn router() -> Router<AppState> {
             "/portfolios/{portfolio_id}/rebalances/{rebalance_id}",
             get(get_rebalance),
         )
-        // `POST /{id}/rebalance` writes and is not served here; a GET is Starlette's 405.
-        // (`POST /import-csv` is left unregistered: a GET there reaches `/{portfolio_id}`.)
+        // `POST /{id}/rebalance` is not ported (DECISIONS-RS R6.23): Python keeps serving it, and
+        // a GET is Starlette's 405.
         .route(
             "/portfolios/{portfolio_id}/rebalance",
             axum::routing::MethodRouter::new(),

@@ -17,6 +17,8 @@
 //! needs a streaming body dependency this crate does not have yet (DECISIONS-RS R5.22).
 
 use std::collections::BTreeSet;
+
+mod writes;
 use std::str::FromStr;
 
 use axum::Router;
@@ -235,6 +237,7 @@ fn py_decimal_of(v: &OrderedJson) -> Result<String, Problem> {
         OrderedJson::Str(s) => WideDecimal::from_str(s.trim()).ok(),
         OrderedJson::Int(i) => Some(WideDecimal::from(*i)),
         OrderedJson::UInt(u) => WideDecimal::from_str(&u.to_string()).ok(),
+        OrderedJson::BigInt(big) => WideDecimal::from_str(big).ok(),
         OrderedJson::Float(f) if f.is_finite() => {
             WideDecimal::from_str(&baskfy_core::py::float_repr(*f)).ok()
         }
@@ -246,7 +249,7 @@ fn py_decimal_of(v: &OrderedJson) -> Result<String, Problem> {
 /// An `int` field validated from JSON (an integral float is accepted, as pydantic's lax mode).
 fn py_int_of(v: &OrderedJson) -> Result<OrderedJson, Problem> {
     match v {
-        OrderedJson::Int(_) | OrderedJson::UInt(_) => Ok(v.clone()),
+        OrderedJson::Int(_) | OrderedJson::UInt(_) | OrderedJson::BigInt(_) => Ok(v.clone()),
         #[allow(clippy::cast_possible_truncation)]
         OrderedJson::Float(f) if f.fract() == 0.0 && f.abs() < 9.0e15 => {
             Ok(OrderedJson::Int(*f as i64))
@@ -267,6 +270,10 @@ fn py_float_of(v: &OrderedJson) -> Result<OrderedJson, Problem> {
         OrderedJson::Float(_) => Ok(v.clone()),
         OrderedJson::Int(i) => Ok(OrderedJson::Float(*i as f64)),
         OrderedJson::UInt(u) => Ok(OrderedJson::Float(*u as f64)),
+        OrderedJson::BigInt(big) => big
+            .parse::<f64>()
+            .map(OrderedJson::Float)
+            .map_err(|_| internal_error()),
         OrderedJson::Str(s) => s
             .trim()
             .parse::<f64>()
@@ -558,6 +565,7 @@ fn metric(metrics: Option<&OrderedJson>, key: &str) -> Option<f64> {
     match metrics?.get(key)? {
         OrderedJson::Int(i) => Some(*i as f64),
         OrderedJson::UInt(u) => Some(*u as f64),
+        OrderedJson::BigInt(big) => big.parse::<f64>().ok(),
         OrderedJson::Float(f) => Some(*f),
         _ => None,
     }
@@ -930,52 +938,7 @@ fn csv_model(
     Ok(out)
 }
 
-/// The first code point of every run of ten Unicode decimal digits (`Nd`, 0-9 in order) —
-/// exactly the characters CPython 3.12's `int()` reads (`unicodedata.decimal`, Unicode 15.0.0).
-/// Generated from the live Python; regenerate when its Unicode version changes.
-const PY_DECIMAL_ZEROS: [u32; 68] = [
-    0x30, 0x660, 0x6F0, 0x7C0, 0x966, 0x9E6, 0xA66, 0xAE6, 0xB66, 0xBE6, 0xC66, 0xCE6, 0xD66,
-    0xDE6, 0xE50, 0xED0, 0xF20, 0x1040, 0x1090, 0x17E0, 0x1810, 0x1946, 0x19D0, 0x1A80, 0x1A90,
-    0x1B50, 0x1BB0, 0x1C40, 0x1C50, 0xA620, 0xA8D0, 0xA900, 0xA9D0, 0xA9F0, 0xAA50, 0xABF0, 0xFF10,
-    0x104A0, 0x10D30, 0x11066, 0x110F0, 0x11136, 0x111D0, 0x112F0, 0x11450, 0x114D0, 0x11650,
-    0x116C0, 0x11730, 0x118E0, 0x11950, 0x11C50, 0x11D50, 0x11DA0, 0x11F50, 0x16A60, 0x16AC0,
-    0x16B50, 0x1D7CE, 0x1D7D8, 0x1D7E2, 0x1D7EC, 0x1D7F6, 0x1E140, 0x1E2F0, 0x1E4F0, 0x1E950,
-    0x1FBF0,
-];
-
-/// The characters `str.isdigit()` accepts that are **not** decimal digits (superscripts,
-/// circled digits, ...): `isdigit()` passes them and `int()` then raises. Same provenance.
-const PY_DIGIT_ONLY: [(u32, u32); 20] = [
-    (0xB2, 0xB3),
-    (0xB9, 0xB9),
-    (0x1369, 0x1371),
-    (0x19DA, 0x19DA),
-    (0x2070, 0x2070),
-    (0x2074, 0x2079),
-    (0x2080, 0x2089),
-    (0x2460, 0x2468),
-    (0x2474, 0x247C),
-    (0x2488, 0x2490),
-    (0x24EA, 0x24EA),
-    (0x24F5, 0x24FD),
-    (0x24FF, 0x24FF),
-    (0x2776, 0x277E),
-    (0x2780, 0x2788),
-    (0x278A, 0x2792),
-    (0x10A40, 0x10A43),
-    (0x10E60, 0x10E68),
-    (0x11052, 0x1105A),
-    (0x1F100, 0x1F10A),
-];
-
-/// `unicodedata.decimal(ch, None)`.
-fn py_decimal(ch: char) -> Option<u32> {
-    let c = u32::from(ch);
-    PY_DECIMAL_ZEROS
-        .iter()
-        .find(|&&zero| (zero..zero + 10).contains(&c))
-        .map(|zero| c - zero)
-}
+use crate::routes::common::{PY_DIGIT_ONLY, py_decimal};
 
 /// `cursor.isdigit()` then `int(cursor)`, as `_page` runs them: not every character a digit is
 /// the 404; a digit `int()` cannot read (`'²'`) is the `ValueError` Python lets escape as a 500;
@@ -1283,8 +1246,14 @@ pub async fn backtest_events(
 /// The ported `/backtests` routes, relative to `/api/v1` (`POST` and `DELETE` stay on Python).
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/backtests", get(list_backtests))
-        .route("/backtests/{public_id}", get(get_backtest))
+        .route(
+            "/backtests",
+            get(list_backtests).post(writes::create_backtest),
+        )
+        .route(
+            "/backtests/{public_id}",
+            get(get_backtest).delete(writes::delete_backtest),
+        )
         .route("/backtests/{public_id}/trades", get(get_trades))
         .route("/backtests/{public_id}/holdings", get(get_holdings))
         .route("/backtests/{public_id}/export", get(export_backtest))

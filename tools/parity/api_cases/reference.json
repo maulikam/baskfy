@@ -920,7 +920,9 @@
       "path": "/api/v1/instruments/20MICRONS/rank-history",
       "query": {
         "screen": "da1dae3992bf"
-      }
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
     },
     {
       "name": "rank-history-limit",
@@ -929,7 +931,9 @@
       "query": {
         "screen": "1db2573befaa",
         "limit": "5"
-      }
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
     },
     {
       "name": "rank-history-other-tenant",
@@ -939,7 +943,47 @@
         "screen": "8eb9259c87e9"
       },
       "user": "plain",
-      "note": "Python does not scope rank history by owner"
+      "note": "R5.28 (fixed 30 Oct 2026, Python first): another account's private screen is a 404, the same as no such screen"
+    },
+    {
+      "name": "rank-history-private-anonymous",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/rank-history",
+      "query": {
+        "screen": "da1dae3992bf"
+      },
+      "note": "R5.28: an anonymous caller cannot read a private screen's history (it could until 30 Oct 2026)"
+    },
+    {
+      "name": "rank-history-private-plain",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/rank-history",
+      "query": {
+        "screen": "1db2573befaa",
+        "limit": "5"
+      },
+      "user": "plain",
+      "note": "R5.28: another signed-in account gets the 404"
+    },
+    {
+      "name": "rank-history-private-subscriber-own",
+      "method": "GET",
+      "path": "/api/v1/instruments/20MICRONS/rank-history",
+      "query": {
+        "screen": "8eb9259c87e9"
+      },
+      "user": "subscriber",
+      "note": "R5.28: the owner of 8eb9259c87e9 (user 6) reads its own history"
+    },
+    {
+      "name": "rank-history-template-plain",
+      "method": "GET",
+      "path": "/api/v1/instruments/RELIANCE/rank-history",
+      "query": {
+        "screen": "exmpl0000004"
+      },
+      "user": "plain",
+      "note": "R5.28: a system screen stays everyone's"
     },
     {
       "name": "rank-history-template",
@@ -977,7 +1021,9 @@
       "query": {
         "screen": "da1dae3992bf",
         "limit": "0"
-      }
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
     },
     {
       "name": "rank-history-limit-big",
@@ -986,7 +1032,9 @@
       "query": {
         "screen": "da1dae3992bf",
         "limit": "501"
-      }
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
     },
     {
       "name": "search-anon",
@@ -3769,7 +3817,9 @@
       "query": {
         "screen": "da1dae3992bf",
         "limit": " 5"
-      }
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
     },
     {
       "name": "verify-x-listings-limit-[5 ]",
@@ -3813,7 +3863,9 @@
       "query": {
         "screen": "da1dae3992bf",
         "limit": "5 "
-      }
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
     },
     {
       "name": "verify-x-listings-limit-[+5]",
@@ -3857,7 +3909,9 @@
       "query": {
         "screen": "da1dae3992bf",
         "limit": "+5"
-      }
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
     },
     {
       "name": "verify-x-listings-limit-[05]",
@@ -3901,7 +3955,9 @@
       "query": {
         "screen": "da1dae3992bf",
         "limit": "05"
-      }
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
     },
     {
       "name": "verify-x-listings-limit-[0x5]",
@@ -3945,7 +4001,9 @@
       "query": {
         "screen": "da1dae3992bf",
         "limit": "0x5"
-      }
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
     },
     {
       "name": "verify-x-listings-limit-[5e0]",
@@ -3989,7 +4047,9 @@
       "query": {
         "screen": "da1dae3992bf",
         "limit": "5e0"
-      }
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
     },
     {
       "name": "verify-x-listings-limit-[5.00]",
@@ -4033,7 +4093,9 @@
       "query": {
         "screen": "da1dae3992bf",
         "limit": "5.00"
-      }
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
     },
     {
       "name": "verify-x-listings-limit-[-0]",
@@ -4077,7 +4139,9 @@
       "query": {
         "screen": "da1dae3992bf",
         "limit": "-0"
-      }
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
     },
     {
       "name": "verify-x-listings-limit-[١٠]",
@@ -4121,7 +4185,9 @@
       "query": {
         "screen": "da1dae3992bf",
         "limit": "١٠"
-      }
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
     },
     {
       "name": "verify-x-listings-limit-[999999999999999999999999]",
@@ -4165,7 +4231,9 @@
       "query": {
         "screen": "da1dae3992bf",
         "limit": "999999999999999999999999"
-      }
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
     },
     {
       "name": "verify-x-listings-limit-[5_]",
@@ -4209,7 +4277,9 @@
       "query": {
         "screen": "da1dae3992bf",
         "limit": "5_"
-      }
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
     },
     {
       "name": "verify-x-listings-limit-[_5]",
@@ -4253,7 +4323,9 @@
       "query": {
         "screen": "da1dae3992bf",
         "limit": "_5"
-      }
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
     },
     {
       "name": "verify-x-listings-limit-[5__0]",
@@ -4297,7 +4369,9 @@
       "query": {
         "screen": "da1dae3992bf",
         "limit": "5__0"
-      }
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
     },
     {
       "name": "verify-x-listings-limit-[true]",
@@ -4341,7 +4415,9 @@
       "query": {
         "screen": "da1dae3992bf",
         "limit": "true"
-      }
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
     },
     {
       "name": "verify-x-listings-limit-[]",
@@ -4385,7 +4461,9 @@
       "query": {
         "screen": "da1dae3992bf",
         "limit": ""
-      }
+      },
+      "user": "owner",
+      "note": "the screen is the owner's (R5.28: a private screen's history is its owner's only)"
     },
     {
       "name": "verify-x-kite-amt-[1e-2]",

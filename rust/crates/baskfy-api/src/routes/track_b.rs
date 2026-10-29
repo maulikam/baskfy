@@ -2,15 +2,14 @@
 //! `baskfy_api.routers.track_b` (its GET routes) and `baskfy_api.track_b`'s gates.
 //!
 //! Python declares `APIRouter(tags=["track-b"])`. Ported: `GET /cb/track-b/flags`,
-//! `GET /cb/track-b/free-access`, `GET /cb/paywall`. The three `POST` stubs
-//! (`/cb/paywall/checkout`, `/cb/public-signup`, `/cb/fees/collect`) are write routes and wait for
-//! the write wave; Python keeps serving them. The flags stay false (docs/smallcase/02): every
+//! `GET /cb/track-b/free-access`, `GET /cb/paywall`, and (wave 4c) the three `POST` stubs
+//! `/cb/paywall/checkout`, `/cb/public-signup`, `/cb/fees/collect`, which write nothing. The flags stay false (docs/smallcase/02): every
 //! surface here 404s while its flag is off, exactly as Python's does.
 
 use axum::Router;
 use axum::extract::{RawQuery, State};
 use axum::response::Response;
-use axum::routing::get;
+use axum::routing::{get, post};
 use serde::Serialize;
 
 use crate::problems::{Problem, not_found};
@@ -105,16 +104,75 @@ pub async fn paywall(State(state): State<AppState>) -> Result<Response, Problem>
     }))
 }
 
-/// The GET routes of `baskfy_api.routers.track_b`, relative to `/api/v1`.
+/// `require_public_signup_enabled`.
+///
+/// # Errors
+/// 404 `No route with id 'public-signup'.` while public signup is off.
+pub fn require_public_signup_enabled(settings: &Settings) -> Result<(), Problem> {
+    if settings.public_signup_enabled {
+        Ok(())
+    } else {
+        Err(not_found("route", "public-signup"))
+    }
+}
+
+/// `require_fee_collection_enabled`.
+///
+/// # Errors
+/// 404 `No route with id 'fee-collect'.` while fee collection is off.
+pub fn require_fee_collection_enabled(settings: &Settings) -> Result<(), Problem> {
+    if settings.fee_collection_enabled {
+        Ok(())
+    } else {
+        Err(not_found("route", "fee-collect"))
+    }
+}
+
+/// `POST /cb/paywall/checkout`: 404 while subscriptions are off. Writes nothing.
+///
+/// # Errors
+/// As [`require_subscriptions_enabled`].
+pub async fn paywall_checkout(State(state): State<AppState>) -> Result<Response, Problem> {
+    require_subscriptions_enabled(&state.settings)?;
+    Ok(wire::json(&EnabledStubOut {
+        enabled: true,
+        surface: "paywall-checkout",
+    }))
+}
+
+/// `POST /cb/public-signup`: 404 while public signup is off. Writes nothing.
+///
+/// # Errors
+/// As [`require_public_signup_enabled`].
+pub async fn public_signup(State(state): State<AppState>) -> Result<Response, Problem> {
+    require_public_signup_enabled(&state.settings)?;
+    Ok(wire::json(&EnabledStubOut {
+        enabled: true,
+        surface: "public-signup",
+    }))
+}
+
+/// `POST /cb/fees/collect`: 404 while fee collection is off. Writes nothing.
+///
+/// # Errors
+/// As [`require_fee_collection_enabled`].
+pub async fn fee_collect(State(state): State<AppState>) -> Result<Response, Problem> {
+    require_fee_collection_enabled(&state.settings)?;
+    Ok(wire::json(&EnabledStubOut {
+        enabled: true,
+        surface: "fee-collect",
+    }))
+}
+
+/// The routes of `baskfy_api.routers.track_b`, relative to `/api/v1`.
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/cb/track-b/flags", get(track_b_flags))
         .route("/cb/track-b/free-access", get(track_b_free_access))
         .route("/cb/paywall", get(paywall))
-        // The write routes' paths, with no method: a GET there is Starlette's 405.
-        .route("/cb/paywall/checkout", axum::routing::MethodRouter::new())
-        .route("/cb/public-signup", axum::routing::MethodRouter::new())
-        .route("/cb/fees/collect", axum::routing::MethodRouter::new())
+        .route("/cb/paywall/checkout", post(paywall_checkout))
+        .route("/cb/public-signup", post(public_signup))
+        .route("/cb/fees/collect", post(fee_collect))
 }
 
 #[cfg(test)]

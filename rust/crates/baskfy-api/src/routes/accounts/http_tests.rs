@@ -36,6 +36,7 @@ fn app() -> Router {
         settings: Arc::new(settings),
         db,
         limiter: None,
+        write: crate::state::WriteAccess::none(),
     })
 }
 

@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
-use chrono::{DateTime, Datelike, Duration, FixedOffset, NaiveDate, NaiveTime, Utc};
+use chrono::{DateTime, Datelike, Duration, NaiveDate, NaiveTime, Utc};
 
 use super::cash::{CashFlowKind, LedgerCashFlow};
 use super::db;
@@ -15,7 +15,7 @@ use super::pydec::Dec;
 use super::recon::{InboxEntry, LedgerPosition, ReconciliationState};
 use super::tradebook::TradeFill;
 use crate::problems::Problem;
-use crate::state::AppState;
+use sqlx::PgConnection;
 
 /// `NSE_EXCHANGE_ID`.
 const NSE_EXCHANGE_ID: i16 = 1;
@@ -24,20 +24,7 @@ pub(crate) const MONTH_WINDOW_DAYS: i64 = 30;
 /// `_CALENDAR_LOOKBACK` (days).
 const CALENDAR_LOOKBACK_DAYS: i64 = 21;
 
-/// IST, `+05:30`.
-pub(crate) fn ist() -> FixedOffset {
-    baskfy_providers::tokens::ist()
-}
-
-/// `_now_ist()`.
-pub(crate) fn now_ist() -> DateTime<FixedOffset> {
-    crate::entitlements::utc_now().with_timezone(&ist())
-}
-
-/// `today_ist()`.
-pub(crate) fn today_ist() -> NaiveDate {
-    now_ist().date_naive()
-}
+pub(crate) use crate::routes::common::{ist, now_ist, today_ist};
 
 fn fail(e: String) -> Problem {
     super::fail(&e)
@@ -131,6 +118,8 @@ pub(crate) struct Position {
     pub(crate) holding: Holding,
     /// `capital_slices`, ordered by portfolio id.
     pub(crate) capital_slices: Vec<(i64, Dec)>,
+    /// `pile_slices`: the broker pile's rows for this position (the unallocated shares, as rows).
+    pub(crate) pile_slices: Vec<(i64, Dec)>,
     pub(crate) monitoring_portfolio_ids: Vec<i64>,
     pub(crate) first_bought_on: Option<NaiveDate>,
     pub(crate) history_source: String,
@@ -336,10 +325,16 @@ fn positions_from(
             .filter(|(p, _)| !pile_ids.contains(p))
             .cloned()
             .collect();
+        let piles: Vec<(i64, Dec)> = filed
+            .iter()
+            .filter(|(p, _)| pile_ids.contains(p))
+            .cloned()
+            .collect();
         positions.push(Position {
             key,
             holding: Holding::new(key, quantity, source_row.avg_price.clone()).map_err(fail)?,
             capital_slices: slices,
+            pile_slices: piles,
             monitoring_portfolio_ids: monitoring,
             first_bought_on: source_row.first_bought_on,
             history_source: source_row.history_source.clone(),
@@ -368,7 +363,7 @@ pub(crate) fn last_session_on_or_before(
 }
 
 async fn closes_on_or_before(
-    state: &AppState,
+    conn: &mut PgConnection,
     ids: &[i64],
     day: NaiveDate,
 ) -> Result<HashMap<i64, Dec>, Problem> {
@@ -381,7 +376,7 @@ async fn closes_on_or_before(
     .bind(ids)
     .bind(day)
     .bind(day - Duration::days(CALENDAR_LOOKBACK_DAYS))
-    .fetch_all(state.db.pool())
+    .fetch_all(&mut *conn)
     .await
     .map_err(db::fail)?;
     let mut out = HashMap::new();
@@ -417,7 +412,7 @@ fn live_overlay_possible() -> bool {
 }
 
 /// `_load_prices`.
-async fn load_prices(state: &AppState, ids: &[i64]) -> Result<Prices, Problem> {
+async fn load_prices(conn: &mut PgConnection, ids: &[i64]) -> Result<Prices, Problem> {
     if ids.is_empty() {
         return Ok(Prices::default());
     }
@@ -428,7 +423,7 @@ async fn load_prices(state: &AppState, ids: &[i64]) -> Result<Prices, Problem> {
          ORDER BY instrument_id, recency",
     )
     .bind(ids)
-    .fetch_all(state.db.pool())
+    .fetch_all(&mut *conn)
     .await
     .map_err(db::fail)?;
     let mut prices = Prices::default();
@@ -446,7 +441,7 @@ async fn load_prices(state: &AppState, ids: &[i64]) -> Result<Prices, Problem> {
     }
     let now = now_ist();
     let today = now.date_naive();
-    let (closed, open_days) = calendar_near(state, today).await?;
+    let (closed, open_days) = calendar_near(&mut *conn, today).await?;
     let open_at = NaiveTime::from_hms_opt(9, 15, 0).unwrap_or_default();
     let quote_bound = if now.time() >= open_at {
         today
@@ -467,14 +462,14 @@ async fn load_prices(state: &AppState, ids: &[i64]) -> Result<Prices, Problem> {
         &closed,
         &open_days,
     );
-    prices.week_base = closes_on_or_before(state, ids, week_since).await?;
+    prices.week_base = closes_on_or_before(&mut *conn, ids, week_since).await?;
     prices.week_since = Some(week_since);
     let month_since = last_session_on_or_before(
         quote_session - Duration::days(MONTH_WINDOW_DAYS),
         &closed,
         &open_days,
     );
-    prices.month_base = closes_on_or_before(state, ids, month_since).await?;
+    prices.month_base = closes_on_or_before(&mut *conn, ids, month_since).await?;
     prices.month_since = Some(month_since);
     let mut unpriced: Vec<i64> = ids
         .iter()
@@ -491,7 +486,7 @@ async fn load_prices(state: &AppState, ids: &[i64]) -> Result<Prices, Problem> {
 
 /// `_calendar_near`: (named closures, named sessions) over the last few weeks.
 async fn calendar_near(
-    state: &AppState,
+    conn: &mut PgConnection,
     today: NaiveDate,
 ) -> Result<(HashSet<NaiveDate>, HashSet<NaiveDate>), Problem> {
     let rows = sqlx::query(
@@ -501,7 +496,7 @@ async fn calendar_near(
     .bind(NSE_EXCHANGE_ID)
     .bind(today - Duration::days(MONTH_WINDOW_DAYS + CALENDAR_LOOKBACK_DAYS + 7))
     .bind(today)
-    .fetch_all(state.db.pool())
+    .fetch_all(&mut *conn)
     .await
     .map_err(db::fail)?;
     let mut closed = HashSet::new();
@@ -524,14 +519,13 @@ struct SleeveRow {
 }
 
 /// `_load_ledger`.
-pub(crate) async fn load_ledger(state: &AppState, user_id: i64) -> Result<Ledger, Problem> {
-    let pool = state.db.pool();
+pub(crate) async fn load_ledger(conn: &mut PgConnection, user_id: i64) -> Result<Ledger, Problem> {
     let portfolio_rows = sqlx::query(
         "SELECT id, name, kind, source, started_on, benchmark_index_id::bigint AS benchmark_index_id, \
          is_broker_pile FROM portfolio WHERE user_id = $1",
     )
     .bind(user_id)
-    .fetch_all(pool)
+    .fetch_all(&mut *conn)
     .await
     .map_err(db::fail)?;
     let mut ledger = Ledger::default();
@@ -567,7 +561,7 @@ pub(crate) async fn load_ledger(state: &AppState, user_id: i64) -> Result<Ledger
          ORDER BY h.instrument_id, h.broker_account_id, h.portfolio_id",
     )
     .bind(user_id)
-    .fetch_all(pool)
+    .fetch_all(&mut *conn)
     .await
     .map_err(db::fail)?;
     let mut raw = Vec::with_capacity(holding_rows.len());
@@ -592,11 +586,11 @@ pub(crate) async fn load_ledger(state: &AppState, user_id: i64) -> Result<Ledger
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect();
-    ledger.prices = load_prices(state, &instrument_ids).await?;
+    ledger.prices = load_prices(&mut *conn, &instrument_ids).await?;
     if !instrument_ids.is_empty() {
         let rows = sqlx::query("SELECT id, symbol, name FROM instrument WHERE id = ANY($1)")
             .bind(&instrument_ids)
-            .fetch_all(pool)
+            .fetch_all(&mut *conn)
             .await
             .map_err(db::fail)?;
         for row in &rows {
@@ -617,7 +611,7 @@ pub(crate) async fn load_ledger(state: &AppState, user_id: i64) -> Result<Ledger
          ORDER BY id",
     )
     .bind(user_id)
-    .fetch_all(pool)
+    .fetch_all(&mut *conn)
     .await
     .map_err(db::fail)?;
     for row in &broker_rows {
@@ -639,7 +633,7 @@ pub(crate) async fn load_ledger(state: &AppState, user_id: i64) -> Result<Ledger
              WHERE broker_account_id = ANY($1) ORDER BY broker_account_id",
         )
         .bind(&broker_ids)
-        .fetch_all(pool)
+        .fetch_all(&mut *conn)
         .await
         .map_err(db::fail)?;
         for row in &rows {
@@ -655,7 +649,7 @@ pub(crate) async fn load_ledger(state: &AppState, user_id: i64) -> Result<Ledger
              ORDER BY occurred_on, id",
         )
         .bind(&broker_ids)
-        .fetch_all(pool)
+        .fetch_all(&mut *conn)
         .await
         .map_err(db::fail)?;
         for row in &rows {
@@ -692,7 +686,7 @@ pub(crate) async fn load_ledger(state: &AppState, user_id: i64) -> Result<Ledger
          FROM reconciliation_item WHERE user_id = $1 ORDER BY detected_on DESC, id DESC",
     )
     .bind(user_id)
-    .fetch_all(pool)
+    .fetch_all(&mut *conn)
     .await
     .map_err(db::fail)?;
     for row in &item_rows {
@@ -731,7 +725,7 @@ pub(crate) async fn load_ledger(state: &AppState, user_id: i64) -> Result<Ledger
              WHERE portfolio_id = ANY($1) ORDER BY sort_order, id",
         )
         .bind(&portfolio_ids)
-        .fetch_all(pool)
+        .fetch_all(&mut *conn)
         .await
         .map_err(db::fail)?;
         for row in &rows {
@@ -742,7 +736,7 @@ pub(crate) async fn load_ledger(state: &AppState, user_id: i64) -> Result<Ledger
             });
         }
     }
-    load_sources(state, &sleeves, &mut ledger).await?;
+    load_sources(&mut *conn, &sleeves, &mut ledger).await?;
 
     let benchmark_ids: Vec<i64> = ledger
         .rows
@@ -756,7 +750,7 @@ pub(crate) async fn load_ledger(state: &AppState, user_id: i64) -> Result<Ledger
             "SELECT id::bigint AS id, name FROM index_def WHERE id = ANY($1::bigint[])",
         )
         .bind(&benchmark_ids)
-        .fetch_all(pool)
+        .fetch_all(&mut *conn)
         .await
         .map_err(db::fail)?;
         for row in &rows {
@@ -766,17 +760,16 @@ pub(crate) async fn load_ledger(state: &AppState, user_id: i64) -> Result<Ledger
         }
     }
 
-    ledger.rebalance_due_portfolio_ids = rebalance_due(state, user_id, &sleeves).await?;
+    ledger.rebalance_due_portfolio_ids = rebalance_due(&mut *conn, user_id, &sleeves).await?;
     Ok(ledger)
 }
 
 /// `_load_sources`: the basket, publisher and screen behind each portfolio, via its sleeves.
 async fn load_sources(
-    state: &AppState,
+    conn: &mut PgConnection,
     sleeves: &[SleeveRow],
     ledger: &mut Ledger,
 ) -> Result<(), Problem> {
-    let pool = state.db.pool();
     let basket_ids: Vec<i64> = sleeves
         .iter()
         .filter_map(|s| s.basket_id)
@@ -796,7 +789,7 @@ async fn load_sources(
              JOIN cb_manager m ON m.id = b.manager_id WHERE b.id = ANY($1)",
         )
         .bind(&basket_ids)
-        .fetch_all(pool)
+        .fetch_all(&mut *conn)
         .await
         .map_err(db::fail)?;
         for row in &rows {
@@ -818,7 +811,7 @@ async fn load_sources(
     if !screen_ids.is_empty() {
         let rows = sqlx::query("SELECT id, public_id, name FROM screen WHERE id = ANY($1)")
             .bind(&screen_ids)
-            .fetch_all(pool)
+            .fetch_all(&mut *conn)
             .await
             .map_err(db::fail)?;
         for row in &rows {
@@ -852,7 +845,7 @@ async fn load_sources(
 
 /// `_rebalance_due`.
 async fn rebalance_due(
-    state: &AppState,
+    conn: &mut PgConnection,
     user_id: i64,
     sleeves: &[SleeveRow],
 ) -> Result<BTreeSet<i64>, Problem> {
@@ -876,7 +869,7 @@ async fn rebalance_due(
     )
     .bind(user_id)
     .bind(&ids)
-    .fetch_all(state.db.pool())
+    .fetch_all(&mut *conn)
     .await
     .map_err(db::fail)?;
     let mut due = BTreeSet::new();
@@ -913,7 +906,7 @@ fn nav_row(row: &sqlx::postgres::PgRow) -> Result<NavRow, Problem> {
 
 /// `_nav_rows(user, portfolio)`: one series (the consolidated one for `None`), by date.
 pub(crate) async fn nav_rows(
-    state: &AppState,
+    conn: &mut PgConnection,
     user_id: i64,
     portfolio_id: Option<i64>,
 ) -> Result<Vec<NavRow>, Problem> {
@@ -924,7 +917,7 @@ pub(crate) async fn nav_rows(
     )
     .bind(user_id)
     .bind(portfolio_id)
-    .fetch_all(state.db.pool())
+    .fetch_all(&mut *conn)
     .await
     .map_err(db::fail)?;
     rows.iter().map(nav_row).collect()
@@ -932,7 +925,7 @@ pub(crate) async fn nav_rows(
 
 /// `_nav_by_portfolio`: every series this user has, grouped.
 pub(crate) async fn nav_by_portfolio(
-    state: &AppState,
+    conn: &mut PgConnection,
     user_id: i64,
 ) -> Result<HashMap<Option<i64>, Vec<NavRow>>, Problem> {
     let rows = sqlx::query(
@@ -940,7 +933,7 @@ pub(crate) async fn nav_by_portfolio(
          FROM portfolio_nav_daily WHERE user_id = $1 ORDER BY date",
     )
     .bind(user_id)
-    .fetch_all(state.db.pool())
+    .fetch_all(&mut *conn)
     .await
     .map_err(db::fail)?;
     let mut grouped: HashMap<Option<i64>, Vec<NavRow>> = HashMap::new();
@@ -953,7 +946,7 @@ pub(crate) async fn nav_by_portfolio(
 
 /// `_model_return_values`: the publisher's TWR over each subscribed portfolio's own window.
 pub(crate) async fn model_return_values(
-    state: &AppState,
+    conn: &mut PgConnection,
     ledger: &Ledger,
 ) -> Result<HashMap<i64, Option<Dec>>, Problem> {
     let mut values = HashMap::new();
@@ -972,7 +965,7 @@ pub(crate) async fn model_return_values(
         )
         .bind(basket.id)
         .bind(portfolio.started_on)
-        .fetch_optional(state.db.pool())
+        .fetch_optional(&mut *conn)
         .await
         .map_err(db::fail)?;
         let current = sqlx::query(
@@ -980,7 +973,7 @@ pub(crate) async fn model_return_values(
              AND since_inception_pct IS NOT NULL ORDER BY as_of_date DESC LIMIT 1",
         )
         .bind(basket.id)
-        .fetch_optional(state.db.pool())
+        .fetch_optional(&mut *conn)
         .await
         .map_err(db::fail)?;
         let (Some(anchor), Some(current)) = (anchor, current) else {

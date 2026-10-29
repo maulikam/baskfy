@@ -274,6 +274,77 @@ fn children_by_parent<'a>(index: &Index<'a>) -> HashMap<i64, Vec<&'a PortfolioNo
     grouped
 }
 
+fn height(children: &HashMap<i64, Vec<&PortfolioNode>>, node_id: i64) -> usize {
+    match children.get(&node_id) {
+        None => 1,
+        Some(below) => {
+            1 + below
+                .iter()
+                .map(|c| height(children, c.id))
+                .max()
+                .unwrap_or(0)
+        }
+    }
+}
+
+/// `check_move(rows, portfolio_id, new_parent_id)`: refuse a ring or a breach of the depth cap.
+pub(crate) fn check_move(
+    rows: &[PortfolioNode],
+    portfolio_id: i64,
+    new_parent_id: Option<i64>,
+) -> Result<(), GraphError> {
+    let index = Index::new(rows)?;
+    check_no_cycles(&index)?;
+    if !index.contains(portfolio_id) {
+        return Err(GraphError::Unknown(portfolio_id));
+    }
+    let tall = height(&children_by_parent(&index), portfolio_id);
+    let Some(parent) = new_parent_id else {
+        if tall > MAX_DEPTH {
+            return Err(GraphError::DepthExceeded {
+                portfolio_id,
+                depth: tall,
+            });
+        }
+        return Ok(());
+    };
+    if parent == portfolio_id {
+        return Err(GraphError::Cycle(vec![portfolio_id, portfolio_id]));
+    }
+    if !index.contains(parent) {
+        return Err(GraphError::Orphan {
+            portfolio_id,
+            missing_parent_id: parent,
+        });
+    }
+    let inside = descendant_ids(rows, portfolio_id)?;
+    if inside.contains(&parent) {
+        let (upward, _) = chain(&index, parent)?;
+        let cut = upward
+            .iter()
+            .position(|id| *id == portfolio_id)
+            .map_or(upward.len(), |p| p + 1);
+        let mut ring = vec![portfolio_id];
+        ring.extend_from_slice(&upward[..cut]);
+        return Err(GraphError::Cycle(ring));
+    }
+    let (walk, dangling) = chain(&index, parent)?;
+    if let Some(missing) = dangling {
+        return Err(GraphError::Orphan {
+            portfolio_id: walk.last().copied().unwrap_or(parent),
+            missing_parent_id: missing,
+        });
+    }
+    let deepest = walk.len() + tall;
+    if deepest > MAX_DEPTH {
+        return Err(GraphError::DepthExceeded {
+            portfolio_id,
+            depth: deepest,
+        });
+    }
+    Ok(())
+}
+
 /// `descendant_ids`: breadth-first, root first.
 pub(crate) fn descendant_ids(rows: &[PortfolioNode], root_id: i64) -> Result<Vec<i64>, GraphError> {
     let index = Index::new(rows)?;
@@ -481,5 +552,34 @@ mod tests {
         assert_eq!(rollup.unattributed.holdings, 1);
         assert!(rollup.spans_brokers());
         assert!(rollup.declaration_conflicts());
+    }
+
+    #[test]
+    fn a_move_is_refused_for_a_ring_or_a_breach() {
+        // Ports test_portfolio_graph.py's check_move assertions.
+        let node = |id: i64, parent: Option<i64>| PortfolioNode {
+            id,
+            name: id.to_string(),
+            parent_id: parent,
+            broker_account_id: None,
+        };
+        let rows = vec![node(1, None), node(2, Some(1)), node(3, Some(2))];
+        assert_eq!(
+            check_move(&rows, 1, Some(3)).map_err(|e| e.to_string()),
+            Err("portfolio parentage forms a cycle: 1 -> 3 -> 2 -> 1".to_owned())
+        );
+        assert!(matches!(
+            check_move(&rows, 1, Some(1)),
+            Err(GraphError::Cycle(_))
+        ));
+        assert_eq!(check_move(&rows, 3, None), Ok(()));
+        let deep: Vec<PortfolioNode> = (1..=6)
+            .map(|i| node(i, if i == 1 { None } else { Some(i - 1) }))
+            .chain([node(7, None), node(8, Some(7))])
+            .collect();
+        assert!(matches!(
+            check_move(&deep, 7, Some(5)),
+            Err(GraphError::DepthExceeded { depth: 7, .. })
+        ));
     }
 }

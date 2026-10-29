@@ -169,6 +169,12 @@ fn py_int(value: &OrderedJson) -> Result<i128, bool> {
     match value {
         OrderedJson::Int(i) => Ok(i128::from(*i)),
         OrderedJson::UInt(u) => Ok(i128::from(*u)),
+        // Python's int is unbounded; beyond i128 only the sign decides any comparison here.
+        OrderedJson::BigInt(big) => Ok(big.parse::<i128>().unwrap_or(if big.starts_with('-') {
+            i128::MIN
+        } else {
+            i128::MAX
+        })),
         OrderedJson::Bool(b) => Ok(i128::from(*b)),
         OrderedJson::Float(f) if f.is_finite() => {
             let t = f.trunc();
@@ -203,6 +209,7 @@ fn truthy(value: &OrderedJson) -> bool {
         OrderedJson::Bool(b) => *b,
         OrderedJson::Int(i) => *i != 0,
         OrderedJson::UInt(u) => *u != 0,
+        OrderedJson::BigInt(_) => true,
         OrderedJson::Float(f) => *f != 0.0,
         OrderedJson::Str(s) => !s.is_empty(),
         OrderedJson::Array(a) => !a.is_empty(),
@@ -222,6 +229,31 @@ pub fn pyjwt_decode(
     issuer: Option<&str>,
     leeway: f64,
     now: f64,
+) -> Result<Vec<(String, OrderedJson)>, TokenError> {
+    pyjwt_decode_requiring(
+        token,
+        secret,
+        audience,
+        issuer,
+        leeway,
+        now,
+        &["exp", "iat", "sub"],
+    )
+}
+
+/// [`pyjwt_decode`] with `options={"require": required}` — `routers.auth._restore_code_valid`
+/// requires `["exp", "sub", "purpose"]`.
+///
+/// # Errors
+/// [`TokenError`] naming PyJWT's exception class.
+pub fn pyjwt_decode_requiring(
+    token: &str,
+    secret: &[u8],
+    audience: Option<&str>,
+    issuer: Option<&str>,
+    leeway: f64,
+    now: f64,
+    required: &[&str],
 ) -> Result<Vec<(String, OrderedJson)>, TokenError> {
     let invalid = TokenError::Invalid;
     let (signing_input, crypto) = token.rsplit_once('.').ok_or(invalid("DecodeError"))?;
@@ -285,7 +317,7 @@ pub fn pyjwt_decode(
     let OrderedJson::Object(claims) = payload.clone() else {
         return Err(invalid("DecodeError"));
     };
-    for required in ["exp", "iat", "sub"] {
+    for required in required {
         if matches!(payload.get(required), None | Some(OrderedJson::Null)) {
             return Err(invalid("MissingRequiredClaimError"));
         }
@@ -418,6 +450,13 @@ pub fn decode_token(
     let as_int = |v: Option<&OrderedJson>| match v {
         Some(OrderedJson::Int(i)) => Some(i128::from(*i)),
         Some(OrderedJson::UInt(u)) => Some(i128::from(*u)),
+        Some(OrderedJson::BigInt(big)) => {
+            Some(big.parse::<i128>().unwrap_or(if big.starts_with('-') {
+                i128::MIN
+            } else {
+                i128::MAX
+            }))
+        }
         Some(OrderedJson::Bool(b)) => Some(i128::from(*b)),
         _ => None,
     };
@@ -443,6 +482,11 @@ pub fn token_epoch(claims: &[(String, OrderedJson)]) -> i128 {
     match claims.iter().find(|(k, _)| k == "epoch").map(|(_, v)| v) {
         Some(OrderedJson::Int(i)) => i128::from(*i),
         Some(OrderedJson::UInt(u)) => i128::from(*u),
+        Some(OrderedJson::BigInt(big)) => big.parse::<i128>().unwrap_or(if big.starts_with('-') {
+            i128::MIN
+        } else {
+            i128::MAX
+        }),
         _ => 0,
     }
 }
@@ -522,8 +566,8 @@ pub async fn current_principal(
     })
 }
 
-/// `encode_token(...)`: mint a token the way the web app does. For tests and the parity harness
-/// only — the API itself never issues one.
+/// `encode_token(...)` without an audience or issuer: what the web app and the parity harness
+/// mint.
 #[must_use]
 pub fn encode_token(
     subject: &str,
@@ -532,9 +576,31 @@ pub fn encode_token(
     lifetime_seconds: i64,
     epoch: i64,
 ) -> String {
-    let engine = base64::engine::general_purpose::URL_SAFE_NO_PAD;
-    let header = engine.encode(br#"{"alg":"HS256","typ":"JWT"}"#);
-    let claims = OrderedJson::Object(vec![
+    encode_token_full(
+        subject,
+        secret,
+        issued_at,
+        lifetime_seconds,
+        None,
+        None,
+        epoch,
+    )
+}
+
+/// `encode_token(subject, secret, lifetime_seconds=, issued_at=, audience=, issuer=, epoch=)`:
+/// the claims in Python's dict order (`sub`, `iat`, `exp`, `epoch`, then `aud`, `iss` when set),
+/// signed as `jwt.encode` signs them. `issue_session` mints the access token with it.
+#[must_use]
+pub fn encode_token_full(
+    subject: &str,
+    secret: &[u8],
+    issued_at: i64,
+    lifetime_seconds: i64,
+    audience: Option<&str>,
+    issuer: Option<&str>,
+    epoch: i64,
+) -> String {
+    let mut claims = vec![
         ("sub".to_owned(), OrderedJson::Str(subject.to_owned())),
         ("iat".to_owned(), OrderedJson::Int(issued_at)),
         (
@@ -542,8 +608,39 @@ pub fn encode_token(
             OrderedJson::Int(issued_at + lifetime_seconds),
         ),
         ("epoch".to_owned(), OrderedJson::Int(epoch)),
-    ]);
-    let payload = engine.encode(claims.to_python_json().unwrap_or_default());
+    ];
+    if let Some(aud) = audience {
+        claims.push(("aud".to_owned(), OrderedJson::Str(aud.to_owned())));
+    }
+    if let Some(iss) = issuer {
+        claims.push(("iss".to_owned(), OrderedJson::Str(iss.to_owned())));
+    }
+    sign_hs256(&claims, secret)
+}
+
+/// `jwt.encode(claims, secret, algorithm="HS256")`: the header `{"alg":"HS256","typ":"JWT"}`
+/// (PyJWT sorts it), the payload `json.dumps(claims, separators=(",", ":"))` in the dict's order
+/// with `ensure_ascii`, HMAC-SHA256 over both.
+#[must_use]
+pub fn sign_hs256(claims: &[(String, OrderedJson)], secret: &[u8]) -> String {
+    let engine = base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    let header = engine.encode(br#"{"alg":"HS256","typ":"JWT"}"#);
+    let json = OrderedJson::Object(claims.to_vec())
+        .to_python_json()
+        .unwrap_or_default();
+    // `ensure_ascii=True`: every non-ASCII character as `\uXXXX` (surrogate pairs above U+FFFF).
+    let mut ascii = String::with_capacity(json.len());
+    for c in json.chars() {
+        if c.is_ascii() {
+            ascii.push(c);
+        } else {
+            let mut units = [0u16; 2];
+            for u in c.encode_utf16(&mut units) {
+                ascii.push_str(&format!("\\u{:04x}", u));
+            }
+        }
+    }
+    let payload = engine.encode(ascii);
     let signing_input = format!("{header}.{payload}");
     let signature = Hmac::<Sha256>::new_from_slice(secret)
         .map(|mut mac| {

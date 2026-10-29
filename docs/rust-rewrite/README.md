@@ -127,6 +127,29 @@ python3 tools/parity/api_diff.py --py-port 18111 --rs-port 18112 \
 it (the 503 path). Both runs pass `--env BASKFY_FIXTURE_DIR=<an empty dir>` (R5.33). Every case
 must be EQUAL in both runs.
 
+**Grading a write** (wave 4c; R6.5). A write is graded on what it *did* as well as what it
+answered. A case file whose top level says `"mode": "writes"` is a **scenario**:
+
+```bash
+python3 tools/parity/api_diff.py --writes --lane <lane> --smtp-port <your port> \
+    --py-port <P> --rs-port <R> --cases tools/parity/api_cases/writes_<lane>.json \
+    --report /tmp/<lane>-writes.txt [--dump-dir /tmp/<lane>-answers]
+```
+
+* It clones the bed into a lane template once (`rsw_tpl_<lane>`, TimescaleDB jobs unscheduled),
+  then per run into three fresh databases (`rsw_<lane>_<run>_{base,py,rs}`, dropped afterwards),
+  starts Python on one and Rust on the other with their own Redis database index
+  (`--redis-db-py`/`--redis-db-rs`, never 0) and SMTP pointed at the harness's mail sink, and
+  sends the cases **in order**, each to Python then Rust. It never writes to `baskfy` itself and
+  refuses any database name that does not start `rsw_`.
+* After the scenario: every table either side touched is diffed against the base clone by
+  primary key (`"db_mask"` columns compare as `<null>`/`<unchanged>`/`<changed>`/`<set>`), every
+  sequence, both Redis databases (rate-limit buckets by presence, Celery task ids normalised),
+  and every mail each request sent. All of it must be EQUAL.
+* `"capture": {"name": "json:/ptr" | "cookie:NAME" | "header:NAME" | "mail:REGEX"}` keeps a value
+  per side; `${name}` uses it later. `"seed_sql"` adds a fixture to all three clones before the
+  servers start. GET mode skips writes files.
+
 **Porting a router** (the five lanes): own `rust/crates/baskfy-api/src/routes/<router>.rs`
 (the stub lists the Python routes) and your case file; never edit `app.rs`, `routes.rs`, `lib.rs`
 or `Cargo.toml` (a new dependency is a DECISIONS-RS entry the integrator applies). Read the
@@ -134,7 +157,9 @@ principal from `Extension<Principal>`, parse queries with `query::{QueryParams, 
 (FastAPI's last-value-wins and error accumulation), return `Result<Response, Problem>`, and
 serialise with `wire` (`ser::decimal`, `ser::datetime`, `ser::date`, `ser::float`; `OrderedJson`
 for a `dict` built at runtime or read from `jsonb`). Query the database through `state.db` —
-read-only; a route that writes waits for the decision that lets the pool write its table.
+read-only. A **write** route takes `Option<Extension<session::WritePool>>` (handed only to
+POST/PUT/PATCH/DELETE) and runs its statements in `session::run`, Python's `get_session`: commit
+on `Ok`, roll back on `Err` (R6.2); bodies go through `body::receive` + `body::validate_model`.
 **No route may place, modify or cancel an order** (law 2); `routes::public` is never mounted (D9).
 
 ## Building — the only invocation

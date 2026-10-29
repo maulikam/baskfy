@@ -10,6 +10,7 @@ pub(crate) fn truthy(value: &OrderedJson) -> bool {
         OrderedJson::Bool(b) => *b,
         OrderedJson::Int(i) => *i != 0,
         OrderedJson::UInt(u) => *u != 0,
+        OrderedJson::BigInt(_) => true,
         OrderedJson::Float(f) => *f != 0.0,
         OrderedJson::Str(s) => !s.is_empty(),
         OrderedJson::Array(a) => !a.is_empty(),

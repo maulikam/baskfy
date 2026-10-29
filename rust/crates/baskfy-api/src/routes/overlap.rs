@@ -11,16 +11,20 @@
 //! tagger and its resolution against Laya's cached answer), the screen-definition hash, the
 //! shared live-marks overlay, and two Redis writes Python makes on that read (the sidecar's
 //! "wanted" set and hash). None has a Rust home yet (DECISIONS-RS R5.21); Python keeps serving it.
-//! **Not registered:** `PUT`/`DELETE /tags`, `PUT`/`DELETE /reviews`, `POST /catalyst-scan` —
-//! writes, which wait for a writable pool (R5.2).
+//! Ported (lane writes-sleeves, RS4c): `PUT`/`DELETE /tags` and `POST /catalyst-scan`
+//! (`writes.rs`). **Not registered:** `PUT`/`DELETE /reviews` — they re-read the row through the
+//! unported `GET ` above, so Python keeps serving them (DECISIONS-RS R6.29).
 //!
 //! No route here reaches a rank, a size or an order: the tags and labels are display context.
+
+mod tags;
+mod writes;
 
 use axum::Router;
 use axum::extract::{Extension, State};
 use axum::http::{HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
-use axum::routing::get;
+use axum::routing::{get, put};
 use baskfy_db::OrderedJson;
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
@@ -296,7 +300,7 @@ fn opt_string(v: Option<&OrderedJson>) -> Result<Canon, Problem> {
 
 /// `OverlapScanOut.model_validate(status)` dumped by `canonical_json`: every field in order,
 /// defaults filled, unknown keys ignored; a value the model refuses is the 500 Python raises.
-fn scan_out(status: &OrderedJson) -> Result<String, Problem> {
+pub(crate) fn scan_out(status: &OrderedJson) -> Result<String, Problem> {
     let state = match status.get("state") {
         Some(OrderedJson::Str(s)) if SCAN_STATES.contains(&s.as_str()) => Canon::Str(s.clone()),
         _ => return Err(internal_error()),
@@ -389,9 +393,17 @@ pub async fn get_catalyst_scan(
 /// Python).
 pub fn router() -> Router<AppState> {
     Router::new()
+        .route(
+            "/overlap/tags",
+            put(writes::put_tag).delete(writes::delete_tag),
+        )
+        .route("/overlap/reviews", super::common::write_only())
         .route("/overlap/tags/export", get(get_tags_export))
         .route("/overlap/reviews/export", get(get_reviews_export))
-        .route("/overlap/catalyst-scan", get(get_catalyst_scan))
+        .route(
+            "/overlap/catalyst-scan",
+            get(get_catalyst_scan).post(writes::post_catalyst_scan),
+        )
 }
 
 #[cfg(test)]

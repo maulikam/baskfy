@@ -18,16 +18,24 @@ mod golden;
 pub(crate) mod graph;
 pub(crate) mod ledger;
 pub(crate) mod load;
+pub(crate) mod model;
+pub(crate) mod multipart;
 pub(crate) mod nav;
 pub(crate) mod num;
 pub(crate) mod params;
+pub(crate) mod portfolio_csv;
+pub(crate) mod portfolios_writes;
+pub(crate) mod pycsv;
 pub(crate) mod pydec;
 pub(crate) mod pyfmt;
 pub(crate) mod rebalance;
 pub(crate) mod recon;
+pub(crate) mod request;
 pub(crate) mod suggest;
+pub(crate) mod symbols;
 pub(crate) mod tenant;
 pub(crate) mod tradebook;
+pub(crate) mod tradebook_csv;
 
 /// A Python `ValueError`/`KeyError`/`TypeError` escaping a handler: logged, answered with the
 /// 500 catch-all (no handler in `app.py` catches them).

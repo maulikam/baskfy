@@ -299,6 +299,12 @@ async fn access_log(request: Request, next: Next) -> Response {
 pub fn build_app(state: AppState) -> Router {
     let cell: RouterCell = Arc::new(OnceLock::new());
     let api = routes::api_router()
+        // Innermost: after the principal and the rate limit, a write method receives the write
+        // pool; nothing else ever does (crate::session, DECISIONS-RS R6.2).
+        .route_layer(from_fn_with_state(
+            state.clone(),
+            crate::session::write_access,
+        ))
         .route_layer(from_fn_with_state(state.clone(), versioned_dependencies))
         .route_layer(from_fn(probe_layer));
     let ops = routes::ops::router().route_layer(from_fn(probe_layer));

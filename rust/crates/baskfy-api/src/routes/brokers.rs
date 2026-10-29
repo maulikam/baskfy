@@ -8,15 +8,18 @@
 //! the Rust process holds no pending state and answers every callback "Invalid or expired OAuth
 //! state." — what a second Python worker without the shared state file answers too. The success
 //! path (token exchange, encrypted store, holdings sync) writes, and stays on Python until the
-//! write wave; DECISIONS-RS, api-portfolio P5. **Not ported:** `POST /{broker_id}/connect`,
-//! `POST /{broker_id}/sync-holdings`. Nothing here reaches an order path (law 2).
+//! write wave; DECISIONS-RS, api-portfolio P5. The write routes `POST /{broker_id}/connect` and
+//! `POST /{broker_id}/sync-holdings` are in [`writes`] (wave 4c; the live holdings read is a
+//! cutover gate, DECISIONS-RS R6.22). Nothing here reaches an order path (law 2).
 
 use axum::Router;
 use axum::extract::{Extension, Path, RawQuery, State};
 use axum::response::Response;
-use axum::routing::get;
+use axum::routing::{get, post};
 use baskfy_db::OrderedJson;
 use serde::Serialize;
+
+pub(crate) mod writes;
 
 use crate::auth::{Principal, require_authenticated};
 use crate::problems::{Problem, ProblemType};
@@ -302,7 +305,7 @@ pub struct BrokerListOut {
     pub adapters_wired: usize,
 }
 
-fn env_stripped(name: &str) -> String {
+pub(crate) fn env_stripped(name: &str) -> String {
     std::env::var(name).unwrap_or_default().trim().to_owned()
 }
 
@@ -334,7 +337,7 @@ fn gate_out(state: &AppState) -> BrokerGateOut {
 }
 
 /// `token_store_path()`: broker-specific env, then the shared Kite path, then the default.
-fn token_store_path() -> std::path::PathBuf {
+pub(crate) fn token_store_path() -> std::path::PathBuf {
     let broker = env_stripped("BASKFY_BROKER_TOKEN_PATH");
     let kite = env_stripped("BASKFY_KITE_TOKEN_PATH");
     let raw = if !broker.is_empty() {
@@ -498,13 +501,10 @@ pub fn router() -> Router<AppState> {
         .route("/brokers/callback", get(oauth_callback))
         .route("/brokers/{broker_id}", get(get_one_broker))
         // The write routes' paths, with no method: a GET there is Starlette's 405.
-        .route(
-            "/brokers/{broker_id}/connect",
-            axum::routing::MethodRouter::new(),
-        )
+        .route("/brokers/{broker_id}/connect", post(writes::connect_broker))
         .route(
             "/brokers/{broker_id}/sync-holdings",
-            axum::routing::MethodRouter::new(),
+            post(writes::sync_holdings),
         )
 }
 

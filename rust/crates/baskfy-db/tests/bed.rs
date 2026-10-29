@@ -169,3 +169,42 @@ async fn a_real_table_reads_as_python_reads_it() {
         Some(&OrderedJson::Int(50))
     );
 }
+
+#[tokio::test]
+#[cfg_attr(
+    not(bed),
+    ignore = "BASKFY_RS_TEST_DATABASE_URL is unset at build time: the bed tests are skipped"
+)]
+async fn the_write_pool_writes_and_an_uncommitted_session_leaves_nothing() {
+    use baskfy_db::WriteDb;
+    let url = std::env::var("BASKFY_RS_TEST_DATABASE_URL").expect("cfg(bed) implies the variable");
+    let write = WriteDb::connect_lazy(&DbSettings::with_url(Secret::new(url))).unwrap();
+    let mut tx = write.begin().await.unwrap();
+    let r = sqlx::query("SHOW default_transaction_read_only")
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+    let on: String = sqlx::Row::get(&r, 0);
+    assert_eq!(on, "off");
+    // A temporary table, inside a transaction that is dropped: nothing persists on the bed.
+    sqlx::query("CREATE TEMP TABLE rs_write_probe (x int) ON COMMIT DROP")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO rs_write_probe VALUES (1)")
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+    drop(tx);
+    let mut tx = write.begin().await.unwrap();
+    let gone = sqlx::query("SELECT to_regclass('pg_temp.rs_write_probe') IS NULL")
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+    assert!(
+        sqlx::Row::get::<bool, _>(&gone, 0),
+        "a dropped session must roll back"
+    );
+    drop(tx);
+    write.close().await;
+}

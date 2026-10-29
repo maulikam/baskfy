@@ -8,15 +8,18 @@
 //!
 //! No signing secret is returned by either (Python returns one only on create and rotate).
 //!
-//! **Not ported in this wave** (they write; the Python API keeps serving them):
-//! `POST /webhook-endpoints`, `PATCH`/`DELETE /webhook-endpoints/{public_id}`,
-//! `POST /webhook-endpoints/{public_id}/rotate-secret`. **No route may place, modify or cancel an
+//! The **writes** — `POST /webhook-endpoints`, `PATCH`/`DELETE /webhook-endpoints/{public_id}`,
+//! `POST /webhook-endpoints/{public_id}/rotate-secret` — are in [`writes`] (wave 4c, lane
+//! writes-accounts), with the SSRF guard in [`ssrf`]. **No route may place, modify or cancel an
 //! order** (law 2).
+
+mod ssrf;
+mod writes;
 
 use axum::Router;
 use axum::extract::{Extension, Path, State};
 use axum::response::Response;
-use axum::routing::get;
+use axum::routing::{get, patch, post};
 use baskfy_db::{OrderedJson, row};
 use chrono::{DateTime, Utc};
 use serde::Serialize;
@@ -241,10 +244,21 @@ pub async fn endpoint_deliveries(
     Ok(wire::json(&WebhookDeliveryListOut { deliveries }))
 }
 
-/// The ported `/webhook-endpoints` GET routes, relative to `/api/v1`.
+/// The ported `/webhook-endpoints` routes, relative to `/api/v1`.
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/webhook-endpoints", get(list_endpoints))
+        .route(
+            "/webhook-endpoints/{public_id}",
+            patch(writes::update_endpoint).delete(writes::delete_endpoint),
+        )
+        .route(
+            "/webhook-endpoints/{public_id}/rotate-secret",
+            post(writes::rotate_secret),
+        )
+        .route(
+            "/webhook-endpoints",
+            get(list_endpoints).post(writes::create_endpoint),
+        )
         .route(
             "/webhook-endpoints/{public_id}/deliveries",
             get(endpoint_deliveries),

@@ -225,6 +225,7 @@ fn json_f(value: Option<&OrderedJson>) -> Result<Option<f64>, Problem> {
         None | Some(OrderedJson::Null) => Ok(None),
         Some(OrderedJson::Int(i)) => Ok(Some(*i as f64)),
         Some(OrderedJson::UInt(u)) => Ok(Some(*u as f64)),
+        Some(OrderedJson::BigInt(big)) => Ok(big.parse::<f64>().ok()),
         Some(OrderedJson::Float(f)) => Ok(Some(*f)),
         Some(OrderedJson::Bool(b)) => Ok(Some(if *b { 1.0 } else { 0.0 })),
         Some(OrderedJson::Str(s)) => Ok(py_float_str(s)),
@@ -288,6 +289,7 @@ fn py_repr(v: &OrderedJson) -> String {
         OrderedJson::Bool(b) => if *b { "True" } else { "False" }.to_owned(),
         OrderedJson::Int(i) => i.to_string(),
         OrderedJson::UInt(u) => u.to_string(),
+        OrderedJson::BigInt(big) => big.clone(),
         OrderedJson::Float(f) => {
             if f.is_nan() {
                 "nan".to_owned()
@@ -322,6 +324,7 @@ fn truthy(v: Option<&OrderedJson>) -> bool {
         Some(OrderedJson::Bool(b)) => *b,
         Some(OrderedJson::Int(i)) => *i != 0,
         Some(OrderedJson::UInt(u)) => *u != 0,
+        Some(OrderedJson::BigInt(_)) => true,
         Some(OrderedJson::Float(f)) => *f != 0.0,
         Some(OrderedJson::Str(s)) => !s.is_empty(),
         Some(OrderedJson::Array(a)) => !a.is_empty(),

@@ -1,0 +1,153 @@
+{
+ "mode": "writes",
+ "lane": "writes-sleeves",
+ "note": "Review of lane writes-sleeves: the same writes with no task queue and no cache (BASKFY_REDIS_URL empty). POST /backtests with the Celery executor and no broker fails the row in the request (_why_it_cannot_start) and answers 202 status=failed; the scan routes insert their run and publish nothing; the tag correction reads no Laya answer. Run: python3 tools/parity/api_diff.py --writes --lane wslnb --smtp-port 18333 --redis-db-py 14 --redis-db-rs 15 --py-port 18331 --rs-port 18332 --cases tools/parity/api_cases/writes_sleeves_nobroker.json BASKFY_RATE_LIMIT_ENABLED=false: Python builds no limiter without a cache, while Rust's state.rs builds one that refuses every request with 503 (a foundation divergence, reported to the integrator).",
+ "env": {
+  "BASKFY_SOLE_USER_ID": "1",
+  "BASKFY_BACKTEST_EXECUTOR": "celery",
+  "BASKFY_REDIS_URL": "",
+  "BASKFY_RATE_LIMIT_ENABLED": "false"
+ },
+ "db_mask": {
+  "sw_scan_run": [
+   "requested_at",
+   "task_id"
+  ],
+  "tw_scan_run": [
+   "requested_at",
+   "task_id",
+   "created_at"
+  ],
+  "vb_scan_run": [
+   "requested_at",
+   "task_id",
+   "created_at"
+  ],
+  "catalyst_tag_correction": [
+   "created_at",
+   "updated_at"
+  ],
+  "backtest": [
+   "public_id",
+   "created_at",
+   "finished_at"
+  ]
+ },
+ "cases": [
+  {
+   "name": "nb-bt",
+   "method": "POST",
+   "path": "/api/v1/backtests",
+   "user": "owner",
+   "body": {
+    "config": {
+     "start": "2023-01-01",
+     "end": "2024-01-01",
+     "screen_public_id": "exmpl0000003"
+    },
+    "fragility": false
+   },
+   "headers": {
+    "Idempotency-Key": "nb-1"
+   },
+   "mask": [
+    "public_id",
+    "created_at",
+    "events_url"
+   ],
+   "capture": {
+    "bt": "json:/public_id"
+   },
+   "note": "no broker: the row is written and failed in the same request, 202 status=failed"
+  },
+  {
+   "name": "nb-bt-get",
+   "method": "GET",
+   "path": "/api/v1/backtests/${bt}",
+   "user": "owner",
+   "mask": [
+    "public_id",
+    "created_at",
+    "finished_at",
+    "instance"
+   ]
+  },
+  {
+   "name": "nb-bt-again",
+   "method": "POST",
+   "path": "/api/v1/backtests",
+   "user": "owner",
+   "body": {
+    "config": {
+     "start": "2023-01-01",
+     "end": "2024-01-01",
+     "screen_public_id": "exmpl0000003"
+    }
+   },
+   "headers": {
+    "Idempotency-Key": "nb-1"
+   },
+   "mask": [
+    "public_id",
+    "created_at",
+    "events_url"
+   ],
+   "note": "no cache: the key is not remembered, so the same key makes a second (failed) run; the failed one does not hold the cap"
+  },
+  {
+   "name": "nb-sw-scan",
+   "method": "POST",
+   "path": "/api/v1/swing/scan",
+   "user": "owner",
+   "mask": [
+    "requested_at"
+   ]
+  },
+  {
+   "name": "nb-tw-scan",
+   "method": "POST",
+   "path": "/api/v1/twt/scan",
+   "user": "owner",
+   "mask": [
+    "requested_at"
+   ]
+  },
+  {
+   "name": "nb-vb-scan",
+   "method": "POST",
+   "path": "/api/v1/vbt/scan",
+   "user": "owner",
+   "mask": [
+    "requested_at"
+   ]
+  },
+  {
+   "name": "nb-ov-scan",
+   "method": "POST",
+   "path": "/api/v1/overlap/catalyst-scan",
+   "user": "owner",
+   "mask": [
+    "queued_at"
+   ]
+  },
+  {
+   "name": "nb-ov-scan-read",
+   "method": "GET",
+   "path": "/api/v1/overlap/catalyst-scan",
+   "user": "owner",
+   "mask": [
+    "queued_at"
+   ]
+  },
+  {
+   "name": "nb-ov-tag",
+   "method": "PUT",
+   "path": "/api/v1/overlap/tags",
+   "user": "owner",
+   "body": {
+    "headline": "Acme Ltd — Outcome of Board Meeting",
+    "event_type": "order"
+   }
+  }
+ ]
+}

@@ -19,7 +19,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use axum::Router;
 use axum::extract::{Extension, Path, RawQuery, State};
 use axum::response::Response;
-use axum::routing::{MethodRouter, get};
+use axum::routing::{get, post};
 use chrono::{DateTime, Duration, NaiveDate, Utc};
 use serde::Serialize;
 
@@ -51,9 +51,13 @@ use super::portfolios::portfolio::tradebook::{
     TradeFill, fills_by_instrument, history_for, xirr_since_first_purchase,
 };
 use super::portfolios::portfolio::{fail, pyfmt};
+mod writes;
+
 use crate::auth::{Principal, require_authenticated};
 use crate::problems::{Problem, not_found};
 use crate::query::{QueryParams, Validation};
+use sqlx::PgConnection;
+
 use crate::state::AppState;
 use crate::wire;
 
@@ -1147,7 +1151,7 @@ fn windowed(rows: &[NavRow], window: NavRange) -> Vec<NavRow> {
 }
 
 async fn benchmark(
-    state: &AppState,
+    conn: &mut PgConnection,
     index: Option<(i64, &String)>,
     figure: &ReturnFigure,
     rows: &[NavRow],
@@ -1164,7 +1168,7 @@ async fn benchmark(
     .bind(i16::try_from(index_id).unwrap_or(i16::MAX))
     .bind(first.date)
     .bind(last.date)
-    .fetch_all(state.db.pool())
+    .fetch_all(&mut *conn)
     .await
     .map_err(db::fail)?;
     if levels.len() < 2 {
@@ -1278,7 +1282,7 @@ fn series_out(rows: &[NavRow], meta: SeriesMeta) -> Result<NavSeriesOut, Problem
 
 /// `_owned_portfolio`: the caller's portfolio row (its benchmark), or `No portfolio with id '7'.`
 async fn owned_portfolio(
-    state: &AppState,
+    conn: &mut PgConnection,
     portfolio_id: params::PyInt,
     user_id: i64,
 ) -> Result<Option<i64>, Problem> {
@@ -1289,7 +1293,7 @@ async fn owned_portfolio(
     )
     .bind(id)
     .bind(user_id)
-    .fetch_optional(state.db.pool())
+    .fetch_optional(&mut *conn)
     .await
     .map_err(db::fail)?
     .ok_or_else(|| not_found("portfolio", &portfolio_id.to_string()))?;
@@ -1618,14 +1622,15 @@ pub async fn portfolio_overview(
     let window = range_param(&mut v, &q);
     v.finish()?;
     let user_id = principal.require_user()?;
-    let mut ledger = load_ledger(&state, user_id).await?;
+    let mut conn = db::acquire(&state).await?;
+    let mut ledger = load_ledger(&mut conn, user_id).await?;
     let mut trade_figure = None;
     if !ledger.flows.iter().any(|f| f.kind.is_xirr_event()) {
-        ledger.trades = fills_by_instrument(&state, user_id).await?;
+        ledger.trades = fills_by_instrument(&mut conn, user_id).await?;
         trade_figure = trade_xirr(&ledger)?;
     }
-    let series = nav_by_portfolio(&state, user_id).await?;
-    let model_values = model_return_values(&state, &ledger).await?;
+    let series = nav_by_portfolio(&mut conn, user_id).await?;
+    let model_values = model_return_values(&mut conn, &ledger).await?;
 
     let holdings = ledger.holdings();
     let allocations = ledger.allocations();
@@ -1913,7 +1918,8 @@ pub async fn portfolio_holdings(
     Extension(principal): Extension<Principal>,
 ) -> Result<Response, Problem> {
     let user_id = require_authenticated(&principal)?.require_user()?;
-    let ledger = load_ledger(&state, user_id).await?;
+    let mut conn = db::acquire(&state).await?;
+    let ledger = load_ledger(&mut conn, user_id).await?;
     let freeze = freeze_report(&ledger.entries, &ledger.ledger_positions()?);
     let mut by_instrument: BTreeMap<i64, Vec<&Position>> = BTreeMap::new();
     for p in &ledger.positions {
@@ -2100,7 +2106,7 @@ fn reconciliation_activity(ledger: &Ledger, entry: &InboxEntry) -> ActivityItemO
 }
 
 async fn corporate_actions(
-    state: &AppState,
+    conn: &mut PgConnection,
     ledger: &Ledger,
     portfolio_id: Option<i64>,
 ) -> Result<Vec<ActivityItemOut>, Problem> {
@@ -2126,7 +2132,7 @@ async fn corporate_actions(
     )
     .bind(&ids)
     .bind(earliest)
-    .fetch_all(state.db.pool())
+    .fetch_all(&mut *conn)
     .await
     .map_err(db::fail)?;
     let mut items = Vec::new();
@@ -2193,14 +2199,15 @@ pub async fn portfolio_activity(
     .unwrap_or(ACTIVITY_DEFAULT);
     v.finish()?;
     let user_id = principal.require_user()?;
+    let mut conn = db::acquire(&state).await?;
     let portfolio_id = match portfolio_id {
         Some(pid) => {
-            owned_portfolio(&state, pid, user_id).await?;
+            owned_portfolio(&mut conn, pid, user_id).await?;
             Some(params::bigint(pid)?)
         }
         None => None,
     };
-    let ledger = load_ledger(&state, user_id).await?;
+    let ledger = load_ledger(&mut conn, user_id).await?;
     let mut items = Vec::new();
     for row in &ledger.flow_rows {
         if let Some(pid) = portfolio_id
@@ -2219,7 +2226,7 @@ pub async fn portfolio_activity(
         }
         items.push(reconciliation_activity(&ledger, entry));
     }
-    items.extend(corporate_actions(&state, &ledger, portfolio_id).await?);
+    items.extend(corporate_actions(&mut conn, &ledger, portfolio_id).await?);
     items.sort_by(|a, b| (b.on, b.kind).cmp(&(a.on, a.kind)));
     let total = items.len();
     items.truncate(usize::try_from(limit).unwrap_or(usize::MAX));
@@ -2297,7 +2304,8 @@ pub async fn portfolio_reconciliation(
     };
     v.finish()?;
     let user_id = principal.require_user()?;
-    let ledger = load_ledger(&state, user_id).await?;
+    let mut conn = db::acquire(&state).await?;
+    let ledger = load_ledger(&mut conn, user_id).await?;
     let freeze = freeze_report(&ledger.entries, &ledger.ledger_positions()?);
     let items = ledger
         .entries
@@ -2322,7 +2330,10 @@ pub async fn portfolio_reconciliation(
 // GET /portfolio/suggestions
 // ---------------------------------------------------------------------------------------------
 
-async fn sector_map(state: &AppState, ids: &[i64]) -> Result<BTreeMap<i64, String>, Problem> {
+async fn sector_map(
+    conn: &mut PgConnection,
+    ids: &[i64],
+) -> Result<BTreeMap<i64, String>, Problem> {
     if ids.is_empty() {
         return Ok(BTreeMap::new());
     }
@@ -2332,7 +2343,7 @@ async fn sector_map(state: &AppState, ids: &[i64]) -> Result<BTreeMap<i64, Strin
          AND d.is_universe IS false ORDER BY m.instrument_id, m.date DESC, d.id",
     )
     .bind(ids)
-    .fetch_all(state.db.pool())
+    .fetch_all(&mut *conn)
     .await
     .map_err(db::fail)?;
     let mut out = BTreeMap::new();
@@ -2343,15 +2354,14 @@ async fn sector_map(state: &AppState, ids: &[i64]) -> Result<BTreeMap<i64, Strin
 }
 
 async fn subscribed_baskets(
-    state: &AppState,
+    conn: &mut PgConnection,
     user_id: i64,
 ) -> Result<Vec<SubscribedBasket>, Problem> {
-    let pool = state.db.pool();
     let invested: Vec<i64> = sqlx::query_scalar(
         "SELECT basket_id FROM cb_investment WHERE user_id = $1 AND status = 'ACTIVE'",
     )
     .bind(user_id)
-    .fetch_all(pool)
+    .fetch_all(&mut *conn)
     .await
     .map_err(db::fail)?;
     let filed: Vec<Option<i64>> = sqlx::query_scalar(
@@ -2359,7 +2369,7 @@ async fn subscribed_baskets(
          WHERE p.user_id = $1 AND p.source = 'SUBSCRIBED' AND s.basket_id IS NOT NULL",
     )
     .bind(user_id)
-    .fetch_all(pool)
+    .fetch_all(&mut *conn)
     .await
     .map_err(db::fail)?;
     let ids: Vec<i64> = invested
@@ -2373,7 +2383,7 @@ async fn subscribed_baskets(
     }
     let rows = sqlx::query("SELECT id, name FROM cb_basket WHERE id = ANY($1)")
         .bind(&ids)
-        .fetch_all(pool)
+        .fetch_all(&mut *conn)
         .await
         .map_err(db::fail)?;
     let mut names = HashMap::new();
@@ -2387,7 +2397,7 @@ async fn subscribed_baskets(
          JOIN cb_constituent c ON c.version_id = anon_1.version_id WHERE anon_1.recency = 1",
     )
     .bind(&ids)
-    .fetch_all(pool)
+    .fetch_all(&mut *conn)
     .await
     .map_err(db::fail)?;
     let mut members: HashMap<i64, BTreeSet<i64>> = HashMap::new();
@@ -2423,7 +2433,8 @@ pub async fn portfolio_suggestions(
     Extension(principal): Extension<Principal>,
 ) -> Result<Response, Problem> {
     let user_id = require_authenticated(&principal)?.require_user()?;
-    let ledger = load_ledger(&state, user_id).await?;
+    let mut conn = db::acquire(&state).await?;
+    let ledger = load_ledger(&mut conn, user_id).await?;
     let today = today_ist();
     let unallocated =
         unallocated_holdings(&ledger.holdings(), &ledger.allocations()).map_err(dfail)?;
@@ -2452,7 +2463,7 @@ pub async fn portfolio_suggestions(
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect();
-    let sectors = sector_map(&state, &ids).await?;
+    let sectors = sector_map(&mut conn, &ids).await?;
     let mut first_bought = Vec::new();
     for p in &ledger.positions {
         if let Some(on) = p.first_bought_on
@@ -2464,7 +2475,7 @@ pub async fn portfolio_suggestions(
             }
         }
     }
-    let baskets = subscribed_baskets(&state, user_id).await?;
+    let baskets = subscribed_baskets(&mut conn, user_id).await?;
     let pile: HashSet<_> = priced_pile.iter().map(|h| h.key).collect();
     let with_sector = priced_pile
         .iter()
@@ -2670,9 +2681,22 @@ pub async fn portfolio_detail(
     v.finish()?;
     let pid = pid.unwrap_or_default();
     let user_id = principal.require_user()?;
-    let benchmark_index_id = owned_portfolio(&state, pid, user_id).await?;
+    let mut conn = db::acquire(&state).await?;
+    let benchmark_index_id = owned_portfolio(&mut conn, pid, user_id).await?;
     let pid = params::bigint(pid)?;
-    let ledger = load_ledger(&state, user_id).await?;
+    Ok(wire::json(
+        &detail_on(&mut conn, user_id, pid, benchmark_index_id).await?,
+    ))
+}
+
+/// `portfolio_detail`'s body on a given connection (a write route's transaction answers with it).
+async fn detail_on(
+    conn: &mut PgConnection,
+    user_id: i64,
+    pid: i64,
+    benchmark_index_id: Option<i64>,
+) -> Result<PortfolioDetailOut, Problem> {
+    let ledger = load_ledger(conn, user_id).await?;
     let portfolio = ledger
         .portfolios
         .get(&pid)
@@ -2680,8 +2704,8 @@ pub async fn portfolio_detail(
         .clone();
     let members = members_of(&ledger, &portfolio);
     let freeze = freeze_report(&ledger.entries, &ledger.ledger_positions()?);
-    let model_values = model_return_values(&state, &ledger).await?;
-    let rows = nav_rows(&state, user_id, Some(pid)).await?;
+    let model_values = model_return_values(conn, &ledger).await?;
+    let rows = nav_rows(conn, user_id, Some(pid)).await?;
     let points: Vec<NavPoint> = rows.iter().map(nav_point).collect::<Result<_, _>>()?;
     let priced_members = priced(&ledger, &members);
     let mut value = Dec::lit("0");
@@ -2763,7 +2787,7 @@ pub async fn portfolio_detail(
         headline_return: figure_out(&headline),
         model_return: model_for(&portfolio, model_values.get(&pid).cloned().flatten())?,
         xirr: portfolio_xirr_out(&ledger, &portfolio, &money(&value.add(&cash)))?,
-        benchmark: benchmark(&state, index, &headline, &rows).await?,
+        benchmark: benchmark(conn, index, &headline, &rows).await?,
         counts_toward_total: capital,
         excluded_note: (!capital).then_some(MONITORING_NOTE),
         status: status_for(
@@ -2776,12 +2800,12 @@ pub async fn portfolio_detail(
         value,
         cash,
     };
-    Ok(wire::json(&PortfolioDetailOut {
+    Ok(PortfolioDetailOut {
         summary,
         holdings,
         source_panel: source_panel(&ledger, &portfolio, brokers.clone()),
         brokers,
-    }))
+    })
 }
 
 /// `GET /portfolio/{portfolio_id}/nav?range=1Y` — one portfolio's stored EOD series.
@@ -2803,20 +2827,21 @@ pub async fn portfolio_nav(
     v.finish()?;
     let pid = pid.unwrap_or_default();
     let user_id = principal.require_user()?;
-    let benchmark_index_id = owned_portfolio(&state, pid, user_id).await?;
+    let mut conn = db::acquire(&state).await?;
+    let benchmark_index_id = owned_portfolio(&mut conn, pid, user_id).await?;
     let pid = params::bigint(pid)?;
-    let ledger = load_ledger(&state, user_id).await?;
+    let ledger = load_ledger(&mut conn, user_id).await?;
     let portfolio = ledger
         .portfolios
         .get(&pid)
         .ok_or_else(|| fail(&format!("KeyError: {pid}")))?
         .clone();
-    let all_rows = nav_rows(&state, user_id, Some(pid)).await?;
+    let all_rows = nav_rows(&mut conn, user_id, Some(pid)).await?;
     let rows = windowed(&all_rows, window);
     let points: Vec<NavPoint> = all_rows.iter().map(nav_point).collect::<Result<_, _>>()?;
     let headline = headline_for(&portfolio, &points)?;
     let index = benchmark_index_id.and_then(|id| ledger.benchmarks.get(&id).map(|name| (id, name)));
-    let bench = benchmark(&state, index, &headline, &rows).await?;
+    let bench = benchmark(&mut conn, index, &headline, &rows).await?;
     let out = series_out(
         &rows,
         SeriesMeta {
@@ -2834,18 +2859,21 @@ pub async fn portfolio_nav(
 /// write routes' paths with no method (Starlette answers a GET there with 405).
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/portfolio", MethodRouter::new())
+        .route("/portfolio", post(writes::new_portfolio))
         .route("/portfolio/overview", get(portfolio_overview))
         .route("/portfolio/holdings", get(portfolio_holdings))
         .route("/portfolio/activity", get(portfolio_activity))
         .route("/portfolio/reconciliation", get(portfolio_reconciliation))
         .route(
             "/portfolio/reconciliation/{item_id}/resolve",
-            MethodRouter::new(),
+            post(writes::resolve_reconciliation_item),
         )
         .route("/portfolio/suggestions", get(portfolio_suggestions))
         .route("/portfolio/{portfolio_id}", get(portfolio_detail))
-        .route("/portfolio/{portfolio_id}/holdings", MethodRouter::new())
+        .route(
+            "/portfolio/{portfolio_id}/holdings",
+            post(writes::add_holdings),
+        )
         .route("/portfolio/{portfolio_id}/nav", get(portfolio_nav))
 }
 

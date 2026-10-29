@@ -7,19 +7,21 @@
 //!   `BASKFY_FEE_COLLECTION_ENABLED` is false** (`track_b.require_fee_collection_enabled`), and
 //!   `unset: true` (never a rate of zero) when no agreement exists.
 //!
-//! **Not ported in this wave** (they write; the Python API keeps serving them):
-//! `POST /managers/me`, `PATCH /managers/{slug}` (staff review),
-//! `POST`/`DELETE /managers/me/baskets/{basket_slug}/publish`. It places nothing (law 2).
+//! The writes (`POST /managers/me`, `PATCH /managers/{slug}` — staff review —, and
+//! `POST`/`DELETE /managers/me/baskets/{basket_slug}/publish`) are ported at wave 4c
+//! ([`writes`]). It places nothing (law 2).
 
 use axum::Router;
 use axum::extract::{Extension, State};
 use axum::response::Response;
-use axum::routing::get;
+use axum::routing::{get, patch, post};
 use baskfy_db::row;
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::Serialize;
 use sqlx::Row;
 use sqlx::postgres::PgRow;
+
+mod writes;
 
 use super::screens::accounts::{db, dbe};
 use crate::auth::{Principal, require_authenticated};
@@ -90,7 +92,7 @@ pub struct RevenueShareOut {
     pub unset: bool,
 }
 
-fn manager_out(r: &PgRow) -> Result<ManagerOut, Problem> {
+pub(crate) fn manager_out(r: &PgRow) -> Result<ManagerOut, Problem> {
     let state: String = r.try_get("state").map_err(db)?;
     Ok(ManagerOut {
         slug: r.try_get("slug").map_err(db)?,
@@ -179,9 +181,19 @@ pub async fn revenue_share(
     Ok(wire::json(&out))
 }
 
-/// The ported `/managers` GET routes, relative to `/api/v1`.
+/// The `/managers` routes, relative to `/api/v1`.
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/managers/me", get(my_manager))
+        .route("/managers/{slug}", patch(writes::review_manager))
+        .route(
+            "/managers/me/baskets/{basket_slug}/publish",
+            post(writes::publish_basket).delete(writes::unpublish_basket),
+        )
+        .route(
+            "/managers/me",
+            get(my_manager)
+                .post(writes::apply_as_manager)
+                .patch(writes::review_manager_me),
+        )
         .route("/managers/me/revenue-share", get(revenue_share))
 }

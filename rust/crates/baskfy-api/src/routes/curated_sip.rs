@@ -4,13 +4,15 @@
 //! `GET /cb/investments/{investment_id}/sip` — the newest plan on the investment, or
 //! `No sip plan with id '…'.`.
 //!
-//! **Not ported in this wave**: `POST /cb/investments/{investment_id}/sip` (it writes; the Python
-//! API keeps serving it). A SIP here is a reminder; nothing places an order (law 2).
+//! `POST /cb/investments/{investment_id}/sip` is ported at wave 4c ([`writes`]). A SIP here is a
+//! reminder; nothing places an order (law 2).
 
 use axum::Router;
 use axum::extract::{Extension, Path, State};
 use axum::response::Response;
 use axum::routing::get;
+
+mod writes;
 use baskfy_db::row;
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
@@ -80,5 +82,8 @@ pub async fn get_sip_plan(
 
 /// The SIP GET route, relative to `/api/v1`.
 pub fn router() -> Router<AppState> {
-    Router::new().route("/cb/investments/{investment_id}/sip", get(get_sip_plan))
+    Router::new().route(
+        "/cb/investments/{investment_id}/sip",
+        get(get_sip_plan).post(writes::create_sip_plan),
+    )
 }

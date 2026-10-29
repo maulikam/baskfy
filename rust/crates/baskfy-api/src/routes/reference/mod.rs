@@ -19,11 +19,10 @@ pub(crate) mod universes;
 use axum::http::{HeaderName, HeaderValue, header};
 use axum::response::{IntoResponse, Response};
 use baskfy_core::screener::{Payload, PyDecimal};
-use baskfy_db::OrderedJson;
-use chrono::{DateTime, FixedOffset, NaiveDate, Offset, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
 
-use crate::problems::{Problem, ProblemType, no_trading_day, pipeline_degraded};
+use crate::problems::{Problem, no_trading_day, pipeline_degraded};
 use crate::query::{QueryParams, Validation};
 use crate::state::AppState;
 
@@ -70,12 +69,10 @@ pub(crate) async fn current_data_version(state: &AppState) -> Result<i64, Proble
     Ok(v.unwrap_or(0))
 }
 
-/// `latest_published_date`: the newest trade date of a published run.
+/// `latest_published_date`: the newest trade date of a published run
+/// ([`crate::routes::common::latest_published_date`]).
 pub(crate) async fn latest_published_date(state: &AppState) -> Result<Option<NaiveDate>, Problem> {
-    sqlx::query_scalar("SELECT max(trade_date) FROM pipeline_run WHERE data_version IS NOT NULL")
-        .fetch_one(state.db.pool())
-        .await
-        .map_err(db)
+    crate::routes::common::latest_published_date(&state.db).await
 }
 
 /// `resolve_as_of(session, requested).as_of`, with `AsOfOutOfRange` and `NoPublishedData`
@@ -215,71 +212,20 @@ pub(crate) enum PyInt {
     HugeNegative,
 }
 
-fn underscores_ok(digits: &str) -> bool {
-    // Python's int(): underscores only between two digits.
-    let bytes = digits.as_bytes();
-    if bytes.is_empty() || !bytes.iter().all(|b| b.is_ascii_digit() || *b == b'_') {
-        return false;
-    }
-    if bytes.first() == Some(&b'_') || bytes.last() == Some(&b'_') {
-        return false;
-    }
-    !digits.contains("__")
-}
-
-/// pydantic-core's `str` → `int` (lax): whitespace stripped, a sign, digits with Python's
-/// underscore rule, and a `.0…` fraction of zeros only.
+/// pydantic-core's `str` → `int` (lax): [`crate::routes::common::lax_int`] in this lane's shape
+/// (R5.10's collapse).
 pub(crate) fn parse_py_int(raw: &str) -> Option<PyInt> {
-    let s = raw.trim();
-    let (negative, body) = match s.as_bytes().first() {
-        Some(b'-') => (true, &s[1..]),
-        Some(b'+') => (false, &s[1..]),
-        _ => (false, s),
-    };
-    let int_part = match body.split_once('.') {
-        Some((int_part, frac)) => {
-            if frac.is_empty() || !frac.bytes().all(|b| b == b'0') {
-                return None;
-            }
-            int_part
-        }
-        None => body,
-    };
-    if !underscores_ok(int_part) {
-        return None;
-    }
-    let digits: String = int_part.chars().filter(|c| *c != '_').collect();
-    let trimmed = digits.trim_start_matches('0');
-    if trimmed.is_empty() {
-        return Some(PyInt::Small(0));
-    }
-    let magnitude: Option<i128> = if trimmed.len() > 30 {
-        None
-    } else {
-        trimmed.parse::<i128>().ok()
-    };
-    let signed = magnitude.map(|m| if negative { -m } else { m });
-    Some(match signed {
-        Some(v) => i64::try_from(v).map_or(
-            if v > 0 {
-                PyInt::Huge
-            } else {
-                PyInt::HugeNegative
-            },
-            PyInt::Small,
-        ),
-        None if negative => PyInt::HugeNegative,
+    let p = crate::routes::common::lax_int(raw)?;
+    Some(match p.as_i64() {
+        Some(v) => PyInt::Small(v),
+        None if p.negative => PyInt::HugeNegative,
         None => PyInt::Huge,
     })
 }
 
 /// pydantic-core's `str` → `bool` (lax).
 pub(crate) fn parse_py_bool(raw: &str) -> Option<bool> {
-    match raw.to_lowercase().as_str() {
-        "1" | "on" | "t" | "true" | "y" | "yes" => Some(true),
-        "0" | "off" | "f" | "false" | "n" | "no" => Some(false),
-        _ => None,
-    }
+    crate::routes::common::lax_bool(raw)
 }
 
 /// The outcome of pydantic's `str` → `Decimal` (lax).
@@ -625,20 +571,7 @@ pub(crate) fn path_max_length(v: &mut Validation, name: &str, value: &str, max: 
 // Clocks and tenants
 // ---------------------------------------------------------------------------------------------
 
-/// IST, `+05:30`.
-pub(crate) fn ist() -> FixedOffset {
-    FixedOffset::east_opt(5 * 3600 + 30 * 60).unwrap_or_else(|| Utc.fix())
-}
-
-/// `datetime.now(tz=IST)`.
-pub(crate) fn now_ist() -> DateTime<FixedOffset> {
-    crate::entitlements::utc_now().with_timezone(&ist())
-}
-
-/// `invoices.today_ist()`.
-pub(crate) fn today_ist() -> NaiveDate {
-    now_ist().date_naive()
-}
+pub(crate) use crate::routes::common::{now_ist, today_ist};
 
 /// `datetime.fromtimestamp(seconds, tz=UTC)` for an epoch-seconds float: CPython splits with
 /// `modf` and rounds the fraction's microseconds half-even (`_PyTime_DoubleToDenominator`).
@@ -691,87 +624,21 @@ pub(crate) fn py_sum(values: &[f64]) -> f64 {
     f_result
 }
 
-/// `BASKFY_SOLE_USER_ID`.
-pub(crate) const SOLE_USER_ENV: &str = "BASKFY_SOLE_USER_ID";
-
-/// `seed.E2E_PUBLIC_ID`.
-pub(crate) const E2E_PUBLIC_ID: &str = "e2e000000001";
-
-/// `curated_tenant.SOLE_TENANT_REFUSED`.
-pub(crate) const SOLE_TENANT_REFUSED: &str = "not-the-sole-tenant";
-
-/// `curated_seed.resolve_sole_user_id`: the variable (stripped; blank or non-numeric is unset),
-/// else the seeded account by public id, else 503.
-pub(crate) async fn resolve_sole_user_id(state: &AppState) -> Result<i64, Problem> {
-    let raw = std::env::var(SOLE_USER_ENV).unwrap_or_default();
-    let raw = raw.trim();
-    if !raw.is_empty() {
-        if let Some(PyInt::Small(id)) = parse_python_int_literal(raw) {
-            return Ok(id);
-        }
-        crate::logging::warning(
-            "baskfy_api.curated_seed",
-            &format!(
-                "{SOLE_USER_ENV} is not a number ({}); reading it as 'no sole tenant configured', \
-                 which is what baskfy_worker.providers._sole_user_id does with the same value",
-                baskfy_providers::py::repr_str(raw)
-            ),
-            &[],
-        );
-    }
-    let found: Option<i64> = sqlx::query_scalar("SELECT id FROM app_user WHERE public_id = $1")
-        .bind(E2E_PUBLIC_ID)
-        .fetch_optional(state.db.pool())
-        .await
-        .map_err(db)?;
-    found.ok_or_else(|| {
-        pipeline_degraded(&format!(
-            "The sole-tenant account is not configured on this deployment. Set {SOLE_USER_ENV}, \
-             or run `make seed` to create the development account."
-        ))
-    })
-}
-
-/// Python's `int(str)` (no fraction allowed, unlike pydantic's lax parse).
-fn parse_python_int_literal(raw: &str) -> Option<PyInt> {
-    if raw.contains('.') {
-        return None;
-    }
-    parse_py_int(raw)
-}
-
-/// `curated_tenant.scoped_sole_user_id(session, principal_user_id, surface=)`.
+/// `curated_tenant.scoped_sole_user_id(session, principal_user_id, surface=)`, as
+/// [`crate::routes::common::scoped_sole_user_id`].
 pub(crate) async fn scoped_sole_user_id(
     state: &AppState,
     principal_user_id: Option<i64>,
     surface: Option<&str>,
 ) -> Result<i64, Problem> {
-    let sole = resolve_sole_user_id(state).await?;
-    if let Some(uid) = principal_user_id
-        && uid != sole
-    {
-        let tail = surface.map_or_else(
-            || ".".to_owned(),
-            |s| format!(", so {s} is not readable here."),
-        );
-        return Err(Problem::new(
-            ProblemType::NotFound,
-            format!("This deployment serves a single account and this caller (user {uid}) is not it{tail}"),
-        )
-        .with("reason", OrderedJson::Str(SOLE_TENANT_REFUSED.to_owned())));
-    }
-    Ok(sole)
+    crate::routes::common::scoped_sole_user_id(&state.db, principal_user_id, surface).await
 }
 
 // ---------------------------------------------------------------------------------------------
 // Python strings and the live-quote switch
 // ---------------------------------------------------------------------------------------------
 
-/// `str.isspace()` for one character: Unicode `White_Space` plus the four ASCII separators
-/// (`\x1c`-`\x1f`) Python also counts.
-fn py_space(c: char) -> bool {
-    c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
-}
+use crate::routes::common::py_space;
 
 /// `str.strip()`.
 pub(crate) fn py_strip(s: &str) -> &str {

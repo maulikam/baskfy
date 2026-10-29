@@ -11,80 +11,15 @@ use crate::query::{QueryParams, Validation};
 /// The parsed value of a pydantic `int`: saturated `i128` (see the module docs).
 pub(crate) type PyInt = i128;
 
-/// pydantic's lax `str -> int`, or `None` for `int_parsing`.
+/// pydantic's lax `str -> int`, or `None` for `int_parsing`: [`crate::routes::common::lax_int`],
+/// saturated into `i128` (R5.10's collapse).
 pub(crate) fn parse_py_int(raw: &str) -> Option<PyInt> {
-    let t = raw.trim();
-    let (negative, body) = match t.as_bytes().first() {
-        Some(b'-') => (true, &t[1..]),
-        Some(b'+') => (false, &t[1..]),
-        _ => (false, t),
-    };
-    let (int_part, frac) = match body.split_once('.') {
-        Some((i, f)) => (i, Some(f)),
-        None => (body, None),
-    };
-    if let Some(f) = frac
-        && (f.is_empty() || !f.bytes().all(|b| b == b'0'))
-    {
-        return None;
-    }
-    if int_part.is_empty() {
-        return None;
-    }
-    let mut digits = String::new();
-    let mut previous_underscore = true; // a leading `_` is refused
-    for b in int_part.bytes() {
-        match b {
-            b'0'..=b'9' => {
-                digits.push(char::from(b));
-                previous_underscore = false;
-            }
-            b'_' if !previous_underscore => previous_underscore = true,
-            _ => return None,
-        }
-    }
-    if previous_underscore {
-        return None; // a trailing `_`
-    }
-    let trimmed = digits.trim_start_matches('0');
-    let magnitude: i128 = if trimmed.is_empty() {
-        0
-    } else if trimmed.len() > 38 {
-        i128::MAX
-    } else {
-        trimmed.parse().unwrap_or(i128::MAX)
-    };
-    Some(if negative { -magnitude } else { magnitude })
+    crate::routes::common::lax_int(raw).map(|p| p.saturated())
 }
 
-/// Python's `int(text)`: surrounding whitespace, a sign, decimal digits (any script's) with
-/// single underscores between them. Saturating, as [`parse_py_int`].
+/// Python's `int(text)`: [`crate::routes::common::python_int`], saturated as [`parse_py_int`].
 pub(crate) fn python_int(text: &str) -> Option<PyInt> {
-    let t = text.trim();
-    let (negative, body) = match t.chars().next() {
-        Some('-') => (true, &t[1..]),
-        Some('+') => (false, &t[1..]),
-        _ => (false, t),
-    };
-    if body.is_empty() || body.starts_with('_') || body.ends_with('_') || body.contains("__") {
-        return None;
-    }
-    let mut digits = String::new();
-    for c in body.chars() {
-        if c == '_' {
-            continue;
-        }
-        digits.push(char::from_digit(c.to_digit(10)?, 10)?);
-    }
-    let trimmed = digits.trim_start_matches('0');
-    let magnitude: i128 = if trimmed.is_empty() {
-        0
-    } else if trimmed.len() > 38 {
-        i128::MAX
-    } else {
-        trimmed.parse().unwrap_or(i128::MAX)
-    };
-    Some(if negative { -magnitude } else { magnitude })
+    crate::routes::common::python_int(text).map(|p| p.saturated())
 }
 
 /// Bounds on an `int` parameter (`Field(ge=, le=, gt=)`).

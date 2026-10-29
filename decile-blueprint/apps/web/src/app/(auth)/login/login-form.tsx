@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 
-import { signInWithGoogle, type FormResult } from "@/app/actions/auth";
+import { signInOnThisMac, signInWithGoogle, type FormResult } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -22,9 +22,16 @@ import { cn } from "@/lib/utils";
  * cannot reach Google the failure is silent otherwise, and a sign-in button that does nothing
  * visible when clicked is the worst state this page can be in.
  */
-export function LoginForm({ next }: { next?: string | undefined }) {
+export function LoginForm({
+  next,
+  local = false,
+}: {
+  next?: string | undefined;
+  /** The operator's own Mac: one button, no Google (`lib/auth/api-auth.ts`). */
+  local?: boolean;
+}) {
   const [result, action, pending] = useActionState<FormResult | null, FormData>(
-    signInWithGoogle,
+    local ? signInOnThisMac : signInWithGoogle,
     null,
   );
 
@@ -33,8 +40,14 @@ export function LoginForm({ next }: { next?: string | undefined }) {
       <form action={action} className="space-y-3">
         {next ? <input type="hidden" name="next" value={next} /> : null}
         <Button type="submit" className="w-full gap-2" size="lg" disabled={pending}>
-          <GoogleMark />
-          {pending ? "Taking you to Google…" : "Continue with Google"}
+          {local ? null : <GoogleMark />}
+          {local
+            ? pending
+              ? "Signing in…"
+              : "Continue on this Mac"
+            : pending
+              ? "Taking you to Google…"
+              : "Continue with Google"}
         </Button>
       </form>
 

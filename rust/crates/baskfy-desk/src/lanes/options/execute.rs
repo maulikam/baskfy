@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, Weak};
 
 use chrono::{DateTime, FixedOffset};
 use rust_decimal::Decimal;
@@ -184,13 +184,18 @@ pub fn to_f64(d: Decimal) -> f64 {
     d.to_string().parse().unwrap_or(0.0)
 }
 
+/// The executor's clock: Python's `clock` callable (`now or (lambda: dt.datetime.now(tz=IST))`),
+/// read afresh at each step it is read in Python — the plan's validation, the confirm, each
+/// fill, the open and the close (DECISIONS-RS R8.20.1).
+pub type Now<'a> = &'a (dyn Fn() -> DateTime<FixedOffset> + Sync);
+
 /// `DeskVenue`: the executor's venue over the real gateway.
 pub struct DeskVenue<'s, 'c> {
     gateway: Arc<dyn Gateway>,
     store: &'s mut PgOptionsStore<'c>,
     plan: PlanRow,
     quotes: &'s dyn QuoteSource,
-    now: DateTime<FixedOffset>,
+    now: Now<'s>,
     execution: ExecutionConfig,
     close_counts: HashMap<i64, i64>,
     /// Orders sent.
@@ -308,7 +313,7 @@ impl Venue for DeskVenue<'_, '_> {
                 .write_fill(
                     &leg,
                     order_id,
-                    self.now,
+                    (self.now)(),
                     sim.filled,
                     sim.avg_price,
                     sim.requested,
@@ -398,19 +403,23 @@ fn left_open(result: &ExecResult) -> PyDict {
 
 /// `execute_entry(store, gateway, quotes=, plan_id=, confirm=, mode_of=, now=)`.
 ///
+/// The gateway is resolved by the caller before this runs, as Python evaluates
+/// `gateway_for(sleeve)` as an argument: no gateway is the caller's 500, before any read here
+/// (R8.20.1).
+///
 /// # Errors
 /// A refusal, or an exception.
 pub async fn execute_entry(
     store: &mut PgOptionsStore<'_>,
-    gateway: Option<Arc<dyn Gateway>>,
+    gateway: Arc<dyn Gateway>,
     quotes: &dyn QuoteSource,
     plan_id: &str,
     confirm: bool,
     mode_of: &(dyn Fn(Sleeve) -> Mode + Sync),
-    now: DateTime<FixedOffset>,
+    now: Now<'_>,
 ) -> Result<ExecOutcome, ExecError> {
     let found = store.plan(plan_id).await?;
-    let plan = validate(found, confirm, now)?;
+    let plan = validate(found, confirm, now())?;
     if mode_of(plan.sleeve) == Mode::Live {
         return Err(Refused::new(
             409,
@@ -422,8 +431,8 @@ pub async fn execute_entry(
     let holder = store.slot_holder(plan.trade_date).await?;
     let slot = super::core::slot_after_confirm(plan.sleeve, holder)
         .map_err(|m| Refused::new(409, "SLOT_TAKEN", m))?;
-    let gateway = gateway.ok_or_else(no_gateway)?;
-    store.confirm(&plan, now, slot).await?;
+    let confirmed_at = now();
+    store.confirm(&plan, confirmed_at, slot).await?;
     let quantity = plan.lots * plan.lot_size;
     let roles: Vec<LegRole> = plan.legs.iter().map(|l| l.role).collect();
     let mut venue = DeskVenue {
@@ -451,7 +460,7 @@ pub async fn execute_entry(
         let points = entry_points(plan.structure, &result);
         let hard_exit = py::ist_at(plan.trade_date, super::core::hard_exit_time(plan.sleeve))
             .ok_or_else(|| ExecError::Other("ValueError: no hard exit".to_owned()))?;
-        store.open_position(&plan, points, now, hard_exit).await?;
+        store.open_position(&plan, points, now(), hard_exit).await?;
         let mut detail = PyDict::new();
         detail.insert(
             "events",
@@ -468,6 +477,8 @@ pub async fn execute_entry(
             detail,
         });
     }
+    // Python's `store.abandon(plan, clock())`: the time is read and not written.
+    let _abandoned_at = now();
     store.abandon(&plan).await?;
     let mut detail = PyDict::new();
     detail.insert("left_open", PyValue::Map(left_open(&result)));
@@ -483,9 +494,10 @@ pub async fn execute_entry(
     })
 }
 
-/// The refusal when no per-sleeve gateway can be derived (the exec_core lane's
-/// `Gateway::derive` not yet available): fail closed, nothing sent.
-fn no_gateway() -> ExecError {
+/// The exception when no per-sleeve gateway can be derived (`gateway_for` raising): fail
+/// closed, nothing read or sent after it.
+#[must_use]
+pub fn no_gateway() -> ExecError {
     ExecError::Other(
         "RuntimeError: the options gateway could not be built (Gateway::derive); nothing was sent"
             .to_owned(),
@@ -500,16 +512,15 @@ fn no_gateway() -> ExecError {
 #[allow(clippy::too_many_arguments)]
 pub async fn execute_exit(
     store: &mut PgOptionsStore<'_>,
-    gateway: Option<Arc<dyn Gateway>>,
+    gateway: Arc<dyn Gateway>,
     quotes: &dyn QuoteSource,
     plan: &PlanRow,
     exit_plan_id: Option<&str>,
     reason: &str,
     mode: Mode,
-    now: DateTime<FixedOffset>,
+    now: Now<'_>,
 ) -> Result<ExecOutcome, ExecError> {
     let position = store.net_open(plan.session_id).await?;
-    let gateway = gateway.ok_or_else(no_gateway)?;
     let mut venue = DeskVenue {
         gateway,
         store,
@@ -531,11 +542,12 @@ pub async fn execute_exit(
     let orders = venue.orders;
     let mut applied: Vec<String> = Vec::new();
     if result.outcome == Outcome::Flat {
+        let closed_at = now();
         store
-            .close_position(plan.session_id, exit_plan_id, now, reason)
+            .close_position(plan.session_id, exit_plan_id, closed_at, reason)
             .await?;
         applied =
-            super::ledger::after_close(store, plan.session_id, plan.sleeve, reason, now, mode)
+            super::ledger::after_close(store, plan.session_id, plan.sleeve, reason, closed_at, mode)
                 .await
                 .map_err(|e| ExecError::Other(e.py_text()))?;
     }
@@ -572,7 +584,7 @@ pub async fn run_pending_exits(
     gateway_for: &(dyn Fn(Sleeve) -> Option<Arc<dyn Gateway>> + Sync),
     quotes: &dyn QuoteSource,
     mode_of: &(dyn Fn(Sleeve) -> Mode + Sync),
-    now: DateTime<FixedOffset>,
+    now: Now<'_>,
 ) -> Result<Vec<ExecOutcome>, ExecError> {
     let sql = format!(
         "SELECT p.session_id, p.exit_plan_id, x.detail FROM {} p \
@@ -605,9 +617,12 @@ pub async fn run_pending_exits(
             _ => "EXIT".to_owned(),
         };
         let exit_id = py::text(py::col(row, "exit_plan_id"));
+        // `gateway_for(plan.sleeve)` is an argument: its exception leaves the sweep before
+        // the position is read (R8.20.1).
+        let gateway = gateway_for(plan.sleeve).ok_or_else(no_gateway)?;
         match execute_exit(
             store,
-            gateway_for(plan.sleeve),
+            gateway,
             quotes,
             &plan,
             Some(&exit_id),
@@ -636,24 +651,41 @@ pub fn options_journal_path(state: &AppState) -> PathBuf {
         .with_file_name("options_orders_journal.jsonl")
 }
 
-type GatewayCache = Mutex<HashMap<(PathBuf, &'static str), Arc<dyn Gateway>>>;
+/// One desk's `_GATEWAYS`: the desk it belongs to (its gateway, held weakly), the sleeve, the
+/// sleeve's gateway.
+type GatewayCache = Mutex<Vec<(Weak<dyn Gateway>, &'static str, Arc<dyn Gateway>)>>;
 
 fn cache() -> &'static GatewayCache {
     static CACHE: OnceLock<GatewayCache> = OnceLock::new();
-    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+    CACHE.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+fn same_desk(entry: &Weak<dyn Gateway>, desk: &Arc<dyn Gateway>) -> bool {
+    entry
+        .upgrade()
+        .is_some_and(|g| std::ptr::addr_eq(Arc::as_ptr(&g), Arc::as_ptr(desk)))
 }
 
 /// `options_gateway(sleeve, kc, risk)`: one gateway per sleeve whose gates are that sleeve's,
 /// read per order, sharing the desk's risk manager (OP10.2). `None` when the desk's gateway
 /// cannot derive one (fail closed).
+///
+/// Python's `_GATEWAYS` is keyed by sleeve in a module, and one process holds one desk. Here
+/// the cache is keyed by the desk (its gateway, `state.gateway`) and the sleeve, so a second
+/// `AppState` in one process — a test — never gets a gateway built over another desk's Kite
+/// and risk manager; with one desk it is Python's map exactly (R8.20.1).
 #[must_use]
 pub fn options_gateway(state: &AppState, sleeve: Sleeve) -> Option<Arc<dyn Gateway>> {
     let journal = options_journal_path(state);
-    let key = (journal.clone(), sleeve_str(sleeve));
-    if let Ok(found) = cache().lock()
-        && let Some(g) = found.get(&key)
-    {
-        return Some(g.clone());
+    let name = sleeve_str(sleeve);
+    if let Ok(mut found) = cache().lock() {
+        found.retain(|(desk, _, _)| desk.strong_count() > 0);
+        if let Some((_, _, g)) = found
+            .iter()
+            .find(|(desk, s, _)| *s == name && same_desk(desk, &state.gateway))
+        {
+            return Some(g.clone());
+        }
     }
     let settings = state.settings.clone();
     let gates: crate::gateway::GatesFn = Arc::new(move || {
@@ -669,7 +701,7 @@ pub fn options_gateway(state: &AppState, sleeve: Sleeve) -> Option<Arc<dyn Gatew
         fo_coverage: false,
     })?;
     if let Ok(mut c) = cache().lock() {
-        c.insert(key, built.clone());
+        c.push((Arc::downgrade(&state.gateway), name, built.clone()));
     }
     Some(built)
 }

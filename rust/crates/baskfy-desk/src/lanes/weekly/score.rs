@@ -139,7 +139,8 @@ fn py_list_repr(items: &[String]) -> String {
 }
 
 /// `drop_duplicates(subset="symbol").reset_index(drop=True)`: keep each symbol's first row.
-fn dedupe(frame: &Frame) -> Frame {
+#[must_use]
+pub fn dedupe(frame: &Frame) -> Frame {
     let Some(sym) = frame.col("symbol") else {
         return frame.clone();
     };
@@ -183,6 +184,21 @@ fn num(u: &Frame, name: &str) -> Result<Vec<f64>, ScanError> {
             "TypeError: column {name} is not numeric; pandas cannot compare it"
         ))
     })
+}
+
+/// A column on the **right** of a series-to-series comparison (`u.close > u.ma_20`). pandas
+/// compares a `float64` series with an `object` one element by element and raises
+/// `TypeError: '>' not supported between instances of 'float' and 'NoneType'` on the first
+/// `None`; an all-`None` `object` column is what a generated scan's never-computed factor is
+/// (`scan_source`, e.g. `ma_200` on a history shorter than 200 bars). `read_csv` never builds
+/// one (an all-empty column is `float64`), so an uploaded scan is unaffected.
+fn num_rhs(u: &Frame, name: &str) -> Result<Vec<f64>, ScanError> {
+    if u.nrows > 0 && matches!(u.col(name), Some(Column::Str(_))) {
+        return Err(ScanError(
+            "TypeError: '>' not supported between instances of 'float' and 'NoneType'".to_owned(),
+        ));
+    }
+    num(u, name)
 }
 
 #[allow(clippy::cast_precision_loss)]
@@ -263,11 +279,11 @@ pub fn audit(u: &Frame, cfg: &ScoringConfig) -> Result<PyDict, ScanError> {
     let gt = |a: &[f64], b: &[f64]| -> Vec<bool> { a.iter().zip(b).map(|(x, y)| x > y).collect() };
     out.insert(
         "breadth_above_20dma",
-        PyValue::Float(py_round(mean_pct(&gt(&close, &num(u, "ma_20")?)), 1)),
+        PyValue::Float(py_round(mean_pct(&gt(&close, &num_rhs(u, "ma_20")?)), 1)),
     );
     out.insert(
         "breadth_above_50dma",
-        PyValue::Float(py_round(mean_pct(&gt(&close, &num(u, "ma_50")?)), 1)),
+        PyValue::Float(py_round(mean_pct(&gt(&close, &num_rhs(u, "ma_50")?)), 1)),
     );
     let r1m = num(u, "absolute_return_one_month")?;
     out.insert(
@@ -315,8 +331,8 @@ pub fn apply_filters(u: &Frame, cfg: &ScoringConfig) -> Result<Vec<String>, Scan
     let n = u.nrows;
     let mut reject = vec![String::new(); n];
     let close = num(u, "close")?;
-    let ma50 = num(u, "ma_50")?;
-    let ma200 = num(u, "ma_200")?;
+    let ma50 = num_rhs(u, "ma_50")?;
+    let ma200 = num_rhs(u, "ma_200")?;
     let r3 = num(u, "absolute_return_three_months")?;
     let r6 = num(u, "absolute_return_six_months")?;
     let c3 = num(u, "circuits_three_months")?;
@@ -465,6 +481,10 @@ pub fn score(u: &Frame, cfg: &ScoringConfig) -> Result<Scored, ScanError> {
         let all = num(u, name)?;
         Ok(elig.iter().map(|&i| all[i]).collect())
     };
+    let col_rhs = |name: &str| -> Result<Vec<f64>, ScanError> {
+        let all = num_rhs(u, name)?;
+        Ok(elig.iter().map(|&i| all[i]).collect())
+    };
     let clipped = |name: &str| -> Result<Vec<f64>, ScanError> {
         let v = col(name)?;
         let lo = quantile(&v, 0.01);
@@ -488,10 +508,10 @@ pub fn score(u: &Frame, cfg: &ScoringConfig) -> Result<Scored, ScanError> {
             .unwrap_or_default()
     };
     let close = col("close")?;
-    let ma20 = col("ma_20")?;
-    let ma50 = col("ma_50")?;
-    let ma100 = col("ma_100")?;
-    let ma200 = col("ma_200")?;
+    let ma20 = col_rhs("ma_20")?;
+    let ma50 = col_rhs("ma_50")?;
+    let ma100 = col_rhs("ma_100")?;
+    let ma200 = col_rhs("ma_200")?;
     let ext: Vec<f64> = (0..m).map(|k| (close[k] / ma20[k] - 1.0) * 100.0).collect();
 
     // A: integer arithmetic on booleans, then the extension bonus.

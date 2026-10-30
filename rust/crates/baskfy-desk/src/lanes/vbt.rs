@@ -175,7 +175,35 @@ pub async fn vbt_gateway_ready(state: &AppState) -> Option<Arc<dyn Gateway>> {
 }
 
 fn now_ist(state: &AppState) -> DateTime<FixedOffset> {
-    state.clock.now_ist()
+    py_fromtimestamp_ist(state.clock.time())
+}
+
+/// `datetime.fromtimestamp(t, IST)` exactly as CPython computes it (what `_now()` is under the
+/// desk's clock): the fraction is rounded **half-even to microseconds**
+/// (`_PyTime_DoubleToDenominator`), not to nanoseconds as the foundation's `Clock::now_ist` does.
+/// The difference decides a plan's exact expiry instant: at `now == expires_at` Python's clock
+/// equals the stored microsecond and the plan is live (404 for a missing line), where a
+/// nanosecond reading can sit a fraction of a microsecond past it (410).
+#[must_use]
+pub fn py_fromtimestamp_ist(t: f64) -> DateTime<FixedOffset> {
+    use chrono::TimeZone;
+    let mut int_part = t.trunc();
+    let mut micros = ((t - int_part) * 1e6).round_ties_even();
+    if micros >= 1e6 {
+        micros -= 1e6;
+        int_part += 1.0;
+    } else if micros < 0.0 {
+        micros += 1e6;
+        int_part -= 1.0;
+    }
+    // Seconds since 1970 fit an i64 and a microsecond count a u32 for any clock this desk reads.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let (secs, nanos) = (int_part as i64, (micros as u32) * 1_000);
+    chrono::Utc
+        .timestamp_opt(secs, nanos)
+        .single()
+        .unwrap_or_default()
+        .with_timezone(&crate::clock::ist())
 }
 
 /// `str(exc)[:200]` for a store failure, as the page shows it.

@@ -377,12 +377,12 @@ async fn confirm(
     let mut store = PgOptionsStore::new(conn, uid);
     execute_entry(
         &mut store,
-        Some(gw),
+        gw,
         &Quotes(quotes),
         plan_id,
         true,
         &paper_mode,
-        now(),
+        &now,
     )
     .await
 }
@@ -541,12 +541,12 @@ async fn live_is_refused_before_any_order() {
     let live = |_s: Sleeve| Mode::Live;
     let r = execute_entry(
         &mut store,
-        Some(gw),
+        gw,
         &Quotes(deep()),
         &plan_id,
         true,
         &live,
-        now(),
+        &now,
     )
     .await;
     assert_eq!(refused(r).1, "LIVE_NOT_BUILT");
@@ -576,12 +576,12 @@ async fn confirm_false_is_refused_before_any_read() {
     let mut store = PgOptionsStore::new(&mut conn, uid);
     let r = execute_entry(
         &mut store,
-        Some(gw),
+        gw,
         &Quotes(deep()),
         &plan_id,
         false,
         &paper_mode,
-        now(),
+        &now,
     )
     .await;
     assert_eq!(refused(r), (400, "CONFIRM_REQUIRED".to_owned()));
@@ -706,7 +706,7 @@ async fn the_monitors_exit_closes_shorts_first_and_the_position() {
     };
     let done = {
         let mut store = PgOptionsStore::new(&mut conn, uid);
-        execute::run_pending_exits(&mut store, &gw_for, &Quotes(deep()), &paper_mode, now())
+        execute::run_pending_exits(&mut store, &gw_for, &Quotes(deep()), &paper_mode, &now)
             .await
             .unwrap()
     };
@@ -739,7 +739,7 @@ async fn the_monitors_exit_closes_shorts_first_and_the_position() {
     assert_eq!(py::text(py::col(&state[0], "status")), "CONFIRMED");
     let again = {
         let mut store = PgOptionsStore::new(&mut conn, uid);
-        execute::run_pending_exits(&mut store, &gw_for, &Quotes(deep()), &paper_mode, now())
+        execute::run_pending_exits(&mut store, &gw_for, &Quotes(deep()), &paper_mode, &now)
             .await
             .unwrap()
     };
@@ -767,12 +767,12 @@ async fn zero_broker_calls_under_both_dry_run_values() {
         let modes = |sl: Sleeve| gates::mode_of(&s, sl);
         let out = execute_entry(
             &mut store,
-            Some(gw),
+            gw,
             &Quotes(deep()),
             &plan_id,
             true,
             &modes,
-            now(),
+            &now,
         )
         .await
         .unwrap();
@@ -818,7 +818,7 @@ async fn close_all(
 ) -> Vec<ExecOutcome> {
     let gw_for = move |_s: Sleeve| Some(gw.clone());
     let mut store = PgOptionsStore::new(conn, uid);
-    execute::run_pending_exits(&mut store, &gw_for, &Quotes(quotes), &paper_mode, later())
+    execute::run_pending_exits(&mut store, &gw_for, &Quotes(quotes), &paper_mode, &later)
         .await
         .unwrap()
 }
@@ -1119,5 +1119,398 @@ async fn a_book_rupee_breach_closes_every_open_position() {
     .await;
     assert!(py::text(py::col(&book_row[0], "paused_reason")).starts_with("BOOK_DAILY_INR"));
     assert_eq!(bed.broker_calls(), 0);
+    drop_user(&mut conn, uid).await;
+}
+
+// --- test_options_monitor.py::TestTheStoreOnADatabase --------------------------------------------
+
+/// The monitor's store on a real Postgres with the `op_` schema: `open_positions`, `raise_exit`
+/// (one EXIT plan, `<entry>-X`, idempotent), `record_mark` — Python's seed, verbatim.
+#[tokio::test]
+async fn the_position_store_raises_one_exit_and_marks() {
+    use baskfy_desk::lanes::options::monitor::{PgPositionStore, PositionStore};
+    let Some(mut conn) = connect().await else {
+        return;
+    };
+    let tag = unique_tag();
+    let uid = py::int(py::col(
+        &rows(
+            &mut conn,
+            "INSERT INTO app_user (public_id, email) VALUES (?, ?) RETURNING id",
+            &[
+                Param::Text(format!("op9-{}", &tag[..8])),
+                Param::Text(format!("op9-{}@x.test", &tag[8..16])),
+            ],
+        )
+        .await[0],
+        "id",
+    ));
+    let day = NaiveDate::from_ymd_opt(2026, 10, 20).unwrap();
+    for (token, strike) in [(9201_i64, 25200_i64), (9202, 25300)] {
+        rows(
+            &mut conn,
+            "INSERT INTO op_contract (instrument_token, tradingsymbol, underlying, expiry, \
+             strike, option_type, lot_size, tick_size, first_seen, last_seen, expired) \
+             VALUES (?, ?, 'NIFTY', ?, ?, 'CE', 65, 0.05, ?, ?, false) \
+             ON CONFLICT (instrument_token) DO NOTHING",
+            &[
+                Param::Int(token),
+                Param::Text(format!("NIFTYOP9{token}")),
+                Param::Date(day),
+                Param::Int(strike),
+                Param::Date(day),
+                Param::Date(day),
+            ],
+        )
+        .await;
+    }
+    let plan_id = format!("O3A-OP9-{uid}");
+    let sid = py::int(py::col(
+        &rows(
+            &mut conn,
+            "INSERT INTO op_session (user_id, sleeve, trade_date, expiry_used, mode, state, plan_id) \
+             VALUES (?, 'O3A', ?, ?, 'PAPER', 'OPEN', ?) RETURNING id",
+            &[
+                Param::Int(uid),
+                Param::Date(day),
+                Param::Date(day),
+                Param::Text(plan_id.clone()),
+            ],
+        )
+        .await[0],
+        "id",
+    ));
+    let at = |h, m| ist().with_ymd_and_hms(2026, 10, 20, h, m, 0).unwrap();
+    let detail =
+        r#"{"direction": "UP", "gate": {"range_high": "25182.00", "range_low": "24998.00"}}"#;
+    let plan_pk = py::int(py::col(
+        &rows(
+            &mut conn,
+            "INSERT INTO op_plan (user_id, plan_id, session_id, sleeve, structure, kind, sizing_mode, \
+             issued_at, expires_at, lots, lot_size, width_points, risk_budget_inr, status, detail) \
+             VALUES (?, ?, ?, 'O3A', 'DEBIT_SPREAD', 'ENTRY', 'PAPER_ONE_LOT', ?, ?, 1, 65, 100, 2500, \
+             'CONFIRMED', ?) RETURNING id",
+            &[
+                Param::Int(uid),
+                Param::Text(plan_id.clone()),
+                Param::Int(sid),
+                Param::Aware(at(10, 21)),
+                Param::Aware(at(10, 51)),
+                Param::Text(detail.to_owned()),
+            ],
+        )
+        .await[0],
+        "id",
+    ));
+    let mut leg_ids = Vec::new();
+    for (seq, (role, token, strike, side, price)) in [
+        ("LONG_CALL", 9201_i64, 25200_i64, "BUY", "35.05"),
+        ("SHORT_CALL", 9202, 25300, "SELL", "5.00"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        leg_ids.push(py::int(py::col(
+            &rows(
+                &mut conn,
+                "INSERT INTO op_leg (user_id, plan_id, seq, role, tradingsymbol, instrument_token, \
+                 strike, option_type, side, quantity, status, filled_qty, avg_price) \
+                 VALUES (?, ?, ?, ?, ?, ?, ?, 'CE', ?, 65, 'FILLED', 65, ?) RETURNING id",
+                &[
+                    Param::Int(uid),
+                    Param::Int(plan_pk),
+                    Param::Int(i64::try_from(seq).unwrap() + 1),
+                    Param::Text(role.to_owned()),
+                    Param::Text(format!("NIFTYOP9{token}")),
+                    Param::Int(token),
+                    Param::Int(strike),
+                    Param::Text(side.to_owned()),
+                    Param::Decimal(d(price)),
+                ],
+            )
+            .await[0],
+            "id",
+        )));
+    }
+    rows(
+        &mut conn,
+        &format!(
+            "INSERT INTO op_position (session_id, user_id, leg_ids, entry_points, entry_inr, lots, \
+             opened_at, hard_exit_at, simulated) VALUES (?, ?, {}, 30.05, 1953.25, 1, ?, ?, true)",
+            py::int_array_sql(&leg_ids)
+        ),
+        &[
+            Param::Int(sid),
+            Param::Int(uid),
+            Param::Aware(at(10, 22)),
+            Param::Aware(at(14, 45)),
+        ],
+    )
+    .await;
+
+    let url = std::env::var("BASKFY_RS_OPTIONS_TEST_PG").unwrap();
+    let store_conn = Db::open(DbConfig {
+        backend: "postgres".to_owned(),
+        schema: "public".to_owned(),
+        database_url: url,
+        db_path: PathBuf::from("unused.db"),
+    })
+    .await
+    .unwrap()
+    .connect()
+    .await
+    .unwrap();
+    let mut store = PgPositionStore {
+        conn: store_conn,
+        user_id: uid,
+    };
+    let open = store.open_positions(day).await.unwrap();
+    assert_eq!(open.len(), 1);
+    let tracked = &open[0];
+    assert!(tracked.session_id == sid && tracked.exit_plan_id.is_none());
+    assert_eq!(tracked.position.entry_points, d("30.05"));
+    assert_eq!(tracked.position.range_high, Some(d("25182.00")));
+    assert_eq!(tracked.tokens(), vec![9201, 9202]);
+    let verdict = baskfy_core::options::exits::ExitVerdict {
+        code: "TARGET".to_owned(),
+        reason: "RULE".to_owned(),
+        value_points: Some(d("81.50")),
+        marked_loss_inr: Some(d("-3315")),
+        stale: false,
+    };
+    let when = at(10, 40).naive_local() + chrono::Duration::seconds(50);
+    let first = store.raise_exit(tracked, &verdict, when).await.unwrap();
+    let again = store.raise_exit(tracked, &verdict, when).await.unwrap();
+    assert_eq!(first, again);
+    let first = first.unwrap();
+    assert_eq!(first, format!("{plan_id}-X"));
+    let plans = rows(
+        &mut conn,
+        "SELECT kind, status, detail->>'code' AS code FROM op_plan WHERE plan_id = ?",
+        &[Param::Text(first.clone())],
+    )
+    .await;
+    assert_eq!(plans.len(), 1);
+    assert_eq!(py::text(py::col(&plans[0], "kind")), "EXIT");
+    assert_eq!(py::text(py::col(&plans[0], "status")), "ISSUED");
+    assert_eq!(py::text(py::col(&plans[0], "code")), "TARGET");
+    let reread = store.open_positions(day).await.unwrap();
+    assert_eq!(reread[0].exit_plan_id.as_deref(), Some(first.as_str()));
+    store.record_mark(tracked, d("81.5"), when).await.unwrap();
+    let mark = rows(
+        &mut conn,
+        "SELECT last_mark_points FROM op_position WHERE session_id = ?",
+        &[Param::Int(sid)],
+    )
+    .await;
+    assert_eq!(py::dec(py::col(&mark[0], "last_mark_points")), Some(d("81.50")));
+    drop_user(&mut conn, uid).await;
+}
+
+// --- test_options_safety.py::TestLiveRefused / TestNoSecondEntry -------------------------------
+
+#[tokio::test]
+async fn all_four_flags_on_is_refused_before_any_order() {
+    let Some(mut conn) = connect().await else {
+        return;
+    };
+    let mut s = paper_defaults();
+    s.options_enabled = true;
+    s.intraday_enabled = true;
+    s.options_o2_execution_enabled = true;
+    s.dry_run = false;
+    assert_eq!(gates::mode_of(&s, Sleeve::O2), Mode::Live);
+    let uid = new_user(&mut conn).await;
+    let plan_id = seed(&mut conn, uid, "O2", "LONG_OPTION", &SPREAD[..1], None, None).await;
+    let bed = Bed::new();
+    let gw = bed.gateway(s.clone(), Sleeve::O2).await;
+    let modes = |sl: Sleeve| gates::mode_of(&s, sl);
+    let mut store = PgOptionsStore::new(&mut conn, uid);
+    let r = execute_entry(&mut store, gw, &Quotes(deep()), &plan_id, true, &modes, &now).await;
+    assert_eq!(refused(r).1, "LIVE_NOT_BUILT");
+    assert!(orders(&mut conn, &plan_id).await.is_empty());
+    assert_eq!(bed.broker_calls(), 0);
+    drop_user(&mut conn, uid).await;
+}
+
+#[tokio::test]
+async fn a_second_entry_plan_in_a_confirmed_session_is_refused() {
+    let Some(mut conn) = connect().await else {
+        return;
+    };
+    let uid = new_user(&mut conn).await;
+    let plan_id = seed(&mut conn, uid, "O3B", "DEBIT_SPREAD", SPREAD, None, None).await;
+    let bed = Bed::new();
+    let gw = bed.gateway(paper_defaults(), Sleeve::O3b).await;
+    let first = confirm(&mut conn, uid, gw.clone(), &plan_id, deep())
+        .await
+        .unwrap();
+    assert_eq!(first.outcome, "OPEN");
+    let session = py::int(py::col(
+        &rows(
+            &mut conn,
+            "SELECT id FROM op_session WHERE plan_id = ?",
+            &[Param::Text(plan_id.clone())],
+        )
+        .await[0],
+        "id",
+    ));
+    // A second ISSUED entry plan hung on the same (now OPEN) session.
+    let again = format!("{plan_id}-again");
+    rows(
+        &mut conn,
+        "INSERT INTO op_plan (user_id, plan_id, session_id, sleeve, structure, kind, \
+         sizing_mode, issued_at, expires_at, lots, lot_size, risk_budget_inr, status, detail) \
+         SELECT user_id, ?, session_id, sleeve, structure, kind, sizing_mode, issued_at, \
+         expires_at, lots, lot_size, risk_budget_inr, 'ISSUED', detail FROM op_plan \
+         WHERE plan_id = ?",
+        &[Param::Text(again.clone()), Param::Text(plan_id.clone())],
+    )
+    .await;
+    let r = confirm(&mut conn, uid, gw, &again, deep()).await;
+    assert_eq!(refused(r), (409, "NOT_ISSUED".to_owned()));
+    let n = rows(
+        &mut conn,
+        "SELECT count(*) AS n FROM op_order o JOIN op_leg l ON l.id = o.leg_id \
+         JOIN op_plan p ON p.id = l.plan_id WHERE p.session_id = ?",
+        &[Param::Int(session)],
+    )
+    .await;
+    assert_eq!(py::int(py::col(&n[0], "n")), 2, "the first entry's two legs, nothing more");
+    drop_user(&mut conn, uid).await;
+}
+
+#[tokio::test]
+async fn a_second_session_for_the_sleeve_and_day_cannot_exist() {
+    let Some(mut conn) = connect().await else {
+        return;
+    };
+    let uid = new_user(&mut conn).await;
+    seed(&mut conn, uid, "O2", "LONG_OPTION", &SPREAD[..1], None, None).await;
+    let err = conn
+        .execute(
+            "INSERT INTO op_session (user_id, sleeve, trade_date, mode, state) \
+             VALUES (?, 'O2', ?, 'PAPER', 'PLANNED')",
+            &[Param::Int(uid), Param::Date(day())],
+        )
+        .await
+        .unwrap_err();
+    assert!(err.to_string().contains("uq_op_session_user_sleeve_date"), "{err}");
+    drop_user(&mut conn, uid).await;
+}
+
+// --- test_options_ledger.py::TestMonthlyR::test_a_pause_is_never_shortened ---------------------
+
+#[tokio::test]
+async fn a_pause_is_never_shortened() {
+    use baskfy_desk::lanes::options::core::{Pause, PauseReason};
+    let Some(mut conn) = connect().await else {
+        return;
+    };
+    let uid = new_user(&mut conn).await;
+    rows(
+        &mut conn,
+        "INSERT INTO op_sleeve_config (user_id, sleeve, paused_until, paused_reason) \
+         VALUES (?, 'O2', '2026-11-30', 'MANUAL')",
+        &[Param::Int(uid)],
+    )
+    .await;
+    {
+        let mut store = PgOptionsStore::new(&mut conn, uid);
+        baskfy_desk::lanes::options::ledger::write_pause(
+            &mut store,
+            "O2",
+            &Pause {
+                paused_until: day(),
+                reasons: vec![PauseReason::DailyR],
+                close_now: true,
+            },
+        )
+        .await
+        .unwrap();
+    }
+    let config = rows(
+        &mut conn,
+        "SELECT paused_until FROM op_sleeve_config WHERE user_id = ? AND sleeve = 'O2'",
+        &[Param::Int(uid)],
+    )
+    .await;
+    assert_eq!(
+        py::opt_day(py::col(&config[0], "paused_until")),
+        NaiveDate::from_ymd_opt(2026, 11, 30)
+    );
+    drop_user(&mut conn, uid).await;
+}
+
+// --- test_options_execute.py::TestThePage -------------------------------------------------------
+
+#[tokio::test]
+async fn the_page_shows_the_plan_the_button_and_the_sentence() {
+    use baskfy_desk::app::StateParts;
+    use baskfy_desk::{DeskPaths, build_state};
+    use tower::ServiceExt as _;
+    let Some(mut conn) = connect().await else {
+        return;
+    };
+    let uid = new_user(&mut conn).await;
+    let plan_id = seed(&mut conn, uid, "O3A", "DEBIT_SPREAD", SPREAD, None, None).await;
+    let dir = tempfile::tempdir().unwrap();
+    std::os::unix::fs::symlink(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../kite-momentum-rebalancer/app"),
+        dir.path().join("app"),
+    )
+    .unwrap();
+    std::fs::create_dir(dir.path().join("data")).unwrap();
+    let kite_dir = dir.path().join("kite");
+    std::fs::create_dir_all(kite_dir.join("instruments")).unwrap();
+    std::fs::write(kite_dir.join("kite.json"), FIXTURE).unwrap();
+    let kite = Arc::new(ReplayKite::load(&kite_dir, None, "test-api-key").unwrap());
+    let mut settings = paper_defaults();
+    settings.sole_user_id = uid;
+    let db = Db::open(DbConfig {
+        backend: "postgres".to_owned(),
+        schema: "public".to_owned(),
+        database_url: std::env::var("BASKFY_RS_OPTIONS_TEST_PG").unwrap(),
+        db_path: dir.path().join("unused.db"),
+    })
+    .await
+    .unwrap();
+    let state = build_state(StateParts {
+        settings,
+        clock: Arc::new(FixedClock::new(now())),
+        ids: Arc::new(HarnessIds::new("options-page")),
+        db,
+        kite,
+        paths: DeskPaths::under(dir.path()),
+        harness: None,
+    });
+    let app = baskfy_desk::lanes::options::routes().with_state(state);
+    let get = |path: &str| {
+        axum::http::Request::builder()
+            .uri(path)
+            .body(axum::body::Body::empty())
+            .unwrap()
+    };
+    let page = app.clone().oneshot(get("/nifty-options")).await.unwrap();
+    assert_eq!(page.status(), 200);
+    let text = String::from_utf8(
+        axum::body::to_bytes(page.into_body(), usize::MAX)
+            .await
+            .unwrap()
+            .to_vec(),
+    )
+    .unwrap();
+    assert!(text.contains(&plan_id));
+    assert!(text.contains("Confirm — simulated"));
+    assert!(text.contains("80 % of width, half the debit lost"));
+    let data = app.oneshot(get("/nifty-options/data")).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(
+        &axum::body::to_bytes(data.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(body["ok"], true);
+    assert_eq!(body["plans"][0]["legs"][0]["role"], "LONG_CALL");
     drop_user(&mut conn, uid).await;
 }

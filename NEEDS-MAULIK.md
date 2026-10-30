@@ -7,6 +7,32 @@ that does not depend on them (rule 11) and returns the moment a dependency clear
 Nothing here is urgent unless marked so. Each entry says what is needed, why, what it blocks, and
 what was done meanwhile.
 
+## 36. The live desk carries the VBT session-cap fix only after an image rebuild (30 Oct 2026, rust-rewrite wave D2, lane vbt)
+
+**What changed, in Python, on branch `rs-desk` (not committed by the lane; the integrator commits):**
+`kite-momentum-rebalancer/app/vbt_desk.py` and `app/vbt_execute.py` (DECISIONS-RS **R8.VB1**,
+**R8.VB2**, both ⚠ UNREVIEWED).
+
+* **R8.VB1 — the three-entries-a-session cap was not enforced under concurrency.** The desk's
+  Postgres connection is autocommit, so `lock_session_for_update`'s `SELECT … FOR UPDATE` held
+  its row lock for one statement and locked nothing; and a MORNING plan's line and a LIVE plan's
+  line lock *different* session rows while the cap counts one IST day. Two confirms at once could
+  each read "two taken" and each send a third. Now one transaction per confirm, a per-user
+  `pg_try_advisory_xact_lock` plus the row `FOR UPDATE NOWAIT`, `COMMIT` on exit; a confirm that
+  finds the lock held is a **409 `SESSION_BUSY` with nothing sent** (confirm again). Proved on a
+  bed clone: before, both confirms sent (four entries); after, one sends and one is a 409.
+* **R8.VB2 — a second order on the same signal reached the broker before failing.** An EVENING
+  or MORNING plan sharing `signal_date` with an earlier LIVE plan's entry passed the gateway and
+  *then* hit `uq_vb_order_one_per_signal` — an order at the broker with no `vb_order` row, no GTT
+  and a 500. Now refused `ALREADY_SENT` **before** the gateway.
+
+**What is needed from you:** nothing to approve for the code (it only refuses more). But the
+running desk on the Mac (`baskfy-local-*`) runs the image it was built from — **it carries
+neither fix until the desk image is rebuilt and restarted** from a tree that has them. VBT's
+execution flag is false and the desk is in DRY_RUN, so nothing live is exposed today; rebuild
+before `BASKFY_VBT_EXECUTION_ENABLED` is ever set true. The TWT lane fixed the same autocommit
+defect in `app/twt_desk.py` (R8.TD1) and it needs the same rebuild.
+
 ## 35. Ranking Phase 2 — deploy, a box-down incident, and what's left to review
 
 **Raised 14 Sep 2026.** · **Status:** ✅ **Deployed 14 Sep 2026 (a market holiday), in three

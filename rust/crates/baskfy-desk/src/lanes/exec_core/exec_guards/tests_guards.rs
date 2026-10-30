@@ -672,3 +672,186 @@ fn the_guard_patterns_compile() {
         .unwrap_err();
     assert!(e.message.contains("does not read as"), "{}", e.message);
 }
+
+// --- wave D2: the rest of test_guards.py, one Rust test per Python test -----------------------
+
+#[tokio::test]
+async fn test_gateway_accepts_ordinary_equity() {
+    // DRY_RUN pinned on (Python pins it rather than inheriting it from .env).
+    let r = rig(gates(true, false, false), RiskConfig::default()).await;
+    let mut o = order("RRKABEL", 10, "BUY", 2275.0);
+    o.series = Some("EQ".to_owned());
+    let out = r.gw.place(&o).await.unwrap();
+    assert_eq!(status(&out), "DRY_RUN");
+    assert_eq!(out.get("symbol"), Some(&PyValue::Str("RRKABEL".to_owned())));
+}
+
+#[tokio::test]
+async fn test_mis_is_blocked_cleanly() {
+    let r = rig(gates(true, false, false), big()).await;
+    let mut mis = order("DIXON", 10, "BUY", 639.4);
+    mis.product = "MIS".to_owned();
+    let out = r.gw.place(&mis).await.unwrap();
+    assert_eq!(status(&out), "BLOCKED");
+    assert!(error(&out).contains("INTRADAY_ENABLED"), "{}", error(&out));
+    assert!(r.kite.write_calls().is_empty());
+}
+
+#[tokio::test]
+async fn test_fno_is_blocked_cleanly() {
+    let r = rig(gates(true, false, false), big()).await;
+    let mut fno = order("NIFTY26AUGCE", 50, "BUY", 120.0);
+    fno.product = "NRML".to_owned();
+    fno.exchange = "NFO".to_owned();
+    let out = r.gw.place(&fno).await.unwrap();
+    assert_eq!(status(&out), "BLOCKED");
+    assert!(error(&out).contains("OPTIONS_ENABLED"), "{}", error(&out));
+    assert!(r.kite.write_calls().is_empty());
+}
+
+#[tokio::test]
+async fn test_cnc_still_passes() {
+    let r = rig(gates(true, false, false), big()).await;
+    let out = r.gw.place(&order("DIXON", 10, "BUY", 639.4)).await.unwrap();
+    assert_eq!(status(&out), "DRY_RUN");
+    assert!(
+        r.kite.write_calls().is_empty(),
+        "DRY_RUN never reaches the broker"
+    );
+}
+
+#[test]
+fn test_excluded_symbol_never_scored() {
+    // Second, independent layer: the scan filter rejects SGBDE31III too. The sample scan is the
+    // weekly lane's checked-in copy of `data/uploads/sample_scan.csv`.
+    use crate::lanes::weekly::score::{ScoringConfig, load_scan, score};
+    let fixture: serde_json::Value = serde_json::from_slice(
+        &std::fs::read(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/weekly/scans.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let csv = fixture["scans"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["name"] == "sample")
+        .and_then(|c| c["csv"].as_str())
+        .unwrap();
+    let cfg = ScoringConfig::default();
+    let scored = score(&load_scan(csv.as_bytes(), &cfg).unwrap(), &cfg).unwrap();
+    let row = scored
+        .row_of("SGBDE31III")
+        .expect("sample scan must contain SGBDE31III");
+    assert!(
+        scored.reject[row].contains("excluded_instrument"),
+        "{}",
+        scored.reject[row]
+    );
+    assert!(scored.score[row].is_nan());
+}
+
+#[tokio::test]
+async fn test_a_legitimate_cnc_order_reaches_the_broker_when_live() {
+    let r = rig(gates(false, false, false), big()).await;
+    let out = r.gw.place(&order("DIXON", 10, "BUY", 639.4)).await.unwrap();
+    assert_eq!(r.kite.write_calls().len(), 1);
+    assert_ne!(status(&out), "BLOCKED", "{out:?}");
+}
+
+#[tokio::test]
+async fn test_a_gated_product_never_reaches_the_broker_when_live() {
+    let r = rig(gates(false, false, false), big()).await;
+    let mut mis = order("DIXON", 10, "BUY", 639.4);
+    mis.product = "MIS".to_owned();
+    let out = r.gw.place(&mis).await.unwrap();
+    assert_eq!(status(&out), "BLOCKED");
+    assert!(
+        r.kite.write_calls().is_empty(),
+        "an MIS order was sent while the gate is off"
+    );
+}
+
+#[tokio::test]
+async fn test_the_order_sent_live_is_cnc_and_delivery() {
+    let r = rig(gates(false, false, false), big()).await;
+    r.gw.place(&order("DIXON", 10, "BUY", 639.4)).await.unwrap();
+    let calls = r.kite.write_calls();
+    let Some(PyValue::Map(sent)) = &calls[0].params else {
+        panic!("no params")
+    };
+    assert_eq!(sent.get("product"), Some(&PyValue::Str("CNC".to_owned())));
+    assert_eq!(sent.get("exchange"), Some(&PyValue::Str("NSE".to_owned())));
+    assert_eq!(sent.get("quantity"), Some(&PyValue::Int(10)));
+}
+
+// --- test_derivative_product_gate.py's gateway cases, one Rust test each ----------------------
+
+async fn derivative(
+    gates_: ProductGates,
+    symbol: &str,
+    product: &str,
+) -> (Rig, crate::wire::PyDict) {
+    let r = rig(gates_, RiskConfig::default()).await;
+    let mut o = order(symbol, 65, "BUY", 100.0);
+    o.product = product.to_owned();
+    o.exchange = "NFO".to_owned();
+    let out = r.gw.place(&o).await.unwrap();
+    (r, out)
+}
+
+#[tokio::test]
+async fn test_an_nfo_mis_option_is_blocked_in_the_gateway_with_options_but_not_intraday() {
+    let (r, out) = derivative(gates(false, false, true), "NIFTY2692223700CE", "MIS").await;
+    assert_eq!(status(&out), "BLOCKED");
+    assert!(error(&out).contains("INTRADAY_ENABLED"), "{}", error(&out));
+    assert!(r.kite.calls().is_empty());
+}
+
+#[tokio::test]
+async fn test_an_nrml_future_is_blocked_in_the_gateway_with_both_switches_on() {
+    let (r, out) = derivative(gates(false, true, true), "NIFTY26SEPFUT", "NRML").await;
+    assert_eq!(status(&out), "BLOCKED");
+    assert!(error(&out).contains("MIS"), "{}", error(&out));
+    assert!(r.kite.calls().is_empty());
+}
+
+#[tokio::test]
+async fn test_an_nrml_option_is_still_refused_by_the_overnight_guard_first() {
+    let (r, out) = derivative(gates(false, true, true), "NIFTY2692223700CE", "NRML").await;
+    assert_eq!(status(&out), "BLOCKED");
+    assert!(error(&out).contains("past the close"), "{}", error(&out));
+    assert!(r.kite.calls().is_empty());
+}
+
+#[tokio::test]
+async fn test_an_nfo_mis_option_with_both_switches_reaches_only_the_dry_run_branch() {
+    let (r, out) = derivative(gates(true, true, true), "NIFTY2692223700CE", "MIS").await;
+    assert_ne!(status(&out), "BLOCKED", "{out:?}");
+    assert!(r.kite.calls().is_empty());
+}
+
+#[tokio::test]
+async fn test_a_gtt_on_a_derivative_venue_is_refused_whatever_the_switches() {
+    let r = rig(gates(false, true, true), RiskConfig::default()).await;
+    let tenant = TenantIds::new(1, 1).unwrap();
+    let out =
+        r.gw.place_gtt_stop(&GttStop {
+            symbol: "NIFTY26SEPFUT".to_owned(),
+            qty: 65,
+            trigger: 89.0,
+            last_price: 100.0,
+            exchange: "NFO".to_owned(),
+            series: None,
+            client_id: None,
+            tenant: Some(tenant),
+            plan_tenant: Some(tenant),
+            limit_fraction: None,
+            fo_plan: None,
+        })
+        .await
+        .unwrap();
+    assert_eq!(status(&out), "BLOCKED");
+    assert!(r.kite.calls().is_empty());
+}

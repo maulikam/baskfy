@@ -4,22 +4,43 @@
 //! exception** of non-negotiable 6 (`place_gtt_stop` / `delete_gtt` with their own guard, used
 //! by the weekly `/stops/arm`).
 //!
+//! **`Kite()` and `app.main.kite()`** ([`DeskKite::ready`]). The gateway builds this handle at
+//! boot; Python builds its `Kite` on the first `kite()` call, and that constructor is where
+//! `KITE_API_KEY missing` raises and where the stored token is loaded (which, with no
+//! `KITE_TOKEN_ENCRYPTION_KEY`, writes the fallback key beside it). So the handle runs `Kite()`'s
+//! load at boot only when it is configured (timing only: a token written later is picked up by
+//! `refresh_token_if_changed`), and every method first runs [`DeskKite::ready`]: unconfigured,
+//! each one raises Python's `RuntimeError` (a GTT write before its guard — Python's `kite()`
+//! raises before `place_gtt_stop` is reached), nothing having been loaded or written; a store
+//! that could not be built raises its `OSError` on every call until it can. `FORCE_IPV4` pins in
+//! the constructor, before anything else — slightly earlier than Python's (which pins only after
+//! the key check), in the safe direction: an order is never sent from an unpinned family.
+//!
+//! **Malformed broker replies raise what Python raises** (wave D2): `TypeError`, `KeyError`,
+//! `AttributeError`, `IndexError`, `ValueError` with Python's own messages, pinned by
+//! `fixtures/exec_kite/goldens.json` (written by `tools/parity/exec_kite_goldens.py` from the
+//! live `Kite`). `list(x or [])` reads a dict as its keys and a string as its characters, and
+//! `dict(...)` takes pairs, exactly as Python does.
+//!
 //! **Not ported, deliberately:** `place_cnc_order`. It places an order around the gateway (no
 //! risk, no rate limit, no journal), and nothing in the desk calls it; the stricter boundary
-//! wins (law 2; the integrator records it in DECISIONS-RS, ⚠ UNREVIEWED). Every order goes
-//! through [`super::order_gateway`].
+//! wins (law 2; DECISIONS-RS R8.9). Every order goes through [`super::order_gateway`].
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
+use baskfy_providers::kite::repr_bytes;
+use baskfy_providers::py::repr_str;
 use baskfy_providers::secret::Secret;
 use tokio::sync::OnceCell;
 
 use super::Broker;
-use super::gtt::{TickSizes, to_tick};
+use super::gtt::to_tick;
 use super::guards::{assert_not_overnight_option, assert_tradeable};
 use super::kite_limits::{DeskLimits, LimitClock, SharedSpacers, TokioClock};
 use crate::clock::Clock;
+use crate::gateway::DEFAULT_TICK;
 use crate::kite::KiteError;
 use crate::settings::{Settings, SharedSettings};
 use crate::wire::{PyDict, PyValue, dict};
@@ -31,13 +52,16 @@ pub const QUOTE_BATCH_SIZE: usize = 500;
 /// `LTP_BATCH_SIZE`.
 pub const LTP_BATCH_SIZE: usize = 1000;
 
+/// `RuntimeError("KITE_API_KEY missing — …")`, `Kite()`'s refusal.
+pub const NO_API_KEY: &str = "KITE_API_KEY missing — copy .env.example to .env and fill it.";
+
 /// What a wrapper call raised (`type(exc).__name__`, `str(exc)`).
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 #[error("{python_type}: {message}")]
 pub struct ClientError {
     /// The class.
     pub python_type: String,
-    /// The message.
+    /// The message (`str(exc)`).
     pub message: String,
 }
 
@@ -59,53 +83,319 @@ impl From<super::guards::GuardError> for ClientError {
     }
 }
 
-fn runtime(message: String) -> ClientError {
+type R<T> = Result<T, ClientError>;
+
+fn raise(python_type: &str, message: impl Into<String>) -> ClientError {
     ClientError {
-        python_type: "RuntimeError".to_owned(),
-        message,
+        python_type: python_type.to_owned(),
+        message: message.into(),
     }
+}
+
+fn runtime(message: impl Into<String>) -> ClientError {
+    raise("RuntimeError", message)
 }
 
 fn s(v: &str) -> PyValue {
     PyValue::Str(v.to_owned())
 }
 
-fn get<'a>(m: &'a PyDict, k: &str) -> &'a PyValue {
-    m.get(k).unwrap_or(&PyValue::None)
+/// `logging.getLogger("kite")`, on stderr (no secret ever reaches it: messages name files and
+/// exceptions, never a token).
+#[allow(clippy::print_stderr)]
+fn log(level: &str, message: &str) {
+    eprintln!("{level}:kite:{message}");
 }
 
-/// `a + b` on two Python numbers (ints stay ints).
-fn py_add(a: &PyValue, b: &PyValue) -> PyValue {
+// ---------------------------------------------------------------------------------------------
+// Python's object model, as far as a broker reply reaches it
+// ---------------------------------------------------------------------------------------------
+
+static NONE: PyValue = PyValue::None;
+static ZERO: PyValue = PyValue::Int(0);
+
+/// `v[key]` with a str key.
+fn subscript<'a>(v: &'a PyValue, key: &str) -> R<&'a PyValue> {
+    match v {
+        PyValue::Map(m) => m.get(key).ok_or_else(|| raise("KeyError", repr_str(key))),
+        PyValue::Str(_) => Err(raise(
+            "TypeError",
+            "string indices must be integers, not 'str'",
+        )),
+        PyValue::List(_) => Err(raise(
+            "TypeError",
+            "list indices must be integers or slices, not str",
+        )),
+        PyValue::Bytes(_) => Err(raise(
+            "TypeError",
+            "byte indices must be integers or slices, not str",
+        )),
+        other => Err(raise(
+            "TypeError",
+            format!("'{}' object is not subscriptable", other.type_name()),
+        )),
+    }
+}
+
+fn no_attribute(v: &PyValue, attribute: &str) -> ClientError {
+    raise(
+        "AttributeError",
+        format!("'{}' object has no attribute '{attribute}'", v.type_name()),
+    )
+}
+
+/// `v.get(key)` (`None` when absent): `AttributeError` on a value that is not a dict.
+fn attr_get<'a>(v: &'a PyValue, key: &str) -> R<&'a PyValue> {
+    match v {
+        PyValue::Map(m) => Ok(m.get(key).unwrap_or(&NONE)),
+        other => Err(no_attribute(other, "get")),
+    }
+}
+
+/// `v.items()`.
+fn items(v: &PyValue) -> R<&PyDict> {
+    match v {
+        PyValue::Map(m) => Ok(m),
+        other => Err(no_attribute(other, "items")),
+    }
+}
+
+/// `for item in v`.
+fn py_iter(v: &PyValue) -> R<Vec<PyValue>> {
+    v.py_iter()
+        .map_err(|e| raise(e.python_type(), e.message().to_owned()))
+}
+
+/// `list(v or [])`.
+fn list_or_empty(v: &PyValue) -> R<Vec<PyValue>> {
+    if v.truthy() {
+        py_iter(v)
+    } else {
+        Ok(Vec::new())
+    }
+}
+
+/// `float(v)`.
+fn to_float(v: &PyValue) -> R<f64> {
     #[allow(clippy::cast_precision_loss)]
-    match (a, b) {
-        (PyValue::Int(x), PyValue::Int(y)) => PyValue::Int(x + y),
-        (PyValue::Float(x), PyValue::Float(y)) => PyValue::Float(x + y),
-        (PyValue::Int(x), PyValue::Float(y)) | (PyValue::Float(y), PyValue::Int(x)) => {
-            PyValue::Float(*x as f64 + y)
+    match v {
+        PyValue::Float(f) => Ok(*f),
+        PyValue::Int(i) => Ok(*i as f64),
+        PyValue::Bool(b) => Ok(if *b { 1.0 } else { 0.0 }),
+        PyValue::Str(text) => crate::settings::py_float(text).ok_or_else(|| {
+            raise(
+                "ValueError",
+                format!("could not convert string to float: {}", repr_str(text)),
+            )
+        }),
+        PyValue::Bytes(b) => std::str::from_utf8(b)
+            .ok()
+            .and_then(crate::settings::py_float)
+            .ok_or_else(|| {
+                raise(
+                    "ValueError",
+                    format!("could not convert string to float: {}", repr_bytes(b)),
+                )
+            }),
+        other => Err(raise(
+            "TypeError",
+            format!(
+                "float() argument must be a string or a real number, not '{}'",
+                other.type_name()
+            ),
+        )),
+    }
+}
+
+/// `int(v)`. An integer past `i64` (Python's are unbounded) is refused, never wrapped.
+fn to_int(v: &PyValue) -> R<i64> {
+    match v {
+        PyValue::Int(i) => Ok(*i),
+        PyValue::Bool(b) => Ok(i64::from(*b)),
+        PyValue::Float(f) => {
+            if f.is_nan() {
+                return Err(raise("ValueError", "cannot convert float NaN to integer"));
+            }
+            if f.is_infinite() {
+                return Err(raise(
+                    "OverflowError",
+                    "cannot convert float infinity to integer",
+                ));
+            }
+            let t = f.trunc();
+            #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+            if t >= i64::MIN as f64 && t < i64::MAX as f64 {
+                Ok(t as i64)
+            } else {
+                Err(raise("OverflowError", "int too large to convert to i64"))
+            }
         }
-        (PyValue::Bool(x), other) => py_add(&PyValue::Int(i64::from(*x)), other),
-        (other, PyValue::Bool(y)) => py_add(other, &PyValue::Int(i64::from(*y))),
-        _ => a.clone(),
+        PyValue::Str(text) => crate::settings::py_int(text).ok_or_else(|| {
+            raise(
+                "ValueError",
+                format!("invalid literal for int() with base 10: {}", repr_str(text)),
+            )
+        }),
+        other => Err(raise(
+            "TypeError",
+            format!(
+                "int() argument must be a string, a bytes-like object or a real number, not '{}'",
+                other.type_name()
+            ),
+        )),
     }
 }
 
-fn int_of(v: &PyValue) -> i64 {
-    #[allow(clippy::cast_possible_truncation)]
-    match v {
-        PyValue::Int(i) => *i,
-        PyValue::Float(f) => f.trunc() as i64,
-        PyValue::Bool(b) => i64::from(*b),
-        PyValue::Str(st) => st.trim().parse().unwrap_or(0),
-        _ => 0,
+/// `a + b`.
+fn add(a: &PyValue, b: &PyValue) -> R<PyValue> {
+    let int_of = |v: &PyValue| match v {
+        PyValue::Int(i) => Some(*i),
+        PyValue::Bool(x) => Some(i64::from(*x)),
+        _ => None,
+    };
+    #[allow(clippy::cast_precision_loss)]
+    let float_of = |v: &PyValue| match v {
+        PyValue::Float(f) => Some(*f),
+        PyValue::Int(i) => Some(*i as f64),
+        PyValue::Bool(x) => Some(f64::from(u8::from(*x))),
+        _ => None,
+    };
+    if let (Some(x), Some(y)) = (int_of(a), int_of(b)) {
+        return x
+            .checked_add(y)
+            .map(PyValue::Int)
+            .ok_or_else(|| raise("OverflowError", "int too large to convert to i64"));
+    }
+    if let (Some(x), Some(y)) = (float_of(a), float_of(b)) {
+        return Ok(PyValue::Float(x + y));
+    }
+    match (a, b) {
+        (PyValue::Str(x), PyValue::Str(y)) => Ok(PyValue::Str(format!("{x}{y}"))),
+        (PyValue::List(x), PyValue::List(y)) => {
+            let mut out = x.clone();
+            out.extend(y.iter().cloned());
+            Ok(PyValue::List(out))
+        }
+        (PyValue::Str(_), other) => Err(raise(
+            "TypeError",
+            format!(
+                "can only concatenate str (not \"{}\") to str",
+                other.type_name()
+            ),
+        )),
+        (PyValue::List(_), other) => Err(raise(
+            "TypeError",
+            format!(
+                "can only concatenate list (not \"{}\") to list",
+                other.type_name()
+            ),
+        )),
+        (x, y) => Err(raise(
+            "TypeError",
+            format!(
+                "unsupported operand type(s) for +: '{}' and '{}'",
+                x.type_name(),
+                y.type_name()
+            ),
+        )),
     }
 }
 
-fn is_positive(v: &PyValue) -> bool {
+/// `v <= 0`.
+fn le_zero(v: &PyValue) -> R<bool> {
     match v {
-        PyValue::Int(i) => *i > 0,
-        PyValue::Float(f) => *f > 0.0,
-        PyValue::Bool(b) => *b,
-        _ => false,
+        PyValue::Int(i) => Ok(*i <= 0),
+        PyValue::Float(f) => Ok(*f <= 0.0),
+        PyValue::Bool(b) => Ok(!*b),
+        other => Err(raise(
+            "TypeError",
+            format!(
+                "'<=' not supported between instances of '{}' and 'int'",
+                other.type_name()
+            ),
+        )),
+    }
+}
+
+/// `hash(v)`: a list or a dict cannot be a dict key.
+fn hashable(v: &PyValue) -> R<()> {
+    match v {
+        PyValue::List(_) | PyValue::Map(_) => Err(raise(
+            "TypeError",
+            format!("unhashable type: '{}'", v.type_name()),
+        )),
+        _ => Ok(()),
+    }
+}
+
+/// Dict-key equality: `1 == 1.0 == True`.
+fn key_eq(a: &PyValue, b: &PyValue) -> bool {
+    #[allow(clippy::cast_precision_loss)]
+    let num = |v: &PyValue| match v {
+        PyValue::Int(i) => Some(*i as f64),
+        PyValue::Float(f) => Some(*f),
+        PyValue::Bool(x) => Some(f64::from(u8::from(*x))),
+        _ => None,
+    };
+    match (num(a), num(b)) {
+        (Some(x), Some(y)) => x == y,
+        _ => a == b,
+    }
+}
+
+/// `key.split(":", 1)[1]`.
+fn after_colon(key: &str) -> R<&str> {
+    key.split_once(':')
+        .map(|(_, rest)| rest)
+        .ok_or_else(|| raise("IndexError", "list index out of range"))
+}
+
+/// `dict(v)`: a dict as is, else a sequence of pairs.
+fn py_dict(v: &PyValue) -> R<PyDict> {
+    match v {
+        PyValue::Map(m) => Ok(m.clone()),
+        PyValue::Str(_) | PyValue::List(_) | PyValue::Bytes(_) => {
+            let mut out = PyDict::new();
+            for (i, element) in py_iter(v)?.iter().enumerate() {
+                let parts = match element {
+                    PyValue::Str(_) | PyValue::List(_) | PyValue::Map(_) | PyValue::Bytes(_) => {
+                        py_iter(element)?
+                    }
+                    _ => {
+                        return Err(raise(
+                            "TypeError",
+                            format!(
+                                "cannot convert dictionary update sequence element #{i} to a sequence"
+                            ),
+                        ));
+                    }
+                };
+                let [key, value] = parts.as_slice() else {
+                    return Err(raise(
+                        "ValueError",
+                        format!(
+                            "dictionary update sequence element #{i} has length {}; 2 is required",
+                            parts.len()
+                        ),
+                    ));
+                };
+                hashable(key)?;
+                let PyValue::Str(key) = key else {
+                    // A non-str key is legal Python; the desk's dict holds str keys only, and no
+                    // Kite payload has one. Refused, never silently re-keyed.
+                    return Err(raise(
+                        "TypeError",
+                        format!("a {} dict key is not representable here", key.type_name()),
+                    ));
+                };
+                out.insert(key.clone(), value.clone());
+            }
+            Ok(out)
+        }
+        other => Err(raise(
+            "TypeError",
+            format!("'{}' object is not iterable", other.type_name()),
+        )),
     }
 }
 
@@ -120,14 +410,17 @@ fn snapshot(settings: &SharedSettings) -> Settings {
 pub struct DeskKite {
     kc: Arc<Broker>,
     settings: SharedSettings,
-    clock: Arc<dyn Clock>,
     limit_clock: Arc<dyn LimitClock>,
     limits: OnceCell<Arc<DeskLimits>>,
     shared: Arc<SharedSpacers>,
-    ltp_cache: Mutex<std::collections::HashMap<String, (f64, f64)>>,
-    ticks: Mutex<TickSizes>,
+    ltp_cache: Mutex<HashMap<String, (f64, f64)>>,
+    /// `_ticks`: exchange → (str symbol → tick). A non-str symbol is a legal key in Python's
+    /// dict, but no `&str` lookup can ever match it, so it is validated and not kept.
+    ticks: Mutex<HashMap<String, HashMap<String, f64>>>,
     token_mtime: Mutex<Option<std::time::SystemTime>>,
     slots_taken: Mutex<Vec<&'static str>>,
+    /// `app.main._kite is not None`: `Kite()` has run to completion.
+    constructed: Mutex<bool>,
 }
 
 impl std::fmt::Debug for DeskKite {
@@ -137,19 +430,22 @@ impl std::fmt::Debug for DeskKite {
 }
 
 impl DeskKite {
-    /// `Kite()`: pin IPv4 first when `FORCE_IPV4` (before the session exists), then load the
-    /// stored token.
+    /// The handle the gateway holds, built at boot: `FORCE_IPV4` pins first (before any session
+    /// exists), then — configured — `Kite()`'s token load. Unconfigured, nothing is loaded or
+    /// written and every method raises `KITE_API_KEY missing` ([`DeskKite::ready`]). `clock` is
+    /// accepted for the callers' sake; the LTP cache reads `time.monotonic()` (the limiter's real
+    /// clock), as Python's does — never the harness's settable wall clock.
     #[must_use]
     pub fn new(kc: Arc<Broker>, settings: SharedSettings, clock: Arc<dyn Clock>) -> Self {
         Self::with_limit_clock(kc, settings, clock, Arc::new(TokioClock::default()))
     }
 
-    /// As [`DeskKite::new`] with the limiter's clock injected (tests).
+    /// As [`DeskKite::new`] with the limiter's clock (and so the LTP cache's) injected (tests).
     #[must_use]
     pub fn with_limit_clock(
         kc: Arc<Broker>,
         settings: SharedSettings,
-        clock: Arc<dyn Clock>,
+        _clock: Arc<dyn Clock>,
         limit_clock: Arc<dyn LimitClock>,
     ) -> Self {
         let s = snapshot(&settings);
@@ -164,30 +460,59 @@ impl DeskKite {
         let me = Self {
             kc,
             settings,
-            clock,
             limit_clock,
             limits: OnceCell::new(),
             shared,
-            ltp_cache: Mutex::new(std::collections::HashMap::new()),
-            ticks: Mutex::new(TickSizes::default()),
+            ltp_cache: Mutex::new(HashMap::new()),
+            ticks: Mutex::new(HashMap::new()),
             token_mtime: Mutex::new(None),
             slots_taken: Mutex::new(Vec::new()),
+            constructed: Mutex::new(false),
         };
-        me.load_token();
+        // `Kite()` runs here when it can: configured, and the token store builds. Otherwise
+        // nothing is loaded and nothing is written, and [`DeskKite::ready`] raises Python's error
+        // on the first call (and builds it once the key arrives).
+        if !s.kite_api_key.is_empty()
+            && me.load_token().is_ok()
+            && let Ok(mut constructed) = me.constructed.lock()
+        {
+            *constructed = true;
+        }
         me
     }
 
-    /// `KITE_API_KEY missing` is Python's constructor error; callers that need a configured
-    /// client ask here.
+    /// `KITE_API_KEY missing` is Python's constructor error.
     ///
     /// # Errors
     /// `RuntimeError` when `KITE_API_KEY` is empty.
     pub fn ensure_configured(&self) -> Result<(), ClientError> {
         if snapshot(&self.settings).kite_api_key.is_empty() {
-            return Err(runtime(
-                "KITE_API_KEY missing — copy .env.example to .env and fill it.".to_owned(),
-            ));
+            return Err(runtime(NO_API_KEY));
         }
+        Ok(())
+    }
+
+    /// `app.main.kite()`: run `Kite()` once — refuse without `KITE_API_KEY`, pin IPv4 when
+    /// `FORCE_IPV4` (before the session exists), load the stored token. A constructor that
+    /// raised leaves nothing built, so the next call tries again (`_kite` stays `None`).
+    ///
+    /// # Errors
+    /// `RuntimeError` without `KITE_API_KEY`; the token store's `OSError` (its fallback key
+    /// cannot be read or written).
+    pub fn ready(&self) -> Result<(), ClientError> {
+        let mut constructed = self
+            .constructed
+            .lock()
+            .map_err(|_| runtime("the Kite wrapper's state is poisoned"))?;
+        if *constructed {
+            return Ok(());
+        }
+        self.ensure_configured()?;
+        if snapshot(&self.settings).force_ipv4 {
+            super::net::force_ipv4();
+        }
+        self.load_token()?;
+        *constructed = true;
         Ok(())
     }
 
@@ -211,7 +536,7 @@ impl DeskKite {
     pub fn set_limits(&self, limits: Arc<DeskLimits>) -> Result<(), ClientError> {
         self.limits
             .set(limits)
-            .map_err(|_| runtime("the read limiter is already built".to_owned()))
+            .map_err(|_| runtime("the read limiter is already built"))
     }
 
     /// `shared_mode()` for `/status`.
@@ -240,26 +565,42 @@ impl DeskKite {
         PathBuf::from(snapshot(&self.settings).token_file)
     }
 
-    fn store(&self) -> Option<baskfy_providers::tokens::AccessTokenStore> {
-        super::token_store::store_for(&self.token_path(), "").ok()
+    /// `store_for(C.TOKEN_FILE, getattr(C, "KITE_TOKEN_ENCRYPTION_KEY", ""))` — `app.config`
+    /// has no such attribute, so the configured key is always `""` and the environment (then
+    /// `.env`) decides.
+    fn store(&self) -> R<baskfy_providers::tokens::AccessTokenStore> {
+        let path = self.token_path();
+        super::token_store::store_for(&path, "").map_err(|e| {
+            let (python_type, message) =
+                super::token_store::os_error(&e, &super::token_store::key_path(&path));
+            raise(&python_type, message)
+        })
     }
 
     fn mtime(path: &std::path::Path) -> Option<std::time::SystemTime> {
         std::fs::metadata(path).and_then(|m| m.modified()).ok()
     }
 
-    /// `_load_token()`: a token that cannot be read is the same as none (log in again).
-    fn load_token(&self) {
-        let Some(store) = self.store() else {
-            return;
-        };
+    /// `_load_token()`: a token that cannot be read is the same as none (log in again); a
+    /// store that cannot be built raises.
+    fn load_token(&self) -> R<()> {
+        let store = self.store()?;
         let seen = if store.exists() {
             match store.load() {
                 Ok(token) => {
                     self.kc.set_access_token(&token.value);
                     Self::mtime(store.path())
                 }
-                Err(_) => None,
+                Err(exc) => {
+                    log(
+                        "WARNING",
+                        &format!(
+                            "could not read the stored access token ({}); log in again",
+                            exc.message()
+                        ),
+                    );
+                    None
+                }
             }
         } else {
             None
@@ -267,71 +608,85 @@ impl DeskKite {
         if let Ok(mut m) = self.token_mtime.lock() {
             *m = seen;
         }
+        Ok(())
     }
 
-    /// `refresh_token_if_changed()`: re-read the blob when somebody else wrote a newer token.
-    pub fn refresh_token_if_changed(&self) -> bool {
+    /// `refresh_token_if_changed()` on a built `Kite`.
+    fn refresh(&self) -> R<bool> {
         // `store_for` first, as Python does: it is what bootstraps the fallback key file.
-        let Some(store) = self.store() else {
-            return false;
-        };
+        let store = self.store()?;
         let seen = Self::mtime(store.path());
         let known = self.token_mtime.lock().map(|m| *m).unwrap_or(None);
         if seen.is_none() || seen == known {
-            return false;
+            return Ok(false);
         }
-        self.load_token();
-        true
+        log(
+            "INFO",
+            "the stored Kite token changed on disk; re-reading it",
+        );
+        self.load_token()?;
+        Ok(true)
+    }
+
+    /// `refresh_token_if_changed()`: re-read the blob when somebody else wrote a newer token.
+    ///
+    /// # Errors
+    /// As [`DeskKite::ready`], or the store cannot be built.
+    pub fn refresh_token_if_changed(&self) -> Result<bool, ClientError> {
+        self.ready()?;
+        self.refresh()
     }
 
     /// `login_url()`.
-    #[must_use]
-    pub fn login_url(&self) -> String {
-        self.kc.login_url()
+    ///
+    /// # Errors
+    /// As [`DeskKite::ready`].
+    pub fn login_url(&self) -> Result<String, ClientError> {
+        self.ready()?;
+        Ok(self.kc.login_url())
     }
 
     /// `exchange_token(request_token)`: the login exchange, then the token encrypted at rest.
     ///
     /// # Errors
-    /// The exchange, a reply with no `access_token`, or the store.
+    /// As [`DeskKite::ready`]; the exchange; a reply without `access_token`; the store.
     pub async fn exchange_token(&self, request_token: &str) -> Result<(), ClientError> {
+        self.ready()?;
         let secret = Secret::new(snapshot(&self.settings).kite_api_secret);
         let data = self.kc.generate_session(request_token, &secret).await?;
-        let token = match &data {
-            PyValue::Map(m) => match m.get("access_token") {
-                Some(PyValue::Str(t)) => t.clone(),
-                _ => {
-                    return Err(ClientError {
-                        python_type: "KeyError".to_owned(),
-                        message: "'access_token'".to_owned(),
-                    });
-                }
-            },
-            _ => {
-                return Err(ClientError {
-                    python_type: "TypeError".to_owned(),
-                    message: "the session reply is not a dict".to_owned(),
-                });
+        let token = match subscript(&data, "access_token")? {
+            PyValue::Str(t) => t.clone(),
+            other => {
+                return Err(raise(
+                    "TypeError",
+                    format!("the session's access_token is a {}", other.type_name()),
+                ));
             }
         };
         self.kc.set_access_token(&Secret::new(token.clone()));
-        let store =
-            super::token_store::store_for(&self.token_path(), "").map_err(|e| ClientError {
-                python_type: "OSError".to_owned(),
-                message: e.to_string(),
-            })?;
-        store.save(&token, None).map_err(|e| ClientError {
-            python_type: e.python_type().to_owned(),
-            message: e.to_string(),
-        })?;
+        let store = self.store()?;
+        store
+            .save(&token, None)
+            .map_err(|e| raise(e.python_type(), e.message().to_owned()))?;
         Ok(())
     }
 
-    /// `is_authed()`: one cheap `profile` call.
-    pub async fn is_authed(&self) -> bool {
-        self.refresh_token_if_changed();
+    /// `is_authed()`, raising where Python's does (`kite()` unconfigured, the store unbuilt);
+    /// a refused session or a limiter error is `false`.
+    ///
+    /// # Errors
+    /// As [`DeskKite::ready`], or the token store.
+    pub async fn try_is_authed(&self) -> Result<bool, ClientError> {
+        self.ready()?;
+        self.refresh()?;
         self.slot("general").await;
-        self.kc.profile().await.is_ok()
+        Ok(self.kc.profile().await.is_ok())
+    }
+
+    /// `kite().is_authed()` for a caller that treats any failure as "not authed" (an
+    /// unconfigured desk is not authed). [`DeskKite::try_is_authed`] raises instead.
+    pub async fn is_authed(&self) -> bool {
+        self.try_is_authed().await.unwrap_or(false)
     }
 
     /// `holdings()`: what is owned right now — `quantity + t1_quantity + collateral_quantity`
@@ -340,180 +695,156 @@ impl DeskKite {
     /// which Kite moves into holdings only at T+1.
     ///
     /// # Errors
-    /// The holdings read, or `RuntimeError` when positions cannot be read (refuse rather than
-    /// under-report).
+    /// As [`DeskKite::ready`]; the holdings read or a malformed reply (Python's exception);
+    /// `RuntimeError` when positions cannot be read (refuse rather than under-report).
     pub async fn holdings(&self) -> Result<Vec<PyDict>, ClientError> {
-        self.refresh_token_if_changed();
-        let mut out: Vec<(String, PyDict)> = Vec::new();
+        self.ready()?;
+        self.refresh()?;
+        let mut out: Vec<(PyValue, PyDict)> = Vec::new();
         self.slot("general").await;
-        let rows = match self.kc.holdings().await? {
-            PyValue::List(rows) => rows,
-            _ => Vec::new(),
-        };
-        let zero = PyValue::Int(0);
-        for h in &rows {
-            let PyValue::Map(h) = h else { continue };
-            let total = py_add(
-                &py_add(get(h, "quantity"), h.get("t1_quantity").unwrap_or(&zero)),
-                h.get("collateral_quantity").unwrap_or(&zero),
-            );
-            if !is_positive(&total) {
+        let reply = self.kc.holdings().await?;
+        for h in py_iter(&reply)? {
+            let quantity = subscript(&h, "quantity")?;
+            let PyValue::Map(hm) = &h else { continue };
+            let t1 = hm.get("t1_quantity").unwrap_or(&ZERO);
+            let collateral = hm.get("collateral_quantity").unwrap_or(&ZERO);
+            let total = add(&add(quantity, t1)?, collateral)?;
+            if le_zero(&total)? {
                 continue;
             }
-            let sym = match get(h, "tradingsymbol") {
-                PyValue::Str(t) => t.clone(),
-                other => format!("{other:?}"),
-            };
             let row = dict([
-                ("symbol", s(&sym)),
-                ("exchange", get(h, "exchange").clone()),
+                ("symbol", subscript(&h, "tradingsymbol")?.clone()),
+                ("exchange", subscript(&h, "exchange")?.clone()),
                 ("quantity", total),
-                (
-                    "pledged_qty",
-                    h.get("collateral_quantity")
-                        .cloned()
-                        .unwrap_or(PyValue::Int(0)),
-                ),
-                ("average_price", get(h, "average_price").clone()),
-                ("last_price", get(h, "last_price").clone()),
+                ("pledged_qty", collateral.clone()),
+                ("average_price", subscript(&h, "average_price")?.clone()),
+                ("last_price", subscript(&h, "last_price")?.clone()),
             ]);
-            match out.iter_mut().find(|(k, _)| *k == sym) {
+            let key = subscript(&h, "tradingsymbol")?.clone();
+            hashable(&key)?;
+            match out.iter_mut().find(|(k, _)| key_eq(k, &key)) {
                 Some((_, slot)) => *slot = row,
-                None => out.push((sym, row)),
+                None => out.push((key, row)),
             }
         }
+
         self.slot("general").await;
-        let positions = self.kc.positions().await.map_err(|exc| {
-            runtime(format!(
-                "could not read positions, so today's purchases cannot be counted: {exc}"
-            ))
-        })?;
-        let net = match &positions {
-            PyValue::Map(m) => match m.get("net") {
-                Some(PyValue::List(rows)) => rows.clone(),
-                _ => Vec::new(),
+        let positions = match self.kc.positions().await {
+            Ok(PyValue::Map(m)) => match m.get("net") {
+                Some(net) if net.truthy() => net.clone(),
+                Some(_) => PyValue::List(Vec::new()),
+                None => PyValue::List(Vec::new()),
             },
-            _ => Vec::new(),
+            Ok(other) => {
+                return Err(runtime(format!(
+                    "could not read positions, so today's purchases cannot be counted: {}",
+                    no_attribute(&other, "get").message
+                )));
+            }
+            Err(exc) => {
+                return Err(runtime(format!(
+                    "could not read positions, so today's purchases cannot be counted: {exc}"
+                )));
+            }
         };
-        for p in &net {
-            let PyValue::Map(p) = p else { continue };
-            let product = match p.get("product") {
-                Some(PyValue::Str(st)) => st.clone(),
-                _ => String::new(),
+        for p in py_iter(&positions)? {
+            let product = attr_get(&p, "product")?;
+            let product = if product.truthy() {
+                product.py_str()
+            } else {
+                String::new()
             };
             if product != "CNC" {
                 continue;
             }
-            let qty = int_of(get(p, "quantity")) - int_of(get(p, "overnight_quantity"));
+            let or_zero = |v: &PyValue| if v.truthy() { v.clone() } else { ZERO.clone() };
+            let quantity = to_int(&or_zero(attr_get(&p, "quantity")?))?;
+            let overnight = to_int(&or_zero(attr_get(&p, "overnight_quantity")?))?;
+            let qty = quantity
+                .checked_sub(overnight)
+                .ok_or_else(|| raise("OverflowError", "int too large to convert to i64"))?;
             if qty <= 0 {
                 continue;
             }
-            let sym = match get(p, "tradingsymbol") {
-                PyValue::Str(t) => t.clone(),
-                other => format!("{other:?}"),
-            };
-            if let Some((_, row)) = out.iter_mut().find(|(k, _)| *k == sym) {
-                let q = py_add(get(row, "quantity"), &PyValue::Int(qty));
+            let sym = subscript(&p, "tradingsymbol")?.clone();
+            hashable(&sym)?;
+            if let Some((_, row)) = out.iter_mut().find(|(k, _)| key_eq(k, &sym)) {
+                let q = add(row.get("quantity").unwrap_or(&NONE), &PyValue::Int(qty))?;
                 row.insert("quantity", q);
             } else {
-                let or_zero = |k: &str| {
-                    let v = get(p, k);
+                let PyValue::Map(pm) = &p else { continue };
+                let or_float = |k: &str| {
+                    let v = pm.get(k).unwrap_or(&NONE);
                     if v.truthy() {
                         v.clone()
                     } else {
                         PyValue::Float(0.0)
                     }
                 };
-                out.push((
-                    sym.clone(),
-                    dict([
-                        ("symbol", s(&sym)),
-                        (
-                            "exchange",
-                            p.get("exchange").cloned().unwrap_or_else(|| s("NSE")),
-                        ),
-                        ("quantity", PyValue::Int(qty)),
-                        ("pledged_qty", PyValue::Int(0)),
-                        ("average_price", or_zero("average_price")),
-                        ("last_price", or_zero("last_price")),
-                    ]),
-                ));
+                let row = dict([
+                    ("symbol", sym.clone()),
+                    (
+                        "exchange",
+                        pm.get("exchange").cloned().unwrap_or_else(|| s("NSE")),
+                    ),
+                    ("quantity", PyValue::Int(qty)),
+                    ("pledged_qty", PyValue::Int(0)),
+                    ("average_price", or_float("average_price")),
+                    ("last_price", or_float("last_price")),
+                ]);
+                out.push((sym, row));
             }
         }
         Ok(out.into_iter().map(|(_, r)| r).collect())
     }
 
-    async fn list_of(&self, v: Result<PyValue, KiteError>) -> Result<Vec<PyValue>, ClientError> {
-        Ok(match v? {
-            PyValue::List(rows) => rows,
-            _ => Vec::new(),
-        })
-    }
-
-    /// `trades()`: today's executed trades (the book is same-day only).
+    /// `trades()`: today's executed trades (the book is same-day only). No token re-read, as
+    /// Python's has none.
     ///
     /// # Errors
-    /// The read.
+    /// As [`DeskKite::ready`]; the read; a reply `list()` refuses.
     pub async fn trades(&self) -> Result<Vec<PyValue>, ClientError> {
+        self.ready()?;
         self.slot("general").await;
-        let r = self.kc.trades().await;
-        self.list_of(r).await
+        list_or_empty(&self.kc.trades().await?)
     }
 
-    /// `available_cash()`: `margins()["equity"]["available"]["live_balance"]`.
+    /// `available_cash()`: `float(margins()["equity"]["available"]["live_balance"])`.
     ///
     /// # Errors
-    /// The read, or a payload without that path.
+    /// As [`DeskKite::ready`]; the read; Python's exception on a malformed payload.
     pub async fn available_cash(&self) -> Result<f64, ClientError> {
+        self.ready()?;
         self.slot("general").await;
         let m = self.kc.margins(None).await?;
-        let mut cur = &m;
-        for k in ["equity", "available", "live_balance"] {
-            cur = match cur {
-                PyValue::Map(d) => d.get(k).ok_or_else(|| ClientError {
-                    python_type: "KeyError".to_owned(),
-                    message: format!("'{k}'"),
-                })?,
-                _ => {
-                    return Err(ClientError {
-                        python_type: "TypeError".to_owned(),
-                        message: "margins payload is not a dict".to_owned(),
-                    });
-                }
-            };
-        }
-        #[allow(clippy::cast_precision_loss)]
-        match cur {
-            PyValue::Float(f) => Ok(*f),
-            PyValue::Int(i) => Ok(*i as f64),
-            _ => Err(ClientError {
-                python_type: "TypeError".to_owned(),
-                message: "live_balance is not a number".to_owned(),
-            }),
-        }
+        let equity = subscript(&m, "equity")?;
+        let available = subscript(equity, "available")?;
+        to_float(subscript(available, "live_balance")?)
     }
 
-    /// `ltp(symbols, exchange)`: last prices, a `LTP_CACHE_SECONDS` cache first; only the names
-    /// with no fresh answer cost a (quote-family) call.
+    /// `ltp(symbols, exchange)`: last prices, a `LTP_CACHE_SECONDS` cache first (on
+    /// `time.monotonic()`); only the names with no fresh answer cost a (quote-family) call.
     ///
     /// # Errors
-    /// The read.
+    /// As [`DeskKite::ready`]; the read; Python's exception on a malformed entry (the entries
+    /// before it are cached, as Python's are).
     pub async fn ltp(&self, symbols: &[String], exchange: &str) -> Result<PyDict, ClientError> {
-        self.refresh_token_if_changed();
+        self.ready()?;
+        self.refresh()?;
         let mut wanted: Vec<&String> = Vec::new();
         for sym in symbols {
             if !sym.is_empty() && !wanted.contains(&sym) {
                 wanted.push(sym);
             }
         }
-        let now = self.clock.monotonic();
+        let now = self.limit_clock.now();
         let mut out = PyDict::new();
         let mut missing: Vec<String> = Vec::new();
         {
             let cache = self
                 .ltp_cache
                 .lock()
-                .map_err(|_| runtime("ltp cache poisoned".to_owned()))?;
+                .map_err(|_| runtime("ltp cache poisoned"))?;
             for sym in wanted {
                 match cache.get(&format!("{exchange}:{sym}")) {
                     Some((at, price)) if now - at < LTP_CACHE_SECONDS => {
@@ -530,33 +861,26 @@ impl DeskKite {
                 .collect();
             self.slot("quote").await;
             let data = self.kc.ltp(&keys).await?;
-            let fetched = self.clock.monotonic();
-            if let PyValue::Map(data) = data {
-                for (key, value) in data.iter() {
-                    let price = match value {
-                        PyValue::Map(v) => match v.get("last_price") {
-                            Some(PyValue::Float(f)) => *f,
-                            #[allow(clippy::cast_precision_loss)]
-                            Some(PyValue::Int(i)) => *i as f64,
-                            _ => continue,
-                        },
-                        _ => continue,
-                    };
-                    if let Ok(mut cache) = self.ltp_cache.lock() {
-                        cache.insert(key.to_owned(), (fetched, price));
-                    }
-                    let sym = key.split_once(':').map_or(key, |(_, s)| s);
-                    out.insert(sym, PyValue::Float(price));
+            let fetched = self.limit_clock.now();
+            for (key, value) in items(&data)?.iter() {
+                let price = to_float(subscript(value, "last_price")?)?;
+                if let Ok(mut cache) = self.ltp_cache.lock() {
+                    cache.insert(key.to_owned(), (fetched, price));
                 }
+                out.insert(after_colon(key)?, PyValue::Float(price));
             }
         }
         Ok(out)
     }
 
-    /// `quotes(symbols, exchange)`: the desk's shape — chunked under 500, symbol-keyed, a
-    /// failed batch skipped (a missing name must not take the panel down).
-    pub async fn quotes(&self, symbols: &[String], exchange: &str) -> PyDict {
-        self.refresh_token_if_changed();
+    /// `quotes(symbols, exchange)`: the desk's shape — chunked under 500, symbol-keyed; a batch
+    /// whose call fails is skipped (logged), a reply that is not a dict raises, as Python's does.
+    ///
+    /// # Errors
+    /// As [`DeskKite::ready`]; Python's exception on a malformed reply.
+    pub async fn quotes(&self, symbols: &[String], exchange: &str) -> Result<PyDict, ClientError> {
+        self.ready()?;
+        self.refresh()?;
         let mut clean: Vec<&String> = Vec::new();
         for sym in symbols {
             if !sym.is_empty() && !clean.contains(&sym) {
@@ -570,51 +894,55 @@ impl DeskKite {
                 .map(|sym| format!("{exchange}:{sym}"))
                 .collect();
             self.slot("quote").await;
-            let Ok(PyValue::Map(data)) = self.kc.quote(&keys).await else {
-                continue;
+            let data = match self.kc.quote(&keys).await {
+                Ok(d) => d,
+                Err(e) => {
+                    log(
+                        "WARNING",
+                        &format!("quote batch failed ({} symbols): {e}", keys.len()),
+                    );
+                    continue;
+                }
             };
-            for (k, v) in data.iter() {
-                let PyValue::Map(v) = v else { continue };
-                let ohlc = match v.get("ohlc") {
-                    Some(PyValue::Map(o)) => o.clone(),
-                    _ => PyDict::new(),
+            for (k, v) in items(&data)?.iter() {
+                let ohlc = attr_get(v, "ohlc")?;
+                let empty = PyValue::Map(PyDict::new());
+                let ohlc = if ohlc.truthy() { ohlc } else { &empty };
+                let volume = attr_get(v, "volume")?;
+                let volume = if volume.truthy() {
+                    volume
+                } else {
+                    attr_get(v, "volume_traded")?
                 };
-                let volume = match v.get("volume") {
-                    Some(x) if x.truthy() => x.clone(),
-                    _ => get(v, "volume_traded").clone(),
-                };
-                let sym = k.split_once(':').map_or(k, |(_, s)| s);
-                out.insert(
-                    sym,
-                    PyValue::Map(dict([
-                        ("last_price", get(v, "last_price").clone()),
-                        ("net_change", get(v, "net_change").clone()),
-                        ("open", get(&ohlc, "open").clone()),
-                        ("high", get(&ohlc, "high").clone()),
-                        ("low", get(&ohlc, "low").clone()),
-                        ("prev_close", get(&ohlc, "close").clone()),
-                        ("volume", volume),
-                    ])),
-                );
+                let row = dict([
+                    ("last_price", attr_get(v, "last_price")?.clone()),
+                    ("net_change", attr_get(v, "net_change")?.clone()),
+                    ("open", attr_get(ohlc, "open")?.clone()),
+                    ("high", attr_get(ohlc, "high")?.clone()),
+                    ("low", attr_get(ohlc, "low")?.clone()),
+                    ("prev_close", attr_get(ohlc, "close")?.clone()),
+                    ("volume", volume.clone()),
+                ]);
+                out.insert(after_colon(k)?, PyValue::Map(row));
             }
         }
-        out
+        Ok(out)
     }
 
     /// `instruments(exchange)`: one general slot.
     ///
     /// # Errors
-    /// The read.
+    /// As [`DeskKite::ready`]; the read.
     pub async fn instruments(&self, exchange: &str) -> Result<Vec<PyValue>, ClientError> {
+        self.ready()?;
         self.slot("general").await;
-        let r = self.kc.instruments(Some(exchange)).await;
-        self.list_of(r).await
+        list_or_empty(&self.kc.instruments(Some(exchange)).await?)
     }
 
     /// `historical(token, start, end, interval)`: the 3 req/s family.
     ///
     /// # Errors
-    /// The read.
+    /// As [`DeskKite::ready`]; the read.
     pub async fn historical(
         &self,
         token: i64,
@@ -622,95 +950,120 @@ impl DeskKite {
         end: &str,
         interval: &str,
     ) -> Result<Vec<PyValue>, ClientError> {
-        self.refresh_token_if_changed();
+        self.ready()?;
+        self.refresh()?;
         self.slot("historical").await;
-        let r = self
-            .kc
-            .historical_data(token, start, end, interval, false, false)
-            .await;
-        self.list_of(r).await
+        list_or_empty(
+            &self
+                .kc
+                .historical_data(token, start, end, interval, false, false)
+                .await?,
+        )
     }
 
-    /// `margins(segment)`: the raw payload.
+    /// `margins(segment)`: `dict(...)` of the raw payload.
     ///
     /// # Errors
-    /// The read.
+    /// As [`DeskKite::ready`]; the read; a payload `dict()` refuses.
     pub async fn margins(&self, segment: Option<&str>) -> Result<PyValue, ClientError> {
-        self.refresh_token_if_changed();
+        self.ready()?;
+        self.refresh()?;
         self.slot("general").await;
-        Ok(self.kc.margins(segment.filter(|s| !s.is_empty())).await?)
+        let raw = self.kc.margins(segment.filter(|s| !s.is_empty())).await?;
+        Ok(PyValue::Map(py_dict(&raw)?))
     }
 
     /// `orders()`.
     ///
     /// # Errors
-    /// The read.
+    /// As [`DeskKite::ready`]; the read.
     pub async fn orders(&self) -> Result<Vec<PyValue>, ClientError> {
-        self.refresh_token_if_changed();
+        self.ready()?;
+        self.refresh()?;
         self.slot("general").await;
-        let r = self.kc.orders().await;
-        self.list_of(r).await
+        list_or_empty(&self.kc.orders().await?)
     }
 
     /// `order_history(order_id)`.
     ///
     /// # Errors
-    /// The read.
+    /// As [`DeskKite::ready`]; the read.
     pub async fn order_history(&self, order_id: &str) -> Result<Vec<PyValue>, ClientError> {
-        self.refresh_token_if_changed();
+        self.ready()?;
+        self.refresh()?;
         self.slot("general").await;
-        let r = self.kc.order_history(order_id).await;
-        self.list_of(r).await
+        list_or_empty(&self.kc.order_history(order_id).await?)
     }
 
-    /// `quote_raw(keys)`: Kite's own `quote` shape, one quote slot.
+    /// `quote_raw(keys)`: `dict(quote(keys) or {})`, one quote slot.
     ///
     /// # Errors
-    /// The read.
+    /// As [`DeskKite::ready`]; the read; a payload `dict()` refuses.
     pub async fn quote_raw(&self, keys: &[String]) -> Result<PyValue, ClientError> {
-        self.refresh_token_if_changed();
+        self.ready()?;
+        self.refresh()?;
         self.slot("quote").await;
-        Ok(match self.kc.quote(keys).await? {
-            PyValue::None => PyValue::Map(PyDict::new()),
-            other => other,
-        })
+        let raw = self.kc.quote(keys).await?;
+        if !raw.truthy() {
+            return Ok(PyValue::Map(PyDict::new()));
+        }
+        Ok(PyValue::Map(py_dict(&raw)?))
     }
 
     /// `get_gtts()`: every resting GTT (a read).
     ///
     /// # Errors
-    /// The read.
+    /// As [`DeskKite::ready`]; the read.
     pub async fn get_gtts(&self) -> Result<Vec<PyValue>, ClientError> {
-        self.refresh_token_if_changed();
+        self.ready()?;
+        self.refresh()?;
         self.slot("general").await;
-        let r = self.kc.get_gtts().await;
-        self.list_of(r).await
+        list_or_empty(&self.kc.get_gtts().await?)
     }
 
-    /// `tick_size(symbol, exchange)`: cached per exchange for the process.
+    /// `tick_size(symbol, exchange)`: `{i["tradingsymbol"]: float(i.get("tick_size") or 0.05)}`
+    /// from the dump, cached per exchange for the process.
     ///
     /// # Errors
-    /// The instrument read.
+    /// As [`DeskKite::ready`]; the instrument read; Python's exception on a malformed row.
     pub async fn tick_size(&self, symbol: &str, exchange: &str) -> Result<f64, ClientError> {
-        let cached = self.ticks.lock().is_ok_and(|t| t.cached(exchange));
+        self.ready()?;
+        let cached = self.ticks.lock().is_ok_and(|t| t.contains_key(exchange));
         if !cached {
             let dump = self.instruments(exchange).await?;
+            let mut table = HashMap::new();
+            for i in &dump {
+                let key = subscript(i, "tradingsymbol")?;
+                let tick = attr_get(i, "tick_size")?;
+                let tick = if tick.truthy() {
+                    to_float(tick)?
+                } else {
+                    DEFAULT_TICK
+                };
+                hashable(key)?;
+                if let PyValue::Str(sym) = key {
+                    table.insert(sym.clone(), tick);
+                }
+            }
             if let Ok(mut t) = self.ticks.lock() {
-                t.remember(exchange, &dump);
+                t.insert(exchange.to_owned(), table);
             }
         }
         Ok(self
             .ticks
             .lock()
-            .map_or(crate::gateway::DEFAULT_TICK, |t| t.get(symbol, exchange)))
+            .ok()
+            .and_then(|t| t.get(exchange).and_then(|m| m.get(symbol)).copied())
+            .unwrap_or(DEFAULT_TICK))
     }
 
     /// `delete_gtt(gtt_id, symbol)`: the documented exception — its own untouchable guard (when
     /// a symbol is named), DRY_RUN simulated.
     ///
     /// # Errors
-    /// `UntouchableInstrumentError`.
+    /// As [`DeskKite::ready`]; `UntouchableInstrumentError`.
     pub async fn delete_gtt(&self, gtt_id: i64, symbol: &str) -> Result<PyDict, ClientError> {
+        self.ready()?;
         if !symbol.is_empty() {
             assert_tradeable(symbol, None)?;
         }
@@ -739,7 +1092,7 @@ impl DeskKite {
     /// simulated (the unsnapped trigger), else snapped to the tick with the limit at 99.5%.
     ///
     /// # Errors
-    /// `UntouchableInstrumentError` / `OvernightOptionError`.
+    /// As [`DeskKite::ready`]; `UntouchableInstrumentError` / `OvernightOptionError`.
     pub async fn place_gtt_stop(
         &self,
         symbol: &str,
@@ -748,6 +1101,7 @@ impl DeskKite {
         last_price: f64,
         exchange: &str,
     ) -> Result<PyDict, ClientError> {
+        self.ready()?;
         assert_tradeable(symbol, None)?;
         assert_not_overnight_option(symbol, exchange, "CNC")?;
         if snapshot(&self.settings).dry_run {
@@ -772,19 +1126,19 @@ impl DeskKite {
         let trig = to_tick(trigger, tick);
         let limit = to_tick(trig * 0.995, tick);
         let params = super::gtt::gtt_params(symbol, exchange, qty, trig, limit, last_price, None);
-        match self.kc.place_gtt(&params).await {
-            Ok(PyValue::Map(gid)) => match gid.get("trigger_id") {
-                Some(id) => Ok(dict([
-                    ("symbol", s(symbol)),
-                    ("status", s("GTT_PLACED")),
-                    ("gtt_id", id.clone()),
-                    ("trigger", PyValue::Float(trig)),
-                    ("limit", PyValue::Float(limit)),
-                ])),
-                None => Ok(error("'trigger_id'".to_owned())),
-            },
-            Ok(_) => Ok(error("'trigger_id'".to_owned())),
-            Err(exc) => Ok(error(exc.to_string())),
+        let gid = match self.kc.place_gtt(&params).await {
+            Ok(gid) => gid,
+            Err(exc) => return Ok(error(exc.to_string())),
+        };
+        match subscript(&gid, "trigger_id") {
+            Ok(id) => Ok(dict([
+                ("symbol", s(symbol)),
+                ("status", s("GTT_PLACED")),
+                ("gtt_id", id.clone()),
+                ("trigger", PyValue::Float(trig)),
+                ("limit", PyValue::Float(limit)),
+            ])),
+            Err(e) => Ok(error(e.message)),
         }
     }
 }

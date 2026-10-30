@@ -12,8 +12,14 @@
 //! * [`clock`] — the 10:45 cutoff and the 15:15 GTT sweep, through the swing book's gateway
 //!   (`execute::cutoff_open_orders` / `eod_gtt_sweep`), `run_chore` and the backstop
 //!   `run_after_close`. Clocks and sleeps are injected.
+//! * [`service`] — `swing_monitor.main()`: `baskfy-desk service swing-monitor`, wired to the
+//!   desk (its store, the swing gateway, `execute_line` as [`service::DeskAutoConfirm`], the
+//!   chores' seams, the quote fallback, the gated heartbeat), and the container scheduler's
+//!   `next_run`.
+//! * [`harness`] — `POST /__harness/swing-signal`, harness-only, so `desk_diff.py --plans`
+//!   grades the SIGNAL plan kind against Python's.
 //! * The notifier is [`super::notify`] (declared by the parent before the split; this lane owns
-//!   its content and tests it here).
+//!   its content and tests it here): SMTP (STARTTLS, AUTH) and Telegram's `sendMessage`.
 
 /// One log line on stderr, Python's `logging` format reduced to `LEVEL logger message`.
 macro_rules! log_line {
@@ -30,11 +36,21 @@ pub fn emit(line: &str) {
 }
 
 pub mod clock;
+pub mod harness;
 pub mod runner;
+pub mod service;
 
 pub use super::notify;
 
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_clock;
+#[cfg(test)]
+mod tests_notify;
+#[cfg(test)]
+mod tests_service;
+#[cfg(test)]
 mod tests_store;
+#[cfg(test)]
+mod tests_strategy;

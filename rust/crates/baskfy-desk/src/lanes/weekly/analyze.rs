@@ -11,10 +11,8 @@
 //! sells first, with `client_id = plan_id:symbol`. Stops are **not** armed here (they are
 //! sized from fills at `/stops`, which is the stops lane's).
 //!
-//! **Not ported, loud:** the generated-scan path (`generate_for=…`, or
-//! `SCAN_SOURCE_DEFAULT=generated`) needs `baskfy_core.momentum_scan`, which has no Rust port
-//! yet; it validates its date and its carried columns exactly as Python does and then answers
-//! 503 instead of generating (lane weekly_plan decision, ⚠ UNREVIEWED, for the integrator to number). Telemetry (`_tel`) is a no-op in the
+//! The generated-scan path (`generate_for=…`, or `SCAN_SOURCE_DEFAULT=generated`) builds the
+//! scan from the screener's bars through [`super::scan_source`] (DECISIONS-RS R8.WP1). Telemetry (`_tel`) is a no-op in the
 //! harness and is not reproduced.
 
 use std::collections::BTreeSet;
@@ -31,6 +29,7 @@ use super::basket::{BasketConfig, PlanInputs, build_plan};
 use super::frame::{Frame, read_csv};
 use super::pandas::{Num, py_round_int};
 use super::plan_store;
+use super::scan_source;
 use super::score::{ScoringConfig, audit, load_scan, score};
 use crate::app::AppState;
 use crate::gateway::{FAILED_STATUSES, PlaceOrder};
@@ -45,13 +44,7 @@ use crate::wire::{PyDict, PyValue, dict};
 /// `UPLOAD_DIR`.
 pub const UPLOAD_DIR: &str = "data/uploads";
 /// `CARRIED_COLUMNS` (`baskfy_core.momentum_scan`).
-pub const CARRIED_COLUMNS: [&str; 5] = [
-    "marketcap",
-    "beta",
-    "circuits_three_months",
-    "circuits_one_year",
-    "is_nifty_fno",
-];
+pub use super::scan_source::CARRIED_COLUMNS;
 /// `/execute`'s circuit breaker: identical failures in a row that stop the batch.
 pub const BREAKER_TRIP: usize = 3;
 
@@ -485,18 +478,55 @@ fn uploaded_scan(
     Ok((df, provenance, note))
 }
 
-/// `_generated_scan(generate_for)`'s refusals, then the honest 503 (not ported).
-fn generated_scan(state: &AppState, generate_for: &str) -> Response<Body> {
+/// `_generated_scan(generate_for)`: the same columns, from the screener's bars instead of a
+/// website (`scan_source.generate`, ported in [`super::scan_source`]).
+async fn generated_scan(
+    state: &AppState,
+    cfg: &ScoringConfig,
+    generate_for: &str,
+) -> Result<(Frame, PyDict, String), Box<Response<Body>>> {
     let Some(as_of) = date_fromisoformat(generate_for) else {
-        return detail(
+        return Err(Box::new(detail(
             StatusCode::BAD_REQUEST,
             &format!(
                 "generate_for must be YYYY-MM-DD, got {}",
                 py_repr_str(generate_for)
             ),
-        );
+        )));
     };
-    // `_carried_columns()`: the newest retained scan supplies what no bar series can.
+    let carried = carried_columns(state)?;
+    let dsn = state.settings_snapshot().screener_dsn;
+    let unavailable = |exc: &str| {
+        Box::new(detail(
+            StatusCode::SERVICE_UNAVAILABLE,
+            &format!("could not generate a scan for {as_of}: {exc}"),
+        ))
+    };
+    let (bars, days) = scan_source::fetch(&dsn, as_of)
+        .await
+        .map_err(|e| unavailable(&e))?;
+    let generated = scan_source::generate_from(&bars, &days, as_of, cfg, &carried)
+        .map_err(|e| unavailable(&e.0))?;
+    drop(bars);
+    let mut provenance = generated.provenance();
+    provenance.insert("source", PyValue::Str("generated".to_owned()));
+    provenance.insert(
+        "warnings",
+        PyValue::List(
+            scan_source::scan_warnings(&generated)
+                .into_iter()
+                .map(PyValue::Str)
+                .collect(),
+        ),
+    );
+    // `as_desk_frame` is outside Python's try: its ValueError is a 500.
+    let df =
+        scan_source::as_desk_frame(&generated, cfg).map_err(|e| Box::new(internal_error(&e.0)))?;
+    Ok((df, provenance, format!("generated scan {as_of}")))
+}
+
+/// `_carried_columns()`: the newest retained scan supplies what no bar series can.
+fn carried_columns(state: &AppState) -> Result<Frame, Box<Response<Body>>> {
     let dir = state.paths.resolve(UPLOAD_DIR);
     let mut scans: Vec<(std::time::SystemTime, std::path::PathBuf)> = std::fs::read_dir(&dir)
         .map(|rd| {
@@ -516,14 +546,14 @@ fn generated_scan(state: &AppState, generate_for: &str) -> Response<Body> {
         .unwrap_or_default();
     scans.sort_by_key(|s| std::cmp::Reverse(s.0));
     let Some((_, newest)) = scans.first() else {
-        return detail(
+        return Err(Box::new(detail(
             StatusCode::SERVICE_UNAVAILABLE,
             "a generated scan still needs marketcap, beta, circuits and F&O membership, and no uploaded scan is available to take them from. Upload one scan first.",
-        );
+        )));
     };
     let frame = match std::fs::read(newest).map(|raw| read_csv(&raw)) {
         Ok(Ok(f)) => f,
-        _ => return internal_error("unreadable retained scan"),
+        _ => return Err(Box::new(internal_error("unreadable retained scan"))),
     };
     let missing: Vec<String> = ["symbol", "series"]
         .iter()
@@ -536,17 +566,28 @@ fn generated_scan(state: &AppState, generate_for: &str) -> Response<Body> {
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or_default();
-        return detail(
+        return Err(Box::new(detail(
             StatusCode::SERVICE_UNAVAILABLE,
             &format!("{name} cannot supply [{}]", missing.join(", ")),
-        );
+        )));
     }
-    detail(
-        StatusCode::SERVICE_UNAVAILABLE,
-        &format!(
-            "could not generate a scan for {as_of}: the generated scan (baskfy_core.momentum_scan) is not ported to Rust yet"
-        ),
-    )
+    Ok(frame)
+}
+
+/// `_latest_pipeline_date()`: the most recent date the pipeline has bars for (the M14 flag).
+async fn latest_pipeline_date(state: &AppState) -> Result<NaiveDate, Box<Response<Body>>> {
+    let dsn = state.settings_snapshot().screener_dsn;
+    match scan_source::latest_pipeline_date(&dsn).await {
+        Err(exc) => Err(Box::new(detail(
+            StatusCode::SERVICE_UNAVAILABLE,
+            &format!("SCAN_SOURCE_DEFAULT is 'generated' but the screener is unreachable: {exc}"),
+        ))),
+        Ok(None) => Err(Box::new(detail(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "SCAN_SOURCE_DEFAULT is 'generated' but the screener has no bars",
+        ))),
+        Ok(Some(d)) => Ok(d),
+    }
 }
 
 // =============================================================================================
@@ -619,15 +660,29 @@ pub async fn breadth_for_plan(
     on: NaiveDate,
 ) -> PyDict {
     let slug = settings.desk_universe_slug.clone();
+    let pipeline = pipeline_breadth(&settings.screener_dsn, on, &slug).await;
+    breadth_decision(scan_breadth, symbols, on, &slug, pipeline)
+}
+
+/// `breadth_for_plan`'s decision, given what `pipeline_breadth` returned (or the class of the
+/// exception it raised): the pipeline's number only when it measured the same population.
+#[must_use]
+pub fn breadth_decision(
+    scan_breadth: f64,
+    symbols: &BTreeSet<String>,
+    on: NaiveDate,
+    slug: &str,
+    pipeline: Result<(Option<f64>, BTreeSet<String>), String>,
+) -> PyDict {
     let mut result = dict([
         ("value", PyValue::Float(scan_breadth)),
         ("source", PyValue::Str("scan".to_owned())),
         ("scan_value", PyValue::Float(scan_breadth)),
         ("pipeline_value", PyValue::None),
-        ("universe", PyValue::Str(slug.clone())),
+        ("universe", PyValue::Str(slug.to_owned())),
         ("reason", PyValue::Str(String::new())),
     ]);
-    let (value, members) = match pipeline_breadth(&settings.screener_dsn, on, &slug).await {
+    let (value, members) = match pipeline {
         Ok(v) => v,
         Err(class) => {
             result.insert(
@@ -751,17 +806,25 @@ async fn analyze(State(state): State<AppState>, headers: HeaderMap, body: Bytes)
     let scoring = scoring_config(&cfg);
     let settings = state.settings_snapshot();
     let (df, provenance, note) = if !generate_for.is_empty() {
-        return generated_scan(&state, &generate_for);
+        match generated_scan(&state, &scoring, &generate_for).await {
+            Ok(v) => v,
+            Err(r) => return *r,
+        }
     } else if let Some((filename, raw)) = scan {
         match uploaded_scan(&state, &scoring, filename.as_deref(), &raw) {
             Ok(v) => v,
             Err(r) => return *r,
         }
     } else if settings.scan_source_default == "generated" {
-        return detail(
-            StatusCode::SERVICE_UNAVAILABLE,
-            "SCAN_SOURCE_DEFAULT is 'generated', and the generated scan (baskfy_core.momentum_scan) is not ported to Rust yet",
-        );
+        // M14 §3's flag, off by default: "no file and no date" means "build it".
+        let latest = match latest_pipeline_date(&state).await {
+            Ok(d) => d,
+            Err(r) => return *r,
+        };
+        match generated_scan(&state, &scoring, &latest.format("%Y-%m-%d").to_string()).await {
+            Ok(v) => v,
+            Err(r) => return *r,
+        }
     } else {
         return detail(
             StatusCode::BAD_REQUEST,
@@ -981,11 +1044,10 @@ async fn execute(State(state): State<AppState>, headers: HeaderMap, body: Bytes)
     let orders = orders_of(&body_plan);
     let preflight = funding_check(&state, &k, &orders).await;
 
-    let mut lines: Vec<PlanLine> = orders
-        .iter()
-        .filter_map(PlanLine::from_row)
-        .filter(|o| o.delta != 0)
-        .collect();
+    let mut lines = match plan_lines(&orders) {
+        Ok(l) => l,
+        Err(e) => return internal_error(&e),
+    };
     // Sells first (frees cash), then buys, largest first: `(delta > 0, -|delta·ref_price|)`.
     #[allow(clippy::cast_precision_loss)]
     lines.sort_by(|a, b| {
@@ -1108,6 +1170,67 @@ async fn execute(State(state): State<AppState>, headers: HeaderMap, body: Bytes)
             ("reconciliation", PyValue::Map(recon)),
         ])),
     )
+}
+
+/// The lines `/execute` sends: `[o for o in plan["orders"] if o["delta"] != 0]`, every row
+/// read **before any order is sent**.
+///
+/// Python evaluates `o["delta"]` on every row and the sort key `delta * ref_price` on every
+/// non-zero row before its loop, so a row missing either (or holding a non-number) is a
+/// `KeyError`/`TypeError` — a 500 with nothing sent — and so it is here. Two rows Python would
+/// treat differently are refused the same way here, before anything is sent (DECISIONS-RS
+/// R8.WP2, stricter): a non-zero row missing `symbol` or `action` (Python sends the rows sorted
+/// before it, then raises mid-batch), and a `delta` that is not a whole number (Python would
+/// hand the gateway a float quantity). A whole-number float delta is sent as that integer.
+/// No plan `build_plan` makes has any of these: every delta is an `int`.
+///
+/// # Errors
+/// The exception Python would raise.
+pub fn plan_lines(orders: &[PyDict]) -> Result<Vec<PlanLine>, String> {
+    let mut out = Vec::new();
+    for row in orders {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+        let delta = match row.get("delta") {
+            None => return Err("KeyError: 'delta'".to_owned()),
+            Some(PyValue::Int(i)) => *i,
+            Some(PyValue::Bool(b)) => i64::from(*b),
+            Some(PyValue::Float(f)) if f.is_finite() && f.fract() == 0.0 && f.abs() < 9.0e15 => {
+                *f as i64
+            }
+            Some(other) => {
+                return Err(format!(
+                    "TypeError: an order delta of {other:?} cannot be sent as a share quantity"
+                ));
+            }
+        };
+        if delta == 0 {
+            continue;
+        }
+        #[allow(clippy::cast_precision_loss)]
+        let ref_price = match row.get("ref_price") {
+            None => return Err("KeyError: 'ref_price'".to_owned()),
+            Some(PyValue::Float(f)) => *f,
+            Some(PyValue::Int(i)) => *i as f64,
+            Some(PyValue::Bool(b)) => f64::from(u8::from(*b)),
+            Some(_) => return Err("TypeError: bad operand type for abs()".to_owned()),
+        };
+        let symbol = match row.get("symbol") {
+            Some(PyValue::Str(s)) => s.clone(),
+            _ => return Err("KeyError: 'symbol'".to_owned()),
+        };
+        let action = match row.get("action") {
+            Some(PyValue::Str(s)) => s.clone(),
+            _ => return Err("KeyError: 'action'".to_owned()),
+        };
+        out.push(PlanLine {
+            symbol,
+            action,
+            delta,
+            ref_price,
+            row: row.clone(),
+        });
+    }
+    Ok(out)
 }
 
 /// The request's form fields as Starlette's `request.form()` gives them to `Form(...)`

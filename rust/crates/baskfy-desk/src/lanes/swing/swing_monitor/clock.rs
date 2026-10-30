@@ -190,6 +190,8 @@ pub async fn run_gtt_sweep(
             "ERROR swing_clock 15:15 sweep: {still} position(s) still without a GTT — \
              SWING_GTT_MISSING_AT_1515"
         );
+    } else {
+        log_line!("INFO swing_clock 15:15 sweep: {naked_before} naked, {armed} armed, none left");
     }
     Ok(SweepReport {
         naked_before,
@@ -207,9 +209,9 @@ pub trait ChoreSeams: Send + Sync {
     /// `open_store()`: the sole user's swing store.
     async fn open_store(&self) -> Result<Box<dyn SwingStore>, String>;
     /// `swing_gateway()`: the swing book's gateway.
-    fn gateway(&self) -> Result<Arc<dyn Gateway>, String>;
-    /// `order_source()`: the Kite order book (a READ).
-    fn orders(&self) -> Option<Arc<dyn OrderSource>>;
+    async fn gateway(&self) -> Result<Arc<dyn Gateway>, String>;
+    /// `order_source()`: the Kite order book (a READ); `None` without one.
+    async fn orders(&self) -> Option<Arc<dyn OrderSource>>;
     /// `last_price`.
     fn prices(&self) -> Arc<dyn PriceOf>;
 }
@@ -225,10 +227,10 @@ async fn chore_body(
     counter: &dyn SweepCounter,
 ) -> Result<(), String> {
     let mut store = seams.open_store().await?;
-    let gw = seams.gateway()?;
+    let gw = seams.gateway().await?;
     match name {
         "cutoff" => {
-            let orders = seams.orders();
+            let orders = seams.orders().await;
             run_cutoff(
                 store.as_mut(),
                 gw.as_ref(),
@@ -301,6 +303,11 @@ where
     if wait > 0 {
         #[allow(clippy::cast_precision_loss)]
         let seconds = wait as f64 / 1000.0;
+        log_line!(
+            "INFO swing_clock clock: sleeping {} s until the {} GTT sweep",
+            baskfy_providers::py::fixed(seconds, 0),
+            target.format("%H:%M:%S")
+        );
         sleep(seconds).await;
     }
     let at = now();

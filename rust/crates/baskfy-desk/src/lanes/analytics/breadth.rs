@@ -256,6 +256,75 @@ pub fn comparable(a: &BreadthReading, b: &BreadthReading) -> bool {
         && a.universe_id == b.universe_id
 }
 
+/// `reading_from_audit(audit, scan, universe_id=, as_of=None)` over `scoring.audit()`'s dict,
+/// with Python's fallbacks: the audit's newest `scan_date`, else `today`. The audit's breadth
+/// value is consumed as-is.
+///
+/// # Errors
+/// `ValueError` when the dict carries no `breadth_above_20dma` (wrong source), or a value Python
+/// cannot read.
+pub fn reading_from_audit_dict(
+    audit: &crate::wire::PyDict,
+    scan: &ScanColumns,
+    universe_id: &str,
+    as_of: Option<NaiveDate>,
+    today: NaiveDate,
+) -> Result<BreadthReading, String> {
+    use crate::wire::PyValue;
+    let Some(value) = audit.get("breadth_above_20dma") else {
+        return Err(
+            "ValueError: audit dict has no 'breadth_above_20dma' — wrong source?".to_owned(),
+        );
+    };
+    let pct = match value {
+        PyValue::Float(f) => *f,
+        #[allow(clippy::cast_precision_loss)]
+        PyValue::Int(i) => *i as f64,
+        PyValue::Str(s) => crate::settings::py_float(s)
+            .ok_or_else(|| format!("ValueError: could not convert string to float: '{s}'"))?,
+        other => return Err(format!("TypeError: float() argument: {}", other.type_name())),
+    };
+    let as_of = match as_of {
+        Some(d) => d,
+        None => {
+            let mut dates: Vec<String> = match audit.get("scan_date") {
+                Some(PyValue::List(items)) => items.iter().map(PyValue::py_str).collect(),
+                _ => Vec::new(),
+            };
+            dates.sort();
+            match dates.last() {
+                Some(last) => {
+                    let head: String = last.chars().take(10).collect();
+                    super::ops::parse_iso_date(&head)
+                        .ok_or_else(|| format!("ValueError: Invalid isoformat string: '{head}'"))?
+                }
+                None => today,
+            }
+        }
+    };
+    Ok(reading_from_audit(pct, scan, universe_id, as_of))
+}
+
+/// `distinct_universes(conn, universe_id=)`: every universe definition the stored history spans.
+///
+/// # Errors
+/// The driver's.
+pub async fn distinct_universes(
+    conn: &mut Conn,
+    universe_id: &str,
+) -> Result<Vec<crate::wire::PyDict>, StorageError> {
+    let cur = conn
+        .execute(
+            "SELECT universe_hash, calculation_version, COUNT(*) n, \
+             MIN(as_of_date) first, MAX(as_of_date) last \
+             FROM breadth_readings WHERE universe_id=? \
+             GROUP BY universe_hash, calculation_version ORDER BY first",
+            &[universe_id.into()],
+        )
+        .await?;
+    Ok(cur.rows.iter().map(super::web::row_dict).collect())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

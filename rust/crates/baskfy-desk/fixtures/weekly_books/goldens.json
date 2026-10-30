@@ -1998,6 +1998,1237 @@
     "cash": 123456.79,
     "holdings_json": "{\"as_of\":\"2026-08-15\",\"price_source\":\"holdings\",\"include_untouchable_in_nav\":true,\"excluded_value\":0.0,\"backfilled\":false,\"positions\":[{\"symbol\":\"SGBDE31III\",\"exchange\":\"NSE\",\"quantity\":5,\"pledged_qty\":0,\"average_price\":5000.0,\"price\":6123.4,\"value\":30617.0,\"excluded\":true},{\"symbol\":\"AAA\",\"exchange\":\"NSE\",\"quantity\":110,\"pledged_qty\":10,\"average_price\":90.1235,\"price\":100.05,\"value\":11005.5,\"excluded\":false},{\"symbol\":\"B\\u00c9TA\",\"exchange\":\"BSE\",\"quantity\":3,\"pledged_qty\":3,\"average_price\":1.0,\"price\":0.0,\"value\":0.0,\"excluded\":false}]}"
    }
+  },
+  {
+   "kind": "snapshot_source",
+   "input": {
+    "source": "quote",
+    "on_date": null,
+    "cash": null,
+    "quotes": {
+     "NSE:AAA": {
+      "ohlc": {
+       "close": 101.25
+      },
+      "last_price": 100.05
+     },
+     "BSE:BBB": {
+      "ohlc": {
+       "close": 0
+      },
+      "last_price": 48.75
+     },
+     "NSE:SGBDE31III": {
+      "ohlc": {},
+      "last_price": 6200.0
+     }
+    },
+    "candles": {},
+    "holdings": [
+     {
+      "symbol": "AAA",
+      "exchange": "NSE",
+      "quantity": 110,
+      "pledged_qty": 10,
+      "average_price": 90.123456,
+      "last_price": 100.05
+     },
+     {
+      "symbol": "BBB",
+      "exchange": "BSE",
+      "quantity": 7,
+      "pledged_qty": 0,
+      "average_price": 50,
+      "last_price": 49.5
+     },
+     {
+      "symbol": "SGBDE31III",
+      "exchange": "NSE",
+      "quantity": 5,
+      "pledged_qty": 0,
+      "average_price": 5000,
+      "last_price": 6123.4
+     }
+    ],
+    "instruments": [
+     {
+      "tradingsymbol": "AAA",
+      "instrument_token": 101,
+      "segment": "NSE",
+      "name": "A"
+     },
+     {
+      "tradingsymbol": "SGBDE31III",
+      "instrument_token": 103
+     },
+     {
+      "tradingsymbol": "ZZZ",
+      "instrument_token": 199,
+      "segment": "NSE",
+      "name": "Z"
+     }
+    ],
+    "today": "2026-08-15"
+   },
+   "output": {
+    "snapshot": {
+     "date": "2026-08-15",
+     "nav": 134935.54,
+     "invested": 11478.75,
+     "cash": 123456.79,
+     "holdings_json": "{\"as_of\":\"2026-08-15\",\"price_source\":\"quote\",\"include_untouchable_in_nav\":false,\"excluded_value\":31000.0,\"backfilled\":false,\"positions\":[{\"symbol\":\"SGBDE31III\",\"exchange\":\"NSE\",\"quantity\":5,\"pledged_qty\":0,\"average_price\":5000.0,\"price\":6200.0,\"value\":31000.0,\"excluded\":true},{\"symbol\":\"AAA\",\"exchange\":\"NSE\",\"quantity\":110,\"pledged_qty\":10,\"average_price\":90.1235,\"price\":101.25,\"value\":11137.5,\"excluded\":false},{\"symbol\":\"BBB\",\"exchange\":\"BSE\",\"quantity\":7,\"pledged_qty\":0,\"average_price\":50.0,\"price\":48.75,\"value\":341.25,\"excluded\":false}]}"
+    },
+    "calls": [
+     [
+      "quote_raw",
+      [
+       "NSE:AAA",
+       "BSE:BBB",
+       "NSE:SGBDE31III"
+      ]
+     ]
+    ],
+    "cache": null
+   }
+  },
+  {
+   "kind": "snapshot_source",
+   "input": {
+    "source": "historical",
+    "on_date": "2026-08-14",
+    "cash": 5000.5,
+    "quotes": {},
+    "candles": {
+     "101": [
+      {
+       "close": 98.0
+      },
+      {
+       "close": 99.5
+      }
+     ],
+     "103": []
+    },
+    "holdings": [
+     {
+      "symbol": "AAA",
+      "exchange": "NSE",
+      "quantity": 110,
+      "pledged_qty": 10,
+      "average_price": 90.123456,
+      "last_price": 100.05
+     },
+     {
+      "symbol": "BBB",
+      "exchange": "BSE",
+      "quantity": 7,
+      "pledged_qty": 0,
+      "average_price": 50,
+      "last_price": 49.5
+     },
+     {
+      "symbol": "SGBDE31III",
+      "exchange": "NSE",
+      "quantity": 5,
+      "pledged_qty": 0,
+      "average_price": 5000,
+      "last_price": 6123.4
+     }
+    ],
+    "instruments": [
+     {
+      "tradingsymbol": "AAA",
+      "instrument_token": 101,
+      "segment": "NSE",
+      "name": "A"
+     },
+     {
+      "tradingsymbol": "SGBDE31III",
+      "instrument_token": 103
+     },
+     {
+      "tradingsymbol": "ZZZ",
+      "instrument_token": 199,
+      "segment": "NSE",
+      "name": "Z"
+     }
+    ],
+    "today": "2026-08-15"
+   },
+   "output": {
+    "snapshot": {
+     "date": "2026-08-14",
+     "nav": 16292.0,
+     "invested": 11291.5,
+     "cash": 5000.5,
+     "holdings_json": "{\"as_of\":\"2026-08-14\",\"price_source\":\"historical\",\"include_untouchable_in_nav\":false,\"excluded_value\":30617.0,\"backfilled\":true,\"positions\":[{\"symbol\":\"SGBDE31III\",\"exchange\":\"NSE\",\"quantity\":5,\"pledged_qty\":0,\"average_price\":5000.0,\"price\":6123.4,\"value\":30617.0,\"excluded\":true},{\"symbol\":\"AAA\",\"exchange\":\"NSE\",\"quantity\":110,\"pledged_qty\":10,\"average_price\":90.1235,\"price\":99.5,\"value\":10945.0,\"excluded\":false},{\"symbol\":\"BBB\",\"exchange\":\"BSE\",\"quantity\":7,\"pledged_qty\":0,\"average_price\":50.0,\"price\":49.5,\"value\":346.5,\"excluded\":false}]}"
+    },
+    "calls": [
+     [
+      "instruments",
+      "NSE"
+     ],
+     [
+      "historical",
+      101,
+      "2026-08-14",
+      "2026-08-14",
+      "day"
+     ],
+     [
+      "historical",
+      103,
+      "2026-08-14",
+      "2026-08-14",
+      "day"
+     ]
+    ],
+    "cache": {
+     "fetched": "2026-08-15",
+     "rows": [
+      {
+       "tradingsymbol": "AAA",
+       "instrument_token": 101,
+       "segment": "NSE",
+       "name": "A"
+      },
+      {
+       "tradingsymbol": "SGBDE31III",
+       "instrument_token": 103,
+       "segment": "",
+       "name": ""
+      },
+      {
+       "tradingsymbol": "ZZZ",
+       "instrument_token": 199,
+       "segment": "NSE",
+       "name": "Z"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "kind": "snapshot_source",
+   "input": {
+    "source": "historical",
+    "on_date": "2026-08-15",
+    "cash": null,
+    "quotes": {},
+    "candles": {},
+    "holdings": [
+     {
+      "symbol": "AAA",
+      "exchange": "NSE",
+      "quantity": 110,
+      "pledged_qty": 10,
+      "average_price": 90.123456,
+      "last_price": 100.05
+     },
+     {
+      "symbol": "BBB",
+      "exchange": "BSE",
+      "quantity": 7,
+      "pledged_qty": 0,
+      "average_price": 50,
+      "last_price": 49.5
+     },
+     {
+      "symbol": "SGBDE31III",
+      "exchange": "NSE",
+      "quantity": 5,
+      "pledged_qty": 0,
+      "average_price": 5000,
+      "last_price": 6123.4
+     }
+    ],
+    "instruments": [
+     {
+      "tradingsymbol": "AAA",
+      "instrument_token": 101,
+      "segment": "NSE",
+      "name": "A"
+     },
+     {
+      "tradingsymbol": "SGBDE31III",
+      "instrument_token": 103
+     },
+     {
+      "tradingsymbol": "ZZZ",
+      "instrument_token": 199,
+      "segment": "NSE",
+      "name": "Z"
+     }
+    ],
+    "today": "2026-08-15"
+   },
+   "output": {
+    "snapshot": {
+     "raised": "ValueError: no daily candles for any holding on 2026-08-15 \u2014 market holiday or weekend? Nothing was written."
+    },
+    "calls": [
+     [
+      "instruments",
+      "NSE"
+     ],
+     [
+      "historical",
+      101,
+      "2026-08-15",
+      "2026-08-15",
+      "day"
+     ],
+     [
+      "historical",
+      103,
+      "2026-08-15",
+      "2026-08-15",
+      "day"
+     ]
+    ],
+    "cache": {
+     "fetched": "2026-08-15",
+     "rows": [
+      {
+       "tradingsymbol": "AAA",
+       "instrument_token": 101,
+       "segment": "NSE",
+       "name": "A"
+      },
+      {
+       "tradingsymbol": "SGBDE31III",
+       "instrument_token": 103,
+       "segment": "",
+       "name": ""
+      },
+      {
+       "tradingsymbol": "ZZZ",
+       "instrument_token": 199,
+       "segment": "NSE",
+       "name": "Z"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "kind": "snapshot_source",
+   "input": {
+    "source": "nonsense",
+    "on_date": null,
+    "cash": null,
+    "quotes": {},
+    "candles": {},
+    "holdings": [
+     {
+      "symbol": "AAA",
+      "exchange": "NSE",
+      "quantity": 110,
+      "pledged_qty": 10,
+      "average_price": 90.123456,
+      "last_price": 100.05
+     },
+     {
+      "symbol": "BBB",
+      "exchange": "BSE",
+      "quantity": 7,
+      "pledged_qty": 0,
+      "average_price": 50,
+      "last_price": 49.5
+     },
+     {
+      "symbol": "SGBDE31III",
+      "exchange": "NSE",
+      "quantity": 5,
+      "pledged_qty": 0,
+      "average_price": 5000,
+      "last_price": 6123.4
+     }
+    ],
+    "instruments": [
+     {
+      "tradingsymbol": "AAA",
+      "instrument_token": 101,
+      "segment": "NSE",
+      "name": "A"
+     },
+     {
+      "tradingsymbol": "SGBDE31III",
+      "instrument_token": 103
+     },
+     {
+      "tradingsymbol": "ZZZ",
+      "instrument_token": 199,
+      "segment": "NSE",
+      "name": "Z"
+     }
+    ],
+    "today": "2026-08-15"
+   },
+   "output": {
+    "snapshot": {
+     "raised": "ValueError: unknown price source: 'nonsense'"
+    },
+    "calls": [],
+    "cache": null
+   }
+  },
+  {
+   "kind": "snapshot_source",
+   "input": {
+    "source": "holdings",
+    "on_date": "2026-08-14",
+    "cash": null,
+    "quotes": {},
+    "candles": {},
+    "holdings": [
+     {
+      "symbol": "AAA",
+      "exchange": "NSE",
+      "quantity": 110,
+      "pledged_qty": 10,
+      "average_price": 90.123456,
+      "last_price": 100.05
+     },
+     {
+      "symbol": "BBB",
+      "exchange": "BSE",
+      "quantity": 7,
+      "pledged_qty": 0,
+      "average_price": 50,
+      "last_price": 49.5
+     },
+     {
+      "symbol": "SGBDE31III",
+      "exchange": "NSE",
+      "quantity": 5,
+      "pledged_qty": 0,
+      "average_price": 5000,
+      "last_price": 6123.4
+     }
+    ],
+    "instruments": [
+     {
+      "tradingsymbol": "AAA",
+      "instrument_token": 101,
+      "segment": "NSE",
+      "name": "A"
+     },
+     {
+      "tradingsymbol": "SGBDE31III",
+      "instrument_token": 103
+     },
+     {
+      "tradingsymbol": "ZZZ",
+      "instrument_token": 199,
+      "segment": "NSE",
+      "name": "Z"
+     }
+    ],
+    "today": "2026-08-15"
+   },
+   "output": {
+    "snapshot": {
+     "raised": "ValueError: backfilling 2026-08-14: kc.margins() only knows today's cash. Pass cash=<balance on 2026-08-14> (CLI: --cash), or allow_stale_cash=True (CLI: --assume-current-cash) if you accept today's balance."
+    },
+    "calls": [],
+    "cache": null
+   }
+  },
+  {
+   "kind": "parse_fallback",
+   "input": {
+    "csv": "symbol,isin,trade_date,exchange,segment,series,trade_type,auction,quantity,price,trade_id,order_id,order_execution_time\nA,INE1,2025-07-01,NSE,EQ,EQ,buy,false,1,10,T1,O1,20250702\nB,INE1,2025-07-01,NSE,EQ,EQ,buy,false,2,10,T2,O2,20250702 093000\nC,INE1,2025-07-01,NSE,EQ,EQ,buy,false,3,10,T3,O3,2 Jul 2025 9:30 AM\nD,INE1,2025-07-01,NSE,EQ,EQ,buy,false,4,10,T4,O4,13-07-2025 09:30:00 PM\nE,INE1,2025-07-01,NSE,EQ,EQ,buy,false,5,10,T5,O5,\"July 2, 2025 09:30\"\nF,INE1,2025-07-01,NSE,EQ,EQ,buy,false,6,10,T6,O6,02/07/25\nG,INE1,2025-07-01,NSE,EQ,EQ,buy,false,7,10,T7,O7,13:00 PM\nH,INE1,2025-07-01,NSE,EQ,EQ,buy,false,8,10,T8,O8,2025-07-02t09:30\nI,INE1,2025-07-01,NSE,EQ,EQ,buy,false,9,10,T9,O9,Jul 2 2025\n"
+   },
+   "output": {
+    "fills": [
+     [
+      "A",
+      "2025-02-07T00:00:00",
+      "BUY",
+      1,
+      10.0,
+      "NSE",
+      "T1",
+      0.0
+     ],
+     [
+      "B",
+      "2025-02-07T09:30:00",
+      "BUY",
+      2,
+      10.0,
+      "NSE",
+      "T2",
+      0.0
+     ],
+     [
+      "C",
+      "2025-07-02T09:30:00",
+      "BUY",
+      3,
+      10.0,
+      "NSE",
+      "T3",
+      0.0
+     ],
+     [
+      "D",
+      "2025-07-13T21:30:00",
+      "BUY",
+      4,
+      10.0,
+      "NSE",
+      "T4",
+      0.0
+     ],
+     [
+      "E",
+      "2025-07-02T09:30:00",
+      "BUY",
+      5,
+      10.0,
+      "NSE",
+      "T5",
+      0.0
+     ],
+     [
+      "F",
+      "2025-07-02T00:00:00",
+      "BUY",
+      6,
+      10.0,
+      "NSE",
+      "T6",
+      0.0
+     ],
+     [
+      "G",
+      "2025-07-01T09:15:00",
+      "BUY",
+      7,
+      10.0,
+      "NSE",
+      "T7",
+      0.0
+     ],
+     [
+      "H",
+      "2025-02-07T09:30:00",
+      "BUY",
+      8,
+      10.0,
+      "NSE",
+      "T8",
+      0.0
+     ],
+     [
+      "I",
+      "2025-07-02T00:00:00",
+      "BUY",
+      9,
+      10.0,
+      "NSE",
+      "T9",
+      0.0
+     ]
+    ],
+    "keys": [
+     "T1",
+     "T2",
+     "T3",
+     "T4",
+     "T5",
+     "T6",
+     "T7",
+     "T8",
+     "T9"
+    ],
+    "ts": [
+     1738866600.0,
+     1738900800.0,
+     1751428800.0,
+     1752422400.0,
+     1751428800.0,
+     1751394600.0,
+     1751341500.0,
+     1738900800.0,
+     1751394600.0
+    ]
+   }
+  },
+  {
+   "kind": "parse_fallback",
+   "input": {
+    "csv": "symbol,isin,trade_date,exchange,segment,series,trade_type,auction,quantity,price,trade_id,order_id,order_execution_time\nZ1,INE1,2025-07-01,NSE,EQ,EQ,buy,false,1,10,,O1,2025-07-02T09:30:00Z\nZ2,INE1,2025-07-01,NSE,EQ,EQ,buy,false,2,10,,O2,2025-07-02 09:30:00 +0530\nZ3,INE1,2025-07-01,NSE,EQ,EQ,buy,false,3,10,,O3,2025-07-02T09:30:00-04:00\nZ4,INE1,2025-07-01,NSE,EQ,EQ,buy,false,4,10,,O4,2025-07-02 09:30:00 UTC\nZ5,INE1,2025-07-01,NSE,EQ,EQ,buy,false,5,10,,O5,2025-07-02T09:30:00.123+05:30\nZ6,INE1,2025-07-01,NSE,EQ,EQ,buy,false,6,10,,O6,2025-07-02T09:30:00+05\nN1,INE1,2025-07-01,NSE,EQ,EQ,buy,false,7,10,,O7,\n"
+   },
+   "output": {
+    "fills": [
+     [
+      "N1",
+      "2025-07-01T09:15:00",
+      "BUY",
+      7,
+      10.0,
+      "NSE",
+      "",
+      0.0
+     ],
+     [
+      "Z1",
+      "2025-02-07T09:30:00+00:00",
+      "BUY",
+      1,
+      10.0,
+      "NSE",
+      "",
+      0.0
+     ],
+     [
+      "Z2",
+      "2025-02-07T09:30:00+05:30",
+      "BUY",
+      2,
+      10.0,
+      "NSE",
+      "",
+      0.0
+     ],
+     [
+      "Z3",
+      "2025-02-07T09:30:00-04:00",
+      "BUY",
+      3,
+      10.0,
+      "NSE",
+      "",
+      0.0
+     ],
+     [
+      "Z4",
+      "2025-02-07T09:30:00+00:00",
+      "BUY",
+      4,
+      10.0,
+      "NSE",
+      "",
+      0.0
+     ],
+     [
+      "Z5",
+      "2025-02-07T09:30:00.123000+05:30",
+      "BUY",
+      5,
+      10.0,
+      "NSE",
+      "",
+      0.0
+     ],
+     [
+      "Z6",
+      "2025-02-07T09:30:00+05:00",
+      "BUY",
+      6,
+      10.0,
+      "NSE",
+      "",
+      0.0
+     ]
+    ],
+    "keys": [
+     "syn:3b0ab46b3483b3698acd",
+     "syn:85b10186b1e573fa8210",
+     "syn:e2e3da50513a244f9276",
+     "syn:4a46c6c8d5bf03da03a8",
+     "syn:e7927f5106fdde28e0a5",
+     "syn:2b138cbe97b5fd338f7a",
+     "syn:68a672a3fe50eb8718c4"
+    ],
+    "ts": [
+     1751341500.0,
+     1738920600.0,
+     1738900800.0,
+     1738935000.0,
+     1738920600.0,
+     1738900800.123,
+     1738902600.0
+    ]
+   }
+  },
+  {
+   "kind": "parse_fallback",
+   "input": {
+    "csv": "symbol,isin,trade_date,exchange,segment,series,trade_type,auction,quantity,price,trade_id,order_id,order_execution_time\nM,INE1,2025-07-01,NSE,EQ,EQ,buy,false,1,10,T1,O1,2025-07-02T09:30:00Z\nM,INE1,2025-07-03,NSE,EQ,EQ,buy,false,2,10,T2,O2,\n"
+   },
+   "output": {
+    "raised": "TypeError: can't compare offset-naive and offset-aware datetimes"
+   }
+  },
+  {
+   "kind": "fifo",
+   "input": {
+    "fills": [
+     [
+      "X",
+      "2025-01-01T09:15:00+05:30",
+      "BUY",
+      100,
+      50.0,
+      "NSE",
+      "",
+      1.0
+     ],
+     [
+      "X",
+      "2025-01-01T03:50:00+00:00",
+      "BUY",
+      10,
+      51.0,
+      "NSE",
+      "",
+      0.0
+     ],
+     [
+      "X",
+      "2025-02-01T09:15:00-04:00",
+      "SELL",
+      105,
+      60.0,
+      "NSE",
+      "",
+      2.0
+     ],
+     [
+      "Y",
+      "2025-01-02T00:00:00+05:30",
+      "SELL",
+      1,
+      9.0,
+      "NSE",
+      "",
+      0.0
+     ]
+    ],
+    "actions": []
+   },
+   "output": {
+    "closed": [
+     {
+      "symbol": "X",
+      "entry_ts": 1735703100.0,
+      "exit_ts": 1738415700.0,
+      "qty": 100,
+      "entry_price": 50.0,
+      "exit_price": 60.0,
+      "pnl": 1000.0,
+      "costs": 2.9
+     },
+     {
+      "symbol": "X",
+      "entry_ts": 1735703400.0,
+      "exit_ts": 1738415700.0,
+      "qty": 5,
+      "entry_price": 51.0,
+      "exit_price": 60.0,
+      "pnl": 45.0,
+      "costs": 0.1
+     }
+    ],
+    "open": [
+     [
+      "X",
+      "2025-01-01T03:50:00+00:00",
+      5,
+      51.0,
+      0.0,
+      1735703400.0
+     ]
+    ],
+    "unmatched": [
+     {
+      "symbol": "Y",
+      "date": "2025-01-02",
+      "quantity": 1,
+      "price": 9.0
+     }
+    ],
+    "keys": [
+     "syn:66204545549fea236164",
+     "syn:c5e8160f4c95d6df470d",
+     "syn:4eadf0cd7d6f856a39e4",
+     "syn:5606605aa1d8b57509f3"
+    ]
+   }
+  },
+  {
+   "kind": "reconcile_raise",
+   "input": {
+    "orders": [],
+    "gtts": [],
+    "holdings": [],
+    "sleeve_orders": [],
+    "positions": [
+     {
+      "symbol": "NOID",
+      "quantity_open": 5,
+      "gtt_id": null,
+      "simulated": true
+     }
+    ]
+   },
+   "output": {
+    "raised": "KeyError: 'id'"
+   }
+  },
+  {
+   "kind": "reconcile_raise",
+   "input": {
+    "orders": [
+     {
+      "order_id": "B1",
+      "status": "REJECTED",
+      "filled_quantity": 0
+     }
+    ],
+    "gtts": [],
+    "holdings": [],
+    "sleeve_orders": [
+     {
+      "broker_order_id": "B1",
+      "symbol": "TWTCO",
+      "quantity": 10,
+      "reference_price": "n/a"
+     }
+    ],
+    "positions": []
+   },
+   "output": {
+    "raised": "InvalidOperation: [<class 'decimal.ConversionSyntax'>]"
+   }
+  },
+  {
+   "kind": "reconcile_raise",
+   "input": {
+    "orders": [
+     {
+      "order_id": "B1",
+      "status": "CANCELLED",
+      "filled_quantity": 0
+     }
+    ],
+    "gtts": [],
+    "holdings": [],
+    "sleeve_orders": [
+     {
+      "broker_order_id": "B1",
+      "quantity": 10,
+      "reference_price": 5
+     }
+    ],
+    "positions": []
+   },
+   "output": {
+    "raised": "KeyError: 'symbol'"
+   }
+  },
+  {
+   "kind": "reconcile_raise",
+   "input": {
+    "orders": [
+     {
+      "order_id": "B1",
+      "status": "CANCELLED",
+      "filled_quantity": 0
+     }
+    ],
+    "gtts": [],
+    "holdings": [],
+    "sleeve_orders": [
+     {
+      "broker_order_id": "B1",
+      "symbol": "X",
+      "quantity": "ten",
+      "reference_price": 5
+     }
+    ],
+    "positions": []
+   },
+   "output": {
+    "raised": "ValueError: invalid literal for int() with base 10: 'ten'"
+   }
+  },
+  {
+   "kind": "reconcile_raise",
+   "input": {
+    "orders": [
+     "junk"
+    ],
+    "gtts": [
+     "junk"
+    ],
+    "holdings": [
+     {
+      "symbol": "X",
+      "quantity": "lots"
+     }
+    ],
+    "sleeve_orders": [],
+    "positions": [
+     {
+      "id": 1,
+      "symbol": "Q",
+      "quantity_open": "abc",
+      "gtt_id": null
+     }
+    ]
+   },
+   "output": {
+    "line": "reconcile 09:20:05: 0 order(s) seen, 0 applied, 0 dead, 0 released, 0 not in the book; issues: none; 0 resolved; errors: orders: AttributeError: 'str' object has no attribute 'get' | gtts: AttributeError: 'str' object has no attribute 'get' | holdings: ValueError: invalid literal for int() with base 10: 'lots' | twt open_positions: ValueError: invalid literal for int() with base 10: 'abc'",
+    "released": [],
+    "issues": []
+   }
+  },
+  {
+   "kind": "reconcile_raise",
+   "input": {
+    "orders": [],
+    "gtts": [
+     {
+      "id": 5,
+      "status": "active",
+      "condition": {
+       "trigger_values": [
+        "x"
+       ]
+      },
+      "orders": []
+     }
+    ],
+    "holdings": [],
+    "sleeve_orders": [],
+    "positions": [
+     {
+      "id": 2,
+      "symbol": "S",
+      "quantity_open": "7",
+      "gtt_id": 5
+     }
+    ]
+   },
+   "output": {
+    "line": "reconcile 09:20:05: 0 order(s) seen, 0 applied, 0 dead, 0 released, 0 not in the book; issues: EXTERNAL_EXIT 1; 0 resolved; errors: gtts: InvalidOperation: [<class 'decimal.ConversionSyntax'>]",
+    "released": [],
+    "issues": [
+     [
+      "twt",
+      2,
+      "S",
+      "EXTERNAL_EXIT",
+      "the broker holds 0 S and the sleeves record 7 \u2014 7 share(s) left the book outside the desk"
+     ]
+    ]
+   }
+  },
+  {
+   "kind": "reconcile_raise",
+   "input": {
+    "orders": [],
+    "gtts": [
+     {
+      "id": 6,
+      "status": "active",
+      "condition": "c",
+      "orders": []
+     }
+    ],
+    "holdings": [],
+    "sleeve_orders": [],
+    "positions": []
+   },
+   "output": {
+    "line": "reconcile 09:20:05: 0 order(s) seen, 0 applied, 0 dead, 0 released, 0 not in the book; issues: none; 0 resolved; errors: gtts: AttributeError: 'str' object has no attribute 'get'",
+    "released": [],
+    "issues": []
+   }
+  },
+  {
+   "kind": "reconcile_raise",
+   "input": {
+    "orders": [
+     {
+      "order_id": "B1",
+      "status": "CANCELLED",
+      "filled_quantity": 0
+     },
+     {
+      "order_id": "B2",
+      "status": "CANCELLED",
+      "filled_quantity": 0
+     },
+     {
+      "order_id": "B3",
+      "status": "CANCELLED",
+      "filled_quantity": "2"
+     }
+    ],
+    "gtts": [],
+    "holdings": [],
+    "sleeve_orders": [
+     {
+      "broker_order_id": "B1",
+      "symbol": "N",
+      "quantity": 1,
+      "reference_price": "1_0.5"
+     },
+     {
+      "broker_order_id": "B2",
+      "symbol": "I",
+      "quantity": 1,
+      "reference_price": "-Infinity"
+     },
+     {
+      "broker_order_id": "B3",
+      "symbol": "F",
+      "quantity": " 5 ",
+      "reference_price": 2.5
+     }
+    ],
+    "positions": []
+   },
+   "output": {
+    "line": "reconcile 09:20:05: 3 order(s) seen, 3 applied, 3 dead, 2 released, 0 not in the book; issues: none; 0 resolved",
+    "released": [
+     [
+      "N",
+      10.5
+     ],
+     [
+      "F",
+      7.5
+     ]
+    ],
+    "issues": []
+   }
+  },
+  {
+   "kind": "snapshot_cli",
+   "input": {
+    "runs": [
+     [
+      "--cashflow",
+      "-1000000",
+      "--cashflow-type",
+      "invest"
+     ],
+     [],
+     [],
+     [
+      "--force",
+      "--prices",
+      "holdings"
+     ],
+     [
+      "--date",
+      "2026-08-14",
+      "--cash",
+      "250000.5"
+     ],
+     [
+      "--check-flows"
+     ],
+     [
+      "--import-cashflows",
+      "<ledger>"
+     ],
+     [
+      "--cashflow",
+      "500",
+      "--check-flows"
+     ],
+     [
+      "--date",
+      "2026-08-13",
+      "--prices",
+      "historical"
+     ],
+     [
+      "--prices=bogus"
+     ]
+    ],
+    "ledger": "Date,Amount,Type\n2026-08-14,\"-2,500\",invest\n2026-08-15,750,\n",
+    "holdings": [
+     {
+      "symbol": "AAA",
+      "exchange": "NSE",
+      "quantity": 110,
+      "pledged_qty": 10,
+      "average_price": 90.123456,
+      "last_price": 100.05
+     },
+     {
+      "symbol": "SGBDE31III",
+      "exchange": "NSE",
+      "quantity": 5,
+      "pledged_qty": 0,
+      "average_price": 5000,
+      "last_price": 6123.4
+     },
+     {
+      "symbol": "B\u00c9TA",
+      "exchange": "BSE",
+      "quantity": 3,
+      "pledged_qty": 3,
+      "average_price": 1.0,
+      "last_price": 1e-07
+     }
+    ],
+    "dry_run": true,
+    "today": "2026-08-15"
+   },
+   "output": {
+    "runs": [
+     {
+      "code": 0,
+      "stdout": [
+       "cashflow -1,000,000.00 (invest) on 2026-08-15: recorded",
+       "DRY_RUN=True (snapshots are read-only \u2014 no orders are ever placed)",
+       "snapshot 2026-08-15  [inserted]  prices=holdings",
+       "  nav        Rs       134,462.29",
+       "  invested   Rs        11,005.50",
+       "  cash       Rs       123,456.79",
+       "  index                 100.0000"
+      ],
+      "message": null
+     },
+     {
+      "code": 0,
+      "stdout": [
+       "DRY_RUN=True (snapshots are read-only \u2014 no orders are ever placed)",
+       "snapshot 2026-08-15  [unchanged]  prices=holdings",
+       "  nav        Rs       134,462.29",
+       "  invested   Rs        11,005.50",
+       "  cash       Rs       123,456.79",
+       "  index                 100.0000",
+       "  (row already existed \u2014 values left untouched; pass --force to overwrite)"
+      ],
+      "message": null
+     },
+     {
+      "code": 0,
+      "stdout": [
+       "DRY_RUN=True (snapshots are read-only \u2014 no orders are ever placed)",
+       "snapshot 2026-08-15  [unchanged]  prices=holdings",
+       "  nav        Rs       134,462.29",
+       "  invested   Rs        11,005.50",
+       "  cash       Rs       123,456.79",
+       "  index                 100.0000",
+       "  (row already existed \u2014 values left untouched; pass --force to overwrite)"
+      ],
+      "message": null
+     },
+     {
+      "code": 0,
+      "stdout": [
+       "DRY_RUN=True (snapshots are read-only \u2014 no orders are ever placed)",
+       "snapshot 2026-08-15  [updated]  prices=holdings",
+       "  nav        Rs       134,462.29",
+       "  invested   Rs        11,005.50",
+       "  cash       Rs       123,456.79",
+       "  index                 100.0000"
+      ],
+      "message": null
+     },
+     {
+      "code": 0,
+      "stdout": [
+       "DRY_RUN=True (snapshots are read-only \u2014 no orders are ever placed)",
+       "snapshot 2026-08-14  [inserted]  prices=holdings",
+       "  nav        Rs       261,006.00",
+       "  invested   Rs        11,005.50",
+       "  cash       Rs       250,000.50",
+       "  index                 100.0000"
+      ],
+      "message": null
+     },
+     {
+      "code": 0,
+      "stdout": [
+       "possible unrecorded cashflows: 0"
+      ],
+      "message": null
+     },
+     {
+      "code": 0,
+      "stdout": [
+       "cashflow import: {'inserted': 2, 'skipped_existing': 0}",
+       "DRY_RUN=True (snapshots are read-only \u2014 no orders are ever placed)",
+       "snapshot 2026-08-15  [unchanged]  prices=holdings",
+       "  nav        Rs       134,462.29",
+       "  invested   Rs        11,005.50",
+       "  cash       Rs       123,456.79",
+       "  index                -331.3287",
+       "  (row already existed \u2014 values left untouched; pass --force to overwrite)"
+      ],
+      "message": null
+     },
+     {
+      "code": 0,
+      "stdout": [
+       "cashflow +500.00 (invest) on 2026-08-15: recorded",
+       "possible unrecorded cashflows: 0"
+      ],
+      "message": null
+     },
+     {
+      "code": 1,
+      "stdout": [],
+      "message": "snapshot aborted: backfilling 2026-08-13: kc.margins() only knows today's cash. Pass cash=<balance on 2026-08-13> (CLI: --cash), or allow_stale_cash=True (CLI: --assume-current-cash) if you accept today's balance."
+     },
+     {
+      "code": 2,
+      "stdout": [],
+      "message": null
+     }
+    ],
+    "snapshots": [
+     [
+      "2026-08-14",
+      261006.0,
+      11005.5,
+      250000.5,
+      100.0
+     ],
+     [
+      "2026-08-15",
+      134462.29,
+      11005.5,
+      123456.79,
+      -331.1371041278744
+     ]
+    ],
+    "cashflows": [
+     [
+      "2026-08-15",
+      -1000000.0,
+      "invest"
+     ],
+     [
+      "2026-08-14",
+      -2500.0,
+      "invest"
+     ],
+     [
+      "2026-08-15",
+      750.0,
+      "withdraw"
+     ],
+     [
+      "2026-08-15",
+      500.0,
+      "invest"
+     ]
+    ]
+   }
   }
  ]
 }

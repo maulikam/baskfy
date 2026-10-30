@@ -3,18 +3,24 @@
 //! nothing; strategy annotations survive a rebuild). Also the two `corporate_actions` reads the
 //! rebuild needs (`load`, `apply_to_book`), private until lane `analytics` ports that module.
 //!
-//! **Narrowed on purpose (DECISIONS-RS entry pending, recorded in the lane report):** Python's last
-//! resort for an execution time it cannot read with its seven fixed formats is
-//! `pandas.to_datetime(raw, dayfirst=True)`. Here that fallback is a fixed, day-first table
-//! ([`parse_when`]): a date in any of the tradebook's date formats, then `T` or a space, then
-//! `HH:MM[:SS[.ffffff]]`, or the date alone (midnight, as pandas gives). A string pandas would
-//! read and this table does not falls through to the trade date at 09:15, as Python does when
-//! pandas fails; a time zone suffix is not read.
+//! **The pandas fallback (DECISIONS-RS R8.WB2).** Python's last resort for an execution time its
+//! fixed formats cannot read is `pandas.to_datetime(raw, dayfirst=True)`. Here that is a fixed,
+//! day-first grammar ([`parse_when_tz`]), probed against pandas 3.0.5: a date in the tradebook's
+//! formats (year-first read year-**day**-month first, as dateutil does; month names either side;
+//! two-digit years), a compact `YYYYMMDD[THHMMSS]`, or a bare time (stamped with **today**, the
+//! wall clock's IST date, as pandas stamps it); then `HH:MM[:SS[.ffffff]]` with an optional
+//! `AM`/`PM`; then an optional zone — `Z`, `UTC`, `GMT`, `±HH`, `±HHMM`, `±HH:MM` — which makes
+//! the fill **aware** ([`Fill::tz`]): its `ts` is the true instant, its `fill_key` carries the
+//! offset (`isoformat()`), and an aware fill sorted beside a naive one is Python's `TypeError`
+//! ([`ImportError::Uncaught`]). What dateutil reads beyond that grammar (`9:5`, `9 PM` — year 1)
+//! falls through to the trade date at 09:15, as Python does when pandas raises.
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
-use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
+use std::cmp::Ordering;
+
+use chrono::{FixedOffset, NaiveDate, NaiveDateTime, NaiveTime, TimeDelta};
 
 use super::{iso_naive, local_from_ts, local_ts, pyf, pyi, round_int, round_to, sha1};
 use crate::storage::{Conn, DbValue, Param, StorageError};
@@ -40,6 +46,8 @@ const FALLBACK_DATES: &[&str] = &[
     "%d %b %Y", "%d-%B-%Y", "%d %B %Y",
 ];
 const FALLBACK_TIMES: &[&str] = &["%H:%M:%S%.f", "%H:%M:%S", "%H:%M"];
+/// Month-name-first and two-digit-year dates pandas also reads.
+const FALLBACK_DATES_MORE: &[&str] = &["%b %d %Y", "%b %d, %Y", "%B %d %Y", "%B %d, %Y"];
 
 /// `TradebookError` (a `ValueError`).
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -55,6 +63,61 @@ pub enum ImportError {
     /// The database.
     #[error(transparent)]
     Storage(#[from] StorageError),
+    /// An exception Python does not catch (`"TypeError: ..."`): the route's 500.
+    #[error("{0}")]
+    Uncaught(String),
+}
+
+/// `can't compare offset-naive and offset-aware datetimes`.
+pub const NAIVE_AWARE: &str = "TypeError: can't compare offset-naive and offset-aware datetimes";
+
+/// A `datetime` as Python orders it: the wall time with its zone, if any.
+fn instant(when: NaiveDateTime, tz: Option<FixedOffset>) -> NaiveDateTime {
+    match tz {
+        Some(off) => when - TimeDelta::seconds(i64::from(off.local_minus_utc())),
+        None => when,
+    }
+}
+
+/// `a < b` between two datetimes: by instant when both are aware, by wall time when both are
+/// naive, Python's `TypeError` when one of each.
+fn py_cmp(
+    a: (NaiveDateTime, Option<FixedOffset>),
+    b: (NaiveDateTime, Option<FixedOffset>),
+) -> Result<Ordering, String> {
+    if a.1.is_some() != b.1.is_some() {
+        return Err(NAIVE_AWARE.to_owned());
+    }
+    Ok(instant(a.0, a.1).cmp(&instant(b.0, b.1)))
+}
+
+/// `datetime.timestamp()`: an aware value's own instant, a naive one in the process zone (IST).
+#[must_use]
+#[allow(clippy::cast_precision_loss)]
+pub fn stamp_ts(when: NaiveDateTime, tz: Option<FixedOffset>) -> f64 {
+    match tz {
+        Some(off) => {
+            let utc = instant(when, Some(off)).and_utc();
+            utc.timestamp() as f64 + f64::from(utc.timestamp_subsec_micros()) / 1e6
+        }
+        None => local_ts(when),
+    }
+}
+
+/// `datetime.isoformat()`, with `+HH:MM[:SS]` on an aware value.
+#[must_use]
+pub fn stamp_iso(when: NaiveDateTime, tz: Option<FixedOffset>) -> String {
+    let mut out = iso_naive(when);
+    if let Some(off) = tz {
+        let secs = off.local_minus_utc();
+        let sign = if secs < 0 { '-' } else { '+' };
+        let a = secs.unsigned_abs();
+        out.push_str(&format!("{sign}{:02}:{:02}", a / 3600, (a % 3600) / 60));
+        if a % 60 != 0 {
+            out.push_str(&format!(":{:02}", a % 60));
+        }
+    }
+    out
 }
 
 /// One executed trade.
@@ -76,10 +139,13 @@ pub struct Fill {
     pub trade_id: String,
     /// `charges`.
     pub charges: f64,
+    /// `when.tzinfo`: `None` for the naive local time every Console export and Kite trade
+    /// carries; an offset only when the pandas fallback read a zone suffix.
+    pub tz: Option<FixedOffset>,
 }
 
 impl Fill {
-    /// A fill with the dataclass defaults (`NSE`, no trade id, no charges).
+    /// A fill with the dataclass defaults (`NSE`, no trade id, no charges, naive).
     #[must_use]
     pub fn new(symbol: &str, when: NaiveDateTime, side: &str, quantity: i64, price: f64) -> Self {
         Self {
@@ -91,13 +157,14 @@ impl Fill {
             exchange: "NSE".to_owned(),
             trade_id: String::new(),
             charges: 0.0,
+            tz: None,
         }
     }
 
     /// `ts`: `when.timestamp()`.
     #[must_use]
     pub fn ts(&self) -> f64 {
-        local_ts(self.when)
+        stamp_ts(self.when, self.tz)
     }
 }
 
@@ -114,6 +181,8 @@ pub struct Lot {
     pub price: f64,
     /// `charges` (the unconsumed share).
     pub charges: f64,
+    /// `when.tzinfo` (the fill's that opened it; a corporate action's lot is naive).
+    pub tz: Option<FixedOffset>,
 }
 
 /// A consumed slice: one closed `trades` row.
@@ -226,6 +295,7 @@ pub fn apply_to_book(book: &mut Vec<Lot>, action: &Action) {
                 quantity: whole,
                 price: 0.0,
                 charges: 0.0,
+                tz: None,
             });
         }
         return;
@@ -309,40 +379,196 @@ fn strpdate(raw: &str, fmt: &str) -> Option<NaiveDate> {
     NaiveDate::parse_from_str(raw, fmt).ok()
 }
 
-/// The stand-in for `pd.to_datetime(raw, dayfirst=True)` (see the module docs).
-fn pandas_fallback(raw: &str) -> Option<NaiveDateTime> {
-    let date_only = |s: &str| FALLBACK_DATES.iter().find_map(|f| strpdate(s, f));
-    if let Some(d) = date_only(raw) {
-        return Some(d.and_time(NaiveTime::MIN));
+/// A datetime read from the export: the wall time and, when a zone suffix was read, its offset.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Stamp {
+    /// The wall time (in `tz` when aware).
+    pub when: NaiveDateTime,
+    /// `tzinfo`.
+    pub tz: Option<FixedOffset>,
+}
+
+/// `Z`, `UTC`, `GMT`, `±HH`, `±HHMM`, `±HH:MM` at the end, after a time: the rest and the offset.
+fn split_zone(raw: &str) -> (&str, Option<FixedOffset>) {
+    let t = raw.trim_end();
+    for word in ["UTC", "GMT", "Z", "z"] {
+        if let Some(rest) = t.strip_suffix(word)
+            && rest.trim_end().ends_with(|c: char| c.is_ascii_digit())
+            && rest.contains(':')
+        {
+            return (rest.trim_end(), FixedOffset::east_opt(0));
+        }
     }
-    let splits: Vec<usize> = raw
+    let Some(at) = t.rfind(['+', '-']) else {
+        return (t, None);
+    };
+    let (rest, zone) = (&t[..at], &t[at + 1..]);
+    // Only after a clock time: `2025-07-02` must not lose `-02`.
+    if !rest.contains(':') {
+        return (t, None);
+    }
+    let digits: String = zone.chars().filter(|c| *c != ':').collect();
+    if !digits.bytes().all(|b| b.is_ascii_digit())
+        || !matches!(digits.len(), 2 | 4)
+        || (zone.contains(':') && zone.len() != 5)
+    {
+        return (t, None);
+    }
+    let hours: i32 = digits[..2].parse().unwrap_or(99);
+    let minutes: i32 = if digits.len() == 4 {
+        digits[2..].parse().unwrap_or(99)
+    } else {
+        0
+    };
+    if hours > 23 || minutes > 59 {
+        return (t, None);
+    }
+    let secs = (hours * 3600 + minutes * 60) * if t.as_bytes()[at] == b'-' { -1 } else { 1 };
+    match FixedOffset::east_opt(secs) {
+        Some(off) => (rest.trim_end(), Some(off)),
+        None => (t, None),
+    }
+}
+
+/// A clock time, `HH:MM[:SS[.f]]` with an optional `AM`/`PM` (a 12-hour hour must be 1–12).
+fn clock_time(raw: &str) -> Option<NaiveTime> {
+    let t = raw.trim();
+    let upper = t.to_ascii_uppercase();
+    let (body, meridiem) = if let Some(b) = upper.strip_suffix("PM") {
+        (b.trim_end(), Some(true))
+    } else if let Some(b) = upper.strip_suffix("AM") {
+        (b.trim_end(), Some(false))
+    } else {
+        (upper.as_str(), None)
+    };
+    // `9:5` is not a time to this grammar (pandas reads it as year 1).
+    let mut parts = body.split(':');
+    let hour_text = parts.next()?;
+    let minute_text = parts.next()?;
+    if hour_text.is_empty() || hour_text.len() > 2 || minute_text.len() != 2 {
+        return None;
+    }
+    let time = FALLBACK_TIMES
+        .iter()
+        .find_map(|f| NaiveTime::parse_from_str(body, f).ok())?;
+    match meridiem {
+        None => Some(time),
+        Some(pm) => {
+            let h = chrono::Timelike::hour(&time);
+            if !(1..=12).contains(&h) {
+                return None;
+            }
+            let h24 = match (pm, h) {
+                (false, 12) => 0,
+                (false, h) => h,
+                (true, 12) => 12,
+                (true, h) => h + 12,
+            };
+            chrono::Timelike::with_hour(&time, h24)
+        }
+    }
+}
+
+/// A day-first date in any of the forms pandas reads.
+fn fallback_date(raw: &str) -> Option<NaiveDate> {
+    let t = raw.trim();
+    if t.len() == 8 && t.bytes().all(|b| b.is_ascii_digit()) {
+        // `YYYYMMDD`, read year-day-month first as dateutil does with `dayfirst`.
+        return strpdate(t, "%Y%d%m").or_else(|| strpdate(t, "%Y%m%d"));
+    }
+    // A two-digit year is 20xx to pandas; `%Y` would read it as year 25.
+    let parts: Vec<&str> = t.split(['/', '-']).collect();
+    if let [d, m, y] = parts.as_slice()
+        && (1..=2).contains(&d.len())
+        && (1..=2).contains(&m.len())
+        && y.len() == 2
+        && parts.iter().all(|p| p.bytes().all(|b| b.is_ascii_digit()))
+    {
+        return ["%d/%m/%y", "%d-%m-%y"].iter().find_map(|f| strpdate(t, f));
+    }
+    FALLBACK_DATES
+        .iter()
+        .chain(FALLBACK_DATES_MORE)
+        .find_map(|f| strpdate(t, f))
+}
+
+/// The stand-in for `pd.to_datetime(raw, dayfirst=True)` (see the module docs). `today` is the
+/// date a bare time is stamped with.
+fn pandas_fallback(raw: &str, today: NaiveDate) -> Option<Stamp> {
+    let (body, tz) = split_zone(raw);
+    let body = body.trim();
+    if let Some(d) = fallback_date(body) {
+        return tz.is_none().then(|| Stamp {
+            when: d.and_time(NaiveTime::MIN),
+            tz,
+        });
+    }
+    if let Some(time) = clock_time(body) {
+        return Some(Stamp {
+            when: today.and_time(time),
+            tz,
+        });
+    }
+    // Compact date and time: `YYYYMMDD[T ]HHMMSS`.
+    let compact: Vec<&str> = body
+        .split(['T', 't', ' '])
+        .filter(|p| !p.is_empty())
+        .collect();
+    if let [d, t] = compact.as_slice()
+        && d.len() == 8
+        && t.len() == 6
+        && t.bytes().all(|b| b.is_ascii_digit())
+        && let Some(day) = fallback_date(d)
+        && let Ok(time) = NaiveTime::parse_from_str(t, "%H%M%S")
+    {
+        return Some(Stamp {
+            when: day.and_time(time),
+            tz,
+        });
+    }
+    let splits: Vec<usize> = body
         .char_indices()
-        .filter(|(_, c)| *c == 'T' || *c == ' ')
+        .filter(|(_, c)| matches!(*c, 'T' | 't' | ' '))
         .map(|(i, _)| i)
         .collect();
-    for i in splits.into_iter().rev() {
-        let (d, t) = (&raw[..i], &raw[i + 1..]);
-        if let Some(day) = date_only(d)
-            && let Some(time) = FALLBACK_TIMES
-                .iter()
-                .find_map(|f| NaiveTime::parse_from_str(t, f).ok())
+    // The date is everything before the first separator that leaves a readable time after it.
+    for i in splits {
+        let (d, t) = (body[..i].trim(), body[i + 1..].trim());
+        if let Some(day) = fallback_date(d)
+            && let Some(time) = clock_time(t)
         {
-            return Some(day.and_time(time));
+            return Some(Stamp {
+                when: day.and_time(time),
+                tz,
+            });
         }
     }
     None
 }
 
+/// The wall clock's date in the desk's zone (pandas stamps a bare time with it).
+fn wall_today() -> NaiveDate {
+    chrono::Utc::now()
+        .with_timezone(&crate::clock::ist())
+        .date_naive()
+}
+
 /// `_parse_when(date_raw, time_raw)`: the execution timestamp when readable, else the trade date
-/// at 09:15.
+/// at 09:15. The wall time only; [`parse_when_tz`] keeps the zone.
 #[must_use]
 pub fn parse_when(date_raw: &str, time_raw: &str) -> Option<NaiveDateTime> {
+    parse_when_tz(date_raw, time_raw, wall_today()).map(|s| s.when)
+}
+
+/// `_parse_when(date_raw, time_raw)` with its zone, a bare time stamped with `today`.
+#[must_use]
+pub fn parse_when_tz(date_raw: &str, time_raw: &str, today: NaiveDate) -> Option<Stamp> {
     let raw = time_raw.trim();
     if !raw.is_empty() {
         if let Some(at) = DATETIME_FORMATS.iter().find_map(|f| strptime(raw, f)) {
-            return Some(at);
+            return Some(Stamp { when: at, tz: None });
         }
-        if let Some(at) = pandas_fallback(raw) {
+        if let Some(at) = pandas_fallback(raw, today) {
             return Some(at);
         }
     }
@@ -354,7 +580,10 @@ pub fn parse_when(date_raw: &str, time_raw: &str) -> Option<NaiveDateTime> {
     DATE_FORMATS
         .iter()
         .find_map(|f| strpdate(d, f))
-        .map(|day| day.and_time(nine_fifteen))
+        .map(|day| Stamp {
+            when: day.and_time(nine_fifteen),
+            tz: None,
+        })
 }
 
 /// `_num(raw)`: thousands separators and the rupee sign dropped; blank or a dash is 0; anything
@@ -370,7 +599,7 @@ pub fn num(raw: &str) -> f64 {
 }
 
 /// Python's `csv` reader (the `excel` dialect) over the whole text: records of fields.
-fn csv_records(text: &str) -> Vec<Vec<String>> {
+pub(super) fn csv_records(text: &str) -> Vec<Vec<String>> {
     let mut records = Vec::new();
     let mut record: Vec<String> = Vec::new();
     let mut field = String::new();
@@ -436,9 +665,31 @@ fn py_list_repr(items: &[String]) -> String {
 ///
 /// # Errors
 /// [`TradebookError`] with Python's messages: unreadable file, missing columns, a row with more
-/// fields than the header, an unrecognised trade type, no parseable date, no usable trades.
+/// fields than the header, an unrecognised trade type, no parseable date, no usable trades; and
+/// [`ImportError::Uncaught`] where Python's sort raises (one symbol's naive and aware times).
+pub fn parse_tradebook(path: &Path) -> Result<Vec<Fill>, ImportError> {
+    let mut fills = read_tradebook(path)?;
+    // `sorted(fills, key=lambda f: (f.symbol, f.when))`: one symbol's naive and aware fills meet
+    // in the sort, which is Python's `TypeError`.
+    for f in &fills {
+        if fills
+            .iter()
+            .any(|g| g.symbol == f.symbol && g.tz.is_some() != f.tz.is_some())
+        {
+            return Err(ImportError::Uncaught(NAIVE_AWARE.to_owned()));
+        }
+    }
+    fills.sort_by(|a, b| {
+        a.symbol
+            .cmp(&b.symbol)
+            .then_with(|| py_cmp((a.when, a.tz), (b.when, b.tz)).unwrap_or(Ordering::Equal))
+    });
+    Ok(fills)
+}
+
+/// The rows of [`parse_tradebook`], unsorted.
 #[allow(clippy::too_many_lines)]
-pub fn parse_tradebook(path: &Path) -> Result<Vec<Fill>, TradebookError> {
+fn read_tradebook(path: &Path) -> Result<Vec<Fill>, TradebookError> {
     let shown = path.display().to_string();
     let bytes = std::fs::read(path).map_err(|e| TradebookError(format!("{shown}: {e}")))?;
     let text = String::from_utf8(bytes).map_err(|e| TradebookError(format!("{shown}: {e}")))?;
@@ -547,7 +798,7 @@ pub fn parse_tradebook(path: &Path) -> Result<Vec<Fill>, TradebookError> {
         };
         let date_raw = c_date.as_deref().and_then(get).unwrap_or("");
         let time_raw = c_time.as_deref().and_then(get).unwrap_or("");
-        let Some(when) = parse_when(date_raw, time_raw) else {
+        let Some(stamp) = parse_when_tz(date_raw, time_raw, wall_today()) else {
             return Err(TradebookError(format!(
                 "{shown}: line {line_no} ({sym}) has no parseable date. An acquisition date \
                  cannot be inferred, and a lot without one is never assumed tax-safe."
@@ -564,7 +815,8 @@ pub fn parse_tradebook(path: &Path) -> Result<Vec<Fill>, TradebookError> {
         };
         fills.push(Fill {
             symbol: sym,
-            when,
+            when: stamp.when,
+            tz: stamp.tz,
             side: side.to_owned(),
             quantity: qty,
             price: num(get(&c_price).unwrap_or("")),
@@ -581,8 +833,48 @@ pub fn parse_tradebook(path: &Path) -> Result<Vec<Fill>, TradebookError> {
     if fills.is_empty() {
         return Err(TradebookError(format!("{shown}: no usable trades found")));
     }
-    fills.sort_by(|a, b| (&a.symbol, a.when).cmp(&(&b.symbol, b.when)));
     Ok(fills)
+}
+
+/// `min`/`max` of the fills' `when`, Python's `TypeError` when naive and aware are mixed.
+fn span(fills: &[Fill]) -> Result<Option<(Stamp, Stamp)>, ImportError> {
+    let mut it = fills.iter();
+    let Some(first) = it.next() else {
+        return Ok(None);
+    };
+    let (mut lo, mut hi) = ((first.when, first.tz), (first.when, first.tz));
+    for f in it {
+        let x = (f.when, f.tz);
+        if py_cmp(x, lo).map_err(ImportError::Uncaught)? == Ordering::Less {
+            lo = x;
+        }
+        if py_cmp(x, hi).map_err(ImportError::Uncaught)? == Ordering::Greater {
+            hi = x;
+        }
+    }
+    Ok(Some((
+        Stamp {
+            when: lo.0,
+            tz: lo.1,
+        },
+        Stamp {
+            when: hi.0,
+            tz: hi.1,
+        },
+    )))
+}
+
+/// `build_lots(fills, actions)` where Python's event sort would raise: a naive and an aware
+/// `when` among the events (an aware fill beside any naive fill or any corporate action).
+///
+/// # Errors
+/// [`ImportError::Uncaught`] (`TypeError`).
+pub fn build_lots_checked(fills: &[Fill], actions: &[Action]) -> Result<Rebuild, ImportError> {
+    let aware = fills.iter().filter(|f| f.tz.is_some()).count();
+    if aware > 0 && (aware < fills.len() || !actions.is_empty()) {
+        return Err(ImportError::Uncaught(NAIVE_AWARE.to_owned()));
+    }
+    Ok(build_lots(fills, actions))
 }
 
 // =====================================================================================
@@ -601,9 +893,10 @@ enum Event<'a> {
 pub fn build_lots(fills: &[Fill], actions: &[Action]) -> Rebuild {
     let mut out = Rebuild::default();
     let mut books: Vec<(String, Vec<Lot>)> = Vec::new();
+    // Ordered by instant: all naive (local wall time) or all aware ([`build_lots_checked`]).
     let mut events: Vec<(NaiveDateTime, &str, u8, Event<'_>)> = fills
         .iter()
-        .map(|f| (f.when, f.symbol.as_str(), 0, Event::Fill(f)))
+        .map(|f| (instant(f.when, f.tz), f.symbol.as_str(), 0, Event::Fill(f)))
         .collect();
     events.extend(
         actions
@@ -639,6 +932,7 @@ pub fn build_lots(fills: &[Fill], actions: &[Action]) -> Rebuild {
                 quantity: f.quantity,
                 price: f.price,
                 charges: f.charges,
+                tz: f.tz,
             });
             continue;
         }
@@ -658,8 +952,8 @@ pub fn build_lots(fills: &[Fill], actions: &[Action]) -> Rebuild {
             };
             out.closed.push(Closed {
                 symbol: f.symbol.clone(),
-                entry_ts: local_ts(lot.when),
-                exit_ts: local_ts(f.when),
+                entry_ts: stamp_ts(lot.when, lot.tz),
+                exit_ts: stamp_ts(f.when, f.tz),
                 qty: take,
                 entry_price: lot.price,
                 exit_price: f.price,
@@ -686,8 +980,9 @@ pub fn build_lots(fills: &[Fill], actions: &[Action]) -> Rebuild {
         out.open_lots
             .extend(book.into_iter().filter(|l| l.quantity > 0));
     }
-    out.open_lots
-        .sort_by(|a, b| (&a.symbol, a.when).cmp(&(&b.symbol, b.when)));
+    out.open_lots.sort_by(|a, b| {
+        (&a.symbol, instant(a.when, a.tz)).cmp(&(&b.symbol, instant(b.when, b.tz)))
+    });
     out
 }
 
@@ -705,7 +1000,7 @@ pub fn fill_key(f: &Fill) -> String {
     let raw = format!(
         "{}|{}|{}|{}|{:.4}",
         f.symbol,
-        iso_naive(f.when),
+        stamp_iso(f.when, f.tz),
         f.side,
         f.quantity,
         f.price
@@ -820,6 +1115,7 @@ pub async fn load_fills(
             },
             trade_id: as_text(r.get("trade_id")),
             charges: r.get("charges").and_then(DbValue::as_f64).unwrap_or(0.0),
+            tz: None,
         });
     }
     Ok(out)
@@ -899,7 +1195,7 @@ pub async fn import_tradebook(
             r.realised_pnl,
         )
     } else {
-        let rebuild = build_lots(&fills, &[]);
+        let rebuild = build_lots_checked(&fills, &[])?;
         write_lots(conn, &rebuild, &stored.symbols, false).await?;
         (
             len_i(rebuild.open_lots.len()),
@@ -908,8 +1204,10 @@ pub async fn import_tradebook(
             realised(&rebuild.closed),
         )
     };
-    let first = fills.iter().map(|f| f.when).min().unwrap_or_default();
-    let last = fills.iter().map(|f| f.when).max().unwrap_or_default();
+    let (first, last) = match span(&fills)? {
+        Some((lo, hi)) => (lo.when, hi.when),
+        None => (NaiveDateTime::default(), NaiveDateTime::default()),
+    };
     Ok(dict([
         ("file", PyValue::Str(path.display().to_string())),
         ("fills", PyValue::Int(len_i(fills.len()))),
@@ -993,7 +1291,7 @@ async fn write_lots(
         ]);
     }
     for l in &rebuild.open_lots {
-        let ts = local_ts(l.when);
+        let ts = stamp_ts(l.when, l.tz);
         let ann = kept
             .get(&(l.symbol.clone(), Some(ts.to_bits()), Some(l.quantity)))
             .unwrap_or(&none);
@@ -1080,11 +1378,14 @@ pub fn fills_from_kite(rows: &[PyValue]) -> Result<Vec<Fill>, TradebookError> {
             .or(r.get("exchange_timestamp").unwrap_or(&none))
             .or(r.get("order_timestamp").unwrap_or(&none));
         let when = match when_v {
-            PyValue::Str(s) => parse_when("", s),
-            PyValue::DateTime(baskfy_providers::records::PyDateTime::Naive(n)) => Some(*n),
-            PyValue::DateTime(baskfy_providers::records::PyDateTime::Aware(a)) => {
-                Some(a.naive_local())
+            PyValue::Str(s) => parse_when_tz("", s, wall_today()),
+            PyValue::DateTime(baskfy_providers::records::PyDateTime::Naive(n)) => {
+                Some(Stamp { when: *n, tz: None })
             }
+            PyValue::DateTime(baskfy_providers::records::PyDateTime::Aware(a)) => Some(Stamp {
+                when: a.naive_local(),
+                tz: Some(*a.offset()),
+            }),
             _ => None,
         };
         let Some(when) = when else {
@@ -1104,7 +1405,8 @@ pub fn fills_from_kite(rows: &[PyValue]) -> Result<Vec<Fill>, TradebookError> {
             .map_or_else(|| "NSE".to_owned(), PyValue::py_str);
         out.push(Fill {
             symbol,
-            when,
+            when: when.when,
+            tz: when.tz,
             side,
             quantity: qty,
             price: pyf(r.get("average_price")),
@@ -1622,7 +1924,7 @@ mod tests {
         assert!(
             parse_tradebook(&f)
                 .unwrap_err()
-                .0
+                .to_string()
                 .contains("refusing to guess")
         );
     }
@@ -1637,7 +1939,7 @@ mod tests {
         assert!(
             parse_tradebook(&f)
                 .unwrap_err()
-                .0
+                .to_string()
                 .contains("acquisition date")
         );
     }
@@ -1707,7 +2009,7 @@ mod tests {
         assert!(
             parse_tradebook(&f)
                 .unwrap_err()
-                .0
+                .to_string()
                 .contains("more fields than the header")
         );
     }
@@ -1721,7 +2023,7 @@ mod tests {
             "symbol,trade_date",
             "t.csv",
         );
-        let e = parse_tradebook(&f).unwrap_err().0;
+        let e = parse_tradebook(&f).unwrap_err().to_string();
         assert!(
             e.contains("missing required columns ['trade_type', 'quantity', 'price']"),
             "{e}"
@@ -2355,5 +2657,49 @@ mod tests {
             panic!()
         };
         assert_eq!(int(fills, "total"), 1);
+    }
+
+    /// pandas stamps a bare time with today's date (probed 30 Oct 2026: `09:30:00` →
+    /// 2026-10-30 09:30, `9:30 PM` → 21:30, `12:00 AM` → 00:00, `0:05` → 00:05, `13:00 PM`
+    /// raises); the goldens cannot pin a wall-clock date, so this does, with `today` injected.
+    #[test]
+    fn a_bare_time_is_stamped_with_today_as_pandas_does() {
+        let today = d(2026, 10, 30);
+        let at = |t: &str| parse_when_tz("2025-07-01", t, today).unwrap();
+        let hm = |h: u32, m: u32| today.and_hms_opt(h, m, 0).unwrap();
+        assert_eq!(at("09:30:00").when, hm(9, 30));
+        assert_eq!(at("9:30 PM").when, hm(21, 30));
+        assert_eq!(at("12:00 AM").when, hm(0, 0));
+        assert_eq!(at("12:30 PM").when, hm(12, 30));
+        assert_eq!(at("0:05").when, hm(0, 5));
+        assert_eq!(
+            at("09:30:00.5").when,
+            today.and_hms_micro_opt(9, 30, 0, 500_000).unwrap()
+        );
+        // `13:00 PM` is pandas' error: the trade date at 09:15.
+        assert_eq!(
+            at("13:00 PM").when,
+            d(2025, 7, 1).and_hms_opt(9, 15, 0).unwrap()
+        );
+        // A zone on a bare time is aware too.
+        let z = at("09:30:00Z");
+        assert_eq!((z.when, z.tz), (hm(9, 30), FixedOffset::east_opt(0)));
+    }
+
+    #[test]
+    fn an_aware_fill_keeps_its_instant_and_its_offset_in_the_key() {
+        let when = d(2025, 2, 7).and_hms_opt(9, 30, 0).unwrap();
+        let mut f = Fill::new("Z", when, "BUY", 1, 10.0);
+        f.tz = FixedOffset::east_opt(0);
+        assert_eq!(f.ts(), 1_738_920_600.0);
+        assert_eq!(stamp_iso(f.when, f.tz), "2025-02-07T09:30:00+00:00");
+        f.tz = FixedOffset::east_opt(-4 * 3600);
+        assert_eq!(stamp_iso(f.when, f.tz), "2025-02-07T09:30:00-04:00");
+        let naive = Fill::new("Z", when, "BUY", 1, 10.0);
+        assert!(matches!(
+            build_lots_checked(&[f.clone(), naive], &[]),
+            Err(ImportError::Uncaught(m)) if m == NAIVE_AWARE
+        ));
+        assert!(build_lots_checked(&[f], &[]).is_ok());
     }
 }

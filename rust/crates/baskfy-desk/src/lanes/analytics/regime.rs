@@ -10,6 +10,10 @@
 
 use crate::settings::Settings;
 
+pub mod alloc;
+pub mod engine;
+pub mod run;
+
 /// `ALGORITHM_VERSION`.
 pub const ALGORITHM_VERSION: &str = "regime/1.0.0";
 
@@ -375,6 +379,13 @@ impl RegimeConfig {
         Ok(cfg)
     }
 
+    /// `buffer`: the buffer as a fraction (150 bps → 0.015).
+    #[must_use]
+    #[allow(clippy::cast_precision_loss)]
+    pub fn buffer(&self) -> f64 {
+        self.buffer_bps as f64 / 10_000.0
+    }
+
     /// `cap_for(RegimeTier(tier))`; `None` for a value that is not a tier (Python raises).
     #[must_use]
     pub fn cap_for(&self, tier: &str) -> Option<f64> {
@@ -394,13 +405,14 @@ impl RegimeConfig {
         sorted.sort_unstable();
         sorted.dedup();
         if self.ma_lengths != sorted {
+            let items: Vec<String> = self.ma_lengths.iter().map(ToString::to_string).collect();
+            let tuple = if items.len() == 1 {
+                format!("({},)", items[0])
+            } else {
+                format!("({})", items.join(", "))
+            };
             errs.push(format!(
-                "ma_lengths must be strictly increasing and unique: ({})",
-                self.ma_lengths
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join(", ")
+                "ma_lengths must be strictly increasing and unique: {tuple}"
             ));
         }
         if self.ma_lengths.is_empty() {
@@ -452,6 +464,38 @@ impl RegimeConfig {
                 ));
             }
         }
+        let weights_repr = || {
+            let body: Vec<String> = self
+                .default_book_weights
+                .iter()
+                .map(|(k, v)| format!("'{k}': {}", baskfy_core::py::float_repr(*v)))
+                .collect();
+            format!("{{{}}}", body.join(", "))
+        };
+        if self.default_book_weights.iter().any(|(_, v)| *v < 0.0) {
+            errs.push(format!(
+                "default_book_weights must be non-negative: {}",
+                weights_repr()
+            ));
+        }
+        if engine::py_sum(self.default_book_weights.iter().map(|(_, v)| *v)) <= 0.0 {
+            errs.push("default_book_weights must be normalizable (sum > 0)".to_owned());
+        }
+        let mut missing: Vec<&str> = self
+            .structural_indices
+            .iter()
+            .map(|(c, _)| c.as_str())
+            .filter(|c| !self.default_book_weights.iter().any(|(k, _)| k == c))
+            .collect();
+        missing.sort_unstable();
+        missing.dedup();
+        if !missing.is_empty() {
+            let items: Vec<String> = missing.iter().map(|m| format!("'{m}'")).collect();
+            errs.push(format!(
+                "default_book_weights missing categories: [{}]",
+                items.join(", ")
+            ));
+        }
         if self.confirm_days < 1 {
             errs.push(format!(
                 "confirm_days must be at least 1, got {}",
@@ -469,6 +513,19 @@ impl RegimeConfig {
         }
         if !(0..=6).contains(&self.weekly_evaluation_weekday) {
             errs.push("weekly_evaluation_weekday must be 0-6 (Mon-Sun)".to_owned());
+        }
+        if self.structural_indices.is_empty() {
+            errs.push("structural_indices must not be empty".to_owned());
+        }
+        if self
+            .structural_indices
+            .iter()
+            .any(|(_, v)| v.trim().is_empty())
+        {
+            errs.push("structural index identifiers must be non-empty".to_owned());
+        }
+        if self.momentum_sentinel.trim().is_empty() {
+            errs.push("momentum_sentinel must be non-empty".to_owned());
         }
         if errs.is_empty() {
             Ok(())

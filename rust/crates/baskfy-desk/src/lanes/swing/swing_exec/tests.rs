@@ -81,7 +81,20 @@ struct MemoryStore {
     resizes: Vec<(i64, i64)>,
     range_highs: BTreeMap<i64, Decimal>,
     issues: Vec<ProtectionIssue>,
+    /// Python's `store.resizes`: every `resize_line` call, whole.
+    resize_log: Vec<(i64, i64, Decimal, Decimal, String)>,
+    /// Python's `store.context_reads`.
+    context_reads: usize,
+    /// `lock` / `unlock` (a normal exit), shared with a watched gateway's calls.
+    lock_log: Option<std::sync::Arc<Mutex<Vec<String>>>>,
+    /// A line another request confirms while this one waits for the lock (marked `FILLED`
+    /// inside the lock, after the snapshot — Python's `lock_then_lose`).
+    lose_race: Option<i64>,
 }
+
+/// Plan ids are unique across every store in the process (Python mints `uuid4()`), so one
+/// gateway's idempotency map can serve many stores, as `fast_gw` does.
+static PLAN_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 impl MemoryStore {
     fn new() -> Self {
@@ -118,6 +131,10 @@ impl MemoryStore {
             resizes: Vec::new(),
             range_highs: BTreeMap::new(),
             issues: Vec::new(),
+            resize_log: Vec::new(),
+            context_reads: 0,
+            lock_log: None,
+            lose_race: None,
         }
     }
 
@@ -127,7 +144,8 @@ impl MemoryStore {
 
     fn add_plan_built(&mut self, built_at: DateTime<FixedOffset>) -> String {
         let n = self.book.plans.len() + 1;
-        let plan_id = format!("00000000-0000-4000-8000-{n:012}");
+        let seq = PLAN_SEQ.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let plan_id = format!("00000000-0000-4000-8000-{seq:012}");
         self.book.plans.insert(
             plan_id.clone(),
             PlanRow {
@@ -413,12 +431,23 @@ impl SwingStore for MemoryStore {
 
     async fn lock_begin(&mut self, day: NaiveDate) -> Result<(), StoreError> {
         self.locks.push(day);
+        if let Some(log) = &self.lock_log {
+            log.lock().unwrap().push("lock".to_owned());
+        }
         self.snapshot = Some(self.book.clone());
+        if let Some(id) = self.lose_race
+            && let Some(l) = self.book.lines.get_mut(&id)
+        {
+            "FILLED".clone_into(&mut l.state);
+        }
         Ok(())
     }
 
     async fn lock_commit(&mut self) -> Result<(), StoreError> {
         self.snapshot = None;
+        if let Some(log) = &self.lock_log {
+            log.lock().unwrap().push("unlock".to_owned());
+        }
         Ok(())
     }
 
@@ -430,6 +459,7 @@ impl SwingStore for MemoryStore {
     }
 
     async fn session_context(&mut self, day: NaiveDate) -> Result<SignalContext, StoreError> {
+        self.context_reads += 1;
         let held: Vec<&PositionRow> = self
             .book
             .positions
@@ -500,6 +530,8 @@ impl SwingStore for MemoryStore {
             row.note = Some(note.to_owned());
         }
         self.resizes.push((line_id, quantity));
+        self.resize_log
+            .push((line_id, quantity, risk_inr, position_value, note.to_owned()));
         Ok(())
     }
 
@@ -591,6 +623,9 @@ struct FakeGateway {
     refuse_gtt: bool,
     refuse_delete: bool,
     explode_place: bool,
+    /// Python's `Refusing(RecordingGateway)`: the cancel of this symbol answers
+    /// `ORDER_CANCEL_ERROR`.
+    refuse_cancel: Option<String>,
 }
 
 impl FakeGateway {
@@ -604,6 +639,7 @@ impl FakeGateway {
             refuse_gtt: false,
             refuse_delete: false,
             explode_place: false,
+            refuse_cancel: None,
         }
     }
 
@@ -794,6 +830,14 @@ impl Gateway for FakeGateway {
 
     async fn cancel_order(&self, req: CancelOrder) -> Result<PyDict, GatewayError> {
         self.calls.lock().unwrap().push(Call::Cancel(req.clone()));
+        if self.refuse_cancel.as_deref() == Some(req.symbol.as_str()) {
+            return Ok(dict(vec![
+                ("symbol", s(&req.symbol)),
+                ("order_id", s(&req.order_id)),
+                ("status", s("ORDER_CANCEL_ERROR")),
+                ("error", s("broker down")),
+            ]));
+        }
         let status = if self.dry() {
             gtt_status::ORDER_CANCEL_DRY_RUN
         } else {
@@ -2227,3 +2271,12 @@ async fn a_missing_stop_is_an_error_never_a_trigger_at_zero() {
     assert!(matches!(r, Err(ExecError::Store(_))), "{r:?}");
     assert!(gw.gtts().is_empty(), "no GTT at 0");
 }
+
+// --- the rest of the Python suites, test for test (wave D2) ---------------------------------
+
+/// `tests/test_swing_execute.py`, every test by its Python name.
+mod py;
+/// The real `OrderGateway` over a replay Kite that explodes on every write.
+mod real;
+/// `tests/test_swing_track_c.py`, every test by its Python name.
+mod track_c;

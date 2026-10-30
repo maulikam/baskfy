@@ -289,7 +289,12 @@ async fn history(
     Ok(out)
 }
 
-async fn write_pause(
+/// `_write_pause(store, scope, pause)`: one sleeve's (or the book's) pause, never shortened —
+/// the later of the stored and the new `paused_until` wins. `true` when a row changed.
+///
+/// # Errors
+/// The database, or a stored date Python would refuse.
+pub async fn write_pause(
     store: &mut PgOptionsStore<'_>,
     scope: &str,
     pause: &Pause,

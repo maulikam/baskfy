@@ -339,8 +339,10 @@ dependencies = [
  "md-5",
  "minijinja",
  "minijinja-contrib",
+ "polars",
  "rand 0.9.5",
  "regex",
+ "reqwest",
  "rust_decimal",
  "serde",
  "serde_json",
@@ -349,7 +351,9 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "tokio-rustls",
  "tower",
+ "webpki-roots 1.0.11",
 ]
 
 [[package]]

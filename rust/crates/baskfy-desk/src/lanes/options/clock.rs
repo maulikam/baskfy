@@ -3,9 +3,9 @@
 //! per `min_interval`), and call `strategy.check(now)` on **every** pass, ticks or not — a
 //! position whose feed has gone silent is exactly the one `FEED_LOST` exists for. `now`,
 //! `sleep` and the monotonic clock are seams, so a test ends the loop by handing it a time past
-//! the close.
-
-use std::collections::BTreeMap;
+//! the close. New legs are followed on the ticker as they appear (`follow`), and `act(now)` —
+//! the executor's sweep of raised exits — runs after every evaluation pass, its error logged and
+//! the loop carried on.
 
 use chrono::NaiveDateTime;
 
@@ -20,7 +20,8 @@ pub fn is_token_error(python_type: &str) -> bool {
     python_type == "TokenException"
 }
 
-/// What the loop drives (`NiftyOptionsMonitor` or a test's stand-in).
+/// What the loop drives (`NiftyOptionsMonitor` or a test's stand-in). An `Err` is the
+/// exception Python's strategy would raise: it ends the session (after `on_stop`).
 #[async_trait::async_trait]
 pub trait Monitor: Send {
     /// The tokens to follow (the index, then every leg).
@@ -32,14 +33,25 @@ pub trait Monitor: Send {
     /// Stop.
     async fn on_stop(&mut self);
     /// One tick.
-    async fn on_tick(&mut self, tick: &PyDict);
+    async fn on_tick(&mut self, tick: &PyDict) -> Result<(), String>;
     /// One evaluation pass.
-    fn check(&mut self, now: NaiveDateTime);
+    async fn check(&mut self, now: NaiveDateTime) -> Result<(), String>;
     /// Past the close?
     fn session_over(&self, at: NaiveDateTime) -> bool;
     /// The token was refused: raise every exit.
-    fn token_lost(&mut self, now: NaiveDateTime);
+    async fn token_lost(&mut self, now: NaiveDateTime) -> Result<(), String>;
 }
+
+/// `act(now)`: what runs after every evaluation pass — the executor's sweep of pending exits.
+#[async_trait::async_trait]
+pub trait Act: Send {
+    /// One sweep; an `Err` is logged and the loop carries on.
+    async fn act(&mut self, now: NaiveDateTime) -> Result<(), String>;
+}
+
+/// `follow(tokens)`: subscribe new tokens on the live ticker; an `Err` is logged and the bus
+/// still gets the quote fallback for them.
+pub type Follow<'f> = &'f mut (dyn FnMut(&[i64]) -> Result<(), String> + Send);
 
 /// The quote endpoint the fallback asks (`kite.quote_raw(keys)`); `Err(python_type)` on a
 /// failure.
@@ -173,63 +185,87 @@ pub trait Bus: Send {
     fn drain(&mut self, token: i64) -> Vec<PyDict>;
 }
 
-/// `run_session(strategy, bus, quotes=, now=, sleep=, poll_seconds=, clock=)`: drive the
-/// strategy until `session_over(now())`; the number of exits it raised.
+/// `run_session(strategy, bus, follow=, quotes=, act=, now=, sleep=, poll_seconds=, clock=)`:
+/// drive the strategy until `session_over(now())`; the number of exits it raised.
+///
+/// # Errors
+/// The strategy's exception (`on_tick`, `check`, `token_lost`), after `on_stop`.
 pub async fn run_session(
     strategy: &mut dyn Monitor,
     bus: &mut dyn Bus,
+    mut follow: Option<Follow<'_>>,
     mut quotes: Option<&mut LegQuotes<'_>>,
+    mut act: Option<&mut dyn Act>,
     seams: &mut dyn Seams,
     poll_seconds: f64,
-) -> usize {
-    let mut queues: BTreeMap<i64, ()> = BTreeMap::new();
+) -> Result<usize, String> {
     let mut order: Vec<i64> = Vec::new();
-    let sync = |strategy: &dyn Monitor,
-                bus: &mut dyn Bus,
-                queues: &mut BTreeMap<i64, ()>,
-                order: &mut Vec<i64>| {
+    let mut sync = |strategy: &dyn Monitor, bus: &mut dyn Bus, order: &mut Vec<i64>| {
+        let mut new: Vec<i64> = Vec::new();
         for t in strategy.tokens() {
-            if queues.insert(t, ()).is_none() {
-                bus.subscribe(t);
-                order.push(t);
+            if !order.contains(&t) && !new.contains(&t) {
+                new.push(t);
             }
+        }
+        for t in &new {
+            bus.subscribe(*t);
+            order.push(*t);
+        }
+        if !new.is_empty()
+            && let Some(f) = follow.as_deref_mut()
+            && let Err(e) = f(&new)
+        {
+            super::monitor::emit(&format!(
+                "ERROR desk.options_clock options monitor: could not subscribe {new:?} on the ticker: {e}"
+            ));
         }
     };
     strategy.on_start().await;
-    sync(strategy, bus, &mut queues, &mut order);
+    sync(strategy, bus, &mut order);
     let mut last_tick = seams.clock();
-    loop {
-        let now = seams.now();
-        if strategy.session_over(now) {
-            break;
-        }
-        let mut drained = 0;
-        for token in order.clone() {
-            for tick in bus.drain(token) {
-                strategy.on_tick(&tick).await;
-                drained += 1;
-            }
-        }
-        if drained > 0 {
-            last_tick = seams.clock();
-        } else if let Some(q) = quotes.as_deref_mut()
-            && seams.clock() - last_tick >= QUIET_SECONDS
-        {
-            let moment = seams.clock();
+    let outcome: Result<(), String> = async {
+        loop {
             let now = seams.now();
-            for tick in q.poll(&order, now, moment).await.unwrap_or_default() {
-                strategy.on_tick(&tick).await;
+            if strategy.session_over(now) {
+                return Ok(());
             }
-            if q.token_dead {
+            let mut drained = 0;
+            for token in order.clone() {
+                for tick in bus.drain(token) {
+                    strategy.on_tick(&tick).await?;
+                    drained += 1;
+                }
+            }
+            if drained > 0 {
+                last_tick = seams.clock();
+            } else if let Some(q) = quotes.as_deref_mut()
+                && seams.clock() - last_tick >= QUIET_SECONDS
+            {
+                let moment = seams.clock();
                 let now = seams.now();
-                strategy.token_lost(now);
+                for tick in q.poll(&order, now, moment).await.unwrap_or_default() {
+                    strategy.on_tick(&tick).await?;
+                }
+                if q.token_dead {
+                    let now = seams.now();
+                    strategy.token_lost(now).await?;
+                }
             }
+            let now = seams.now();
+            strategy.check(now).await?;
+            if let Some(a) = act.as_deref_mut() {
+                let now = seams.now();
+                if let Err(e) = a.act(now).await {
+                    super::monitor::emit(&format!(
+                        "ERROR desk.options_clock options monitor: the exit sweep failed: {e}"
+                    ));
+                }
+            }
+            sync(strategy, bus, &mut order);
+            seams.sleep(poll_seconds).await;
         }
-        let now = seams.now();
-        strategy.check(now);
-        sync(strategy, bus, &mut queues, &mut order);
-        seams.sleep(poll_seconds).await;
     }
+    .await;
     strategy.on_stop().await;
-    strategy.exits()
+    outcome.map(|()| strategy.exits())
 }

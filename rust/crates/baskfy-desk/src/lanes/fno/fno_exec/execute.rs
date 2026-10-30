@@ -285,6 +285,12 @@ pub struct FoCtx<'a> {
     pub tenant: Option<TenantIds>,
 }
 
+/// `log.error` on `app.fno_execute`.
+#[allow(clippy::print_stderr)]
+pub fn log_error(message: &str) {
+    eprintln!("ERROR:app.fno_execute:{message}");
+}
+
 fn other(e: impl std::fmt::Display) -> ExecError {
     ExecError::Other(e.to_string())
 }
@@ -1854,8 +1860,10 @@ pub async fn execute_exit(
             delete_future_stop(gateway, &position, &leg.tradingsymbol, ctx).await?;
         }
     }
+    // `_after_close(store, position.id, now(), log.error)`: an exit's journal failure is
+    // logged, not the caller's alert (Python passes `log.error` here, whatever the caller's).
     ctx.ledger
-        .after_close(store, position.id, (ctx.now)(), ctx.alert)
+        .after_close(store, position.id, (ctx.now)(), &log_error)
         .await?;
     Ok(FoOutcome::new(plan, "CLOSED", orders).with(
         Some(position.id),

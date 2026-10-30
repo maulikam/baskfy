@@ -414,3 +414,99 @@ async fn equal_prints_keep_the_first_scale_like_python_max() {
     assert_eq!(opening.high.to_string(), "100.0");
     assert_eq!(opening.low.to_string(), "99.50");
 }
+
+/// `NoCandles`: a source with nothing to say.
+struct NoCandles;
+
+#[async_trait]
+impl CandleSource for NoCandles {
+    async fn minute_candles(
+        &self,
+        _token: i64,
+        _day: NaiveDate,
+        _until: NaiveDateTime,
+    ) -> Result<Vec<Candle>, String> {
+        Ok(Vec::new())
+    }
+}
+
+/// `Exploding`: the historical API is down.
+struct Exploding;
+
+#[async_trait]
+impl CandleSource for Exploding {
+    async fn minute_candles(
+        &self,
+        _token: i64,
+        _day: NaiveDate,
+        _until: NaiveDateTime,
+    ) -> Result<Vec<Candle>, String> {
+        Err("historical API down".to_owned())
+    }
+}
+
+#[tokio::test]
+async fn test_a_failing_candle_source_leaves_the_tick_range_standing() {
+    let mut store = ListStore::default();
+    let mut s = strategy(vec![name("AAA", 1, Some("100"), None)]);
+    let ticks = [
+        tick(1, "99.0", "09:15", None),
+        tick(1, "99.5", "09:19", None),
+        tick(1, "99.3", "09:20", None),
+        tick(1, "99.2", "09:21", None),
+        tick(1, "99.2", "09:22", None),
+    ];
+    drive(&mut s, &ticks, &mut store, &Exploding).await;
+    assert_eq!(s.opening(1).unwrap().high, d("99.5"));
+    assert!(s.state[&1].reconciled);
+}
+
+/// SW26: a monitor that comes up at 13:10 measures the break against the MORNING range (from
+/// Kite's 09:15 candles), never a range built from the afternoon's own ticks.
+#[tokio::test]
+#[allow(non_snake_case)]
+async fn test_a_monitor_started_in_the_afternoon_still_uses_the_MORNING_range() {
+    let source = Counting {
+        candles: vec![
+            candle("09:15", "99", "99.5", "98.0", "99.2"),
+            candle("09:20", "99.2", "99.4", "99.0", "99.1"),
+        ],
+        ..Counting::default()
+    };
+    let mut store = ListStore::default();
+    let mut s = strategy(vec![name("AAA", 1, Some("100"), None)]);
+    drive(
+        &mut s,
+        &[tick(1, "101.0", "13:10", Some("99.8"))],
+        &mut store,
+        &source,
+    )
+    .await;
+    let opening = s.opening(1).unwrap();
+    assert_eq!(
+        (opening.high, opening.low),
+        (d("99.5"), d("98.0")),
+        "the afternoon's own prints became the opening range"
+    );
+    assert_eq!(states(&store.signals), [TriggerState::Triggered]);
+    assert_eq!(store.signals[0].verdict.entry, Some(d("101.0")));
+}
+
+/// The fail-safe half: no morning range, no verdict — the name is silent for the day.
+#[tokio::test]
+async fn test_an_afternoon_start_with_no_candles_refuses_to_trigger_at_all() {
+    let mut store = ListStore::default();
+    let mut s = strategy(vec![name("AAA", 1, Some("100"), None)]);
+    drive(
+        &mut s,
+        &[
+            tick(1, "101.0", "13:10", None),
+            tick(1, "120.0", "14:00", None),
+        ],
+        &mut store,
+        &NoCandles,
+    )
+    .await;
+    assert!(s.opening(1).is_none());
+    assert!(store.signals.is_empty());
+}

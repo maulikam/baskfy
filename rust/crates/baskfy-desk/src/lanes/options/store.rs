@@ -744,11 +744,29 @@ impl<'c> PgOptionsStore<'c> {
         value: Decimal,
         at: DateTime<FixedOffset>,
     ) -> Result<(), StoreError> {
-        let pnl = py::q2(super::core::pnl_points(
+        self.record_mark_of(
+            tracked.session_id,
             tracked.structure,
             tracked.entry_points,
             value,
-        ));
+            at,
+        )
+        .await
+    }
+
+    /// `record_mark` from the parts it reads (the monitor holds `exits.OpenPosition`s).
+    ///
+    /// # Errors
+    /// The database.
+    pub async fn record_mark_of(
+        &mut self,
+        session_id: i64,
+        structure: Structure,
+        entry_points: Decimal,
+        value: Decimal,
+        at: DateTime<FixedOffset>,
+    ) -> Result<(), StoreError> {
+        let pnl = py::q2(super::core::pnl_points(structure, entry_points, value));
         let sql = format!(
             "UPDATE {} SET last_mark_points = ?, last_mark_at = ?, \
              peak_value = GREATEST(COALESCE(peak_value, ?), ?), \
@@ -765,11 +783,61 @@ impl<'c> PgOptionsStore<'c> {
                     Param::Decimal(pnl),
                     Param::Decimal(pnl),
                     Param::Decimal(pnl),
-                    Param::Int(tracked.session_id),
+                    Param::Int(session_id),
                 ],
             )
             .await?;
         Ok(())
+    }
+
+    /// `PgPositionStore.index_minutes(day, until)`: NIFTY 50's stored minutes from 09:15 to
+    /// `until` (exclusive), as naive IST bars.
+    ///
+    /// # Errors
+    /// The database, or a row Python would refuse.
+    pub async fn index_minutes(
+        &mut self,
+        day: NaiveDate,
+        until: DateTime<FixedOffset>,
+    ) -> Result<Vec<baskfy_core::options::bars::Bar>, StoreError> {
+        let s = self.schema.clone();
+        let start = py::ist_at(day, NaiveTime::from_hms_opt(9, 15, 0).unwrap_or(NaiveTime::MIN))
+            .ok_or_else(|| data("ValueError: 09:15 IST"))?;
+        let sql = format!(
+            "SELECT m.ts, m.open, m.high, m.low, m.close \
+             FROM {} m JOIN {} i \
+             ON i.id = m.instrument_id \
+             WHERE i.kite_token = ? AND m.ts >= ? AND m.ts < ? ORDER BY m.ts",
+            t(&s, "op_index_minute"),
+            t(&s, "instrument")
+        );
+        let rows = self
+            .rows(
+                &sql,
+                &[
+                    Param::Int(super::monitor::NIFTY_50_TOKEN),
+                    Param::Aware(start),
+                    Param::Aware(until),
+                ],
+            )
+            .await?;
+        let mut out = Vec::with_capacity(rows.len());
+        for r in &rows {
+            let ts = py::aware(col(r, "ts")).ok_or_else(|| data("TypeError: ts is not a datetime"))?;
+            let num = |name: &str| {
+                py::dec(col(r, name)).ok_or_else(|| {
+                    data(format!("decimal.InvalidOperation: {name} is not a number"))
+                })
+            };
+            out.push(baskfy_core::options::bars::Bar {
+                ts: baskfy_core::options::bars::ist(&ts),
+                open: num("open")?,
+                high: num("high")?,
+                low: num("low")?,
+                close: num("close")?,
+            });
+        }
+        Ok(out)
     }
 }
 

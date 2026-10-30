@@ -1833,4 +1833,10 @@ pub fn routes() -> Router<AppState> {
 }
 
 #[cfg(test)]
+mod scenario;
+#[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_routes;
+#[cfg(test)]
+mod tests_store;

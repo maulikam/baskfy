@@ -993,30 +993,108 @@ struct KiteSources {
     kite: Arc<crate::lanes::exec_core::kite_client::DeskKite>,
 }
 
-fn levels(raw: Option<&PyValue>) -> Vec<baskfy_core::options::execution::Level> {
+use crate::lanes::weekly::weekly_books::pyconv::{self, PyDecimal};
+
+/// `decimal.InvalidOperation` from comparing a NaN `Decimal` (`price > 0`).
+const NAN_COMPARE: &str = "InvalidOperation: [<class 'decimal.InvalidOperation'>]";
+
+/// A `Decimal` the desk can hold: `Decimal(str(x))` that is finite. Python would carry an
+/// infinite or NaN price on into the book; the port refuses it by name instead (DECISIONS-RS
+/// R8.19.1 — no exchange quote is ever one).
+fn finite(d: PyDecimal, what: &str) -> Result<Decimal, String> {
+    match d {
+        PyDecimal::Finite(x) => Ok(x),
+        _ => Err(format!(
+            "InvalidOperation: a non-finite {what} the desk cannot carry"
+        )),
+    }
+}
+
+/// `fno_monitor._levels(raw)`: a list's dict items with a positive price and quantity; anything
+/// else is skipped. `Decimal(str(price or 0))` and `int(quantity or 0)` raise as Python's do.
+fn levels(raw: Option<&PyValue>) -> Result<Vec<baskfy_core::options::execution::Level>, String> {
     let Some(PyValue::List(items)) = raw else {
-        return Vec::new();
+        return Ok(Vec::new());
     };
-    items
-        .iter()
-        .filter_map(|it| match it {
-            PyValue::Map(m) => {
-                let price = m
-                    .get("price")
-                    .filter(|v| v.truthy())
-                    .and_then(|v| py::dec_py(Some(v)))
-                    .unwrap_or(Decimal::ZERO);
-                let qty = py::py_int(m.get("quantity"), 0);
-                (price > Decimal::ZERO && qty > 0).then_some(
-                    baskfy_core::options::execution::Level {
-                        price,
-                        quantity: qty,
-                    },
-                )
-            }
-            _ => None,
-        })
-        .collect()
+    let mut out = Vec::new();
+    for it in items {
+        let PyValue::Map(m) = it else { continue };
+        let price = match m.get("price") {
+            Some(v) if v.truthy() => pyconv::decimal(v)?,
+            _ => PyDecimal::Finite(Decimal::ZERO),
+        };
+        let qty = pyconv::int_or_zero(m.get("quantity"))?;
+        let positive = match price {
+            PyDecimal::Finite(p) => p > Decimal::ZERO,
+            PyDecimal::Inf(up) => up,
+            PyDecimal::NaN | PyDecimal::SNaN => return Err(NAN_COMPARE.to_owned()),
+        };
+        if positive && qty > 0 {
+            out.push(baskfy_core::options::execution::Level {
+                price: finite(price, "depth price")?,
+                quantity: qty,
+            });
+        }
+    }
+    Ok(out)
+}
+
+/// `X._dec(value)`: `None` for `None`/`""`, else `Decimal(str(value))`.
+fn strict_dec(value: Option<&PyValue>) -> Result<Option<Decimal>, String> {
+    match value {
+        None | Some(PyValue::None) => Ok(None),
+        Some(PyValue::Str(s)) if s.is_empty() => Ok(None),
+        Some(v) => finite(pyconv::decimal(v)?, "last price").map(Some),
+    }
+}
+
+/// One `quote_raw` payload into books (`fno_monitor.kite_quotes`'s inner loop), raising where
+/// Python's `q.get`, `depth.get`, `Decimal(...)` and `int(...)` raise, so the page's `live_note`
+/// names the same failure.
+///
+/// # Errors
+/// Python's exception text (`"<Type>: <message>"`).
+pub fn books_from_payload(payload: &PyValue, out: &mut Live) -> Result<(), String> {
+    // `kite.quote_raw(...) or {}`: a falsy payload is no books.
+    if !payload.truthy() {
+        return Ok(());
+    }
+    let PyValue::Map(m) = payload else {
+        return Err(format!(
+            "AttributeError: '{}' object has no attribute 'items'",
+            pyconv::type_name(payload)
+        ));
+    };
+    let empty = PyValue::Map(PyDict::new());
+    for (key, q) in m.iter() {
+        let PyValue::Map(q) = q else {
+            return Err(pyconv::no_get(q));
+        };
+        let depth = match q.get("depth") {
+            Some(d) if d.truthy() => d,
+            _ => &empty,
+        };
+        let PyValue::Map(depth) = depth else {
+            return Err(pyconv::no_get(depth));
+        };
+        let bids = levels(depth.get("buy"))?;
+        let asks = levels(depth.get("sell"))?;
+        let last = strict_dec(q.get("last_price"))?;
+        let oi = pyconv::int_or_zero(q.get("oi"))?;
+        let name = key.strip_prefix("NFO:").unwrap_or(key).to_owned();
+        out.insert(
+            name,
+            FoQuote {
+                bid: bids.first().map(|l| l.price),
+                ask: asks.first().map(|l| l.price),
+                bids,
+                asks,
+                last,
+                oi: Some(oi),
+            },
+        );
+    }
+    Ok(())
 }
 
 impl LiveSources for KiteSources {
@@ -1039,28 +1117,7 @@ impl LiveSources for KiteSources {
                     .quote_raw(chunk)
                     .await
                     .map_err(|e| format!("{}: {}", e.python_type, e.message))?;
-                let PyValue::Map(m) = payload else { continue };
-                for (key, q) in m.iter() {
-                    let PyValue::Map(q) = q else { continue };
-                    let depth = match q.get("depth") {
-                        Some(PyValue::Map(d)) => d.clone(),
-                        _ => PyDict::new(),
-                    };
-                    let bids = levels(depth.get("buy"));
-                    let asks = levels(depth.get("sell"));
-                    let name = key.strip_prefix("NFO:").unwrap_or(key).to_owned();
-                    out.insert(
-                        name,
-                        FoQuote {
-                            bid: bids.first().map(|l| l.price),
-                            ask: asks.first().map(|l| l.price),
-                            bids,
-                            asks,
-                            last: py::dec_py(q.get("last_price")),
-                            oi: Some(py::py_int(q.get("oi"), 0)),
-                        },
-                    );
-                }
+                books_from_payload(&payload, &mut out)?;
             }
             Ok(out)
         })
@@ -1081,7 +1138,11 @@ impl LiveSources for KiteSources {
                 .ltp(&[name.to_owned()], "NSE")
                 .await
                 .map_err(|e| format!("{}: {}", e.python_type, e.message))?;
-            Ok(found.get(name).and_then(|v| py::dec_py(Some(v))))
+            // `None if found is None else Decimal(str(found))`; a raise is the caller's dash.
+            match found.get(name) {
+                None | Some(PyValue::None) => Ok(None),
+                Some(v) => finite(pyconv::decimal(v)?, "index level").map(Some),
+            }
         })
     }
 }
@@ -1443,6 +1504,103 @@ mod tests {
         assert_eq!(
             py::dumps(&PyValue::Map(badge_of(&[]))),
             "{\"open\": 0, \"nearest\": null}"
+        );
+    }
+
+    fn payload(json: &str) -> PyValue {
+        PyValue::from_json(json.as_bytes()).unwrap()
+    }
+
+    #[test]
+    fn a_kite_payload_becomes_books_as_kite_quotes_reads_it() {
+        let mut out = Live::new();
+        books_from_payload(
+            &payload(
+                r#"{"NFO:NIFTY26NOV25000CE": {"last_price": 60.5, "oi": "1_000", "depth":
+                {"buy": [{"price": 60, "quantity": 65}, {"price": 0, "quantity": 9}, "x",
+                {"price": "59.95", "quantity": 1.9}], "sell": [{"price": 61, "quantity": 0}]}},
+                "NFO:NIFTY26NOV23000PE": {"depth": null, "oi": null, "last_price": ""}}"#,
+            ),
+            &mut out,
+        )
+        .unwrap();
+        let q = &out["NIFTY26NOV25000CE"];
+        assert_eq!(q.bid, Some(Decimal::from(60)));
+        assert_eq!(
+            q.bids.len(),
+            2,
+            "zero price skipped, non-dict skipped, 1.9 → 1"
+        );
+        assert_eq!(q.bids[1].quantity, 1);
+        assert_eq!((q.ask, q.asks.len()), (None, 0));
+        assert_eq!(q.last, Some(Decimal::new(605, 1)));
+        assert_eq!(q.oi, Some(1000));
+        let p = &out["NIFTY26NOV23000PE"];
+        assert_eq!((p.bid, p.last, p.oi), (None, None, Some(0)));
+        // `{} or {}` and an empty payload are no books.
+        books_from_payload(&payload("{}"), &mut out).unwrap();
+    }
+
+    #[test]
+    fn a_malformed_kite_payload_raises_as_python_does() {
+        // The finding: Python raises here and the page names it in `live_note`; Rust used to
+        // skip the row silently.
+        let cases = [
+            (
+                r#"{"NFO:X": 5}"#,
+                "AttributeError: 'int' object has no attribute 'get'",
+            ),
+            (
+                r#"{"NFO:X": null}"#,
+                "AttributeError: 'NoneType' object has no attribute 'get'",
+            ),
+            (
+                r#"{"NFO:X": {"depth": [1]}}"#,
+                "AttributeError: 'list' object has no attribute 'get'",
+            ),
+            (
+                r#"{"NFO:X": {"depth": "deep"}}"#,
+                "AttributeError: 'str' object has no attribute 'get'",
+            ),
+            (
+                r#"{"NFO:X": {"depth": {"buy": [{"price": "abc", "quantity": 1}]}}}"#,
+                "InvalidOperation: [<class 'decimal.ConversionSyntax'>]",
+            ),
+            (
+                r#"{"NFO:X": {"depth": {"buy": [{"price": "NaN", "quantity": 1}]}}}"#,
+                "InvalidOperation: [<class 'decimal.InvalidOperation'>]",
+            ),
+            (
+                r#"{"NFO:X": {"depth": {"sell": [{"price": 1, "quantity": "1.5"}]}}}"#,
+                "ValueError: invalid literal for int() with base 10: '1.5'",
+            ),
+            (
+                r#"{"NFO:X": {"last_price": true}}"#,
+                "InvalidOperation: [<class 'decimal.ConversionSyntax'>]",
+            ),
+            (
+                r#"{"NFO:X": {"oi": "many"}}"#,
+                "ValueError: invalid literal for int() with base 10: 'many'",
+            ),
+            (
+                r#"{"NFO:X": {"oi": [3]}}"#,
+                "TypeError: int() argument must be a string, a bytes-like object or a real \
+                 number, not 'list'",
+            ),
+        ];
+        for (raw, want) in cases {
+            let mut out = Live::new();
+            assert_eq!(
+                books_from_payload(&payload(raw), &mut out).unwrap_err(),
+                want,
+                "{raw}"
+            );
+        }
+        // A non-dict payload (`quote_raw` always hands a dict; the loop's own words if not).
+        let mut out = Live::new();
+        assert_eq!(
+            books_from_payload(&payload("[1]"), &mut out).unwrap_err(),
+            "AttributeError: 'list' object has no attribute 'items'"
         );
     }
 

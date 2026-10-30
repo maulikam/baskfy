@@ -113,6 +113,10 @@ minijinja = { version = "=3.0.5", default-features = false, features = ["builtin
 minijinja-contrib = { version = "=3.0.5", default-features = false, features = ["pycompat"] }
 # `ASSET_V` (md5 of app.css) and Starlette's static-file ETag; already in the lock through sqlx.
 md-5 = { version = "=0.10.6" }
+# The swing notifier's SMTP STARTTLS (DECISIONS-RS R8.SM3): rustls over ring with the webpki roots,
+# both already in the lock through reqwest/hyper-rustls; aws-lc stays out (default features off).
+tokio-rustls = { version = "=0.26.6", default-features = false, features = ["ring", "tls12"] }
+webpki-roots = { version = "=1.0.11" }
 # Starlette's `Last-Modified` (email.utils.formatdate(usegmt=True)); already in the lock.
 httpdate = { version = "=1.0.3" }
 # Reading a raw (simple-protocol) query's rows and its row count together (`fetch_many`), as

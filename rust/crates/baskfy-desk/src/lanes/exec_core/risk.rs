@@ -19,7 +19,7 @@ use tokio::sync::Mutex;
 use crate::clock::Clock;
 use crate::pyfmt::{PyArg, format_value};
 use crate::storage::{Db, DbValue, Param};
-use crate::wire::{PyDict, PyValue, dict, py_json_dumps};
+use crate::wire::{PyDict, PyValue, dict};
 
 /// `app.config.MAX_SINGLE_WEIGHT` — % of the equity sleeve (a constant, not an env var).
 pub const MAX_SINGLE_WEIGHT: f64 = 15.0;
@@ -125,9 +125,11 @@ fn as_float(v: &PyValue) -> Option<f64> {
     }
 }
 
+/// `float(v)`: a string as Python's `float()` reads it (whitespace, `_` separators, `inf`,
+/// `nan`), a number or a bool as itself, anything else Python's `TypeError`.
 fn py_float(v: &PyValue) -> Result<f64, RiskError> {
     match v {
-        PyValue::Str(s) => s.trim().parse::<f64>().map_err(|_| {
+        PyValue::Str(s) => crate::settings::py_float(s).ok_or_else(|| {
             RiskError::new(
                 "ValueError",
                 format!(
@@ -139,21 +141,133 @@ fn py_float(v: &PyValue) -> Result<f64, RiskError> {
         other => as_float(other).ok_or_else(|| {
             RiskError::new(
                 "TypeError",
-                "float() argument must be a string or a real number",
+                format!(
+                    "float() argument must be a string or a real number, not '{}'",
+                    other.type_name()
+                ),
             )
         }),
     }
 }
 
-fn py_str(v: &PyValue) -> String {
+/// `int(v)`: a float truncates (NaN and infinity raise, as Python's do), a string is read as
+/// Python's `int()` reads it, a bool is 0/1, anything else Python's `TypeError`. A float past
+/// `i64` saturates (Python would hold the big integer; no order counter reaches it).
+fn py_int(v: &PyValue) -> Result<i64, RiskError> {
+    #[allow(clippy::cast_possible_truncation)]
     match v {
-        PyValue::Str(s) => s.clone(),
-        PyValue::Int(i) => i.to_string(),
-        PyValue::Float(f) => baskfy_core::py::float_repr(*f),
-        PyValue::Bool(b) => if *b { "True" } else { "False" }.to_owned(),
-        PyValue::None => "None".to_owned(),
-        other => format!("{other:?}"),
+        PyValue::Int(i) => Ok(*i),
+        PyValue::Bool(b) => Ok(i64::from(*b)),
+        PyValue::Float(f) if f.is_nan() => Err(RiskError::new(
+            "ValueError",
+            "cannot convert float NaN to integer",
+        )),
+        PyValue::Float(f) if f.is_infinite() => Err(RiskError::new(
+            "OverflowError",
+            "cannot convert float infinity to integer",
+        )),
+        PyValue::Float(f) => Ok(f.trunc() as i64),
+        PyValue::Str(s) => crate::settings::py_int(s).ok_or_else(|| {
+            RiskError::new(
+                "ValueError",
+                format!(
+                    "invalid literal for int() with base 10: {}",
+                    baskfy_providers::py::repr_str(s)
+                ),
+            )
+        }),
+        other => Err(RiskError::new(
+            "TypeError",
+            format!(
+                "int() argument must be a string, a bytes-like object or a real number, not '{}'",
+                other.type_name()
+            ),
+        )),
     }
+}
+
+/// `[str(r) for r in value]`: a string iterates its characters, a dict its keys; a value
+/// Python cannot iterate is its `TypeError`.
+fn py_str_items(v: &PyValue) -> Result<Vec<String>, RiskError> {
+    v.py_iter()
+        .map(|items| items.iter().map(PyValue::py_str).collect())
+        .map_err(|e| RiskError::new("TypeError", e.message()))
+}
+
+/// The marker a non-finite token is parked under while the strict JSON reader parses the
+/// text: `{PREFIX}{token}{SUFFIX}` as a JSON string (control characters no writer emits).
+const PARK_PREFIX: &str = "\u{0}\u{1}baskfy-json:";
+const PARK_SUFFIX: &str = "\u{1}\u{0}";
+const PARK_PREFIX_JSON: &str = "\\u0000\\u0001baskfy-json:";
+const PARK_SUFFIX_JSON: &str = "\\u0001\\u0000";
+/// `json.dumps`'s three non-finite tokens (longest first, so `-Infinity` is not read as `-`).
+const NON_FINITE: [(&str, f64); 3] = [
+    ("-Infinity", f64::NEG_INFINITY),
+    ("Infinity", f64::INFINITY),
+    ("NaN", f64::NAN),
+];
+
+fn restore_non_finite(v: PyValue) -> PyValue {
+    match v {
+        PyValue::Str(s) => {
+            let token = s
+                .strip_prefix(PARK_PREFIX)
+                .and_then(|rest| rest.strip_suffix(PARK_SUFFIX));
+            match token.and_then(|t| NON_FINITE.iter().find(|(name, _)| *name == t)) {
+                Some((_, f)) => PyValue::Float(*f),
+                None => PyValue::Str(s),
+            }
+        }
+        PyValue::List(items) => PyValue::List(items.into_iter().map(restore_non_finite).collect()),
+        PyValue::Map(m) => PyValue::Map(dict(
+            m.iter()
+                .map(|(k, v)| (k.to_owned(), restore_non_finite(v.clone()))),
+        )),
+        other => other,
+    }
+}
+
+/// `json.loads(text)`: strict JSON plus the `NaN`/`Infinity`/`-Infinity` tokens Python's
+/// `json.dumps` writes (`allow_nan=True`) and its reader accepts, outside strings.
+///
+/// # Errors
+/// The parser's message when the text is not that.
+pub fn py_json_loads(text: &str) -> Result<PyValue, String> {
+    let mut strict = String::with_capacity(text.len());
+    let (mut in_str, mut escaped) = (false, false);
+    let mut rest = text;
+    while let Some(c) = rest.chars().next() {
+        if in_str {
+            strict.push(c);
+            if escaped {
+                escaped = false;
+            } else if c == '\\' {
+                escaped = true;
+            } else if c == '"' {
+                in_str = false;
+            }
+            rest = &rest[c.len_utf8()..];
+            continue;
+        }
+        if c == '"' {
+            in_str = true;
+            strict.push(c);
+            rest = &rest[1..];
+            continue;
+        }
+        if let Some((token, _)) = NON_FINITE.iter().find(|(t, _)| rest.starts_with(t)) {
+            strict.push('"');
+            strict.push_str(PARK_PREFIX_JSON);
+            strict.push_str(token);
+            strict.push_str(PARK_SUFFIX_JSON);
+            strict.push('"');
+            rest = &rest[token.len()..];
+            continue;
+        }
+        strict.push(c);
+        rest = &rest[c.len_utf8()..];
+    }
+    PyValue::from_json(strict.as_bytes()).map(restore_non_finite)
 }
 
 /// The trading day's calendar date in IST, from the clock.
@@ -168,7 +282,7 @@ pub fn ist_day(clock: &dyn Clock) -> String {
 /// A `position_value` entry `float()` refuses.
 pub fn state_from(raw: &PyDict, today: &str) -> Result<(String, RiskState), RiskError> {
     let day = match raw.get("day") {
-        Some(v) if v.truthy() => py_str(v),
+        Some(v) if v.truthy() => v.py_str(),
         _ => today.to_owned(),
     };
     let mut position_value = Vec::new();
@@ -178,15 +292,14 @@ pub fn state_from(raw: &PyDict, today: &str) -> Result<(String, RiskState), Risk
         }
     }
     let reasons = match raw.get("reasons") {
-        Some(PyValue::List(items)) => items.iter().map(py_str).collect(),
+        Some(PyValue::List(items)) => items.iter().map(PyValue::py_str).collect(),
         _ => Vec::new(),
     };
+    // `float(x) if isinstance(x, (int, float)) else 0.0` (a bool is an int).
     let day_pnl = raw.get("day_pnl").and_then(as_float).unwrap_or(0.0);
-    #[allow(clippy::cast_possible_truncation)]
     let orders_today = match raw.get("orders_today") {
-        Some(PyValue::Int(i)) => *i,
-        Some(v) => as_float(v).map_or(0, |f| f.trunc() as i64),
-        None => 0,
+        Some(v @ (PyValue::Int(_) | PyValue::Float(_) | PyValue::Bool(_))) => py_int(v)?,
+        _ => 0,
     };
     let killed = raw.get("killed").is_some_and(PyValue::truthy);
     Ok((
@@ -199,6 +312,38 @@ pub fn state_from(raw: &PyDict, today: &str) -> Result<(String, RiskState), Risk
             position_value,
         },
     ))
+}
+
+/// `RiskManager._load`'s reading of a same-day file, which is strict where `_state_from` is
+/// tolerant: `float(raw.get("day_pnl", 0.0))`, `int(raw.get("orders_today", 0))`,
+/// `bool(raw.get("killed", False))`, `[str(r) for r in (raw.get("reasons") or [])]` and
+/// `float(v)` per position, raising (in that order) where Python's would.
+///
+/// # Errors
+/// The first of those conversions Python refuses.
+pub fn state_from_file(raw: &PyDict) -> Result<RiskState, RiskError> {
+    let positions = match raw.get("position_value") {
+        Some(PyValue::Map(m)) => m.clone(),
+        _ => PyDict::new(),
+    };
+    let day_pnl = raw.get("day_pnl").map_or(Ok(0.0), py_float)?;
+    let orders_today = raw.get("orders_today").map_or(Ok(0), py_int)?;
+    let killed = raw.get("killed").is_some_and(PyValue::truthy);
+    let reasons = match raw.get("reasons") {
+        Some(v) if v.truthy() => py_str_items(v)?,
+        _ => Vec::new(),
+    };
+    let mut position_value = Vec::new();
+    for (k, v) in positions.iter() {
+        position_value.push((k.to_owned(), py_float(v)?));
+    }
+    Ok(RiskState {
+        day_pnl,
+        orders_today,
+        killed,
+        reasons,
+        position_value,
+    })
 }
 
 /// `_payload()`: the JSON the store and the file both hold.
@@ -379,8 +524,12 @@ struct PgTxn {
     day: chrono::NaiveDate,
 }
 
+/// `json.dumps(payload)` (and `json.dump`): Python's defaults, `allow_nan=True` included, so a
+/// non-finite day P&L is written as `NaN` where Python writes it (a Postgres `jsonb` column then
+/// refuses it, as it refuses Python's).
+#[allow(clippy::unnecessary_wraps)]
 fn dumps(p: &PyDict) -> Result<String, RiskError> {
-    py_json_dumps(&PyValue::Map(p.clone())).map_err(|e| RiskError::new("ValueError", e.to_string()))
+    Ok(super::journal::dumps_allow_nan(&PyValue::Map(p.clone())))
 }
 
 #[async_trait]
@@ -409,8 +558,7 @@ impl RiskTxn for PgTxn {
                 ));
             }
         };
-        let parsed = PyValue::from_json(text.as_bytes())
-            .map_err(|e| RiskError::new("JSONDecodeError", e))?;
+        let parsed = py_json_loads(&text).map_err(|e| RiskError::new("JSONDecodeError", e))?;
         let PyValue::Map(m) = parsed else {
             return Err(RiskError::new(
                 "TypeError",
@@ -613,6 +761,17 @@ impl RiskManager {
         &self.cfg
     }
 
+    /// Which backing this manager decides against: `"memory"`, `"file"` or `"store"` (the
+    /// shared row) — what `app.main._risk_store()`'s wiring is checked by.
+    #[must_use]
+    pub const fn backing_kind(&self) -> &'static str {
+        match self.backing {
+            RiskBacking::Memory => "memory",
+            RiskBacking::File(_) => "file",
+            RiskBacking::Store(_) => "store",
+        }
+    }
+
     /// A copy of the state as this process last saw it.
     pub async fn state(&self) -> RiskState {
         self.inner.lock().await.state.clone()
@@ -634,8 +793,7 @@ impl RiskManager {
         }
         let text =
             std::fs::read_to_string(path).map_err(|e| RiskError::new("OSError", e.to_string()))?;
-        let raw = PyValue::from_json(text.as_bytes())
-            .map_err(|e| RiskError::new("JSONDecodeError", e))?;
+        let raw = py_json_loads(&text).map_err(|e| RiskError::new("JSONDecodeError", e))?;
         let PyValue::Map(raw) = raw else {
             return Err(RiskError::new(
                 "ValueError",
@@ -644,7 +802,8 @@ impl RiskManager {
         };
         let today = ist_day(self.clock.as_ref());
         let mut inner = self.inner.lock().await;
-        if raw.get("day").map(py_str).as_deref() != Some(today.as_str()) {
+        // `day != _ist_day()`: only the string itself is today.
+        if !matches!(raw.get("day"), Some(PyValue::Str(d)) if *d == today) {
             inner.day = today;
             inner.state = RiskState::default();
             return write_file(path, &payload(&inner.day, &inner.state)).await;
@@ -661,7 +820,7 @@ impl RiskManager {
                 ),
             ));
         }
-        let (_, state) = state_from(&raw, &today)?;
+        let state = state_from_file(&raw)?;
         inner.day = today;
         inner.state = state;
         Ok(())
@@ -925,8 +1084,9 @@ impl RiskLayer for RiskManager {
 pub fn risk_config(nav: f64, s: &crate::settings::Settings) -> Result<RiskConfig, RiskError> {
     // `base = float(nav) if nav else 0.0`; every branch below asks `base > 0`.
     let base = nav;
+    // `float(RISK_MAX_POSITION_VALUE)`: Python's `float()`, underscores and all ("1_500_000").
     let parse = |raw: &str| {
-        raw.trim().parse::<f64>().map_err(|_| {
+        crate::settings::py_float(raw).ok_or_else(|| {
             RiskError::new(
                 "ValueError",
                 format!(

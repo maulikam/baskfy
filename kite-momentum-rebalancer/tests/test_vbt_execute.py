@@ -225,6 +225,12 @@ class MemoryStore:
             if row["state"] in {"CONFIRMED", "SENT", "FILLED"}
         )
 
+    def order_for_signal(self, instrument_id: int, signal_date: dt.date) -> int | None:
+        for row in self.orders.values():
+            if row["instrument_id"] == instrument_id and row.get("signal_date") == signal_date:
+                return int(row["id"])
+        return None
+
 
 def a_store(kind: str = "PLACE_LIMIT", **line_overrides: object) -> tuple[MemoryStore, str, int]:
     store = MemoryStore()
@@ -398,6 +404,64 @@ class TestThePlaceLimit:
         outcome = confirm(store, plan_id, line_id)
         assert outcome.status == "BLOCKED"
         assert outcome.reason.startswith("ALREADY_WORKING")
+
+
+class TestOneEntryPerSignal:
+    """R8.VB2: ``uq_vb_order_one_per_signal`` allows one ``vb_order`` per (user, signal, name).
+    The check is asked **before** the gateway, because asked after it an order reached the broker
+    with no row, no GTT and its line left ``PROPOSED`` behind a 500 (DECISIONS-RS R8.VB2)."""
+
+    class Recording:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        async def place(self, **_: object) -> dict:
+            self.calls.append("place")
+            return {"status": "DRY_RUN", "order_id": "dry"}
+
+        async def place_gtt_stop(self, **_: object) -> dict:
+            self.calls.append("place_gtt_stop")
+            return {"status": "DRY_RUN_GTT", "trigger_id": "g"}
+
+    def _taken(self, store: MemoryStore, state: str = "FILLED") -> None:
+        store.orders[900] = {
+            "id": 900,
+            "instrument_id": 42,
+            "signal_date": SESSION,
+            "state": state,
+        }
+
+    @pytest.mark.parametrize("kind", ["PLACE_LIMIT", "BUY_AT_MARKET"])
+    @pytest.mark.parametrize("state", ["FILLED", "CANCELLED", "EXPIRED", "REJECTED"])
+    def test_a_second_order_on_the_same_signal_is_refused_before_the_gateway(
+        self, kind: str, state: str
+    ) -> None:
+        store, plan_id, line_id = a_store(kind)
+        self._taken(store, state)
+        gw = self.Recording()
+        outcome = run(
+            X.execute_line(
+                store, gw, plan_id=plan_id, line_id=line_id, confirm="true", now=NOW,
+                last_price=D("97.50"),
+            )
+        )
+        assert outcome.status == "BLOCKED"
+        assert outcome.reason.startswith("ALREADY_SENT") and "order 900" in outcome.reason
+        assert gw.calls == [], "nothing may reach the gateway"
+        assert store.lines[line_id]["state"] == "REJECTED"
+        assert len(store.orders) == 1
+
+    @pytest.mark.parametrize("kind", ["PLACE_LIMIT", "BUY_AT_MARKET"])
+    def test_a_fresh_signal_in_the_same_name_is_a_fresh_entry(self, kind: str) -> None:
+        store, plan_id, line_id = a_store(kind)
+        store.orders[900] = {
+            "id": 900,
+            "instrument_id": 42,
+            "signal_date": SESSION - dt.timedelta(days=1),
+            "state": "CANCELLED",
+        }
+        outcome = confirm(store, plan_id, line_id, last_price=D("97.50"))
+        assert outcome.status == "SIMULATED", outcome.reason
 
 
 class TestTheBuyAtMarket:

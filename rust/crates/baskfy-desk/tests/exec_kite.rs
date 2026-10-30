@@ -20,14 +20,20 @@
 use std::sync::{Arc, Mutex, RwLock};
 
 use async_trait::async_trait;
+use baskfy_desk::app::StateParts;
 use baskfy_desk::clock::{Clock, FixedClock};
+use baskfy_desk::ids::HarnessIds;
 use baskfy_desk::kite::{
     GttParams, KiteError, KiteExceptionKind, KiteReads, KiteWrites, OrderParams,
 };
-use baskfy_desk::lanes::exec_core::exec_kite::kite_client::DeskKite;
+use baskfy_desk::lanes::exec_core::exec_kite;
+use baskfy_desk::lanes::exec_core::exec_kite::kite_client::{ClientError, DeskKite, NO_API_KEY};
 use baskfy_desk::lanes::exec_core::exec_kite::token_store;
+use baskfy_desk::lanes::exec_core::kite_limits::LimitClock;
 use baskfy_desk::settings::{Settings, SharedSettings};
+use baskfy_desk::storage::{Db, DbConfig};
 use baskfy_desk::wire::{PyDict, PyValue};
+use baskfy_desk::{AppState, DeskPaths, build_state};
 use baskfy_providers::secret::Secret;
 
 fn v(json: &str) -> PyValue {
@@ -250,10 +256,31 @@ impl KiteWrites for Recorder {
     }
 }
 
+/// `time.monotonic()` for the limiter and the LTP cache: settable, and a sleep only moves it.
+#[derive(Default)]
+struct Mono(Mutex<f64>);
+
+impl Mono {
+    fn advance(&self, seconds: f64) {
+        *self.0.lock().unwrap() += seconds;
+    }
+}
+
+#[async_trait]
+impl LimitClock for Mono {
+    fn now(&self) -> f64 {
+        1_000.0 + *self.0.lock().unwrap()
+    }
+    async fn sleep(&self, seconds: f64) {
+        self.advance(seconds.max(0.0));
+    }
+}
+
 struct Desk {
     kite: DeskKite,
     broker: Arc<Recorder>,
     clock: Arc<FixedClock>,
+    mono: Arc<Mono>,
     settings: SharedSettings,
     dir: tempfile::TempDir,
 }
@@ -275,15 +302,18 @@ fn desk_with(broker: Arc<Recorder>, dry_run: bool) -> Desk {
     let settings: SharedSettings = Arc::new(RwLock::new(settings_for(dir.path(), dry_run)));
     let at = chrono::DateTime::parse_from_rfc3339("2026-10-30T11:00:00+05:30").unwrap();
     let clock = Arc::new(FixedClock::new(at));
-    let kite = DeskKite::new(
+    let mono = Arc::new(Mono::default());
+    let kite = DeskKite::with_limit_clock(
         broker.clone(),
         settings.clone(),
         clock.clone() as Arc<dyn Clock>,
+        mono.clone() as Arc<dyn LimitClock>,
     );
     Desk {
         kite,
         broker,
         clock,
+        mono,
         settings,
         dir,
     }
@@ -771,7 +801,7 @@ async fn every_read_takes_its_familys_slot() {
     k.trades().await.unwrap();
     assert_eq!(k.available_cash().await.unwrap(), 1234.5);
     k.ltp(&[s("INFY")], "NSE").await.unwrap();
-    k.quotes(&[s("INFY")], "NSE").await;
+    k.quotes(&[s("INFY")], "NSE").await.unwrap();
     k.instruments("NSE").await.unwrap();
     k.historical(408_065, "2026-10-01", "2026-10-29", "day")
         .await
@@ -826,7 +856,7 @@ async fn ltp_is_served_from_cache_inside_the_ttl_and_refetched_after() {
         .unwrap();
     assert_eq!(PyValue::Map(first), v(r#"{"INFY": 1500.5, "TCS": 4000.0}"#));
     assert_eq!(d.broker.calls(), [s("ltp NSE:INFY,NSE:TCS")]);
-    d.clock.advance(4.9);
+    d.mono.advance(4.9);
     let again = d.kite.ltp(&[s("TCS"), s("INFY")], "NSE").await.unwrap();
     assert_eq!(PyValue::Map(again), v(r#"{"TCS": 4000.0, "INFY": 1500.5}"#));
     assert_eq!(
@@ -839,7 +869,7 @@ async fn ltp_is_served_from_cache_inside_the_ttl_and_refetched_after() {
         v(r#"{"NSE:WIPRO": {"last_price": 250.0}, "NSE:INFY": {"last_price": 1.0}}"#);
     d.kite.ltp(&[s("INFY"), s("WIPRO")], "NSE").await.unwrap();
     assert_eq!(d.broker.calls()[1], "ltp NSE:WIPRO");
-    d.clock.advance(0.2);
+    d.mono.advance(0.2);
     let late = d.kite.ltp(&[s("INFY")], "NSE").await.unwrap();
     assert_eq!(
         late.get("INFY"),
@@ -851,7 +881,7 @@ async fn ltp_is_served_from_cache_inside_the_ttl_and_refetched_after() {
 #[tokio::test]
 async fn quotes_are_symbol_keyed_and_a_failed_batch_is_skipped() {
     let d = desk(true);
-    let empty = d.kite.quotes(&[s("INFY")], "NSE").await;
+    let empty = d.kite.quotes(&[s("INFY")], "NSE").await.unwrap();
     assert!(
         empty.is_empty(),
         "a failed batch must not take the panel down"
@@ -860,7 +890,7 @@ async fn quotes_are_symbol_keyed_and_a_failed_batch_is_skipped() {
         r#"{"NSE:INFY": {"last_price": 1500.5, "net_change": 3.5, "volume": 0, "volume_traded": 99,
                          "ohlc": {"open": 1490, "high": 1510, "low": 1480, "close": 1497}}}"#,
     ));
-    let out = d.kite.quotes(&[s("INFY")], "NSE").await;
+    let out = d.kite.quotes(&[s("INFY")], "NSE").await.unwrap();
     assert_eq!(
         PyValue::Map(out),
         v(
@@ -903,28 +933,32 @@ async fn the_login_exchange_stores_the_token_encrypted_and_uses_it() {
             0o600
         );
     }
-    // A fresh process loads it at start.
+    // A fresh process loads it at start (`kite()`'s first call is `Kite()`).
     let broker = Recorder::new();
     let again = DeskKite::new(
         broker.clone(),
         d.settings.clone(),
         d.clock.clone() as Arc<dyn Clock>,
     );
+    again.ready().unwrap();
     assert_eq!(*broker.tokens.lock().unwrap(), [s("tok-from-exchange")]);
-    assert!(!again.refresh_token_if_changed(), "nothing changed on disk");
+    assert!(
+        !again.refresh_token_if_changed().unwrap(),
+        "nothing changed on disk"
+    );
 }
 
 #[tokio::test]
 async fn a_token_written_by_another_process_is_picked_up_without_a_restart() {
     let d = desk(true);
-    assert!(!d.kite.refresh_token_if_changed(), "no blob yet");
+    assert!(!d.kite.refresh_token_if_changed().unwrap(), "no blob yet");
     // The morning login, by another process.
     let other = Recorder::new();
     let writer = DeskKite::new(other, d.settings.clone(), d.clock.clone() as Arc<dyn Clock>);
     writer.exchange_token("req-2").await.unwrap();
     assert!(d.kite.is_authed().await);
     assert_eq!(*d.broker.tokens.lock().unwrap(), [s("tok-from-exchange")]);
-    assert!(!d.kite.refresh_token_if_changed());
+    assert!(!d.kite.refresh_token_if_changed().unwrap());
 }
 
 #[test]
@@ -934,7 +968,9 @@ fn an_unreadable_token_is_the_same_as_none() {
     let settings: SharedSettings = Arc::new(RwLock::new(settings_for(dir.path(), true)));
     let broker = Recorder::new();
     let at = chrono::DateTime::parse_from_rfc3339("2026-10-30T09:00:00+05:30").unwrap();
-    let _k = DeskKite::new(broker.clone(), settings, Arc::new(FixedClock::new(at)));
+    let k = DeskKite::new(broker.clone(), settings, Arc::new(FixedClock::new(at)));
+    k.ready()
+        .expect("an unreadable token is not a refused start");
     assert!(broker.tokens.lock().unwrap().is_empty());
 }
 
@@ -982,4 +1018,297 @@ fn a_configured_key_wins_and_no_key_file_is_written() {
     assert_eq!(other.load().unwrap().value.expose(), "abc");
     let wrong = token_store::store_for(&token, &token_store::generate_key()).unwrap();
     assert!(wrong.load().is_err(), "a rotated key must not decrypt");
+}
+
+// =====================================================================================
+// `kite()` is lazy: `Kite()` refuses without KITE_API_KEY, runs once, loads the token then
+// =====================================================================================
+
+/// A desk started without `KITE_API_KEY` (a desk started with one has run `Kite()` already, and
+/// Python's `_kite` stays built whatever the settings say afterwards).
+fn unconfigured() -> Desk {
+    let dir = tempfile::tempdir().unwrap();
+    let mut st = settings_for(dir.path(), true);
+    st.kite_api_key = String::new();
+    let settings: SharedSettings = Arc::new(RwLock::new(st));
+    let at = chrono::DateTime::parse_from_rfc3339("2026-10-30T11:00:00+05:30").unwrap();
+    let clock = Arc::new(FixedClock::new(at));
+    let mono = Arc::new(Mono::default());
+    let broker = Recorder::new();
+    let kite = DeskKite::with_limit_clock(
+        broker.clone(),
+        settings.clone(),
+        clock.clone() as Arc<dyn Clock>,
+        mono.clone() as Arc<dyn LimitClock>,
+    );
+    Desk {
+        kite,
+        broker,
+        clock,
+        mono,
+        settings,
+        dir,
+    }
+}
+
+fn is_no_key<T: std::fmt::Debug>(r: Result<T, ClientError>) {
+    let e = r.expect_err("Kite() must refuse without KITE_API_KEY");
+    assert_eq!(e.python_type, "RuntimeError");
+    assert_eq!(e.message, NO_API_KEY);
+}
+
+/// Python's `kite()` raises `RuntimeError("KITE_API_KEY missing — …")` before any method runs,
+/// so every route that reaches the wrapper refuses the same way — the GTT writes included, before
+/// their guard and whatever DRY_RUN says — and nothing reaches the broker or the disk.
+#[tokio::test]
+async fn without_an_api_key_every_method_raises_kites_runtime_error() {
+    let d = unconfigured();
+    let k = &d.kite;
+    is_no_key(k.ready());
+    is_no_key(k.login_url());
+    is_no_key(k.refresh_token_if_changed());
+    is_no_key(k.exchange_token("req").await);
+    is_no_key(k.try_is_authed().await);
+    assert!(!k.is_authed().await);
+    is_no_key(k.holdings().await);
+    is_no_key(k.trades().await);
+    is_no_key(k.available_cash().await);
+    is_no_key(k.ltp(&[s("INFY")], "NSE").await);
+    is_no_key(k.quotes(&[s("INFY")], "NSE").await);
+    is_no_key(k.instruments("NSE").await);
+    is_no_key(k.historical(1, "2026-10-01", "2026-10-02", "day").await);
+    is_no_key(k.margins(None).await);
+    is_no_key(k.orders().await);
+    is_no_key(k.order_history("1").await);
+    is_no_key(k.quote_raw(&[s("NSE:INFY")]).await);
+    is_no_key(k.get_gtts().await);
+    is_no_key(k.tick_size("INFY", "NSE").await);
+    is_no_key(k.place_gtt_stop("INFY", 1, 100.0, 110.0, "NSE").await);
+    is_no_key(k.delete_gtt(1, "INFY").await);
+    // An untouchable is refused too — by `kite()`, which runs before the guard, as in Python.
+    is_no_key(k.place_gtt_stop("SGBAUG29", 1, 100.0, 110.0, "NSE").await);
+    assert!(d.broker.calls().is_empty(), "{:?}", d.broker.calls());
+    assert!(k.slots_taken().is_empty());
+    assert!(
+        !token_store::key_path(&d.dir.path().join("kite_token.json")).exists(),
+        "Kite() never ran, so no fallback key may be written"
+    );
+    // The key arrives (an operator fills .env and the settings reload): the next call builds it.
+    d.settings.write().unwrap().kite_api_key = s("test-key");
+    k.ready().unwrap();
+    assert!(token_store::key_path(&d.dir.path().join("kite_token.json")).exists());
+}
+
+/// Unconfigured, building the gateway's handle loads nothing and writes nothing (no fallback
+/// key at boot): Python's `Kite()` would have raised before its token load.
+#[tokio::test]
+async fn an_unconfigured_handle_writes_nothing_at_boot() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut st = settings_for(dir.path(), true);
+    st.kite_api_key = String::new();
+    let at = chrono::DateTime::parse_from_rfc3339("2026-10-30T09:00:00+05:30").unwrap();
+    let broker = Recorder::new();
+    let _k = DeskKite::new(
+        broker.clone(),
+        Arc::new(RwLock::new(st)),
+        Arc::new(FixedClock::new(at)),
+    );
+    assert!(!token_store::key_path(&dir.path().join("kite_token.json")).exists());
+    assert!(broker.tokens.lock().unwrap().is_empty());
+}
+
+/// `Kite()` runs once per process: a second `kite()` does not reload the token (a rotated token
+/// is `refresh_token_if_changed`'s job).
+#[tokio::test]
+async fn kite_is_built_once() {
+    let d = desk(true);
+    d.kite.exchange_token("req-1").await.unwrap();
+    let broker = Recorder::new();
+    let k = DeskKite::new(
+        broker.clone(),
+        d.settings.clone(),
+        d.clock.clone() as Arc<dyn Clock>,
+    );
+    k.ready().unwrap();
+    k.ready().unwrap();
+    k.login_url().unwrap();
+    assert_eq!(broker.tokens.lock().unwrap().len(), 1);
+}
+
+/// `FORCE_IPV4` pins when the handle is built — before any session exists, and before the
+/// key check (the safe direction).
+#[tokio::test]
+async fn force_ipv4_pins_when_the_handle_is_built() {
+    use baskfy_desk::lanes::exec_core::net;
+    let dir = tempfile::tempdir().unwrap();
+    let mut st = settings_for(dir.path(), true);
+    st.force_ipv4 = true;
+    st.kite_api_key = String::new();
+    let settings: SharedSettings = Arc::new(RwLock::new(st));
+    let at = chrono::DateTime::parse_from_rfc3339("2026-10-30T09:00:00+05:30").unwrap();
+    let k = DeskKite::new(Recorder::new(), settings, Arc::new(FixedClock::new(at)));
+    assert!(net::ipv4_only());
+    is_no_key(k.ready());
+}
+
+/// A token store that cannot be built (its fallback key cannot be written) makes `Kite()`
+/// raise — Python's `_load_token` calls `store_for` outside its `try` — and leaves nothing
+/// built, so the next call tries again.
+#[tokio::test]
+async fn a_store_that_cannot_be_built_refuses_kite_and_the_next_call_retries() {
+    let dir = tempfile::tempdir().unwrap();
+    let blocker = dir.path().join("afile");
+    std::fs::write(&blocker, "x").unwrap();
+    let mut st = settings_for(dir.path(), true);
+    st.token_file = blocker.join("kite_token.json").display().to_string();
+    let settings: SharedSettings = Arc::new(RwLock::new(st));
+    let at = chrono::DateTime::parse_from_rfc3339("2026-10-30T09:00:00+05:30").unwrap();
+    let broker = Recorder::new();
+    let k = DeskKite::new(
+        broker.clone(),
+        settings.clone(),
+        Arc::new(FixedClock::new(at)),
+    );
+    let e = k
+        .ready()
+        .expect_err("the key file cannot be created under a file");
+    assert!(
+        ["NotADirectoryError", "FileExistsError", "OSError"].contains(&e.python_type.as_str()),
+        "{e:?}"
+    );
+    assert!(e.message.starts_with("[Errno "), "{e:?}");
+    let e2 = k.holdings().await.expect_err("still unbuilt");
+    assert_eq!(e2.python_type, e.python_type);
+    assert!(broker.calls().is_empty());
+    settings.write().unwrap().token_file = dir.path().join("t.json").display().to_string();
+    k.ready().unwrap();
+}
+
+/// The LTP cache ages on `time.monotonic()`, never on the desk's wall clock: the harness moving
+/// its settable clock an hour does not expire a price fetched a moment ago (Python's harness
+/// leaves `time.monotonic` alone, so its cache did not expire either).
+#[tokio::test]
+async fn the_ltp_cache_ages_on_monotonic_time_not_the_wall_clock() {
+    let d = desk(true);
+    *d.broker.ltp.lock().unwrap() = v(r#"{"NSE:INFY": {"last_price": 1500.5}}"#);
+    d.kite.ltp(&[s("INFY")], "NSE").await.unwrap();
+    d.clock.advance(3_600.0);
+    d.kite.ltp(&[s("INFY")], "NSE").await.unwrap();
+    assert_eq!(d.broker.calls().len(), 1, "{:?}", d.broker.calls());
+    d.mono.advance(5.0);
+    d.kite.ltp(&[s("INFY")], "NSE").await.unwrap();
+    assert_eq!(d.broker.calls().len(), 2, "{:?}", d.broker.calls());
+}
+
+// =====================================================================================
+// `/status`'s session half (`exec_kite::status_session`), through the wrapper
+// =====================================================================================
+
+async fn state_with(broker: Arc<Recorder>, api_key: &str) -> (AppState, tempfile::TempDir) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut st = settings_for(dir.path(), true);
+    st.kite_api_key = api_key.to_owned();
+    let db = Db::open(DbConfig {
+        backend: "sqlite".to_owned(),
+        schema: String::new(),
+        database_url: String::new(),
+        db_path: dir.path().join("desk.db"),
+    })
+    .await
+    .unwrap();
+    let at = chrono::DateTime::parse_from_rfc3339("2026-10-30T11:00:00+05:30").unwrap();
+    let state = build_state(StateParts {
+        settings: st,
+        clock: Arc::new(FixedClock::new(at)),
+        ids: Arc::new(HarnessIds::new("exec-kite")),
+        db,
+        kite: broker,
+        paths: DeskPaths::under(dir.path()),
+        harness: None,
+    });
+    (state, dir)
+}
+
+/// Python's `/status`: `is_authed()` twice (so `profile` twice, each behind a token re-read and
+/// a `general` slot), then `available_cash()`.
+#[tokio::test]
+async fn status_reads_the_session_through_the_wrapper_as_python_does() {
+    let broker = Recorder::new();
+    *broker.margins.lock().unwrap() = v(r#"{"equity": {"available": {"live_balance": 1234.5}}}"#);
+    let (state, _dir) = state_with(broker.clone(), "test-key").await;
+    let out = exec_kite::status_session(&state).await;
+    assert_eq!(PyValue::Map(out), v(r#"{"authed": true, "cash": 1234.5}"#));
+    assert_eq!(
+        broker.calls(),
+        [s("profile"), s("profile"), s("margins None")]
+    );
+    let k = exec_kite::kite(&state).unwrap();
+    assert_eq!(k.slots_taken(), ["general", "general", "general"]);
+}
+
+#[tokio::test]
+async fn status_when_the_session_is_refused_reads_no_cash() {
+    let broker = Recorder::new();
+    *broker.profile_fails.lock().unwrap() = true;
+    let (state, _dir) = state_with(broker.clone(), "test-key").await;
+    let out = exec_kite::status_session(&state).await;
+    assert_eq!(PyValue::Map(out), v(r#"{"authed": false, "cash": null}"#));
+    assert_eq!(broker.calls(), [s("profile"), s("profile")]);
+}
+
+#[tokio::test]
+async fn status_without_an_api_key_is_kites_refusal() {
+    let broker = Recorder::new();
+    let (state, dir) = state_with(broker.clone(), "").await;
+    let out = exec_kite::status_session(&state).await;
+    assert_eq!(out.get("authed"), Some(&PyValue::Bool(false)), "{out:?}");
+    assert_eq!(out.get("error"), Some(&PyValue::Str(s(NO_API_KEY))));
+    assert_eq!(out.len(), 2);
+    assert!(broker.calls().is_empty());
+    assert!(!token_store::key_path(&dir.path().join("kite_token.json")).exists());
+}
+
+#[tokio::test]
+async fn status_with_a_malformed_margins_payload_reports_pythons_error() {
+    let broker = Recorder::new();
+    *broker.margins.lock().unwrap() = v("{}");
+    let (state, _dir) = state_with(broker.clone(), "test-key").await;
+    let out = exec_kite::status_session(&state).await;
+    assert_eq!(
+        PyValue::Map(out),
+        v(r#"{"authed": false, "error": "'equity'"}"#)
+    );
+}
+
+// =====================================================================================
+// the encryption key: process environment first (even empty), then `.env`
+// =====================================================================================
+
+#[test]
+fn the_key_resolves_as_os_getenv_after_load_dotenv() {
+    use token_store::resolve_env_key;
+    assert_eq!(resolve_env_key(None, None), "");
+    assert_eq!(resolve_env_key(None, Some("from-dotenv")), "from-dotenv");
+    assert_eq!(
+        resolve_env_key(Some(s("from-env")), Some("from-dotenv")),
+        "from-env"
+    );
+    // load_dotenv() never overrides a variable the process has, even an empty one.
+    assert_eq!(
+        resolve_env_key(Some(String::new()), Some("from-dotenv")),
+        ""
+    );
+}
+
+#[test]
+fn os_errors_read_as_pythons() {
+    let e = std::io::Error::from_raw_os_error(13);
+    let (t, m) = token_store::os_error(&e, std::path::Path::new("/x/k.key"));
+    assert_eq!(t, "PermissionError");
+    assert_eq!(m, "[Errno 13] Permission denied: '/x/k.key'");
+    let e = std::io::Error::from_raw_os_error(2);
+    assert_eq!(
+        token_store::os_error(&e, std::path::Path::new("k")).0,
+        "FileNotFoundError"
+    );
 }

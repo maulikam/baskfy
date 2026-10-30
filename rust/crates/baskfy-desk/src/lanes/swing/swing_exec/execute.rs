@@ -537,8 +537,15 @@ async fn validate(
             ),
         ));
     }
-    let expired = plan.expires_at.is_none_or(|e| *now > e);
-    if expired {
+    // `_aware(plan["expires_at"])` on a None raises `AttributeError` before the line is
+    // touched — FastAPI's 500, not a 410 (DECISIONS-RS R8.15.1). The column is NOT NULL in both
+    // schemas, so only a hand-built store reaches this; it fails closed either way.
+    let Some(expires_at) = plan.expires_at else {
+        return Err(ExecError::Store(StoreError::Value(
+            "'NoneType' object has no attribute 'tzinfo'".to_owned(),
+        )));
+    };
+    if *now > expires_at {
         if line.state == "PROPOSED" {
             store.set_line(line_id, "EXPIRED", None, None).await?;
         }
@@ -578,80 +585,213 @@ pub async fn execute_line(
     now: DateTime<FixedOffset>,
     last_price: Option<Decimal>,
 ) -> Result<ExecOutcome, ExecError> {
+    execute_line_observed(
+        store,
+        gw,
+        cx,
+        plan_id,
+        line_id,
+        confirm,
+        now,
+        last_price,
+        &DeskTelemetry,
+    )
+    .await
+}
+
+/// SW11's observability sink for one confirm (`app.telemetry`'s `span`, `count`, `observe`,
+/// `capture`), as a seam: an `Err` is a sink that raised. [`DeskTelemetry`] is the desk's own
+/// (the library-absent branch, which never fails); a test hands one that fails every call.
+pub trait ConfirmTelemetry: Send + Sync {
+    /// `telemetry.span(name, **attributes)`.
+    ///
+    /// # Errors
+    /// The sink raised.
+    fn span(&self, name: &str, attributes: &[(&str, &str)]) -> Result<(), String>;
+    /// `telemetry.count(metric, **labels)`.
+    ///
+    /// # Errors
+    /// The sink raised.
+    fn count(&self, metric: &str, labels: &[(&str, &str)]) -> Result<(), String>;
+    /// `telemetry.observe(metric, value)`.
+    ///
+    /// # Errors
+    /// The sink raised.
+    fn observe(&self, metric: &str, value: f64) -> Result<(), String>;
+    /// `telemetry.capture(exc, **context)`.
+    ///
+    /// # Errors
+    /// The sink raised.
+    fn capture(&self, error: &str, context: &[(&str, &str)]) -> Result<(), String>;
+}
+
+/// The desk's telemetry: `lanes::session::telemetry`, which cannot fail.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct DeskTelemetry;
+
+impl ConfirmTelemetry for DeskTelemetry {
+    fn span(&self, name: &str, attributes: &[(&str, &str)]) -> Result<(), String> {
+        crate::lanes::session::telemetry::span(name, attributes, |_| ());
+        Ok(())
+    }
+
+    fn count(&self, metric: &str, labels: &[(&str, &str)]) -> Result<(), String> {
+        crate::lanes::session::telemetry::count(metric, labels);
+        Ok(())
+    }
+
+    fn observe(&self, metric: &str, value: f64) -> Result<(), String> {
+        crate::lanes::session::telemetry::observe(metric, value);
+        Ok(())
+    }
+
+    fn capture(&self, error: &str, context: &[(&str, &str)]) -> Result<(), String> {
+        crate::lanes::session::telemetry::capture(&error, context);
+        Ok(())
+    }
+}
+
+/// `_span`: a span is never a reason not to trade — a sink that raises is a span not taken.
+fn observed_span(tel: &dyn ConfirmTelemetry, name: &str, attributes: &[(&str, &str)]) {
+    let _ = tel.span(name, attributes);
+}
+
+/// `_observe_confirm`: one `try` around both, as Python's (a raising `count` skips `observe`).
+fn observe_confirm(tel: &dyn ConfirmTelemetry, kind: &str, outcome: &str, seconds: f64) {
+    let _ = tel
+        .count("swing_confirms", &[("kind", kind), ("outcome", outcome)])
+        .and_then(|()| tel.observe("swing_confirm_seconds", seconds));
+}
+
+/// `_capture`: error capture failing is not a second error.
+fn capture_error(tel: &dyn ConfirmTelemetry, error: &ExecError, kind: &str, line_id: i64) {
+    let line = line_id.to_string();
+    let _ = tel.capture(&error.to_string(), &[("kind", kind), ("line_id", &line)]);
+}
+
+/// [`execute_line`] with its telemetry sink named: what the confirm does is the same whatever
+/// the sink does (`test_telemetry_never_raises_into_execute_line`).
+///
+/// # Errors
+/// As [`execute_line`].
+#[allow(clippy::too_many_arguments)]
+pub async fn execute_line_observed(
+    store: &mut dyn SwingStore,
+    gw: &dyn Gateway,
+    cx: &ExecContext<'_>,
+    plan_id: &str,
+    line_id: i64,
+    confirm: &str,
+    now: DateTime<FixedOffset>,
+    last_price: Option<Decimal>,
+    tel: &dyn ConfirmTelemetry,
+) -> Result<ExecOutcome, ExecError> {
     let validated = validate(store, plan_id, line_id, confirm, &now).await?;
     let simulated = swing_gates(cx.settings).dry_run;
     let day = session_day(&now);
     let mode = if simulated { "DRY_RUN" } else { "LIVE" };
     let kind = validated.kind;
-    store.lock_begin(day).await?;
+    let started = std::time::Instant::now();
+    observed_span(
+        tel,
+        "swing.execute_line",
+        &[
+            ("kind", kind.as_str()),
+            ("simulated", if simulated { "True" } else { "False" }),
+        ],
+    );
     let body = async {
-        let current = store.line(line_id).await?;
-        let Some(line) = current.filter(|c| c.state == "PROPOSED") else {
-            let state = store
-                .line(line_id)
-                .await?
-                .map_or_else(|| "?".to_owned(), |c| c.state);
-            return Err(http(
-                409,
-                format!("Line is {state}, not PROPOSED — it cannot be confirmed twice."),
-            ));
-        };
-        let context = if kind == BUY_ON_TRIGGER {
-            Some(store.session_context(day).await?)
-        } else {
-            None
-        };
-        store.set_line(line_id, "CONFIRMED", None, None).await?;
-        store.bump_session(day, mode, 1, 0, 0).await?;
-        let outcome = match kind.as_str() {
-            BUY_ON_TRIGGER => {
-                buy(
-                    store, gw, cx, &line, plan_id, now, simulated, context, last_price,
-                )
-                .await?
-            }
-            SELL_AT_OPEN => sell(store, gw, cx, &line, plan_id, now, simulated, last_price).await?,
-            RAISE_GTT_STOP => {
-                raise_stop(store, gw, cx, &line, plan_id, now, simulated, last_price).await?
-            }
-            other => ExecOutcome::new(
-                "BLOCKED",
-                format!(
-                    "{} is not a kind this desk executes",
-                    baskfy_providers::py::repr_str(other)
+        // `with store.lock_session_for_update(day):` — entering it can raise too (the store
+        // rolls its own `BEGIN` back), and that is the `except Exception` branch below.
+        store.lock_begin(day).await?;
+        let inner = async {
+            let current = store.line(line_id).await?;
+            let Some(line) = current.filter(|c| c.state == "PROPOSED") else {
+                let state = store
+                    .line(line_id)
+                    .await?
+                    .map_or_else(|| "?".to_owned(), |c| c.state);
+                return Err(http(
+                    409,
+                    format!("Line is {state}, not PROPOSED — it cannot be confirmed twice."),
+                ));
+            };
+            let context = if kind == BUY_ON_TRIGGER {
+                Some(store.session_context(day).await?)
+            } else {
+                None
+            };
+            store.set_line(line_id, "CONFIRMED", None, None).await?;
+            store.bump_session(day, mode, 1, 0, 0).await?;
+            let outcome = match kind.as_str() {
+                BUY_ON_TRIGGER => {
+                    buy(
+                        store, gw, cx, &line, plan_id, now, simulated, context, last_price,
+                    )
+                    .await?
+                }
+                SELL_AT_OPEN => {
+                    sell(store, gw, cx, &line, plan_id, now, simulated, last_price).await?
+                }
+                RAISE_GTT_STOP => {
+                    raise_stop(store, gw, cx, &line, plan_id, now, simulated, last_price).await?
+                }
+                other => ExecOutcome::new(
+                    "BLOCKED",
+                    format!(
+                        "{} is not a kind this desk executes",
+                        baskfy_providers::py::repr_str(other)
+                    ),
+                    None,
+                    None,
+                    None,
+                    simulated,
                 ),
-                None,
-                None,
-                None,
-                simulated,
-            ),
-        };
-        record_line(store, line_id, &outcome).await?;
-        let is_fill = matches!(outcome.status.as_str(), "SIMULATED" | "FILLED");
-        // A buy or a sell that filled is a fill; so is a partial (A8). Any other success is a
-        // manage action.
-        let bought_or_sold = is_fill && (kind == BUY_ON_TRIGGER || kind == SELL_AT_OPEN);
-        if bought_or_sold || (outcome.status == "SENT" && outcome.filled_quantity > 0) {
-            store.bump_session(day, mode, 0, 1, 0).await?;
-        } else if is_fill {
-            store.bump_session(day, mode, 0, 0, 1).await?;
+            };
+            record_line(store, line_id, &outcome).await?;
+            let is_fill = matches!(outcome.status.as_str(), "SIMULATED" | "FILLED");
+            // A buy or a sell that filled is a fill; so is a partial (A8). Any other success is a
+            // manage action.
+            let bought_or_sold = is_fill && (kind == BUY_ON_TRIGGER || kind == SELL_AT_OPEN);
+            if bought_or_sold || (outcome.status == "SENT" && outcome.filled_quantity > 0) {
+                store.bump_session(day, mode, 0, 1, 0).await?;
+            } else if is_fill {
+                store.bump_session(day, mode, 0, 0, 1).await?;
+            }
+            Ok::<ExecOutcome, ExecError>(outcome)
         }
-        Ok::<ExecOutcome, ExecError>(outcome)
+        .await;
+        match inner {
+            // The lock's `else: COMMIT` — a failed commit raises inside the `with` as well.
+            Ok(outcome) => store
+                .lock_commit()
+                .await
+                .map(|()| outcome)
+                .map_err(Into::into),
+            Err(e) => {
+                store.lock_rollback().await?;
+                Err(e)
+            }
+        }
     }
     .await;
+    let seconds = || started.elapsed().as_secs_f64();
     match body {
         Ok(outcome) => {
-            store.lock_commit().await?;
+            observe_confirm(tel, &kind, &outcome.status, seconds());
             Ok(outcome)
         }
         Err(ExecError::Http(refusal)) => {
-            store.lock_rollback().await?;
+            observe_confirm(tel, &kind, "REFUSED", seconds());
             Err(ExecError::Http(refusal))
         }
         Err(e) => {
-            store.lock_rollback().await?;
+            // Not swallowed: the transaction rolled back with the lock, then the line is
+            // marked so it cannot be re-posted, the click is counted, and the error goes up.
             store.set_line(line_id, "REJECTED", None, None).await?;
             store.bump_session(day, mode, 1, 0, 0).await?;
+            observe_confirm(tel, &kind, "ERROR", seconds());
+            capture_error(tel, &e, &kind, line_id);
             Err(e)
         }
     }

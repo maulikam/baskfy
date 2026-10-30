@@ -17,14 +17,81 @@
 //! journal); the stricter boundary wins (law 2). The DRY_RUN check sits in front of every
 //! broker write that is ported, exactly where Python has it.
 //!
-//! The tests are `tests/exec_kite.rs`: no network, a recording fake broker, and every DRY_RUN
-//! path asserted never to reach it.
+//! **`kite()` is lazy** ([`kite`], [`kite_client::DeskKite::ready`]): `KITE_API_KEY missing`
+//! raises from every method, the token is loaded and `FORCE_IPV4` applied on the first call.
+//! `/status`'s session half is [`status_session`], for the session lane's route.
+//!
+//! The tests are `tests/exec_kite.rs` (no network, a recording fake broker, every DRY_RUN path
+//! asserted never to reach it), `tests/exec_kite_goldens.rs` (175 broker-reply shapes against
+//! the live Python's answers, `fixtures/exec_kite/goldens.json`) and
+//! `tests/exec_kite_dotenv.rs` (the `.env`-only encryption key, in its own process).
 
 pub use super::{kite_client, token_store};
 
+use std::sync::Arc;
+
 use axum::Router;
 
+use self::kite_client::{ClientError, DeskKite};
+use super::desk::DeskGateway;
 use crate::app::AppState;
+use crate::wire::{PyDict, PyValue, dict};
+
+/// `app.main.kite()`: the process's one Kite wrapper, built (`Kite()`) on first call — so it
+/// raises `RuntimeError("KITE_API_KEY missing — …")` without a key, every time, until one is
+/// set. A route that Python writes as `k = kite()` starts here.
+///
+/// # Errors
+/// `Kite()`'s refusal ([`DeskKite::ready`]), or a gateway that is not the desk's (no wrapper
+/// to hand out — never a bare broker in its place).
+pub fn kite(state: &AppState) -> Result<Arc<DeskKite>, ClientError> {
+    let gateway = state
+        .gateway
+        .as_any()
+        .and_then(|a| a.downcast_ref::<DeskGateway>())
+        .ok_or_else(|| ClientError {
+            python_type: "RuntimeError".to_owned(),
+            message: "the desk's Kite wrapper is not wired (the gateway is not the desk's)"
+                .to_owned(),
+        })?;
+    let k = gateway.kite();
+    k.ready()?;
+    Ok(k)
+}
+
+/// `/status`'s session half, exactly as `app.main.status` computes it:
+///
+/// ```python
+/// try:
+///     k = kite()
+///     out |= {"authed": k.is_authed(),
+///             "cash": k.available_cash() if k.is_authed() else None}
+/// except Exception as exc:
+///     out |= {"authed": False, "error": str(exc)}
+/// ```
+///
+/// Through the wrapper, so each `is_authed` re-reads a rotated token and takes a `general` slot
+/// before its `profile` — and `profile` is called twice, as Python calls it. The session lane's
+/// `/status` merges this dict into its answer.
+pub async fn status_session(state: &AppState) -> PyDict {
+    let attempt = async {
+        let k = kite(state)?;
+        let authed = k.try_is_authed().await?;
+        let cash = if k.try_is_authed().await? {
+            PyValue::Float(k.available_cash().await?)
+        } else {
+            PyValue::None
+        };
+        Ok::<_, ClientError>(dict([("authed", PyValue::Bool(authed)), ("cash", cash)]))
+    };
+    match attempt.await {
+        Ok(d) => d,
+        Err(exc) => dict([
+            ("authed", PyValue::Bool(false)),
+            ("error", PyValue::Str(exc.message)),
+        ]),
+    }
+}
 
 /// The lane's routes: none (`/login` and `/callback` are the session lane's).
 pub fn routes() -> Router<AppState> {

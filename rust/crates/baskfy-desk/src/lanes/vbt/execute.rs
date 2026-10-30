@@ -380,11 +380,32 @@ async fn reject_line(
     Ok(blocked(reason, simulated))
 }
 
+/// `_signal_refusal(store, instrument_id, signal_date)` (R8.VB2): `uq_vb_order_one_per_signal`
+/// allows one `vb_order` per (user, signal, name), in any state, so a second entry on the same
+/// signal is refused **before** the gateway — asked after it, the order reached the broker and
+/// then the insert failed (no row, no GTT, the line left `PROPOSED` behind a 500).
+async fn signal_refusal(
+    store: &mut dyn VbtStore,
+    instrument_id: i64,
+    signal_date: NaiveDate,
+) -> ExecResult<Option<String>> {
+    Ok(store
+        .order_for_signal(instrument_id, signal_date)
+        .await?
+        .map(|existing| {
+            format!(
+                "ALREADY_SENT: order {existing} already took this name on the {signal_date} \
+                 signal; one entry per name per signal"
+            )
+        }))
+}
+
 /// The refusals `_place_limit` and `_buy_at_market` share: session cap, held, working,
-/// protection unresolved. `working_words` is the one phrase that differs.
+/// protection unresolved, one entry per signal. `working_words` is the one phrase that differs.
 async fn entry_refusal(
     store: &mut dyn VbtStore,
     line: &Rec,
+    plan: &Rec,
     now: &DateTime<FixedOffset>,
     working_words: &str,
 ) -> ExecResult<Option<String>> {
@@ -408,7 +429,7 @@ async fn entry_refusal(
     if !unresolved.is_empty() {
         return Ok(Some(refusal(&unresolved)));
     }
-    Ok(None)
+    signal_refusal(store, instrument_id, plan_day(plan)?).await
 }
 
 fn place_failed(result: PyDict, status: &str, simulated: bool) -> (String, ExecOutcome) {
@@ -467,8 +488,14 @@ async fn place_limit(
     now: DateTime<FixedOffset>,
 ) -> ExecResult<ExecOutcome> {
     let gates = vbt_gates(settings);
-    if let Some(reason) =
-        entry_refusal(store, line, &now, "a limit is already resting in this name").await?
+    if let Some(reason) = entry_refusal(
+        store,
+        line,
+        plan,
+        &now,
+        "a limit is already resting in this name",
+    )
+    .await?
     {
         return reject_line(store, line, reason, gates.dry_run).await;
     }
@@ -574,6 +601,7 @@ async fn buy_at_market(
     if let Some(reason) = entry_refusal(
         store,
         line,
+        plan,
         &now,
         "an order is already working in this name",
     )
@@ -1407,6 +1435,37 @@ pub async fn execute_line(
     now: DateTime<FixedOffset>,
     last_price: Option<Decimal>,
 ) -> ExecResult<ExecOutcome> {
+    let out = execute_line_locked(
+        store, gateway, settings, plan_id, line_id, confirm, now, last_price,
+    )
+    .await;
+    leave_session_lock(store, out).await
+}
+
+/// The exit of `with store.lock_session_for_update(day):` (R8.VB1): the lock's transaction is
+/// committed whether the body returned or raised — what was written stays written, as the
+/// autocommit connection kept it — and a held lock is Python's `HTTPException(409)`.
+async fn leave_session_lock<T>(store: &mut dyn VbtStore, out: ExecResult<T>) -> ExecResult<T> {
+    store.unlock_session().await?;
+    match out {
+        Err(ExecError::Store(StoreError::SessionBusy)) => {
+            Err(http(409, super::store::SESSION_BUSY))
+        }
+        other => other,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn execute_line_locked(
+    store: &mut dyn VbtStore,
+    gateway: &dyn Gateway,
+    settings: &Settings,
+    plan_id: &str,
+    line_id: i64,
+    confirm: &str,
+    now: DateTime<FixedOffset>,
+    last_price: Option<Decimal>,
+) -> ExecResult<ExecOutcome> {
     let line = validate(store, plan_id, line_id, confirm, now).await?;
     let plan = store
         .plan(plan_id)
@@ -1439,6 +1498,17 @@ pub async fn execute_line(
 /// # Errors
 /// The gateway raising, or the store.
 pub async fn on_order_update(
+    store: &mut dyn VbtStore,
+    gateway: &dyn Gateway,
+    settings: &Settings,
+    payload: &PyDict,
+    now: DateTime<FixedOffset>,
+) -> ExecResult<Option<ExecOutcome>> {
+    let out = on_order_update_locked(store, gateway, settings, payload, now).await;
+    leave_session_lock(store, out).await
+}
+
+async fn on_order_update_locked(
     store: &mut dyn VbtStore,
     gateway: &dyn Gateway,
     settings: &Settings,

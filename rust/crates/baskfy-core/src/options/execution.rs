@@ -272,3 +272,40 @@ where
         .filter(|code| !(stale && profit_codes.contains(code)))
         .collect()
 }
+
+/// §8.5 — `HARD_EXIT` with reason `FEED_LOST`.
+///
+/// With a position open: O1 and O3 lose the feed after `feed_watch_from` (14:00) once no index
+/// tick has come for `stale_index_seconds`; O2 at any time once the position is older than
+/// `feed_grace_seconds` and no tick has come for `stale_index_seconds`. No position, no exit.
+/// Times are IST wall-clock (`bars::ist` applied by the caller).
+///
+/// Ports `baskfy_core.options.execution.feed_lost`.
+#[must_use]
+pub fn feed_lost(
+    sleeve: crate::options::gating::Sleeve,
+    now: chrono::NaiveDateTime,
+    last_index_tick: Option<chrono::NaiveDateTime>,
+    position_opened_at: Option<chrono::NaiveDateTime>,
+    stale_index_seconds: i64,
+    config: &ExecutionConfig,
+) -> bool {
+    use crate::options::gating::{SleeveGroup, group_of};
+    let Some(opened) = position_opened_at else {
+        return false;
+    };
+    // `(a - b).total_seconds() > n` on microseconds, exactly.
+    let older_than = |a: chrono::NaiveDateTime, b: chrono::NaiveDateTime, secs: i64| {
+        (a - b).num_microseconds().map_or(a > b, |us| {
+            i128::from(us) > i128::from(secs) * 1_000_000
+        })
+    };
+    let silent = last_index_tick.is_none_or(|t| older_than(now, t, stale_index_seconds));
+    if !silent {
+        return false;
+    }
+    if group_of(sleeve) == SleeveGroup::O2 {
+        return older_than(now, opened, config.feed_grace_seconds);
+    }
+    now.time() >= config.feed_watch_from
+}

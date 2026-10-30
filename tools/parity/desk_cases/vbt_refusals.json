@@ -73,6 +73,28 @@
    "clock": "2026-10-21T09:29:59+05:30"
   },
   {
+   "name": "refused: AT the exact expiry instant (09:30:00.355993, the stored microsecond) the plan is still live, so an unknown line is 404, not 410 (CPython's clock is microseconds, half-even)",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "6c89b1d7-3108-4cf6-a2a1-040671219cfc",
+    "line_id": "999999",
+    "confirm": "true"
+   },
+   "clock": "2026-10-21T09:30:00.355993+05:30"
+  },
+  {
+   "name": "refused: one microsecond past expiry is 410",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "6c89b1d7-3108-4cf6-a2a1-040671219cfc",
+    "line_id": "999999",
+    "confirm": "true"
+   },
+   "clock": "2026-10-21T09:30:00.355994+05:30"
+  },
+  {
    "name": "refused: a negative line_id is 404",
    "method": "POST",
    "path": "/vbt/execute",

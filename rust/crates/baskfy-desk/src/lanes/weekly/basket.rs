@@ -124,6 +124,21 @@ pub fn tradeable(symbol: &str) -> bool {
 #[error("{0}")]
 pub struct PlanError(pub String);
 
+/// `float(idx.loc[s, name])`: the scan cell as a float, or Python's `TypeError` when the column
+/// is an `object` column whose cell is `None` (a generated scan's never-computed factor,
+/// `scan_source`; an uploaded scan has no such column).
+fn float_cell(scored: &Scored, name: &str, i: usize) -> Result<f64, PlanError> {
+    if let Some(super::frame::Column::Str(v)) = scored.frame.col(name)
+        && v.get(i).is_some_and(Option::is_none)
+    {
+        return Err(PlanError(
+            "TypeError: float() argument must be a string or a real number, not 'NoneType'"
+                .to_owned(),
+        ));
+    }
+    Ok(scored.num(name, i))
+}
+
 /// A number from a holding dict, as Python arithmetic sees it.
 fn num(v: Option<&PyValue>) -> f64 {
     #[allow(clippy::cast_precision_loss)]
@@ -334,7 +349,7 @@ pub fn build_plan(
                     value,
                 ));
             }
-        } else if scored.num("rsi_one_month", i) >= cfg.parabolic_rsi {
+        } else if float_cell(scored, "rsi_one_month", i)? >= cfg.parabolic_rsi {
             runners.push((
                 s.clone(),
                 format!(
@@ -508,12 +523,18 @@ pub fn build_plan(
     for (s, weight) in &by_weight {
         let Some(px) = ctx.price_of(s) else { continue };
         let row = scored.row_of(s);
-        let vol = row.map_or(0.36, |i| scored.num("volatility_one_year", i));
+        let vol = match row {
+            Some(i) => float_cell(scored, "volatility_one_year", i)?,
+            None => 0.36,
+        };
         let mut tgt_qty = py_round_int(capital * weight / 100.0 / px).ok_or_else(zero_div)?;
         let held = ctx.held(s);
         let cur_qty = held.map_or(0, qty);
         let mut dq = tgt_qty - cur_qty;
-        let day_val = row.map_or(f64::INFINITY, |i| scored.num("median_volume_one_year", i));
+        let day_val = match row {
+            Some(i) => float_cell(scored, "median_volume_one_year", i)?,
+            None => f64::INFINITY,
+        };
         if tgt_qty as f64 * px > day_val * cfg.max_pos_vs_day_value {
             tgt_qty = py_int(day_val * cfg.max_pos_vs_day_value / px).ok_or_else(zero_div)?;
             dq = tgt_qty - cur_qty;
@@ -559,7 +580,10 @@ pub fn build_plan(
         let fit = py_int(val.as_f64() / px).ok_or_else(zero_div)?;
         let tgt_qty = if fit < q { fit } else { q };
         let row = scored.row_of(s);
-        let vol = row.map_or(0.4, |i| scored.num("volatility_one_year", i));
+        let vol = match row {
+            Some(i) => float_cell(scored, "volatility_one_year", i)?,
+            None => 0.4,
+        };
         if capital == 0.0 {
             return Err(zero_div());
         }

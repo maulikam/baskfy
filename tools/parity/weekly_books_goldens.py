@@ -329,6 +329,230 @@ for include in (False, True):
     cases.append({"kind": "snapshot", "input": {"holdings": snap_holdings, "include": include,
                                                 "today": NOW.date().isoformat()}, "output": snap})
 
+# === wave D2 additions (DECISIONS-RS R8.WB1/R8.WB2) — appended so cases 0-22 keep their places ===
+
+# --- snapshot: the quote and historical price sources ------------------------------------------
+
+
+class _SourceKite(_SnapKite):
+    def __init__(self, hs, quotes, instruments, candles):  # noqa: ANN001, ANN204
+        super().__init__(hs)
+        self.quotes, self.instr, self.candles = quotes, instruments, candles
+        self.calls = []
+
+    def quote_raw(self, keys):  # noqa: ANN001, ANN201
+        self.calls.append(["quote_raw", list(keys)])
+        return {k: self.quotes[k] for k in keys if k in self.quotes}
+
+    def instruments(self, exchange):  # noqa: ANN001, ANN201
+        self.calls.append(["instruments", exchange])
+        return list(self.instr)
+
+    def historical(self, token, frm, to, interval):  # noqa: ANN001, ANN201
+        self.calls.append(["historical", token, frm.isoformat(), to.isoformat(), interval])
+        return list(self.candles.get(str(token), []))
+
+
+source_holdings = [{"symbol": "AAA", "exchange": "NSE", "quantity": 110, "pledged_qty": 10,
+                    "average_price": 90.123456, "last_price": 100.05},
+                   {"symbol": "BBB", "exchange": "BSE", "quantity": 7, "pledged_qty": 0,
+                    "average_price": 50, "last_price": 49.5},
+                   {"symbol": "SGBDE31III", "exchange": "NSE", "quantity": 5, "pledged_qty": 0,
+                    "average_price": 5000, "last_price": 6123.4}]
+instruments = [{"tradingsymbol": "AAA", "instrument_token": 101, "segment": "NSE", "name": "A"},
+               {"tradingsymbol": "SGBDE31III", "instrument_token": 103},
+               {"tradingsymbol": "ZZZ", "instrument_token": 199, "segment": "NSE", "name": "Z"}]
+source_cases = [
+    {"source": "quote", "on_date": None, "cash": None,
+     "quotes": {"NSE:AAA": {"ohlc": {"close": 101.25}, "last_price": 100.05},
+                "BSE:BBB": {"ohlc": {"close": 0}, "last_price": 48.75},
+                "NSE:SGBDE31III": {"ohlc": {}, "last_price": 6200.0}},
+     "candles": {}},
+    {"source": "historical", "on_date": "2026-08-14", "cash": 5000.5, "quotes": {},
+     "candles": {"101": [{"close": 98.0}, {"close": 99.5}], "103": []}},
+    {"source": "historical", "on_date": "2026-08-15", "cash": None, "quotes": {}, "candles": {}},
+    {"source": "nonsense", "on_date": None, "cash": None, "quotes": {}, "candles": {}},
+    {"source": "holdings", "on_date": "2026-08-14", "cash": None, "quotes": {}, "candles": {}},
+]
+S.C.INCLUDE_UNTOUCHABLE_IN_NAV = False
+for sc in source_cases:
+    here = os.getcwd()
+    with tempfile.TemporaryDirectory() as tmp:
+        os.chdir(tmp)
+        try:
+            kite = _SourceKite(source_holdings, sc["quotes"], instruments, sc["candles"])
+            job = S.SnapshotJob(kite=kite, limits=_NoLimit())
+            try:
+                out_ = asyncio.run(job.collect(sc["on_date"], sc["source"], cash=sc["cash"]))
+            except (ValueError, RuntimeError) as exc:
+                out_ = {"raised": f"{type(exc).__name__}: {exc}"}
+            cache = None
+            if os.path.exists("data/.instruments_NSE.json"):
+                with open("data/.instruments_NSE.json") as fh:
+                    cache = json.load(fh)
+        finally:
+            os.chdir(here)
+    cases.append({"kind": "snapshot_source",
+                  "input": {**sc, "holdings": source_holdings, "instruments": instruments,
+                            "today": NOW.date().isoformat()},
+                  "output": {"snapshot": out_, "calls": kite.calls, "cache": cache}})
+
+# --- tradebook: what only pandas reads (a zone makes the fill aware) ------------------------------
+fallback_csvs = [
+    HEADER + "\nA,INE1,2025-07-01,NSE,EQ,EQ,buy,false,1,10,T1,O1,20250702\n"
+             "B,INE1,2025-07-01,NSE,EQ,EQ,buy,false,2,10,T2,O2,20250702 093000\n"
+             "C,INE1,2025-07-01,NSE,EQ,EQ,buy,false,3,10,T3,O3,2 Jul 2025 9:30 AM\n"
+             "D,INE1,2025-07-01,NSE,EQ,EQ,buy,false,4,10,T4,O4,13-07-2025 09:30:00 PM\n"
+             "E,INE1,2025-07-01,NSE,EQ,EQ,buy,false,5,10,T5,O5,\"July 2, 2025 09:30\"\n"
+             "F,INE1,2025-07-01,NSE,EQ,EQ,buy,false,6,10,T6,O6,02/07/25\n"
+             "G,INE1,2025-07-01,NSE,EQ,EQ,buy,false,7,10,T7,O7,13:00 PM\n"
+             "H,INE1,2025-07-01,NSE,EQ,EQ,buy,false,8,10,T8,O8,2025-07-02t09:30\n"
+             "I,INE1,2025-07-01,NSE,EQ,EQ,buy,false,9,10,T9,O9,Jul 2 2025\n",
+    # Not here: a bare time (`09:30`, `12:00 AM 2025`) is stamped with the wall clock's date by
+    # pandas, so its golden would change every day; `parse_when_tz` takes `today` and its unit
+    # test pins it.
+    HEADER + "\nZ1,INE1,2025-07-01,NSE,EQ,EQ,buy,false,1,10,,O1,2025-07-02T09:30:00Z\n"
+             "Z2,INE1,2025-07-01,NSE,EQ,EQ,buy,false,2,10,,O2,2025-07-02 09:30:00 +0530\n"
+             "Z3,INE1,2025-07-01,NSE,EQ,EQ,buy,false,3,10,,O3,2025-07-02T09:30:00-04:00\n"
+             "Z4,INE1,2025-07-01,NSE,EQ,EQ,buy,false,4,10,,O4,2025-07-02 09:30:00 UTC\n"
+             "Z5,INE1,2025-07-01,NSE,EQ,EQ,buy,false,5,10,,O5,2025-07-02T09:30:00.123+05:30\n"
+             "Z6,INE1,2025-07-01,NSE,EQ,EQ,buy,false,6,10,,O6,2025-07-02T09:30:00+05\n"
+             "N1,INE1,2025-07-01,NSE,EQ,EQ,buy,false,7,10,,O7,\n",
+    # One symbol's naive and aware fills meet in the sort: Python's TypeError.
+    HEADER + "\nM,INE1,2025-07-01,NSE,EQ,EQ,buy,false,1,10,T1,O1,2025-07-02T09:30:00Z\n"
+             "M,INE1,2025-07-03,NSE,EQ,EQ,buy,false,2,10,T2,O2,\n",
+]
+with tempfile.TemporaryDirectory() as tmp:
+    for i, text in enumerate(fallback_csvs):
+        path = os.path.join(tmp, f"fb{i}.csv")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(text)
+        try:
+            fills_ = TB.parse_tradebook(path)
+            out_ = {"fills": [fill_row(x) for x in fills_],
+                    "keys": [TB.fill_key(x) for x in fills_],
+                    "ts": [x.ts for x in fills_]}
+        except TB.TradebookError as exc:
+            out_ = {"error": str(exc).replace(path, "<path>")}
+        except TypeError as exc:
+            out_ = {"raised": f"TypeError: {exc}"}
+        cases.append({"kind": "parse_fallback", "input": {"csv": text}, "output": out_})
+
+# FIFO over aware fills (all aware: Python's sort compares instants).
+aware_fifo = {"fills": [["X", "2025-01-01T09:15:00+05:30", "BUY", 100, 50.0, "NSE", "", 1.0],
+                        ["X", "2025-01-01T03:50:00+00:00", "BUY", 10, 51.0, "NSE", "", 0.0],
+                        ["X", "2025-02-01T09:15:00-04:00", "SELL", 105, 60.0, "NSE", "", 2.0],
+                        ["Y", "2025-01-02T00:00:00+05:30", "SELL", 1, 9.0, "NSE", "", 0.0]],
+              "actions": []}
+fl = [TB.Fill(s, dt.datetime.fromisoformat(w), sd, q, p, e, t, c) for s, w, sd, q, p, e, t, c in aware_fifo["fills"]]
+rb = TB.build_lots(fl, [])
+cases.append({"kind": "fifo", "input": aware_fifo, "output": {
+    "closed": rb.closed,
+    "open": [[l.symbol, l.when.isoformat(), l.quantity, l.price, l.charges, l.when.timestamp()] for l in rb.open_lots],
+    "unmatched": rb.unmatched_sells,
+    "keys": [TB.fill_key(f) for f in fl]}})
+
+# --- reconcile: where Python's pass records, and where it raises ---------------------------------
+
+
+def _reconcile_case(rc, risk_):  # noqa: ANN001, ANN202
+    hooks_ = R.SleeveHooks("twt", open_orders=lambda: list(rc["sleeve_orders"]), on_order_update=_update,
+                           open_positions=lambda: list(rc["positions"]), risk=risk_)
+    try:
+        run_ = asyncio.run(R.reconcile_once(_Book(rc), [hooks_], now=AT, issues=R.MemoryIssueStore()))
+    except Exception as exc:  # noqa: BLE001 - the case is the raise
+        return {"raised": f"{type(exc).__name__}: {exc}"}
+    return {"line": run_.line(), "released": risk_.released,
+            "issues": [[i.sleeve, i.position_id, i.symbol, i.kind, i.detail] for i in run_.issues]}
+
+
+raise_cases = [
+    # A position without an id: KeyError escapes the pass.
+    {"orders": [], "gtts": [], "holdings": [], "sleeve_orders": [],
+     "positions": [{"symbol": "NOID", "quantity_open": 5, "gtt_id": None, "simulated": True}]},
+    # A dead order whose reference Decimal cannot read: InvalidOperation escapes.
+    {"orders": [{"order_id": "B1", "status": "REJECTED", "filled_quantity": 0}], "gtts": [], "holdings": [],
+     "sleeve_orders": [{"broker_order_id": "B1", "symbol": "TWTCO", "quantity": 10, "reference_price": "n/a"}],
+     "positions": []},
+    # A dead order without a symbol key: KeyError escapes.
+    {"orders": [{"order_id": "B1", "status": "CANCELLED", "filled_quantity": 0}], "gtts": [], "holdings": [],
+     "sleeve_orders": [{"broker_order_id": "B1", "quantity": 10, "reference_price": 5}], "positions": []},
+    # A dead order's quantity int() cannot read: ValueError escapes.
+    {"orders": [{"order_id": "B1", "status": "CANCELLED", "filled_quantity": 0}], "gtts": [], "holdings": [],
+     "sleeve_orders": [{"broker_order_id": "B1", "symbol": "X", "quantity": "ten", "reference_price": 5}],
+     "positions": []},
+    # Recorded, not raised: a GTT row that is not a dict, a holding whose quantity int() refuses, a
+    # position whose quantity_open int() refuses, a book row that is not a dict.
+    {"orders": ["junk"], "gtts": ["junk"], "holdings": [{"symbol": "X", "quantity": "lots"}],
+     "sleeve_orders": [], "positions": [{"id": 1, "symbol": "Q", "quantity_open": "abc", "gtt_id": None}]},
+    # A GTT whose trigger Decimal cannot read, and one whose legs are a string.
+    {"orders": [], "gtts": [{"id": 5, "status": "active", "condition": {"trigger_values": ["x"]}, "orders": []}],
+     "holdings": [], "sleeve_orders": [], "positions": [{"id": 2, "symbol": "S", "quantity_open": "7", "gtt_id": 5}]},
+    {"orders": [], "gtts": [{"id": 6, "status": "active", "condition": "c", "orders": []}],
+     "holdings": [], "sleeve_orders": [], "positions": []},
+    # NaN and Infinity references are released as Python does; -Infinity is not.
+    {"orders": [{"order_id": "B1", "status": "CANCELLED", "filled_quantity": 0},
+                {"order_id": "B2", "status": "CANCELLED", "filled_quantity": 0},
+                {"order_id": "B3", "status": "CANCELLED", "filled_quantity": "2"}],
+     "gtts": [], "holdings": [],
+     "sleeve_orders": [{"broker_order_id": "B1", "symbol": "N", "quantity": 1, "reference_price": "1_0.5"},
+                       {"broker_order_id": "B2", "symbol": "I", "quantity": 1, "reference_price": "-Infinity"},
+                       {"broker_order_id": "B3", "symbol": "F", "quantity": " 5 ", "reference_price": 2.5}],
+     "positions": []},
+]
+for rc_ in raise_cases:
+    cases.append({"kind": "reconcile_raise", "input": rc_, "output": _reconcile_case(rc_, _Risk())})
+
+# --- snapshot: the CLI (`python -m app.analytics.snapshot`) over one database, in order -----------
+import contextlib  # noqa: E402
+import io  # noqa: E402
+
+cli_runs = [
+    ["--cashflow", "-1000000", "--cashflow-type", "invest"],
+    [],
+    [],
+    ["--force", "--prices", "holdings"],
+    ["--date", "2026-08-14", "--cash", "250000.5"],
+    ["--check-flows"],
+    ["--import-cashflows", "<ledger>"],
+    ["--cashflow", "500", "--check-flows"],
+    ["--date", "2026-08-13", "--prices", "historical"],
+    ["--prices=bogus"],
+]
+ledger_text = "Date,Amount,Type\n2026-08-14,\"-2,500\",invest\n2026-08-15,750,\n"
+S.C.INCLUDE_UNTOUCHABLE_IN_NAV = False
+cli_out = []
+saved_argv = sys.argv
+with tempfile.TemporaryDirectory() as tmp:
+    dbp = os.path.join(tmp, "cli.db")
+    ledger = os.path.join(tmp, "ledger.csv")
+    with open(ledger, "w", encoding="utf-8") as fh:
+        fh.write(ledger_text)
+    S.Kite = lambda: _SnapKite(snap_holdings)
+    S.KiteLimits = _NoLimit
+    for argv in cli_runs:
+        sys.argv = ["snapshot.py", "--db", dbp, *[ledger if a == "<ledger>" else a for a in argv]]
+        out_, err_ = io.StringIO(), io.StringIO()
+        code, message = 0, None
+        with contextlib.redirect_stdout(out_), contextlib.redirect_stderr(err_):
+            try:
+                S._main()
+            except SystemExit as exc:
+                if isinstance(exc.code, int):
+                    code = exc.code
+                else:
+                    code, message = 1, str(exc.code)
+        cli_out.append({"code": code, "stdout": out_.getvalue().splitlines(), "message": message})
+    with db.connect(dbp) as conn:
+        series = [list(r) for r in conn.execute(
+            "SELECT date, nav, invested, cash, index_value FROM snapshots ORDER BY date")]
+        flows = [list(r) for r in conn.execute("SELECT date, amount, type FROM cashflows ORDER BY id")]
+sys.argv = saved_argv
+cases.append({"kind": "snapshot_cli", "input": {"runs": cli_runs, "ledger": ledger_text,
+                                                "holdings": snap_holdings, "dry_run": S.C.DRY_RUN,
+                                                "today": NOW.date().isoformat()},
+              "output": {"runs": cli_out, "snapshots": series, "cashflows": flows}})
+
 out = sys.argv[1]
 os.makedirs(os.path.dirname(out), exist_ok=True)
 with open(out, "w", encoding="utf-8") as f:

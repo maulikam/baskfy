@@ -45,7 +45,18 @@ pub enum StoreError {
     /// A row the code cannot read (Python's `KeyError`/`ValueError`).
     #[error("{0}")]
     Bad(String),
+    /// `HTTPException(409, SESSION_BUSY)`: the session row is held by another confirm
+    /// (`FOR UPDATE NOWAIT`, R8.TD1).
+    #[error("{SESSION_BUSY}")]
+    SessionBusy,
 }
+
+/// Postgres's SQLSTATE for `FOR UPDATE NOWAIT` finding the row held (`LOCK_NOT_AVAILABLE`).
+pub const LOCK_NOT_AVAILABLE: &str = "55P03";
+
+/// `SESSION_BUSY`: what a confirm that finds the session row held answers (409, R8.TD1).
+pub const SESSION_BUSY: &str = "SESSION_BUSY: another confirm of this session is in flight; \
+     nothing was sent \u{2014} confirm again";
 
 /// What the store calls return.
 pub type StoreResult<T> = Result<T, StoreError>;
@@ -202,8 +213,15 @@ pub trait TwtStore: Send {
     async fn bump_session(&mut self, day: NaiveDate, bump: SessionBump) -> StoreResult<()>;
     /// `set_naked_count(day, mode=..., naked=...)`.
     async fn set_naked_count(&mut self, day: NaiveDate, mode: &str, naked: i64) -> StoreResult<()>;
-    /// `lock_session_for_update(day)` (the context manager's entry; it has no exit action).
+    /// `lock_session_for_update(day)`: the context manager's entry. Its exit is
+    /// [`TwtStore::unlock_session`], which the confirm functions call once their body is done.
     async fn lock_session_for_update(&mut self, day: NaiveDate) -> StoreResult<()>;
+    /// The exit of the outermost `with store.lock_session_for_update(day):` block: `COMMIT` of
+    /// the transaction the lock opened, on success and on an exception alike (R8.TD1). A store
+    /// with no transaction to close does nothing.
+    async fn unlock_session(&mut self) -> StoreResult<()> {
+        Ok(())
+    }
     /// `sleeve_money(as_of)`.
     async fn sleeve_money(&mut self, as_of: NaiveDate) -> StoreResult<SleeveMoney>;
     /// `adj_factor(instrument_id, as_of)`.
@@ -354,6 +372,8 @@ pub struct PgTwtStore {
     pub schema: String,
     /// `broker_account_id`.
     pub broker_account_id: Option<i64>,
+    /// `_lock_depth > 0` with a transaction this store opened (R8.TD1).
+    lock_opened: bool,
 }
 
 impl std::fmt::Debug for PgTwtStore {
@@ -556,7 +576,14 @@ impl PgTwtStore {
             user_id,
             schema: schema.to_owned(),
             broker_account_id,
+            lock_opened: false,
         }
+    }
+
+    /// Whether a `lock_session_for_update` transaction is open on this store.
+    #[must_use]
+    pub const fn session_locked(&self) -> bool {
+        self.lock_opened
     }
 
     /// `t(table)`.
@@ -1332,22 +1359,54 @@ impl TwtStore for PgTwtStore {
         let params = [Param::Int(self.user_id), Param::Date(day)];
         self.conn.execute(&sql, &params).await?;
         if !self.schema.is_empty() {
+            // R8.TD1: the outermost block opens the transaction the `FOR UPDATE` holds, and
+            // `NOWAIT` refuses a held row (409) rather than waiting on it.
+            let opened = !self.lock_opened;
+            if opened {
+                self.conn.execute("BEGIN", &[]).await?;
+            }
             let sql = format!(
-                "SELECT 1 FROM {} WHERE user_id = ? AND session_date = ? FOR UPDATE",
+                "SELECT 1 FROM {} WHERE user_id = ? AND session_date = ? FOR UPDATE NOWAIT",
                 self.t("tw_session")
             );
-            self.conn.execute(&sql, &params).await?;
+            match self.conn.execute(&sql, &params).await {
+                Ok(_) => {
+                    if opened {
+                        self.lock_opened = true;
+                    }
+                }
+                Err(e) => {
+                    if opened {
+                        self.conn.execute("ROLLBACK", &[]).await?;
+                    }
+                    if let StorageError::Driver(sqlx::Error::Database(db)) = &e
+                        && db.code().as_deref() == Some(LOCK_NOT_AVAILABLE)
+                    {
+                        return Err(StoreError::SessionBusy);
+                    }
+                    return Err(e.into());
+                }
+            }
         } else {
             // `elif _in_transaction(self.conn) is False: BEGIN IMMEDIATE`. sqlite refuses a
-            // second BEGIN on a connection that already holds one (a second confirm, or the
-            // fill path's lock after the confirm's, on the same store), and Python skips the
-            // statement in exactly that case — so that one refusal is the skip, nothing else is.
+            // second BEGIN on a connection that already holds one (a nested block, or a
+            // transaction the caller opened), and Python skips the statement in exactly that
+            // case — so that one refusal is the skip, nothing else is. Only the block that
+            // opened the transaction closes it (R8.TD1).
             match self.conn.execute("BEGIN IMMEDIATE", &[]).await {
-                Ok(_) => {}
+                Ok(_) => self.lock_opened = true,
                 Err(StorageError::Driver(sqlx::Error::Database(db)))
                     if db.message().contains("within a transaction") => {}
                 Err(e) => return Err(e.into()),
             }
+        }
+        Ok(())
+    }
+
+    async fn unlock_session(&mut self) -> StoreResult<()> {
+        if self.lock_opened {
+            self.lock_opened = false;
+            self.conn.execute("COMMIT", &[]).await?;
         }
         Ok(())
     }

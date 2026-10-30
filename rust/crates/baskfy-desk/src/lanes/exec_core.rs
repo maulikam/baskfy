@@ -49,6 +49,7 @@ pub mod guards;
 pub mod journal;
 pub mod kite_client;
 pub mod kite_limits;
+pub mod lifecycle;
 pub mod net;
 pub mod order_gateway;
 pub mod ratelimit;
@@ -157,6 +158,7 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .merge(exec_guards::routes())
         .merge(exec_kite::routes())
+        .merge(lifecycle::routes())
 }
 
 /// The lane's template globals and filters (e.g. the fno lane's `fno_badge`).

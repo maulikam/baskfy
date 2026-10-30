@@ -216,14 +216,35 @@ impl std::fmt::Debug for SharedSpacer {
     }
 }
 
+/// `repr()` of a reply as redis-py hands it to `_claim` (`[1, b'0.5']`, `b'ok'`, `None`).
+fn reply_repr(v: &ScriptValue) -> String {
+    match v {
+        ScriptValue::Int(i) => i.to_string(),
+        ScriptValue::Bytes(b) => baskfy_providers::kite::KiteValue::Bytes(b.clone()).py_repr(),
+        ScriptValue::Array(items) => {
+            let inner: Vec<String> = items.iter().map(reply_repr).collect();
+            format!("[{}]", inner.join(", "))
+        }
+        ScriptValue::Nil => "None".to_owned(),
+        ScriptValue::Other(text) => text.clone(),
+    }
+}
+
 /// `_claim(raw)`: the Lua reply, a two-element table (flag, wait as a string).
 ///
 /// # Errors
-/// Any other shape (a wrong shape is a bug in the script, never permission).
+/// Any other shape (a wrong shape is a bug in the script, never permission): `ValueError` with
+/// Python's message, and a scalar `int()`/`float()` refuses is theirs.
 pub fn claim(raw: &ScriptValue) -> Result<(bool, f64), LimitError> {
-    let bad = || LimitError {
+    let value_error = |message: String| LimitError {
         python_type: "ValueError",
-        message: format!("unexpected reply from the Kite limiter script: {raw:?}"),
+        message,
+    };
+    let bad = || {
+        value_error(format!(
+            "unexpected reply from the Kite limiter script: {}",
+            reply_repr(raw)
+        ))
     };
     let ScriptValue::Array(items) = raw else {
         return Err(bad());
@@ -231,18 +252,35 @@ pub fn claim(raw: &ScriptValue) -> Result<(bool, f64), LimitError> {
     let [flag, wait] = items.as_slice() else {
         return Err(bad());
     };
+    // `_scalar`: bytes decode as UTF-8 (strictly: a bad byte is `UnicodeDecodeError`, a
+    // `ValueError`), ints are `str(int)`; anything else is refused by name.
     let scalar = |v: &ScriptValue| -> Result<String, LimitError> {
         match v {
             ScriptValue::Int(i) => Ok(i.to_string()),
-            ScriptValue::Bytes(b) => Ok(String::from_utf8_lossy(b).into_owned()),
-            other => Err(LimitError {
-                python_type: "ValueError",
-                message: format!("unexpected scalar in the Kite limiter reply: {other:?}"),
+            ScriptValue::Bytes(b) => String::from_utf8(b.clone()).map_err(|e| LimitError {
+                python_type: "UnicodeDecodeError",
+                message: e.to_string(),
             }),
+            other => Err(value_error(format!(
+                "unexpected scalar in the Kite limiter reply: {}",
+                reply_repr(other)
+            ))),
         }
     };
-    let flag: i64 = scalar(flag)?.trim().parse().map_err(|_| bad())?;
-    let wait: f64 = scalar(wait)?.trim().parse().map_err(|_| bad())?;
+    let flag_text = scalar(flag)?;
+    let flag = crate::settings::py_int(&flag_text).ok_or_else(|| {
+        value_error(format!(
+            "invalid literal for int() with base 10: {}",
+            baskfy_providers::py::repr_str(&flag_text)
+        ))
+    })?;
+    let wait_text = scalar(wait)?;
+    let wait = crate::settings::py_float(&wait_text).ok_or_else(|| {
+        value_error(format!(
+            "could not convert string to float: {}",
+            baskfy_providers::py::repr_str(&wait_text)
+        ))
+    })?;
     Ok((flag != 0, wait))
 }
 
@@ -287,9 +325,13 @@ impl SharedSpacer {
     }
 
     /// `take()`: claim the box's next slot, or `None` if the clock could not say.
-    pub async fn take(&self) -> Option<f64> {
+    ///
+    /// # Errors
+    /// A reply the script could not have sent ([`claim`]'s `ValueError`), as Python raises it:
+    /// out of `take()`, without the back-off a Redis failure gets.
+    pub async fn take(&self) -> Result<Option<f64>, LimitError> {
         if !self.available() {
-            return None;
+            return Ok(None);
         }
         let args = [
             baskfy_providers::py::repr_float(self.interval),
@@ -307,22 +349,17 @@ impl SharedSpacer {
                 if let Ok(mut d) = self.down_until.lock() {
                     *d = self.clock.now() + self.retry_after;
                 }
-                return None;
+                return Ok(None);
             }
         };
-        let Ok((claimed, wait)) = claim(&raw) else {
-            if let Ok(mut d) = self.down_until.lock() {
-                *d = self.clock.now() + self.retry_after;
-            }
-            return None;
-        };
+        let (claimed, wait) = claim(&raw)?;
         if !claimed {
-            return None;
+            return Ok(None);
         }
         if wait > 0.0 {
             self.clock.sleep(wait).await;
         }
-        Some(wait.max(0.0))
+        Ok(Some(wait.max(0.0)))
     }
 }
 
@@ -399,16 +436,28 @@ impl DeskLimits {
             .map_or(0, |w| w.get(family).copied().unwrap_or(0))
     }
 
-    async fn take_one(&self, family: &str) -> f64 {
+    /// `_take(family)`: the shared slot, then the local one, both always.
+    ///
+    /// A reply the shared script could not have sent raises out of here as Python's does
+    /// (`_claim`'s `ValueError` propagates through `_take` and `slot`), with this one addition
+    /// (DECISIONS-RS R8.10.1): this process's own spacer is still taken before the error returns,
+    /// so a caller that discards the error cannot send an unspaced read.
+    async fn take_one(&self, family: &str) -> Result<f64, LimitError> {
         let mut waited = 0.0;
         if let Some(shared) = self.shared.get(family) {
             match shared.take().await {
-                None => {
+                Ok(None) => {
                     if let Ok(mut l) = self.local_only.lock() {
                         *l.entry(family.to_owned()).or_insert(0) += 1;
                     }
                 }
-                Some(w) => waited += w,
+                Ok(Some(w)) => waited += w,
+                Err(e) => {
+                    if let Some(spacer) = self.spacers.get(family) {
+                        spacer.take().await;
+                    }
+                    return Err(e);
+                }
             }
         }
         if let Some(spacer) = self.spacers.get(family) {
@@ -417,14 +466,14 @@ impl DeskLimits {
         if let Ok(mut w) = self.waits.lock() {
             *w.entry(family.to_owned()).or_insert(0.0) += waited;
         }
-        waited
+        Ok(waited)
     }
 
     /// `slot(family)`: the combined ceiling first, then the family — shared then local, both
     /// always.
     ///
     /// # Errors
-    /// `KeyError: no such Kite family`.
+    /// `KeyError: no such Kite family`, or the shared script's malformed reply (`ValueError`).
     pub async fn slot(&self, family: &str) -> Result<f64, LimitError> {
         if !FAMILY_FOR_CALL.iter().any(|(_, f)| *f == family) {
             return Err(LimitError {
@@ -432,14 +481,17 @@ impl DeskLimits {
                 message: format!("no such Kite family: {family}"),
             });
         }
-        Ok(self.take_one("read").await + self.take_one(family).await)
+        let read = self.take_one("read").await?;
+        Ok(read + self.take_one(family).await?)
     }
 
     /// `slot_for_call(call)`: an unknown method lands in `general`, never outside every pool.
-    pub async fn slot_for_call(&self, call: &str) -> f64 {
-        self.slot(family_for_call(call).unwrap_or("general"))
-            .await
-            .unwrap_or(0.0)
+    ///
+    /// # Errors
+    /// As [`DeskLimits::slot`]: only the shared script's malformed reply (every family named
+    /// here exists).
+    pub async fn slot_for_call(&self, call: &str) -> Result<f64, LimitError> {
+        self.slot(family_for_call(call).unwrap_or("general")).await
     }
 }
 

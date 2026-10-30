@@ -1,7 +1,8 @@
 //! Lane **weekly** — the weekly momentum book: /analyze → review → /execute (confirm) → /stops/arm.
 //!
 //! **STATUS (lane weekly_plan, 30 Oct 2026):** `POST /analyze` and `POST /execute` are ported
-//! (`analyze.rs`, with `plan_store.rs`, `strategy.rs` and the engine modules); the other
+//! (`analyze.rs`, with `plan_store.rs`, `strategy.rs` and the engine modules), the generated
+//! scan included (`scan_source.rs`, wave D2, DECISIONS-RS R8.WP1); the other
 //! routes below belong to the sibling lanes sharing this parent and answer 404 until they land. The lane owns this file (and may add
 //! private submodules under `src/lanes/weekly/`); it never edits `lib.rs`, `app.rs` or
 //! `lanes.rs`. A new dependency is a DECISIONS-RS entry the integrator applies.
@@ -48,6 +49,7 @@ pub mod costs;
 pub mod frame;
 pub mod pandas;
 pub mod plan_store;
+pub mod scan_source;
 pub mod score;
 pub mod strategy;
 pub mod weekly_books;

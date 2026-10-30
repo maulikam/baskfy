@@ -900,16 +900,19 @@ impl Instruments for StaticInstruments {
     }
 }
 
+/// The landed days and the prints by day.
+pub type MarketState = (
+    Vec<NaiveDate>,
+    BTreeMap<NaiveDate, BTreeMap<PrintKey, Print>>,
+);
+
 /// A settable calendar and bhavcopy (`FakeMarket`).
 #[derive(Debug, Default)]
 pub struct StaticMarket {
     /// `sessions()`.
     pub sessions: Vec<NaiveDate>,
     /// The landed days and the prints by day.
-    pub state: std::sync::Mutex<(
-        Vec<NaiveDate>,
-        BTreeMap<NaiveDate, BTreeMap<PrintKey, Print>>,
-    )>,
+    pub state: std::sync::Mutex<MarketState>,
 }
 
 impl StaticMarket {

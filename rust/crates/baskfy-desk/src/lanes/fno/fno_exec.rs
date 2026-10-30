@@ -7,9 +7,8 @@
 //! * [`execute`] — the confirm (`execute_entry`), the click on an F3 exit
 //!   (`execute_click_exit`), the exits and rolls (`execute_exit`, `execute_roll`,
 //!   `run_pending`), F2's GTT stop (`place/move/delete_future_stop`) and `fo_gateway`.
-//! * [`monitor`] — the monitor's flag, `entry_plan_id`, `raise_exit` (M.5's by-click rule) and
-//!   the tick's lapse-and-send pass; the plan raising, `watch`'s decisions and the night are
-//!   not ported (the service refuses with the flag on).
+//! * [`monitor`] — the whole of `app.fno_monitor`: the 09:20 plans, the watch, the exits and
+//!   rolls (M.5's by-click rule), the tick's lapse-and-send pass and the night's marks.
 //!
 //! **Non-negotiables held here.** No route: `POST /fno/execute` is the fno desk's and calls
 //! [`execute::execute_entry`] / [`execute::execute_click_exit`], which refuse without

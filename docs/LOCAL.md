@@ -63,7 +63,9 @@ close heavy apps during the nightly (18:40–21:15 IST) if it is running then.
    `/desk` on the same address), writes that URL to `/Volumes/T7-Work/baskfy-local/public.url` so every
    later `up` uses it, and restarts the stack (not inside the 18:40–21:20 IST nightly window).
 4. Kite developer console → redirect URL
-   `https://mauliks-macbook-pro.tail6c95b5.ts.net/api/v1/brokers/callback` (by hand). No Google
+   `https://mauliks-macbook-pro.tail6c95b5.ts.net/api/v1/brokers/callback` (by hand — **done by
+   Maulik, 30 Oct 2026**; remove the old AWS static IP and any AWS postback URL in the same
+   console). No Google
    console change is needed: this Mac does not use Google sign-in.
 
 ## How it got here

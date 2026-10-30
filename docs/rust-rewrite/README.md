@@ -28,7 +28,7 @@ Rust replacement has passed its gate. Order (reordered at RS3 so execution comes
 | 3 | `baskfy-db` | the SQLAlchemy reads/writes in `services/` against the existing Postgres schema | `sqlx`, read-only first; row sets equal to the Python's against a **copy** of the DB; writes one table at a time, idempotent |
 | 4 | `baskfy-api` (axum) | `services/api` | serves `openapi.json` unchanged; JSON bodies equal after normalisation (docs/go-rewrite/03 §Tolerances) |
 | 5 | `baskfy-worker` | `services/worker` (nightly, catch-up, publish) | `pipeline_run_step` rows equal to the Python run's against a **copy** of the DB |
-| 6 | `baskfy-desk` | `kite-momentum-rebalancer/app` | two shadow Fridays in DRY_RUN with byte-equal plans; cutover only on Maulik's explicit go |
+| 6 | `baskfy-desk` (wave D, in parallel with step 5; R8.0) | `kite-momentum-rebalancer/app`, its execution core ported with it test-first and DRY_RUN-only | two shadow Fridays in DRY_RUN with byte-equal plans and equal order/GTT call logs (`tools/parity/desk_diff.py`); cutover only on Maulik's explicit go |
 | 7 (last) | `baskfy-execution` | `packages/execution` (guards → risk → rate limit → journal → broker) | law 2 tests; the seven non-negotiables as tests; `DRY_RUN=true` end to end; **no live order, ever, from an agent** |
 | end | `baskfy` (one binary) | all of the above | subcommands `api`, `worker`, `desk`; one process image, one deploy |
 

@@ -1,0 +1,161 @@
+{
+  "note": "Lane swing_exec ports app/swing_execute.py and app/swing_live_gate.py. Neither mounts a route: POST /swing/execute and /swing/rearm are app/swing_desk.py's (the swing desk lane) and call execute_line / rearm_gtt. The confirm path is graded by the 58 Rust tests in src/lanes/swing/swing_exec/tests.rs (ported from tests/test_swing_execute.py); these cases pin the refusals that reach the execute module before any broker read, and that no order or GTT call reaches the replay Kite. Postgres backend: 5 of 5 EQUAL with equal order/GTT call logs (30 Oct 2026); risk_ledger.updated_at is the server's now(), masked as R8.6 documents. Review (30 Oct 2026) added nine cases on the bed's real expired sw_plan lines: 410 with the EXPIRED side effect and its re-post, 404 across plans, 400 on 'True', 422s, and the clock edges. public.sw_plan_line.updated_at is set by both stores' SQL `updated_at = CURRENT_TIMESTAMP` (the server's clock, which the injected clock cannot reach), masked as <null>/<set> exactly like risk_ledger.updated_at (R8.6); every other column, including state EXPIRED, is graded.",
+  "db_mask": {
+    "public.risk_ledger": [
+      "updated_at"
+    ],
+    "public.sw_plan_line": [
+      "updated_at"
+    ]
+  },
+  "cases": [
+    {
+      "name": "an unconfirmed swing line is refused 400 and sends nothing",
+      "method": "POST",
+      "path": "/swing/execute",
+      "form": {
+        "plan_id": "00000000-0000-4000-8000-000000000001",
+        "line_id": "1",
+        "confirm": "false"
+      },
+      "clock": "open"
+    },
+    {
+      "name": "an unknown swing plan is refused 404",
+      "method": "POST",
+      "path": "/swing/execute",
+      "form": {
+        "plan_id": "00000000-0000-4000-8000-000000000001",
+        "line_id": "999999999",
+        "confirm": "true"
+      },
+      "clock": "open"
+    },
+    {
+      "name": "a swing confirm without a line_id is FastAPI's 422",
+      "method": "POST",
+      "path": "/swing/execute",
+      "form": {
+        "plan_id": "x",
+        "confirm": "true"
+      },
+      "clock": "open"
+    },
+    {
+      "name": "re-arming without confirm is refused 400",
+      "method": "POST",
+      "path": "/swing/rearm",
+      "form": {
+        "position_id": "1",
+        "confirm": "false"
+      },
+      "clock": "mid"
+    },
+    {
+      "name": "re-arming an unknown position is refused 404",
+      "method": "POST",
+      "path": "/swing/rearm",
+      "form": {
+        "position_id": "999999999",
+        "confirm": "true"
+      },
+      "clock": "mid"
+    },
+    {
+      "name": "confirm 'True' (not the exact string 'true') on a real expired line is 400 and leaves it PROPOSED",
+      "method": "POST",
+      "path": "/swing/execute",
+      "form": {
+        "plan_id": "1a466726-adb5-429c-9d61-5b7df31c47cf",
+        "line_id": "5",
+        "confirm": "True"
+      },
+      "clock": "open"
+    },
+    {
+      "name": "a real line confirmed against another plan's id is 404",
+      "method": "POST",
+      "path": "/swing/execute",
+      "form": {
+        "plan_id": "1a466726-adb5-429c-9d61-5b7df31c47cf",
+        "line_id": "4",
+        "confirm": "true"
+      },
+      "clock": "open"
+    },
+    {
+      "name": "a real plan past its 30 minutes is 410 and the PROPOSED line is marked EXPIRED",
+      "method": "POST",
+      "path": "/swing/execute",
+      "form": {
+        "plan_id": "1a466726-adb5-429c-9d61-5b7df31c47cf",
+        "line_id": "5",
+        "confirm": "true"
+      },
+      "clock": "open"
+    },
+    {
+      "name": "re-posting the expired line is 410 again (expiry is read before state) and sends nothing",
+      "method": "POST",
+      "path": "/swing/execute",
+      "form": {
+        "plan_id": "1a466726-adb5-429c-9d61-5b7df31c47cf",
+        "line_id": "5",
+        "confirm": "true"
+      },
+      "clock": "mid"
+    },
+    {
+      "name": "an expired line confirmed after the close is still 410",
+      "method": "POST",
+      "path": "/swing/execute",
+      "form": {
+        "plan_id": "74639d5f-52b5-4574-ac8c-fe892a5c3cf9",
+        "line_id": "3",
+        "confirm": "true"
+      },
+      "clock": "after_close"
+    },
+    {
+      "name": "a swing confirm without confirm is FastAPI's 422",
+      "method": "POST",
+      "path": "/swing/execute",
+      "form": {
+        "plan_id": "1a466726-adb5-429c-9d61-5b7df31c47cf",
+        "line_id": "5"
+      },
+      "clock": "open"
+    },
+    {
+      "name": "a non-integer line_id is FastAPI's 422",
+      "method": "POST",
+      "path": "/swing/execute",
+      "form": {
+        "plan_id": "1a466726-adb5-429c-9d61-5b7df31c47cf",
+        "line_id": "five",
+        "confirm": "true"
+      },
+      "clock": "open"
+    },
+    {
+      "name": "re-arming with a non-integer position_id is FastAPI's 422",
+      "method": "POST",
+      "path": "/swing/rearm",
+      "form": {
+        "position_id": "x",
+        "confirm": "true"
+      },
+      "clock": "mid"
+    },
+    {
+      "name": "re-arming without confirm before the open is 400",
+      "method": "POST",
+      "path": "/swing/rearm",
+      "form": {
+        "position_id": "999999999",
+        "confirm": "yes"
+      },
+      "clock": "pre_open"
+    }
+  ]
+}

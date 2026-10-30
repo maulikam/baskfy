@@ -154,7 +154,8 @@ pub fn json_str(s: &str) -> String {
             '\t' => out.push_str("\\t"),
             '\u{8}' => out.push_str("\\b"),
             '\u{c}' => out.push_str("\\f"),
-            c if c.is_ascii() && u32::from(c) >= 0x20 => out.push(c),
+            // `ensure_ascii` escapes everything outside ' '..='~', DEL (0x7f) included.
+            c if (0x20..0x7f).contains(&u32::from(c)) => out.push(c),
             c => {
                 let mut units = [0_u16; 2];
                 for unit in c.encode_utf16(&mut units) {

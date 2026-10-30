@@ -1,0 +1,168 @@
+{
+ "note": "Lane fno_desk: fno_desk.py's three routes and the nav's fno_badge() over the bed's fo_ tables (F3 plans LAPSED / REJECTED_STRUCTURE, no open position), in DRY_RUN with the replay Kite. Graded: /fno's HTML byte for byte (plan cards, the sentences, modes, the badge in the nav title), /fno/data's JSON with order and types, and POST /fno/execute's refusals before any read (missing, false, and non-literal confirm; an empty body) and for an unknown plan. The replay Kite's order/GTT log must stay EMPTY. Review added: pre_open/after_close clocks, confirm in the query string or a JSON body (not the form), padded/upper-case confirm, a NOT_ISSUED plan through the gateway-ready path twice, SQL metacharacters in plan_id, PUT 405.",
+ "cases": [
+  {
+   "name": "fno_desk: /fno/data before the open",
+   "method": "GET",
+   "path": "/fno/data",
+   "clock": "open"
+  },
+  {
+   "name": "fno_desk: /fno before the open",
+   "method": "GET",
+   "path": "/fno"
+  },
+  {
+   "name": "fno_desk: /fno/data mid-session",
+   "method": "GET",
+   "path": "/fno/data",
+   "clock": "mid"
+  },
+  {
+   "name": "fno_desk: /fno mid-session",
+   "method": "GET",
+   "path": "/fno"
+  },
+  {
+   "name": "fno_desk: an empty POST is CONFIRM_REQUIRED",
+   "method": "POST",
+   "path": "/fno/execute"
+  },
+  {
+   "name": "fno_desk: confirm=True (not the literal true) is CONFIRM_REQUIRED",
+   "method": "POST",
+   "path": "/fno/execute",
+   "form": {
+    "plan_id": "F3N-20261029-NIFTY-u1",
+    "confirm": "True"
+   }
+  },
+  {
+   "name": "fno_desk: confirm=1 is CONFIRM_REQUIRED",
+   "method": "POST",
+   "path": "/fno/execute",
+   "form": {
+    "confirm": "1"
+   }
+  },
+  {
+   "name": "fno_desk: an empty plan id with confirm is UNKNOWN_PLAN",
+   "method": "POST",
+   "path": "/fno/execute",
+   "form": {
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "fno_desk: GET /fno/execute is 405",
+   "method": "GET",
+   "path": "/fno/execute"
+  },
+  {
+   "name": "fno_desk: /fno/data after the confirms",
+   "method": "GET",
+   "path": "/fno/data"
+  },
+  {
+   "name": "fno_desk: /fno/data before the session (pre_open)",
+   "method": "GET",
+   "path": "/fno/data",
+   "clock": "pre_open"
+  },
+  {
+   "name": "fno_desk: /fno at pre_open",
+   "method": "GET",
+   "path": "/fno"
+  },
+  {
+   "name": "fno_desk: confirm=true in the query string, not the form, is CONFIRM_REQUIRED",
+   "method": "POST",
+   "path": "/fno/execute",
+   "query": {
+    "confirm": "true",
+    "plan_id": "F3N-20261029-NIFTY-u1"
+   }
+  },
+  {
+   "name": "fno_desk: a JSON body is not a form: CONFIRM_REQUIRED",
+   "method": "POST",
+   "path": "/fno/execute",
+   "json": {
+    "confirm": "true",
+    "plan_id": "F3N-20261029-NIFTY-u1"
+   }
+  },
+  {
+   "name": "fno_desk: confirm=' true' (padded) is CONFIRM_REQUIRED",
+   "method": "POST",
+   "path": "/fno/execute",
+   "form": {
+    "plan_id": "F3N-20261029-NIFTY-u1",
+    "confirm": " true"
+   }
+  },
+  {
+   "name": "fno_desk: confirm=TRUE is CONFIRM_REQUIRED",
+   "method": "POST",
+   "path": "/fno/execute",
+   "form": {
+    "plan_id": "F3N-20261029-NIFTY-u1",
+    "confirm": "TRUE"
+   }
+  },
+  {
+   "name": "fno_desk: a REJECTED_STRUCTURE plan confirmed is NOT_ISSUED through the gateway path, nothing sent",
+   "method": "POST",
+   "path": "/fno/execute",
+   "clock": "mid",
+   "form": {
+    "plan_id": "F3N-20261029-NIFTY-u1",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "fno_desk: the same plan posted twice is refused the same way, nothing sent",
+   "method": "POST",
+   "path": "/fno/execute",
+   "form": {
+    "plan_id": "F3N-20261029-NIFTY-u1",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "fno_desk: a plan id with SQL metacharacters is UNKNOWN_PLAN",
+   "method": "POST",
+   "path": "/fno/execute",
+   "form": {
+    "plan_id": "x' OR '1'='1",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "fno_desk: PUT /fno/execute is 405",
+   "method": "PUT",
+   "path": "/fno/execute"
+  },
+  {
+   "name": "fno_desk: /fno after the close",
+   "method": "GET",
+   "path": "/fno",
+   "clock": "after_close"
+  },
+  {
+   "name": "fno_desk: /fno/data after the close",
+   "method": "GET",
+   "path": "/fno/data"
+  },
+  {
+   "name": "fno_desk: the nav badge after the confirms reset its cache",
+   "method": "GET",
+   "path": "/fno"
+  }
+ ],
+ "db_mask": {
+  "public.risk_ledger": [
+   "updated_at"
+  ]
+ }
+}

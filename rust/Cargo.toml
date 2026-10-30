@@ -100,6 +100,25 @@ tower = { version = "=0.5.3", default-features = false }
 # JWT segments are base64url (PyJWT's base64url_decode); already in the lock through reqwest.
 base64 = { version = "=0.22.1" }
 
+# ---------------------------------------------------------------------------------------------
+# Wave D: the desk (`baskfy-desk`, DECISIONS-RS R8.1-R8.4). Never dependencies of baskfy-core.
+# ---------------------------------------------------------------------------------------------
+baskfy-desk = { path = "crates/baskfy-desk" }
+# The desk's pages are Jinja2 templates rendered by Starlette; minijinja is Jinja2's Rust
+# reimplementation by Jinja2's own author. "serde" for context values, "loop_controls" for
+# {% break %}/{% continue %} parity, "preserve_order" so a dict context keeps insertion order
+# as Python's does. minijinja-contrib's pycompat gives the str/dict methods templates call
+# (`.items()`, `.get()`, `.startswith()`); `.format()` is the desk's own (pyfmt.rs). R8.3.
+minijinja = { version = "=3.0.5", default-features = false, features = ["builtins", "macros", "multi_template", "adjacent_loop_items", "std_collections", "serde", "json", "loop_controls", "preserve_order", "debug"] }
+minijinja-contrib = { version = "=3.0.5", default-features = false, features = ["pycompat"] }
+# `ASSET_V` (md5 of app.css) and Starlette's static-file ETag; already in the lock through sqlx.
+md-5 = { version = "=0.10.6" }
+# Starlette's `Last-Modified` (email.utils.formatdate(usegmt=True)); already in the lock.
+httpdate = { version = "=1.0.3" }
+# Reading a raw (simple-protocol) query's rows and its row count together (`fetch_many`), as
+# psycopg's cursor holds both; already in the lock through sqlx.
+futures-util = { version = "=0.3.34", default-features = false, features = ["std"] }
+
 [workspace.lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"

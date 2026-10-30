@@ -2266,3 +2266,434 @@ row diff and graded instead through `GET /admin/actions` (task ids masked by poi
   suites with a test-environment shim (a `uv` on `PATH` that runs `python -m alembic` in the
   venv) rather than editing the helper: 65 passed.
 
+
+## R8.0 — Wave D: the desk is ported now, in parallel with the worker, execution core included — porting is not cutover (wave D foundation, 30 Oct 2026; Maulik's request to cut calendar time, the lead's reorder) ⚠ UNREVIEWED
+
+**Context.** R3.10 put the desk fifth and `baskfy-execution` last. On 30 Oct Maulik asked to cut
+the calendar time by running the desk in parallel with the worker (wave 5). The desk cannot be
+ported without its execution core: every sleeve's confirm path ends in the gateway.
+
+**Choice.** Wave D ports `kite-momentum-rebalancer/app` now, in its own worktree (`rs-desk`),
+**including the execution core** (`baskfy_execution` + `app/core`), as lane `exec_core`. What
+R3.10 protected is kept by three rules, not by ordering: (1) **porting is not cutover** — the
+Python desk keeps serving and placing every order; (2) the execution core is ported
+**test-first** (its 187 `packages/execution` tests and the desk's gateway/guards/non-negotiable
+tests before any code) and **DRY_RUN-only** — the Rust binary has no live Kite client at all
+(R8.3), so it cannot place an order even by mistake; (3) it **cuts over only on Maulik's
+explicit go after two shadow Fridays** with byte-equal plans and equal order/GTT call logs under
+`desk_diff.py`. Law 2 is enforced in the types (R8.3) and by `tests/non_negotiables.rs`.
+
+**Rejected.** Keeping execution last (the desk lanes would code against a gateway that does not
+exist, and wave D would stall on it); porting the desk without its gateway (half a confirm path
+cannot be graded).
+
+**How to reverse.** Leave `lanes::exec_core` as `NotPortedGateway` (it refuses every call) and
+grade the sleeves on plans only; nothing in Python changes either way.
+
+## R8.1 — `baskfy-desk`: one crate, table-driven settings, the skeleton, harness seams (wave D foundation, 30 Oct 2026) ⚠ UNREVIEWED
+
+**Choice.** New crate `rust/crates/baskfy-desk` (lib + `baskfy-desk --host H --port P [--root
+DIR] [--env-file F]`, and `baskfy-desk service <name>` for the monitors). Modules: `settings`,
+`storage`, `clock`, `ids`, `kite`, `fake_kite`, `gateway`, `plan`, `templates`, `pyfmt`, `wire`,
+`app`, `websec`, `path_prefix`, `lanes`.
+
+* **Settings are a table** (`ENV_VARS`, 113 module-level variables from `app.config`,
+  `app.analytics.db`, `app.scan_source`, `app.breadth_source`, `app.telemetry`, each with
+  Python's exact parse: `== "true"`, `!= "false"`, `int`, `int(x or n)`, `float`, csv tuple)
+  plus `FUNCTION_LEVEL` (6 reads inside functions; `BASKFY_SOLE_USER_ID` defaults `"0"` in the
+  three monitors and `"1"` in config — reproduced, not unified). The answer key is
+  `fixtures/settings_defaults.json`, dumped from the live Python by
+  `tools/parity/desk_settings_dump.py`: every default **and 18 probe strings per variable**
+  (2,000+ cases, including the ones Python refuses). `tests/settings.rs` also pins: `DRY_RUN`
+  true unless exactly `false`; every execute/auto/product switch false unless exactly `true`;
+  **exactly three** auto flags (`BASKFY_SWING_AUTO_EXECUTE`, `BASKFY_TWT_AUTO_EXECUTE`,
+  `BASKFY_FNO_F3_AUTO_EXIT`) — a fourth fails the test. Python's `int()` accepting non-ASCII
+  digits is not reproduced. `.env`: `--env-file` layers under the process environment, never
+  overriding it (`load_dotenv()`'s rule). Settings are shared and mutable (`SharedSettings`) for
+  the settings page and the gateway's per-order read.
+* **The skeleton** is `app/main.py`'s: `PathPrefix` outermost (ported with its 9 tests),
+  `DeskSecurity` (Host 421, Origin/Referer 403, optional Basic 401 — Python's bodies), Starlette's
+  `{"detail":"Not Found"}`/405 fallbacks, the lanes' routers merged. Lanes own
+  `src/lanes/<lane>.rs` (R8.5) and never edit `lib.rs`, `app.rs` or `lanes.rs`.
+* **Harness seams**: `Clock` (`time.time`, `datetime.now(IST)`, monotonic; `FixedClock` under
+  `--harness`) and `IdSource` (`uuid4`; `HarnessIds` = SHA-256 sequence, R8.4), and two routes
+  that exist only under `--harness`: `POST /__harness/clock`, `GET /__harness/kite-calls`.
+  `--harness` refuses to start with `DRY_RUN=false`.
+
+**Rejected.** A struct per Python module (113 hand-typed fields drift; the table is generated
+from the answer key and graded against it); `std::env` reads scattered through lanes (Python's
+module-import semantics would be lost).
+
+**How to reverse.** Delete the crate and the `[workspace.dependencies]` block "Wave D"; nothing
+else depends on it.
+
+## R8.2 — Desk storage: Postgres `desk` schema as deployed, SQLite as tested, psycopg's literal typing (wave D foundation, 30 Oct 2026) ⚠ UNREVIEWED
+
+**Context.** The deployment runs `DESK_DB_BACKEND=postgres` (`compose.prod.yml`,
+`Dockerfile.desk`): the desk's tables in schema `desk` (`search_path=desk`), the sleeves' tables
+in `public`. The code default and the Python tests are SQLite. All 9,500 lines of desk SQL are
+SQLite dialect with `?`, run on Postgres through `app/analytics/pg.py`. psycopg sends a Python
+`str` **untyped** (OID 0) and the swing store relies on it (ISO dates, decimals as text); sqlx
+binds are binary and typed.
+
+**Choice.** `storage::Db` picks the backend as `db.connect(path=None)` does; `Conn::execute`
+takes SQLite-dialect SQL with `?` and `Param`s. On Postgres it applies `translate` (byte-for-byte
+port of `pg.translate`/`placeholders`, `test_pg_adapter.py` ported) and runs the statement on
+the **simple-query protocol with every parameter rendered as a quoted literal** (`pg_literal`):
+a quoted string literal is an untyped constant — the same server-side inference psycopg's OID-0
+bind gets; ints bare, floats `'repr'::float8`, `Decimal` `::numeric`, dates/datetimes cast,
+`Jsonb` `::jsonb`. Quoting doubles `'`, refuses NUL (as psycopg does) and is only used with
+`standard_conforming_strings=on`, checked on every connect. psycopg's quirk is kept: with no
+parameters no `%` processing happens, so a translated `LIKE '%%x%%'` reaches the server doubled.
+Rows come back as the adapter returns them (`numeric` → float, `date` → ISO string, `timestamptz`
+aware, json as text). SQLite: WAL, `synchronous=NORMAL`, foreign keys, 30 s busy timeout,
+sqlite3's default date adapters, `Decimal` refused. `migrate` runs `_MIGRATIONS` (13 versions,
+generated from and held to `fixtures/desk_migrations.json`) with `PRAGMA user_version` /
+the Postgres `schema_version` table. New feature: `sqlx` `"sqlite"` (bundled libsqlite3) in the
+desk crate only; `futures-util =0.3.34` (already in the lock) for `fetch_many`.
+
+**Rejected.** Typed sqlx binds (a `str` bound as `text` breaks `date_col = $1`, which psycopg
+accepts); a second, Rust-native SQL dialect (every lane would rewrite its queries and lose the
+1:1 reading against Python).
+
+**How to reverse.** Swap `pg_render` for typed binds per call site once every lane's SQL is known
+and the OID-0 reliance is removed from Python first.
+
+## R8.3 — The replay Kite, twin in both languages; law 2 in the types (wave D foundation, 30 Oct 2026) ⚠ UNREVIEWED
+
+**Choice.** `kite::KiteReads` (every read the desk makes, the login exchange and the basket-margin
+*calculation*) and `kite::KiteWrites: KiteReads` (the six verbs: place/modify/cancel order,
+place/modify/delete GTT). `AppState` holds only `Arc<dyn KiteReads>` and `Arc<dyn Gateway>`; the
+`KiteWrites` handle goes into `lanes::exec_core::gateway(...)` once at build, and
+`tests/non_negotiables.rs` fails if any other source file names `KiteWrites`. The wire shape is
+the SDK's (`KiteCall`: route, method, `url_args`, `params`, `is_json`, `query_params`;
+`OrderParams::to_params` = `place_order`'s `locals()`; `GttParams::to_params` =
+`_get_gtt_payload` with `json.dumps` strings). **The binary has no live Kite client** (`NoKite`
+outside `--harness`): the live client is a cutover item.
+
+`fake_kite::ReplayKite` and `tools/parity/desk_fake_kite.py` (a `KiteConnect` subclass replacing
+`_request`, so the SDK still shapes and parses everything) answer from the same fixture by the
+same rules and append the same `json.dumps` line per call (api_key/checksum/access_token/
+request_token redacted). Fixture: `tools/parity/desk_fixtures/default/` built by
+`desk_fixture_build.py` — synthetic, deterministic, from the regression corpus's scan CSVs
+(read only): quotes for 304 symbols, ten holdings with `t1_quantity`/`collateral_quantity`, the
+untouchable SGB, one off-scan name, a CNC day buy, margins, 260-day candles. Never `portfolio.db`,
+never a live account. `baskfy-providers` change: `parse_instruments`, `format_historical`,
+`format_response` made `pub` (no behaviour change).
+
+**Rejected.** Recording real Kite traffic (live credentials; forbidden); faking at the desk's
+`Kite` wrapper level (the gateway calls `kite().kc` directly, so its orders would bypass the fake).
+
+**How to reverse.** The replay is harness-only; delete `fake_kite.rs` and the two Python files.
+
+## R8.4 — Templates on minijinja with Python's printing and formatting; harness ids (wave D foundation, 30 Oct 2026) ⚠ UNREVIEWED
+
+**Choice.** `minijinja =3.0.5` (+ `minijinja-contrib =3.0.5`, `pycompat`), loading the Python
+tree's `app/templates` **unchanged** (one copy). Jinja2-exactness comes from: autoescape on every
+template with markupsafe's five escapes (minijinja's own also escapes `/`); a formatter printing
+Python's `str()` (`None`, `True`, `1.0`, `1e-05`, `['a']`, `{'k': 1}`); the `format` filter as
+Python `%` and `'...'.format()` as `str.format` (`pyfmt.rs`, both graded on 2,100+ probe cases
+from the live Python, `fixtures/pyfmt_probes.json`); Jinja2's `tojson` (`sort_keys`,
+`<>&'`); `fromjson`; `PyDate` for `.isoformat()`/`.strftime()`;
+`templates::py_value` keeps dict order. All 18 desk templates compile; 14 probe snippets render
+**byte-equal** to Jinja2 through the desk's own environment (`fixtures/template_probes.json`,
+`tools/parity/desk_probes.py`). The response wire is orjson's (`wire::orjson_dumps`: positional
+floats for exponents in `[-5, 16)`, `1e-6`/`1e+16` otherwise — graded on `wire_probes.json`).
+`md-5 =0.10.6` (`ASSET_V`) and `httpdate =1.0.3` (Starlette's `Last-Modified`) were already in
+the lock.
+
+Ids: `uuid.uuid4` is a seam; under the harness both desks draw
+`SHA-256("baskfy-desk-harness:<seed>:<n>")[:16]` as a v4 UUID, so `plan_id` and everything
+derived from it compare byte for byte.
+
+**Found on the way (fixed):** `baskfy_providers::py::json_str` left DEL (0x7f) unescaped; Python's
+`ensure_ascii` escapes it (`\u007f`). One-line fix in `providers/src/py.rs`, all goldens green.
+
+**Rejected.** Tera/askama (not Jinja2; askama compiles templates into the binary, so a page edit
+would need a rebuild of a second copy); whitespace-insensitive HTML comparison (exact is
+achievable, so exact is required).
+
+**How to reverse.** Templates go through `Templates::render`; another engine replaces one module.
+
+## R8.5 — Lanes for wave D, one file each (wave D foundation, 30 Oct 2026) ⚠ UNREVIEWED
+
+**Choice.** Nine lanes, each a declared stub `src/lanes/<lane>.rs` listing the Python it ports,
+its routes, services and tests (`routes()`, `register_templates()`, `run_service()`):
+`exec_core` (gateway + guards + risk + rate limits + journal; `NotPortedGateway` refuses every
+call until it lands), `weekly`, `analytics`, `swing`, `twt`, `vbt`, `fno`, `options`, `session`
+(Kite session, token store, supervisor, lifecycle, telemetry, `/status`, `/static`). Inventory in
+`STATUS.md` ("Wave D"). Case files: `tools/parity/desk_cases/<lane>.json`; plan builders
+`desk_cases/plans_<sleeve>.json`.
+
+**How to reverse.** Merge or split lane files; `lanes.rs` is the only assembly point.
+
+## R8.6 — `desk_diff.py`: two desks, one script, everything compared; proven Python-vs-Python (wave D foundation, 30 Oct 2026) ⚠ UNREVIEWED
+
+**Choice.** `tools/parity/desk_diff.py` starts the Python desk (`desk_harness.py`: replay Kite,
+patched `time.time`/`datetime.now`/`date.today` via the freezegun technique, harness `uuid4`,
+`load_dotenv` off, the two harness routes) and the Rust desk (`--harness`) from empty run
+directories, `DRY_RUN=true`, each on its own database — `--backend postgres` (default, the
+deployment's: `rsd_tpl_desk` → `rsd_<run>_py`, template dropped, py → `rsd_<run>_rs`, so two
+`rsd_*` at the peak beside everyone else's, waiting while six non-`baskfy` databases exist) or
+`--backend sqlite` (a file per side) — Redis 8–15, ports 18500–18799, under the machine-wide
+`nightly_diff.lock`. It compares status, headers, bodies (JSON with order and types; HTML
+bytes), plan bodies' SHA-256, the order/GTT call logs (must be EQUAL), every file under `data/`
+(journal, execution logs, retained scans), tables (Postgres change sets against the template's
+rows; SQLite whole tables), Redis and mail. Masks are per case (`"mask"`) or per file
+(`"db_mask"` for server `now()` columns, e.g. `public.risk_ledger.updated_at`), always printed.
+Not graded: Kite reads (counted; `--strict-reads` grades them) and the shared read limiter's
+Redis departure clocks (they hold `time.monotonic()`, which the harness does not freeze).
+
+**Proven Python-vs-Python (`--python-both`) on both backends: 17 of 17 cases EQUAL and every
+side effect EQUAL**, including `/analyze` on all six `uploads/*.csv` (two scans → byte-equal
+plans; four tradebooks → equal 500s), `/execute` in DRY_RUN (journal, execution log, DUPLICATE on
+re-post) and the 410 after 30 min + 1 s. Python vs Rust today: the 5 foundation cases EQUAL, the
+weekly scenario DIFF (not ported). Plan kinds without a builder case yet (each sleeve lane's):
+swing MORNING/LIVE, twt MORNING/LIVE, vbt, fno exits.
+
+**Fixture caveat for the weekly lane.** On the bed clone the kill switch trips at `/execute`
+(the bed's real snapshots against the synthetic holdings read as a day loss); both desks agree,
+and every order still journals `dry_run`. A lane wanting the un-tripped path seeds a snapshot.
+
+**How to reverse.** Harness-only; delete the files.
+
+## R8.7 — The earlier coarse run's drafts are kept where they were right; the conventions they set (wave D, 30 Oct 2026) ⚠ UNREVIEWED
+
+**Context.** A first, coarser pass of wave D left drafts under `src/lanes/*` before the fine
+lanes started. Several cite "R8.7" for the conventions below; this entry is that number.
+
+**Choice.** Each fine lane reviewed its drafts line by line against the Python and kept them
+where they matched (moving files under the lane's directory with one-line `pub use` shims where
+siblings already imported the old path). Conventions: (1) a code-only constant that the
+settings page can override is read through `analytics::desk_settings::config_value` over the
+stored overrides — what `C.<NAME>` is in Python after `apply_to_config`; (2) the swing
+notifier's SMTP and Telegram transports are stubs that answer "not sent" and log why — a
+**cutover item**; (3) `/ops` runs `python3` where Python uses `sys.executable`, and the frozen
+options lab's five strangle controls are not offered; (4) the swing market gate is computed from
+breadth and the index exactly as `market.market_gate`, slug from settings (SW29), never pinned to
+a document. **Caveat (honest):** where drafts pre-existed, "test-first" held at the trait level
+only; lanes showed their tests can fail by breaking the guarded code on purpose (exec_gateway,
+exec_guards, exec_kite) rather than by a recorded red run.
+
+**How to reverse.** Per convention: (1) read env only; (2) port the transports (cutover); (3)
+resolve the interpreter path; (4) n/a.
+
+## R8.8 — Wave D integration: boot applies stored settings, the badge state is installed at boot, the law-2 scan's own word lists (wave D integration, 30 Oct 2026) ⚠ UNREVIEWED
+
+**Choice.** (1) `main.rs` now calls `lanes::session::startup` before serving — migrate, then
+`apply_to_config` — which is `main._apply_stored_settings()` (Python runs it at import). A
+failure is a warning, never a refused boot, as in Python. Before this, every stored override
+(the bed's `REGIME_ENABLED=true`) was ignored by Rust, and regime cases needed
+`--env REGIME_ENABLED=true`. (2) `main.rs` calls `lanes::fno::install(&state)` so the
+`fno_badge()` nav global reads the book from the first page on (R8.F2). (3)
+`tests/non_negotiables.rs::only_the_gateway_lane_may_hold_the_order_verbs` was failing on five
+files whose only hit was the word inside their **own** forbidden-word lists
+(`fno/desk.rs`, four swing `tests.rs`). Those literals are now written
+`concat!("Kite", "Writes")`, as the weekly_books lane already did; the scan itself is unchanged
+and no file outside `exec_core` names the trait.
+
+(4) `desk_diff.py` normalises each side's run directory in bodies to `<run>` (as it already did
+the port) — the settings page prints `KITE_TOKEN_FILE` under the run directory, which made six
+`views.json` cases DIFF on a path, not a behaviour — and `DESK_DIFF_DUMP=<dir>` writes full
+differing bodies. Nothing is masked by this.
+
+**Rejected.** Widening the scan's allow-list (weakens a test); deleting the lane tests' word;
+masking the settings bodies.
+
+**How to reverse.** Remove the two calls in `main.rs`; the literals are cosmetic.
+
+## R8.9 — Lane exec_gateway: the real gateway, fail-closed journal replay, `place_cnc_order` not ported (wave D, 30 Oct 2026) [lane labels: exec_gateway 1–5] ⚠ UNREVIEWED
+
+**Choice.** `lanes::exec_core::gateway()` builds `DeskGateway` (the shim of
+`app/core/gateway.py`: operator tenant filled when missing, `gross_exposure` filled only when
+absent, product gates read from `SharedSettings` **per order**) over `OrderGateway`, whose
+layers run in Python's order: tenant → untouchables → overnight-option / FO cover → product gates
+→ risk → idempotency (reserved before the rate-limit await) → rate limits → DRY_RUN or broker.
+It replays the journal on construction (DUPLICATE survives a restart). A journal line that is
+valid JSON but not an object makes the replay fail, and `gateway()` falls back to
+`NotPortedGateway`, which refuses every call — Python's `_replay_journal` raises there too.
+Law 2 in the types: inside `exec_core` the broker is named only through
+`pub(in crate::lanes::exec_core) type Broker = dyn KiteWrites`. `app/kite_client.py`'s
+`place_cnc_order` is **not ported**: nothing calls it, and in Rust it would be a second order
+path around the gateway. `exit_rules` ported (three sentences pinned to the live Python).
+`lifecycle.py` (GET `/lifecycle`, POST `/lifecycle/adopt`) is not ported (needs the sleeve stores).
+
+**How to reverse.** `place_cnc_order` is cheap to add back — but it would need its own law-2 review.
+
+## R8.10 — Lane exec_guards: code stays at `exec_core::{guards,risk,ratelimit,kite_limits,net}`; header bytes read as Latin-1; stricter where Python crashes (wave D, 30 Oct 2026) [lane label: exec_guards 1] ⚠ UNREVIEWED
+
+**Choice.** The modules stay where the gateway imports them; `exec_guards.rs` re-exports them
+and holds 87+ tests. Review fixes: (1) **security fail-open fixed** — header values were read with
+`to_str().ok()`, so a non-ASCII `Host` skipped the DNS-rebinding check and a non-ASCII `Origin`
+fell through to the `Referer`; now read as Latin-1 like Starlette (`websec.rs`); (2) Basic auth
+decodes like `base64.b64decode(validate=False)`; (3) the shared Redis spacer's EVAL has
+redis-py's 1.5 s timeout (a hung Redis no longer blocks every Kite read); (4) a poisoned spacer
+mutex no longer fails open; infinite waits no longer panic; `i64::MIN` quantity refused, not
+overflowed. **Left on purpose:** a malformed Lua reply backs off locally (Python raises);
+`hmac.compare_digest` on a non-ASCII password is 401 in Rust, 500 in Python; a NaN rate is
+refused; the JSON-file risk store's strict-parse quirks are not reproduced (unreachable).
+
+## R8.11 — Lane exec_kite: `DeskKite` and the token store; the encryption key from `.env` only is a residual (wave D, 30 Oct 2026) ⚠ UNREVIEWED
+
+**Choice.** `DeskKite` holds the broker only for the documented GTT exception
+(`place_gtt_stop`, `delete_gtt`): each runs `assert_tradeable` (and the overnight-option guard on
+place) and reads DRY_RUN from the shared settings **at each call**, before any broker call — tests
+prove both, and that the exception never reaches an order verb. Holdings =
+`quantity + t1_quantity + collateral_quantity`; pledged shares are `pledged_qty`, info only.
+Malformed broker replies are skipped where Python raises (none on an order path).
+**Residual (cutover gate):** `KITE_TOKEN_ENCRYPTION_KEY` set only in `.env` is not seen by the
+token store (Rust feeds `--env-file` to `Settings` only), so the Rust desk would read Python's
+token as logged-out — fail-safe for orders, but a parity gap. `DeskKite::ensure_configured()`
+(Python's missing-`KITE_API_KEY` RuntimeError) is not called by every route yet.
+
+## R8.12 — Lane weekly_plan: `/analyze` and `/execute`; the generated-scan path answers 503 (wave D, 30 Oct 2026) ⚠ UNREVIEWED
+
+**Choice.** `/analyze` (uploaded scans; breadth from the screener DB read-only) and `/execute`
+(confirm must be the literal `true` → 400; unknown plan → 404; older than 30 minutes → 410; one
+`gateway.place` per line with `client_id = plan_id:symbol`) are ported; plans byte-equal on the
+corpus. Kite and risk are reached by downcasting the gateway to `DeskGateway`; anything else
+answers 503 and sends nothing. `/execute` reads urlencoded **and multipart** bodies (the desk's
+own page posts `FormData`; a review caught that Rust would have 422'd every real click). A stored
+`STOP_MAX`/`STOP_MIN`/`STOP_VOL_MULT` override now reaches `stop_from_vol` (non-negotiable 4).
+**Not ported:** the generated-scan path (`generate_for=…`, `SCAN_SOURCE_DEFAULT=generated`)
+answers 503 after Python's date and column refusals — it needs a `baskfy_core.momentum_scan` port.
+
+## R8.13 — Lane weekly_books: parity by golden, not by route (wave D, 30 Oct 2026) ⚠ UNREVIEWED
+
+**Choice.** `holdings_view`, `tax_lots`, `tradebook` (+ `corporate_actions` load/apply),
+`reconcile_view`, `reconcile` and `snapshot.collect` have no routes of their own, so
+`tools/parity/weekly_books_goldens.py` runs the live Python on 23 synthetic cases (TZ
+Asia/Kolkata, clock frozen) and the Rust test compares `json.dumps` text byte for byte (23/23).
+SHA-1 for `fill_key` is hand-written (FIPS vectors), naive local time is IST.
+`pd.to_datetime(dayfirst=True)` is a fixed format table (year-day-month tried first, as dateutil
+does). **Left:** reconcile's store errors are collected rather than raised (Python's pass raises);
+the sleeves' `SleeveHooks` and `run_pass_from_desk` are not ported (see R8.23).
+
+## R8.14 — Lane swing_desk: the view, seven routes, the no-key behaviour (wave D, 30 Oct 2026) [lane label R8.S1] ⚠ UNREVIEWED
+
+**Choice.** View built in Python's key order; `/swing/data` keeps swing_desk's own Decimal
+printing (`format(x, "f")`); `hashlib.sha1` hand-written (R8.S1). Template dates are wrapped in a
+truthy object (minijinja treated the foundation's `PyDate` as falsy). Without `KITE_API_KEY`,
+`/swing/execute`, `/rearm` and `/cutoff` answer 500 and reconcile skips lines, as Python's
+`Kite()` raise does. Python's `dict` last-wins and `max()` first-wins semantics are reproduced.
+
+## R8.15 — Lane swing_exec: `execute_line`, the live gate; an invalid tenant refuses before the gateway (wave D, 30 Oct 2026) ⚠ UNREVIEWED
+
+**Choice.** Drafts kept and moved under `swing_exec/`. Review fixes: `sole_tenant()` returns an
+error (Python raises) instead of handing `None` to the GTT paths; a missing stop/entry/price is an
+error, never a trigger at 0; text levels are parsed. The module names no broker method (source
+scan). The success paths (a DRY_RUN BUY with its GTT, SELL, RAISE, the 10:45 cutoff) are graded
+by unit tests against a fake gateway and by swing_desk's bed cases — there is no swing plan
+builder case yet.
+
+## R8.16 — Lane swing_monitor: the watch is ported, the service is not wired (wave D, 30 Oct 2026) ⚠ UNREVIEWED
+
+**Choice.** `drain_auto_execute` always empties the queue and sends only when DRY_RUN=false **and**
+`SWING_EXECUTION_ENABLED` **and** `SWING_AUTO_EXECUTE` (all defaulting to the safe side), through an
+`AutoConfirm` seam that must be the same `execute_line` a click reaches, 09:15–15:30 (SW26). Not
+widened. `run_service("swing-monitor")` still answers "not ported" (no real `AutoConfirm`,
+`KiteTicker` or `GatedHeartbeat` writer) — so the Rust desk has **no** auto-execute path today.
+
+## R8.17 — Lanes twt_desk and twt_exec: `twt_gateway_ready`, the auto path, and a lock that locks nothing (wave D, 30 Oct 2026) [lane label R8.TV1] ⚠ UNREVIEWED — **for Maulik**
+
+**Choice.** Routes build the shared risk manager before deriving the sleeve gateway
+(`twt_gateway_ready`, Python's `main.gateway()` side effect — the day's `risk_ledger` row).
+`twt-auto` requires all three flags (`!DRY_RUN && TWT_EXECUTION_ENABLED && TWT_AUTO_EXECUTE`),
+acts on today's MORNING/LIVE plans only, 09:15–15:30, every line through the same
+`execute_line` with `confirm="true"`, never builds a plan; its Kite session check goes through
+`DeskKite` (token refresh). R8.TV1: the price passed to the sizing is the already-rounded value.
+**For Maulik — a pre-existing Python defect reproduced for parity:** the desk's Postgres
+connection is autocommit (`analytics/pg.py`), so `SELECT … FOR UPDATE` in
+`lock_session_for_update` holds no lock past its statement; two confirms racing (a click against
+twt-auto's drain) are not serialised against the three-entries-a-session cap. The same holds for
+VBT (R8.18). Fix belongs in Python first (run `execute_line` inside `db.transaction`).
+**Coverage gap:** every bed BUY_AT_OPEN is refused PROTECTION_UNRESOLVED (twelve open
+`lv_protection_issue` rows), so desk_diff never reaches the buy path's gateway.place / GTT.
+
+## R8.18 — Lane vbt: desk and execute (wave D, 30 Oct 2026) [lane labels R8.vbt.1–R8.vbt.7] ⚠ UNREVIEWED — **for Maulik**
+
+**Choice.** vbt.1: reuses lanes/twt's shared pieces, no copies. vbt.2: the sleeve gateway is
+`derive_sleeve` with `vbt_gates` (dry unless DRY_RUN=false and `VBT_EXECUTION_ENABLED`;
+intraday/options/carry always off), its own journal, band from settings; an out-of-range band
+now refuses (500) instead of falling back to 8–12%. vbt.3: no auto-execute flag, enforced by a
+source scan. vbt.4: SQLite `BEGIN IMMEDIATE` is sent as Python does (the lane's first reading was
+wrong; corrected). vbt.5: tests drive the real gateway over the replay Kite. vbt.6:
+`/vbt/execute` reads a last price only for SELL_AT_OPEN (a Python quirk, copied). vbt.7: masks
+cover only server `now()` columns. A `line_id` beyond i64 answers Python's 404, not 422.
+**For Maulik — a pre-existing Python defect reproduced:** a pyramided second entry in a held name
+on a plan sharing `signal_date` with an earlier LIVE plan passes `gateway.place` and then fails
+`uq_vb_order_one_per_signal` → 500 after the order is at the broker, with no `vb_order` row and no
+GTT. Needs a pre-send check (Python first). `on_order_update` is ported but uncalled until the
+reconciler is wired (R8.23) — a cutover blocker for non-negotiable 4 on LIVE fills.
+
+## R8.19 — Lanes fno_desk and fno_exec: the paper-pinned F&O path, the badge, the half-monitor (wave D, 30 Oct 2026) ⚠ UNREVIEWED
+
+**Choice.** `POST /fno/execute` refuses anything but the literal `true` before any read, then
+404 UNKNOWN_PLAN, then calls `fno_exec::execute_entry`/`execute_click_exit` on
+`fo_gateway_ready` (risk manager first) whose gates are `paper_gates` — **dry_run pinned true in
+every row, LIVE included**; LIVE refuses LIVE_NOT_BUILT before any order. `BASKFY_FNO_F3_AUTO_EXIT`
+defaults false; `monitor::exit_awaits_click` is M.5's rule exactly (only a CREDIT_SPREAD exit
+waits for the click unless the flag is set); the monitor never confirms an entry or an add. The
+`fno_badge()` global reads the book via `block_in_place` and reuses `options::badge`'s state slot
+(R8.F2), installed at boot (R8.8). New seams: `Alert`, `FoLedger`, `FoQuoteSource`, `FoCtx`.
+**Not ported:** half of `fno_monitor.py` (09:20 plan raising, watch decisions, rolls, the night);
+`run_service("fno-monitor")` refuses. The fill/roll/GTT paths are verified by review and
+compiler only (the bed has no ISSUED/EXIT/ROLL `fo_plan`).
+
+## R8.20 — Lane options: gates, views, the confirm and close (wave D, 30 Oct 2026) [lane labels R8.F1–R8.F6] ⚠ UNREVIEWED
+
+**Choice.** F1: the executor's pieces live under `lanes/options/core.rs` until a
+`baskfy_core::options` home exists. F2: `badge.rs` holds the app state for the nav global (shared
+with fno). F3: legs are NFO/MIS/LIMIT through a `DeskGateway` sibling with gates read per order;
+PAPER always dry; LIVE needs all four flags; longs before shorts in, shorts before longs out; a
+naked short is refused. F4: routes build the risk manager first (`options_gateway_ready`). F5:
+`strategies/nifty_options.py` is not ported (needs `baskfy_core.options.exits`/`bars`); the
+monitor returns 0 with its flag off and refuses with it on. F6: the lab stays frozen — `/options*`
+is 404. 14 DB-backed confirm tests (`tests/options_confirm_db.rs`, `BASKFY_RS_OPTIONS_TEST_PG`)
+show zero broker calls; there is no desk_diff case for a successful confirm (no ISSUED op_plan).
+
+## R8.21 — Lane analytics_regime: `/regime` and `/regime/data`; the engine stays on Python (wave D, 30 Oct 2026) [lane label R-ar.1] ⚠ UNREVIEWED — **for Maulik**
+
+**Choice.** The two GET routes are ported byte-equal; floats follow CPython (compensated sum,
+`repr`, `round`). The engine (`regime_run.py`, `core/regime.py evaluate`, `regime_alloc.py`) and
+`RegimeState` writers stay on Python (`commit_evaluation`'s DRY_RUN refusal untouched). An
+evaluation carrying proposed orders answers 500 rather than render sales without the tax review.
+`/indices*` is not ported (live NSE on first paint; needs an NSE replay fixture). **Python defect
+copied on purpose:** saving `REGIME_WEEKLY_EVAL_WEEKDAY` from `/settings` stores a `str`, and
+`regime_config()` then raises → `/regime` 500 until reset; Rust reproduces the 500. The fix belongs
+in Python's settings `Spec`. Also fixed: `date.fromisoformat`'s ISO-week forms in `ops.rs`.
+
+## R8.22 — Lane analytics_views: protection, corporate actions, autorun, the backtest page; `/performance` is not ported (wave D, 30 Oct 2026) ⚠ UNREVIEWED
+
+**Choice.** `backtest_view` reads stored results through an order-keeping `PyValue` with
+Python's int/float promotion; with-results parity is by `goldens.json` (generated once from
+Python, never edited) plus env-gated differential fuzz (2,000 results, 800 renders, 3,000
+protection books — all EQUAL). `protection` takes `plan_id` from the caller and reuses
+`exec_core` `stop_from_vol`; it holds no gateway (source scan). `autorun` ports the equity half
+only (the strangle half is dark: frozen lab). **Not ported:** `metrics.py`, `benchmark.py`,
+`performance_view.py` — GET `/performance`, `/performance/data` answer 404 in Rust.
+
+## R8.23 — Lane session: supervisor, telemetry, ticker, `/callback`, static files; the supervisor refuses to run without a reconciler (wave D, 30 Oct 2026) ⚠ UNREVIEWED
+
+**Choice.** The supervisor is ported as an injected state machine and reads no flag of its own.
+`run_service("session-supervisor")` **refuses to start** until a `ReconcilePass`
+(`reconcile.run_pass_from_desk` over the sleeves' `SleeveHooks`) exists — it never writes
+heartbeats for a reconciler that is not there. Telemetry is Python's "library absent" branch (no
+OpenTelemetry/Prometheus/Sentry dependency). The ticker bus is ported; `start_ticker` refuses to
+connect (no live websocket in this binary, R8.0/R8.3). `/callback` → 400 without
+`request_token`, exchange, migrate, autorun started un-awaited. Static files follow Starlette's
+`StaticFiles` (normpath + realpath containment, Range/206/416, If-Modified-Since, octet-stream
+fallback). FastAPI GET-only semantics (HEAD → 405, `Allow: GET`). Starlette's `redirect_slashes`
+307 is reproduced for this lane's paths only — **every other lane's toggled-slash path answers 404
+in Rust** (an app-wide fallback is still owed). `/status?ip=1` reports no outbound IP (no network).
+
+## R8.24 — Wave D cutover gates (wave D integration, 30 Oct 2026) ⚠ UNREVIEWED
+
+Porting is not cutover (R8.0). Before any desk-side cutover: **two shadow Fridays in DRY_RUN with
+byte-equal plans and Maulik's explicit go**, and at least: a live Kite client (none in the
+binary); the swing notifier transports (R8.7); the session supervisor's reconciler and the sleeves'
+`SleeveHooks`, so `on_order_update` runs and every LIVE fill gets its GTT (R8.18, R8.23); the
+swing-monitor, twt-auto loop, fno-monitor and options-monitor services wired (R8.16, R8.19,
+R8.20); the generated scan (R8.12); `/performance`, `/tradebook*`, `/reconcile*`, `/indices*`,
+`/lifecycle*` and `/` (home) routes; the token-key `.env` gap (R8.11); app-wide
+`redirect_slashes` (R8.23); plan-builder cases for swing/twt/vbt/fno/options plan kinds.

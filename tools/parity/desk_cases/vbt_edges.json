@@ -1,0 +1,118 @@
+{
+ "note": "Adversarial review of lane vbt, scenario 2 of 2: the LIVE plan 63's three BUY_AT_MARKET lines (Fri 16 Oct 19:45 IST, before its 19:46:42 expiry) each a dry-run MARKET buy valued at the plan's preview (the route reads no last price for a buy), a simulated fill, a position and its GTT stop; then the session cap (a fourth entry the same IST day from EVENING plan 64 is SESSION_CAP, checked before ALREADY_HELD); 409 on a repeat; the page and data with the book. Plans 63 and 65 share signal_date 2026-10-16, so the two next-day re-entries hit vb_order's one-per-signal unique index after gateway.place returned: both desks 500 with the line left PROPOSED (reported as a Python-first defect, not fixed here).",
+ "db_mask": {
+  "public.risk_ledger": [
+   "updated_at"
+  ],
+  "public.vb_fill": [
+   "created_at"
+  ],
+  "public.vb_order": [
+   "updated_at"
+  ],
+  "public.vb_position": [
+   "created_at",
+   "updated_at"
+  ],
+  "public.vb_scan_run": [
+   "created_at"
+  ]
+ },
+ "cases": [
+  {
+   "name": "BUY_AT_MARKET OAL (LIVE plan 63)",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "5cf1d256-59ac-46b9-8e51-f28eb3b2e648",
+    "line_id": "117",
+    "confirm": "true"
+   },
+   "clock": "2026-10-16T19:45:00+05:30"
+  },
+  {
+   "name": "BUY_AT_MARKET TECHM",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "5cf1d256-59ac-46b9-8e51-f28eb3b2e648",
+    "line_id": "118",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "BUY_AT_MARKET TIPSMUSIC (third entry)",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "5cf1d256-59ac-46b9-8e51-f28eb3b2e648",
+    "line_id": "119",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "BUY_AT_MARKET repeat is 409",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "5cf1d256-59ac-46b9-8e51-f28eb3b2e648",
+    "line_id": "119",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "fourth entry the same day is SESSION_CAP (plan 64 TIPSMUSIC)",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "6c3dc9b5-afaf-4ef9-ac6f-cc5506746d86",
+    "line_id": "122",
+    "confirm": "true"
+   },
+   "clock": "2026-10-16T21:00:00+05:30"
+  },
+  {
+   "name": "that line is now 409",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "6c3dc9b5-afaf-4ef9-ac6f-cc5506746d86",
+    "line_id": "122",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "next IST day, OAL again (pyramiding allows a 2nd entry): Python 500s on uq_vb_order_one_per_signal AFTER the gateway accepted the order (pre-existing Python defect, reproduced)",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "6c071143-9ee1-422d-88cc-b811ea9cbf0b",
+    "line_id": "123",
+    "confirm": "true"
+   },
+   "clock": "2026-10-19T09:20:00+05:30"
+  },
+  {
+   "name": "next IST day, TECHM again: the same 500 after the send",
+   "method": "POST",
+   "path": "/vbt/execute",
+   "form": {
+    "plan_id": "6c071143-9ee1-422d-88cc-b811ea9cbf0b",
+    "line_id": "124",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "vbt data with the book",
+   "method": "GET",
+   "path": "/vbt/data",
+   "clock": "2026-10-19T09:20:00+05:30"
+  },
+  {
+   "name": "vbt page with the book",
+   "method": "GET",
+   "path": "/vbt",
+   "clock": "2026-10-19T09:20:00+05:30"
+  }
+ ]
+}

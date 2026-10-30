@@ -1,0 +1,79 @@
+{
+ "1": [
+  "CREATE TABLE IF NOT EXISTS snapshots(\n               date          TEXT PRIMARY KEY,\n               nav           REAL NOT NULL,\n               invested      REAL NOT NULL,\n               cash          REAL NOT NULL,\n               holdings_json TEXT NOT NULL,\n               index_value   REAL\n           )",
+  "CREATE TABLE IF NOT EXISTS cashflows(\n               id     INTEGER PRIMARY KEY AUTOINCREMENT,\n               date   TEXT NOT NULL,\n               amount REAL NOT NULL,        -- invest NEGATIVE, withdraw/terminal POSITIVE\n               type   TEXT NOT NULL\n           )",
+  "CREATE UNIQUE INDEX IF NOT EXISTS ux_cashflows_natural\n               ON cashflows(date, amount, type)",
+  "CREATE TABLE IF NOT EXISTS benchmark(\n               index_name TEXT NOT NULL,\n               date       TEXT NOT NULL,\n               close      REAL,\n               tri        REAL,\n               PRIMARY KEY(index_name, date)\n           )",
+  "CREATE TABLE IF NOT EXISTS rebalance_versions(\n               version_id        TEXT PRIMARY KEY,\n               created_ts        REAL NOT NULL,\n               constituents_json TEXT NOT NULL,\n               weights_json      TEXT NOT NULL,\n               note              TEXT\n           )",
+  "CREATE TABLE IF NOT EXISTS rebalance_orders(\n               id                INTEGER PRIMARY KEY AUTOINCREMENT,\n               version_id        TEXT NOT NULL REFERENCES rebalance_versions(version_id),\n               symbol            TEXT NOT NULL,\n               side              TEXT NOT NULL,\n               planned_qty       INTEGER,\n               planned_ref_price REAL,\n               filled_qty        INTEGER DEFAULT 0,\n               avg_fill_price    REAL,\n               status            TEXT DEFAULT 'PENDING'\n           )",
+  "CREATE INDEX IF NOT EXISTS ix_rebalance_orders_version\n               ON rebalance_orders(version_id)",
+  "CREATE TABLE IF NOT EXISTS trades(\n               id           INTEGER PRIMARY KEY AUTOINCREMENT,\n               symbol       TEXT NOT NULL,\n               entry_ts     REAL,\n               exit_ts      REAL,\n               qty          INTEGER,\n               entry_price  REAL,\n               exit_price   REAL,\n               entry_score  REAL,\n               exit_reason  TEXT,\n               pnl          REAL,\n               costs        REAL\n           )",
+  "CREATE INDEX IF NOT EXISTS ix_trades_symbol ON trades(symbol)",
+  "CREATE INDEX IF NOT EXISTS ix_trades_exit_ts ON trades(exit_ts)"
+ ],
+ "2": [
+  "CREATE TABLE IF NOT EXISTS index_series(\n               index_name       TEXT NOT NULL,\n               date             TEXT NOT NULL,\n               open             REAL,\n               high             REAL,\n               low              REAL,\n               close            REAL NOT NULL,\n               instrument_token INTEGER,\n               is_final         INTEGER NOT NULL DEFAULT 1,\n               updated_at       TEXT NOT NULL,\n               PRIMARY KEY(index_name, date)\n           )",
+  "CREATE INDEX IF NOT EXISTS ix_index_series_date ON index_series(date)",
+  "CREATE TABLE IF NOT EXISTS regime_evaluations(\n               id                   INTEGER PRIMARY KEY AUTOINCREMENT,\n               evaluation_id        TEXT NOT NULL,\n               run_id               TEXT NOT NULL,\n               committed            INTEGER NOT NULL DEFAULT 0,\n               dry_run              INTEGER NOT NULL DEFAULT 1,\n               mode                 TEXT NOT NULL,\n               scheduled_week_end   TEXT NOT NULL,\n               signal_session_date  TEXT NOT NULL,\n               data_as_of           TEXT NOT NULL,\n               raw_candidate_tier   TEXT NOT NULL,\n               previous_policy_tier TEXT,\n               policy_tier          TEXT NOT NULL,\n               transition_limited   INTEGER NOT NULL,\n               new_buys             TEXT NOT NULL,\n               forced_action        TEXT NOT NULL,\n               override_active      INTEGER NOT NULL DEFAULT 0,\n               data_stale           INTEGER NOT NULL DEFAULT 0,\n               manual_action_required INTEGER NOT NULL DEFAULT 0,\n               breadth_pct          REAL,\n               breadth_coverage_pct REAL,\n               book_weights_json    TEXT NOT NULL,\n               book_weight_source   TEXT NOT NULL,\n               input_snapshot_json  TEXT NOT NULL,\n               reason_codes_json    TEXT NOT NULL,\n               reasons_json         TEXT NOT NULL,\n               next_evaluation_date TEXT NOT NULL,\n               last_transition_date TEXT,\n               algorithm_version    TEXT NOT NULL,\n               config_hash          TEXT NOT NULL,\n               created_at           TEXT NOT NULL,\n               UNIQUE(evaluation_id, run_id)\n           )",
+  "CREATE UNIQUE INDEX IF NOT EXISTS ux_regime_canonical\n               ON regime_evaluations(evaluation_id) WHERE run_id = 'canonical'",
+  "CREATE INDEX IF NOT EXISTS ix_regime_week\n               ON regime_evaluations(scheduled_week_end)",
+  "CREATE TABLE IF NOT EXISTS regime_exposure(\n               id                    INTEGER PRIMARY KEY AUTOINCREMENT,\n               evaluation_id         TEXT NOT NULL,\n               observed_at           TEXT NOT NULL,\n               actual_equity_pct     REAL NOT NULL,\n               target_equity_cap_pct REAL NOT NULL,\n               exposure_gap_pct      REAL NOT NULL,\n               pending_buy_pct       REAL NOT NULL DEFAULT 0,\n               pending_sell_pct      REAL NOT NULL DEFAULT 0,\n               execution_status      TEXT NOT NULL,\n               note                  TEXT,\n               UNIQUE(evaluation_id, observed_at)\n           )",
+  "CREATE INDEX IF NOT EXISTS ix_regime_exposure_eval\n               ON regime_exposure(evaluation_id)",
+  "CREATE TABLE IF NOT EXISTS breadth_readings(\n               as_of_date          TEXT NOT NULL,\n               universe_id         TEXT NOT NULL,\n               pct_above_20dma     REAL NOT NULL,\n               eligible_count      INTEGER NOT NULL,\n               observed_count      INTEGER NOT NULL,\n               coverage_pct        REAL NOT NULL,\n               universe_hash       TEXT NOT NULL,\n               audit_run_id        TEXT NOT NULL,\n               calculation_version TEXT NOT NULL,\n               missing_policy      TEXT NOT NULL,\n               created_at          TEXT NOT NULL,\n               PRIMARY KEY(as_of_date, universe_id)\n           )",
+  "CREATE TABLE IF NOT EXISTS regime_book_snapshots(\n               evaluation_id      TEXT PRIMARY KEY,\n               scheduled_week_end TEXT NOT NULL,\n               policy_tier        TEXT NOT NULL,\n               weights_json       TEXT NOT NULL,\n               source             TEXT NOT NULL,\n               coverage_pct       REAL NOT NULL,\n               created_at         TEXT NOT NULL\n           )",
+  "CREATE INDEX IF NOT EXISTS ix_book_snapshots_week\n               ON regime_book_snapshots(scheduled_week_end)"
+ ],
+ "3": [
+  "CREATE TABLE IF NOT EXISTS settings(\n               key        TEXT PRIMARY KEY,\n               value      TEXT NOT NULL,\n               updated_at TEXT NOT NULL,\n               note       TEXT\n           )",
+  "CREATE TABLE IF NOT EXISTS settings_audit(\n               id         INTEGER PRIMARY KEY AUTOINCREMENT,\n               key        TEXT NOT NULL,\n               old_value  TEXT,\n               new_value  TEXT NOT NULL,\n               changed_at TEXT NOT NULL,\n               note       TEXT\n           )",
+  "CREATE INDEX IF NOT EXISTS ix_settings_audit_key\n               ON settings_audit(key, changed_at)"
+ ],
+ "4": [
+  "CREATE TABLE IF NOT EXISTS ops_jobs(\n               id          INTEGER PRIMARY KEY AUTOINCREMENT,\n               name        TEXT NOT NULL,\n               argv_json   TEXT NOT NULL,\n               status      TEXT NOT NULL,      -- running | ok | failed | timeout\n               exit_code   INTEGER,\n               started_at  TEXT NOT NULL,\n               finished_at TEXT,\n               duration_s  REAL,\n               output      TEXT,\n               note        TEXT\n           )",
+  "CREATE INDEX IF NOT EXISTS ix_ops_jobs_started ON ops_jobs(started_at DESC)"
+ ],
+ "5": [
+  "CREATE TABLE IF NOT EXISTS fills(\n               trade_id    TEXT PRIMARY KEY,\n               symbol      TEXT NOT NULL,\n               when_ts     REAL NOT NULL,\n               side        TEXT NOT NULL,      -- BUY | SELL\n               quantity    INTEGER NOT NULL,\n               price       REAL NOT NULL,\n               exchange    TEXT,\n               charges     REAL NOT NULL DEFAULT 0,\n               source      TEXT NOT NULL,      -- console_csv | kite_api\n               captured_at TEXT\n           )",
+  "CREATE INDEX IF NOT EXISTS ix_fills_symbol ON fills(symbol, when_ts)"
+ ],
+ "6": [
+  "CREATE TABLE IF NOT EXISTS daily_runs(\n               id           INTEGER PRIMARY KEY AUTOINCREMENT,\n               ran_at       TEXT NOT NULL,\n               session_date TEXT NOT NULL,\n               trigger      TEXT NOT NULL,   -- schedule | cli | page\n               outcome      TEXT NOT NULL,   -- ok | partial | failed | auth\n               failed_steps INTEGER NOT NULL DEFAULT 0,\n               steps_json   TEXT NOT NULL,\n               duration_s   REAL\n           )",
+  "CREATE INDEX IF NOT EXISTS ix_daily_runs_ran ON daily_runs(ran_at DESC)"
+ ],
+ "7": [
+  "ALTER TABLE rebalance_versions ADD COLUMN evaluation_id TEXT",
+  "CREATE INDEX IF NOT EXISTS ix_rebalance_versions_eval\n               ON rebalance_versions(evaluation_id)",
+  "CREATE INDEX IF NOT EXISTS ix_rebalance_versions_created\n               ON rebalance_versions(created_ts DESC)"
+ ],
+ "8": [
+  "CREATE TABLE IF NOT EXISTS corporate_actions(\n               id         INTEGER PRIMARY KEY AUTOINCREMENT,\n               symbol     TEXT NOT NULL,\n               kind       TEXT NOT NULL,      -- bonus | split\n               ex_date    TEXT NOT NULL,\n               ratio_new  REAL NOT NULL,\n               ratio_old  REAL NOT NULL,\n               note       TEXT,\n               created_at TEXT NOT NULL,\n               UNIQUE(symbol, kind, ex_date)\n           )",
+  "CREATE INDEX IF NOT EXISTS ix_corporate_actions_symbol\n               ON corporate_actions(symbol, ex_date)"
+ ],
+ "9": [
+  "CREATE TABLE IF NOT EXISTS option_variants(\n               variant_id   TEXT PRIMARY KEY,\n               name         TEXT NOT NULL,\n               arm          TEXT NOT NULL,      -- intraday (overnight dropped, v11)\n               spec_json    TEXT NOT NULL,\n               spec_hash    TEXT NOT NULL,\n               registered_at TEXT NOT NULL,\n               note         TEXT\n           )",
+  "CREATE TABLE IF NOT EXISTS option_arms(\n               arm_id        TEXT PRIMARY KEY,\n               variant_id    TEXT NOT NULL REFERENCES option_variants(variant_id),\n               strategy      TEXT NOT NULL,\n               arm           TEXT NOT NULL,\n               session_date  TEXT NOT NULL,\n               expiry        TEXT NOT NULL,\n               dte_at_entry  REAL,\n               lots          INTEGER NOT NULL,\n               lot_size      INTEGER NOT NULL,\n               entry_at      TEXT NOT NULL,\n               entry_spot    REAL,\n               entry_fills_json TEXT NOT NULL,\n               entry_credit  REAL,\n               max_loss      REAL,\n               margin        REAL,\n               margin_source TEXT,\n               exit_at       TEXT,\n               exit_spot     REAL,\n               exit_fills_json TEXT,\n               exit_reason   TEXT,\n               breach_seen   INTEGER,\n               breach_at     TEXT,\n               mark_stop_seen INTEGER,\n               mark_stop_at  TEXT,\n               night_type    TEXT,\n               gap_pct       REAL,\n               settled_json  TEXT,\n               note          TEXT\n           )",
+  "CREATE INDEX IF NOT EXISTS ix_option_arms_variant\n               ON option_arms(variant_id, session_date)",
+  "CREATE INDEX IF NOT EXISTS ix_option_arms_open\n               ON option_arms(exit_at) WHERE exit_at IS NULL"
+ ],
+ "10": [
+  "ALTER TABLE option_arms ADD COLUMN expiry_eve INTEGER",
+  "ALTER TABLE option_arms ADD COLUMN elm_charged REAL"
+ ],
+ "11": [
+  "CREATE TABLE option_arms_v11(\n               arm_id        TEXT PRIMARY KEY,\n               variant_id    TEXT NOT NULL REFERENCES option_variants(variant_id),\n               strategy      TEXT NOT NULL,\n               arm           TEXT NOT NULL,\n               session_date  TEXT NOT NULL,\n               expiry        TEXT NOT NULL,\n               dte_at_entry  REAL,\n               lots          INTEGER NOT NULL,\n               lot_size      INTEGER NOT NULL,\n               entry_at      TEXT NOT NULL,\n               entry_spot    REAL,\n               entry_fills_json TEXT NOT NULL,\n               entry_credit  REAL,\n               max_loss      REAL,\n               margin        REAL,\n               margin_source TEXT,\n               exit_at       TEXT,\n               exit_spot     REAL,\n               exit_fills_json TEXT,\n               exit_reason   TEXT,\n               breach_seen   INTEGER,\n               breach_at     TEXT,\n               mark_stop_seen INTEGER,\n               mark_stop_at  TEXT,\n               spot_move_pct REAL,\n               settled_json  TEXT,\n               note          TEXT\n           )",
+  "INSERT INTO option_arms_v11\n               SELECT arm_id, variant_id, strategy, arm, session_date, expiry,\n                      dte_at_entry, lots, lot_size, entry_at, entry_spot,\n                      entry_fills_json, entry_credit, max_loss, margin, margin_source,\n                      exit_at, exit_spot, exit_fills_json, exit_reason, breach_seen,\n                      breach_at, mark_stop_seen, mark_stop_at, gap_pct, settled_json, note\n               FROM option_arms WHERE arm <> 'overnight'",
+  "DROP TABLE option_arms",
+  "ALTER TABLE option_arms_v11 RENAME TO option_arms",
+  "CREATE INDEX IF NOT EXISTS ix_option_arms_variant\n               ON option_arms(variant_id, session_date)",
+  "CREATE INDEX IF NOT EXISTS ix_option_arms_open\n               ON option_arms(exit_at) WHERE exit_at IS NULL",
+  "DELETE FROM option_variants WHERE arm = 'overnight'"
+ ],
+ "12": [
+  "ALTER TABLE option_arms ADD COLUMN contracts_json TEXT",
+  "ALTER TABLE option_arms ADD COLUMN underlying_token INTEGER"
+ ],
+ "13": [
+  "ALTER TABLE rebalance_orders ADD COLUMN order_id TEXT",
+  "ALTER TABLE rebalance_orders ADD COLUMN reconciled_at TEXT"
+ ]
+}

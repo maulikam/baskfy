@@ -1,0 +1,140 @@
+{
+ "note": "Lane exec_gateway: the gateway (guards -> risk -> rate limits -> journal -> broker) graded through the one HTTP path that reaches it in the weekly book, /execute, in DRY_RUN with the replay Kite. Graded: the order journal byte for byte (every line's client_id = plan_id:symbol), the replay Kite's order/GTT call log (must stay EMPTY: DRY_RUN never reaches the broker), the DUPLICATE answer on a re-post (idempotency survives in the gateway's map), and the risk ledger. Never a live order.",
+ "db_mask": {
+  "public.risk_ledger": [
+   "updated_at"
+  ]
+ },
+ "cases": [
+  {
+   "name": "gateway: analyze the investing scan at 11:00",
+   "method": "POST",
+   "path": "/analyze",
+   "clock": "mid",
+   "files": {
+    "scan": {
+     "path": "/Volumes/T7-Work/Dev/projects/baskfy/kite-momentum-rebalancer/data/uploads/scan_1787143663_Investing_001__1_.csv",
+     "filename": "scan_1787143663_Investing_001__1_.csv"
+    }
+   },
+   "plan": true,
+   "capture": {
+    "plan_id": "json:/plan_id"
+   }
+  },
+  {
+   "name": "gateway: every order goes through the gateway in DRY_RUN and is journalled under plan_id:symbol",
+   "method": "POST",
+   "path": "/execute",
+   "form": {
+    "plan_id": "${plan_id}",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "gateway: the same plan re-posted is DUPLICATE for every leg, nothing reaches the broker",
+   "method": "POST",
+   "path": "/execute",
+   "form": {
+    "plan_id": "${plan_id}",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "gateway: a second plan from the sample scan mints different client ids",
+   "method": "POST",
+   "path": "/analyze",
+   "advance": 60,
+   "files": {
+    "scan": {
+     "path": "/Volumes/T7-Work/Dev/projects/baskfy/kite-momentum-rebalancer/data/uploads/sample_scan.csv",
+     "filename": "sample_scan.csv"
+    }
+   },
+   "plan": true,
+   "capture": {
+    "plan2": "json:/plan_id"
+   }
+  },
+  {
+   "name": "gateway: the second plan executes in DRY_RUN beside the first",
+   "method": "POST",
+   "path": "/execute",
+   "form": {
+    "plan_id": "${plan2}",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "gateway: confirm is case-sensitive, TRUE is not true (400, nothing sent)",
+   "method": "POST",
+   "path": "/execute",
+   "form": {
+    "plan_id": "${plan2}",
+    "confirm": "TRUE"
+   }
+  },
+  {
+   "name": "gateway: execute with no confirm field at all is refused before the route body",
+   "method": "POST",
+   "path": "/execute",
+   "form": {
+    "plan_id": "${plan2}"
+   }
+  },
+  {
+   "name": "gateway: execute with no plan_id is refused",
+   "method": "POST",
+   "path": "/execute",
+   "form": {
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "gateway: a third plan at the close",
+   "method": "POST",
+   "path": "/analyze",
+   "clock": "close",
+   "files": {
+    "scan": {
+     "path": "/Volumes/T7-Work/Dev/projects/baskfy/kite-momentum-rebalancer/data/uploads/sample_scan.csv",
+     "filename": "sample_scan.csv"
+    }
+   },
+   "plan": true,
+   "capture": {
+    "plan3": "json:/plan_id"
+   }
+  },
+  {
+   "name": "gateway: a plan exactly 30 minutes old still executes (the gate is > 1800 s), stops off",
+   "method": "POST",
+   "path": "/execute",
+   "advance": 1800,
+   "form": {
+    "plan_id": "${plan3}",
+    "confirm": "true",
+    "place_stops": "false"
+   }
+  },
+  {
+   "name": "gateway: one second later the same plan is 410, not DUPLICATE",
+   "method": "POST",
+   "path": "/execute",
+   "advance": 1,
+   "form": {
+    "plan_id": "${plan3}",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "gateway: the first plan, re-posted hours later, is 410 before the gateway is reached",
+   "method": "POST",
+   "path": "/execute",
+   "form": {
+    "plan_id": "${plan_id}",
+    "confirm": "true"
+   }
+  }
+ ]
+}

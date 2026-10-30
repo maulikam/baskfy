@@ -1,0 +1,171 @@
+{
+ "note": "Lane fno_exec: fno_execute.py's confirm path as POST /fno/execute reaches it (the route is the fno desk's; the refusals after the route's own checks are fno_execute.execute_entry/_validate's). The bed's fo_plan rows are F3 ENTRY plans in LAPSED / REJECTED_STRUCTURE, so every confirm must be refused NOT_ISSUED with the plan's status named, nothing written, and the replay Kite's order/GTT log EMPTY. A missing or false confirm and an unknown plan are refused before any read. No exit plan exists on the bed, so the click path (execute_click_exit) and the monitor's sends are graded by the Rust tests, not here. Added by review: confirm spellings Python refuses (True, 1, 'true '), empty/missing/quoting plan ids, a REJECTED_COST entry, the refusal at pre_open/after_close and on a re-post, a JSON body, and GET.",
+ "db_mask": {
+  "public.risk_ledger": [
+   "updated_at"
+  ]
+ },
+ "cases": [
+  {
+   "name": "fno_exec: a LAPSED F3 entry is refused NOT_ISSUED, nothing sent",
+   "method": "POST",
+   "path": "/fno/execute",
+   "clock": "mid",
+   "form": {
+    "plan_id": "F3B-20261027-BANKNIFTY-u1",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "fno_exec: a REJECTED_STRUCTURE F3 entry is refused NOT_ISSUED, nothing sent",
+   "method": "POST",
+   "path": "/fno/execute",
+   "form": {
+    "plan_id": "F3N-20261029-NIFTY-u1",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "fno_exec: confirm=false is CONFIRM_REQUIRED before any read",
+   "method": "POST",
+   "path": "/fno/execute",
+   "form": {
+    "plan_id": "F3N-20261029-NIFTY-u1",
+    "confirm": "false"
+   }
+  },
+  {
+   "name": "fno_exec: a missing confirm is the same refusal",
+   "method": "POST",
+   "path": "/fno/execute",
+   "form": {
+    "plan_id": "F3N-20261029-NIFTY-u1"
+   }
+  },
+  {
+   "name": "fno_exec: an unknown plan is UNKNOWN_PLAN",
+   "method": "POST",
+   "path": "/fno/execute",
+   "form": {
+    "plan_id": "F3N-20990101-NIFTY-u1",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "fno_exec: another user's plan id is unknown to this user (FO7.6)",
+   "method": "POST",
+   "path": "/fno/execute",
+   "form": {
+    "plan_id": "F3B-20261027-BANKNIFTY-u2",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "fno_exec: confirm=True (not the literal true) is CONFIRM_REQUIRED",
+   "method": "POST",
+   "path": "/fno/execute",
+   "form": {
+    "plan_id": "F3N-20261029-NIFTY-u1",
+    "confirm": "True"
+   }
+  },
+  {
+   "name": "fno_exec: confirm=1 is CONFIRM_REQUIRED",
+   "method": "POST",
+   "path": "/fno/execute",
+   "form": {
+    "plan_id": "F3N-20261029-NIFTY-u1",
+    "confirm": "1"
+   }
+  },
+  {
+   "name": "fno_exec: confirm with a trailing space is CONFIRM_REQUIRED",
+   "method": "POST",
+   "path": "/fno/execute",
+   "form": {
+    "plan_id": "F3N-20261029-NIFTY-u1",
+    "confirm": "true "
+   }
+  },
+  {
+   "name": "fno_exec: an empty plan id is UNKNOWN_PLAN",
+   "method": "POST",
+   "path": "/fno/execute",
+   "form": {
+    "plan_id": "",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "fno_exec: a missing plan id is UNKNOWN_PLAN",
+   "method": "POST",
+   "path": "/fno/execute",
+   "form": {
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "fno_exec: a quoting plan id is UNKNOWN_PLAN (bound, never spliced)",
+   "method": "POST",
+   "path": "/fno/execute",
+   "form": {
+    "plan_id": "x' OR '1'='1",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "fno_exec: a REJECTED_COST F3 entry is refused NOT_ISSUED",
+   "method": "POST",
+   "path": "/fno/execute",
+   "clock": "open",
+   "form": {
+    "plan_id": "F3N-20261008-NIFTY-u1",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "fno_exec: the same refusal before the open",
+   "method": "POST",
+   "path": "/fno/execute",
+   "clock": "pre_open",
+   "form": {
+    "plan_id": "F3B-20261027-BANKNIFTY-u1",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "fno_exec: the same refusal after the close",
+   "method": "POST",
+   "path": "/fno/execute",
+   "clock": "after_close",
+   "form": {
+    "plan_id": "F3B-20261027-BANKNIFTY-u1",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "fno_exec: a second post of the same refused plan is refused the same way",
+   "method": "POST",
+   "path": "/fno/execute",
+   "clock": "mid",
+   "form": {
+    "plan_id": "F3B-20261027-BANKNIFTY-u1",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "fno_exec: a JSON body carries no form fields: CONFIRM_REQUIRED",
+   "method": "POST",
+   "path": "/fno/execute",
+   "json": {
+    "plan_id": "F3N-20261029-NIFTY-u1",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "fno_exec: GET does not execute",
+   "method": "GET",
+   "path": "/fno/execute"
+  }
+ ]
+}

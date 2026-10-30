@@ -1,0 +1,7722 @@
+{
+ "generated_by": "tools/parity/desk_settings_dump.py",
+ "python": "3.12.13",
+ "probes": [
+  "",
+  "true",
+  "false",
+  "TRUE",
+  "False",
+  "1",
+  "0",
+  "yes",
+  "7",
+  "2.5",
+  " 3 ",
+  "abc",
+  "a,b",
+  "1_000",
+  "-4",
+  "inf",
+  "nan",
+  "1e3"
+ ],
+ "vars": [
+  {
+   "key": "BASKFY_FNO_CARRY_ENABLED",
+   "module": "app.config",
+   "attrs": [
+    "FNO_CARRY_ENABLED"
+   ],
+   "default": {
+    "FNO_CARRY_ENABLED": false
+   },
+   "probes": {
+    "": {
+     "FNO_CARRY_ENABLED": false
+    },
+    "true": {
+     "FNO_CARRY_ENABLED": true
+    },
+    "false": {
+     "FNO_CARRY_ENABLED": false
+    },
+    "TRUE": {
+     "FNO_CARRY_ENABLED": true
+    },
+    "False": {
+     "FNO_CARRY_ENABLED": false
+    },
+    "1": {
+     "FNO_CARRY_ENABLED": false
+    },
+    "0": {
+     "FNO_CARRY_ENABLED": false
+    },
+    "yes": {
+     "FNO_CARRY_ENABLED": false
+    },
+    "7": {
+     "FNO_CARRY_ENABLED": false
+    },
+    "2.5": {
+     "FNO_CARRY_ENABLED": false
+    },
+    " 3 ": {
+     "FNO_CARRY_ENABLED": false
+    },
+    "abc": {
+     "FNO_CARRY_ENABLED": false
+    },
+    "a,b": {
+     "FNO_CARRY_ENABLED": false
+    },
+    "1_000": {
+     "FNO_CARRY_ENABLED": false
+    },
+    "-4": {
+     "FNO_CARRY_ENABLED": false
+    },
+    "inf": {
+     "FNO_CARRY_ENABLED": false
+    },
+    "nan": {
+     "FNO_CARRY_ENABLED": false
+    },
+    "1e3": {
+     "FNO_CARRY_ENABLED": false
+    }
+   }
+  },
+  {
+   "key": "BASKFY_FNO_F1_EXECUTION_ENABLED",
+   "module": "app.config",
+   "attrs": [
+    "FNO_F1_EXECUTION_ENABLED"
+   ],
+   "default": {
+    "FNO_F1_EXECUTION_ENABLED": false
+   },
+   "probes": {
+    "": {
+     "FNO_F1_EXECUTION_ENABLED": false
+    },
+    "true": {
+     "FNO_F1_EXECUTION_ENABLED": true
+    },
+    "false": {
+     "FNO_F1_EXECUTION_ENABLED": false
+    },
+    "TRUE": {
+     "FNO_F1_EXECUTION_ENABLED": true
+    },
+    "False": {
+     "FNO_F1_EXECUTION_ENABLED": false
+    },
+    "1": {
+     "FNO_F1_EXECUTION_ENABLED": false
+    },
+    "0": {
+     "FNO_F1_EXECUTION_ENABLED": false
+    },
+    "yes": {
+     "FNO_F1_EXECUTION_ENABLED": false
+    },
+    "7": {
+     "FNO_F1_EXECUTION_ENABLED": false
+    },
+    "2.5": {
+     "FNO_F1_EXECUTION_ENABLED": false
+    },
+    " 3 ": {
+     "FNO_F1_EXECUTION_ENABLED": false
+    },
+    "abc": {
+     "FNO_F1_EXECUTION_ENABLED": false
+    },
+    "a,b": {
+     "FNO_F1_EXECUTION_ENABLED": false
+    },
+    "1_000": {
+     "FNO_F1_EXECUTION_ENABLED": false
+    },
+    "-4": {
+     "FNO_F1_EXECUTION_ENABLED": false
+    },
+    "inf": {
+     "FNO_F1_EXECUTION_ENABLED": false
+    },
+    "nan": {
+     "FNO_F1_EXECUTION_ENABLED": false
+    },
+    "1e3": {
+     "FNO_F1_EXECUTION_ENABLED": false
+    }
+   }
+  },
+  {
+   "key": "BASKFY_FNO_F2_EXECUTION_ENABLED",
+   "module": "app.config",
+   "attrs": [
+    "FNO_F2_EXECUTION_ENABLED"
+   ],
+   "default": {
+    "FNO_F2_EXECUTION_ENABLED": false
+   },
+   "probes": {
+    "": {
+     "FNO_F2_EXECUTION_ENABLED": false
+    },
+    "true": {
+     "FNO_F2_EXECUTION_ENABLED": true
+    },
+    "false": {
+     "FNO_F2_EXECUTION_ENABLED": false
+    },
+    "TRUE": {
+     "FNO_F2_EXECUTION_ENABLED": true
+    },
+    "False": {
+     "FNO_F2_EXECUTION_ENABLED": false
+    },
+    "1": {
+     "FNO_F2_EXECUTION_ENABLED": false
+    },
+    "0": {
+     "FNO_F2_EXECUTION_ENABLED": false
+    },
+    "yes": {
+     "FNO_F2_EXECUTION_ENABLED": false
+    },
+    "7": {
+     "FNO_F2_EXECUTION_ENABLED": false
+    },
+    "2.5": {
+     "FNO_F2_EXECUTION_ENABLED": false
+    },
+    " 3 ": {
+     "FNO_F2_EXECUTION_ENABLED": false
+    },
+    "abc": {
+     "FNO_F2_EXECUTION_ENABLED": false
+    },
+    "a,b": {
+     "FNO_F2_EXECUTION_ENABLED": false
+    },
+    "1_000": {
+     "FNO_F2_EXECUTION_ENABLED": false
+    },
+    "-4": {
+     "FNO_F2_EXECUTION_ENABLED": false
+    },
+    "inf": {
+     "FNO_F2_EXECUTION_ENABLED": false
+    },
+    "nan": {
+     "FNO_F2_EXECUTION_ENABLED": false
+    },
+    "1e3": {
+     "FNO_F2_EXECUTION_ENABLED": false
+    }
+   }
+  },
+  {
+   "key": "BASKFY_FNO_F3_AUTO_EXIT",
+   "module": "app.config",
+   "attrs": [
+    "FNO_F3_AUTO_EXIT"
+   ],
+   "default": {
+    "FNO_F3_AUTO_EXIT": false
+   },
+   "probes": {
+    "": {
+     "FNO_F3_AUTO_EXIT": false
+    },
+    "true": {
+     "FNO_F3_AUTO_EXIT": true
+    },
+    "false": {
+     "FNO_F3_AUTO_EXIT": false
+    },
+    "TRUE": {
+     "FNO_F3_AUTO_EXIT": true
+    },
+    "False": {
+     "FNO_F3_AUTO_EXIT": false
+    },
+    "1": {
+     "FNO_F3_AUTO_EXIT": false
+    },
+    "0": {
+     "FNO_F3_AUTO_EXIT": false
+    },
+    "yes": {
+     "FNO_F3_AUTO_EXIT": false
+    },
+    "7": {
+     "FNO_F3_AUTO_EXIT": false
+    },
+    "2.5": {
+     "FNO_F3_AUTO_EXIT": false
+    },
+    " 3 ": {
+     "FNO_F3_AUTO_EXIT": false
+    },
+    "abc": {
+     "FNO_F3_AUTO_EXIT": false
+    },
+    "a,b": {
+     "FNO_F3_AUTO_EXIT": false
+    },
+    "1_000": {
+     "FNO_F3_AUTO_EXIT": false
+    },
+    "-4": {
+     "FNO_F3_AUTO_EXIT": false
+    },
+    "inf": {
+     "FNO_F3_AUTO_EXIT": false
+    },
+    "nan": {
+     "FNO_F3_AUTO_EXIT": false
+    },
+    "1e3": {
+     "FNO_F3_AUTO_EXIT": false
+    }
+   }
+  },
+  {
+   "key": "BASKFY_FNO_F3_EXECUTION_ENABLED",
+   "module": "app.config",
+   "attrs": [
+    "FNO_F3_EXECUTION_ENABLED"
+   ],
+   "default": {
+    "FNO_F3_EXECUTION_ENABLED": false
+   },
+   "probes": {
+    "": {
+     "FNO_F3_EXECUTION_ENABLED": false
+    },
+    "true": {
+     "FNO_F3_EXECUTION_ENABLED": true
+    },
+    "false": {
+     "FNO_F3_EXECUTION_ENABLED": false
+    },
+    "TRUE": {
+     "FNO_F3_EXECUTION_ENABLED": true
+    },
+    "False": {
+     "FNO_F3_EXECUTION_ENABLED": false
+    },
+    "1": {
+     "FNO_F3_EXECUTION_ENABLED": false
+    },
+    "0": {
+     "FNO_F3_EXECUTION_ENABLED": false
+    },
+    "yes": {
+     "FNO_F3_EXECUTION_ENABLED": false
+    },
+    "7": {
+     "FNO_F3_EXECUTION_ENABLED": false
+    },
+    "2.5": {
+     "FNO_F3_EXECUTION_ENABLED": false
+    },
+    " 3 ": {
+     "FNO_F3_EXECUTION_ENABLED": false
+    },
+    "abc": {
+     "FNO_F3_EXECUTION_ENABLED": false
+    },
+    "a,b": {
+     "FNO_F3_EXECUTION_ENABLED": false
+    },
+    "1_000": {
+     "FNO_F3_EXECUTION_ENABLED": false
+    },
+    "-4": {
+     "FNO_F3_EXECUTION_ENABLED": false
+    },
+    "inf": {
+     "FNO_F3_EXECUTION_ENABLED": false
+    },
+    "nan": {
+     "FNO_F3_EXECUTION_ENABLED": false
+    },
+    "1e3": {
+     "FNO_F3_EXECUTION_ENABLED": false
+    }
+   }
+  },
+  {
+   "key": "BASKFY_FNO_MONITOR_ENABLED",
+   "module": "app.config",
+   "attrs": [
+    "FNO_MONITOR_ENABLED"
+   ],
+   "default": {
+    "FNO_MONITOR_ENABLED": false
+   },
+   "probes": {
+    "": {
+     "FNO_MONITOR_ENABLED": false
+    },
+    "true": {
+     "FNO_MONITOR_ENABLED": true
+    },
+    "false": {
+     "FNO_MONITOR_ENABLED": false
+    },
+    "TRUE": {
+     "FNO_MONITOR_ENABLED": true
+    },
+    "False": {
+     "FNO_MONITOR_ENABLED": false
+    },
+    "1": {
+     "FNO_MONITOR_ENABLED": false
+    },
+    "0": {
+     "FNO_MONITOR_ENABLED": false
+    },
+    "yes": {
+     "FNO_MONITOR_ENABLED": false
+    },
+    "7": {
+     "FNO_MONITOR_ENABLED": false
+    },
+    "2.5": {
+     "FNO_MONITOR_ENABLED": false
+    },
+    " 3 ": {
+     "FNO_MONITOR_ENABLED": false
+    },
+    "abc": {
+     "FNO_MONITOR_ENABLED": false
+    },
+    "a,b": {
+     "FNO_MONITOR_ENABLED": false
+    },
+    "1_000": {
+     "FNO_MONITOR_ENABLED": false
+    },
+    "-4": {
+     "FNO_MONITOR_ENABLED": false
+    },
+    "inf": {
+     "FNO_MONITOR_ENABLED": false
+    },
+    "nan": {
+     "FNO_MONITOR_ENABLED": false
+    },
+    "1e3": {
+     "FNO_MONITOR_ENABLED": false
+    }
+   }
+  },
+  {
+   "key": "BASKFY_OPTIONS_BOOK_DAILY_LOSS_INR_MAX",
+   "module": "app.config",
+   "attrs": [
+    "OPTIONS_BOOK_DAILY_LOSS_INR_MAX"
+   ],
+   "default": {
+    "OPTIONS_BOOK_DAILY_LOSS_INR_MAX": "30000"
+   },
+   "probes": {
+    "": {
+     "OPTIONS_BOOK_DAILY_LOSS_INR_MAX": ""
+    },
+    "true": {
+     "OPTIONS_BOOK_DAILY_LOSS_INR_MAX": "true"
+    },
+    "false": {
+     "OPTIONS_BOOK_DAILY_LOSS_INR_MAX": "false"
+    },
+    "TRUE": {
+     "OPTIONS_BOOK_DAILY_LOSS_INR_MAX": "TRUE"
+    },
+    "False": {
+     "OPTIONS_BOOK_DAILY_LOSS_INR_MAX": "False"
+    },
+    "1": {
+     "OPTIONS_BOOK_DAILY_LOSS_INR_MAX": "1"
+    },
+    "0": {
+     "OPTIONS_BOOK_DAILY_LOSS_INR_MAX": "0"
+    },
+    "yes": {
+     "OPTIONS_BOOK_DAILY_LOSS_INR_MAX": "yes"
+    },
+    "7": {
+     "OPTIONS_BOOK_DAILY_LOSS_INR_MAX": "7"
+    },
+    "2.5": {
+     "OPTIONS_BOOK_DAILY_LOSS_INR_MAX": "2.5"
+    },
+    " 3 ": {
+     "OPTIONS_BOOK_DAILY_LOSS_INR_MAX": " 3 "
+    },
+    "abc": {
+     "OPTIONS_BOOK_DAILY_LOSS_INR_MAX": "abc"
+    },
+    "a,b": {
+     "OPTIONS_BOOK_DAILY_LOSS_INR_MAX": "a,b"
+    },
+    "1_000": {
+     "OPTIONS_BOOK_DAILY_LOSS_INR_MAX": "1_000"
+    },
+    "-4": {
+     "OPTIONS_BOOK_DAILY_LOSS_INR_MAX": "-4"
+    },
+    "inf": {
+     "OPTIONS_BOOK_DAILY_LOSS_INR_MAX": "inf"
+    },
+    "nan": {
+     "OPTIONS_BOOK_DAILY_LOSS_INR_MAX": "nan"
+    },
+    "1e3": {
+     "OPTIONS_BOOK_DAILY_LOSS_INR_MAX": "1e3"
+    }
+   }
+  },
+  {
+   "key": "BASKFY_OPTIONS_BOOK_MONTHLY_LOSS_INR_MAX",
+   "module": "app.config",
+   "attrs": [
+    "OPTIONS_BOOK_MONTHLY_LOSS_INR_MAX"
+   ],
+   "default": {
+    "OPTIONS_BOOK_MONTHLY_LOSS_INR_MAX": "75000"
+   },
+   "probes": {
+    "": {
+     "OPTIONS_BOOK_MONTHLY_LOSS_INR_MAX": ""
+    },
+    "true": {
+     "OPTIONS_BOOK_MONTHLY_LOSS_INR_MAX": "true"
+    },
+    "false": {
+     "OPTIONS_BOOK_MONTHLY_LOSS_INR_MAX": "false"
+    },
+    "TRUE": {
+     "OPTIONS_BOOK_MONTHLY_LOSS_INR_MAX": "TRUE"
+    },
+    "False": {
+     "OPTIONS_BOOK_MONTHLY_LOSS_INR_MAX": "False"
+    },
+    "1": {
+     "OPTIONS_BOOK_MONTHLY_LOSS_INR_MAX": "1"
+    },
+    "0": {
+     "OPTIONS_BOOK_MONTHLY_LOSS_INR_MAX": "0"
+    },
+    "yes": {
+     "OPTIONS_BOOK_MONTHLY_LOSS_INR_MAX": "yes"
+    },
+    "7": {
+     "OPTIONS_BOOK_MONTHLY_LOSS_INR_MAX": "7"
+    },
+    "2.5": {
+     "OPTIONS_BOOK_MONTHLY_LOSS_INR_MAX": "2.5"
+    },
+    " 3 ": {
+     "OPTIONS_BOOK_MONTHLY_LOSS_INR_MAX": " 3 "
+    },
+    "abc": {
+     "OPTIONS_BOOK_MONTHLY_LOSS_INR_MAX": "abc"
+    },
+    "a,b": {
+     "OPTIONS_BOOK_MONTHLY_LOSS_INR_MAX": "a,b"
+    },
+    "1_000": {
+     "OPTIONS_BOOK_MONTHLY_LOSS_INR_MAX": "1_000"
+    },
+    "-4": {
+     "OPTIONS_BOOK_MONTHLY_LOSS_INR_MAX": "-4"
+    },
+    "inf": {
+     "OPTIONS_BOOK_MONTHLY_LOSS_INR_MAX": "inf"
+    },
+    "nan": {
+     "OPTIONS_BOOK_MONTHLY_LOSS_INR_MAX": "nan"
+    },
+    "1e3": {
+     "OPTIONS_BOOK_MONTHLY_LOSS_INR_MAX": "1e3"
+    }
+   }
+  },
+  {
+   "key": "BASKFY_OPTIONS_COLLECT_ENABLED",
+   "module": "app.config",
+   "attrs": [
+    "OPTIONS_COLLECT_ENABLED"
+   ],
+   "default": {
+    "OPTIONS_COLLECT_ENABLED": false
+   },
+   "probes": {
+    "": {
+     "OPTIONS_COLLECT_ENABLED": false
+    },
+    "true": {
+     "OPTIONS_COLLECT_ENABLED": true
+    },
+    "false": {
+     "OPTIONS_COLLECT_ENABLED": false
+    },
+    "TRUE": {
+     "OPTIONS_COLLECT_ENABLED": true
+    },
+    "False": {
+     "OPTIONS_COLLECT_ENABLED": false
+    },
+    "1": {
+     "OPTIONS_COLLECT_ENABLED": false
+    },
+    "0": {
+     "OPTIONS_COLLECT_ENABLED": false
+    },
+    "yes": {
+     "OPTIONS_COLLECT_ENABLED": false
+    },
+    "7": {
+     "OPTIONS_COLLECT_ENABLED": false
+    },
+    "2.5": {
+     "OPTIONS_COLLECT_ENABLED": false
+    },
+    " 3 ": {
+     "OPTIONS_COLLECT_ENABLED": false
+    },
+    "abc": {
+     "OPTIONS_COLLECT_ENABLED": false
+    },
+    "a,b": {
+     "OPTIONS_COLLECT_ENABLED": false
+    },
+    "1_000": {
+     "OPTIONS_COLLECT_ENABLED": false
+    },
+    "-4": {
+     "OPTIONS_COLLECT_ENABLED": false
+    },
+    "inf": {
+     "OPTIONS_COLLECT_ENABLED": false
+    },
+    "nan": {
+     "OPTIONS_COLLECT_ENABLED": false
+    },
+    "1e3": {
+     "OPTIONS_COLLECT_ENABLED": false
+    }
+   }
+  },
+  {
+   "key": "BASKFY_OPTIONS_HARD_EXIT_LATEST",
+   "module": "app.config",
+   "attrs": [
+    "OPTIONS_HARD_EXIT_LATEST"
+   ],
+   "default": {
+    "OPTIONS_HARD_EXIT_LATEST": "15:00"
+   },
+   "probes": {
+    "": {
+     "OPTIONS_HARD_EXIT_LATEST": ""
+    },
+    "true": {
+     "OPTIONS_HARD_EXIT_LATEST": "true"
+    },
+    "false": {
+     "OPTIONS_HARD_EXIT_LATEST": "false"
+    },
+    "TRUE": {
+     "OPTIONS_HARD_EXIT_LATEST": "TRUE"
+    },
+    "False": {
+     "OPTIONS_HARD_EXIT_LATEST": "False"
+    },
+    "1": {
+     "OPTIONS_HARD_EXIT_LATEST": "1"
+    },
+    "0": {
+     "OPTIONS_HARD_EXIT_LATEST": "0"
+    },
+    "yes": {
+     "OPTIONS_HARD_EXIT_LATEST": "yes"
+    },
+    "7": {
+     "OPTIONS_HARD_EXIT_LATEST": "7"
+    },
+    "2.5": {
+     "OPTIONS_HARD_EXIT_LATEST": "2.5"
+    },
+    " 3 ": {
+     "OPTIONS_HARD_EXIT_LATEST": " 3 "
+    },
+    "abc": {
+     "OPTIONS_HARD_EXIT_LATEST": "abc"
+    },
+    "a,b": {
+     "OPTIONS_HARD_EXIT_LATEST": "a,b"
+    },
+    "1_000": {
+     "OPTIONS_HARD_EXIT_LATEST": "1_000"
+    },
+    "-4": {
+     "OPTIONS_HARD_EXIT_LATEST": "-4"
+    },
+    "inf": {
+     "OPTIONS_HARD_EXIT_LATEST": "inf"
+    },
+    "nan": {
+     "OPTIONS_HARD_EXIT_LATEST": "nan"
+    },
+    "1e3": {
+     "OPTIONS_HARD_EXIT_LATEST": "1e3"
+    }
+   }
+  },
+  {
+   "key": "BASKFY_OPTIONS_MAX_LOTS_MAX",
+   "module": "app.config",
+   "attrs": [
+    "OPTIONS_MAX_LOTS_MAX"
+   ],
+   "default": {
+    "OPTIONS_MAX_LOTS_MAX": 10
+   },
+   "probes": {
+    "": {
+     "OPTIONS_MAX_LOTS_MAX": 10
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "OPTIONS_MAX_LOTS_MAX": 1
+    },
+    "0": {
+     "OPTIONS_MAX_LOTS_MAX": 0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "OPTIONS_MAX_LOTS_MAX": 7
+    },
+    "2.5": {
+     "error": "ValueError"
+    },
+    " 3 ": {
+     "OPTIONS_MAX_LOTS_MAX": 3
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "OPTIONS_MAX_LOTS_MAX": 1000
+    },
+    "-4": {
+     "OPTIONS_MAX_LOTS_MAX": -4
+    },
+    "inf": {
+     "error": "ValueError"
+    },
+    "nan": {
+     "error": "ValueError"
+    },
+    "1e3": {
+     "error": "ValueError"
+    }
+   }
+  },
+  {
+   "key": "BASKFY_OPTIONS_MONITOR_ENABLED",
+   "module": "app.config",
+   "attrs": [
+    "OPTIONS_MONITOR_ENABLED"
+   ],
+   "default": {
+    "OPTIONS_MONITOR_ENABLED": false
+   },
+   "probes": {
+    "": {
+     "OPTIONS_MONITOR_ENABLED": false
+    },
+    "true": {
+     "OPTIONS_MONITOR_ENABLED": true
+    },
+    "false": {
+     "OPTIONS_MONITOR_ENABLED": false
+    },
+    "TRUE": {
+     "OPTIONS_MONITOR_ENABLED": true
+    },
+    "False": {
+     "OPTIONS_MONITOR_ENABLED": false
+    },
+    "1": {
+     "OPTIONS_MONITOR_ENABLED": false
+    },
+    "0": {
+     "OPTIONS_MONITOR_ENABLED": false
+    },
+    "yes": {
+     "OPTIONS_MONITOR_ENABLED": false
+    },
+    "7": {
+     "OPTIONS_MONITOR_ENABLED": false
+    },
+    "2.5": {
+     "OPTIONS_MONITOR_ENABLED": false
+    },
+    " 3 ": {
+     "OPTIONS_MONITOR_ENABLED": false
+    },
+    "abc": {
+     "OPTIONS_MONITOR_ENABLED": false
+    },
+    "a,b": {
+     "OPTIONS_MONITOR_ENABLED": false
+    },
+    "1_000": {
+     "OPTIONS_MONITOR_ENABLED": false
+    },
+    "-4": {
+     "OPTIONS_MONITOR_ENABLED": false
+    },
+    "inf": {
+     "OPTIONS_MONITOR_ENABLED": false
+    },
+    "nan": {
+     "OPTIONS_MONITOR_ENABLED": false
+    },
+    "1e3": {
+     "OPTIONS_MONITOR_ENABLED": false
+    }
+   }
+  },
+  {
+   "key": "BASKFY_OPTIONS_O1M_EXECUTION_ENABLED",
+   "module": "app.config",
+   "attrs": [
+    "OPTIONS_O1M_EXECUTION_ENABLED"
+   ],
+   "default": {
+    "OPTIONS_O1M_EXECUTION_ENABLED": false
+   },
+   "probes": {
+    "": {
+     "OPTIONS_O1M_EXECUTION_ENABLED": false
+    },
+    "true": {
+     "OPTIONS_O1M_EXECUTION_ENABLED": true
+    },
+    "false": {
+     "OPTIONS_O1M_EXECUTION_ENABLED": false
+    },
+    "TRUE": {
+     "OPTIONS_O1M_EXECUTION_ENABLED": true
+    },
+    "False": {
+     "OPTIONS_O1M_EXECUTION_ENABLED": false
+    },
+    "1": {
+     "OPTIONS_O1M_EXECUTION_ENABLED": false
+    },
+    "0": {
+     "OPTIONS_O1M_EXECUTION_ENABLED": false
+    },
+    "yes": {
+     "OPTIONS_O1M_EXECUTION_ENABLED": false
+    },
+    "7": {
+     "OPTIONS_O1M_EXECUTION_ENABLED": false
+    },
+    "2.5": {
+     "OPTIONS_O1M_EXECUTION_ENABLED": false
+    },
+    " 3 ": {
+     "OPTIONS_O1M_EXECUTION_ENABLED": false
+    },
+    "abc": {
+     "OPTIONS_O1M_EXECUTION_ENABLED": false
+    },
+    "a,b": {
+     "OPTIONS_O1M_EXECUTION_ENABLED": false
+    },
+    "1_000": {
+     "OPTIONS_O1M_EXECUTION_ENABLED": false
+    },
+    "-4": {
+     "OPTIONS_O1M_EXECUTION_ENABLED": false
+    },
+    "inf": {
+     "OPTIONS_O1M_EXECUTION_ENABLED": false
+    },
+    "nan": {
+     "OPTIONS_O1M_EXECUTION_ENABLED": false
+    },
+    "1e3": {
+     "OPTIONS_O1M_EXECUTION_ENABLED": false
+    }
+   }
+  },
+  {
+   "key": "BASKFY_OPTIONS_O1W_EXECUTION_ENABLED",
+   "module": "app.config",
+   "attrs": [
+    "OPTIONS_O1W_EXECUTION_ENABLED"
+   ],
+   "default": {
+    "OPTIONS_O1W_EXECUTION_ENABLED": false
+   },
+   "probes": {
+    "": {
+     "OPTIONS_O1W_EXECUTION_ENABLED": false
+    },
+    "true": {
+     "OPTIONS_O1W_EXECUTION_ENABLED": true
+    },
+    "false": {
+     "OPTIONS_O1W_EXECUTION_ENABLED": false
+    },
+    "TRUE": {
+     "OPTIONS_O1W_EXECUTION_ENABLED": true
+    },
+    "False": {
+     "OPTIONS_O1W_EXECUTION_ENABLED": false
+    },
+    "1": {
+     "OPTIONS_O1W_EXECUTION_ENABLED": false
+    },
+    "0": {
+     "OPTIONS_O1W_EXECUTION_ENABLED": false
+    },
+    "yes": {
+     "OPTIONS_O1W_EXECUTION_ENABLED": false
+    },
+    "7": {
+     "OPTIONS_O1W_EXECUTION_ENABLED": false
+    },
+    "2.5": {
+     "OPTIONS_O1W_EXECUTION_ENABLED": false
+    },
+    " 3 ": {
+     "OPTIONS_O1W_EXECUTION_ENABLED": false
+    },
+    "abc": {
+     "OPTIONS_O1W_EXECUTION_ENABLED": false
+    },
+    "a,b": {
+     "OPTIONS_O1W_EXECUTION_ENABLED": false
+    },
+    "1_000": {
+     "OPTIONS_O1W_EXECUTION_ENABLED": false
+    },
+    "-4": {
+     "OPTIONS_O1W_EXECUTION_ENABLED": false
+    },
+    "inf": {
+     "OPTIONS_O1W_EXECUTION_ENABLED": false
+    },
+    "nan": {
+     "OPTIONS_O1W_EXECUTION_ENABLED": false
+    },
+    "1e3": {
+     "OPTIONS_O1W_EXECUTION_ENABLED": false
+    }
+   }
+  },
+  {
+   "key": "BASKFY_OPTIONS_O2_EXECUTION_ENABLED",
+   "module": "app.config",
+   "attrs": [
+    "OPTIONS_O2_EXECUTION_ENABLED"
+   ],
+   "default": {
+    "OPTIONS_O2_EXECUTION_ENABLED": false
+   },
+   "probes": {
+    "": {
+     "OPTIONS_O2_EXECUTION_ENABLED": false
+    },
+    "true": {
+     "OPTIONS_O2_EXECUTION_ENABLED": true
+    },
+    "false": {
+     "OPTIONS_O2_EXECUTION_ENABLED": false
+    },
+    "TRUE": {
+     "OPTIONS_O2_EXECUTION_ENABLED": true
+    },
+    "False": {
+     "OPTIONS_O2_EXECUTION_ENABLED": false
+    },
+    "1": {
+     "OPTIONS_O2_EXECUTION_ENABLED": false
+    },
+    "0": {
+     "OPTIONS_O2_EXECUTION_ENABLED": false
+    },
+    "yes": {
+     "OPTIONS_O2_EXECUTION_ENABLED": false
+    },
+    "7": {
+     "OPTIONS_O2_EXECUTION_ENABLED": false
+    },
+    "2.5": {
+     "OPTIONS_O2_EXECUTION_ENABLED": false
+    },
+    " 3 ": {
+     "OPTIONS_O2_EXECUTION_ENABLED": false
+    },
+    "abc": {
+     "OPTIONS_O2_EXECUTION_ENABLED": false
+    },
+    "a,b": {
+     "OPTIONS_O2_EXECUTION_ENABLED": false
+    },
+    "1_000": {
+     "OPTIONS_O2_EXECUTION_ENABLED": false
+    },
+    "-4": {
+     "OPTIONS_O2_EXECUTION_ENABLED": false
+    },
+    "inf": {
+     "OPTIONS_O2_EXECUTION_ENABLED": false
+    },
+    "nan": {
+     "OPTIONS_O2_EXECUTION_ENABLED": false
+    },
+    "1e3": {
+     "OPTIONS_O2_EXECUTION_ENABLED": false
+    }
+   }
+  },
+  {
+   "key": "BASKFY_OPTIONS_O3_EXECUTION_ENABLED",
+   "module": "app.config",
+   "attrs": [
+    "OPTIONS_O3_EXECUTION_ENABLED"
+   ],
+   "default": {
+    "OPTIONS_O3_EXECUTION_ENABLED": false
+   },
+   "probes": {
+    "": {
+     "OPTIONS_O3_EXECUTION_ENABLED": false
+    },
+    "true": {
+     "OPTIONS_O3_EXECUTION_ENABLED": true
+    },
+    "false": {
+     "OPTIONS_O3_EXECUTION_ENABLED": false
+    },
+    "TRUE": {
+     "OPTIONS_O3_EXECUTION_ENABLED": true
+    },
+    "False": {
+     "OPTIONS_O3_EXECUTION_ENABLED": false
+    },
+    "1": {
+     "OPTIONS_O3_EXECUTION_ENABLED": false
+    },
+    "0": {
+     "OPTIONS_O3_EXECUTION_ENABLED": false
+    },
+    "yes": {
+     "OPTIONS_O3_EXECUTION_ENABLED": false
+    },
+    "7": {
+     "OPTIONS_O3_EXECUTION_ENABLED": false
+    },
+    "2.5": {
+     "OPTIONS_O3_EXECUTION_ENABLED": false
+    },
+    " 3 ": {
+     "OPTIONS_O3_EXECUTION_ENABLED": false
+    },
+    "abc": {
+     "OPTIONS_O3_EXECUTION_ENABLED": false
+    },
+    "a,b": {
+     "OPTIONS_O3_EXECUTION_ENABLED": false
+    },
+    "1_000": {
+     "OPTIONS_O3_EXECUTION_ENABLED": false
+    },
+    "-4": {
+     "OPTIONS_O3_EXECUTION_ENABLED": false
+    },
+    "inf": {
+     "OPTIONS_O3_EXECUTION_ENABLED": false
+    },
+    "nan": {
+     "OPTIONS_O3_EXECUTION_ENABLED": false
+    },
+    "1e3": {
+     "OPTIONS_O3_EXECUTION_ENABLED": false
+    }
+   }
+  },
+  {
+   "key": "BASKFY_OPTIONS_RISK_PCT_MAX",
+   "module": "app.config",
+   "attrs": [
+    "OPTIONS_RISK_PCT_MAX"
+   ],
+   "default": {
+    "OPTIONS_RISK_PCT_MAX": "1.0"
+   },
+   "probes": {
+    "": {
+     "OPTIONS_RISK_PCT_MAX": ""
+    },
+    "true": {
+     "OPTIONS_RISK_PCT_MAX": "true"
+    },
+    "false": {
+     "OPTIONS_RISK_PCT_MAX": "false"
+    },
+    "TRUE": {
+     "OPTIONS_RISK_PCT_MAX": "TRUE"
+    },
+    "False": {
+     "OPTIONS_RISK_PCT_MAX": "False"
+    },
+    "1": {
+     "OPTIONS_RISK_PCT_MAX": "1"
+    },
+    "0": {
+     "OPTIONS_RISK_PCT_MAX": "0"
+    },
+    "yes": {
+     "OPTIONS_RISK_PCT_MAX": "yes"
+    },
+    "7": {
+     "OPTIONS_RISK_PCT_MAX": "7"
+    },
+    "2.5": {
+     "OPTIONS_RISK_PCT_MAX": "2.5"
+    },
+    " 3 ": {
+     "OPTIONS_RISK_PCT_MAX": " 3 "
+    },
+    "abc": {
+     "OPTIONS_RISK_PCT_MAX": "abc"
+    },
+    "a,b": {
+     "OPTIONS_RISK_PCT_MAX": "a,b"
+    },
+    "1_000": {
+     "OPTIONS_RISK_PCT_MAX": "1_000"
+    },
+    "-4": {
+     "OPTIONS_RISK_PCT_MAX": "-4"
+    },
+    "inf": {
+     "OPTIONS_RISK_PCT_MAX": "inf"
+    },
+    "nan": {
+     "OPTIONS_RISK_PCT_MAX": "nan"
+    },
+    "1e3": {
+     "OPTIONS_RISK_PCT_MAX": "1e3"
+    }
+   }
+  },
+  {
+   "key": "BASKFY_OPTIONS_RISK_PER_TRADE_INR_MAX",
+   "module": "app.config",
+   "attrs": [
+    "OPTIONS_RISK_PER_TRADE_INR_MAX"
+   ],
+   "default": {
+    "OPTIONS_RISK_PER_TRADE_INR_MAX": "25000"
+   },
+   "probes": {
+    "": {
+     "OPTIONS_RISK_PER_TRADE_INR_MAX": ""
+    },
+    "true": {
+     "OPTIONS_RISK_PER_TRADE_INR_MAX": "true"
+    },
+    "false": {
+     "OPTIONS_RISK_PER_TRADE_INR_MAX": "false"
+    },
+    "TRUE": {
+     "OPTIONS_RISK_PER_TRADE_INR_MAX": "TRUE"
+    },
+    "False": {
+     "OPTIONS_RISK_PER_TRADE_INR_MAX": "False"
+    },
+    "1": {
+     "OPTIONS_RISK_PER_TRADE_INR_MAX": "1"
+    },
+    "0": {
+     "OPTIONS_RISK_PER_TRADE_INR_MAX": "0"
+    },
+    "yes": {
+     "OPTIONS_RISK_PER_TRADE_INR_MAX": "yes"
+    },
+    "7": {
+     "OPTIONS_RISK_PER_TRADE_INR_MAX": "7"
+    },
+    "2.5": {
+     "OPTIONS_RISK_PER_TRADE_INR_MAX": "2.5"
+    },
+    " 3 ": {
+     "OPTIONS_RISK_PER_TRADE_INR_MAX": " 3 "
+    },
+    "abc": {
+     "OPTIONS_RISK_PER_TRADE_INR_MAX": "abc"
+    },
+    "a,b": {
+     "OPTIONS_RISK_PER_TRADE_INR_MAX": "a,b"
+    },
+    "1_000": {
+     "OPTIONS_RISK_PER_TRADE_INR_MAX": "1_000"
+    },
+    "-4": {
+     "OPTIONS_RISK_PER_TRADE_INR_MAX": "-4"
+    },
+    "inf": {
+     "OPTIONS_RISK_PER_TRADE_INR_MAX": "inf"
+    },
+    "nan": {
+     "OPTIONS_RISK_PER_TRADE_INR_MAX": "nan"
+    },
+    "1e3": {
+     "OPTIONS_RISK_PER_TRADE_INR_MAX": "1e3"
+    }
+   }
+  },
+  {
+   "key": "BASKFY_OPTIONS_SCAN_ENABLED",
+   "module": "app.config",
+   "attrs": [
+    "OPTIONS_SCAN_ENABLED"
+   ],
+   "default": {
+    "OPTIONS_SCAN_ENABLED": false
+   },
+   "probes": {
+    "": {
+     "OPTIONS_SCAN_ENABLED": false
+    },
+    "true": {
+     "OPTIONS_SCAN_ENABLED": true
+    },
+    "false": {
+     "OPTIONS_SCAN_ENABLED": false
+    },
+    "TRUE": {
+     "OPTIONS_SCAN_ENABLED": true
+    },
+    "False": {
+     "OPTIONS_SCAN_ENABLED": false
+    },
+    "1": {
+     "OPTIONS_SCAN_ENABLED": false
+    },
+    "0": {
+     "OPTIONS_SCAN_ENABLED": false
+    },
+    "yes": {
+     "OPTIONS_SCAN_ENABLED": false
+    },
+    "7": {
+     "OPTIONS_SCAN_ENABLED": false
+    },
+    "2.5": {
+     "OPTIONS_SCAN_ENABLED": false
+    },
+    " 3 ": {
+     "OPTIONS_SCAN_ENABLED": false
+    },
+    "abc": {
+     "OPTIONS_SCAN_ENABLED": false
+    },
+    "a,b": {
+     "OPTIONS_SCAN_ENABLED": false
+    },
+    "1_000": {
+     "OPTIONS_SCAN_ENABLED": false
+    },
+    "-4": {
+     "OPTIONS_SCAN_ENABLED": false
+    },
+    "inf": {
+     "OPTIONS_SCAN_ENABLED": false
+    },
+    "nan": {
+     "OPTIONS_SCAN_ENABLED": false
+    },
+    "1e3": {
+     "OPTIONS_SCAN_ENABLED": false
+    }
+   }
+  },
+  {
+   "key": "BASKFY_REDIS_URL",
+   "module": "app.config",
+   "attrs": [
+    "SHARED_READ_LIMITS_REDIS_URL"
+   ],
+   "default": {
+    "SHARED_READ_LIMITS_REDIS_URL": ""
+   },
+   "probes": {
+    "": {
+     "SHARED_READ_LIMITS_REDIS_URL": ""
+    },
+    "true": {
+     "SHARED_READ_LIMITS_REDIS_URL": "true"
+    },
+    "false": {
+     "SHARED_READ_LIMITS_REDIS_URL": "false"
+    },
+    "TRUE": {
+     "SHARED_READ_LIMITS_REDIS_URL": "TRUE"
+    },
+    "False": {
+     "SHARED_READ_LIMITS_REDIS_URL": "False"
+    },
+    "1": {
+     "SHARED_READ_LIMITS_REDIS_URL": "1"
+    },
+    "0": {
+     "SHARED_READ_LIMITS_REDIS_URL": "0"
+    },
+    "yes": {
+     "SHARED_READ_LIMITS_REDIS_URL": "yes"
+    },
+    "7": {
+     "SHARED_READ_LIMITS_REDIS_URL": "7"
+    },
+    "2.5": {
+     "SHARED_READ_LIMITS_REDIS_URL": "2.5"
+    },
+    " 3 ": {
+     "SHARED_READ_LIMITS_REDIS_URL": " 3 "
+    },
+    "abc": {
+     "SHARED_READ_LIMITS_REDIS_URL": "abc"
+    },
+    "a,b": {
+     "SHARED_READ_LIMITS_REDIS_URL": "a,b"
+    },
+    "1_000": {
+     "SHARED_READ_LIMITS_REDIS_URL": "1_000"
+    },
+    "-4": {
+     "SHARED_READ_LIMITS_REDIS_URL": "-4"
+    },
+    "inf": {
+     "SHARED_READ_LIMITS_REDIS_URL": "inf"
+    },
+    "nan": {
+     "SHARED_READ_LIMITS_REDIS_URL": "nan"
+    },
+    "1e3": {
+     "SHARED_READ_LIMITS_REDIS_URL": "1e3"
+    }
+   }
+  },
+  {
+   "key": "BASKFY_SOLE_BROKER_ACCOUNT_ID",
+   "module": "app.config",
+   "attrs": [
+    "SOLE_BROKER_ACCOUNT_ID"
+   ],
+   "default": {
+    "SOLE_BROKER_ACCOUNT_ID": 1
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "SOLE_BROKER_ACCOUNT_ID": 1
+    },
+    "0": {
+     "SOLE_BROKER_ACCOUNT_ID": 0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "SOLE_BROKER_ACCOUNT_ID": 7
+    },
+    "2.5": {
+     "error": "ValueError"
+    },
+    " 3 ": {
+     "SOLE_BROKER_ACCOUNT_ID": 3
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "SOLE_BROKER_ACCOUNT_ID": 1000
+    },
+    "-4": {
+     "SOLE_BROKER_ACCOUNT_ID": -4
+    },
+    "inf": {
+     "error": "ValueError"
+    },
+    "nan": {
+     "error": "ValueError"
+    },
+    "1e3": {
+     "error": "ValueError"
+    }
+   }
+  },
+  {
+   "key": "BASKFY_SOLE_USER_ID",
+   "module": "app.config",
+   "attrs": [
+    "SOLE_USER_ID"
+   ],
+   "default": {
+    "SOLE_USER_ID": 1
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "SOLE_USER_ID": 1
+    },
+    "0": {
+     "SOLE_USER_ID": 0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "SOLE_USER_ID": 7
+    },
+    "2.5": {
+     "error": "ValueError"
+    },
+    " 3 ": {
+     "SOLE_USER_ID": 3
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "SOLE_USER_ID": 1000
+    },
+    "-4": {
+     "SOLE_USER_ID": -4
+    },
+    "inf": {
+     "error": "ValueError"
+    },
+    "nan": {
+     "error": "ValueError"
+    },
+    "1e3": {
+     "error": "ValueError"
+    }
+   }
+  },
+  {
+   "key": "BASKFY_SWING_AUTO_EXECUTE",
+   "module": "app.config",
+   "attrs": [
+    "SWING_AUTO_EXECUTE"
+   ],
+   "default": {
+    "SWING_AUTO_EXECUTE": false
+   },
+   "probes": {
+    "": {
+     "SWING_AUTO_EXECUTE": false
+    },
+    "true": {
+     "SWING_AUTO_EXECUTE": true
+    },
+    "false": {
+     "SWING_AUTO_EXECUTE": false
+    },
+    "TRUE": {
+     "SWING_AUTO_EXECUTE": true
+    },
+    "False": {
+     "SWING_AUTO_EXECUTE": false
+    },
+    "1": {
+     "SWING_AUTO_EXECUTE": false
+    },
+    "0": {
+     "SWING_AUTO_EXECUTE": false
+    },
+    "yes": {
+     "SWING_AUTO_EXECUTE": false
+    },
+    "7": {
+     "SWING_AUTO_EXECUTE": false
+    },
+    "2.5": {
+     "SWING_AUTO_EXECUTE": false
+    },
+    " 3 ": {
+     "SWING_AUTO_EXECUTE": false
+    },
+    "abc": {
+     "SWING_AUTO_EXECUTE": false
+    },
+    "a,b": {
+     "SWING_AUTO_EXECUTE": false
+    },
+    "1_000": {
+     "SWING_AUTO_EXECUTE": false
+    },
+    "-4": {
+     "SWING_AUTO_EXECUTE": false
+    },
+    "inf": {
+     "SWING_AUTO_EXECUTE": false
+    },
+    "nan": {
+     "SWING_AUTO_EXECUTE": false
+    },
+    "1e3": {
+     "SWING_AUTO_EXECUTE": false
+    }
+   }
+  },
+  {
+   "key": "BASKFY_SWING_EP_PREMARKET_ENABLED",
+   "module": "app.config",
+   "attrs": [
+    "_EP_PREMARKET",
+    "SWING_EP_PREMARKET_ENABLED"
+   ],
+   "default": {
+    "_EP_PREMARKET": "false",
+    "SWING_EP_PREMARKET_ENABLED": false
+   },
+   "probes": {
+    "": {
+     "_EP_PREMARKET": "",
+     "SWING_EP_PREMARKET_ENABLED": false
+    },
+    "true": {
+     "_EP_PREMARKET": "true",
+     "SWING_EP_PREMARKET_ENABLED": true
+    },
+    "false": {
+     "_EP_PREMARKET": "false",
+     "SWING_EP_PREMARKET_ENABLED": false
+    },
+    "TRUE": {
+     "_EP_PREMARKET": "TRUE",
+     "SWING_EP_PREMARKET_ENABLED": true
+    },
+    "False": {
+     "_EP_PREMARKET": "False",
+     "SWING_EP_PREMARKET_ENABLED": false
+    },
+    "1": {
+     "_EP_PREMARKET": "1",
+     "SWING_EP_PREMARKET_ENABLED": false
+    },
+    "0": {
+     "_EP_PREMARKET": "0",
+     "SWING_EP_PREMARKET_ENABLED": false
+    },
+    "yes": {
+     "_EP_PREMARKET": "yes",
+     "SWING_EP_PREMARKET_ENABLED": false
+    },
+    "7": {
+     "_EP_PREMARKET": "7",
+     "SWING_EP_PREMARKET_ENABLED": false
+    },
+    "2.5": {
+     "_EP_PREMARKET": "2.5",
+     "SWING_EP_PREMARKET_ENABLED": false
+    },
+    " 3 ": {
+     "_EP_PREMARKET": " 3 ",
+     "SWING_EP_PREMARKET_ENABLED": false
+    },
+    "abc": {
+     "_EP_PREMARKET": "abc",
+     "SWING_EP_PREMARKET_ENABLED": false
+    },
+    "a,b": {
+     "_EP_PREMARKET": "a,b",
+     "SWING_EP_PREMARKET_ENABLED": false
+    },
+    "1_000": {
+     "_EP_PREMARKET": "1_000",
+     "SWING_EP_PREMARKET_ENABLED": false
+    },
+    "-4": {
+     "_EP_PREMARKET": "-4",
+     "SWING_EP_PREMARKET_ENABLED": false
+    },
+    "inf": {
+     "_EP_PREMARKET": "inf",
+     "SWING_EP_PREMARKET_ENABLED": false
+    },
+    "nan": {
+     "_EP_PREMARKET": "nan",
+     "SWING_EP_PREMARKET_ENABLED": false
+    },
+    "1e3": {
+     "_EP_PREMARKET": "1e3",
+     "SWING_EP_PREMARKET_ENABLED": false
+    }
+   }
+  },
+  {
+   "key": "BASKFY_SWING_EXECUTION_ENABLED",
+   "module": "app.config",
+   "attrs": [
+    "SWING_EXECUTION_ENABLED"
+   ],
+   "default": {
+    "SWING_EXECUTION_ENABLED": false
+   },
+   "probes": {
+    "": {
+     "SWING_EXECUTION_ENABLED": false
+    },
+    "true": {
+     "SWING_EXECUTION_ENABLED": true
+    },
+    "false": {
+     "SWING_EXECUTION_ENABLED": false
+    },
+    "TRUE": {
+     "SWING_EXECUTION_ENABLED": true
+    },
+    "False": {
+     "SWING_EXECUTION_ENABLED": false
+    },
+    "1": {
+     "SWING_EXECUTION_ENABLED": false
+    },
+    "0": {
+     "SWING_EXECUTION_ENABLED": false
+    },
+    "yes": {
+     "SWING_EXECUTION_ENABLED": false
+    },
+    "7": {
+     "SWING_EXECUTION_ENABLED": false
+    },
+    "2.5": {
+     "SWING_EXECUTION_ENABLED": false
+    },
+    " 3 ": {
+     "SWING_EXECUTION_ENABLED": false
+    },
+    "abc": {
+     "SWING_EXECUTION_ENABLED": false
+    },
+    "a,b": {
+     "SWING_EXECUTION_ENABLED": false
+    },
+    "1_000": {
+     "SWING_EXECUTION_ENABLED": false
+    },
+    "-4": {
+     "SWING_EXECUTION_ENABLED": false
+    },
+    "inf": {
+     "SWING_EXECUTION_ENABLED": false
+    },
+    "nan": {
+     "SWING_EXECUTION_ENABLED": false
+    },
+    "1e3": {
+     "SWING_EXECUTION_ENABLED": false
+    }
+   }
+  },
+  {
+   "key": "BASKFY_SWING_GTT_LIMIT_FRACTION",
+   "module": "app.config",
+   "attrs": [
+    "SWING_GTT_LIMIT_FRACTION"
+   ],
+   "default": {
+    "SWING_GTT_LIMIT_FRACTION": 0.97
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "SWING_GTT_LIMIT_FRACTION": 1.0
+    },
+    "0": {
+     "SWING_GTT_LIMIT_FRACTION": 0.0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "SWING_GTT_LIMIT_FRACTION": 7.0
+    },
+    "2.5": {
+     "SWING_GTT_LIMIT_FRACTION": 2.5
+    },
+    " 3 ": {
+     "SWING_GTT_LIMIT_FRACTION": 3.0
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "SWING_GTT_LIMIT_FRACTION": 1000.0
+    },
+    "-4": {
+     "SWING_GTT_LIMIT_FRACTION": -4.0
+    },
+    "inf": {
+     "SWING_GTT_LIMIT_FRACTION": {
+      "float": "inf"
+     }
+    },
+    "nan": {
+     "SWING_GTT_LIMIT_FRACTION": {
+      "float": "nan"
+     }
+    },
+    "1e3": {
+     "SWING_GTT_LIMIT_FRACTION": 1000.0
+    }
+   }
+  },
+  {
+   "key": "BASKFY_SWING_INDEX_SLUG",
+   "module": "app.config",
+   "attrs": [
+    "SWING_INDEX_SLUG"
+   ],
+   "default": {
+    "SWING_INDEX_SLUG": "nifty-smallcap-250"
+   },
+   "probes": {
+    "": {
+     "SWING_INDEX_SLUG": ""
+    },
+    "true": {
+     "SWING_INDEX_SLUG": "true"
+    },
+    "false": {
+     "SWING_INDEX_SLUG": "false"
+    },
+    "TRUE": {
+     "SWING_INDEX_SLUG": "TRUE"
+    },
+    "False": {
+     "SWING_INDEX_SLUG": "False"
+    },
+    "1": {
+     "SWING_INDEX_SLUG": "1"
+    },
+    "0": {
+     "SWING_INDEX_SLUG": "0"
+    },
+    "yes": {
+     "SWING_INDEX_SLUG": "yes"
+    },
+    "7": {
+     "SWING_INDEX_SLUG": "7"
+    },
+    "2.5": {
+     "SWING_INDEX_SLUG": "2.5"
+    },
+    " 3 ": {
+     "SWING_INDEX_SLUG": " 3 "
+    },
+    "abc": {
+     "SWING_INDEX_SLUG": "abc"
+    },
+    "a,b": {
+     "SWING_INDEX_SLUG": "a,b"
+    },
+    "1_000": {
+     "SWING_INDEX_SLUG": "1_000"
+    },
+    "-4": {
+     "SWING_INDEX_SLUG": "-4"
+    },
+    "inf": {
+     "SWING_INDEX_SLUG": "inf"
+    },
+    "nan": {
+     "SWING_INDEX_SLUG": "nan"
+    },
+    "1e3": {
+     "SWING_INDEX_SLUG": "1e3"
+    }
+   }
+  },
+  {
+   "key": "BASKFY_SWING_MONITOR_ENABLED",
+   "module": "app.config",
+   "attrs": [
+    "SWING_MONITOR_ENABLED"
+   ],
+   "default": {
+    "SWING_MONITOR_ENABLED": false
+   },
+   "probes": {
+    "": {
+     "SWING_MONITOR_ENABLED": false
+    },
+    "true": {
+     "SWING_MONITOR_ENABLED": true
+    },
+    "false": {
+     "SWING_MONITOR_ENABLED": false
+    },
+    "TRUE": {
+     "SWING_MONITOR_ENABLED": true
+    },
+    "False": {
+     "SWING_MONITOR_ENABLED": false
+    },
+    "1": {
+     "SWING_MONITOR_ENABLED": false
+    },
+    "0": {
+     "SWING_MONITOR_ENABLED": false
+    },
+    "yes": {
+     "SWING_MONITOR_ENABLED": false
+    },
+    "7": {
+     "SWING_MONITOR_ENABLED": false
+    },
+    "2.5": {
+     "SWING_MONITOR_ENABLED": false
+    },
+    " 3 ": {
+     "SWING_MONITOR_ENABLED": false
+    },
+    "abc": {
+     "SWING_MONITOR_ENABLED": false
+    },
+    "a,b": {
+     "SWING_MONITOR_ENABLED": false
+    },
+    "1_000": {
+     "SWING_MONITOR_ENABLED": false
+    },
+    "-4": {
+     "SWING_MONITOR_ENABLED": false
+    },
+    "inf": {
+     "SWING_MONITOR_ENABLED": false
+    },
+    "nan": {
+     "SWING_MONITOR_ENABLED": false
+    },
+    "1e3": {
+     "SWING_MONITOR_ENABLED": false
+    }
+   }
+  },
+  {
+   "key": "BASKFY_SWING_SCAN_MIN_INTERVAL_SECONDS",
+   "module": "app.config",
+   "attrs": [
+    "SWING_SCAN_MIN_INTERVAL_SECONDS"
+   ],
+   "default": {
+    "SWING_SCAN_MIN_INTERVAL_SECONDS": 60
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "SWING_SCAN_MIN_INTERVAL_SECONDS": 1
+    },
+    "0": {
+     "SWING_SCAN_MIN_INTERVAL_SECONDS": 0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "SWING_SCAN_MIN_INTERVAL_SECONDS": 7
+    },
+    "2.5": {
+     "error": "ValueError"
+    },
+    " 3 ": {
+     "SWING_SCAN_MIN_INTERVAL_SECONDS": 3
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "SWING_SCAN_MIN_INTERVAL_SECONDS": 1000
+    },
+    "-4": {
+     "SWING_SCAN_MIN_INTERVAL_SECONDS": -4
+    },
+    "inf": {
+     "error": "ValueError"
+    },
+    "nan": {
+     "error": "ValueError"
+    },
+    "1e3": {
+     "error": "ValueError"
+    }
+   }
+  },
+  {
+   "key": "BASKFY_SWING_SCAN_STALE_AFTER_SECONDS",
+   "module": "app.config",
+   "attrs": [
+    "SWING_SCAN_STALE_AFTER_SECONDS"
+   ],
+   "default": {
+    "SWING_SCAN_STALE_AFTER_SECONDS": 600
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "SWING_SCAN_STALE_AFTER_SECONDS": 1
+    },
+    "0": {
+     "SWING_SCAN_STALE_AFTER_SECONDS": 0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "SWING_SCAN_STALE_AFTER_SECONDS": 7
+    },
+    "2.5": {
+     "error": "ValueError"
+    },
+    " 3 ": {
+     "SWING_SCAN_STALE_AFTER_SECONDS": 3
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "SWING_SCAN_STALE_AFTER_SECONDS": 1000
+    },
+    "-4": {
+     "SWING_SCAN_STALE_AFTER_SECONDS": -4
+    },
+    "inf": {
+     "error": "ValueError"
+    },
+    "nan": {
+     "error": "ValueError"
+    },
+    "1e3": {
+     "error": "ValueError"
+    }
+   }
+  },
+  {
+   "key": "BASKFY_SWING_STOP_BAND_MAX",
+   "module": "app.config",
+   "attrs": [
+    "SWING_STOP_BAND_MAX"
+   ],
+   "default": {
+    "SWING_STOP_BAND_MAX": 0.1
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "SWING_STOP_BAND_MAX": 1.0
+    },
+    "0": {
+     "SWING_STOP_BAND_MAX": 0.0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "SWING_STOP_BAND_MAX": 7.0
+    },
+    "2.5": {
+     "SWING_STOP_BAND_MAX": 2.5
+    },
+    " 3 ": {
+     "SWING_STOP_BAND_MAX": 3.0
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "SWING_STOP_BAND_MAX": 1000.0
+    },
+    "-4": {
+     "SWING_STOP_BAND_MAX": -4.0
+    },
+    "inf": {
+     "SWING_STOP_BAND_MAX": {
+      "float": "inf"
+     }
+    },
+    "nan": {
+     "SWING_STOP_BAND_MAX": {
+      "float": "nan"
+     }
+    },
+    "1e3": {
+     "SWING_STOP_BAND_MAX": 1000.0
+    }
+   }
+  },
+  {
+   "key": "BASKFY_SWING_STOP_BAND_MIN",
+   "module": "app.config",
+   "attrs": [
+    "SWING_STOP_BAND_MIN"
+   ],
+   "default": {
+    "SWING_STOP_BAND_MIN": 0.005
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "SWING_STOP_BAND_MIN": 1.0
+    },
+    "0": {
+     "SWING_STOP_BAND_MIN": 0.0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "SWING_STOP_BAND_MIN": 7.0
+    },
+    "2.5": {
+     "SWING_STOP_BAND_MIN": 2.5
+    },
+    " 3 ": {
+     "SWING_STOP_BAND_MIN": 3.0
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "SWING_STOP_BAND_MIN": 1000.0
+    },
+    "-4": {
+     "SWING_STOP_BAND_MIN": -4.0
+    },
+    "inf": {
+     "SWING_STOP_BAND_MIN": {
+      "float": "inf"
+     }
+    },
+    "nan": {
+     "SWING_STOP_BAND_MIN": {
+      "float": "nan"
+     }
+    },
+    "1e3": {
+     "SWING_STOP_BAND_MIN": 1000.0
+    }
+   }
+  },
+  {
+   "key": "BASKFY_SWING_TELEGRAM_BOT_TOKEN",
+   "module": "app.config",
+   "attrs": [
+    "SWING_TELEGRAM_BOT_TOKEN"
+   ],
+   "default": {
+    "SWING_TELEGRAM_BOT_TOKEN": ""
+   },
+   "probes": {
+    "": {
+     "SWING_TELEGRAM_BOT_TOKEN": ""
+    },
+    "true": {
+     "SWING_TELEGRAM_BOT_TOKEN": "true"
+    },
+    "false": {
+     "SWING_TELEGRAM_BOT_TOKEN": "false"
+    },
+    "TRUE": {
+     "SWING_TELEGRAM_BOT_TOKEN": "TRUE"
+    },
+    "False": {
+     "SWING_TELEGRAM_BOT_TOKEN": "False"
+    },
+    "1": {
+     "SWING_TELEGRAM_BOT_TOKEN": "1"
+    },
+    "0": {
+     "SWING_TELEGRAM_BOT_TOKEN": "0"
+    },
+    "yes": {
+     "SWING_TELEGRAM_BOT_TOKEN": "yes"
+    },
+    "7": {
+     "SWING_TELEGRAM_BOT_TOKEN": "7"
+    },
+    "2.5": {
+     "SWING_TELEGRAM_BOT_TOKEN": "2.5"
+    },
+    " 3 ": {
+     "SWING_TELEGRAM_BOT_TOKEN": " 3 "
+    },
+    "abc": {
+     "SWING_TELEGRAM_BOT_TOKEN": "abc"
+    },
+    "a,b": {
+     "SWING_TELEGRAM_BOT_TOKEN": "a,b"
+    },
+    "1_000": {
+     "SWING_TELEGRAM_BOT_TOKEN": "1_000"
+    },
+    "-4": {
+     "SWING_TELEGRAM_BOT_TOKEN": "-4"
+    },
+    "inf": {
+     "SWING_TELEGRAM_BOT_TOKEN": "inf"
+    },
+    "nan": {
+     "SWING_TELEGRAM_BOT_TOKEN": "nan"
+    },
+    "1e3": {
+     "SWING_TELEGRAM_BOT_TOKEN": "1e3"
+    }
+   }
+  },
+  {
+   "key": "BASKFY_SWING_TELEGRAM_CHAT_ID",
+   "module": "app.config",
+   "attrs": [
+    "SWING_TELEGRAM_CHAT_ID"
+   ],
+   "default": {
+    "SWING_TELEGRAM_CHAT_ID": ""
+   },
+   "probes": {
+    "": {
+     "SWING_TELEGRAM_CHAT_ID": ""
+    },
+    "true": {
+     "SWING_TELEGRAM_CHAT_ID": "true"
+    },
+    "false": {
+     "SWING_TELEGRAM_CHAT_ID": "false"
+    },
+    "TRUE": {
+     "SWING_TELEGRAM_CHAT_ID": "TRUE"
+    },
+    "False": {
+     "SWING_TELEGRAM_CHAT_ID": "False"
+    },
+    "1": {
+     "SWING_TELEGRAM_CHAT_ID": "1"
+    },
+    "0": {
+     "SWING_TELEGRAM_CHAT_ID": "0"
+    },
+    "yes": {
+     "SWING_TELEGRAM_CHAT_ID": "yes"
+    },
+    "7": {
+     "SWING_TELEGRAM_CHAT_ID": "7"
+    },
+    "2.5": {
+     "SWING_TELEGRAM_CHAT_ID": "2.5"
+    },
+    " 3 ": {
+     "SWING_TELEGRAM_CHAT_ID": " 3 "
+    },
+    "abc": {
+     "SWING_TELEGRAM_CHAT_ID": "abc"
+    },
+    "a,b": {
+     "SWING_TELEGRAM_CHAT_ID": "a,b"
+    },
+    "1_000": {
+     "SWING_TELEGRAM_CHAT_ID": "1_000"
+    },
+    "-4": {
+     "SWING_TELEGRAM_CHAT_ID": "-4"
+    },
+    "inf": {
+     "SWING_TELEGRAM_CHAT_ID": "inf"
+    },
+    "nan": {
+     "SWING_TELEGRAM_CHAT_ID": "nan"
+    },
+    "1e3": {
+     "SWING_TELEGRAM_CHAT_ID": "1e3"
+    }
+   }
+  },
+  {
+   "key": "BASKFY_TWT_AUTO_EXECUTE",
+   "module": "app.config",
+   "attrs": [
+    "TWT_AUTO_EXECUTE"
+   ],
+   "default": {
+    "TWT_AUTO_EXECUTE": false
+   },
+   "probes": {
+    "": {
+     "TWT_AUTO_EXECUTE": false
+    },
+    "true": {
+     "TWT_AUTO_EXECUTE": true
+    },
+    "false": {
+     "TWT_AUTO_EXECUTE": false
+    },
+    "TRUE": {
+     "TWT_AUTO_EXECUTE": true
+    },
+    "False": {
+     "TWT_AUTO_EXECUTE": false
+    },
+    "1": {
+     "TWT_AUTO_EXECUTE": false
+    },
+    "0": {
+     "TWT_AUTO_EXECUTE": false
+    },
+    "yes": {
+     "TWT_AUTO_EXECUTE": false
+    },
+    "7": {
+     "TWT_AUTO_EXECUTE": false
+    },
+    "2.5": {
+     "TWT_AUTO_EXECUTE": false
+    },
+    " 3 ": {
+     "TWT_AUTO_EXECUTE": false
+    },
+    "abc": {
+     "TWT_AUTO_EXECUTE": false
+    },
+    "a,b": {
+     "TWT_AUTO_EXECUTE": false
+    },
+    "1_000": {
+     "TWT_AUTO_EXECUTE": false
+    },
+    "-4": {
+     "TWT_AUTO_EXECUTE": false
+    },
+    "inf": {
+     "TWT_AUTO_EXECUTE": false
+    },
+    "nan": {
+     "TWT_AUTO_EXECUTE": false
+    },
+    "1e3": {
+     "TWT_AUTO_EXECUTE": false
+    }
+   }
+  },
+  {
+   "key": "BASKFY_TWT_EXECUTION_ENABLED",
+   "module": "app.config",
+   "attrs": [
+    "TWT_EXECUTION_ENABLED"
+   ],
+   "default": {
+    "TWT_EXECUTION_ENABLED": false
+   },
+   "probes": {
+    "": {
+     "TWT_EXECUTION_ENABLED": false
+    },
+    "true": {
+     "TWT_EXECUTION_ENABLED": true
+    },
+    "false": {
+     "TWT_EXECUTION_ENABLED": false
+    },
+    "TRUE": {
+     "TWT_EXECUTION_ENABLED": true
+    },
+    "False": {
+     "TWT_EXECUTION_ENABLED": false
+    },
+    "1": {
+     "TWT_EXECUTION_ENABLED": false
+    },
+    "0": {
+     "TWT_EXECUTION_ENABLED": false
+    },
+    "yes": {
+     "TWT_EXECUTION_ENABLED": false
+    },
+    "7": {
+     "TWT_EXECUTION_ENABLED": false
+    },
+    "2.5": {
+     "TWT_EXECUTION_ENABLED": false
+    },
+    " 3 ": {
+     "TWT_EXECUTION_ENABLED": false
+    },
+    "abc": {
+     "TWT_EXECUTION_ENABLED": false
+    },
+    "a,b": {
+     "TWT_EXECUTION_ENABLED": false
+    },
+    "1_000": {
+     "TWT_EXECUTION_ENABLED": false
+    },
+    "-4": {
+     "TWT_EXECUTION_ENABLED": false
+    },
+    "inf": {
+     "TWT_EXECUTION_ENABLED": false
+    },
+    "nan": {
+     "TWT_EXECUTION_ENABLED": false
+    },
+    "1e3": {
+     "TWT_EXECUTION_ENABLED": false
+    }
+   }
+  },
+  {
+   "key": "BASKFY_VBT_EXECUTION_ENABLED",
+   "module": "app.config",
+   "attrs": [
+    "VBT_EXECUTION_ENABLED"
+   ],
+   "default": {
+    "VBT_EXECUTION_ENABLED": false
+   },
+   "probes": {
+    "": {
+     "VBT_EXECUTION_ENABLED": false
+    },
+    "true": {
+     "VBT_EXECUTION_ENABLED": true
+    },
+    "false": {
+     "VBT_EXECUTION_ENABLED": false
+    },
+    "TRUE": {
+     "VBT_EXECUTION_ENABLED": true
+    },
+    "False": {
+     "VBT_EXECUTION_ENABLED": false
+    },
+    "1": {
+     "VBT_EXECUTION_ENABLED": false
+    },
+    "0": {
+     "VBT_EXECUTION_ENABLED": false
+    },
+    "yes": {
+     "VBT_EXECUTION_ENABLED": false
+    },
+    "7": {
+     "VBT_EXECUTION_ENABLED": false
+    },
+    "2.5": {
+     "VBT_EXECUTION_ENABLED": false
+    },
+    " 3 ": {
+     "VBT_EXECUTION_ENABLED": false
+    },
+    "abc": {
+     "VBT_EXECUTION_ENABLED": false
+    },
+    "a,b": {
+     "VBT_EXECUTION_ENABLED": false
+    },
+    "1_000": {
+     "VBT_EXECUTION_ENABLED": false
+    },
+    "-4": {
+     "VBT_EXECUTION_ENABLED": false
+    },
+    "inf": {
+     "VBT_EXECUTION_ENABLED": false
+    },
+    "nan": {
+     "VBT_EXECUTION_ENABLED": false
+    },
+    "1e3": {
+     "VBT_EXECUTION_ENABLED": false
+    }
+   }
+  },
+  {
+   "key": "BASKFY_VBT_GTT_LIMIT_FRACTION",
+   "module": "app.config",
+   "attrs": [
+    "VBT_GTT_LIMIT_FRACTION"
+   ],
+   "default": {
+    "VBT_GTT_LIMIT_FRACTION": 0.97
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "VBT_GTT_LIMIT_FRACTION": 1.0
+    },
+    "0": {
+     "VBT_GTT_LIMIT_FRACTION": 0.0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "VBT_GTT_LIMIT_FRACTION": 7.0
+    },
+    "2.5": {
+     "VBT_GTT_LIMIT_FRACTION": 2.5
+    },
+    " 3 ": {
+     "VBT_GTT_LIMIT_FRACTION": 3.0
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "VBT_GTT_LIMIT_FRACTION": 1000.0
+    },
+    "-4": {
+     "VBT_GTT_LIMIT_FRACTION": -4.0
+    },
+    "inf": {
+     "VBT_GTT_LIMIT_FRACTION": {
+      "float": "inf"
+     }
+    },
+    "nan": {
+     "VBT_GTT_LIMIT_FRACTION": {
+      "float": "nan"
+     }
+    },
+    "1e3": {
+     "VBT_GTT_LIMIT_FRACTION": 1000.0
+    }
+   }
+  },
+  {
+   "key": "BASKFY_VBT_STOP_BAND_MAX",
+   "module": "app.config",
+   "attrs": [
+    "VBT_STOP_BAND_MAX"
+   ],
+   "default": {
+    "VBT_STOP_BAND_MAX": 0.15
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "VBT_STOP_BAND_MAX": 1.0
+    },
+    "0": {
+     "VBT_STOP_BAND_MAX": 0.0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "VBT_STOP_BAND_MAX": 7.0
+    },
+    "2.5": {
+     "VBT_STOP_BAND_MAX": 2.5
+    },
+    " 3 ": {
+     "VBT_STOP_BAND_MAX": 3.0
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "VBT_STOP_BAND_MAX": 1000.0
+    },
+    "-4": {
+     "VBT_STOP_BAND_MAX": -4.0
+    },
+    "inf": {
+     "VBT_STOP_BAND_MAX": {
+      "float": "inf"
+     }
+    },
+    "nan": {
+     "VBT_STOP_BAND_MAX": {
+      "float": "nan"
+     }
+    },
+    "1e3": {
+     "VBT_STOP_BAND_MAX": 1000.0
+    }
+   }
+  },
+  {
+   "key": "BASKFY_VBT_STOP_BAND_MIN",
+   "module": "app.config",
+   "attrs": [
+    "VBT_STOP_BAND_MIN"
+   ],
+   "default": {
+    "VBT_STOP_BAND_MIN": 0.005
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "VBT_STOP_BAND_MIN": 1.0
+    },
+    "0": {
+     "VBT_STOP_BAND_MIN": 0.0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "VBT_STOP_BAND_MIN": 7.0
+    },
+    "2.5": {
+     "VBT_STOP_BAND_MIN": 2.5
+    },
+    " 3 ": {
+     "VBT_STOP_BAND_MIN": 3.0
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "VBT_STOP_BAND_MIN": 1000.0
+    },
+    "-4": {
+     "VBT_STOP_BAND_MIN": -4.0
+    },
+    "inf": {
+     "VBT_STOP_BAND_MIN": {
+      "float": "inf"
+     }
+    },
+    "nan": {
+     "VBT_STOP_BAND_MIN": {
+      "float": "nan"
+     }
+    },
+    "1e3": {
+     "VBT_STOP_BAND_MIN": 1000.0
+    }
+   }
+  },
+  {
+   "key": "DB_PATH",
+   "module": "app.config",
+   "attrs": [
+    "DB_PATH"
+   ],
+   "default": {
+    "DB_PATH": "data/portfolio.db"
+   },
+   "probes": {
+    "": {
+     "DB_PATH": ""
+    },
+    "true": {
+     "DB_PATH": "true"
+    },
+    "false": {
+     "DB_PATH": "false"
+    },
+    "TRUE": {
+     "DB_PATH": "TRUE"
+    },
+    "False": {
+     "DB_PATH": "False"
+    },
+    "1": {
+     "DB_PATH": "1"
+    },
+    "0": {
+     "DB_PATH": "0"
+    },
+    "yes": {
+     "DB_PATH": "yes"
+    },
+    "7": {
+     "DB_PATH": "7"
+    },
+    "2.5": {
+     "DB_PATH": "2.5"
+    },
+    " 3 ": {
+     "DB_PATH": " 3 "
+    },
+    "abc": {
+     "DB_PATH": "abc"
+    },
+    "a,b": {
+     "DB_PATH": "a,b"
+    },
+    "1_000": {
+     "DB_PATH": "1_000"
+    },
+    "-4": {
+     "DB_PATH": "-4"
+    },
+    "inf": {
+     "DB_PATH": "inf"
+    },
+    "nan": {
+     "DB_PATH": "nan"
+    },
+    "1e3": {
+     "DB_PATH": "1e3"
+    }
+   }
+  },
+  {
+   "key": "DESK_ALLOWED_HOSTS",
+   "module": "app.config",
+   "attrs": [
+    "DESK_ALLOWED_HOSTS"
+   ],
+   "default": {
+    "DESK_ALLOWED_HOSTS": "127.0.0.1,localhost,testserver"
+   },
+   "probes": {
+    "": {
+     "DESK_ALLOWED_HOSTS": ""
+    },
+    "true": {
+     "DESK_ALLOWED_HOSTS": "true"
+    },
+    "false": {
+     "DESK_ALLOWED_HOSTS": "false"
+    },
+    "TRUE": {
+     "DESK_ALLOWED_HOSTS": "TRUE"
+    },
+    "False": {
+     "DESK_ALLOWED_HOSTS": "False"
+    },
+    "1": {
+     "DESK_ALLOWED_HOSTS": "1"
+    },
+    "0": {
+     "DESK_ALLOWED_HOSTS": "0"
+    },
+    "yes": {
+     "DESK_ALLOWED_HOSTS": "yes"
+    },
+    "7": {
+     "DESK_ALLOWED_HOSTS": "7"
+    },
+    "2.5": {
+     "DESK_ALLOWED_HOSTS": "2.5"
+    },
+    " 3 ": {
+     "DESK_ALLOWED_HOSTS": " 3 "
+    },
+    "abc": {
+     "DESK_ALLOWED_HOSTS": "abc"
+    },
+    "a,b": {
+     "DESK_ALLOWED_HOSTS": "a,b"
+    },
+    "1_000": {
+     "DESK_ALLOWED_HOSTS": "1_000"
+    },
+    "-4": {
+     "DESK_ALLOWED_HOSTS": "-4"
+    },
+    "inf": {
+     "DESK_ALLOWED_HOSTS": "inf"
+    },
+    "nan": {
+     "DESK_ALLOWED_HOSTS": "nan"
+    },
+    "1e3": {
+     "DESK_ALLOWED_HOSTS": "1e3"
+    }
+   }
+  },
+  {
+   "key": "DESK_DOCS",
+   "module": "app.config",
+   "attrs": [
+    "DESK_DOCS"
+   ],
+   "default": {
+    "DESK_DOCS": false
+   },
+   "probes": {
+    "": {
+     "DESK_DOCS": false
+    },
+    "true": {
+     "DESK_DOCS": true
+    },
+    "false": {
+     "DESK_DOCS": false
+    },
+    "TRUE": {
+     "DESK_DOCS": true
+    },
+    "False": {
+     "DESK_DOCS": false
+    },
+    "1": {
+     "DESK_DOCS": false
+    },
+    "0": {
+     "DESK_DOCS": false
+    },
+    "yes": {
+     "DESK_DOCS": false
+    },
+    "7": {
+     "DESK_DOCS": false
+    },
+    "2.5": {
+     "DESK_DOCS": false
+    },
+    " 3 ": {
+     "DESK_DOCS": false
+    },
+    "abc": {
+     "DESK_DOCS": false
+    },
+    "a,b": {
+     "DESK_DOCS": false
+    },
+    "1_000": {
+     "DESK_DOCS": false
+    },
+    "-4": {
+     "DESK_DOCS": false
+    },
+    "inf": {
+     "DESK_DOCS": false
+    },
+    "nan": {
+     "DESK_DOCS": false
+    },
+    "1e3": {
+     "DESK_DOCS": false
+    }
+   }
+  },
+  {
+   "key": "DESK_NOTIFY_FROM",
+   "module": "app.config",
+   "attrs": [
+    "DESK_NOTIFY_FROM"
+   ],
+   "default": {
+    "DESK_NOTIFY_FROM": ""
+   },
+   "probes": {
+    "": {
+     "DESK_NOTIFY_FROM": ""
+    },
+    "true": {
+     "DESK_NOTIFY_FROM": "true"
+    },
+    "false": {
+     "DESK_NOTIFY_FROM": "false"
+    },
+    "TRUE": {
+     "DESK_NOTIFY_FROM": "TRUE"
+    },
+    "False": {
+     "DESK_NOTIFY_FROM": "False"
+    },
+    "1": {
+     "DESK_NOTIFY_FROM": "1"
+    },
+    "0": {
+     "DESK_NOTIFY_FROM": "0"
+    },
+    "yes": {
+     "DESK_NOTIFY_FROM": "yes"
+    },
+    "7": {
+     "DESK_NOTIFY_FROM": "7"
+    },
+    "2.5": {
+     "DESK_NOTIFY_FROM": "2.5"
+    },
+    " 3 ": {
+     "DESK_NOTIFY_FROM": " 3 "
+    },
+    "abc": {
+     "DESK_NOTIFY_FROM": "abc"
+    },
+    "a,b": {
+     "DESK_NOTIFY_FROM": "a,b"
+    },
+    "1_000": {
+     "DESK_NOTIFY_FROM": "1_000"
+    },
+    "-4": {
+     "DESK_NOTIFY_FROM": "-4"
+    },
+    "inf": {
+     "DESK_NOTIFY_FROM": "inf"
+    },
+    "nan": {
+     "DESK_NOTIFY_FROM": "nan"
+    },
+    "1e3": {
+     "DESK_NOTIFY_FROM": "1e3"
+    }
+   }
+  },
+  {
+   "key": "DESK_NOTIFY_TO",
+   "module": "app.config",
+   "attrs": [
+    "DESK_NOTIFY_TO"
+   ],
+   "default": {
+    "DESK_NOTIFY_TO": ""
+   },
+   "probes": {
+    "": {
+     "DESK_NOTIFY_TO": ""
+    },
+    "true": {
+     "DESK_NOTIFY_TO": "true"
+    },
+    "false": {
+     "DESK_NOTIFY_TO": "false"
+    },
+    "TRUE": {
+     "DESK_NOTIFY_TO": "TRUE"
+    },
+    "False": {
+     "DESK_NOTIFY_TO": "False"
+    },
+    "1": {
+     "DESK_NOTIFY_TO": "1"
+    },
+    "0": {
+     "DESK_NOTIFY_TO": "0"
+    },
+    "yes": {
+     "DESK_NOTIFY_TO": "yes"
+    },
+    "7": {
+     "DESK_NOTIFY_TO": "7"
+    },
+    "2.5": {
+     "DESK_NOTIFY_TO": "2.5"
+    },
+    " 3 ": {
+     "DESK_NOTIFY_TO": " 3 "
+    },
+    "abc": {
+     "DESK_NOTIFY_TO": "abc"
+    },
+    "a,b": {
+     "DESK_NOTIFY_TO": "a,b"
+    },
+    "1_000": {
+     "DESK_NOTIFY_TO": "1_000"
+    },
+    "-4": {
+     "DESK_NOTIFY_TO": "-4"
+    },
+    "inf": {
+     "DESK_NOTIFY_TO": "inf"
+    },
+    "nan": {
+     "DESK_NOTIFY_TO": "nan"
+    },
+    "1e3": {
+     "DESK_NOTIFY_TO": "1e3"
+    }
+   }
+  },
+  {
+   "key": "DESK_PASSWORD",
+   "module": "app.config",
+   "attrs": [
+    "DESK_PASSWORD"
+   ],
+   "default": {
+    "DESK_PASSWORD": ""
+   },
+   "probes": {
+    "": {
+     "DESK_PASSWORD": ""
+    },
+    "true": {
+     "DESK_PASSWORD": "true"
+    },
+    "false": {
+     "DESK_PASSWORD": "false"
+    },
+    "TRUE": {
+     "DESK_PASSWORD": "TRUE"
+    },
+    "False": {
+     "DESK_PASSWORD": "False"
+    },
+    "1": {
+     "DESK_PASSWORD": "1"
+    },
+    "0": {
+     "DESK_PASSWORD": "0"
+    },
+    "yes": {
+     "DESK_PASSWORD": "yes"
+    },
+    "7": {
+     "DESK_PASSWORD": "7"
+    },
+    "2.5": {
+     "DESK_PASSWORD": "2.5"
+    },
+    " 3 ": {
+     "DESK_PASSWORD": " 3 "
+    },
+    "abc": {
+     "DESK_PASSWORD": "abc"
+    },
+    "a,b": {
+     "DESK_PASSWORD": "a,b"
+    },
+    "1_000": {
+     "DESK_PASSWORD": "1_000"
+    },
+    "-4": {
+     "DESK_PASSWORD": "-4"
+    },
+    "inf": {
+     "DESK_PASSWORD": "inf"
+    },
+    "nan": {
+     "DESK_PASSWORD": "nan"
+    },
+    "1e3": {
+     "DESK_PASSWORD": "1e3"
+    }
+   }
+  },
+  {
+   "key": "DESK_PATH_PREFIX",
+   "module": "app.config",
+   "attrs": [
+    "DESK_PATH_PREFIX"
+   ],
+   "default": {
+    "DESK_PATH_PREFIX": ""
+   },
+   "probes": {
+    "": {
+     "DESK_PATH_PREFIX": ""
+    },
+    "true": {
+     "DESK_PATH_PREFIX": "true"
+    },
+    "false": {
+     "DESK_PATH_PREFIX": "false"
+    },
+    "TRUE": {
+     "DESK_PATH_PREFIX": "TRUE"
+    },
+    "False": {
+     "DESK_PATH_PREFIX": "False"
+    },
+    "1": {
+     "DESK_PATH_PREFIX": "1"
+    },
+    "0": {
+     "DESK_PATH_PREFIX": "0"
+    },
+    "yes": {
+     "DESK_PATH_PREFIX": "yes"
+    },
+    "7": {
+     "DESK_PATH_PREFIX": "7"
+    },
+    "2.5": {
+     "DESK_PATH_PREFIX": "2.5"
+    },
+    " 3 ": {
+     "DESK_PATH_PREFIX": " 3 "
+    },
+    "abc": {
+     "DESK_PATH_PREFIX": "abc"
+    },
+    "a,b": {
+     "DESK_PATH_PREFIX": "a,b"
+    },
+    "1_000": {
+     "DESK_PATH_PREFIX": "1_000"
+    },
+    "-4": {
+     "DESK_PATH_PREFIX": "-4"
+    },
+    "inf": {
+     "DESK_PATH_PREFIX": "inf"
+    },
+    "nan": {
+     "DESK_PATH_PREFIX": "nan"
+    },
+    "1e3": {
+     "DESK_PATH_PREFIX": "1e3"
+    }
+   }
+  },
+  {
+   "key": "DESK_PORT",
+   "module": "app.config",
+   "attrs": [
+    "DESK_PORT"
+   ],
+   "default": {
+    "DESK_PORT": 8420
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "DESK_PORT": 1
+    },
+    "0": {
+     "DESK_PORT": 0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "DESK_PORT": 7
+    },
+    "2.5": {
+     "error": "ValueError"
+    },
+    " 3 ": {
+     "DESK_PORT": 3
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "DESK_PORT": 1000
+    },
+    "-4": {
+     "DESK_PORT": -4
+    },
+    "inf": {
+     "error": "ValueError"
+    },
+    "nan": {
+     "error": "ValueError"
+    },
+    "1e3": {
+     "error": "ValueError"
+    }
+   }
+  },
+  {
+   "key": "DESK_SHARED_READ_LIMITS",
+   "module": "app.config",
+   "attrs": [
+    "SHARED_READ_LIMITS"
+   ],
+   "default": {
+    "SHARED_READ_LIMITS": true
+   },
+   "probes": {
+    "": {
+     "SHARED_READ_LIMITS": true
+    },
+    "true": {
+     "SHARED_READ_LIMITS": true
+    },
+    "false": {
+     "SHARED_READ_LIMITS": false
+    },
+    "TRUE": {
+     "SHARED_READ_LIMITS": true
+    },
+    "False": {
+     "SHARED_READ_LIMITS": false
+    },
+    "1": {
+     "SHARED_READ_LIMITS": true
+    },
+    "0": {
+     "SHARED_READ_LIMITS": true
+    },
+    "yes": {
+     "SHARED_READ_LIMITS": true
+    },
+    "7": {
+     "SHARED_READ_LIMITS": true
+    },
+    "2.5": {
+     "SHARED_READ_LIMITS": true
+    },
+    " 3 ": {
+     "SHARED_READ_LIMITS": true
+    },
+    "abc": {
+     "SHARED_READ_LIMITS": true
+    },
+    "a,b": {
+     "SHARED_READ_LIMITS": true
+    },
+    "1_000": {
+     "SHARED_READ_LIMITS": true
+    },
+    "-4": {
+     "SHARED_READ_LIMITS": true
+    },
+    "inf": {
+     "SHARED_READ_LIMITS": true
+    },
+    "nan": {
+     "SHARED_READ_LIMITS": true
+    },
+    "1e3": {
+     "SHARED_READ_LIMITS": true
+    }
+   }
+  },
+  {
+   "key": "DESK_SMTP_HOST",
+   "module": "app.config",
+   "attrs": [
+    "DESK_SMTP_HOST"
+   ],
+   "default": {
+    "DESK_SMTP_HOST": ""
+   },
+   "probes": {
+    "": {
+     "DESK_SMTP_HOST": ""
+    },
+    "true": {
+     "DESK_SMTP_HOST": "true"
+    },
+    "false": {
+     "DESK_SMTP_HOST": "false"
+    },
+    "TRUE": {
+     "DESK_SMTP_HOST": "TRUE"
+    },
+    "False": {
+     "DESK_SMTP_HOST": "False"
+    },
+    "1": {
+     "DESK_SMTP_HOST": "1"
+    },
+    "0": {
+     "DESK_SMTP_HOST": "0"
+    },
+    "yes": {
+     "DESK_SMTP_HOST": "yes"
+    },
+    "7": {
+     "DESK_SMTP_HOST": "7"
+    },
+    "2.5": {
+     "DESK_SMTP_HOST": "2.5"
+    },
+    " 3 ": {
+     "DESK_SMTP_HOST": " 3 "
+    },
+    "abc": {
+     "DESK_SMTP_HOST": "abc"
+    },
+    "a,b": {
+     "DESK_SMTP_HOST": "a,b"
+    },
+    "1_000": {
+     "DESK_SMTP_HOST": "1_000"
+    },
+    "-4": {
+     "DESK_SMTP_HOST": "-4"
+    },
+    "inf": {
+     "DESK_SMTP_HOST": "inf"
+    },
+    "nan": {
+     "DESK_SMTP_HOST": "nan"
+    },
+    "1e3": {
+     "DESK_SMTP_HOST": "1e3"
+    }
+   }
+  },
+  {
+   "key": "DESK_SMTP_PASSWORD",
+   "module": "app.config",
+   "attrs": [
+    "DESK_SMTP_PASSWORD"
+   ],
+   "default": {
+    "DESK_SMTP_PASSWORD": ""
+   },
+   "probes": {
+    "": {
+     "DESK_SMTP_PASSWORD": ""
+    },
+    "true": {
+     "DESK_SMTP_PASSWORD": "true"
+    },
+    "false": {
+     "DESK_SMTP_PASSWORD": "false"
+    },
+    "TRUE": {
+     "DESK_SMTP_PASSWORD": "TRUE"
+    },
+    "False": {
+     "DESK_SMTP_PASSWORD": "False"
+    },
+    "1": {
+     "DESK_SMTP_PASSWORD": "1"
+    },
+    "0": {
+     "DESK_SMTP_PASSWORD": "0"
+    },
+    "yes": {
+     "DESK_SMTP_PASSWORD": "yes"
+    },
+    "7": {
+     "DESK_SMTP_PASSWORD": "7"
+    },
+    "2.5": {
+     "DESK_SMTP_PASSWORD": "2.5"
+    },
+    " 3 ": {
+     "DESK_SMTP_PASSWORD": " 3 "
+    },
+    "abc": {
+     "DESK_SMTP_PASSWORD": "abc"
+    },
+    "a,b": {
+     "DESK_SMTP_PASSWORD": "a,b"
+    },
+    "1_000": {
+     "DESK_SMTP_PASSWORD": "1_000"
+    },
+    "-4": {
+     "DESK_SMTP_PASSWORD": "-4"
+    },
+    "inf": {
+     "DESK_SMTP_PASSWORD": "inf"
+    },
+    "nan": {
+     "DESK_SMTP_PASSWORD": "nan"
+    },
+    "1e3": {
+     "DESK_SMTP_PASSWORD": "1e3"
+    }
+   }
+  },
+  {
+   "key": "DESK_SMTP_PORT",
+   "module": "app.config",
+   "attrs": [
+    "DESK_SMTP_PORT"
+   ],
+   "default": {
+    "DESK_SMTP_PORT": 587
+   },
+   "probes": {
+    "": {
+     "DESK_SMTP_PORT": 587
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "DESK_SMTP_PORT": 1
+    },
+    "0": {
+     "DESK_SMTP_PORT": 0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "DESK_SMTP_PORT": 7
+    },
+    "2.5": {
+     "error": "ValueError"
+    },
+    " 3 ": {
+     "DESK_SMTP_PORT": 3
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "DESK_SMTP_PORT": 1000
+    },
+    "-4": {
+     "DESK_SMTP_PORT": -4
+    },
+    "inf": {
+     "error": "ValueError"
+    },
+    "nan": {
+     "error": "ValueError"
+    },
+    "1e3": {
+     "error": "ValueError"
+    }
+   }
+  },
+  {
+   "key": "DESK_SMTP_STARTTLS",
+   "module": "app.config",
+   "attrs": [
+    "DESK_SMTP_STARTTLS"
+   ],
+   "default": {
+    "DESK_SMTP_STARTTLS": true
+   },
+   "probes": {
+    "": {
+     "DESK_SMTP_STARTTLS": true
+    },
+    "true": {
+     "DESK_SMTP_STARTTLS": true
+    },
+    "false": {
+     "DESK_SMTP_STARTTLS": false
+    },
+    "TRUE": {
+     "DESK_SMTP_STARTTLS": true
+    },
+    "False": {
+     "DESK_SMTP_STARTTLS": false
+    },
+    "1": {
+     "DESK_SMTP_STARTTLS": true
+    },
+    "0": {
+     "DESK_SMTP_STARTTLS": true
+    },
+    "yes": {
+     "DESK_SMTP_STARTTLS": true
+    },
+    "7": {
+     "DESK_SMTP_STARTTLS": true
+    },
+    "2.5": {
+     "DESK_SMTP_STARTTLS": true
+    },
+    " 3 ": {
+     "DESK_SMTP_STARTTLS": true
+    },
+    "abc": {
+     "DESK_SMTP_STARTTLS": true
+    },
+    "a,b": {
+     "DESK_SMTP_STARTTLS": true
+    },
+    "1_000": {
+     "DESK_SMTP_STARTTLS": true
+    },
+    "-4": {
+     "DESK_SMTP_STARTTLS": true
+    },
+    "inf": {
+     "DESK_SMTP_STARTTLS": true
+    },
+    "nan": {
+     "DESK_SMTP_STARTTLS": true
+    },
+    "1e3": {
+     "DESK_SMTP_STARTTLS": true
+    }
+   }
+  },
+  {
+   "key": "DESK_SMTP_USER",
+   "module": "app.config",
+   "attrs": [
+    "DESK_SMTP_USER"
+   ],
+   "default": {
+    "DESK_SMTP_USER": ""
+   },
+   "probes": {
+    "": {
+     "DESK_SMTP_USER": ""
+    },
+    "true": {
+     "DESK_SMTP_USER": "true"
+    },
+    "false": {
+     "DESK_SMTP_USER": "false"
+    },
+    "TRUE": {
+     "DESK_SMTP_USER": "TRUE"
+    },
+    "False": {
+     "DESK_SMTP_USER": "False"
+    },
+    "1": {
+     "DESK_SMTP_USER": "1"
+    },
+    "0": {
+     "DESK_SMTP_USER": "0"
+    },
+    "yes": {
+     "DESK_SMTP_USER": "yes"
+    },
+    "7": {
+     "DESK_SMTP_USER": "7"
+    },
+    "2.5": {
+     "DESK_SMTP_USER": "2.5"
+    },
+    " 3 ": {
+     "DESK_SMTP_USER": " 3 "
+    },
+    "abc": {
+     "DESK_SMTP_USER": "abc"
+    },
+    "a,b": {
+     "DESK_SMTP_USER": "a,b"
+    },
+    "1_000": {
+     "DESK_SMTP_USER": "1_000"
+    },
+    "-4": {
+     "DESK_SMTP_USER": "-4"
+    },
+    "inf": {
+     "DESK_SMTP_USER": "inf"
+    },
+    "nan": {
+     "DESK_SMTP_USER": "nan"
+    },
+    "1e3": {
+     "DESK_SMTP_USER": "1e3"
+    }
+   }
+  },
+  {
+   "key": "DRY_RUN",
+   "module": "app.config",
+   "attrs": [
+    "DRY_RUN"
+   ],
+   "default": {
+    "DRY_RUN": true
+   },
+   "probes": {
+    "": {
+     "DRY_RUN": true
+    },
+    "true": {
+     "DRY_RUN": true
+    },
+    "false": {
+     "DRY_RUN": false
+    },
+    "TRUE": {
+     "DRY_RUN": true
+    },
+    "False": {
+     "DRY_RUN": false
+    },
+    "1": {
+     "DRY_RUN": true
+    },
+    "0": {
+     "DRY_RUN": true
+    },
+    "yes": {
+     "DRY_RUN": true
+    },
+    "7": {
+     "DRY_RUN": true
+    },
+    "2.5": {
+     "DRY_RUN": true
+    },
+    " 3 ": {
+     "DRY_RUN": true
+    },
+    "abc": {
+     "DRY_RUN": true
+    },
+    "a,b": {
+     "DRY_RUN": true
+    },
+    "1_000": {
+     "DRY_RUN": true
+    },
+    "-4": {
+     "DRY_RUN": true
+    },
+    "inf": {
+     "DRY_RUN": true
+    },
+    "nan": {
+     "DRY_RUN": true
+    },
+    "1e3": {
+     "DRY_RUN": true
+    }
+   }
+  },
+  {
+   "key": "FORCE_IPV4",
+   "module": "app.config",
+   "attrs": [
+    "FORCE_IPV4"
+   ],
+   "default": {
+    "FORCE_IPV4": true
+   },
+   "probes": {
+    "": {
+     "FORCE_IPV4": true
+    },
+    "true": {
+     "FORCE_IPV4": true
+    },
+    "false": {
+     "FORCE_IPV4": false
+    },
+    "TRUE": {
+     "FORCE_IPV4": true
+    },
+    "False": {
+     "FORCE_IPV4": false
+    },
+    "1": {
+     "FORCE_IPV4": true
+    },
+    "0": {
+     "FORCE_IPV4": true
+    },
+    "yes": {
+     "FORCE_IPV4": true
+    },
+    "7": {
+     "FORCE_IPV4": true
+    },
+    "2.5": {
+     "FORCE_IPV4": true
+    },
+    " 3 ": {
+     "FORCE_IPV4": true
+    },
+    "abc": {
+     "FORCE_IPV4": true
+    },
+    "a,b": {
+     "FORCE_IPV4": true
+    },
+    "1_000": {
+     "FORCE_IPV4": true
+    },
+    "-4": {
+     "FORCE_IPV4": true
+    },
+    "inf": {
+     "FORCE_IPV4": true
+    },
+    "nan": {
+     "FORCE_IPV4": true
+    },
+    "1e3": {
+     "FORCE_IPV4": true
+    }
+   }
+  },
+  {
+   "key": "FULLY_INVESTED",
+   "module": "app.config",
+   "attrs": [
+    "FULLY_INVESTED"
+   ],
+   "default": {
+    "FULLY_INVESTED": false
+   },
+   "probes": {
+    "": {
+     "FULLY_INVESTED": false
+    },
+    "true": {
+     "FULLY_INVESTED": true
+    },
+    "false": {
+     "FULLY_INVESTED": false
+    },
+    "TRUE": {
+     "FULLY_INVESTED": true
+    },
+    "False": {
+     "FULLY_INVESTED": false
+    },
+    "1": {
+     "FULLY_INVESTED": false
+    },
+    "0": {
+     "FULLY_INVESTED": false
+    },
+    "yes": {
+     "FULLY_INVESTED": false
+    },
+    "7": {
+     "FULLY_INVESTED": false
+    },
+    "2.5": {
+     "FULLY_INVESTED": false
+    },
+    " 3 ": {
+     "FULLY_INVESTED": false
+    },
+    "abc": {
+     "FULLY_INVESTED": false
+    },
+    "a,b": {
+     "FULLY_INVESTED": false
+    },
+    "1_000": {
+     "FULLY_INVESTED": false
+    },
+    "-4": {
+     "FULLY_INVESTED": false
+    },
+    "inf": {
+     "FULLY_INVESTED": false
+    },
+    "nan": {
+     "FULLY_INVESTED": false
+    },
+    "1e3": {
+     "FULLY_INVESTED": false
+    }
+   }
+  },
+  {
+   "key": "INCLUDE_UNTOUCHABLE_IN_NAV",
+   "module": "app.config",
+   "attrs": [
+    "INCLUDE_UNTOUCHABLE_IN_NAV"
+   ],
+   "default": {
+    "INCLUDE_UNTOUCHABLE_IN_NAV": false
+   },
+   "probes": {
+    "": {
+     "INCLUDE_UNTOUCHABLE_IN_NAV": false
+    },
+    "true": {
+     "INCLUDE_UNTOUCHABLE_IN_NAV": true
+    },
+    "false": {
+     "INCLUDE_UNTOUCHABLE_IN_NAV": false
+    },
+    "TRUE": {
+     "INCLUDE_UNTOUCHABLE_IN_NAV": true
+    },
+    "False": {
+     "INCLUDE_UNTOUCHABLE_IN_NAV": false
+    },
+    "1": {
+     "INCLUDE_UNTOUCHABLE_IN_NAV": false
+    },
+    "0": {
+     "INCLUDE_UNTOUCHABLE_IN_NAV": false
+    },
+    "yes": {
+     "INCLUDE_UNTOUCHABLE_IN_NAV": false
+    },
+    "7": {
+     "INCLUDE_UNTOUCHABLE_IN_NAV": false
+    },
+    "2.5": {
+     "INCLUDE_UNTOUCHABLE_IN_NAV": false
+    },
+    " 3 ": {
+     "INCLUDE_UNTOUCHABLE_IN_NAV": false
+    },
+    "abc": {
+     "INCLUDE_UNTOUCHABLE_IN_NAV": false
+    },
+    "a,b": {
+     "INCLUDE_UNTOUCHABLE_IN_NAV": false
+    },
+    "1_000": {
+     "INCLUDE_UNTOUCHABLE_IN_NAV": false
+    },
+    "-4": {
+     "INCLUDE_UNTOUCHABLE_IN_NAV": false
+    },
+    "inf": {
+     "INCLUDE_UNTOUCHABLE_IN_NAV": false
+    },
+    "nan": {
+     "INCLUDE_UNTOUCHABLE_IN_NAV": false
+    },
+    "1e3": {
+     "INCLUDE_UNTOUCHABLE_IN_NAV": false
+    }
+   }
+  },
+  {
+   "key": "INTRADAY_ENABLED",
+   "module": "app.config",
+   "attrs": [
+    "INTRADAY_ENABLED"
+   ],
+   "default": {
+    "INTRADAY_ENABLED": false
+   },
+   "probes": {
+    "": {
+     "INTRADAY_ENABLED": false
+    },
+    "true": {
+     "INTRADAY_ENABLED": true
+    },
+    "false": {
+     "INTRADAY_ENABLED": false
+    },
+    "TRUE": {
+     "INTRADAY_ENABLED": true
+    },
+    "False": {
+     "INTRADAY_ENABLED": false
+    },
+    "1": {
+     "INTRADAY_ENABLED": false
+    },
+    "0": {
+     "INTRADAY_ENABLED": false
+    },
+    "yes": {
+     "INTRADAY_ENABLED": false
+    },
+    "7": {
+     "INTRADAY_ENABLED": false
+    },
+    "2.5": {
+     "INTRADAY_ENABLED": false
+    },
+    " 3 ": {
+     "INTRADAY_ENABLED": false
+    },
+    "abc": {
+     "INTRADAY_ENABLED": false
+    },
+    "a,b": {
+     "INTRADAY_ENABLED": false
+    },
+    "1_000": {
+     "INTRADAY_ENABLED": false
+    },
+    "-4": {
+     "INTRADAY_ENABLED": false
+    },
+    "inf": {
+     "INTRADAY_ENABLED": false
+    },
+    "nan": {
+     "INTRADAY_ENABLED": false
+    },
+    "1e3": {
+     "INTRADAY_ENABLED": false
+    }
+   }
+  },
+  {
+   "key": "KITE_API_KEY",
+   "module": "app.config",
+   "attrs": [
+    "KITE_API_KEY"
+   ],
+   "default": {
+    "KITE_API_KEY": ""
+   },
+   "probes": {
+    "": {
+     "KITE_API_KEY": ""
+    },
+    "true": {
+     "KITE_API_KEY": "true"
+    },
+    "false": {
+     "KITE_API_KEY": "false"
+    },
+    "TRUE": {
+     "KITE_API_KEY": "TRUE"
+    },
+    "False": {
+     "KITE_API_KEY": "False"
+    },
+    "1": {
+     "KITE_API_KEY": "1"
+    },
+    "0": {
+     "KITE_API_KEY": "0"
+    },
+    "yes": {
+     "KITE_API_KEY": "yes"
+    },
+    "7": {
+     "KITE_API_KEY": "7"
+    },
+    "2.5": {
+     "KITE_API_KEY": "2.5"
+    },
+    " 3 ": {
+     "KITE_API_KEY": " 3 "
+    },
+    "abc": {
+     "KITE_API_KEY": "abc"
+    },
+    "a,b": {
+     "KITE_API_KEY": "a,b"
+    },
+    "1_000": {
+     "KITE_API_KEY": "1_000"
+    },
+    "-4": {
+     "KITE_API_KEY": "-4"
+    },
+    "inf": {
+     "KITE_API_KEY": "inf"
+    },
+    "nan": {
+     "KITE_API_KEY": "nan"
+    },
+    "1e3": {
+     "KITE_API_KEY": "1e3"
+    }
+   }
+  },
+  {
+   "key": "KITE_API_SECRET",
+   "module": "app.config",
+   "attrs": [
+    "KITE_API_SECRET"
+   ],
+   "default": {
+    "KITE_API_SECRET": ""
+   },
+   "probes": {
+    "": {
+     "KITE_API_SECRET": ""
+    },
+    "true": {
+     "KITE_API_SECRET": "true"
+    },
+    "false": {
+     "KITE_API_SECRET": "false"
+    },
+    "TRUE": {
+     "KITE_API_SECRET": "TRUE"
+    },
+    "False": {
+     "KITE_API_SECRET": "False"
+    },
+    "1": {
+     "KITE_API_SECRET": "1"
+    },
+    "0": {
+     "KITE_API_SECRET": "0"
+    },
+    "yes": {
+     "KITE_API_SECRET": "yes"
+    },
+    "7": {
+     "KITE_API_SECRET": "7"
+    },
+    "2.5": {
+     "KITE_API_SECRET": "2.5"
+    },
+    " 3 ": {
+     "KITE_API_SECRET": " 3 "
+    },
+    "abc": {
+     "KITE_API_SECRET": "abc"
+    },
+    "a,b": {
+     "KITE_API_SECRET": "a,b"
+    },
+    "1_000": {
+     "KITE_API_SECRET": "1_000"
+    },
+    "-4": {
+     "KITE_API_SECRET": "-4"
+    },
+    "inf": {
+     "KITE_API_SECRET": "inf"
+    },
+    "nan": {
+     "KITE_API_SECRET": "nan"
+    },
+    "1e3": {
+     "KITE_API_SECRET": "1e3"
+    }
+   }
+  },
+  {
+   "key": "OPTIONS_ENABLED",
+   "module": "app.config",
+   "attrs": [
+    "OPTIONS_ENABLED"
+   ],
+   "default": {
+    "OPTIONS_ENABLED": false
+   },
+   "probes": {
+    "": {
+     "OPTIONS_ENABLED": false
+    },
+    "true": {
+     "OPTIONS_ENABLED": true
+    },
+    "false": {
+     "OPTIONS_ENABLED": false
+    },
+    "TRUE": {
+     "OPTIONS_ENABLED": true
+    },
+    "False": {
+     "OPTIONS_ENABLED": false
+    },
+    "1": {
+     "OPTIONS_ENABLED": false
+    },
+    "0": {
+     "OPTIONS_ENABLED": false
+    },
+    "yes": {
+     "OPTIONS_ENABLED": false
+    },
+    "7": {
+     "OPTIONS_ENABLED": false
+    },
+    "2.5": {
+     "OPTIONS_ENABLED": false
+    },
+    " 3 ": {
+     "OPTIONS_ENABLED": false
+    },
+    "abc": {
+     "OPTIONS_ENABLED": false
+    },
+    "a,b": {
+     "OPTIONS_ENABLED": false
+    },
+    "1_000": {
+     "OPTIONS_ENABLED": false
+    },
+    "-4": {
+     "OPTIONS_ENABLED": false
+    },
+    "inf": {
+     "OPTIONS_ENABLED": false
+    },
+    "nan": {
+     "OPTIONS_ENABLED": false
+    },
+    "1e3": {
+     "OPTIONS_ENABLED": false
+    }
+   }
+  },
+  {
+   "key": "OPTION_BUY_DELTA",
+   "module": "app.config",
+   "attrs": [
+    "OPTION_BUY_DELTA"
+   ],
+   "default": {
+    "OPTION_BUY_DELTA": 0.6
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "OPTION_BUY_DELTA": 1.0
+    },
+    "0": {
+     "OPTION_BUY_DELTA": 0.0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "OPTION_BUY_DELTA": 7.0
+    },
+    "2.5": {
+     "OPTION_BUY_DELTA": 2.5
+    },
+    " 3 ": {
+     "OPTION_BUY_DELTA": 3.0
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "OPTION_BUY_DELTA": 1000.0
+    },
+    "-4": {
+     "OPTION_BUY_DELTA": -4.0
+    },
+    "inf": {
+     "OPTION_BUY_DELTA": {
+      "float": "inf"
+     }
+    },
+    "nan": {
+     "OPTION_BUY_DELTA": {
+      "float": "nan"
+     }
+    },
+    "1e3": {
+     "OPTION_BUY_DELTA": 1000.0
+    }
+   }
+  },
+  {
+   "key": "OPTION_BUY_ENTRY_END",
+   "module": "app.config",
+   "attrs": [
+    "OPTION_BUY_ENTRY_END"
+   ],
+   "default": {
+    "OPTION_BUY_ENTRY_END": "14:30"
+   },
+   "probes": {
+    "": {
+     "OPTION_BUY_ENTRY_END": ""
+    },
+    "true": {
+     "OPTION_BUY_ENTRY_END": "true"
+    },
+    "false": {
+     "OPTION_BUY_ENTRY_END": "false"
+    },
+    "TRUE": {
+     "OPTION_BUY_ENTRY_END": "TRUE"
+    },
+    "False": {
+     "OPTION_BUY_ENTRY_END": "False"
+    },
+    "1": {
+     "OPTION_BUY_ENTRY_END": "1"
+    },
+    "0": {
+     "OPTION_BUY_ENTRY_END": "0"
+    },
+    "yes": {
+     "OPTION_BUY_ENTRY_END": "yes"
+    },
+    "7": {
+     "OPTION_BUY_ENTRY_END": "7"
+    },
+    "2.5": {
+     "OPTION_BUY_ENTRY_END": "2.5"
+    },
+    " 3 ": {
+     "OPTION_BUY_ENTRY_END": " 3 "
+    },
+    "abc": {
+     "OPTION_BUY_ENTRY_END": "abc"
+    },
+    "a,b": {
+     "OPTION_BUY_ENTRY_END": "a,b"
+    },
+    "1_000": {
+     "OPTION_BUY_ENTRY_END": "1_000"
+    },
+    "-4": {
+     "OPTION_BUY_ENTRY_END": "-4"
+    },
+    "inf": {
+     "OPTION_BUY_ENTRY_END": "inf"
+    },
+    "nan": {
+     "OPTION_BUY_ENTRY_END": "nan"
+    },
+    "1e3": {
+     "OPTION_BUY_ENTRY_END": "1e3"
+    }
+   }
+  },
+  {
+   "key": "OPTION_BUY_ENTRY_START",
+   "module": "app.config",
+   "attrs": [
+    "OPTION_BUY_ENTRY_START"
+   ],
+   "default": {
+    "OPTION_BUY_ENTRY_START": "09:35"
+   },
+   "probes": {
+    "": {
+     "OPTION_BUY_ENTRY_START": ""
+    },
+    "true": {
+     "OPTION_BUY_ENTRY_START": "true"
+    },
+    "false": {
+     "OPTION_BUY_ENTRY_START": "false"
+    },
+    "TRUE": {
+     "OPTION_BUY_ENTRY_START": "TRUE"
+    },
+    "False": {
+     "OPTION_BUY_ENTRY_START": "False"
+    },
+    "1": {
+     "OPTION_BUY_ENTRY_START": "1"
+    },
+    "0": {
+     "OPTION_BUY_ENTRY_START": "0"
+    },
+    "yes": {
+     "OPTION_BUY_ENTRY_START": "yes"
+    },
+    "7": {
+     "OPTION_BUY_ENTRY_START": "7"
+    },
+    "2.5": {
+     "OPTION_BUY_ENTRY_START": "2.5"
+    },
+    " 3 ": {
+     "OPTION_BUY_ENTRY_START": " 3 "
+    },
+    "abc": {
+     "OPTION_BUY_ENTRY_START": "abc"
+    },
+    "a,b": {
+     "OPTION_BUY_ENTRY_START": "a,b"
+    },
+    "1_000": {
+     "OPTION_BUY_ENTRY_START": "1_000"
+    },
+    "-4": {
+     "OPTION_BUY_ENTRY_START": "-4"
+    },
+    "inf": {
+     "OPTION_BUY_ENTRY_START": "inf"
+    },
+    "nan": {
+     "OPTION_BUY_ENTRY_START": "nan"
+    },
+    "1e3": {
+     "OPTION_BUY_ENTRY_START": "1e3"
+    }
+   }
+  },
+  {
+   "key": "OPTION_BUY_PREMIUM_STOP_PCT",
+   "module": "app.config",
+   "attrs": [
+    "OPTION_BUY_PREMIUM_STOP_PCT"
+   ],
+   "default": {
+    "OPTION_BUY_PREMIUM_STOP_PCT": 25.0
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "OPTION_BUY_PREMIUM_STOP_PCT": 1.0
+    },
+    "0": {
+     "OPTION_BUY_PREMIUM_STOP_PCT": 0.0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "OPTION_BUY_PREMIUM_STOP_PCT": 7.0
+    },
+    "2.5": {
+     "OPTION_BUY_PREMIUM_STOP_PCT": 2.5
+    },
+    " 3 ": {
+     "OPTION_BUY_PREMIUM_STOP_PCT": 3.0
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "OPTION_BUY_PREMIUM_STOP_PCT": 1000.0
+    },
+    "-4": {
+     "OPTION_BUY_PREMIUM_STOP_PCT": -4.0
+    },
+    "inf": {
+     "OPTION_BUY_PREMIUM_STOP_PCT": {
+      "float": "inf"
+     }
+    },
+    "nan": {
+     "OPTION_BUY_PREMIUM_STOP_PCT": {
+      "float": "nan"
+     }
+    },
+    "1e3": {
+     "OPTION_BUY_PREMIUM_STOP_PCT": 1000.0
+    }
+   }
+  },
+  {
+   "key": "OPTION_BUY_RISK_PER_TRADE_PCT",
+   "module": "app.config",
+   "attrs": [
+    "OPTION_BUY_RISK_PER_TRADE_PCT"
+   ],
+   "default": {
+    "OPTION_BUY_RISK_PER_TRADE_PCT": 0.5
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "OPTION_BUY_RISK_PER_TRADE_PCT": 1.0
+    },
+    "0": {
+     "OPTION_BUY_RISK_PER_TRADE_PCT": 0.0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "OPTION_BUY_RISK_PER_TRADE_PCT": 7.0
+    },
+    "2.5": {
+     "OPTION_BUY_RISK_PER_TRADE_PCT": 2.5
+    },
+    " 3 ": {
+     "OPTION_BUY_RISK_PER_TRADE_PCT": 3.0
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "OPTION_BUY_RISK_PER_TRADE_PCT": 1000.0
+    },
+    "-4": {
+     "OPTION_BUY_RISK_PER_TRADE_PCT": -4.0
+    },
+    "inf": {
+     "OPTION_BUY_RISK_PER_TRADE_PCT": {
+      "float": "inf"
+     }
+    },
+    "nan": {
+     "OPTION_BUY_RISK_PER_TRADE_PCT": {
+      "float": "nan"
+     }
+    },
+    "1e3": {
+     "OPTION_BUY_RISK_PER_TRADE_PCT": 1000.0
+    }
+   }
+  },
+  {
+   "key": "OPTION_BUY_TRADE_BENCHMARK_PCT",
+   "module": "app.config",
+   "attrs": [
+    "OPTION_BUY_TRADE_BENCHMARK_PCT"
+   ],
+   "default": {
+    "OPTION_BUY_TRADE_BENCHMARK_PCT": 15.0
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "OPTION_BUY_TRADE_BENCHMARK_PCT": 1.0
+    },
+    "0": {
+     "OPTION_BUY_TRADE_BENCHMARK_PCT": 0.0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "OPTION_BUY_TRADE_BENCHMARK_PCT": 7.0
+    },
+    "2.5": {
+     "OPTION_BUY_TRADE_BENCHMARK_PCT": 2.5
+    },
+    " 3 ": {
+     "OPTION_BUY_TRADE_BENCHMARK_PCT": 3.0
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "OPTION_BUY_TRADE_BENCHMARK_PCT": 1000.0
+    },
+    "-4": {
+     "OPTION_BUY_TRADE_BENCHMARK_PCT": -4.0
+    },
+    "inf": {
+     "OPTION_BUY_TRADE_BENCHMARK_PCT": {
+      "float": "inf"
+     }
+    },
+    "nan": {
+     "OPTION_BUY_TRADE_BENCHMARK_PCT": {
+      "float": "nan"
+     }
+    },
+    "1e3": {
+     "OPTION_BUY_TRADE_BENCHMARK_PCT": 1000.0
+    }
+   }
+  },
+  {
+   "key": "OPTION_BUY_TRAIL_ACTIVATION_PCT",
+   "module": "app.config",
+   "attrs": [
+    "OPTION_BUY_TRAIL_ACTIVATION_PCT"
+   ],
+   "default": {
+    "OPTION_BUY_TRAIL_ACTIVATION_PCT": 15.0
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "OPTION_BUY_TRAIL_ACTIVATION_PCT": 1.0
+    },
+    "0": {
+     "OPTION_BUY_TRAIL_ACTIVATION_PCT": 0.0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "OPTION_BUY_TRAIL_ACTIVATION_PCT": 7.0
+    },
+    "2.5": {
+     "OPTION_BUY_TRAIL_ACTIVATION_PCT": 2.5
+    },
+    " 3 ": {
+     "OPTION_BUY_TRAIL_ACTIVATION_PCT": 3.0
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "OPTION_BUY_TRAIL_ACTIVATION_PCT": 1000.0
+    },
+    "-4": {
+     "OPTION_BUY_TRAIL_ACTIVATION_PCT": -4.0
+    },
+    "inf": {
+     "OPTION_BUY_TRAIL_ACTIVATION_PCT": {
+      "float": "inf"
+     }
+    },
+    "nan": {
+     "OPTION_BUY_TRAIL_ACTIVATION_PCT": {
+      "float": "nan"
+     }
+    },
+    "1e3": {
+     "OPTION_BUY_TRAIL_ACTIVATION_PCT": 1000.0
+    }
+   }
+  },
+  {
+   "key": "OPTION_BUY_TRAIL_DRAWDOWN_PCT",
+   "module": "app.config",
+   "attrs": [
+    "OPTION_BUY_TRAIL_DRAWDOWN_PCT"
+   ],
+   "default": {
+    "OPTION_BUY_TRAIL_DRAWDOWN_PCT": 8.0
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "OPTION_BUY_TRAIL_DRAWDOWN_PCT": 1.0
+    },
+    "0": {
+     "OPTION_BUY_TRAIL_DRAWDOWN_PCT": 0.0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "OPTION_BUY_TRAIL_DRAWDOWN_PCT": 7.0
+    },
+    "2.5": {
+     "OPTION_BUY_TRAIL_DRAWDOWN_PCT": 2.5
+    },
+    " 3 ": {
+     "OPTION_BUY_TRAIL_DRAWDOWN_PCT": 3.0
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "OPTION_BUY_TRAIL_DRAWDOWN_PCT": 1000.0
+    },
+    "-4": {
+     "OPTION_BUY_TRAIL_DRAWDOWN_PCT": -4.0
+    },
+    "inf": {
+     "OPTION_BUY_TRAIL_DRAWDOWN_PCT": {
+      "float": "inf"
+     }
+    },
+    "nan": {
+     "OPTION_BUY_TRAIL_DRAWDOWN_PCT": {
+      "float": "nan"
+     }
+    },
+    "1e3": {
+     "OPTION_BUY_TRAIL_DRAWDOWN_PCT": 1000.0
+    }
+   }
+  },
+  {
+   "key": "OPTION_INTRADAY_SQUARE_OFF",
+   "module": "app.config",
+   "attrs": [
+    "OPTION_INTRADAY_SQUARE_OFF"
+   ],
+   "default": {
+    "OPTION_INTRADAY_SQUARE_OFF": "15:12"
+   },
+   "probes": {
+    "": {
+     "OPTION_INTRADAY_SQUARE_OFF": ""
+    },
+    "true": {
+     "OPTION_INTRADAY_SQUARE_OFF": "true"
+    },
+    "false": {
+     "OPTION_INTRADAY_SQUARE_OFF": "false"
+    },
+    "TRUE": {
+     "OPTION_INTRADAY_SQUARE_OFF": "TRUE"
+    },
+    "False": {
+     "OPTION_INTRADAY_SQUARE_OFF": "False"
+    },
+    "1": {
+     "OPTION_INTRADAY_SQUARE_OFF": "1"
+    },
+    "0": {
+     "OPTION_INTRADAY_SQUARE_OFF": "0"
+    },
+    "yes": {
+     "OPTION_INTRADAY_SQUARE_OFF": "yes"
+    },
+    "7": {
+     "OPTION_INTRADAY_SQUARE_OFF": "7"
+    },
+    "2.5": {
+     "OPTION_INTRADAY_SQUARE_OFF": "2.5"
+    },
+    " 3 ": {
+     "OPTION_INTRADAY_SQUARE_OFF": " 3 "
+    },
+    "abc": {
+     "OPTION_INTRADAY_SQUARE_OFF": "abc"
+    },
+    "a,b": {
+     "OPTION_INTRADAY_SQUARE_OFF": "a,b"
+    },
+    "1_000": {
+     "OPTION_INTRADAY_SQUARE_OFF": "1_000"
+    },
+    "-4": {
+     "OPTION_INTRADAY_SQUARE_OFF": "-4"
+    },
+    "inf": {
+     "OPTION_INTRADAY_SQUARE_OFF": "inf"
+    },
+    "nan": {
+     "OPTION_INTRADAY_SQUARE_OFF": "nan"
+    },
+    "1e3": {
+     "OPTION_INTRADAY_SQUARE_OFF": "1e3"
+    }
+   }
+  },
+  {
+   "key": "OPTION_SELL_ENTRY_END",
+   "module": "app.config",
+   "attrs": [
+    "OPTION_SELL_ENTRY_END"
+   ],
+   "default": {
+    "OPTION_SELL_ENTRY_END": "13:30"
+   },
+   "probes": {
+    "": {
+     "OPTION_SELL_ENTRY_END": ""
+    },
+    "true": {
+     "OPTION_SELL_ENTRY_END": "true"
+    },
+    "false": {
+     "OPTION_SELL_ENTRY_END": "false"
+    },
+    "TRUE": {
+     "OPTION_SELL_ENTRY_END": "TRUE"
+    },
+    "False": {
+     "OPTION_SELL_ENTRY_END": "False"
+    },
+    "1": {
+     "OPTION_SELL_ENTRY_END": "1"
+    },
+    "0": {
+     "OPTION_SELL_ENTRY_END": "0"
+    },
+    "yes": {
+     "OPTION_SELL_ENTRY_END": "yes"
+    },
+    "7": {
+     "OPTION_SELL_ENTRY_END": "7"
+    },
+    "2.5": {
+     "OPTION_SELL_ENTRY_END": "2.5"
+    },
+    " 3 ": {
+     "OPTION_SELL_ENTRY_END": " 3 "
+    },
+    "abc": {
+     "OPTION_SELL_ENTRY_END": "abc"
+    },
+    "a,b": {
+     "OPTION_SELL_ENTRY_END": "a,b"
+    },
+    "1_000": {
+     "OPTION_SELL_ENTRY_END": "1_000"
+    },
+    "-4": {
+     "OPTION_SELL_ENTRY_END": "-4"
+    },
+    "inf": {
+     "OPTION_SELL_ENTRY_END": "inf"
+    },
+    "nan": {
+     "OPTION_SELL_ENTRY_END": "nan"
+    },
+    "1e3": {
+     "OPTION_SELL_ENTRY_END": "1e3"
+    }
+   }
+  },
+  {
+   "key": "OPTION_SELL_ENTRY_START",
+   "module": "app.config",
+   "attrs": [
+    "OPTION_SELL_ENTRY_START"
+   ],
+   "default": {
+    "OPTION_SELL_ENTRY_START": "09:45"
+   },
+   "probes": {
+    "": {
+     "OPTION_SELL_ENTRY_START": ""
+    },
+    "true": {
+     "OPTION_SELL_ENTRY_START": "true"
+    },
+    "false": {
+     "OPTION_SELL_ENTRY_START": "false"
+    },
+    "TRUE": {
+     "OPTION_SELL_ENTRY_START": "TRUE"
+    },
+    "False": {
+     "OPTION_SELL_ENTRY_START": "False"
+    },
+    "1": {
+     "OPTION_SELL_ENTRY_START": "1"
+    },
+    "0": {
+     "OPTION_SELL_ENTRY_START": "0"
+    },
+    "yes": {
+     "OPTION_SELL_ENTRY_START": "yes"
+    },
+    "7": {
+     "OPTION_SELL_ENTRY_START": "7"
+    },
+    "2.5": {
+     "OPTION_SELL_ENTRY_START": "2.5"
+    },
+    " 3 ": {
+     "OPTION_SELL_ENTRY_START": " 3 "
+    },
+    "abc": {
+     "OPTION_SELL_ENTRY_START": "abc"
+    },
+    "a,b": {
+     "OPTION_SELL_ENTRY_START": "a,b"
+    },
+    "1_000": {
+     "OPTION_SELL_ENTRY_START": "1_000"
+    },
+    "-4": {
+     "OPTION_SELL_ENTRY_START": "-4"
+    },
+    "inf": {
+     "OPTION_SELL_ENTRY_START": "inf"
+    },
+    "nan": {
+     "OPTION_SELL_ENTRY_START": "nan"
+    },
+    "1e3": {
+     "OPTION_SELL_ENTRY_START": "1e3"
+    }
+   }
+  },
+  {
+   "key": "OPTION_SELL_MONTHLY_BENCHMARK_PCT",
+   "module": "app.config",
+   "attrs": [
+    "OPTION_SELL_MONTHLY_BENCHMARK_PCT"
+   ],
+   "default": {
+    "OPTION_SELL_MONTHLY_BENCHMARK_PCT": 5.0
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "OPTION_SELL_MONTHLY_BENCHMARK_PCT": 1.0
+    },
+    "0": {
+     "OPTION_SELL_MONTHLY_BENCHMARK_PCT": 0.0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "OPTION_SELL_MONTHLY_BENCHMARK_PCT": 7.0
+    },
+    "2.5": {
+     "OPTION_SELL_MONTHLY_BENCHMARK_PCT": 2.5
+    },
+    " 3 ": {
+     "OPTION_SELL_MONTHLY_BENCHMARK_PCT": 3.0
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "OPTION_SELL_MONTHLY_BENCHMARK_PCT": 1000.0
+    },
+    "-4": {
+     "OPTION_SELL_MONTHLY_BENCHMARK_PCT": -4.0
+    },
+    "inf": {
+     "OPTION_SELL_MONTHLY_BENCHMARK_PCT": {
+      "float": "inf"
+     }
+    },
+    "nan": {
+     "OPTION_SELL_MONTHLY_BENCHMARK_PCT": {
+      "float": "nan"
+     }
+    },
+    "1e3": {
+     "OPTION_SELL_MONTHLY_BENCHMARK_PCT": 1000.0
+    }
+   }
+  },
+  {
+   "key": "OPTION_SELL_RISK_PER_TRADE_PCT",
+   "module": "app.config",
+   "attrs": [
+    "OPTION_SELL_RISK_PER_TRADE_PCT"
+   ],
+   "default": {
+    "OPTION_SELL_RISK_PER_TRADE_PCT": 0.75
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "OPTION_SELL_RISK_PER_TRADE_PCT": 1.0
+    },
+    "0": {
+     "OPTION_SELL_RISK_PER_TRADE_PCT": 0.0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "OPTION_SELL_RISK_PER_TRADE_PCT": 7.0
+    },
+    "2.5": {
+     "OPTION_SELL_RISK_PER_TRADE_PCT": 2.5
+    },
+    " 3 ": {
+     "OPTION_SELL_RISK_PER_TRADE_PCT": 3.0
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "OPTION_SELL_RISK_PER_TRADE_PCT": 1000.0
+    },
+    "-4": {
+     "OPTION_SELL_RISK_PER_TRADE_PCT": -4.0
+    },
+    "inf": {
+     "OPTION_SELL_RISK_PER_TRADE_PCT": {
+      "float": "inf"
+     }
+    },
+    "nan": {
+     "OPTION_SELL_RISK_PER_TRADE_PCT": {
+      "float": "nan"
+     }
+    },
+    "1e3": {
+     "OPTION_SELL_RISK_PER_TRADE_PCT": 1000.0
+    }
+   }
+  },
+  {
+   "key": "OPTION_SELL_SHORT_DELTA",
+   "module": "app.config",
+   "attrs": [
+    "OPTION_SELL_SHORT_DELTA"
+   ],
+   "default": {
+    "OPTION_SELL_SHORT_DELTA": 0.16
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "OPTION_SELL_SHORT_DELTA": 1.0
+    },
+    "0": {
+     "OPTION_SELL_SHORT_DELTA": 0.0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "OPTION_SELL_SHORT_DELTA": 7.0
+    },
+    "2.5": {
+     "OPTION_SELL_SHORT_DELTA": 2.5
+    },
+    " 3 ": {
+     "OPTION_SELL_SHORT_DELTA": 3.0
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "OPTION_SELL_SHORT_DELTA": 1000.0
+    },
+    "-4": {
+     "OPTION_SELL_SHORT_DELTA": -4.0
+    },
+    "inf": {
+     "OPTION_SELL_SHORT_DELTA": {
+      "float": "inf"
+     }
+    },
+    "nan": {
+     "OPTION_SELL_SHORT_DELTA": {
+      "float": "nan"
+     }
+    },
+    "1e3": {
+     "OPTION_SELL_SHORT_DELTA": 1000.0
+    }
+   }
+  },
+  {
+   "key": "OPTION_SELL_STOP_CREDIT_MULTIPLE",
+   "module": "app.config",
+   "attrs": [
+    "OPTION_SELL_STOP_CREDIT_MULTIPLE"
+   ],
+   "default": {
+    "OPTION_SELL_STOP_CREDIT_MULTIPLE": 1.5
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "OPTION_SELL_STOP_CREDIT_MULTIPLE": 1.0
+    },
+    "0": {
+     "OPTION_SELL_STOP_CREDIT_MULTIPLE": 0.0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "OPTION_SELL_STOP_CREDIT_MULTIPLE": 7.0
+    },
+    "2.5": {
+     "OPTION_SELL_STOP_CREDIT_MULTIPLE": 2.5
+    },
+    " 3 ": {
+     "OPTION_SELL_STOP_CREDIT_MULTIPLE": 3.0
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "OPTION_SELL_STOP_CREDIT_MULTIPLE": 1000.0
+    },
+    "-4": {
+     "OPTION_SELL_STOP_CREDIT_MULTIPLE": -4.0
+    },
+    "inf": {
+     "OPTION_SELL_STOP_CREDIT_MULTIPLE": {
+      "float": "inf"
+     }
+    },
+    "nan": {
+     "OPTION_SELL_STOP_CREDIT_MULTIPLE": {
+      "float": "nan"
+     }
+    },
+    "1e3": {
+     "OPTION_SELL_STOP_CREDIT_MULTIPLE": 1000.0
+    }
+   }
+  },
+  {
+   "key": "OPTION_SELL_TARGET_CAPTURE_PCT",
+   "module": "app.config",
+   "attrs": [
+    "OPTION_SELL_TARGET_CAPTURE_PCT"
+   ],
+   "default": {
+    "OPTION_SELL_TARGET_CAPTURE_PCT": 35.0
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "OPTION_SELL_TARGET_CAPTURE_PCT": 1.0
+    },
+    "0": {
+     "OPTION_SELL_TARGET_CAPTURE_PCT": 0.0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "OPTION_SELL_TARGET_CAPTURE_PCT": 7.0
+    },
+    "2.5": {
+     "OPTION_SELL_TARGET_CAPTURE_PCT": 2.5
+    },
+    " 3 ": {
+     "OPTION_SELL_TARGET_CAPTURE_PCT": 3.0
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "OPTION_SELL_TARGET_CAPTURE_PCT": 1000.0
+    },
+    "-4": {
+     "OPTION_SELL_TARGET_CAPTURE_PCT": -4.0
+    },
+    "inf": {
+     "OPTION_SELL_TARGET_CAPTURE_PCT": {
+      "float": "inf"
+     }
+    },
+    "nan": {
+     "OPTION_SELL_TARGET_CAPTURE_PCT": {
+      "float": "nan"
+     }
+    },
+    "1e3": {
+     "OPTION_SELL_TARGET_CAPTURE_PCT": 1000.0
+    }
+   }
+  },
+  {
+   "key": "OPTION_SELL_WING_DELTA",
+   "module": "app.config",
+   "attrs": [
+    "OPTION_SELL_WING_DELTA"
+   ],
+   "default": {
+    "OPTION_SELL_WING_DELTA": 0.05
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "OPTION_SELL_WING_DELTA": 1.0
+    },
+    "0": {
+     "OPTION_SELL_WING_DELTA": 0.0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "OPTION_SELL_WING_DELTA": 7.0
+    },
+    "2.5": {
+     "OPTION_SELL_WING_DELTA": 2.5
+    },
+    " 3 ": {
+     "OPTION_SELL_WING_DELTA": 3.0
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "OPTION_SELL_WING_DELTA": 1000.0
+    },
+    "-4": {
+     "OPTION_SELL_WING_DELTA": -4.0
+    },
+    "inf": {
+     "OPTION_SELL_WING_DELTA": {
+      "float": "inf"
+     }
+    },
+    "nan": {
+     "OPTION_SELL_WING_DELTA": {
+      "float": "nan"
+     }
+    },
+    "1e3": {
+     "OPTION_SELL_WING_DELTA": 1000.0
+    }
+   }
+  },
+  {
+   "key": "OPTION_UNDERLYING",
+   "module": "app.config",
+   "attrs": [
+    "OPTION_UNDERLYING"
+   ],
+   "default": {
+    "OPTION_UNDERLYING": "NIFTY"
+   },
+   "probes": {
+    "": {
+     "OPTION_UNDERLYING": ""
+    },
+    "true": {
+     "OPTION_UNDERLYING": "true"
+    },
+    "false": {
+     "OPTION_UNDERLYING": "false"
+    },
+    "TRUE": {
+     "OPTION_UNDERLYING": "TRUE"
+    },
+    "False": {
+     "OPTION_UNDERLYING": "False"
+    },
+    "1": {
+     "OPTION_UNDERLYING": "1"
+    },
+    "0": {
+     "OPTION_UNDERLYING": "0"
+    },
+    "yes": {
+     "OPTION_UNDERLYING": "yes"
+    },
+    "7": {
+     "OPTION_UNDERLYING": "7"
+    },
+    "2.5": {
+     "OPTION_UNDERLYING": "2.5"
+    },
+    " 3 ": {
+     "OPTION_UNDERLYING": " 3 "
+    },
+    "abc": {
+     "OPTION_UNDERLYING": "abc"
+    },
+    "a,b": {
+     "OPTION_UNDERLYING": "a,b"
+    },
+    "1_000": {
+     "OPTION_UNDERLYING": "1_000"
+    },
+    "-4": {
+     "OPTION_UNDERLYING": "-4"
+    },
+    "inf": {
+     "OPTION_UNDERLYING": "inf"
+    },
+    "nan": {
+     "OPTION_UNDERLYING": "nan"
+    },
+    "1e3": {
+     "OPTION_UNDERLYING": "1e3"
+    }
+   }
+  },
+  {
+   "key": "PORT",
+   "module": "app.config",
+   "attrs": [
+    "PORT"
+   ],
+   "default": {
+    "PORT": 8420
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "PORT": 1
+    },
+    "0": {
+     "PORT": 0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "PORT": 7
+    },
+    "2.5": {
+     "error": "ValueError"
+    },
+    " 3 ": {
+     "PORT": 3
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "PORT": 1000
+    },
+    "-4": {
+     "PORT": -4
+    },
+    "inf": {
+     "error": "ValueError"
+    },
+    "nan": {
+     "error": "ValueError"
+    },
+    "1e3": {
+     "error": "ValueError"
+    }
+   }
+  },
+  {
+   "key": "REGIME_BOOTSTRAP_POLICY",
+   "module": "app.config",
+   "attrs": [
+    "REGIME_BOOTSTRAP_POLICY"
+   ],
+   "default": {
+    "REGIME_BOOTSTRAP_POLICY": "observe_only"
+   },
+   "probes": {
+    "": {
+     "REGIME_BOOTSTRAP_POLICY": ""
+    },
+    "true": {
+     "REGIME_BOOTSTRAP_POLICY": "true"
+    },
+    "false": {
+     "REGIME_BOOTSTRAP_POLICY": "false"
+    },
+    "TRUE": {
+     "REGIME_BOOTSTRAP_POLICY": "TRUE"
+    },
+    "False": {
+     "REGIME_BOOTSTRAP_POLICY": "False"
+    },
+    "1": {
+     "REGIME_BOOTSTRAP_POLICY": "1"
+    },
+    "0": {
+     "REGIME_BOOTSTRAP_POLICY": "0"
+    },
+    "yes": {
+     "REGIME_BOOTSTRAP_POLICY": "yes"
+    },
+    "7": {
+     "REGIME_BOOTSTRAP_POLICY": "7"
+    },
+    "2.5": {
+     "REGIME_BOOTSTRAP_POLICY": "2.5"
+    },
+    " 3 ": {
+     "REGIME_BOOTSTRAP_POLICY": " 3 "
+    },
+    "abc": {
+     "REGIME_BOOTSTRAP_POLICY": "abc"
+    },
+    "a,b": {
+     "REGIME_BOOTSTRAP_POLICY": "a,b"
+    },
+    "1_000": {
+     "REGIME_BOOTSTRAP_POLICY": "1_000"
+    },
+    "-4": {
+     "REGIME_BOOTSTRAP_POLICY": "-4"
+    },
+    "inf": {
+     "REGIME_BOOTSTRAP_POLICY": "inf"
+    },
+    "nan": {
+     "REGIME_BOOTSTRAP_POLICY": "nan"
+    },
+    "1e3": {
+     "REGIME_BOOTSTRAP_POLICY": "1e3"
+    }
+   }
+  },
+  {
+   "key": "REGIME_BREADTH_STALE_DAYS",
+   "module": "app.config",
+   "attrs": [
+    "REGIME_BREADTH_STALE_DAYS"
+   ],
+   "default": {
+    "REGIME_BREADTH_STALE_DAYS": 10
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "REGIME_BREADTH_STALE_DAYS": 1
+    },
+    "0": {
+     "REGIME_BREADTH_STALE_DAYS": 0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "REGIME_BREADTH_STALE_DAYS": 7
+    },
+    "2.5": {
+     "error": "ValueError"
+    },
+    " 3 ": {
+     "REGIME_BREADTH_STALE_DAYS": 3
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "REGIME_BREADTH_STALE_DAYS": 1000
+    },
+    "-4": {
+     "REGIME_BREADTH_STALE_DAYS": -4
+    },
+    "inf": {
+     "error": "ValueError"
+    },
+    "nan": {
+     "error": "ValueError"
+    },
+    "1e3": {
+     "error": "ValueError"
+    }
+   }
+  },
+  {
+   "key": "REGIME_BUFFER_BPS",
+   "module": "app.config",
+   "attrs": [
+    "REGIME_BUFFER_BPS"
+   ],
+   "default": {
+    "REGIME_BUFFER_BPS": 150
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "REGIME_BUFFER_BPS": 1
+    },
+    "0": {
+     "REGIME_BUFFER_BPS": 0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "REGIME_BUFFER_BPS": 7
+    },
+    "2.5": {
+     "error": "ValueError"
+    },
+    " 3 ": {
+     "REGIME_BUFFER_BPS": 3
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "REGIME_BUFFER_BPS": 1000
+    },
+    "-4": {
+     "REGIME_BUFFER_BPS": -4
+    },
+    "inf": {
+     "error": "ValueError"
+    },
+    "nan": {
+     "error": "ValueError"
+    },
+    "1e3": {
+     "error": "ValueError"
+    }
+   }
+  },
+  {
+   "key": "REGIME_CONFIRM_DAYS",
+   "module": "app.config",
+   "attrs": [
+    "REGIME_CONFIRM_DAYS"
+   ],
+   "default": {
+    "REGIME_CONFIRM_DAYS": 3
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "REGIME_CONFIRM_DAYS": 1
+    },
+    "0": {
+     "REGIME_CONFIRM_DAYS": 0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "REGIME_CONFIRM_DAYS": 7
+    },
+    "2.5": {
+     "error": "ValueError"
+    },
+    " 3 ": {
+     "REGIME_CONFIRM_DAYS": 3
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "REGIME_CONFIRM_DAYS": 1000
+    },
+    "-4": {
+     "REGIME_CONFIRM_DAYS": -4
+    },
+    "inf": {
+     "error": "ValueError"
+    },
+    "nan": {
+     "error": "ValueError"
+    },
+    "1e3": {
+     "error": "ValueError"
+    }
+   }
+  },
+  {
+   "key": "REGIME_ENABLED",
+   "module": "app.config",
+   "attrs": [
+    "REGIME_ENABLED"
+   ],
+   "default": {
+    "REGIME_ENABLED": false
+   },
+   "probes": {
+    "": {
+     "REGIME_ENABLED": false
+    },
+    "true": {
+     "REGIME_ENABLED": true
+    },
+    "false": {
+     "REGIME_ENABLED": false
+    },
+    "TRUE": {
+     "REGIME_ENABLED": true
+    },
+    "False": {
+     "REGIME_ENABLED": false
+    },
+    "1": {
+     "REGIME_ENABLED": false
+    },
+    "0": {
+     "REGIME_ENABLED": false
+    },
+    "yes": {
+     "REGIME_ENABLED": false
+    },
+    "7": {
+     "REGIME_ENABLED": false
+    },
+    "2.5": {
+     "REGIME_ENABLED": false
+    },
+    " 3 ": {
+     "REGIME_ENABLED": false
+    },
+    "abc": {
+     "REGIME_ENABLED": false
+    },
+    "a,b": {
+     "REGIME_ENABLED": false
+    },
+    "1_000": {
+     "REGIME_ENABLED": false
+    },
+    "-4": {
+     "REGIME_ENABLED": false
+    },
+    "inf": {
+     "REGIME_ENABLED": false
+    },
+    "nan": {
+     "REGIME_ENABLED": false
+    },
+    "1e3": {
+     "REGIME_ENABLED": false
+    }
+   }
+  },
+  {
+   "key": "REGIME_HALF_SIZE_FACTOR",
+   "module": "app.config",
+   "attrs": [
+    "REGIME_HALF_SIZE_FACTOR"
+   ],
+   "default": {
+    "REGIME_HALF_SIZE_FACTOR": 0.5
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "REGIME_HALF_SIZE_FACTOR": 1.0
+    },
+    "0": {
+     "REGIME_HALF_SIZE_FACTOR": 0.0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "REGIME_HALF_SIZE_FACTOR": 7.0
+    },
+    "2.5": {
+     "REGIME_HALF_SIZE_FACTOR": 2.5
+    },
+    " 3 ": {
+     "REGIME_HALF_SIZE_FACTOR": 3.0
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "REGIME_HALF_SIZE_FACTOR": 1000.0
+    },
+    "-4": {
+     "REGIME_HALF_SIZE_FACTOR": -4.0
+    },
+    "inf": {
+     "REGIME_HALF_SIZE_FACTOR": {
+      "float": "inf"
+     }
+    },
+    "nan": {
+     "REGIME_HALF_SIZE_FACTOR": {
+      "float": "nan"
+     }
+    },
+    "1e3": {
+     "REGIME_HALF_SIZE_FACTOR": 1000.0
+    }
+   }
+  },
+  {
+   "key": "REGIME_INDEX_STALE_DAYS",
+   "module": "app.config",
+   "attrs": [
+    "REGIME_INDEX_STALE_DAYS"
+   ],
+   "default": {
+    "REGIME_INDEX_STALE_DAYS": 5
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "REGIME_INDEX_STALE_DAYS": 1
+    },
+    "0": {
+     "REGIME_INDEX_STALE_DAYS": 0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "REGIME_INDEX_STALE_DAYS": 7
+    },
+    "2.5": {
+     "error": "ValueError"
+    },
+    " 3 ": {
+     "REGIME_INDEX_STALE_DAYS": 3
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "REGIME_INDEX_STALE_DAYS": 1000
+    },
+    "-4": {
+     "REGIME_INDEX_STALE_DAYS": -4
+    },
+    "inf": {
+     "error": "ValueError"
+    },
+    "nan": {
+     "error": "ValueError"
+    },
+    "1e3": {
+     "error": "ValueError"
+    }
+   }
+  },
+  {
+   "key": "REGIME_LTCG_REVIEW_DAYS",
+   "module": "app.config",
+   "attrs": [
+    "REGIME_LTCG_REVIEW_DAYS"
+   ],
+   "default": {
+    "REGIME_LTCG_REVIEW_DAYS": 45
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "REGIME_LTCG_REVIEW_DAYS": 1
+    },
+    "0": {
+     "REGIME_LTCG_REVIEW_DAYS": 0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "REGIME_LTCG_REVIEW_DAYS": 7
+    },
+    "2.5": {
+     "error": "ValueError"
+    },
+    " 3 ": {
+     "REGIME_LTCG_REVIEW_DAYS": 3
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "REGIME_LTCG_REVIEW_DAYS": 1000
+    },
+    "-4": {
+     "REGIME_LTCG_REVIEW_DAYS": -4
+    },
+    "inf": {
+     "error": "ValueError"
+    },
+    "nan": {
+     "error": "ValueError"
+    },
+    "1e3": {
+     "error": "ValueError"
+    }
+   }
+  },
+  {
+   "key": "REGIME_MIN_BREADTH_COVERAGE_PCT",
+   "module": "app.config",
+   "attrs": [
+    "REGIME_MIN_BREADTH_COVERAGE_PCT"
+   ],
+   "default": {
+    "REGIME_MIN_BREADTH_COVERAGE_PCT": 90.0
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "REGIME_MIN_BREADTH_COVERAGE_PCT": 1.0
+    },
+    "0": {
+     "REGIME_MIN_BREADTH_COVERAGE_PCT": 0.0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "REGIME_MIN_BREADTH_COVERAGE_PCT": 7.0
+    },
+    "2.5": {
+     "REGIME_MIN_BREADTH_COVERAGE_PCT": 2.5
+    },
+    " 3 ": {
+     "REGIME_MIN_BREADTH_COVERAGE_PCT": 3.0
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "REGIME_MIN_BREADTH_COVERAGE_PCT": 1000.0
+    },
+    "-4": {
+     "REGIME_MIN_BREADTH_COVERAGE_PCT": -4.0
+    },
+    "inf": {
+     "REGIME_MIN_BREADTH_COVERAGE_PCT": {
+      "float": "inf"
+     }
+    },
+    "nan": {
+     "REGIME_MIN_BREADTH_COVERAGE_PCT": {
+      "float": "nan"
+     }
+    },
+    "1e3": {
+     "REGIME_MIN_BREADTH_COVERAGE_PCT": 1000.0
+    }
+   }
+  },
+  {
+   "key": "REGIME_MODE",
+   "module": "app.config",
+   "attrs": [
+    "REGIME_MODE"
+   ],
+   "default": {
+    "REGIME_MODE": "observe"
+   },
+   "probes": {
+    "": {
+     "REGIME_MODE": ""
+    },
+    "true": {
+     "REGIME_MODE": "true"
+    },
+    "false": {
+     "REGIME_MODE": "false"
+    },
+    "TRUE": {
+     "REGIME_MODE": "TRUE"
+    },
+    "False": {
+     "REGIME_MODE": "False"
+    },
+    "1": {
+     "REGIME_MODE": "1"
+    },
+    "0": {
+     "REGIME_MODE": "0"
+    },
+    "yes": {
+     "REGIME_MODE": "yes"
+    },
+    "7": {
+     "REGIME_MODE": "7"
+    },
+    "2.5": {
+     "REGIME_MODE": "2.5"
+    },
+    " 3 ": {
+     "REGIME_MODE": " 3 "
+    },
+    "abc": {
+     "REGIME_MODE": "abc"
+    },
+    "a,b": {
+     "REGIME_MODE": "a,b"
+    },
+    "1_000": {
+     "REGIME_MODE": "1_000"
+    },
+    "-4": {
+     "REGIME_MODE": "-4"
+    },
+    "inf": {
+     "REGIME_MODE": "inf"
+    },
+    "nan": {
+     "REGIME_MODE": "nan"
+    },
+    "1e3": {
+     "REGIME_MODE": "1e3"
+    }
+   }
+  },
+  {
+   "key": "REGIME_NEARBY_RANK_BAND",
+   "module": "app.config",
+   "attrs": [
+    "REGIME_NEARBY_RANK_BAND"
+   ],
+   "default": {
+    "REGIME_NEARBY_RANK_BAND": 3
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "REGIME_NEARBY_RANK_BAND": 1
+    },
+    "0": {
+     "REGIME_NEARBY_RANK_BAND": 0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "REGIME_NEARBY_RANK_BAND": 7
+    },
+    "2.5": {
+     "error": "ValueError"
+    },
+    " 3 ": {
+     "REGIME_NEARBY_RANK_BAND": 3
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "REGIME_NEARBY_RANK_BAND": 1000
+    },
+    "-4": {
+     "REGIME_NEARBY_RANK_BAND": -4
+    },
+    "inf": {
+     "error": "ValueError"
+    },
+    "nan": {
+     "error": "ValueError"
+    },
+    "1e3": {
+     "error": "ValueError"
+    }
+   }
+  },
+  {
+   "key": "REGIME_R4_EQUITY_PCT",
+   "module": "app.config",
+   "attrs": [
+    "REGIME_R4_EQUITY_PCT"
+   ],
+   "default": {
+    "REGIME_R4_EQUITY_PCT": 10.0
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "REGIME_R4_EQUITY_PCT": 1.0
+    },
+    "0": {
+     "REGIME_R4_EQUITY_PCT": 0.0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "REGIME_R4_EQUITY_PCT": 7.0
+    },
+    "2.5": {
+     "REGIME_R4_EQUITY_PCT": 2.5
+    },
+    " 3 ": {
+     "REGIME_R4_EQUITY_PCT": 3.0
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "REGIME_R4_EQUITY_PCT": 1000.0
+    },
+    "-4": {
+     "REGIME_R4_EQUITY_PCT": -4.0
+    },
+    "inf": {
+     "REGIME_R4_EQUITY_PCT": {
+      "float": "inf"
+     }
+    },
+    "nan": {
+     "REGIME_R4_EQUITY_PCT": {
+      "float": "nan"
+     }
+    },
+    "1e3": {
+     "REGIME_R4_EQUITY_PCT": 1000.0
+    }
+   }
+  },
+  {
+   "key": "REGIME_R4_MAX_RESIDUAL_NAMES",
+   "module": "app.config",
+   "attrs": [
+    "REGIME_R4_MAX_RESIDUAL_NAMES"
+   ],
+   "default": {
+    "REGIME_R4_MAX_RESIDUAL_NAMES": 2
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "REGIME_R4_MAX_RESIDUAL_NAMES": 1
+    },
+    "0": {
+     "REGIME_R4_MAX_RESIDUAL_NAMES": 0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "REGIME_R4_MAX_RESIDUAL_NAMES": 7
+    },
+    "2.5": {
+     "error": "ValueError"
+    },
+    " 3 ": {
+     "REGIME_R4_MAX_RESIDUAL_NAMES": 3
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "REGIME_R4_MAX_RESIDUAL_NAMES": 1000
+    },
+    "-4": {
+     "REGIME_R4_MAX_RESIDUAL_NAMES": -4
+    },
+    "inf": {
+     "error": "ValueError"
+    },
+    "nan": {
+     "error": "ValueError"
+    },
+    "1e3": {
+     "error": "ValueError"
+    }
+   }
+  },
+  {
+   "key": "REGIME_R4_RESIDUAL_ORDERING",
+   "module": "app.config",
+   "attrs": [
+    "REGIME_R4_RESIDUAL_ORDERING"
+   ],
+   "default": {
+    "REGIME_R4_RESIDUAL_ORDERING": {
+     "tuple": [
+      "rank",
+      "liquidity"
+     ]
+    }
+   },
+   "probes": {
+    "": {
+     "REGIME_R4_RESIDUAL_ORDERING": {
+      "tuple": [
+       ""
+      ]
+     }
+    },
+    "true": {
+     "REGIME_R4_RESIDUAL_ORDERING": {
+      "tuple": [
+       "true"
+      ]
+     }
+    },
+    "false": {
+     "REGIME_R4_RESIDUAL_ORDERING": {
+      "tuple": [
+       "false"
+      ]
+     }
+    },
+    "TRUE": {
+     "REGIME_R4_RESIDUAL_ORDERING": {
+      "tuple": [
+       "TRUE"
+      ]
+     }
+    },
+    "False": {
+     "REGIME_R4_RESIDUAL_ORDERING": {
+      "tuple": [
+       "False"
+      ]
+     }
+    },
+    "1": {
+     "REGIME_R4_RESIDUAL_ORDERING": {
+      "tuple": [
+       "1"
+      ]
+     }
+    },
+    "0": {
+     "REGIME_R4_RESIDUAL_ORDERING": {
+      "tuple": [
+       "0"
+      ]
+     }
+    },
+    "yes": {
+     "REGIME_R4_RESIDUAL_ORDERING": {
+      "tuple": [
+       "yes"
+      ]
+     }
+    },
+    "7": {
+     "REGIME_R4_RESIDUAL_ORDERING": {
+      "tuple": [
+       "7"
+      ]
+     }
+    },
+    "2.5": {
+     "REGIME_R4_RESIDUAL_ORDERING": {
+      "tuple": [
+       "2.5"
+      ]
+     }
+    },
+    " 3 ": {
+     "REGIME_R4_RESIDUAL_ORDERING": {
+      "tuple": [
+       " 3 "
+      ]
+     }
+    },
+    "abc": {
+     "REGIME_R4_RESIDUAL_ORDERING": {
+      "tuple": [
+       "abc"
+      ]
+     }
+    },
+    "a,b": {
+     "REGIME_R4_RESIDUAL_ORDERING": {
+      "tuple": [
+       "a",
+       "b"
+      ]
+     }
+    },
+    "1_000": {
+     "REGIME_R4_RESIDUAL_ORDERING": {
+      "tuple": [
+       "1_000"
+      ]
+     }
+    },
+    "-4": {
+     "REGIME_R4_RESIDUAL_ORDERING": {
+      "tuple": [
+       "-4"
+      ]
+     }
+    },
+    "inf": {
+     "REGIME_R4_RESIDUAL_ORDERING": {
+      "tuple": [
+       "inf"
+      ]
+     }
+    },
+    "nan": {
+     "REGIME_R4_RESIDUAL_ORDERING": {
+      "tuple": [
+       "nan"
+      ]
+     }
+    },
+    "1e3": {
+     "REGIME_R4_RESIDUAL_ORDERING": {
+      "tuple": [
+       "1e3"
+      ]
+     }
+    }
+   }
+  },
+  {
+   "key": "REGIME_WEEKLY_EVAL_WEEKDAY",
+   "module": "app.config",
+   "attrs": [
+    "REGIME_WEEKLY_EVAL_WEEKDAY"
+   ],
+   "default": {
+    "REGIME_WEEKLY_EVAL_WEEKDAY": 4
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "REGIME_WEEKLY_EVAL_WEEKDAY": 1
+    },
+    "0": {
+     "REGIME_WEEKLY_EVAL_WEEKDAY": 0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "REGIME_WEEKLY_EVAL_WEEKDAY": 7
+    },
+    "2.5": {
+     "error": "ValueError"
+    },
+    " 3 ": {
+     "REGIME_WEEKLY_EVAL_WEEKDAY": 3
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "REGIME_WEEKLY_EVAL_WEEKDAY": 1000
+    },
+    "-4": {
+     "REGIME_WEEKLY_EVAL_WEEKDAY": -4
+    },
+    "inf": {
+     "error": "ValueError"
+    },
+    "nan": {
+     "error": "ValueError"
+    },
+    "1e3": {
+     "error": "ValueError"
+    }
+   }
+  },
+  {
+   "key": "RISK_GROSS_MULTIPLE",
+   "module": "app.config",
+   "attrs": [
+    "RISK_GROSS_MULTIPLE"
+   ],
+   "default": {
+    "RISK_GROSS_MULTIPLE": 1.5
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "RISK_GROSS_MULTIPLE": 1.0
+    },
+    "0": {
+     "RISK_GROSS_MULTIPLE": 0.0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "RISK_GROSS_MULTIPLE": 7.0
+    },
+    "2.5": {
+     "RISK_GROSS_MULTIPLE": 2.5
+    },
+    " 3 ": {
+     "RISK_GROSS_MULTIPLE": 3.0
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "RISK_GROSS_MULTIPLE": 1000.0
+    },
+    "-4": {
+     "RISK_GROSS_MULTIPLE": -4.0
+    },
+    "inf": {
+     "RISK_GROSS_MULTIPLE": {
+      "float": "inf"
+     }
+    },
+    "nan": {
+     "RISK_GROSS_MULTIPLE": {
+      "float": "nan"
+     }
+    },
+    "1e3": {
+     "RISK_GROSS_MULTIPLE": 1000.0
+    }
+   }
+  },
+  {
+   "key": "RISK_MAX_DAILY_LOSS_PCT",
+   "module": "app.config",
+   "attrs": [
+    "RISK_MAX_DAILY_LOSS_PCT"
+   ],
+   "default": {
+    "RISK_MAX_DAILY_LOSS_PCT": 5.0
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "RISK_MAX_DAILY_LOSS_PCT": 1.0
+    },
+    "0": {
+     "RISK_MAX_DAILY_LOSS_PCT": 0.0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "RISK_MAX_DAILY_LOSS_PCT": 7.0
+    },
+    "2.5": {
+     "RISK_MAX_DAILY_LOSS_PCT": 2.5
+    },
+    " 3 ": {
+     "RISK_MAX_DAILY_LOSS_PCT": 3.0
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "RISK_MAX_DAILY_LOSS_PCT": 1000.0
+    },
+    "-4": {
+     "RISK_MAX_DAILY_LOSS_PCT": -4.0
+    },
+    "inf": {
+     "RISK_MAX_DAILY_LOSS_PCT": {
+      "float": "inf"
+     }
+    },
+    "nan": {
+     "RISK_MAX_DAILY_LOSS_PCT": {
+      "float": "nan"
+     }
+    },
+    "1e3": {
+     "RISK_MAX_DAILY_LOSS_PCT": 1000.0
+    }
+   }
+  },
+  {
+   "key": "RISK_MAX_GROSS_EXPOSURE",
+   "module": "app.config",
+   "attrs": [
+    "RISK_MAX_GROSS_EXPOSURE"
+   ],
+   "default": {
+    "RISK_MAX_GROSS_EXPOSURE": ""
+   },
+   "probes": {
+    "": {
+     "RISK_MAX_GROSS_EXPOSURE": ""
+    },
+    "true": {
+     "RISK_MAX_GROSS_EXPOSURE": "true"
+    },
+    "false": {
+     "RISK_MAX_GROSS_EXPOSURE": "false"
+    },
+    "TRUE": {
+     "RISK_MAX_GROSS_EXPOSURE": "TRUE"
+    },
+    "False": {
+     "RISK_MAX_GROSS_EXPOSURE": "False"
+    },
+    "1": {
+     "RISK_MAX_GROSS_EXPOSURE": "1"
+    },
+    "0": {
+     "RISK_MAX_GROSS_EXPOSURE": "0"
+    },
+    "yes": {
+     "RISK_MAX_GROSS_EXPOSURE": "yes"
+    },
+    "7": {
+     "RISK_MAX_GROSS_EXPOSURE": "7"
+    },
+    "2.5": {
+     "RISK_MAX_GROSS_EXPOSURE": "2.5"
+    },
+    " 3 ": {
+     "RISK_MAX_GROSS_EXPOSURE": " 3 "
+    },
+    "abc": {
+     "RISK_MAX_GROSS_EXPOSURE": "abc"
+    },
+    "a,b": {
+     "RISK_MAX_GROSS_EXPOSURE": "a,b"
+    },
+    "1_000": {
+     "RISK_MAX_GROSS_EXPOSURE": "1_000"
+    },
+    "-4": {
+     "RISK_MAX_GROSS_EXPOSURE": "-4"
+    },
+    "inf": {
+     "RISK_MAX_GROSS_EXPOSURE": "inf"
+    },
+    "nan": {
+     "RISK_MAX_GROSS_EXPOSURE": "nan"
+    },
+    "1e3": {
+     "RISK_MAX_GROSS_EXPOSURE": "1e3"
+    }
+   }
+  },
+  {
+   "key": "RISK_MAX_ORDERS_PER_DAY",
+   "module": "app.config",
+   "attrs": [
+    "RISK_MAX_ORDERS_PER_DAY"
+   ],
+   "default": {
+    "RISK_MAX_ORDERS_PER_DAY": 500
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "RISK_MAX_ORDERS_PER_DAY": 1
+    },
+    "0": {
+     "RISK_MAX_ORDERS_PER_DAY": 0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "RISK_MAX_ORDERS_PER_DAY": 7
+    },
+    "2.5": {
+     "error": "ValueError"
+    },
+    " 3 ": {
+     "RISK_MAX_ORDERS_PER_DAY": 3
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "RISK_MAX_ORDERS_PER_DAY": 1000
+    },
+    "-4": {
+     "RISK_MAX_ORDERS_PER_DAY": -4
+    },
+    "inf": {
+     "error": "ValueError"
+    },
+    "nan": {
+     "error": "ValueError"
+    },
+    "1e3": {
+     "error": "ValueError"
+    }
+   }
+  },
+  {
+   "key": "RISK_MAX_POSITION_VALUE",
+   "module": "app.config",
+   "attrs": [
+    "RISK_MAX_POSITION_VALUE"
+   ],
+   "default": {
+    "RISK_MAX_POSITION_VALUE": ""
+   },
+   "probes": {
+    "": {
+     "RISK_MAX_POSITION_VALUE": ""
+    },
+    "true": {
+     "RISK_MAX_POSITION_VALUE": "true"
+    },
+    "false": {
+     "RISK_MAX_POSITION_VALUE": "false"
+    },
+    "TRUE": {
+     "RISK_MAX_POSITION_VALUE": "TRUE"
+    },
+    "False": {
+     "RISK_MAX_POSITION_VALUE": "False"
+    },
+    "1": {
+     "RISK_MAX_POSITION_VALUE": "1"
+    },
+    "0": {
+     "RISK_MAX_POSITION_VALUE": "0"
+    },
+    "yes": {
+     "RISK_MAX_POSITION_VALUE": "yes"
+    },
+    "7": {
+     "RISK_MAX_POSITION_VALUE": "7"
+    },
+    "2.5": {
+     "RISK_MAX_POSITION_VALUE": "2.5"
+    },
+    " 3 ": {
+     "RISK_MAX_POSITION_VALUE": " 3 "
+    },
+    "abc": {
+     "RISK_MAX_POSITION_VALUE": "abc"
+    },
+    "a,b": {
+     "RISK_MAX_POSITION_VALUE": "a,b"
+    },
+    "1_000": {
+     "RISK_MAX_POSITION_VALUE": "1_000"
+    },
+    "-4": {
+     "RISK_MAX_POSITION_VALUE": "-4"
+    },
+    "inf": {
+     "RISK_MAX_POSITION_VALUE": "inf"
+    },
+    "nan": {
+     "RISK_MAX_POSITION_VALUE": "nan"
+    },
+    "1e3": {
+     "RISK_MAX_POSITION_VALUE": "1e3"
+    }
+   }
+  },
+  {
+   "key": "RISK_POSITION_HEADROOM",
+   "module": "app.config",
+   "attrs": [
+    "RISK_POSITION_HEADROOM"
+   ],
+   "default": {
+    "RISK_POSITION_HEADROOM": 1.25
+   },
+   "probes": {
+    "": {
+     "error": "ValueError"
+    },
+    "true": {
+     "error": "ValueError"
+    },
+    "false": {
+     "error": "ValueError"
+    },
+    "TRUE": {
+     "error": "ValueError"
+    },
+    "False": {
+     "error": "ValueError"
+    },
+    "1": {
+     "RISK_POSITION_HEADROOM": 1.0
+    },
+    "0": {
+     "RISK_POSITION_HEADROOM": 0.0
+    },
+    "yes": {
+     "error": "ValueError"
+    },
+    "7": {
+     "RISK_POSITION_HEADROOM": 7.0
+    },
+    "2.5": {
+     "RISK_POSITION_HEADROOM": 2.5
+    },
+    " 3 ": {
+     "RISK_POSITION_HEADROOM": 3.0
+    },
+    "abc": {
+     "error": "ValueError"
+    },
+    "a,b": {
+     "error": "ValueError"
+    },
+    "1_000": {
+     "RISK_POSITION_HEADROOM": 1000.0
+    },
+    "-4": {
+     "RISK_POSITION_HEADROOM": -4.0
+    },
+    "inf": {
+     "RISK_POSITION_HEADROOM": {
+      "float": "inf"
+     }
+    },
+    "nan": {
+     "RISK_POSITION_HEADROOM": {
+      "float": "nan"
+     }
+    },
+    "1e3": {
+     "RISK_POSITION_HEADROOM": 1000.0
+    }
+   }
+  },
+  {
+   "key": "SCAN_SOURCE_DEFAULT",
+   "module": "app.config",
+   "attrs": [
+    "SCAN_SOURCE_DEFAULT"
+   ],
+   "default": {
+    "SCAN_SOURCE_DEFAULT": "upload"
+   },
+   "probes": {
+    "": {
+     "SCAN_SOURCE_DEFAULT": ""
+    },
+    "true": {
+     "SCAN_SOURCE_DEFAULT": "true"
+    },
+    "false": {
+     "SCAN_SOURCE_DEFAULT": "false"
+    },
+    "TRUE": {
+     "SCAN_SOURCE_DEFAULT": "TRUE"
+    },
+    "False": {
+     "SCAN_SOURCE_DEFAULT": "False"
+    },
+    "1": {
+     "SCAN_SOURCE_DEFAULT": "1"
+    },
+    "0": {
+     "SCAN_SOURCE_DEFAULT": "0"
+    },
+    "yes": {
+     "SCAN_SOURCE_DEFAULT": "yes"
+    },
+    "7": {
+     "SCAN_SOURCE_DEFAULT": "7"
+    },
+    "2.5": {
+     "SCAN_SOURCE_DEFAULT": "2.5"
+    },
+    " 3 ": {
+     "SCAN_SOURCE_DEFAULT": " 3 "
+    },
+    "abc": {
+     "SCAN_SOURCE_DEFAULT": "abc"
+    },
+    "a,b": {
+     "SCAN_SOURCE_DEFAULT": "a,b"
+    },
+    "1_000": {
+     "SCAN_SOURCE_DEFAULT": "1_000"
+    },
+    "-4": {
+     "SCAN_SOURCE_DEFAULT": "-4"
+    },
+    "inf": {
+     "SCAN_SOURCE_DEFAULT": "inf"
+    },
+    "nan": {
+     "SCAN_SOURCE_DEFAULT": "nan"
+    },
+    "1e3": {
+     "SCAN_SOURCE_DEFAULT": "1e3"
+    }
+   }
+  },
+  {
+   "key": "TOKEN_FILE",
+   "module": "app.config",
+   "attrs": [
+    "TOKEN_FILE"
+   ],
+   "default": {
+    "TOKEN_FILE": "data/.kite_token.json"
+   },
+   "probes": {
+    "": {
+     "TOKEN_FILE": ""
+    },
+    "true": {
+     "TOKEN_FILE": "true"
+    },
+    "false": {
+     "TOKEN_FILE": "false"
+    },
+    "TRUE": {
+     "TOKEN_FILE": "TRUE"
+    },
+    "False": {
+     "TOKEN_FILE": "False"
+    },
+    "1": {
+     "TOKEN_FILE": "1"
+    },
+    "0": {
+     "TOKEN_FILE": "0"
+    },
+    "yes": {
+     "TOKEN_FILE": "yes"
+    },
+    "7": {
+     "TOKEN_FILE": "7"
+    },
+    "2.5": {
+     "TOKEN_FILE": "2.5"
+    },
+    " 3 ": {
+     "TOKEN_FILE": " 3 "
+    },
+    "abc": {
+     "TOKEN_FILE": "abc"
+    },
+    "a,b": {
+     "TOKEN_FILE": "a,b"
+    },
+    "1_000": {
+     "TOKEN_FILE": "1_000"
+    },
+    "-4": {
+     "TOKEN_FILE": "-4"
+    },
+    "inf": {
+     "TOKEN_FILE": "inf"
+    },
+    "nan": {
+     "TOKEN_FILE": "nan"
+    },
+    "1e3": {
+     "TOKEN_FILE": "1e3"
+    }
+   }
+  },
+  {
+   "key": "DESK_DB_BACKEND",
+   "module": "app.analytics.db",
+   "attrs": [
+    "DB_BACKEND"
+   ],
+   "default": {
+    "DB_BACKEND": "sqlite"
+   },
+   "probes": {
+    "": {
+     "DB_BACKEND": ""
+    },
+    "true": {
+     "DB_BACKEND": "true"
+    },
+    "false": {
+     "DB_BACKEND": "false"
+    },
+    "TRUE": {
+     "DB_BACKEND": "TRUE"
+    },
+    "False": {
+     "DB_BACKEND": "False"
+    },
+    "1": {
+     "DB_BACKEND": "1"
+    },
+    "0": {
+     "DB_BACKEND": "0"
+    },
+    "yes": {
+     "DB_BACKEND": "yes"
+    },
+    "7": {
+     "DB_BACKEND": "7"
+    },
+    "2.5": {
+     "DB_BACKEND": "2.5"
+    },
+    " 3 ": {
+     "DB_BACKEND": " 3 "
+    },
+    "abc": {
+     "DB_BACKEND": "abc"
+    },
+    "a,b": {
+     "DB_BACKEND": "a,b"
+    },
+    "1_000": {
+     "DB_BACKEND": "1_000"
+    },
+    "-4": {
+     "DB_BACKEND": "-4"
+    },
+    "inf": {
+     "DB_BACKEND": "inf"
+    },
+    "nan": {
+     "DB_BACKEND": "nan"
+    },
+    "1e3": {
+     "DB_BACKEND": "1e3"
+    }
+   }
+  },
+  {
+   "key": "DESK_DB_SCHEMA",
+   "module": "app.analytics.db",
+   "attrs": [
+    "DB_SCHEMA"
+   ],
+   "default": {
+    "DB_SCHEMA": "desk"
+   },
+   "probes": {
+    "": {
+     "DB_SCHEMA": ""
+    },
+    "true": {
+     "DB_SCHEMA": "true"
+    },
+    "false": {
+     "DB_SCHEMA": "false"
+    },
+    "TRUE": {
+     "DB_SCHEMA": "TRUE"
+    },
+    "False": {
+     "DB_SCHEMA": "False"
+    },
+    "1": {
+     "DB_SCHEMA": "1"
+    },
+    "0": {
+     "DB_SCHEMA": "0"
+    },
+    "yes": {
+     "DB_SCHEMA": "yes"
+    },
+    "7": {
+     "DB_SCHEMA": "7"
+    },
+    "2.5": {
+     "DB_SCHEMA": "2.5"
+    },
+    " 3 ": {
+     "DB_SCHEMA": " 3 "
+    },
+    "abc": {
+     "DB_SCHEMA": "abc"
+    },
+    "a,b": {
+     "DB_SCHEMA": "a,b"
+    },
+    "1_000": {
+     "DB_SCHEMA": "1_000"
+    },
+    "-4": {
+     "DB_SCHEMA": "-4"
+    },
+    "inf": {
+     "DB_SCHEMA": "inf"
+    },
+    "nan": {
+     "DB_SCHEMA": "nan"
+    },
+    "1e3": {
+     "DB_SCHEMA": "1e3"
+    }
+   }
+  },
+  {
+   "key": "SCREENER_DATABASE_URL",
+   "module": "app.scan_source",
+   "attrs": [
+    "SCREENER_DSN"
+   ],
+   "default": {
+    "SCREENER_DSN": "postgresql://baskfy:baskfy@localhost:5433/baskfy"
+   },
+   "probes": {
+    "": {
+     "SCREENER_DSN": ""
+    },
+    "true": {
+     "SCREENER_DSN": "true"
+    },
+    "false": {
+     "SCREENER_DSN": "false"
+    },
+    "TRUE": {
+     "SCREENER_DSN": "TRUE"
+    },
+    "False": {
+     "SCREENER_DSN": "False"
+    },
+    "1": {
+     "SCREENER_DSN": "1"
+    },
+    "0": {
+     "SCREENER_DSN": "0"
+    },
+    "yes": {
+     "SCREENER_DSN": "yes"
+    },
+    "7": {
+     "SCREENER_DSN": "7"
+    },
+    "2.5": {
+     "SCREENER_DSN": "2.5"
+    },
+    " 3 ": {
+     "SCREENER_DSN": " 3 "
+    },
+    "abc": {
+     "SCREENER_DSN": "abc"
+    },
+    "a,b": {
+     "SCREENER_DSN": "a,b"
+    },
+    "1_000": {
+     "SCREENER_DSN": "1_000"
+    },
+    "-4": {
+     "SCREENER_DSN": "-4"
+    },
+    "inf": {
+     "SCREENER_DSN": "inf"
+    },
+    "nan": {
+     "SCREENER_DSN": "nan"
+    },
+    "1e3": {
+     "SCREENER_DSN": "1e3"
+    }
+   }
+  },
+  {
+   "key": "DESK_UNIVERSE_SLUG",
+   "module": "app.breadth_source",
+   "attrs": [
+    "DESK_UNIVERSE_SLUG"
+   ],
+   "default": {
+    "DESK_UNIVERSE_SLUG": "nifty-total-market"
+   },
+   "probes": {
+    "": {
+     "DESK_UNIVERSE_SLUG": ""
+    },
+    "true": {
+     "DESK_UNIVERSE_SLUG": "true"
+    },
+    "false": {
+     "DESK_UNIVERSE_SLUG": "false"
+    },
+    "TRUE": {
+     "DESK_UNIVERSE_SLUG": "TRUE"
+    },
+    "False": {
+     "DESK_UNIVERSE_SLUG": "False"
+    },
+    "1": {
+     "DESK_UNIVERSE_SLUG": "1"
+    },
+    "0": {
+     "DESK_UNIVERSE_SLUG": "0"
+    },
+    "yes": {
+     "DESK_UNIVERSE_SLUG": "yes"
+    },
+    "7": {
+     "DESK_UNIVERSE_SLUG": "7"
+    },
+    "2.5": {
+     "DESK_UNIVERSE_SLUG": "2.5"
+    },
+    " 3 ": {
+     "DESK_UNIVERSE_SLUG": " 3 "
+    },
+    "abc": {
+     "DESK_UNIVERSE_SLUG": "abc"
+    },
+    "a,b": {
+     "DESK_UNIVERSE_SLUG": "a,b"
+    },
+    "1_000": {
+     "DESK_UNIVERSE_SLUG": "1_000"
+    },
+    "-4": {
+     "DESK_UNIVERSE_SLUG": "-4"
+    },
+    "inf": {
+     "DESK_UNIVERSE_SLUG": "inf"
+    },
+    "nan": {
+     "DESK_UNIVERSE_SLUG": "nan"
+    },
+    "1e3": {
+     "DESK_UNIVERSE_SLUG": "1e3"
+    }
+   }
+  },
+  {
+   "key": "SCREENER_DATABASE_URL",
+   "module": "app.breadth_source",
+   "attrs": [
+    "SCREENER_DSN"
+   ],
+   "default": {
+    "SCREENER_DSN": "postgresql://baskfy:baskfy@localhost:5433/baskfy"
+   },
+   "probes": {
+    "": {
+     "SCREENER_DSN": ""
+    },
+    "true": {
+     "SCREENER_DSN": "true"
+    },
+    "false": {
+     "SCREENER_DSN": "false"
+    },
+    "TRUE": {
+     "SCREENER_DSN": "TRUE"
+    },
+    "False": {
+     "SCREENER_DSN": "False"
+    },
+    "1": {
+     "SCREENER_DSN": "1"
+    },
+    "0": {
+     "SCREENER_DSN": "0"
+    },
+    "yes": {
+     "SCREENER_DSN": "yes"
+    },
+    "7": {
+     "SCREENER_DSN": "7"
+    },
+    "2.5": {
+     "SCREENER_DSN": "2.5"
+    },
+    " 3 ": {
+     "SCREENER_DSN": " 3 "
+    },
+    "abc": {
+     "SCREENER_DSN": "abc"
+    },
+    "a,b": {
+     "SCREENER_DSN": "a,b"
+    },
+    "1_000": {
+     "SCREENER_DSN": "1_000"
+    },
+    "-4": {
+     "SCREENER_DSN": "-4"
+    },
+    "inf": {
+     "SCREENER_DSN": "inf"
+    },
+    "nan": {
+     "SCREENER_DSN": "nan"
+    },
+    "1e3": {
+     "SCREENER_DSN": "1e3"
+    }
+   }
+  },
+  {
+   "key": "METRICS_PORT",
+   "module": "app.telemetry",
+   "attrs": [
+    "METRICS_PORT"
+   ],
+   "default": {
+    "METRICS_PORT": ""
+   },
+   "probes": {
+    "": {
+     "METRICS_PORT": ""
+    },
+    "true": {
+     "METRICS_PORT": "true"
+    },
+    "false": {
+     "METRICS_PORT": "false"
+    },
+    "TRUE": {
+     "METRICS_PORT": "TRUE"
+    },
+    "False": {
+     "METRICS_PORT": "False"
+    },
+    "1": {
+     "METRICS_PORT": "1"
+    },
+    "0": {
+     "METRICS_PORT": "0"
+    },
+    "yes": {
+     "METRICS_PORT": "yes"
+    },
+    "7": {
+     "METRICS_PORT": "7"
+    },
+    "2.5": {
+     "METRICS_PORT": "2.5"
+    },
+    " 3 ": {
+     "METRICS_PORT": " 3 "
+    },
+    "abc": {
+     "METRICS_PORT": "abc"
+    },
+    "a,b": {
+     "METRICS_PORT": "a,b"
+    },
+    "1_000": {
+     "METRICS_PORT": "1_000"
+    },
+    "-4": {
+     "METRICS_PORT": "-4"
+    },
+    "inf": {
+     "METRICS_PORT": "inf"
+    },
+    "nan": {
+     "METRICS_PORT": "nan"
+    },
+    "1e3": {
+     "METRICS_PORT": "1e3"
+    }
+   }
+  },
+  {
+   "key": "OTEL_EXPORTER_OTLP_ENDPOINT",
+   "module": "app.telemetry",
+   "attrs": [
+    "OTLP_ENDPOINT"
+   ],
+   "default": {
+    "OTLP_ENDPOINT": ""
+   },
+   "probes": {
+    "": {
+     "OTLP_ENDPOINT": ""
+    },
+    "true": {
+     "OTLP_ENDPOINT": "true"
+    },
+    "false": {
+     "OTLP_ENDPOINT": "false"
+    },
+    "TRUE": {
+     "OTLP_ENDPOINT": "TRUE"
+    },
+    "False": {
+     "OTLP_ENDPOINT": "False"
+    },
+    "1": {
+     "OTLP_ENDPOINT": "1"
+    },
+    "0": {
+     "OTLP_ENDPOINT": "0"
+    },
+    "yes": {
+     "OTLP_ENDPOINT": "yes"
+    },
+    "7": {
+     "OTLP_ENDPOINT": "7"
+    },
+    "2.5": {
+     "OTLP_ENDPOINT": "2.5"
+    },
+    " 3 ": {
+     "OTLP_ENDPOINT": " 3 "
+    },
+    "abc": {
+     "OTLP_ENDPOINT": "abc"
+    },
+    "a,b": {
+     "OTLP_ENDPOINT": "a,b"
+    },
+    "1_000": {
+     "OTLP_ENDPOINT": "1_000"
+    },
+    "-4": {
+     "OTLP_ENDPOINT": "-4"
+    },
+    "inf": {
+     "OTLP_ENDPOINT": "inf"
+    },
+    "nan": {
+     "OTLP_ENDPOINT": "nan"
+    },
+    "1e3": {
+     "OTLP_ENDPOINT": "1e3"
+    }
+   }
+  },
+  {
+   "key": "OTEL_SERVICE_NAME",
+   "module": "app.telemetry",
+   "attrs": [
+    "SERVICE_NAME"
+   ],
+   "default": {
+    "SERVICE_NAME": "momentum-desk"
+   },
+   "probes": {
+    "": {
+     "SERVICE_NAME": ""
+    },
+    "true": {
+     "SERVICE_NAME": "true"
+    },
+    "false": {
+     "SERVICE_NAME": "false"
+    },
+    "TRUE": {
+     "SERVICE_NAME": "TRUE"
+    },
+    "False": {
+     "SERVICE_NAME": "False"
+    },
+    "1": {
+     "SERVICE_NAME": "1"
+    },
+    "0": {
+     "SERVICE_NAME": "0"
+    },
+    "yes": {
+     "SERVICE_NAME": "yes"
+    },
+    "7": {
+     "SERVICE_NAME": "7"
+    },
+    "2.5": {
+     "SERVICE_NAME": "2.5"
+    },
+    " 3 ": {
+     "SERVICE_NAME": " 3 "
+    },
+    "abc": {
+     "SERVICE_NAME": "abc"
+    },
+    "a,b": {
+     "SERVICE_NAME": "a,b"
+    },
+    "1_000": {
+     "SERVICE_NAME": "1_000"
+    },
+    "-4": {
+     "SERVICE_NAME": "-4"
+    },
+    "inf": {
+     "SERVICE_NAME": "inf"
+    },
+    "nan": {
+     "SERVICE_NAME": "nan"
+    },
+    "1e3": {
+     "SERVICE_NAME": "1e3"
+    }
+   }
+  },
+  {
+   "key": "SENTRY_DSN",
+   "module": "app.telemetry",
+   "attrs": [
+    "SENTRY_DSN"
+   ],
+   "default": {
+    "SENTRY_DSN": ""
+   },
+   "probes": {
+    "": {
+     "SENTRY_DSN": ""
+    },
+    "true": {
+     "SENTRY_DSN": "true"
+    },
+    "false": {
+     "SENTRY_DSN": "false"
+    },
+    "TRUE": {
+     "SENTRY_DSN": "TRUE"
+    },
+    "False": {
+     "SENTRY_DSN": "False"
+    },
+    "1": {
+     "SENTRY_DSN": "1"
+    },
+    "0": {
+     "SENTRY_DSN": "0"
+    },
+    "yes": {
+     "SENTRY_DSN": "yes"
+    },
+    "7": {
+     "SENTRY_DSN": "7"
+    },
+    "2.5": {
+     "SENTRY_DSN": "2.5"
+    },
+    " 3 ": {
+     "SENTRY_DSN": " 3 "
+    },
+    "abc": {
+     "SENTRY_DSN": "abc"
+    },
+    "a,b": {
+     "SENTRY_DSN": "a,b"
+    },
+    "1_000": {
+     "SENTRY_DSN": "1_000"
+    },
+    "-4": {
+     "SENTRY_DSN": "-4"
+    },
+    "inf": {
+     "SENTRY_DSN": "inf"
+    },
+    "nan": {
+     "SENTRY_DSN": "nan"
+    },
+    "1e3": {
+     "SENTRY_DSN": "1e3"
+    }
+   }
+  }
+ ],
+ "function_level": [
+  {
+   "key": "DESK_DATABASE_URL",
+   "module": "app.analytics.db",
+   "line": 532,
+   "default_literal": "postgresql://baskfy:baskfy@localhost:5433/baskfy",
+   "also_module_level": false
+  },
+  {
+   "key": "BASKFY_SOLE_USER_ID",
+   "module": "app.fno_monitor",
+   "line": 1360,
+   "default_literal": "0",
+   "also_module_level": true
+  },
+  {
+   "key": "BASKFY_SOLE_USER_ID",
+   "module": "app.options_monitor",
+   "line": 261,
+   "default_literal": "0",
+   "also_module_level": true
+  },
+  {
+   "key": "BASKFY_SOLE_USER_ID",
+   "module": "app.swing_monitor",
+   "line": 1274,
+   "default_literal": "0",
+   "also_module_level": true
+  },
+  {
+   "key": "DESK_MONITOR_METRICS_PORT",
+   "module": "app.swing_monitor",
+   "line": 1451,
+   "default_literal": "",
+   "also_module_level": false
+  },
+  {
+   "key": "KITE_TOKEN_ENCRYPTION_KEY",
+   "module": "app.token_store",
+   "line": 66,
+   "default_literal": "",
+   "also_module_level": false
+  }
+ ]
+}

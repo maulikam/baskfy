@@ -1,0 +1,156 @@
+{
+  "note": "Wave D lane analytics_regime: the read-only regime overlay (GET /regime, GET /regime/data) over the bed's stored evaluations, exposure rows, index series, breadth readings, snapshots and rebalance plans; then the same pages after the settings page moves the knobs the view reads (REGIME_MODE, the R4 cap, the stale allowance, MIN_POSITION_WEIGHT, TARGET_POSITIONS, CLUSTER_CAP), then reset. No case writes anything but the settings rows. Run on the bed with --env REGIME_ENABLED=true until the integrator wires session::startup (main._apply_stored_settings) into the Rust desk's boot: the bed stores the override REGIME_ENABLED=true, Python applies it at startup and Rust does not yet, so without the flag the three cases before the first settings save differ only in regime_enabled. With it, 9/9 EQUAL on postgres; 9/9 EQUAL on sqlite (empty store) either way. Edge cases (wave D review): pre-open clock, a query string, POST and HEAD (FastAPI's GET-only 405 with Allow: GET), a trailing slash (Starlette's redirect_slashes 307 — an app-wide routing behaviour the Rust desk does not have yet), enforce mode with every other regime knob moved including REGIME_WEEKLY_EVAL_WEEKDAY (Python keeps the choice as a str, so regime_config() raises TypeError and both routes answer 500 until reset — reproduced in Rust, R-ar.1), a refused save, coverage 0 / buffer 0 / confirm 1, and a final reset.",
+  "cases": [
+    {
+      "name": "regime page",
+      "method": "GET",
+      "path": "/regime"
+    },
+    {
+      "name": "regime data",
+      "method": "GET",
+      "path": "/regime/data"
+    },
+    {
+      "name": "regime page mid-session",
+      "method": "GET",
+      "path": "/regime",
+      "clock": "mid"
+    },
+    {
+      "name": "move the knobs the view reads",
+      "method": "POST",
+      "path": "/settings",
+      "form": {
+        "REGIME_MODE": "propose",
+        "REGIME_R4_EQUITY_PCT": "5",
+        "REGIME_INDEX_STALE_DAYS": "1",
+        "MIN_POSITION_WEIGHT": "4",
+        "TARGET_POSITIONS": "10, 14",
+        "CLUSTER_CAP": "30",
+        "REGIME_CONFIRM_DAYS": "5",
+        "REGIME_BUFFER_BPS": "200"
+      }
+    },
+    {
+      "name": "regime page after the knobs moved",
+      "method": "GET",
+      "path": "/regime"
+    },
+    {
+      "name": "regime data after the knobs moved",
+      "method": "GET",
+      "path": "/regime/data"
+    },
+    {
+      "name": "regime data a week later (every index stale)",
+      "method": "GET",
+      "path": "/regime/data",
+      "clock": "2026-11-09T11:00:00+05:30"
+    },
+    {
+      "name": "reset the knobs",
+      "method": "POST",
+      "path": "/settings/reset",
+      "form": {}
+    },
+    {
+      "name": "regime data after reset",
+      "method": "GET",
+      "path": "/regime/data",
+      "clock": "after_close"
+    },
+    {
+      "name": "regime page before the open",
+      "method": "GET",
+      "path": "/regime",
+      "clock": "pre_open"
+    },
+    {
+      "name": "regime data with a query string",
+      "method": "GET",
+      "path": "/regime/data",
+      "query": {
+        "x": "1"
+      }
+    },
+    {
+      "name": "regime data, wrong method",
+      "method": "POST",
+      "path": "/regime/data",
+      "form": {}
+    },
+    {
+      "name": "regime page, HEAD",
+      "method": "HEAD",
+      "path": "/regime"
+    },
+    {
+      "name": "regime page, trailing slash",
+      "method": "GET",
+      "path": "/regime/"
+    },
+    {
+      "name": "enforce mode, coverage, weekday, residuals, ltcg, bootstrap",
+      "method": "POST",
+      "path": "/settings",
+      "form": {
+        "REGIME_MODE": "enforce",
+        "REGIME_MIN_BREADTH_COVERAGE_PCT": "99.5",
+        "REGIME_WEEKLY_EVAL_WEEKDAY": "2",
+        "REGIME_R4_MAX_RESIDUAL_NAMES": "5",
+        "REGIME_LTCG_REVIEW_DAYS": "90",
+        "REGIME_BOOTSTRAP_POLICY": "adopt_candidate",
+        "REGIME_R4_EQUITY_PCT": "0",
+        "REGIME_BREADTH_STALE_DAYS": "3",
+        "REGIME_INDEX_STALE_DAYS": "90"
+      }
+    },
+    {
+      "name": "regime page in enforce mode",
+      "method": "GET",
+      "path": "/regime",
+      "clock": "close"
+    },
+    {
+      "name": "regime data in enforce mode",
+      "method": "GET",
+      "path": "/regime/data",
+      "clock": "close"
+    },
+    {
+      "name": "refused: R4 cap above the R3 cap",
+      "method": "POST",
+      "path": "/settings",
+      "form": {
+        "REGIME_R4_EQUITY_PCT": "55"
+      }
+    },
+    {
+      "name": "regime data after a refused save",
+      "method": "GET",
+      "path": "/regime/data"
+    },
+    {
+      "name": "coverage 0, buffer 0",
+      "method": "POST",
+      "path": "/settings",
+      "form": {
+        "REGIME_MIN_BREADTH_COVERAGE_PCT": "0",
+        "REGIME_BUFFER_BPS": "0",
+        "REGIME_CONFIRM_DAYS": "1"
+      }
+    },
+    {
+      "name": "regime page coverage 0",
+      "method": "GET",
+      "path": "/regime"
+    },
+    {
+      "name": "reset again",
+      "method": "POST",
+      "path": "/settings/reset",
+      "form": {}
+    }
+  ]
+}

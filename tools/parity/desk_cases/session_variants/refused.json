@@ -1,0 +1,9 @@
+{
+ "note": "Run with --fixture desk_fixtures/session_refused (profile refuses, api.token refuses): /status unauthenticated, and a /callback whose exchange the broker refuses (an unhandled exception: 500, nothing written, no autorun).",
+ "cases": [
+  {"name": "status with no session", "method": "GET", "path": "/status"},
+  {"name": "callback the broker refuses", "method": "GET", "path": "/callback", "query": {"request_token": "bad-token"}},
+  {"name": "status still unauthenticated after the refused exchange", "method": "GET", "path": "/status"},
+  {"name": "login still redirects", "method": "GET", "path": "/login"}
+ ]
+}

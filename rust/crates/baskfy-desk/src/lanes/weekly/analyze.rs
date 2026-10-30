@@ -118,7 +118,8 @@ pub fn scoring_config(cfg: &BasketConfig) -> ScoringConfig {
     cfg.scoring.clone()
 }
 
-async fn load_config(state: &AppState) -> (BasketConfig, bool) {
+/// The weekly config with stored overrides, and whether the regime gate is on.
+pub async fn load_config(state: &AppState) -> (BasketConfig, bool) {
     let settings = state.settings_snapshot();
     let overrides = match state.db.connect().await {
         Ok(mut conn) => {

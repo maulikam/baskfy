@@ -50,6 +50,7 @@ pub mod journal;
 pub mod kite_client;
 pub mod kite_limits;
 pub mod lifecycle;
+pub mod limited_reads;
 pub mod net;
 pub mod order_gateway;
 pub mod ratelimit;
@@ -115,6 +116,25 @@ pub fn gateway(parts: GatewayParts) -> Arc<dyn Gateway> {
         Ok(g) => Arc::new(g),
         Err(_) => Arc::new(NotPortedGateway),
     }
+}
+
+/// The lanes' Kite reads, every one through the read limiter. With the desk's gateway the
+/// limiter is its Kite wrapper's own (one per process); otherwise one of its own.
+#[must_use]
+pub fn limited_reads(
+    kite: Arc<dyn KiteWrites>,
+    gateway: &Arc<dyn Gateway>,
+    settings: &SharedSettings,
+) -> Arc<dyn crate::kite::KiteReads> {
+    let inner: Arc<dyn crate::kite::KiteReads> = kite;
+    let desk = gateway
+        .as_any()
+        .and_then(|a| a.downcast_ref::<desk::DeskGateway>())
+        .map(desk::DeskGateway::kite);
+    Arc::new(match desk {
+        Some(k) => limited_reads::LimitedReads::sharing(inner, k),
+        None => limited_reads::LimitedReads::own(inner, settings),
+    })
 }
 
 /// The placeholder gateway: every method refuses with `NotPorted`, no broker call, no journal.

@@ -1312,3 +1312,74 @@ fn os_errors_read_as_pythons() {
         "FileNotFoundError"
     );
 }
+
+// =====================================================================================
+// the lanes' raw reads (`AppState.kite`) take the same limiter's slots (SW20)
+// =====================================================================================
+
+#[tokio::test]
+async fn lane_reads_take_their_family_slot_from_the_wrappers_limiter() {
+    use baskfy_desk::lanes::exec_core::limited_reads;
+    let broker = Recorder::new();
+    let (state, _dir) = state_with(broker.clone(), "test-key").await;
+    let reads = limited_reads(broker.clone(), &state.gateway, &state.settings);
+    reads.profile().await.unwrap();
+    reads.holdings().await.unwrap();
+    reads.ltp(&[s("NSE:INFY")]).await.unwrap();
+    reads
+        .historical_data(408_065, "2026-10-01", "2026-10-29", "day", false, false)
+        .await
+        .unwrap();
+    reads.get_gtts().await.unwrap();
+    reads.basket_order_margins(&[], false, None).await.unwrap();
+    let _ = reads.login_url();
+    let k = exec_kite::kite(&state).unwrap();
+    assert_eq!(
+        k.slots_taken(),
+        [
+            "general",
+            "general",
+            "quote",
+            "historical",
+            "general",
+            "general"
+        ]
+    );
+    assert_eq!(broker.calls().len(), 7);
+    assert!(broker.writes().is_empty());
+}
+
+#[tokio::test]
+async fn lane_reads_are_spaced_at_the_familys_rate() {
+    use baskfy_desk::lanes::exec_core::kite_limits::DeskLimits;
+    use baskfy_desk::lanes::exec_core::limited_reads::LimitedReads;
+    let broker = Recorder::new();
+    let mono = Arc::new(Mono::default());
+    let limits = Arc::new(DeskLimits::new(
+        mono.clone() as Arc<dyn LimitClock>,
+        std::collections::HashMap::new(),
+    ));
+    let reads = LimitedReads::with_limits(broker.clone(), limits.clone());
+    for _ in 0..4 {
+        reads.ltp(&[s("NSE:INFY")]).await.unwrap();
+    }
+    assert_eq!(reads.slots_taken(), ["quote"; 4]);
+    let elapsed = mono.now() - 1_000.0;
+    assert!(elapsed >= 2.99, "four quote reads in {elapsed}s");
+    assert_eq!(broker.calls().len(), 4);
+}
+
+#[tokio::test]
+async fn lane_reads_without_the_desks_gateway_still_take_a_slot() {
+    use baskfy_desk::gateway::Gateway;
+    use baskfy_desk::lanes::exec_core::{NotPortedGateway, limited_reads};
+    let broker = Recorder::new();
+    let dir = tempfile::tempdir().unwrap();
+    let settings: SharedSettings = Arc::new(RwLock::new(settings_for(dir.path(), true)));
+    let gateway: Arc<dyn Gateway> = Arc::new(NotPortedGateway);
+    let reads = limited_reads(broker.clone(), &gateway, &settings);
+    reads.orders().await.unwrap();
+    reads.trades().await.unwrap();
+    assert_eq!(broker.calls(), [s("orders"), s("trades")]);
+    assert!(broker.writes().is_empty());
+}

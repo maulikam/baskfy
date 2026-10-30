@@ -213,17 +213,19 @@ pub(crate) fn decimal_to_f64(d: Decimal) -> Result<f64, WorkerError> {
         .map_err(|e| common::value_err(e.to_string()))
 }
 
-/// `upsert_signals`: the day's provisional stragglers swept (a real run), then one upsert per
-/// row on `(user_id, date, instrument_id)`.
+/// `upsert_signals`: the day's provisional stragglers swept (a real run only), then one upsert
+/// per row on `(user_id, date, instrument_id)`.
 async fn upsert_signals(
     conn: &mut PgConnection,
     rows: &[SignalRow],
     user_id: i64,
     trade_date: NaiveDate,
-    pipeline_run_id: i64,
+    pipeline_run_id: Option<i64>,
+    provisional: bool,
 ) -> Result<i64, WorkerError> {
     let keep: Vec<i64> = rows.iter().map(|r| r.instrument_id).collect();
-    if keep.is_empty() {
+    // LV8: a live scan (`provisional`) sweeps nothing; the nightly's real rows replace its own.
+    if !provisional && keep.is_empty() {
         sqlx::query(
             "DELETE FROM vb_signal_daily WHERE user_id = $1 AND date = $2 \
              AND provisional IS true",
@@ -232,7 +234,7 @@ async fn upsert_signals(
         .bind(trade_date)
         .execute(&mut *conn)
         .await?;
-    } else {
+    } else if !provisional {
         sqlx::query(
             "DELETE FROM vb_signal_daily WHERE user_id = $1 AND date = $2 \
              AND provisional IS true AND instrument_id <> ALL($3)",
@@ -251,7 +253,7 @@ async fn upsert_signals(
              turnover_avg_20, sma_200, ema_21, high_20_prior, rank_key, locked_upper_circuit, \
              bars_in_window, pipeline_run_id, provisional) VALUES ($1, $2, $3, $4, \
              $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, \
-             $18, $19, $20, $21, $22, $23, $24, $25, $26, NULL, $27, false) \
+             $18, $19, $20, $21, $22, $23, $24, $25, $26, NULL, $27, $28) \
              ON CONFLICT (user_id, date, instrument_id) DO UPDATE SET \
              state = excluded.state, failed_filters = excluded.failed_filters, \
              open = excluded.open, high = excluded.high, low = excluded.low, \
@@ -295,6 +297,7 @@ async fn upsert_signals(
         .bind(r.rank_key)
         .bind(r.locked_upper_circuit)
         .bind(pipeline_run_id)
+        .bind(provisional)
         .execute(&mut *conn)
         .await?;
     }
@@ -311,7 +314,8 @@ async fn write_breadth_row(
     funnel: &VbtFunnel,
     thin_session: bool,
     config: &VbtConfig,
-    pipeline_run_id: i64,
+    pipeline_run_id: Option<i64>,
+    provisional: bool,
 ) -> Result<(), WorkerError> {
     let detail = OrderedJson::Object(funnel.as_detail())
         .to_python_json()
@@ -331,7 +335,7 @@ async fn write_breadth_row(
         "INSERT INTO vb_breadth_daily (user_id, date, universe_count, measured_count, \
          above_count, pct_above_dma, gate, dma_bars, thin_session, detail, pipeline_run_id, \
          provisional) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CAST($10 AS JSONB), $11, \
-         false) ON CONFLICT (user_id, date) DO UPDATE SET \
+         $12) ON CONFLICT (user_id, date) DO UPDATE SET \
          universe_count = excluded.universe_count, measured_count = excluded.measured_count, \
          above_count = excluded.above_count, pct_above_dma = excluded.pct_above_dma, \
          gate = excluded.gate, dma_bars = excluded.dma_bars, \
@@ -349,6 +353,7 @@ async fn write_breadth_row(
     .bind(thin_session)
     .bind(detail)
     .bind(pipeline_run_id)
+    .bind(provisional)
     .execute(&mut *conn)
     .await?;
     Ok(())
@@ -373,8 +378,28 @@ pub(crate) async fn run_detect_vbt(
     user_id: i64,
     pipeline_run_id: i64,
 ) -> Result<i64, WorkerError> {
-    let config = load_vbt_config(conn, user_id).await?;
-    let universe = common::load_universe(
+    run_detect_vbt_for(
+        conn,
+        outcome,
+        trade_date,
+        user_id,
+        Some(pipeline_run_id),
+        None,
+        false,
+    )
+    .await
+}
+
+/// `load_universe(session, config)`: VBT-1's rule (NSE cash `EQ`/`BE`/`BZ`, no null-series arm,
+/// less the ETFs). Added in wave 6 (lane `vbt_jobs`) for the live scan's quote list.
+///
+/// # Errors
+/// The database's; a pattern that does not compile.
+pub(crate) async fn load_vbt_universe(
+    conn: &mut PgConnection,
+    config: &VbtConfig,
+) -> Result<std::collections::BTreeSet<i64>, WorkerError> {
+    common::load_universe(
         conn,
         &UniverseRule {
             instrument_type: &config.data.instrument_type,
@@ -386,9 +411,41 @@ pub(crate) async fn run_detect_vbt(
             etf_symbol_pattern: &config.data.etf_symbol_pattern,
         },
     )
-    .await?;
+    .await
+}
+
+/// `run_detect_vbt(session, outcome, trade_date, user_id=, pipeline_run_id=, extra_bars=,
+/// provisional=)` with every keyword Python's has (wave 6, lane `vbt_jobs`): the 21:10 retry and
+/// the desk's Re-detect pass `pipeline_run_id = None`; LV8's live scan appends today's
+/// provisional bars and stamps every row it writes `provisional`. The nightly's call above is
+/// this with `Some(run id)`, no extra bars, `provisional = false` — unchanged.
+///
+/// # Errors
+/// Python's, as the task raises them.
+pub(crate) async fn run_detect_vbt_for(
+    conn: &mut PgConnection,
+    outcome: &mut StepOutcome,
+    trade_date: NaiveDate,
+    user_id: i64,
+    pipeline_run_id: Option<i64>,
+    extra_bars: Option<&DataFrame>,
+    provisional: bool,
+) -> Result<i64, WorkerError> {
+    let config = load_vbt_config(conn, user_id).await?;
+    let universe = load_vbt_universe(conn, &config).await?;
     let start = lookback_start(conn, trade_date, LOOKBACK_SESSIONS).await?;
-    let bars = load_raw_bars(conn, start, trade_date, &universe, false).await?;
+    let mut bars = load_raw_bars(conn, start, trade_date, &universe, false).await?;
+    if let Some(extra) = extra_bars.filter(|e| e.height() > 0) {
+        // LV8: `pl.concat([bars, extra_bars.select(bars.columns)], how="vertical")`.
+        let names: Vec<String> = bars
+            .get_column_names()
+            .iter()
+            .map(|n| n.to_string())
+            .collect();
+        let aligned = extra.select(names).map_err(|e| common::pl_err(&e))?;
+        bars.vstack_mut(&aligned).map_err(|e| common::pl_err(&e))?;
+        bars.align_chunks();
+    }
     if bars.height() == 0 {
         outcome.status = StepStatus::Skipped;
         outcome.note(
@@ -432,6 +489,7 @@ pub(crate) async fn run_detect_vbt(
             signals: 0,
             thin_sessions_dropped: dropped,
         };
+        // Python's thin branch passes no `provisional`: the row is a real one even on a live scan.
         write_breadth_row(
             conn,
             user_id,
@@ -441,6 +499,7 @@ pub(crate) async fn run_detect_vbt(
             true,
             &config,
             pipeline_run_id,
+            false,
         )
         .await?;
         outcome.status = StepStatus::Skipped;
@@ -461,7 +520,15 @@ pub(crate) async fn run_detect_vbt(
     let reading = breadth_above_dma(&indicated, Some(trade_date), &config).map_err(core_err)?;
     let detected = detect_signals(&indicated, Some(trade_date), &config).map_err(core_err)?;
     let rows = signal_rows(&detected, &config)?;
-    let written = upsert_signals(conn, &rows, user_id, trade_date, pipeline_run_id).await?;
+    let written = upsert_signals(
+        conn,
+        &rows,
+        user_id,
+        trade_date,
+        pipeline_run_id,
+        provisional,
+    )
+    .await?;
     let signals = len_i64(
         rows.iter()
             .filter(|r| r.state == SignalState::Signal.value())
@@ -486,12 +553,13 @@ pub(crate) async fn run_detect_vbt(
         false,
         &config,
         pipeline_run_id,
+        provisional,
     )
     .await?;
     outcome.rows_in = bar_count;
     outcome.rows_out = written;
     outcome.note("gate", pyjson::s(reading.gate.value()));
-    outcome.note("provisional", OrderedJson::Bool(false));
+    outcome.note("provisional", OrderedJson::Bool(provisional));
     for (k, v) in funnel.as_detail() {
         outcome.note(&k, v);
     }

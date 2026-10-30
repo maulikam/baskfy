@@ -321,7 +321,145 @@ async fn warm_screen_cache(
     conn: &mut PgConnection,
     client: &redis::Client,
 ) -> Result<WarmCacheResult, WarmStop> {
-    let (targets, unreadable) = top_screen_definitions(conn, WARM_CACHE_SCREEN_LIMIT).await?;
+    warm_screen_cache_limited(conn, client, WARM_CACHE_SCREEN_LIMIT).await
+}
+
+/// Why [`warm_screen_cache_with_limit`] stopped: the cache (a `RedisError`, which the task
+/// raises) or anything else, raised with its Python class. Added for wave 6's screener lane
+/// (`baskfy.compute.warm_screen_cache`), which raises both where `publish` notes the first.
+#[derive(Debug)]
+pub(crate) enum WarmFailure {
+    /// A Redis failure (redis-py's `RedisError` family).
+    Cache(redis::RedisError),
+    /// Anything else.
+    Raised(WorkerError),
+}
+
+/// `warm_screen_cache(session, cache, limit=limit)` — the task's out-of-band warm-up (wave 6,
+/// lane screener). The same body `publish` runs, with the caller's `limit`.
+pub(crate) async fn warm_screen_cache_with_limit(
+    conn: &mut PgConnection,
+    client: &redis::Client,
+    limit: i64,
+) -> Result<WarmCacheResult, WarmFailure> {
+    warm_screen_cache_limited(conn, client, limit)
+        .await
+        .map_err(|stop| match stop {
+            WarmStop::Cache(e) => WarmFailure::Cache(e),
+            WarmStop::Raised(e) => WarmFailure::Raised(e),
+        })
+}
+
+/// `execute_screen(session, definition, as_of=..., data_version=..., columns=...,
+/// requested_as_of=...)` as a caller outside the warm-up sees it: every error raised with its
+/// Python class (the alert dispatch's `ensure_run` catches none). Added for wave 6 (lane
+/// screener). A `ranking_terms` definition raises `NotPorted` (R-gate.2).
+pub(crate) async fn execute_screen_raising(
+    conn: &mut PgConnection,
+    definition: &ScreenDefinition,
+    as_of: NaiveDate,
+    data_version: i64,
+    columns: &[String],
+    requested_as_of: Option<NaiveDate>,
+) -> Result<ScreenResult, WorkerError> {
+    // The legacy builder first, so a definition it refuses raises its own class
+    // (`ScreenQueryError`, ...) rather than the warm-up's caught message.
+    if definition.ranking_terms.is_empty() {
+        core_screener::build_screen_query(definition, as_of, columns, MAX_RESULT_ROWS + 1)
+            .map_err(|e| screen_raise(&e))?;
+    }
+    execute_screen(
+        conn,
+        definition,
+        as_of,
+        data_version,
+        columns,
+        requested_as_of,
+    )
+    .await
+    .map_err(|stop| match stop {
+        RunStop::Caught(message) => WorkerError::python("ValueError", message),
+        RunStop::Stop(WarmStop::Raised(e)) => e,
+        RunStop::Stop(WarmStop::Cache(e)) => WorkerError::python("RedisError", e.to_string()),
+    })
+}
+
+/// `execute_screen(session, definition, as_of=..., data_version=..., columns=..., limit=...)`
+/// with the caller's `limit` — the backtest loader asks for `top_n + hold_buffer` rows (wave 6,
+/// lane backtest_engine). Every error is raised with its Python class: a [`ScreenError`] as
+/// its own (`ScreenQueryError` is a `ValueError`, which the backtest job catches), the rest as
+/// the [`WorkerError`] it is. A `ranking_terms` definition raises `NotPorted` (R-gate.2).
+pub(crate) async fn execute_screen_with_limit(
+    conn: &mut PgConnection,
+    definition: &ScreenDefinition,
+    as_of: NaiveDate,
+    data_version: i64,
+    columns: &[String],
+    limit: i64,
+) -> Result<ScreenResult, WorkerError> {
+    let raised = |stop: RunStop| match stop {
+        RunStop::Caught(message) => WorkerError::python("ValueError", message),
+        RunStop::Stop(WarmStop::Raised(e)) => e,
+        RunStop::Stop(WarmStop::Cache(e)) => WorkerError::python("RedisError", e.to_string()),
+    };
+    if !definition.ranking_terms.is_empty() {
+        return Err(WorkerError::NotPorted {
+            what: "backtest: screening with ranking_terms (the ranking-engine path; \
+                   DECISIONS-RS R-gate.2)",
+        });
+    }
+    let query = core_screener::build_screen_query(definition, as_of, columns, limit + 1)
+        .map_err(|e| screen_raise(&e))?;
+    let compiled = query.statement.compile();
+    let (sql, args) = executable(&compiled).map_err(|m| WorkerError::python("RuntimeError", m))?;
+    let rows = sqlx::query_with(&sql, args).fetch_all(&mut *conn).await?;
+    let truncated = i64::try_from(rows.len()).unwrap_or(i64::MAX) > limit;
+    let keep = usize::try_from(limit).unwrap_or(0);
+    let mut kept = Vec::with_capacity(rows.len().min(keep));
+    for row in rows.iter().take(keep) {
+        kept.push(row_to_result(row, &query.columns).map_err(raised)?);
+    }
+    let mut result_columns = query.columns.clone();
+    if definition.sort_by == DESK_SCORE_KEY {
+        kept = attach_desk_columns(conn, as_of, kept)
+            .await
+            .map_err(raised)?;
+        for name in DESK_SCORE_EXPLAIN_COLUMNS {
+            if !query.columns.iter().any(|c| c == name) {
+                result_columns.push(name.to_owned());
+            }
+        }
+    }
+    Ok(ScreenResult {
+        as_of,
+        data_version,
+        sorting_factor: query.sorting_factor.clone(),
+        columns: result_columns,
+        rows: kept,
+        requested_as_of: None,
+        truncated,
+        ranking_factors: query.ranking_factors.clone(),
+    })
+}
+
+/// `record_run(session, screen_id, result, definition_hash)` for callers outside this module
+/// (wave 6, lane screener: the alert dispatch's `ensure_run`).
+pub(crate) async fn record_screen_run(
+    conn: &mut PgConnection,
+    screen_id: i64,
+    result: &ScreenResult,
+    definition_hash: &str,
+) -> Result<(), WorkerError> {
+    record_run(conn, screen_id, result, definition_hash).await
+}
+
+/// The warm-up body over `limit` screens.
+async fn warm_screen_cache_limited(
+    conn: &mut PgConnection,
+    client: &redis::Client,
+    limit: i64,
+) -> Result<WarmCacheResult, WarmStop> {
+    let (targets, unreadable) = top_screen_definitions(conn, limit).await?;
     // redis-py connects on a command, not on construction: with no screen to warm, or every
     // screen refused before its `GET`, Python never touches Redis and notes no failure. So the
     // connection is opened by the first `GET`, never up front.

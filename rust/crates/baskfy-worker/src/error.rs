@@ -18,6 +18,15 @@ pub enum WorkerError {
         /// What is missing (a step name, `catch_up`, ...).
         what: &'static str,
     },
+    /// A Celery task whose body its wave-6 lane has not ported yet (`tasks/<lane>.rs`'s declared
+    /// stub). Reported as Python class `NotPorted`, like [`WorkerError::NotPorted`].
+    #[error("task {task} is not ported to Rust yet (lane {lane})")]
+    TaskNotPorted {
+        /// The Celery task name (or the helper a task needs).
+        task: &'static str,
+        /// The lane that owns it.
+        lane: &'static str,
+    },
     /// A database failure (Python: an `sqlalchemy.exc.DBAPIError` subclass).
     #[error("{0}")]
     Db(#[from] DbError),
@@ -54,7 +63,7 @@ impl WorkerError {
     #[must_use]
     pub fn python_type(&self) -> String {
         match self {
-            Self::NotPorted { .. } => "NotPorted".to_owned(),
+            Self::NotPorted { .. } | Self::TaskNotPorted { .. } => "NotPorted".to_owned(),
             Self::Db(e) => db_python_type(e).to_owned(),
             Self::Provider(e) => e.python_type().to_owned(),
             Self::Lookup(_) => "LookupError".to_owned(),

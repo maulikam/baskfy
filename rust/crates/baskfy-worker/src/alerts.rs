@@ -43,6 +43,16 @@ pub enum AlertName {
     PipelineAbandoned,
     /// `data_quality_gate_failed`.
     GateFailed,
+    /// `SWING_POSITION_NAKED` (SW11; added by wave-6 lane swing_live).
+    SwingPositionNaked,
+    /// `SWING_MONITOR_DID_NOT_START`.
+    SwingMonitorDidNotStart,
+    /// `SWING_DETECT_STALE`.
+    SwingDetectStale,
+    /// `SWING_ORDER_OPEN_AFTER_CUTOFF`.
+    SwingOrderOpenAfterCutoff,
+    /// `SWING_GTT_MISSING_AT_1515`.
+    SwingGttMissingAt1515,
 }
 
 impl AlertName {
@@ -53,6 +63,11 @@ impl AlertName {
             Self::PipelineFailed => "pipeline_failed",
             Self::PipelineAbandoned => "pipeline_abandoned",
             Self::GateFailed => "data_quality_gate_failed",
+            Self::SwingPositionNaked => "SWING_POSITION_NAKED",
+            Self::SwingMonitorDidNotStart => "SWING_MONITOR_DID_NOT_START",
+            Self::SwingDetectStale => "SWING_DETECT_STALE",
+            Self::SwingOrderOpenAfterCutoff => "SWING_ORDER_OPEN_AFTER_CUTOFF",
+            Self::SwingGttMissingAt1515 => "SWING_GTT_MISSING_AT_1515",
         }
     }
 
@@ -62,6 +77,11 @@ impl AlertName {
         match self {
             Self::PipelineFailed | Self::PipelineAbandoned => "docs/runbooks/pipeline-failed.md",
             Self::GateFailed => "docs/runbooks/bad-data-published.md",
+            Self::SwingPositionNaked
+            | Self::SwingMonitorDidNotStart
+            | Self::SwingDetectStale
+            | Self::SwingOrderOpenAfterCutoff
+            | Self::SwingGttMissingAt1515 => "docs/runbooks/06-swing-morning.md",
         }
     }
 }

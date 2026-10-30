@@ -26,8 +26,10 @@
 #[path = "accounts/admin_providers.rs"]
 mod providers;
 mod queue;
+/// `baskfy_api.resync` — public so the worker's `baskfy.ops.resync` inspects exactly as the
+/// API does (wave 6, lane api_routes).
 #[path = "accounts/admin_resync.rs"]
-mod resync;
+pub mod resync;
 mod writes;
 
 use std::collections::HashMap;

@@ -2869,3 +2869,672 @@ names, 43 suspect symbols, masks `computed_at`/`computed_ms` only), and again wi
 
 **How to reverse.** Revert the visibility edits with R7.14; `catch-up` without `--now` reads the
 system clock as before (its new stdout line is additive).
+
+## R8.1 — Wave 6 foundation: the task registry, the Beat table as data, and how cutover runs a Rust task (RS6.0, 30 Oct 2026) ⚠ UNREVIEWED
+
+**Context.** Wave 6 ports the rest of the worker: every Celery task Python registers that wave 5's
+nightly does not already answer. Python registers **76** `baskfy.*` tasks (`tasks/celery_tasks.py`
+through `autodiscover_tasks`, and `tasks/desk.py` through `include`) and Beat fires **61** entries
+(`celery_app.BEAT_SCHEDULE`). Fifteen lanes will port the bodies in parallel; they need a fixed
+surface they never have to edit, and the cutover needs one rule for every task.
+
+**Choice — the registry.** `baskfy_worker::tasks` (`rust/crates/baskfy-worker/src/tasks.rs`):
+
+* `tasks/registry.rs` — one `TaskSpec` per task: the Celery name, the Python function
+  (`module.qualname`), the lane, `run`'s parameters (names, annotations as written, defaults),
+  `bind`, `acks_late`, `autoretry_for`, `retry_backoff`, `time_limit`, the task's own `queue=`
+  option, and the Rust function. **Generated from and held equal to**
+  `tests/fixtures/python_task_registry.json`, which `tools/parity/task_registry.py` writes from the
+  live `celery_app` (what Celery resolved, not the source text); `tests/task_registry.rs` fails on
+  any task added, renamed, re-parameterised, re-routed or re-scheduled in Python.
+* **Routing** is computed, not stored: `queue_by_name()` (`TASK_ROUTES` globs in order — how
+  `send_task`, the API's producer and Beat publish) and `queue_via_task()` (the task's own
+  `queue=` first — how `.delay()` publishes). Both are held to Celery's own router. They differ
+  for `baskfy.swing.backtest` and `baskfy.options.backtest` (`queue=compute` on the decorator, no
+  route): published **by name** they land on `default`. Nothing publishes them by name today (the
+  CLI and `.delay()` do); a Rust producer that ever does must pass `queue_via_task()`.
+* **Retry policy**: `max_retries` is the `task_annotations["*"]` entry (`BASKFY_TASK_MAX_RETRIES`,
+  3); `default_retry_delay` is **180 s for every task** — the configured
+  `task_default_retry_delay = BASKFY_TASK_RETRY_BACKOFF_SECONDS` (60) never reaches a task,
+  because Celery applies a config value only to an attribute that is `None` and `Task`'s class
+  default is 180. Reproduced and pinned both ways (**for Maulik**: if 60 s was the intent, it is a
+  Python change first). Only `baskfy.compute.reprocess_instrument` auto-retries
+  (`TransientProviderError`, backoff, jitter); two bound tasks (`swing.scan_now`,
+  `swing.scan_after_login`) call `self.retry` themselves.
+* `tasks/args.rs` binds a message's `args`/`kwargs` exactly as CPython binds a call — the
+  unexpected-or-repeated keyword first, then too many positionals, then the missing ones, with
+  CPython 3.12's messages (checked against the interpreter), `self` counted for a bound task.
+  Typed accessors refuse a JSON value of the wrong type with a generic `TypeError`; Python would
+  fail later with a message particular to the body's first use, so a lane graded on a wrong-typed
+  argument reproduces that message itself from `BoundArgs::value`.
+* `tasks/context.rs` — `TaskContext`: the write pool, `Settings`, `WorkerSettings`, the replay
+  seams, and the **clock** (R8.2). `build_pipeline_dependencies`/`sole_user_id` moved here from
+  `main.rs` (behaviour unchanged) so the CLI and the tasks share one copy.
+* **Lanes.** `screener`, `api_routes`, `curated`, `backtest_engine`, `sleeve_backtests`,
+  `swing_eod`, `swing_live`, `twt_jobs`, `vbt_jobs`, `portfolio`, `ops_alerts`, `fno`, `options`,
+  `backfills`, `clis` — each `tasks/<lane>.rs` a **declared stub**: one `pub async fn` per task
+  (named as the Python function) returning `WorkerError::TaskNotPorted { task, lane }` (Python
+  class `NotPorted`), and a `PORTED` list the lane grows. A lane edits only its own file and the
+  private submodules it declares there; the registry, `tasks.rs`, `lib.rs` and the Beat table are
+  never a lane's. The assignment (76 = 4 + 72) is in each module's docs and in STATUS.
+* **Wired by the foundation** (`tasks/pipeline.rs`, wave-5 code reused, never forked):
+  `baskfy.pipeline.nightly` (both paths: an explicit date through `nightly::run_nightly`; Beat's
+  path with its three guards — not a session, already published, before
+  `SESSION_DATA_READY_IST` — on the injected clock, and Python's `if trade_date` /
+  `trade_date is None` asymmetry: an empty string runs today unguarded), `session_catch_up` (the
+  sweep, the nightly per day, the AF 3.11 probe-and-demote through the provider stack, the swing
+  EOD plan through the registry — the `swing_eod` lane's stub today, reported by class name as
+  Python's `except Exception`), `compute.reprocess_instrument` and `pipeline.integrity_audit`
+  (`steps::ingest::reprocess_instrument` with `as_of = None` — the deliberate unbounded call,
+  house rule 5). Both nightly paths call `ops_alerts::refresh_kite_session_quietly`, which answers
+  `false` under the harness (as Python's injection does) and `TaskNotPorted` otherwise until the
+  `ops_alerts` lane ports `kite_session_cli.refresh_quietly`.
+* `tasks/beat.rs` — `BEAT_SCHEDULE` as data (crontab fields as written, in IST; intervals;
+  kwargs; `queue`/`expires`/`countdown`), Celery's `crontab_parser` expansion (names, ranges,
+  wrapping ranges, steps) held equal to Celery's sets for all 61 entries, and `due_at(minute)` with
+  Celery's semantics (every field must match — day-of-month **and** day-of-week, so `fno-retest`
+  fires on the first Saturday of a quarter's month; weekday 0 is Sunday).
+* **CLI.** `baskfy-worker task <name> [--args JSON] [--now IST] [--replay-bundle DIR]
+  [--replay-upstream URL]` runs one task once (no retry) and prints its JSON, or
+  `{"raised": <class>, "error": <str>}`; exit 0 returned, **75** raised an error its
+  `autoretry_for` covers, 1 any other raise, 2 usage or an unregistered name.
+  `baskfy-worker tasks` lists the registry; `baskfy-worker beat --now T` lists what is due.
+* A task future is **not `Send`**: the nightly's publish step holds a `!Send` screen query across
+  an await (wave 5). Tasks run on the thread that drives them (`block_on`; a `LocalSet` in a
+  future in-binary scheduler).
+
+**Choice — cutover (consistent with R7.1).** Python's Celery keeps the broker, Beat and every
+consumer. When a task's cases are EQUAL `py,rs` (`task_diff.py`, R8.2) — and only then — its Python
+body is replaced by a **shim** that execs `baskfy-worker task <name> --args <the message's args and
+kwargs as JSON>` and relays the result: exit 0 returns the printed JSON; **75** raises
+`TransientProviderError(<message>)` so the task's own `autoretry_for`/backoff retries it; 1 raises
+the Python class named in `raised` when the shim knows it (a bound task's `ScanNotRunnable` goes to
+`self.retry` with its own countdown, as today) and otherwise a `RuntimeError("<class>: <message>")`;
+2 is a deployment error. Routing, `acks_late`, redelivery bounds and Beat stay Celery's, so a task
+moves (and moves back) one at a time. Because the registry and the Beat table are held equal to
+Python, the single binary's own scheduler can later replace Beat and the shims in one step without
+re-deriving either.
+
+**Rejected.** A Celery-protocol consumer in Rust (kombu's Redis transport, acks, visibility
+timeouts and redelivery — large, and it dies with the shim once the whole worker is Rust); a Rust
+scheduler now (two schedulers could fire one entry twice; the shim keeps one); letting lanes add
+registry rows (fifteen lanes editing one file).
+
+**How to reverse.** A shim is reverted by restoring its Python body (it never left git); the Rust
+side is additive (`tasks/`, the `task`/`tasks`/`beat` subcommands, `tests/task_registry.rs`, the
+fixture, one `WorkerError` variant).
+
+## R8.2 — `task_diff.py`: one task, two clones, the replay, an injected clock, every effect compared (RS6.0, 30 Oct 2026) ⚠ UNREVIEWED
+
+**Context.** The tasks are time-of-day sensitive (a publish cutoff, a session window, a token's
+issue day, "today" as the default date), enqueue other tasks, send mail, write Redis, read Kite
+and NSE, and write the raw archive. The nightly harness covers one entry point and no clock.
+
+**Choice.** `tools/parity/task_diff.py` generalises `nightly_diff.py` (imported, not copied: its
+guards, templates, budget, lock, digests, run-table views and `TABLE_MASKS` are reused) to any task:
+
+* **Cases** (`tools/parity/task_cases/<lane>.json`, one file per lane, `pipeline.json` the
+  foundation's): task, `args` (array or object), `now` (IST), `scenario` (`rerun`/`fresh`),
+  `bundle` (`base`, or `session` for R8.3's upstream), `kite` (a throwaway Fernet key and a token
+  file written by Python's own `AccessTokenStore`, issued at `now`), `seed_sql`, `env`, `mask`,
+  `payload_mask`, `redis_presence`. Each case runs on two fresh clones of an `rst_tpl_*` template.
+* **Sides.** `py` is `task_py.py run`: the registered Celery task called once
+  (`app.tasks[name](*args, **kwargs)`), with `nightly_py`'s injection (network guard, replay
+  provider, `refresh_quietly` a no-op) plus the Kite root pointed at the replay upstream and the
+  clock. `rs` is `baskfy-worker task`.
+* **The clock.** Both sides start at the case's IST moment and **advance in whole seconds of real
+  elapsed time** — a task that reads the clock in its first second sees exactly the moment on both
+  sides (with microsecond drift the options collector's greeks differed between two Python runs: an
+  option's time to expiry moved), and a task that waits for a moment to pass still progresses (a
+  frozen clock would hang it). Python: the production modules
+  (`baskfy_*`, the desk's `app`/`scripts`) have their `datetime` module reference re-pointed to a
+  copy whose `datetime`/`date` classes answer `now`/`utcnow`/`today` from the injected moment;
+  instances, construction and `isinstance` stay the real types, ORM mappers are configured first,
+  and a production module imported later is re-pointed once it has loaded. **Libraries keep the
+  real module**: the first version patched `datetime` process-wide and polars then refused a date
+  column on both sides alike — an equal-but-wrong result the py,py run exposed and this design
+  removes. Rust: `TaskContext::now_ist/now_utc/clock()`; a task never reads the system clock.
+  Not injectable on either side: Postgres's `now()` and Python's `time.time()` — stamp columns are
+  masked `<before>`/`<during>`, as in the nightly.
+* **Compared** (all must be EQUAL; every mask printed): the payload with key order (exit code,
+  JSON or raised class and message); every touched table by digest plus the run tables in full;
+  sequences; each side's Redis index (1–7) with Celery messages normalised — ids, `origin`,
+  delivery tags as before, and the `eta`/`expires` header stamps (Celery computes them from the
+  real clock) as `<set>` — so **every enqueued message** is compared and listed; mail; the requests
+  each side made to the replay upstream; any write verb that reached it (a law-2 violation fails
+  the case); and the files each side wrote to its raw archive.
+* **The machine.** Databases `rst_*` only (`rst_tpl_<kind>_<date>` cached, `rst_run_*` dropped per
+  case and on exit), at most 6 besides `baskfy` counting the desk workflow's `rsd_*`; Redis indices
+  1–7 (defaults 6/7); ports 18800–18999 (SMTP 18899, upstream 18898), checked under the lock; the
+  same machine-wide `fcntl` lock as `nightly_diff.py`; `cargo` with 4 jobs.
+
+**Proved (30 Oct 2026; every run in STATUS, "Wave 6 foundation").** Python vs Python:
+`pipeline.json` 12 of 12 — `baskfy.pipeline.nightly` at four clocks (13:15 and 17:59:59 on an
+unpublished session: skipped until 18:00; 19:00 on a published day; a Saturday), a bad date, a bad
+keyword; `baskfy.compute.reprocess_instrument` (KPIGREEN 633 bars over 4 actions, idempotent —
+`ohlcv_daily` 3,887,194 rows EQUAL; CUPID positional; an instrument with no action; a missing
+argument); `session_catch_up` twice — and, on the replay upstream, `fno.json` 3 of 3 and
+`options.json` 5 of 5 (below, R8.3). Python vs Rust: `pipeline.json` 12 of 12.
+
+**Found by the py,py runs and fixed in the harness, not masked:** the first clock patched
+`datetime` process-wide and polars then refused a date column — identically on both Python sides,
+so py,py said EQUAL while both were wrong; the injection is now confined to the production modules.
+**Masked, each with its reason:** `fo_underlying_daily.updated_at` and `fo_ingest_day.updated_at`
+(Postgres `now()`; `TASK_TABLE_MASKS`), an alert's `raised_at` and a report's measured `seconds` in
+the payload (the cases' `payload_mask`).
+
+**How to reverse.** Delete `task_diff.py`, `task_py.py`, `task_cases/`; nothing else uses them.
+
+## R8.3 — The replay upstream and the `session` bundle: Kite REST and NSE raw files at the wire (RS6.0, 30 Oct 2026) ⚠ UNREVIEWED
+
+**Context.** Wave 6's tasks build their own clients — quotes during a session, the read-only
+holdings sync, the NFO instrument dump, option-chain quotes (Kite); the F&O bhavcopy and ban list
+(NSE) — outside the provider stack R7.3's port-level replay answers. Patching each builder on
+each side would be one seam per call site per language.
+
+**Choice.** Replay them **at the wire**, where both production stacks parse the same bytes:
+
+* **NSE**: the adapter is archive-first (`fetch_and_archive` never re-fetches an archived key), so
+  the harness copies the bundle's `upstream/archive/` into each side's `BASKFY_RAW_ARCHIVE_DIR` and
+  the production parser reads the recorded raw file without a request. A miss goes to
+  `BASKFY_NSE_ARCHIVE_URL`/`BASKFY_NSE_BASE_URL`, pointed at the replay upstream (404 unless
+  recorded under `upstream/http/`). Files a side writes to its archive are compared.
+* **Kite**: `tools/parity/replay_upstream.py`, a loopback HTTP server over `upstream/kite/`:
+  `/quote`, `/quote/ohlc`, `/quote/ltp` (the asked keys, from the latest recorded minute at or
+  before the case's clock), `/portfolio/holdings`, `/user/margins[/<segment>]`, `/trades`,
+  `/user/profile`, `/instruments/<exchange>`, `/instruments/historical/<token>/<interval>`. Python
+  reaches it through `kiteconnect.KiteConnect._default_root_uri` (set by `task_py.py`); Rust through
+  `--replay-upstream URL` → `TaskContext::kite_root()`, which a lane passes to
+  `KiteConnect::with_root` (and the token store takes `TaskContext::clock()`, so the token issued
+  at the case's moment is not expired by the real date). `--replay-upstream` is refused without
+  `--replay-bundle`.
+* **Law 2 at the wire.** Any write verb is answered 405 and recorded as a violation that fails the
+  case — except Kite's two margin calculators (`POST /margins/basket`, `/margins/orders`), which
+  place nothing and answer only if recorded.
+* **The `session` bundle** (`replay_build.py --variant session`, `replay_build_session.py`): the
+  `base` calls (byte-identical; `base` and its hash are unchanged) plus `upstream/`:
+  **real raw files** — the last five F&O bhavcopies (22–28 Oct) and ban lists (23–29 Oct) from the
+  AWS-exit archive tarball (read, never modified; extracted once into
+  `rust/target/replay/sources/aws-exit-20261029/`); the **NFO dump rebuilt** from the 28 Oct
+  F&O bhavcopy by the production parser (35,033 contracts, Kite's tradingsymbol grammar,
+  synthetic tokens); **synthesized quotes** at 09:20, 13:15 and 15:30 (every equity with a bar on
+  the day, the benchmark indices, the index derivatives of NIFTY/BANKNIFTY/FINNIFTY/MIDCPNIFTY:
+  last price walked open→close on the tick, volume pro rata, five levels of depth); a
+  **synthetic read-only book** (eight holdings, one with T1 and collateral quantity —
+  margins, no trades, a profile). **Superseded the same day, once the bed's real contents were
+  counted** (`pg_stat_user_tables` had reported zero live rows for the F&O, options and broker
+  tables — stale statistics; `count(*)` says the local box ran them): the options master is now the
+  bed's own record of Kite's (`op_contract`, real tokens), option quotes at **09:35, 13:15, 15:29**
+  are the **recorded chain** (`op_chain_snapshot`: last, bid/ask, Kite's depth, volume, OI),
+  NIFTY 50 / NIFTY BANK / INDIA VIX quotes and `/instruments/historical/<token>/minute` are the
+  **recorded index minutes** (`op_index_minute`), and holdings are the bed's **broker-linked
+  holdings** (`portfolio_holding` — an SGB among them, non-negotiable 7's case). Still synthesized:
+  equity quotes (no intraday equity record), index futures quotes and tokens, margins, trades, the
+  profile. The F&O raw files stay the archive's (the bed keeps parsed rows, not files). Fidelity is
+  stated per file in `replay_build_session.py`; identical bytes to both sides is the requirement.
+* **Proved (Python vs Python, bundle `session`).** `fno.ingest_bhavcopy` parses the real
+  28 Oct zip from the archive with no request (35,033 rows in the file, 15,125 kept;
+  `fo_contract_daily_202610` 367,805 rows EQUAL), records the 29 Oct ban list (KAYNES, SAIL), and on
+  a day with no file misses the archive, takes the upstream's 404 for both files, records `MISSING`
+  at 23:30 and mails `FNO_BHAVCOPY_MISSING` — 3 of 3 with the disabled path. Through the production
+  `kiteconnect` with a test token: `options.refresh_master` (one `/instruments/NFO`, 27,495 option
+  contracts), `options.index_bars` at 13:15:20 (three `/instruments/historical` calls, 76 recorded
+  minutes per index), `options.collect_chain` at 13:15:20 (one `/quote`, 105 chain rows) — 5 of 5
+  with the two refusals.
+* **Not recorded**: historical candles other than the three indices' minutes, and any other call —
+  they answer 404, a provider error on both sides, until a lane records what it needs
+  (`replay_build_session.py` is the place).
+
+**Rejected.** Port-level replay of each extra call (a seam per builder per language, and the
+parsers — where Rust and Python can actually disagree — never exercised); recording live (never:
+no network); restoring the AWS dump's F&O tables into the bed (a second, inconsistent source of
+truth beside the local bed, and 3 GB more).
+
+**How to reverse.** Delete `replay_upstream.py`, `replay_build_session.py`, the `session` entry in
+`replay_build.py`, `--replay-upstream` and `TaskContext::kite_root`.
+
+## R8.twt_jobs — Wave 6 lane `twt_jobs`: the TWT detect retry, evening/morning plans, Scan now and its publisher (RS6, 30 Oct 2026) ⚠ UNREVIEWED
+
+*(Lane label; the integrator renumbers.)*
+
+**Ported.** `baskfy.twt.detect`, `baskfy.twt.evening`, `baskfy.twt.morning`, `baskfy.twt.scan`,
+`baskfy.twt.scan_publish` (`tasks/twt_jobs.rs` + private `tasks/twt_jobs/{detect,evening,sleeve,
+scan,live,quotes,celery,alerting}.rs`). `tools/parity/task_diff.py --cases
+tools/parity/task_cases/twt_jobs.json`: **30 of 30 EQUAL py,rs** (detect ×8 incl. a full
+re-detect with `pipeline_run_id NULL` and Qullamaggie management, bad/empty dates, flags off;
+evening ×7 incl. the gate opened on 10-19 with 3 entries/30 skips, execution on (LIVE mode,
+half size), a re-adjusted position (`TWT_ADJUSTMENT_RESET` + digest mails); morning ×5 (Friday,
+Saturday, explicit date, nothing detected, no tenant); publisher idle and with two desk rows
+(two `compute` messages compared message by message); scan before the open, Saturday, after the
+publish, not-QUEUED, unknown id, nothing published (FAILED on the row), in session without a
+Kite token (`CredentialsMissing` on the row), and in session at 13:15:20 on the `session` bundle
+with a test token — 3,022 quotes, provisional rows for 10-30, 21 `GET /quote` requests equal).
+
+**Choices.**
+* **Wave 5's detector reused, generalised in place, not forked.** `steps/sleeves/twt.rs`'s private
+  upserts take `pipeline_run_id: Option<i64>` and LV8's `provisional` flag (the literal `false`
+  became a bind; stragglers are dropped only on a real run, as Python's); `run_detect_twt` keeps
+  its signature and delegates to the new `run_detect_twt_for(.., extra_bars, provisional)`, which
+  appends the provisional bars (`vstack` after `select` of the loader's columns) and, when
+  provisional, notes `gate, provisional, funnel…` and skips the book's management. Exposed through
+  an additive `steps::sleeves::for_twt_jobs` (the same pattern as the other lanes). The nightly's
+  behaviour is unchanged (its tests pass; the scan/detect cases re-run the full detector EQUAL).
+* **The API's `twt_sleeve` reading half is ported in the lane** (`sleeve.rs`: `read_config`,
+  `config_for`, `load_sleeve`, `book_state`, `slot_multiplier`, `entries_already_this_session`)
+  — the Rust API has no shared copy; the arithmetic stays `baskfy_core::twt`. The countdown's
+  spending half (`count_first_live_entry`) is a fill's and is not ported here.
+* **Two alert names outside `alerts::AlertName`** (`TWT_EVENING`, `TWT_ADJUSTMENT_RESET`) are
+  dispatched by the lane's `alerting.rs`, which builds the payload and mail exactly as
+  `alerts.dispatch`/`_send_email` do, rather than widening the nightly's closed enum (another
+  lane's file). An integrator may fold it into `alerts.rs`.
+* **`apply_async` without a new dependency** (`celery.rs`): kombu's envelope as the API's
+  producer writes it, base64 by hand, the task id/reply_to/delivery_tag from Postgres's
+  `gen_random_uuid()`; SADD binding + LPUSH. The plan's `plan_id` is likewise
+  `gen_random_uuid()` (a v4 uuid, as `uuid.uuid4()`).
+* **Python's own semantics kept, even where odd:** `book_state`'s `entries_on or signal_date or
+  as_of`; `live_scan.build_live_plan_twt` reads the *detector's* config (two stops only, not the
+  person's position cap) as Python imports it; `LiveReport.as_detail()`'s dict merge lets the
+  funnel's `entries`/`signals` overwrite the report's; a FAILED scan keeps the row's prior
+  `session_date`/`detail`; `dry_run_sessions` and the desk's counters are never moved.
+* **Harness (additive):** `task_diff.py` gains an optional case key `mail_mask` (regexes, printed
+  in the report) because the evening digest carries the uuid `plan_id`. Masks used, each printed:
+  `tw_plan.plan_id`, `tw_plan_line.client_id`, `tw_session.plan_ids`, `tw_scan_run.task_id`
+  (uuids) as `<set>`; `tw_scan_run.started_at/finished_at` (measured) as `<set>`; Postgres-`now()`
+  stamps as `<before>/<during>`; payload `/plan_id`, `/detail/plan_id`. `tw_plan.built_at` /
+  `expires_at` compared raw (EQUAL).
+* **Law 2 / TW17.** No order, GTT or Kite write path; the only Kite call is `GET /quote` on the
+  interactive lane, built only on the provisional path. No auto-execute flag is read anywhere in
+  the lane; `BASKFY_TWT_EXECUTION_ENABLED` only sets the session's mode and the half-size
+  multiplier; every line is `PROPOSED`. `tests/law_two.rs` passes over the lane.
+
+**Not exercised by parity:** a live scan that *signals* (the bed's 10-30 provisional bar
+signals nothing), so `build_live_plan_twt`'s store, the kept-in-flight plan and the
+already-ordered filter are covered by reading and by the evening's shared `store_plan` only.
+
+**Tests.** 25 unit tests (Beat ordering and no-sweep from `test_twt_beat.py`, `decide_session`,
+provisional bars, annotate, keys, base64, the envelope) and 10 scratch-DB tests
+(`BASKFY_RS_SCRATCH_DATABASE_URL`, `--ignored twt_jobs`: publisher order and filter, published
+session, evening skip/entries/liquidity skip/shut gate/no capital/replace/morning row/session
+row/counters untouched, last tradeable session, sleeve equity and stale marks) — all pass.
+
+**For the integrator.** `tests/task_registry.rs::every_stub_refuses_with_task_not_ported` asserts
+`REGISTRY.len() - 4` stubs and fails as soon as any lane ports a task (42 vs 72 at the time of
+writing); it should count `!is_ported()` instead. Not edited here (the foundation's file).
+
+**How to reverse.** Restore the five stubs and `PORTED = &[]`; delete `tasks/twt_jobs/`; the
+`for_twt_jobs` block and `run_detect_twt_for` can stay (the nightly calls the old signature).
+
+## R8.sb1 — Lane `sleeve_backtests`: the swing, VBT and TWT backtests ported; the options backtest not (RS6, 30 Oct 2026) [lane label R-sb.1] ⚠ UNREVIEWED
+
+**Context.** The lane owns three Celery tasks — `baskfy.swing.backtest`, `baskfy.vbt.backtest`,
+`baskfy.options.backtest` — and the brief added `tasks/twt_backtest.py`, which has **no Celery
+task**: `tools/twt/backtest.py` (`make twt-backtest`) is its only caller.
+
+**Choices.**
+
+* **`vbt.backtest`** (`tasks/sleeve_backtests/vbt.rs`): `run_vbt_backtest` over the nightly
+  detector's own universe and bar loader (`steps::sleeves::for_backtests`, a re-export block
+  *added* to `steps/sleeves.rs`; nothing there changed) and `baskfy_core::vbt` (golden-graded).
+  One transaction, as `run_in_session`: a run that raises writes its `error` and is then rolled
+  back with everything else — only the identity sequence remembers it, on both sides.
+  `date.today()` (the default `end`) is the UTC date of the injected clock: the containers and
+  the harness run with `TZ=UTC`, and chrono's `Local` is not built (law 1's clock rule).
+* **`swing.backtest`** (`swing.rs`, the runner; `swing_core.rs`, the engine). The engine,
+  `baskfy_core.swing.backtest` (1,308 lines), was **not ported** before this wave and has no
+  goldens. It is ported here, in the worker, as a private module: it is pure (no clock, no I/O),
+  it leans on the worker's wave-5 ports of `market.breadth_snapshot`/`ema`/`market_gate`/
+  `liquid_expr` (re-exported, not forked), and it is graded **end to end, byte for byte** by
+  `task_diff.py` (the stored `stats` JSON, the trades, the curve, the ladder, the three books'
+  comparison, the summary payload). `swing.journal` (`ClosedTrade`, `summarize`,
+  `exit_average`, 103 lines, also unported) and `stops.apply` came with it. Moving it into
+  `baskfy-core::swing::backtest` is a later step that needs a goldens dumper first (STATUS,
+  "What comes next" — goldens first, never blind). Decimal rules reproduced: `_price` is
+  `Decimal(float)` — the float's **exact** binary value — quantized half-up (not
+  `f"{x:.4f}"`, which the screener engine's `_price` uses and which rounds half-even); every
+  division runs in Python's 28-digit context (`WideDecimal::div`); `quantize` without a rounding
+  is the context's half-even (`r_multiple`, `pnl_inr`, the journal's means); `max`/`min` keep the
+  first of equals, so `str()` of a peak or a drawdown keeps the exponent Python's would.
+  The run's two commits are reproduced (`run_checkpointed`): the row is committed on the way in,
+  and a run that raises commits its `error` and `finished_at` before the error leaves.
+  `INDEX_SLUG` stays `nifty-500` with the `nifty-50` fallback: the backtest module was not
+  changed when the nightly gate moved to `nifty-smallcap-250` (SW29), and the port reproduces the
+  module as it stands (CLAUDE.md, "When the code and a doc disagree" — no change without a
+  decision; flagged **for Maulik**).
+* **TWT** (`twt.rs`): `pub fn run_twt_backtest` (the caller owns the transaction, as the script's
+  `session.begin()` does) with the ETF-denominator counterfactual, `stats_payload`'s None-dropping
+  and decimal-string percentages (`_pct` is `Decimal(str(x))` half-up — the float's repr, then
+  quantize), `_half`'s `float ** float` (C `pow` both sides). Graded by a new harness,
+  `tools/parity/twt_backtest_diff.py`: `task_diff`'s own code with one seam replaced — a side
+  runs the script's `_run` body (Python) or `examples/twt_backtest.rs` (Rust, a new example in
+  the worker crate; no Cargo.toml change). Cases: `task_cases/sleeve_backtests_twt.json`.
+* **A NaN in a stored JSON** (found by `vbt-two-sessions-nan-stats`): over two sessions the books
+  summarise with a NaN; Python's `json.dumps` writes a bare `NaN` token, Postgres refuses it and
+  SQLAlchemy raises `DBAPIError` (its message carries the SQL and a truncated parameter dump).
+  Rust raises the same class with Postgres's own words before the statement (`jsonb_text`); the
+  case masks `/error` and compares the class, the rollback and the sequence. **For Maulik**: this
+  is a Python defect (a short window cannot be backtested at all); fixing it is a Python change
+  first.
+* **The `error` column** carries Python's traceback; Rust writes `"<Class>: <message>"`, the
+  same separator, and a one-line `Traceback (Rust): raised in <function>` — compared by presence
+  (`elapsed`: `<null>`/`<set>`), as R7.4 compares `pipeline_run_step.error.traceback`.
+  `finished_at` advances with real elapsed time (Rust's debug build is slower than polars on the
+  swing engine: 87 s against 18 s for 144 sessions) and is compared by presence; `started_at` is
+  the injected clock's first second and compared exactly.
+
+**Not ported: `baskfy.options.backtest`.** `options/backtest_run.run_backtest` drives
+`baskfy_core.options.backtest`, `backtest_suite`, `replay_day`, `executor`, `exits`, `plan`,
+`plan_o2`, `plan_o3`, `scan`, `structures`, `chain`, `bars`, `calendar`, `greeks`, `journal`,
+`directional` and `expiry_setups` — about 6,000 lines of core with **no Rust port and no
+goldens** — plus the `options` lane's `options/scan.py` readers and a `git rev-parse` subprocess.
+It stays `TaskNotPorted` (on demand only, no Beat entry: nothing schedules it). Porting it is the
+options core's wave, goldens first.
+
+**Rejected.** Putting the swing engine in `baskfy-core` now (no goldens: it would be the first
+core module ported blind); forking the nightly's bar loader (the survivorship clause is the one
+difference, so the backtest's query is its own, as Python's is); a Celery task for TWT (Python
+has none; adding one is a Python change).
+
+**How to reverse.** Restore the three stubs in `tasks/sleeve_backtests.rs` and delete its
+submodules, the `for_backtests` block in `steps/sleeves.rs`, `examples/twt_backtest.rs`,
+`twt_backtest_diff.py` and the two case files.
+
+## R8.x (lane label R-se.1) — Lane **swing_eod**: the calls (RS6, 30 Oct 2026) ⚠ UNREVIEWED
+
+* Detector widened, not forked: `steps/sleeves/swing.rs` gains `run_detect_swing_for(.., Option<i64>)` (the nightly's wrapper passes `Some(run)`); `upsert_setups` binds `Option<i64>`. Re-exported via `steps::sleeves::for_swing_eod`.
+* Ported privately under `tasks/swing_eod/`: `baskfy_api.swing_watch` (auto_watch/expire/focus), `swing_settings.record_system_change` (writes only on a change, ORM-style `updated_at = now()`), `email.templates.swing_eod` + shell (the API's copy is crate-private), and `plan.exit_lines/assemble/plan_hash` (core ports `build_entries` only). Lift into shared crates later.
+* `sw_plan.plan_id` is a fresh uuid (Python `uuid4`, Rust `gen_random_uuid()`): `plan_id`, `client_id`, `sw_session.plan_ids` and the payload's `/plan/plan_id` are compared by presence in the cases.
+* Catalyst: NSE provider built per task as Python's `build_nse_provider` (retry hooks are metrics, not ported); under the harness the archive misses and the upstream's 404 is absence.
+* No auto-execute flag is read; `swing_execution_enabled` only picks the session mode and the first-live countdown, as in Python. Gate slug unchanged (SW29).
+
+## R8.ar — Lane `api_routes` (RS6, 30 Oct 2026) ⚠ UNREVIEWED
+
+* **ar1 — R7.15 closed.** Plan quantities are `num_bigint::BigInt` (exact past 128 bits; holdings re-read from the raw JSON, since `body_model` saturates). `probe-exit-huge-int` masks `desk_plan_id`/`expires_at_hint` like `plans-exit-closed`. New pin `num-bigint =0.4.8` (already in the lock via redis). Graded in market hours: writes_screens 260/260.
+* **ar2 — explore `POST /watchlist`, `DELETE /watchlist/{slug}` ported** (R6.40). pydantic's `max_digits/decimal_places` order reproduced; `DELETE /watchlist/{instruments,discover-preferences}` reach the slug route as in Starlette. 49/49 EQUAL.
+* **ar3 — `accounts.purge`, `ops.resync` ported.** Resync reuses the API's `inspect_pending` (extracted `pub` from `build_plan`), ingest's bhavcopy backfill (`backfill_summary` added) and swing_live's producer. `task_diff.py` gains mask kind `"uuid"` (task ids in `admin_action.detail`).
+* **ar4 — `overlap.catalyst_scan` written but gated (for the integrator).** The per-name loop is swing_eod's private `run_swing_catalyst` with no `symbols=`; expose it `pub(crate)` with `symbols: Option<..>`, call it from `catalyst_scan::feed_loop`, add to `PORTED`.
+* **ar5 — `GET /overlap`, `PUT/DELETE /overlap/reviews` ported** (R5.21, R6.29 closed). `candidate_review` private in `routes/overlap/review.rs` (pending a core move with goldens); `view.rs` is `pub` for the worker. `last_price` null (Rust live marks are always closed). Graded in writes mode (the read writes Redis).
+* **ar6 — the 7 screener routes stay on Python.** The executor lives in `baskfy-worker`, which depends on `baskfy-api` (cycle); `ranking_selection`, `basket_sizing`, `screen_ranking`, `rank_buffer` need goldens first. Next: move the executor to a shared crate, then port.
+
+## Wave 6 lane backtest_engine — `baskfy.backtest.run` (RS6, 30 Oct 2026) ⚠ UNREVIEWED
+
+* **R-be.1 — the Celery task only.** `run_backtest_job` in one transaction, claimed `FOR UPDATE`; `skipped` on a redelivery. `run_backtest_inline` (the API's two-transaction executor) is not a task and stays Python; R6.28's gate (Rust `POST /backtests` only with `celery`) is unchanged.
+* **R-be.2 — config validation by serde, not pydantic.** A stored config pydantic would refuse fails `ValidationError` on both sides, but the message differs. Only API-validated rows reach the queue; not graded.
+* **R-be.3 — added, never forked.** `steps::gate::execute_screen_with_limit` (the legacy screen with the loader's `top_n + hold_buffer` limit; `ranking_terms` raises `NotPorted`, R-gate.2). `india_tbill.csv` compiled in; a test holds it byte-equal to Python's. `task_diff.py`: `{archive}` in a case `env` value is the side's archive dir, so the three CSVs (via `BASKFY_INVOICE_LOCAL_DIR`) are compared by sha256.
+* **R-be.4 — graded.** `task_cases/backtest_engine.json` 12/12 EQUAL py,rs (done with/without fragility, inline definition + overlay + inverse-vol, pre-M39 reinvest, unknown benchmark, four failure paths on the row, two skips, missing arg; Friday session, after close, before open, Saturday): row (metrics, metrics_hash, curve), Redis frame, artefacts.
+
+## R8.x — Lane **swing_live**: the calls (RS6, 30 Oct 2026) [lane label R-sl.1] ⚠ UNREVIEWED
+
+* Eight registry tasks ported (`swing.premarket`, `scan_now`, `scan_after_login`, `scan_sweep`, `timing_probe`, three checks). `swing.catalyst` is `swing_eod`'s; `live_scan` belongs to the twt/vbt lanes. `published_session` and the Celery `producer` are public so those lanes reuse them.
+* Detector widened, not forked: `steps/sleeves/swing.rs` gains `ScanExtras` + `run_detect_swing_scan`; the nightly path is `ScanExtras::default()` (unchanged).
+* Plans reuse `swing_eod`'s pieces: their visibility is widened to `pub(crate)` and a `for_swing_live` re-export is added to `tasks/swing_eod.rs`. No body changed. **For the integrator.**
+* `live_gap`/`live_gap_score` added to `baskfy-core` (pure, Decimal); five `SWING_*` `AlertName` variants added to `alerts.rs`.
+* Producer: kombu envelope via `SADD`+`LPUSH`; uuid4 and base64 are local, so no new dependency.
+* **For Maulik:** a 409 or 429 login refusal carries the existing row's `run_id`, and Python then re-runs that row. This is reproduced and graded. A Python fix would come first if "skip" was the intent.
+* Cutover: run directly, the login row's `task_id` is Python's `broker-login-<ts>` fallback. The shim should pass the real id.
+* Quotes: the production `KiteProvider` on the interactive limiter, its client rooted at `TaskContext::kite_root()`, its token store on the task clock (`swing_live::quotes`).
+* Timing probe: generic over a `ProbeSource`/`ProbeClock`, so Python's scripted-Kite tests port as unit tests. Its candle count is `KiteProvider::minute_bars`' (parsed, de-duplicated) where Python counts the raw list: equal on every graded case and any well-formed answer; only the report reads it.
+* Masks, each with its reason: seeded rows' `created_at`/`updated_at` (Postgres `now()`); the sweep's `task_id` (a fresh uuid4); the intraday plan's `plan_id` (uuid), and its `built_at`/`expires_at` where a scan precedes the rebuild (the task clock after a scan whose real duration differs per side).
+* Graded: `task_cases/swing_live.json` **43 of 43 EQUAL py,rs** — the three checks at 09:20/10:50/15:20 with and without a finding, a weekend and two NSE holidays; the sweep idle and publishing two rows (the enqueued messages EQUAL); the probe off, after its good run, started late, and over two candle asks; scan_now before the open, on a published day, on a Saturday, with nothing published, inside the session with and without a Kite session (866 quotes, provisional rows and the INTRADAY plan), after the close; the login path on every refusal and live; premarket's LEVELS (and a rescale after a factor change), GAPS off/on/without Kite, the A10 ladder catch-up, a Saturday, before the calendar, an unknown stage, a bad date.
+* Reverse: delete `tasks/swing_live/`, restore the stub, drop `ScanExtras`, the re-exports, the alerts and `live_gap`.
+
+## R8.curated — Lane `curated`: the five `baskfy.cb.*` tasks ported (RS6, 30 Oct 2026) ⚠ UNREVIEWED
+
+- Ported `compute_metrics`, `sip_reminders`, `derive_dividends`, `sync_batches`, `rebalance_notify` in `tasks/curated.rs` + `tasks/curated/{math,metrics,sip,dividends,batch_sync,notify}.rs`. None of them places an order: SIP raises `SIP_DUE` reminders (AUTO refused), batch sync only reads `desk.rebalance_orders`, notify sends mail through the `Mailer`.
+- `baskfy_core.curated_metrics` is ported in the lane's own `math.rs` (lane rule: its own files only). Added one pub item, `WideDecimal::sqrt` (from `_pydecimal`, checked against libmpdec on 200k operands). `x ** 2` keeps libmpdec's 31-then-28-digit double rounding (`pow2`), which differs from `x * x` in ~1 operand in 2,000.
+- The metrics job commits per chunk of reads and per written basket, as Python does. The other four tasks each run in one transaction.
+- **Not graded yet:** `task_cases/curated.json` has 35 cases (every task, before/inside/after session, Friday, Saturday, failure paths, each seeded with fixed timestamps). No `task_diff.py` run finished: the bed lock was held, then CODE FIRST stopped diff runs. So Python parity is unproven.
+- The foundation's `tests/task_registry.rs::every_stub_refuses_with_task_not_ported` asserts `REGISTRY.len() - 4` stubs, so it fails as soon as any lane ports a task. It belongs to the foundation and was left for the integrator.
+
+## R8.vbt_jobs — Wave 6 lane `vbt_jobs`: the VBT detect retry, evening/morning plans, Re-detect and its sweep, the four checks (RS6, 30 Oct 2026) ⚠ UNREVIEWED
+
+*(Lane label; the integrator renumbers.)*
+
+**Ported.** `baskfy.vbt.detect`, `.evening`, `.morning`, `.rescan`, `.rescan_sweep`,
+`.check_detect_fresh`, `.check_orders_past_expiry`, `.check_naked_positions`,
+`.check_positions_without_bars` (`tasks/vbt_jobs.rs` + private `tasks/vbt_jobs/{sleeve,book,evening,
+live,rescan,ops,quotes,celery}.rs`, `db_tests.rs`). Graded by `task_diff.py --cases
+tools/parity/task_cases/vbt_jobs.json` (58 cases; results in STATUS, "Wave 6 lane `vbt_jobs`").
+
+**Choices.**
+* **Wave 5's detector widened in place, not forked** (the `twt_jobs` pattern). `steps/sleeves/vbt.rs`'s
+  private writers take `pipeline_run_id: Option<i64>` and LV8's `provisional` (the literal `false`
+  became a bind; the provisional-straggler sweep runs only on a real run, as Python's); the new
+  `run_detect_vbt_for(.., pipeline_run_id, extra_bars, provisional)` appends the provisional bars
+  (`select` of the loader's columns, `vstack`) and notes `provisional`; `load_vbt_universe` is the
+  universe rule factored out. Python's thin-session branch passes no `provisional`, so that row is
+  written `false` even on a live scan — kept. `run_detect_vbt` keeps its signature and delegates;
+  the nightly's sleeve tests pass unchanged. Exposed through an additive `steps::sleeves::for_vbt_jobs`.
+* **The API's `vbt_sleeve` reading half and `vbt_settings.record_system_change` are ported inside the
+  lane** (the Rust API has no shared copy). The two counters move exactly as `settle_session` moves
+  them: `dry_run_sessions` once per session and only when rehearsed (a confirm, or no executable line);
+  `first_live_sessions_left` once per LIVE session while positive; each audited in `vb_config_audit` by
+  `vbt-evening`, `changed_at` = the task's clock (compared raw, EQUAL).
+* **Python's own semantics kept, even where odd:** `settle_session` files the plan id under `"evening"`
+  whichever source built it (a MORNING rebuild overwrites the evening's id in `plan_ids`); the ORM's
+  identity map is reproduced — an order the sweep marks `EXPIRED` no longer holds a slot in the book
+  built after it; `queue_exits` falls back to the **last** position in a name; the ORM writes a row (and
+  its `onupdate` stamp) only when an attribute's value changed, so the sweep issues an `UPDATE` only for a
+  row whose derived count, expiry or state actually moved.
+* **Qullamaggie's `decide` is re-done in `book.rs` with its note**, because the VBT plan line persists the
+  note (`close X below the MA20 Y`, `stop to breakeven X (+1R showing)`, …) and the shared adapter
+  (`steps/sleeves/qulla.rs`) drops it. The arithmetic is the shared one (`mean`, `trail_for`,
+  `baskfy_core::swing::stops::manage`); the history is kept in `WideDecimal` (`Decimal(str(v)) / factor`
+  in Python's context) beside the core `Bar`, not narrowed into it. Python's `f"{x:g}"` is `book::py_g`.
+* **Lane-local copies** (the `twt_jobs` precedent; a lane never edits another's file or widens the
+  nightly's closed `AlertName`): the four `VBT_*` alerts' dispatch (`ops.rs`, payload and mail exactly as
+  `alerts.dispatch`/`_send_email`), the INTERACTIVE-lane quote source (`quotes.rs`) and the kombu
+  producer (`celery.rs`). **For the integrator:** fold the three copies of each (twt, swing_live, vbt) into
+  one public module.
+* **Law 2.** No order, GTT or Kite write path; the only Kite call is the live Re-detect's `GET /quote`
+  (built only on the provisional path). A `SENT` limit past its window becomes a `CANCEL_LIMIT` **line**;
+  only a never-sent one (`PROPOSED`/`CONFIRMED`) is marked `EXPIRED`. Every plan line is `PROPOSED`. VBT has
+  no auto-execute flag and the lane reads none; `BASKFY_VBT_EXECUTION_ENABLED` sets only the session's
+  mode, the first-live half size and which counter moves.
+
+**Harness masks** (each printed by the report): `vb_plan.plan_id`, `vb_plan_line.client_id`,
+`vb_session.plan_ids`, `vb_scan_run.task_id` (uuids) and `vb_scan_run.started_at/finished_at`
+(measured) as `elapsed`; Postgres-`now()` stamps as `stamp`; payload `/plan_id`, `/detail/plan_id`,
+`/alert/raised_at`. `vb_plan.built_at/expires_at` and `vb_config_audit.changed_at` compared raw.
+
+**Not exercised by parity:** a live Re-detect that *signals* (the bed's 10-30 provisional bar signals
+nothing), so `build_live_plan_vbt`'s store and kept-in-flight plan are covered by reading and by the
+evening's shared `store_plan` only.
+
+**How to reverse.** Restore the nine stubs and `PORTED = &[]`; delete `tasks/vbt_jobs/`; the
+`for_vbt_jobs` block, `run_detect_vbt_for` and `load_vbt_universe` can stay (the nightly calls the old
+signature).
+## R8.oa — Lane `ops_alerts`: the six ops tasks and the Kite session refresh (RS6, 30 Oct 2026) ⚠ UNREVIEWED
+
+* **R8.oa1 — two crate lines, no new crate.** `baskfy-worker/Cargo.toml` gains `reqwest` and
+  `hmac` (`workspace = true`; both already pinned and in the lock through baskfy-providers). The
+  webhook sweep must POST with **no redirect followed** (httpx's default: a 3xx counts as
+  delivered), which needs `reqwest::redirect::Policy::none()` on `net::client_builder()`; the
+  signature is HMAC-SHA256. Every client is still built from `baskfy_providers::net`, so the
+  harness's network block reaches it. Reverse: drop the two lines and the two modules that use them.
+* **R8.oa2 — the lane's own `dispatch`.** `tasks/ops_alerts/alerting.rs` ports `alerts.dispatch` in
+  full for the lane's four names (`pipeline_abandoned`, `publish_late`, `kite_token_expiring`,
+  `queue_backlog`): log, email, the ops JSON webhook (Alertmanager-shaped, 5 s, a 2xx), the
+  `suppressed` path the token check needs, "no sink" warned once per process, `raised_at` from the
+  task clock. `crate::alerts::AlertName` (another lane's file) is not widened, as lanes `twt_jobs`
+  and `vbt_jobs` did. Still not ported (R7.5): Sentry (a configured DSN is logged as not sent),
+  the counter, the span. The integrator may fold the lanes' alert copies into `alerts.rs`.
+* **R8.oa3 — the sweep's two additive API items.** `routes::webhook_endpoints` gains
+  `assert_public_webhook_url_with(url, resolve)` and `webhook_host_encodable`, over a new
+  `ssrf::assert_public_resolving` (the create route's `assert_public` unchanged): the worker passes
+  the guarded resolver, so under `--replay-bundle` every non-loopback name "does not resolve",
+  exactly as `task_py.py`'s guard makes Python's `getaddrinfo` raise `OSError` — the harness can
+  never reach a POST, on either side. Approximated: a transport failure's `last_error` names
+  httpx's class by reqwest's error kind (`ConnectError`, `ConnectTimeout`, `ReadTimeout`,
+  `HTTPError`) with reqwest's message. The POST path, signing, backoff and endpoint disabling are
+  unit-tested (signature and secret checked against Python's `hmac`).
+* **R8.oa4 — the login nudge reuses the API's one builder.** `routes::brokers` gains
+  `kite_login_url_for_worker(api_key, user_id)` and `STATE_VALID_FOR_MINUTES` (30), over a new
+  `writes::kite_login_url_default`: the state is minted and registered (and persisted to
+  `BASKFY_BROKER_OAUTH_STATE_PATH`) exactly as `POST /brokers/{id}/connect` does, so the callback
+  accepts it. Difference kept: Rust's state-file write logs a failure and carries on, where Python's
+  `OSError` would become the note "the login URL could not be built (OSError)". The random state is
+  masked in the cases' mail (`mail_mask`). The marker is the `O_EXCL` file beside the token blob.
+* **R8.oa5 — `refresh_quietly` ported in full** (`kite_session.rs`): the local session first
+  (`GET https://api.kite.trade/user/profile`, read-only), then the desk over SSH (fixed argv, no
+  shell, `BatchMode`, pinned host key, the timeout polled on the task's runtime), `verify_session`,
+  `deposit` (store, read back). Python's `print`s go to standard error (standard output is the
+  task payload). Under the harness it still answers `false` untouched, as Python's injection does.
+  `deposit`/`pull`/`status` as CLI subcommands remain lane `clis`' (`kite_session_cli`); the
+  functions here are `pub(crate)` for it to reuse.
+* **R8.oa6 — what the lane was handed and did not port.** `purge_accounts` is lane `api_routes'`
+  (`baskfy.accounts.purge`, already ported); `window`, `calendar`, `tasks/fundamentals`,
+  `tasks/listings` are wave 5's nightly code (`window.rs`, `calendar.rs`, `steps::ingest`,
+  `steps::index`; `listings_page`/`listed_count` have no caller outside tests); `telemetry` is R7.4.
+  `action_recovery` (M28's operator CLI, `python -m`, never scheduled) needs
+  `baskfy_core.action_recovery` (not started in the core, no goldens, `Fraction.limit_denominator`)
+  — left for the core's own wave, goldens first; not a Celery task, so no cutover waits on it.
+* **Grading.** `tools/parity/task_cases/ops_alerts.json`: 37 cases. `backlog-over-threshold` reads
+  Redis index 5, pre-seeded by hand (`RPUSH default x x x; RPUSH compute x x; RPUSH ingest x`) —
+  the harness has no Redis seed; the other cases need nothing outside the file.
+
+## R8.pf — Lane `portfolio`: the end-of-day NAV and the evening capture of Kite's trades (RS6, 30 Oct 2026) ⚠ UNREVIEWED
+
+* **R8.pf1 — ported, both registry tasks.** `baskfy.portfolio.eod_nav` (`tasks/portfolio_nav_job.run_portfolio_nav`: `tasks/portfolio/nav.rs`) and `baskfy.pipeline.capture_kite_trades` (`baskfy_api.broker_trades.capture_kite_trades`: `tasks/portfolio/capture.rs`), each in one transaction as `run_in_session`. The NAV job keeps Python's four refusals (no bar on the date: no rows — so a run during a session never claims today; a lens never loaded; an open item or an unpriced holding drops the holding and flags its rows), the upsert on `(user_id, date, portfolio_id)`, the prune, and the since-grouped mark that leaves `history_source` at `NONE`. `as_of` follows Python's truthiness (`""`, `0`, `false` are today; another non-string is `fromisoformat`'s `TypeError`).
+* **R8.pf2 — one pub item added to `baskfy-api`, nothing changed.** The capture's storage half (`ensure_default_broker_account`, `store_fills`, `apply_trade_history`, and `resolve_symbols` under them) is the API's crate-private port of the tradebook import. Rather than fork ~400 lines, `routes/trades/writes.rs` gains `capture_store_and_date` + `CaptureFill`/`CaptureCounts`, re-exported from `routes::trades` (additions only; the routes are untouched). The ledger arithmetic the NAV job needs (`allocation_ledger.portfolio_values`/`consolidated_value`/both validations, `cash_ledger`'s constructor and three totals, `gst.money`) is carried in the lane's `ledger.rs` on `rust_decimal`: the API's port is crate-private on its own `Dec` and lacks the three totals; every operand is a stored `numeric` (4 places for quantities and prices, 2 for money), so every product and sum is exact as Python's are. For the integrator: when `baskfy_core` gains the ledger, both copies fold into it.
+* **R8.pf3 — the other modules named for this lane have no task here.** `tasks/desk.py`'s three tasks are lane `clis`'s registry rows; `tasks/resync.py` is lane `api_routes`'s (`baskfy.ops.resync`, ported there); `tasks/desk_score.py` is wave 5's nightly step (`steps::compute::desk`, reused, not forked); `tasks/holdings_sync.run_holdings_sync` has **no caller** — no task, Beat entry or CLI reaches it (migration 0043's note; the live holdings sync is the API's `broker_holdings_sync`). Porting it would add code nothing runs and nothing can grade; it is left for whoever gives it a caller.
+* **R8.pf4 — reproduced, not corrected (for Maulik).** (a) The NAV job loads one `Holding` per `portfolio_holding` row, so an instrument held in two capital portfolios at the same broker account is refused by `validate_against_holdings` as *over-allocated* (the dict keeps the last row's quantity) and the whole run writes nothing — graded as case `nav-holding-split-across-portfolios`. If slices were meant to be valued, it is a Python change first (sum the rows per key before building `Holding`s). (b) The capture's sole tenant is resolved **before** the DRY_RUN check, so with no tenant configured even a dry run raises the `pipeline-degraded` `Problem`. (c) A storage failure surfaces as `Problem` with the API's catch-all detail (the API port maps database errors to its 500), where Python would raise the driver's class; not graded (no case can make the bed fail mid-write).
+* **Law 2.** The one Kite call is `KiteProvider::broker_trades` (`GET /trades`) on the replay upstream under the harness; no auto-execute flag is read.
+* **Tests.** `ledger.rs` unit tests (half-up paise; per-holding quantisation; Python's over-allocation sentence; the §4.4 constructor) and `db_tests.rs` — the database half of `test_portfolio_nav_job.py` on TEMP tables in a scratch database (`BASKFY_RS_SCRATCH_DATABASE_URL`, `--ignored`): 14 of 14 pass.
+* **Graded.** `task_cases/portfolio.json` **21 of 21 EQUAL py,rs** (`--smtp-port 18908 --upstream-port 18909`): eod_nav after the close, an explicit past date during a session, inside the session and before it (no rows: today is never claimed), a Saturday, `0`/`""` as today, an int and a bad date refused, a bad keyword, every cash-flow kind with open items and a capital portfolio flipped to a lens (one row pruned, two pending), a split holding refused, cash into a lens refused; capture through DRY_RUN, a closed day, a day the calendar does not carry, no key, no stored session, the live read-only `GET /trades` on the replay upstream after the close and at 13:15 (holdings re-dated from the bed's trades), no sole tenant, a non-numeric one, and an unexpected argument. Payload, every touched table, sequences, Redis, mail, upstream requests (law 2: no write verb) and archive all EQUAL.
+* **Open for the foundation.** `tests/task_registry.rs::every_stub_refuses_with_task_not_ported` asserts `REGISTRY.len() - 4` stubs and so fails once any lane ports a task (already noted under R8.curated); it is the foundation's file, not this lane's.
+* **How to reverse.** Restore the two stubs in `tasks/portfolio.rs`, delete `tasks/portfolio/`, and remove the appended block of `routes/trades/writes.rs` and its `pub use` in `routes/trades.rs`.
+
+## R8.ar1 — Lane `api_routes`: R7.15 closed — a plan's quantities are Python's unbounded `int`; the case masks its two volatile fields (RS6, 30 Oct 2026) [lane label R-ar.1] ⚠ UNREVIEWED
+
+**Context.** `writes_screens.json`'s `probe-exit-huge-int` differed whenever it was graded in
+market hours: `POST /cb/plans/exit` builds a preview then, the body model saturated the 42-digit
+holding at `i128::MAX`, so the leg quantity and `requested_amount` were wrong; and the case left
+`desk_plan_id` (`cb-sim-{uuid4}`) and `expires_at_hint` (now + 30 min, microseconds) unmasked.
+
+**Choice.** The plan arithmetic (`routes/curated_plans/core.rs`) carries every quantity as a
+`num_bigint::BigInt`: `to_int` (`int(d.to_integral_value(ROUND_DOWN))`) has no 128-bit ceiling,
+an apply plan's `target - current` is exact, and a leg serialises as a JSON integer literal of any
+size (`PyIntOut`, through `RawValue`). The validated body still saturates (`body_model` is the
+screens lane's, unchanged), so the exact `int` of each `holdings` value is read back from the
+received JSON (`ints(v, raw)`: an integer literal, an integral float, a lax string via `lax_int`'s
+canonical digits, a bool). `customize` echoes `investment_id` exactly the same way.
+`requested_amount` stays `WideDecimal` in the 28-digit context
+(`1.234567890123456789012345679E+41`, as Python). The case gains the two masks
+`plans-exit-closed` already has — a uuid4 and a wall-clock stamp, nothing else. **Graded in
+market hours** (13:3x and 14:5x IST, Friday 30 Oct): `writes_screens.json` **260 of 260 EQUAL**,
+side effects EQUAL, twice; unit test `an_exit_beyond_128_bits_is_pythons_int` holds an exit and
+an apply plan to the live Python's answers.
+
+**New dependency.** `num-bigint = "=0.4.8"` (workspace + `baskfy-api`) — already in the lock
+through `redis`, so no new crate is compiled. Rejected: a hand-written big integer (more code to
+get wrong); refusing the value (Python does not).
+
+**How to reverse.** Revert `curated_plans/{core,writes}.rs`, `curated_customize.rs`, the two
+manifest lines and the case's mask.
+
+## R8.ar2 — Lane `api_routes`: explore's `POST /watchlist` and `DELETE /watchlist/{slug}` ported (RS6, 30 Oct 2026) [lane label R-ar.2] ⚠ UNREVIEWED
+
+R6.40's two unassigned routes (`routes/explore/watchlist_writes.rs`). `WatchlistAddIn.nav_at_watch`
+is `Decimal(gt=0, max_digits=18, decimal_places=2) | None`: pydantic-core checks the digits
+**before** the bound, on the value `normalize()`d in the default context (so `100.000` passes, and
+a 37-digit `1.000…0001` passes and is stored `1.00`), in the order max digits, decimal places,
+whole digits, then `gt` — reproduced privately and unit-tested against 21 answers dumped from the
+API's pydantic. Starlette tries explore's `DELETE /watchlist/{slug}` before the instrument
+router, so `DELETE /watchlist/instruments` and `/watchlist/discover-preferences` reach it with the
+static segment as the slug (404 basket); axum's static-first match would have answered 405, so
+those two static routes mount the delete too. Graded by `writes_api_routes_explore.json`
+(49 cases): **49 of 49 EQUAL**, side effects EQUAL (twice). **How to reverse:** delete the file,
+the `.post`/`.delete` registrations, restore `/watchlist/{slug}`'s `write_only()`.
+
+## R8.ar3 — Lane `api_routes`: `baskfy.accounts.purge` and `baskfy.ops.resync` ported; the inspection is the API's own (RS6, 30 Oct 2026) [lane label R-ar.3] ⚠ UNREVIEWED
+
+* **Purge** (`tasks/api_routes/purge.rs`): the ORM's statements in its order — the sweep's
+  `SELECT` with no `ORDER BY` (heap order, the same on both clones), the user, the payment count,
+  the flush of `purged_at`, then the delete (everything cascades) or the anonymisation (the five
+  owned tables deleted, the address a tombstone); a reactivated account's `cancelled_at` and a
+  missing user's `purged_at` go in the final flush. `outcome.detail` always holds both notes, so
+  `notes` is never `null`. The seven Python tests are ported as scratch-database tests
+  (`purge_db_tests.rs`, 7 of 7 with `BASKFY_RS_SCRATCH_DATABASE_URL`).
+* **Resync** (`tasks/api_routes/resync.rs`): `run_resync` step for step — inspect; the Kite
+  session (`ops_alerts::refresh_kite_session_quietly`); wrong holidays upserted as sessions;
+  bars re-ingested; nightlies queued (`MAX_BAR_REPAIRS` 30, `MAX_RERUNS` 10, the rest deferred by
+  name); re-inspect; the report recorded on `admin_action`. Shared, never forked:
+  * `inspect_pending` is `baskfy_api::routes::admin::resync::inspect_pending` — the body of
+    `GET /admin/resync`'s `build_plan`, extracted into a `pub` function over a connection, the
+    deadline, `now` and a lazy publication source (the API still builds the production stack only
+    when a weekday is an inferred holiday; the worker hands in its replay-backed check).
+    `build_plan`'s answers are unchanged (GET re-graded, below); `admin::resync` became `pub mod`.
+  * The bhavcopy re-ingest is the ingest lane's `backfill_bars_from_bhavcopy` through an added
+    `steps::ingest::backfill_summary` (bars written, missing days, failures), one transaction
+    per day as Python's own session per call.
+  * Nightlies are published with the `swing_live` lane's public producer
+    (`producer::apply_async`, the queue from `route_by_name`); a refused broker is a `failed`
+    line, never a raised task.
+* **Harness.** The report names the Celery task id it queued (a uuid4) in the payload and in
+  `admin_action.detail`. `task_diff.py` gained one mask kind, `"uuid"`: the column compared as
+  text with every UUID replaced by `<uuid>`, everything else intact; the payload's `queued` lines
+  use `payload_mask`. The messages themselves are compared in Redis with ids normalised.
+* **Grading — open.** `tools/parity/task_cases/api_routes.json` holds 12 cases (4 purge, 8
+  resync). Only `purge-nothing-due` has been graded EQUAL; the rest were not run, because the
+  coordinator's "code first, skip long diff runs" order (30 Oct, 14:29 IST) came first. The purge
+  path is held by the 7 scratch-database tests; resync has no grade yet. **Run the file before
+  either task is routed to Rust.**
+* **How to reverse.** Restore the two stubs; drop `inspect_pending`'s extraction (inline it back
+  into `build_plan`), `backfill_summary`, the mask kind.
+
+## R8.ar4 — Lane `api_routes`: `baskfy.overlap.catalyst_scan` is written but gated — the feed's loop is another lane's (RS6, 30 Oct 2026) [lane label R-ar.4] ⚠ UNREVIEWED — **for the integrator**
+
+`tasks/api_routes/catalyst_scan.rs` holds the task: the API's own overlap view (R8.ar5) for the
+scope, the status document in Python's key order (`started_at`/`finished_at` from the task clock),
+the wake key, the lock released whatever happened. The per-name loop is
+`swing_catalyst.run_swing_catalyst(..., symbols=, on_symbol=)`, which the `swing_eod` lane ported
+**privately** (`tasks/swing_eod/catalyst.rs`, `pub(super)`) and **without** `symbols=`. A lane may
+not edit another's file, so `feed_loop` answers `NotPorted`, the task answers `NotPorted` before
+touching Redis or the database, and it is not in `PORTED`. **To land it:** expose from the
+`swing_eod` lane `pub(crate) async fn run_swing_catalyst_for(conn, outcome, day, user_id,
+provider, symbols: Option<&[(String, i64)]>)` (the feed's own selection when `None`) with
+`as_detail` and `build_provider` `pub(crate)`; call it in `feed_loop`; add the task to `PORTED`;
+add cases. Intermediate progress writes are not needed for parity — the final status document
+overwrites them; `done = total` is written after the loop as Python's last `on_symbol` does.
+
+## R8.ar5 — Lane `api_routes`: `GET /overlap` and `PUT`/`DELETE /overlap/reviews` ported; R5.21 and R6.29 closed (RS6, 30 Oct 2026) [lane label R-ar.5] ⚠ UNREVIEWED
+
+* `routes/overlap/review.rs` ports `baskfy_core.candidate_review` (the row in words, the
+  timeline, the context, `review_state`, `review_key`, `opinion_from_laya`, `rules_opinion`,
+  `adverse_phrases`). Every figure is a stored `Decimal`/`int` through `WideDecimal` in the
+  default context and `format(d, ".Nf")` (a half-even rescale with no digit limit that keeps
+  `-0`); the state is hashed into the label's key, so any character off would be another key.
+  `REVIEW_SCHEMA` (`903c43c0`) is pinned from the live Python. Private to the API beside its
+  callers (R2.3), pending R5.21's move of `catalyst_tags`/`candidate_review` into `baskfy-core`
+  with goldens.
+* `routes/overlap/view.rs` ports `baskfy_api.overlap.overlap` and the label writes. The read
+  path's two sidecar notes (`SADD catalyst_tag:wanted`, `HSET candidate_review:wanted`, three-day
+  TTL) are one Lua script each (read the keys, note the misses), made only when a cache is
+  configured — Python's write on a read path, reproduced (R5.21 asked for the decision: keep it;
+  it feeds the sidecar and costs nothing else). `pub`, so the worker's scan reads the same view.
+* The shared live-marks overlay is the closed answer in Rust (`/meta/live-marks`), so
+  `last_price` is `null` — Python's answer without a Kite session, which the bed has. A
+  **cutover gate** with `/meta/live-marks` itself.
+* **Graded in writes mode**, not GET mode: GET mode runs both servers on Redis index 0, which the
+  read path writes. `writes_api_routes_overlap.json` (35 cases: the read in both scopes and for
+  three principals over the bed's 9 actionable / 35 listed rows, labels put/update/no-op/delete
+  and every refusal) compares tables, sequences and each side's Redis: **35 of 35 EQUAL**, side
+  effects EQUAL (Redis included).
+
+## R8.ar6 — Lane `api_routes`: the seven routes that run the screener stay on Python (cutover gate) (RS6, 30 Oct 2026) [lane label R-ar.6] ⚠ UNREVIEWED — **for the integrator**
+
+`POST /screens/preview`, `/explain`, `/selection`, `/screens/{id}/run`, `/cb/baskets/from-screen`,
+`/cb/baskets/{slug}/recut` (R6.13) and `POST /portfolios/{id}/rebalance` (R6.23) are **not**
+ported and keep their R6.11 routing (Python serves them). Either reason suffices:
+1. **Dependency direction.** The screener lane's executor (`tasks::screener::execute_screen`,
+   `record_run`, the cache) lives in `baskfy-worker`, and `baskfy-worker` depends on
+   `baskfy-api` (R7.2): the API cannot call it without a cycle. The executor has to move to a
+   crate both depend on (proposed: a module of `baskfy-db`, or a `baskfy-screener` crate) — a
+   structural change, not a lane's.
+2. **Unported cores.** The routes also need `screen_ranking.explain_symbol`,
+   `baskfy_core.ranking_selection` (1,102 lines), `basket_sizing` (543), `rank_buffer.plan_rebalance`
+   and the ranking-engine path (`ranking_terms`, R-gate.2) — each wants goldens first.
+
+No `routes/screener_writes.rs` stub was registered: it would change answers Python's routing gives
+today. **Next:** move the executor down, port the four cores with goldens, then the seven routes
+in one pass.

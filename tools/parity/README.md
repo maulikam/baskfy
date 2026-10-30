@@ -102,3 +102,80 @@ dropped on exit), at pinned IST moments inside a session, a second before
 2026-10-29's run deleted. Both sides only read (Rust's transaction is rolled back). Today is
 never proposed before 18:00 IST. Running the nightly for each proposed day is `nightly_diff.py`'s
 job; the Celery task's swing EOD and holiday demotion are not ported (R-gate.4).
+
+## The worker's tasks: `task_diff.py` (wave 6; DECISIONS-RS R8.1–R8.3)
+
+`nightly_diff.py` generalised to any Celery task: one case = a task, its message arguments and a
+fixed **IST moment**; two fresh clones of an `rst_tpl_*` template per case; the two sides one after
+the other; everything either side did compared.
+
+```bash
+# the foundation's own cases (the wave-5 tasks it wires), Python vs Rust
+python3 tools/parity/task_diff.py --cases tools/parity/task_cases/pipeline.json --report /tmp/t.txt
+# the harness against itself
+python3 tools/parity/task_diff.py --cases tools/parity/task_cases/pipeline.json --sides py,py
+# one case
+python3 tools/parity/task_diff.py --cases tools/parity/task_cases/fno.json --case ingest-bhavcopy-recorded-day
+```
+
+| flag | meaning |
+|---|---|
+| `--cases FILE` / `--case NAME` | the lane's case file; repeat `--case` to run a subset |
+| `--sides` | two of `py`/`rs` (default `py,rs`) |
+| `--profile` / `--no-build` | the Rust binary (`debug`), or skip cargo |
+| `--redis-db-a/-b` | Redis indices, 1–7 only (default 6, 7) |
+| `--smtp-port` / `--upstream-port` | 18800–18999 only (default 18899, 18898), checked under the lock |
+| `--max-dbs` | the database budget besides `baskfy`, shared with every harness on the bed (6) |
+| `--keep-dbs` | keep each case's two clones (drop them yourself) |
+
+**A side.** `py` is `task_py.py run NAME --args JSON --now T`: `app.tasks[NAME](*args, **kwargs)`,
+once, with `nightly_py`'s injection (network guard, replay provider, `refresh_quietly` a no-op), the
+Kite root pointed at the replay upstream, and the **injected clock** in the production modules only
+(their `datetime` module reference re-pointed; libraries keep the real one), advancing in whole
+seconds as the Rust side's. `rs` is
+`baskfy-worker task NAME --args JSON --now T --replay-bundle DIR --replay-upstream URL`. Exit 0
+returned, 75 a retryable raise, 1 any other raise, 2 usage.
+
+**Case fields.** `name`, `task`, `args`, `now` (required); `scenario` (`rerun`, `fresh`), `date`
+(bundle day, default 2026-10-29), `bundle` (`base`, `session`), `kite`, `seed_sql` (applied to both
+clones; fixed timestamps), `env` (`{archive}` in a value is the side's raw archive directory, so
+files a task writes under another setting are compared with the archive's), `mask` (`{table: {column: "stamp"|"elapsed"}}`), `payload_mask`
+(JSON pointers), `redis_presence` (key regexes), `mail_mask` (regexes masked in each mail, beside `raised_at`;
+lane twt_jobs — the evening digest's uuid `plan_id`), `note`.
+
+**Compared.** The payload (exit code; JSON with key order, or the raised class and message); every
+touched table (digest) and the run tables; sequences; Redis (Celery ids, `origin`, delivery tags
+normalised, `eta`/`expires` as `<set>`; every enqueued message listed); mail (`raised_at`); the
+upstream requests; write verbs at the upstream (law 2); the raw archive's new files.
+
+### The replay upstream and the `session` bundle
+
+`replay_build.py --date D --variant session` writes `base`'s calls plus `upstream/`
+(`replay_build_session.py`): `archive/nse/fo-bhavcopy/*.zip` and `fo-ban-list/*.csv` (real raw
+files, the last five on or before D, from the AWS-exit archive tarball, extracted once into
+`rust/target/replay/sources/`), `kite/instruments/NFO.csv` (the bed's `op_contract` options plus
+futures rebuilt from the newest F&O bhavcopy), `kite/quote/{0935,1315,1529}.json` (the recorded
+chain and index minutes; equities synthesized from the day's bar), `kite/historical/<token>/minute.json`
+(the recorded index minutes), `kite/holdings.json` (the bed's broker-linked holdings),
+`margins.json`, `trades.json`, `profile.json` (synthetic). `replay_upstream.py`
+serves `kite/` and `http/` on a loopback port and refuses every write verb; each side's
+`BASKFY_RAW_ARCHIVE_DIR` starts as a copy of `archive/`, so the archive-first NSE adapter parses the
+recorded file without a request. Anything not recorded answers 404.
+
+`task_registry.py` (run from `decile-blueprint` with the usual `PYTHONPATH`) rewrites
+`rust/crates/baskfy-worker/tests/fixtures/python_task_registry.json` from the live `celery_app`;
+`tests/task_registry.rs` holds the Rust registry and Beat table to it.
+
+### The TWT backtest: `twt_backtest_diff.py` (lane `sleeve_backtests`, R8.sb1)
+
+`baskfy_worker.tasks.twt_backtest.run_twt_backtest` has no Celery task — `tools/twt/backtest.py`
+(`make twt-backtest`) is its caller — so `task_diff` cannot name it. `twt_backtest_diff.py` is
+`task_diff` with one seam replaced: a side runs the script's `_run` body (`py`, this file's `side`
+subcommand under `task_py`'s clock) or `rust/crates/baskfy-worker/examples/twt_backtest.rs`
+(`rs`); clones, lock, budget, ports and every comparison are `task_diff`'s own code. Cases:
+`task_cases/sleeve_backtests_twt.json` (`args`: `start`, `end`, `sleeve`, `skip_etf_denominator`).
+`TWT_BACKTEST_DIFF_KEEP=DIR` keeps each side's full stdout (the payload is printed truncated).
+
+```bash
+python3 tools/parity/twt_backtest_diff.py --smtp-port 18850 --upstream-port 18851 --report /tmp/twt-bt.txt
+```

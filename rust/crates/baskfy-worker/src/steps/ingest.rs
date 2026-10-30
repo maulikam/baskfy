@@ -42,6 +42,8 @@ use crate::steps::StepOutcome;
 use crate::window::DateWindow;
 
 pub use adjustments::InstrumentAdjustment;
+/// The bhavcopy backfill as a task outside the chain reads it (wave 6, lane api_routes).
+pub(crate) use bars::backfill_summary;
 
 /// One row of `active_instruments`: `(instrument_id, symbol, kite_token)`.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -1,6 +1,9 @@
 //! SW3 — the daily swing detection job. Ports `baskfy_worker.tasks.swing` as the nightly
 //! reaches it (`run_detect_swing` with no `extra_bars`, `provisional=False`, no
-//! `reference_date`, no `scan`, no live index level).
+//! `reference_date`, no `scan`, no live index level) and, since wave 6 (lane swing_live), as
+//! "Scan now" reaches it too ([`run_detect_swing_scan`] with [`ScanExtras`]: SW15's provisional
+//! bars, the `reference_date` the point-in-time reads fall back to, `detail.scan` and the live
+//! index level). The nightly's path is the same code with every extra at its default.
 //!
 //! `baskfy_core::swing` computes the indicators and the three detectors; the breadth snapshot,
 //! the gate and the EMA index reading come from [`super::swing_market`] (not yet in the core);
@@ -87,20 +90,20 @@ fn dec_err(e: baskfy_core::decimal::DecimalError) -> WorkerError {
 }
 
 /// The `sw_config` columns the job reads.
-struct ConfigRow {
-    adr_min_pct: f64,
-    turnover_min_inr: f64,
-    price_min: f64,
-    risk_per_trade_pct: f64,
-    max_position_pct: f64,
-    max_open_positions: i64,
-    exposure_level: i64,
-    sleeve_capital_inr: Decimal,
-    sleeve_peak_inr: Option<Decimal>,
-    drawdown_locked: bool,
+pub(crate) struct ConfigRow {
+    pub(crate) adr_min_pct: f64,
+    pub(crate) turnover_min_inr: f64,
+    pub(crate) price_min: f64,
+    pub(crate) risk_per_trade_pct: f64,
+    pub(crate) max_position_pct: f64,
+    pub(crate) max_open_positions: i64,
+    pub(crate) exposure_level: i64,
+    pub(crate) sleeve_capital_inr: Decimal,
+    pub(crate) sleeve_peak_inr: Option<Decimal>,
+    pub(crate) drawdown_locked: bool,
 }
 
-async fn config_row(
+pub(crate) async fn config_row(
     conn: &mut PgConnection,
     user_id: i64,
 ) -> Result<Option<ConfigRow>, WorkerError> {
@@ -134,7 +137,7 @@ async fn config_row(
 }
 
 /// `load_swing_config`: the defaults with the user's liquidity floors and sizing knobs.
-fn swing_config(row: Option<&ConfigRow>) -> SwingConfig {
+pub(crate) fn swing_config(row: Option<&ConfigRow>) -> SwingConfig {
     let mut config = SwingConfig::default();
     if let Some(r) = row {
         config.liquidity = LiquidityConfig {
@@ -170,7 +173,7 @@ type BarRow = (
 
 /// `load_swing_bars`: adjusted bars of every live cash-market name, the circuit band moved
 /// into the adjusted space.
-async fn load_swing_bars(
+pub(crate) async fn load_swing_bars(
     conn: &mut PgConnection,
     start: NaiveDate,
     as_of: NaiveDate,
@@ -455,8 +458,9 @@ async fn upsert_setups(
     conn: &mut PgConnection,
     rows: &[SetupRow],
     user_id: i64,
-    pipeline_run_id: i64,
+    pipeline_run_id: Option<i64>,
     trade_date: NaiveDate,
+    provisional: bool,
 ) -> Result<i64, WorkerError> {
     for r in rows {
         sqlx::query(
@@ -466,7 +470,7 @@ async fn upsert_setups(
              rvol, gap_pct, turnover_avg, base_bars, up_streak, locked_upper_circuit, \
              sector_slug, listed_within_2y, pipeline_run_id, provisional) VALUES ($1, $2, $3, \
              $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, \
-             $21, $22, $23, $24, $25, $26, $27, false) \
+             $21, $22, $23, $24, $25, $26, $27, $28) \
              ON CONFLICT (user_id, date, instrument_id, setup) DO UPDATE SET \
              status = excluded.status, score = excluded.score, close = excluded.close, \
              trigger = excluded.trigger, stop_ref = excluded.stop_ref, \
@@ -508,6 +512,7 @@ async fn upsert_setups(
         .bind(&r.sector_slug)
         .bind(r.listed_within_2y)
         .bind(pipeline_run_id)
+        .bind(provisional)
         .execute(&mut *conn)
         .await?;
     }
@@ -592,9 +597,21 @@ async fn load_index_reading(
     on: NaiveDate,
     slug: &str,
     config: &MarketConfig,
+    live_level: Option<f64>,
 ) -> Result<(Option<IndexReading>, Option<String>), WorkerError> {
     for candidate in [slug, FALLBACK_INDEX] {
-        let levels = index_levels(conn, on, candidate, INDEX_HISTORY_SESSIONS).await?;
+        let mut levels = index_levels(conn, on, candidate, INDEX_HISTORY_SESSIONS).await?;
+        // SW30 (lane swing_live): today's level is appended, never substituted, and for the
+        // first candidate only — `[*levels, live][-INDEX_HISTORY_SESSIONS:]`.
+        if let Some(live) = live_level
+            && candidate == slug
+        {
+            levels.push(live);
+            let keep = usize::try_from(INDEX_HISTORY_SESSIONS).unwrap_or(usize::MAX);
+            if levels.len() > keep {
+                levels.drain(..levels.len() - keep);
+            }
+        }
         if let Some(reading) = swing_market::index_reading(&levels, config)? {
             return Ok((Some(reading), Some(candidate.to_owned())));
         }
@@ -630,11 +647,11 @@ async fn load_closed_trades(
 }
 
 /// `SleeveDrawdown`, decimals kept as Python holds them (for `str()`).
-struct SleeveDrawdown {
-    nav: WideDecimal,
-    peak: WideDecimal,
-    pct: WideDecimal,
-    was_locked: bool,
+pub(crate) struct SleeveDrawdown {
+    pub(crate) nav: WideDecimal,
+    pub(crate) peak: WideDecimal,
+    pub(crate) pct: WideDecimal,
+    pub(crate) was_locked: bool,
 }
 
 /// `sleeve_nav(simulated=False)`: capital + realised + the open book marked at `on`'s close
@@ -710,7 +727,7 @@ async fn sleeve_nav(
 }
 
 /// `sleeve_drawdown`: tonight's NAV against the stored peak, read without writing anything.
-async fn sleeve_drawdown(
+pub(crate) async fn sleeve_drawdown(
     conn: &mut PgConnection,
     user_id: i64,
     on: NaiveDate,
@@ -835,8 +852,10 @@ async fn write_market_row(
     sectors: &[(String, f64, i64)],
     index_slug: &str,
     funnel: OrderedJson,
+    extras: &ScanExtras,
 ) -> Result<(), WorkerError> {
-    let highs = load_year_highs(conn, trade_date).await?;
+    let lookup = extras.reference_date.unwrap_or(trade_date);
+    let highs = load_year_highs(conn, lookup).await?;
     let breadth = if liquid.ids.is_empty() {
         BreadthSnapshot::empty()
     } else {
@@ -850,8 +869,14 @@ async fn write_market_row(
             .collect();
         swing_market::breadth_snapshot(&rows, &config.market)
     };
-    let (reading, used_slug) =
-        load_index_reading(conn, trade_date, index_slug, &config.market).await?;
+    let (reading, used_slug) = load_index_reading(
+        conn,
+        lookup,
+        index_slug,
+        &config.market,
+        extras.live_index_level,
+    )
+    .await?;
     let gate = swing_market::market_gate(&breadth, reading.as_ref(), &config.market);
 
     let closed = load_closed_trades(conn, user_id, trade_date).await?;
@@ -905,6 +930,9 @@ async fn write_market_row(
         ),
     ];
     pyjson::update(&mut detail, "funnel", funnel);
+    if let Some(scan) = &extras.scan {
+        pyjson::update(&mut detail, "scan", scan.clone());
+    }
     if let Some(settled) = settled_market_row(conn, user_id, trade_date).await? {
         tier = settled.tier;
         for key in [
@@ -938,7 +966,7 @@ async fn write_market_row(
          index_ma_slow, gate, exposure_level, max_open_positions, max_exposure_pct, \
          new_entries_allowed, drawdown_pct, drawdown_locked, parabolic_count, detail, \
          provisional) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, \
-         $15, $16, $17, $18, CAST($19 AS JSONB), false) \
+         $15, $16, $17, $18, CAST($19 AS JSONB), $20) \
          ON CONFLICT (user_id, date) DO UPDATE SET provisional = excluded.provisional, \
          constituent_count = excluded.constituent_count, \
          pct_up_strong_1m = excluded.pct_up_strong_1m, \
@@ -972,6 +1000,7 @@ async fn write_market_row(
     .bind(tier.drawdown_locked)
     .bind(i32::try_from(parabolic_count).map_err(|e| value_err(e.to_string()))?)
     .bind(detail_text)
+    .bind(extras.provisional)
     .execute(&mut *conn)
     .await?;
     Ok(())
@@ -989,10 +1018,116 @@ pub(crate) async fn run_detect_swing(
     index_slug: &str,
     pipeline_run_id: i64,
 ) -> Result<i64, WorkerError> {
+    run_detect_swing_for(
+        conn,
+        outcome,
+        trade_date,
+        user_id,
+        index_slug,
+        Some(pipeline_run_id),
+    )
+    .await
+}
+
+/// `run_detect_swing(..., pipeline_run_id=)` with Python's `int | None` run id: the nightly
+/// passes its run, `baskfy.swing.detect` and `baskfy.swing.weekend` pass `None` (wave 6, lane
+/// `swing_eod`; the same detector, widened rather than forked).
+///
+/// # Errors
+/// Python's, as the task raises them.
+pub(crate) async fn run_detect_swing_for(
+    conn: &mut PgConnection,
+    outcome: &mut StepOutcome,
+    trade_date: NaiveDate,
+    user_id: i64,
+    index_slug: &str,
+    pipeline_run_id: Option<i64>,
+) -> Result<i64, WorkerError> {
+    run_detect_swing_scan(
+        conn,
+        outcome,
+        trade_date,
+        user_id,
+        index_slug,
+        pipeline_run_id,
+        &ScanExtras::default(),
+    )
+    .await
+}
+
+/// SW15's inputs to `run_detect_swing` beyond the nightly's (wave 6, lane swing_live):
+/// `extra_bars` (one provisional bar per name, in `load_swing_bars`' shape, appended to the
+/// published ones), `provisional` (stamped on every row), `reference_date` (the last *published*
+/// session, where the point-in-time reads look when `trade_date` has no published row), `scan`
+/// (`detail.scan`) and the benchmark's live level. The default is the nightly's call.
+#[derive(Debug, Default, Clone)]
+pub struct ScanExtras {
+    /// `extra_bars`.
+    pub extra_bars: Option<DataFrame>,
+    /// `provisional`.
+    pub provisional: bool,
+    /// `reference_date`.
+    pub reference_date: Option<NaiveDate>,
+    /// `scan`.
+    pub scan: Option<OrderedJson>,
+    /// `live_index_level`.
+    pub live_index_level: Option<f64>,
+}
+
+/// `BAR_SCHEMA`'s columns, in order.
+pub(crate) const BAR_COLUMNS: [&str; 11] = [
+    "instrument_id",
+    "symbol",
+    "date",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "turnover",
+    "upper_circuit",
+    "adj_factor",
+];
+
+/// `append_bars`: the published bars plus a scan's provisional ones, sorted by
+/// `(instrument_id, date)` as the indicators expect.
+fn append_bars(bars: DataFrame, extra: Option<&DataFrame>) -> Result<DataFrame, WorkerError> {
+    let Some(extra) = extra.filter(|e| e.height() > 0) else {
+        return Ok(bars);
+    };
+    let mut all = bars.select(BAR_COLUMNS).map_err(|e| pl_err(&e))?;
+    all.vstack_mut(&extra.select(BAR_COLUMNS).map_err(|e| pl_err(&e))?)
+        .map_err(|e| pl_err(&e))?;
+    all.sort(
+        ["instrument_id", "date"],
+        polars::prelude::SortMultipleOptions::default(),
+    )
+    .map_err(|e| pl_err(&e))
+}
+
+/// `run_detect_swing(..., extra_bars=, provisional=, reference_date=, scan=,
+/// live_index_level=)` — "Scan now"'s call (SW15; wave 6, lane swing_live), and the nightly's
+/// with every extra at its default.
+///
+/// # Errors
+/// Python's, as the task raises them.
+pub(crate) async fn run_detect_swing_scan(
+    conn: &mut PgConnection,
+    outcome: &mut StepOutcome,
+    trade_date: NaiveDate,
+    user_id: i64,
+    index_slug: &str,
+    pipeline_run_id: Option<i64>,
+    extras: &ScanExtras,
+) -> Result<i64, WorkerError> {
     let cfg_row = config_row(conn, user_id).await?;
     let config = swing_config(cfg_row.as_ref());
     let start = lookback_start(conn, trade_date, LOOKBACK_SESSIONS).await?;
-    let bars = load_swing_bars(conn, start, trade_date).await?;
+    let bars = append_bars(
+        load_swing_bars(conn, start, trade_date).await?,
+        extras.extra_bars.as_ref(),
+    )?;
+    let lookup = extras.reference_date.unwrap_or(trade_date);
     let day = trade_date.format("%Y-%m-%d").to_string();
     if bars.height() == 0 {
         outcome.status = StepStatus::Skipped;
@@ -1051,7 +1186,7 @@ pub(crate) async fn run_detect_swing(
             liquid.high.push(high[i]);
         }
     }
-    let sectors = load_sector_membership(conn, trade_date).await?;
+    let sectors = load_sector_membership(conn, lookup).await?;
     let strip = sector_breadth(&liquid, &sectors);
     let hot: BTreeSet<String> = strip
         .iter()
@@ -1070,7 +1205,15 @@ pub(crate) async fn run_detect_swing(
     } else {
         setup_rows(&candidates, &young, &sectors, &hot)?
     };
-    let written = upsert_setups(conn, &rows, user_id, pipeline_run_id, trade_date).await?;
+    let written = upsert_setups(
+        conn,
+        &rows,
+        user_id,
+        pipeline_run_id,
+        trade_date,
+        extras.provisional,
+    )
+    .await?;
 
     let mut per_setup: Vec<(String, OrderedJson)> = Vec::new();
     let mut parabolic = 0;
@@ -1100,6 +1243,7 @@ pub(crate) async fn run_detect_swing(
         &strip,
         index_slug,
         funnel.clone(),
+        extras,
     )
     .await?;
     outcome.rows_in = bar_count;

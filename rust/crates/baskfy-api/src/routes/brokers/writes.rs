@@ -241,6 +241,13 @@ fn kite_login_url(api_key: &str, user_id: i64, broker_id: &str, base: &str) -> (
     (format!("{base}?{query}"), state)
 }
 
+/// `kite_login_url(api_key=, user_id=)` with its defaults (`broker_id="zerodha"`,
+/// `authorize_base=KITE_AUTHORIZE_URL`): the one builder, reached by the worker's 08:45 login
+/// nudge through [`super::kite_login_url_for_worker`] (wave 6, lane ops_alerts).
+pub(crate) fn kite_login_url_default(api_key: &str, user_id: i64) -> (String, String) {
+    kite_login_url(api_key, user_id, "zerodha", KITE_AUTHORIZE_URL)
+}
+
 /// `POST /brokers/{broker_id}/connect`: begin the redirect flow, or explain why it cannot start.
 ///
 /// # Errors

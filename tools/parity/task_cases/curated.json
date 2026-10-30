@@ -1,0 +1,316 @@
+{
+  "lane": "curated",
+  "note": "Lane curated (wave 6, DECISIONS-RS R8.curated). The bed holds 2026-10-29 published (run 103) and no curated investments, plans, batches or pending actions, so each of those cases seeds its own rows with fixed timestamps (test users @example.test). Beat: metrics 20:20, dividends 20:25, SIP 09:00, notify 09:30, sync every 15 min, all Mon-Fri.",
+  "cases": [
+    {
+      "name": "metrics-beat-thursday-rerun",
+      "task": "baskfy.cb.compute_metrics",
+      "args": {},
+      "now": "2026-10-29T20:20:00",
+      "note": "Beat's 20:20 on the bed's published day: the nine rows for 2026-10-29 already exist and are rewritten (idempotent upsert); computed_at is the injected clock on both sides"
+    },
+    {
+      "name": "metrics-explicit-date",
+      "task": "baskfy.cb.compute_metrics",
+      "args": {
+        "trade_date": "2026-10-29"
+      },
+      "now": "2026-10-30T09:00:00"
+    },
+    {
+      "name": "metrics-friday-before-session",
+      "task": "baskfy.cb.compute_metrics",
+      "args": [],
+      "now": "2026-10-30T08:30:00",
+      "note": "as_of is today in IST: no bar for 30 Oct yet, so the series ends on 29 Oct while months_available counts to 30 Oct (Python's behaviour, reproduced)"
+    },
+    {
+      "name": "metrics-friday-inside-session",
+      "task": "baskfy.cb.compute_metrics",
+      "args": {},
+      "now": "2026-10-30T13:15:00"
+    },
+    {
+      "name": "metrics-saturday",
+      "task": "baskfy.cb.compute_metrics",
+      "args": {},
+      "now": "2026-10-31T20:20:00",
+      "note": "a manual run on a non-trading day writes rows dated the Saturday (Beat would not fire)"
+    },
+    {
+      "name": "metrics-catalog-seeded",
+      "task": "baskfy.cb.compute_metrics",
+      "args": {
+        "trade_date": "2026-10-29"
+      },
+      "now": "2026-10-29T20:20:00",
+      "seed_sql": "INSERT INTO cb_basket_version (basket_id, version_no, effective_date, label, created_at) VALUES (7, 2, DATE '2025-06-02', 'CHANGED', TIMESTAMPTZ '2026-01-02 00:00:00+00'); INSERT INTO cb_constituent (version_id, instrument_id, segment, weight) SELECT (SELECT id FROM cb_basket_version WHERE basket_id = 7 AND version_no = 2), instrument_id, segment, weight FROM cb_constituent WHERE version_id = 8 ORDER BY id; INSERT INTO cb_basket (slug, name, manager_id, type, access, visibility, categories, rebalance_frequency, launched_at, source, archived_at) SELECT slug || '-rs', name || ' RS', manager_id, type, access, visibility, categories, rebalance_frequency, launched_at, source, NULL FROM cb_basket WHERE id IN (8, 9, 10, 11) ORDER BY id; INSERT INTO cb_basket_version (basket_id, version_no, effective_date, label, created_at) SELECT n.id, 1, v.effective_date, 'GENESIS', TIMESTAMPTZ '2026-01-02 00:00:00+00' FROM cb_basket n JOIN cb_basket o ON o.slug || '-rs' = n.slug JOIN cb_basket_version v ON v.basket_id = o.id ORDER BY n.id; INSERT INTO cb_constituent (version_id, instrument_id, segment, weight) SELECT nv.id, c.instrument_id, c.segment, c.weight FROM cb_basket n JOIN cb_basket o ON o.slug || '-rs' = n.slug JOIN cb_basket_version ov ON ov.basket_id = o.id JOIN cb_constituent c ON c.version_id = ov.id JOIN cb_basket_version nv ON nv.basket_id = n.id ORDER BY nv.id, c.id; INSERT INTO cb_basket (slug, name, manager_id, type, access, visibility, categories, rebalance_frequency, launched_at, source, archived_at) SELECT 'rs-archived', 'Archived RS', manager_id, type, access, 'PUBLISHED', categories, rebalance_frequency, launched_at, source, TIMESTAMPTZ '2026-02-01 00:00:00+00' FROM cb_basket WHERE id = 7; INSERT INTO cb_basket (slug, name, manager_id, type, access, visibility, categories, rebalance_frequency, launched_at, source) SELECT 'rs-private-empty', 'Private RS', manager_id, type, access, 'PRIVATE', categories, rebalance_frequency, NULL, source FROM cb_basket WHERE id = 7; ",
+      "note": "13 published baskets (tercile buckets), a basket with two versions chained across 2025-06-02, an archived basket (skipped) and a private basket with no version (status no_version)"
+    },
+    {
+      "name": "metrics-early-date",
+      "task": "baskfy.cb.compute_metrics",
+      "args": {
+        "trade_date": "2024-11-04"
+      },
+      "now": "2026-10-30T09:00:00",
+      "note": "eight baskets have no version yet (no_version); basket 7 has ten months"
+    },
+    {
+      "name": "metrics-empty-string-date",
+      "task": "baskfy.cb.compute_metrics",
+      "args": {
+        "trade_date": ""
+      },
+      "now": "2026-10-29T21:00:00"
+    },
+    {
+      "name": "metrics-bad-date",
+      "task": "baskfy.cb.compute_metrics",
+      "args": {
+        "trade_date": "29-10-2026"
+      },
+      "now": "2026-10-30T09:00:00"
+    },
+    {
+      "name": "metrics-wrong-type",
+      "task": "baskfy.cb.compute_metrics",
+      "args": {
+        "trade_date": 20261029
+      },
+      "now": "2026-10-30T09:00:00"
+    },
+    {
+      "name": "sip-beat-friday",
+      "task": "baskfy.cb.sip_reminders",
+      "args": {},
+      "now": "2026-10-30T09:00:00",
+      "seed_sql": "INSERT INTO app_user (public_id, email, created_at) VALUES ('rs-curated-1', 'rs.curated.one@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-2', 'rs.curated.two@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-3', '   ', TIMESTAMPTZ '2026-01-02 00:00:00+00'); INSERT INTO broker_account (user_id, broker_id, created_at) SELECT id, 'zerodha', TIMESTAMPTZ '2026-01-02 00:00:00+00' FROM app_user WHERE public_id LIKE 'rs-curated-%' ORDER BY id; INSERT INTO cb_investment (user_id, basket_id, status, version_applied_id, created_at, broker_account_id) SELECT u.id, 7, 'ACTIVE', 7, TIMESTAMPTZ '2026-01-05 10:00:00+00', b.id FROM app_user u JOIN broker_account b ON b.user_id = u.id WHERE u.public_id = 'rs-curated-1'; INSERT INTO cb_sip_plan (investment_id, amount, day_of_month, mode, status, next_fire_date, created_at) VALUES ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 5000.00, 28, 'REMINDER', 'ACTIVE', DATE '2026-10-28', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 2500.50, 5, 'REMINDER', 'ACTIVE', DATE '2026-11-05', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 1000.00, 10, 'REMINDER', 'PAUSED', DATE '2026-10-10', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 750.00, 1, 'REMINDER', 'ACTIVE', DATE '2026-10-01', TIMESTAMPTZ '2026-01-02 00:00:00+00'); INSERT INTO cb_pending_action (user_id, type, payload, created_at) SELECT (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), 'SIP_DUE', jsonb_build_object('plan_id', p.id, 'fire_key', p.id::text || ':2026-10', 'mode', 'REMINDER'), TIMESTAMPTZ '2026-01-02 00:00:00+00' FROM cb_sip_plan p WHERE p.day_of_month = 1; ",
+      "note": "one plan due (28 Oct, advanced to 30 Nov past the 28 Nov Saturday), one not yet due, one paused, one already fired this month (fire_key)",
+      "mask": {
+        "cb_pending_action": {
+          "created_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "sip-before-open",
+      "task": "baskfy.cb.sip_reminders",
+      "args": {},
+      "now": "2026-10-30T06:00:00",
+      "seed_sql": "INSERT INTO app_user (public_id, email, created_at) VALUES ('rs-curated-1', 'rs.curated.one@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-2', 'rs.curated.two@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-3', '   ', TIMESTAMPTZ '2026-01-02 00:00:00+00'); INSERT INTO broker_account (user_id, broker_id, created_at) SELECT id, 'zerodha', TIMESTAMPTZ '2026-01-02 00:00:00+00' FROM app_user WHERE public_id LIKE 'rs-curated-%' ORDER BY id; INSERT INTO cb_investment (user_id, basket_id, status, version_applied_id, created_at, broker_account_id) SELECT u.id, 7, 'ACTIVE', 7, TIMESTAMPTZ '2026-01-05 10:00:00+00', b.id FROM app_user u JOIN broker_account b ON b.user_id = u.id WHERE u.public_id = 'rs-curated-1'; INSERT INTO cb_sip_plan (investment_id, amount, day_of_month, mode, status, next_fire_date, created_at) VALUES ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 5000.00, 28, 'REMINDER', 'ACTIVE', DATE '2026-10-28', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 2500.50, 5, 'REMINDER', 'ACTIVE', DATE '2026-11-05', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 1000.00, 10, 'REMINDER', 'PAUSED', DATE '2026-10-10', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 750.00, 1, 'REMINDER', 'ACTIVE', DATE '2026-10-01', TIMESTAMPTZ '2026-01-02 00:00:00+00'); INSERT INTO cb_pending_action (user_id, type, payload, created_at) SELECT (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), 'SIP_DUE', jsonb_build_object('plan_id', p.id, 'fire_key', p.id::text || ':2026-10', 'mode', 'REMINDER'), TIMESTAMPTZ '2026-01-02 00:00:00+00' FROM cb_sip_plan p WHERE p.day_of_month = 1; ",
+      "mask": {
+        "cb_pending_action": {
+          "created_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "sip-inside-session-explicit",
+      "task": "baskfy.cb.sip_reminders",
+      "args": {
+        "as_of": "2026-11-05"
+      },
+      "now": "2026-10-30T13:15:00",
+      "seed_sql": "INSERT INTO app_user (public_id, email, created_at) VALUES ('rs-curated-1', 'rs.curated.one@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-2', 'rs.curated.two@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-3', '   ', TIMESTAMPTZ '2026-01-02 00:00:00+00'); INSERT INTO broker_account (user_id, broker_id, created_at) SELECT id, 'zerodha', TIMESTAMPTZ '2026-01-02 00:00:00+00' FROM app_user WHERE public_id LIKE 'rs-curated-%' ORDER BY id; INSERT INTO cb_investment (user_id, basket_id, status, version_applied_id, created_at, broker_account_id) SELECT u.id, 7, 'ACTIVE', 7, TIMESTAMPTZ '2026-01-05 10:00:00+00', b.id FROM app_user u JOIN broker_account b ON b.user_id = u.id WHERE u.public_id = 'rs-curated-1'; INSERT INTO cb_sip_plan (investment_id, amount, day_of_month, mode, status, next_fire_date, created_at) VALUES ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 5000.00, 28, 'REMINDER', 'ACTIVE', DATE '2026-10-28', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 2500.50, 5, 'REMINDER', 'ACTIVE', DATE '2026-11-05', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 1000.00, 10, 'REMINDER', 'PAUSED', DATE '2026-10-10', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 750.00, 1, 'REMINDER', 'ACTIVE', DATE '2026-10-01', TIMESTAMPTZ '2026-01-02 00:00:00+00'); INSERT INTO cb_pending_action (user_id, type, payload, created_at) SELECT (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), 'SIP_DUE', jsonb_build_object('plan_id', p.id, 'fire_key', p.id::text || ':2026-10', 'mode', 'REMINDER'), TIMESTAMPTZ '2026-01-02 00:00:00+00' FROM cb_sip_plan p WHERE p.day_of_month = 1; ",
+      "note": "an explicit future as_of: the 5 Nov plan and the 28 Oct plan both fire",
+      "mask": {
+        "cb_pending_action": {
+          "created_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "sip-saturday",
+      "task": "baskfy.cb.sip_reminders",
+      "args": {},
+      "now": "2026-10-31T09:00:00",
+      "seed_sql": "INSERT INTO app_user (public_id, email, created_at) VALUES ('rs-curated-1', 'rs.curated.one@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-2', 'rs.curated.two@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-3', '   ', TIMESTAMPTZ '2026-01-02 00:00:00+00'); INSERT INTO broker_account (user_id, broker_id, created_at) SELECT id, 'zerodha', TIMESTAMPTZ '2026-01-02 00:00:00+00' FROM app_user WHERE public_id LIKE 'rs-curated-%' ORDER BY id; INSERT INTO cb_investment (user_id, basket_id, status, version_applied_id, created_at, broker_account_id) SELECT u.id, 7, 'ACTIVE', 7, TIMESTAMPTZ '2026-01-05 10:00:00+00', b.id FROM app_user u JOIN broker_account b ON b.user_id = u.id WHERE u.public_id = 'rs-curated-1'; INSERT INTO cb_sip_plan (investment_id, amount, day_of_month, mode, status, next_fire_date, created_at) VALUES ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 5000.00, 28, 'REMINDER', 'ACTIVE', DATE '2026-10-28', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 2500.50, 5, 'REMINDER', 'ACTIVE', DATE '2026-11-05', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 1000.00, 10, 'REMINDER', 'PAUSED', DATE '2026-10-10', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 750.00, 1, 'REMINDER', 'ACTIVE', DATE '2026-10-01', TIMESTAMPTZ '2026-01-02 00:00:00+00'); INSERT INTO cb_pending_action (user_id, type, payload, created_at) SELECT (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), 'SIP_DUE', jsonb_build_object('plan_id', p.id, 'fire_key', p.id::text || ':2026-10', 'mode', 'REMINDER'), TIMESTAMPTZ '2026-01-02 00:00:00+00' FROM cb_sip_plan p WHERE p.day_of_month = 1; ",
+      "mask": {
+        "cb_pending_action": {
+          "created_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "sip-bad-day-of-month",
+      "task": "baskfy.cb.sip_reminders",
+      "args": {},
+      "now": "2026-10-30T09:00:00",
+      "seed_sql": "INSERT INTO app_user (public_id, email, created_at) VALUES ('rs-curated-1', 'rs.curated.one@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-2', 'rs.curated.two@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-3', '   ', TIMESTAMPTZ '2026-01-02 00:00:00+00'); INSERT INTO broker_account (user_id, broker_id, created_at) SELECT id, 'zerodha', TIMESTAMPTZ '2026-01-02 00:00:00+00' FROM app_user WHERE public_id LIKE 'rs-curated-%' ORDER BY id; INSERT INTO cb_investment (user_id, basket_id, status, version_applied_id, created_at, broker_account_id) SELECT u.id, 7, 'ACTIVE', 7, TIMESTAMPTZ '2026-01-05 10:00:00+00', b.id FROM app_user u JOIN broker_account b ON b.user_id = u.id WHERE u.public_id = 'rs-curated-1'; INSERT INTO cb_sip_plan (investment_id, amount, day_of_month, mode, status, next_fire_date, created_at) VALUES ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 5000.00, 28, 'REMINDER', 'ACTIVE', DATE '2026-10-28', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 2500.50, 5, 'REMINDER', 'ACTIVE', DATE '2026-11-05', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 1000.00, 10, 'REMINDER', 'PAUSED', DATE '2026-10-10', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 750.00, 1, 'REMINDER', 'ACTIVE', DATE '2026-10-01', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 300.00, 30, 'REMINDER', 'ACTIVE', DATE '2026-10-30', TIMESTAMPTZ '2026-01-02 00:00:00+00'); INSERT INTO cb_pending_action (user_id, type, payload, created_at) SELECT (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), 'SIP_DUE', jsonb_build_object('plan_id', p.id, 'fire_key', p.id::text || ':2026-10', 'mode', 'REMINDER'), TIMESTAMPTZ '2026-01-02 00:00:00+00' FROM cb_sip_plan p WHERE p.day_of_month = 1; ",
+      "note": "day_of_month 30 (outside 1..28): ValueError while advancing; the whole run rolls back",
+      "mask": {
+        "cb_pending_action": {
+          "created_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "sip-stale-plan",
+      "task": "baskfy.cb.sip_reminders",
+      "args": {},
+      "now": "2026-10-30T09:00:00",
+      "seed_sql": "INSERT INTO app_user (public_id, email, created_at) VALUES ('rs-curated-1', 'rs.curated.one@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-2', 'rs.curated.two@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-3', '   ', TIMESTAMPTZ '2026-01-02 00:00:00+00'); INSERT INTO broker_account (user_id, broker_id, created_at) SELECT id, 'zerodha', TIMESTAMPTZ '2026-01-02 00:00:00+00' FROM app_user WHERE public_id LIKE 'rs-curated-%' ORDER BY id; INSERT INTO cb_investment (user_id, basket_id, status, version_applied_id, created_at, broker_account_id) SELECT u.id, 7, 'ACTIVE', 7, TIMESTAMPTZ '2026-01-05 10:00:00+00', b.id FROM app_user u JOIN broker_account b ON b.user_id = u.id WHERE u.public_id = 'rs-curated-1'; INSERT INTO cb_sip_plan (investment_id, amount, day_of_month, mode, status, next_fire_date, created_at) VALUES ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 5000.00, 15, 'REMINDER', 'ACTIVE', DATE '2026-01-15', TIMESTAMPTZ '2026-01-02 00:00:00+00'); ",
+      "note": "a January fire date: the loaded calendar (16 Oct onward) has no day within 60 days of 15 Jan: ValueError",
+      "mask": {
+        "cb_pending_action": {
+          "created_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "sip-no-trading-dates",
+      "task": "baskfy.cb.sip_reminders",
+      "args": {
+        "as_of": "2040-01-01"
+      },
+      "now": "2026-10-30T09:00:00",
+      "seed_sql": "INSERT INTO app_user (public_id, email, created_at) VALUES ('rs-curated-1', 'rs.curated.one@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-2', 'rs.curated.two@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-3', '   ', TIMESTAMPTZ '2026-01-02 00:00:00+00'); INSERT INTO broker_account (user_id, broker_id, created_at) SELECT id, 'zerodha', TIMESTAMPTZ '2026-01-02 00:00:00+00' FROM app_user WHERE public_id LIKE 'rs-curated-%' ORDER BY id; INSERT INTO cb_investment (user_id, basket_id, status, version_applied_id, created_at, broker_account_id) SELECT u.id, 7, 'ACTIVE', 7, TIMESTAMPTZ '2026-01-05 10:00:00+00', b.id FROM app_user u JOIN broker_account b ON b.user_id = u.id WHERE u.public_id = 'rs-curated-1'; INSERT INTO cb_sip_plan (investment_id, amount, day_of_month, mode, status, next_fire_date, created_at) VALUES ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 5000.00, 28, 'REMINDER', 'ACTIVE', DATE '2026-10-28', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 2500.50, 5, 'REMINDER', 'ACTIVE', DATE '2026-11-05', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 1000.00, 10, 'REMINDER', 'PAUSED', DATE '2026-10-10', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 750.00, 1, 'REMINDER', 'ACTIVE', DATE '2026-10-01', TIMESTAMPTZ '2026-01-02 00:00:00+00'); INSERT INTO cb_pending_action (user_id, type, payload, created_at) SELECT (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), 'SIP_DUE', jsonb_build_object('plan_id', p.id, 'fire_key', p.id::text || ':2026-10', 'mode', 'REMINDER'), TIMESTAMPTZ '2026-01-02 00:00:00+00' FROM cb_sip_plan p WHERE p.day_of_month = 1; ",
+      "mask": {
+        "cb_pending_action": {
+          "created_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "sip-nothing",
+      "task": "baskfy.cb.sip_reminders",
+      "args": {},
+      "now": "2026-10-30T09:00:00",
+      "mask": {
+        "cb_pending_action": {
+          "created_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "sip-bad-date",
+      "task": "baskfy.cb.sip_reminders",
+      "args": {
+        "as_of": "2026/10/30"
+      },
+      "now": "2026-10-30T09:00:00",
+      "mask": {
+        "cb_pending_action": {
+          "created_at": "stamp"
+        }
+      }
+    },
+    {
+      "name": "dividends-beat-thursday",
+      "task": "baskfy.cb.derive_dividends",
+      "args": {},
+      "now": "2026-10-29T20:25:00",
+      "seed_sql": "INSERT INTO app_user (public_id, email, created_at) VALUES ('rs-curated-1', 'rs.curated.one@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-2', 'rs.curated.two@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-3', '   ', TIMESTAMPTZ '2026-01-02 00:00:00+00'); INSERT INTO broker_account (user_id, broker_id, created_at) SELECT id, 'zerodha', TIMESTAMPTZ '2026-01-02 00:00:00+00' FROM app_user WHERE public_id LIKE 'rs-curated-%' ORDER BY id; INSERT INTO cb_investment (user_id, basket_id, status, version_applied_id, created_at, broker_account_id) SELECT u.id, 7, 'ACTIVE', 7, TIMESTAMPTZ '2026-01-05 10:00:00+00', b.id FROM app_user u JOIN broker_account b ON b.user_id = u.id WHERE u.public_id = 'rs-curated-1'; INSERT INTO cb_investment (user_id, basket_id, status, version_applied_id, created_at, broker_account_id) SELECT u.id, 7, 'EXITED', 7, TIMESTAMPTZ '2026-01-06 10:00:00+00', b.id FROM app_user u JOIN broker_account b ON b.user_id = u.id WHERE u.public_id = 'rs-curated-1'; INSERT INTO cb_investment (user_id, basket_id, status, version_applied_id, created_at, broker_account_id) SELECT u.id, 7, 'ACTIVE', 7, TIMESTAMPTZ '2026-12-01 10:00:00+00', b.id FROM app_user u JOIN broker_account b ON b.user_id = u.id WHERE u.public_id = 'rs-curated-1'; INSERT INTO cb_investment (user_id, basket_id, status, version_applied_id, created_at, broker_account_id) SELECT u.id, 7, 'ACTIVE', 7, TIMESTAMPTZ '2026-09-01 10:00:00+00', b.id FROM app_user u JOIN broker_account b ON b.user_id = u.id WHERE u.public_id = 'rs-curated-1'; INSERT INTO cb_investment_holding (investment_id, instrument_id, qty, avg_price, updated_at) VALUES ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 1293, 10.0000, 1000.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 160, 3.0000, 1500.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 1293, 5.5000, 1100.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 1474, 0.0000, 100.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 1990, 7.0000, 400.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-06 10:00:00+00'), 1293, 4.0000, 900.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-12-01 10:00:00+00'), 1293, 4.0000, 900.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-09-01 10:00:00+00'), 1293, 2.0000, 900.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-09-01 10:00:00+00'), 2567, 1.0000, 900.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'); INSERT INTO cb_dividend (investment_id, instrument_id, ex_date, amount_per_share, qty_held, total, source) VALUES ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 160, DATE '2026-08-03', 4.00, 3.0000, 12.00, 'CORPORATE_ACTIONS'); ",
+      "note": "two lots of ICICIBANK summed, a zero lot ignored, an existing COFORGE row skipped, an exited investment, a future investment and one created after the ex-dates"
+    },
+    {
+      "name": "dividends-friday-before-session",
+      "task": "baskfy.cb.derive_dividends",
+      "args": [],
+      "now": "2026-10-30T08:00:00",
+      "seed_sql": "INSERT INTO app_user (public_id, email, created_at) VALUES ('rs-curated-1', 'rs.curated.one@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-2', 'rs.curated.two@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-3', '   ', TIMESTAMPTZ '2026-01-02 00:00:00+00'); INSERT INTO broker_account (user_id, broker_id, created_at) SELECT id, 'zerodha', TIMESTAMPTZ '2026-01-02 00:00:00+00' FROM app_user WHERE public_id LIKE 'rs-curated-%' ORDER BY id; INSERT INTO cb_investment (user_id, basket_id, status, version_applied_id, created_at, broker_account_id) SELECT u.id, 7, 'ACTIVE', 7, TIMESTAMPTZ '2026-01-05 10:00:00+00', b.id FROM app_user u JOIN broker_account b ON b.user_id = u.id WHERE u.public_id = 'rs-curated-1'; INSERT INTO cb_investment (user_id, basket_id, status, version_applied_id, created_at, broker_account_id) SELECT u.id, 7, 'EXITED', 7, TIMESTAMPTZ '2026-01-06 10:00:00+00', b.id FROM app_user u JOIN broker_account b ON b.user_id = u.id WHERE u.public_id = 'rs-curated-1'; INSERT INTO cb_investment (user_id, basket_id, status, version_applied_id, created_at, broker_account_id) SELECT u.id, 7, 'ACTIVE', 7, TIMESTAMPTZ '2026-12-01 10:00:00+00', b.id FROM app_user u JOIN broker_account b ON b.user_id = u.id WHERE u.public_id = 'rs-curated-1'; INSERT INTO cb_investment (user_id, basket_id, status, version_applied_id, created_at, broker_account_id) SELECT u.id, 7, 'ACTIVE', 7, TIMESTAMPTZ '2026-09-01 10:00:00+00', b.id FROM app_user u JOIN broker_account b ON b.user_id = u.id WHERE u.public_id = 'rs-curated-1'; INSERT INTO cb_investment_holding (investment_id, instrument_id, qty, avg_price, updated_at) VALUES ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 1293, 10.0000, 1000.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 160, 3.0000, 1500.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 1293, 5.5000, 1100.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 1474, 0.0000, 100.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 1990, 7.0000, 400.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-06 10:00:00+00'), 1293, 4.0000, 900.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-12-01 10:00:00+00'), 1293, 4.0000, 900.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-09-01 10:00:00+00'), 1293, 2.0000, 900.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-09-01 10:00:00+00'), 2567, 1.0000, 900.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'); INSERT INTO cb_dividend (investment_id, instrument_id, ex_date, amount_per_share, qty_held, total, source) VALUES ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 160, DATE '2026-08-03', 4.00, 3.0000, 12.00, 'CORPORATE_ACTIONS'); "
+    },
+    {
+      "name": "dividends-explicit-early",
+      "task": "baskfy.cb.derive_dividends",
+      "args": {
+        "as_of": "2026-08-03"
+      },
+      "now": "2026-10-30T13:15:00",
+      "seed_sql": "INSERT INTO app_user (public_id, email, created_at) VALUES ('rs-curated-1', 'rs.curated.one@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-2', 'rs.curated.two@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-3', '   ', TIMESTAMPTZ '2026-01-02 00:00:00+00'); INSERT INTO broker_account (user_id, broker_id, created_at) SELECT id, 'zerodha', TIMESTAMPTZ '2026-01-02 00:00:00+00' FROM app_user WHERE public_id LIKE 'rs-curated-%' ORDER BY id; INSERT INTO cb_investment (user_id, basket_id, status, version_applied_id, created_at, broker_account_id) SELECT u.id, 7, 'ACTIVE', 7, TIMESTAMPTZ '2026-01-05 10:00:00+00', b.id FROM app_user u JOIN broker_account b ON b.user_id = u.id WHERE u.public_id = 'rs-curated-1'; INSERT INTO cb_investment (user_id, basket_id, status, version_applied_id, created_at, broker_account_id) SELECT u.id, 7, 'EXITED', 7, TIMESTAMPTZ '2026-01-06 10:00:00+00', b.id FROM app_user u JOIN broker_account b ON b.user_id = u.id WHERE u.public_id = 'rs-curated-1'; INSERT INTO cb_investment (user_id, basket_id, status, version_applied_id, created_at, broker_account_id) SELECT u.id, 7, 'ACTIVE', 7, TIMESTAMPTZ '2026-12-01 10:00:00+00', b.id FROM app_user u JOIN broker_account b ON b.user_id = u.id WHERE u.public_id = 'rs-curated-1'; INSERT INTO cb_investment (user_id, basket_id, status, version_applied_id, created_at, broker_account_id) SELECT u.id, 7, 'ACTIVE', 7, TIMESTAMPTZ '2026-09-01 10:00:00+00', b.id FROM app_user u JOIN broker_account b ON b.user_id = u.id WHERE u.public_id = 'rs-curated-1'; INSERT INTO cb_investment_holding (investment_id, instrument_id, qty, avg_price, updated_at) VALUES ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 1293, 10.0000, 1000.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 160, 3.0000, 1500.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 1293, 5.5000, 1100.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 1474, 0.0000, 100.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 1990, 7.0000, 400.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-06 10:00:00+00'), 1293, 4.0000, 900.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-12-01 10:00:00+00'), 1293, 4.0000, 900.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-09-01 10:00:00+00'), 1293, 2.0000, 900.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-09-01 10:00:00+00'), 2567, 1.0000, 900.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'); INSERT INTO cb_dividend (investment_id, instrument_id, ex_date, amount_per_share, qty_held, total, source) VALUES ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 160, DATE '2026-08-03', 4.00, 3.0000, 12.00, 'CORPORATE_ACTIONS'); "
+    },
+    {
+      "name": "dividends-saturday",
+      "task": "baskfy.cb.derive_dividends",
+      "args": {},
+      "now": "2026-10-31T20:25:00",
+      "seed_sql": "INSERT INTO app_user (public_id, email, created_at) VALUES ('rs-curated-1', 'rs.curated.one@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-2', 'rs.curated.two@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-3', '   ', TIMESTAMPTZ '2026-01-02 00:00:00+00'); INSERT INTO broker_account (user_id, broker_id, created_at) SELECT id, 'zerodha', TIMESTAMPTZ '2026-01-02 00:00:00+00' FROM app_user WHERE public_id LIKE 'rs-curated-%' ORDER BY id; INSERT INTO cb_investment (user_id, basket_id, status, version_applied_id, created_at, broker_account_id) SELECT u.id, 7, 'ACTIVE', 7, TIMESTAMPTZ '2026-01-05 10:00:00+00', b.id FROM app_user u JOIN broker_account b ON b.user_id = u.id WHERE u.public_id = 'rs-curated-1'; INSERT INTO cb_investment (user_id, basket_id, status, version_applied_id, created_at, broker_account_id) SELECT u.id, 7, 'EXITED', 7, TIMESTAMPTZ '2026-01-06 10:00:00+00', b.id FROM app_user u JOIN broker_account b ON b.user_id = u.id WHERE u.public_id = 'rs-curated-1'; INSERT INTO cb_investment (user_id, basket_id, status, version_applied_id, created_at, broker_account_id) SELECT u.id, 7, 'ACTIVE', 7, TIMESTAMPTZ '2026-12-01 10:00:00+00', b.id FROM app_user u JOIN broker_account b ON b.user_id = u.id WHERE u.public_id = 'rs-curated-1'; INSERT INTO cb_investment (user_id, basket_id, status, version_applied_id, created_at, broker_account_id) SELECT u.id, 7, 'ACTIVE', 7, TIMESTAMPTZ '2026-09-01 10:00:00+00', b.id FROM app_user u JOIN broker_account b ON b.user_id = u.id WHERE u.public_id = 'rs-curated-1'; INSERT INTO cb_investment_holding (investment_id, instrument_id, qty, avg_price, updated_at) VALUES ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 1293, 10.0000, 1000.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 160, 3.0000, 1500.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 1293, 5.5000, 1100.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 1474, 0.0000, 100.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 1990, 7.0000, 400.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-06 10:00:00+00'), 1293, 4.0000, 900.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-12-01 10:00:00+00'), 1293, 4.0000, 900.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-09-01 10:00:00+00'), 1293, 2.0000, 900.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-09-01 10:00:00+00'), 2567, 1.0000, 900.00, TIMESTAMPTZ '2026-01-02 00:00:00+00'); INSERT INTO cb_dividend (investment_id, instrument_id, ex_date, amount_per_share, qty_held, total, source) VALUES ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 160, DATE '2026-08-03', 4.00, 3.0000, 12.00, 'CORPORATE_ACTIONS'); "
+    },
+    {
+      "name": "dividends-no-investments",
+      "task": "baskfy.cb.derive_dividends",
+      "args": {},
+      "now": "2026-10-29T20:25:00"
+    },
+    {
+      "name": "dividends-bad-date",
+      "task": "baskfy.cb.derive_dividends",
+      "args": {
+        "as_of": "yesterday"
+      },
+      "now": "2026-10-29T20:25:00"
+    },
+    {
+      "name": "sync-inside-session",
+      "task": "baskfy.cb.sync_batches",
+      "args": {},
+      "now": "2026-10-30T13:15:00",
+      "seed_sql": "INSERT INTO app_user (public_id, email, created_at) VALUES ('rs-curated-1', 'rs.curated.one@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-2', 'rs.curated.two@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-3', '   ', TIMESTAMPTZ '2026-01-02 00:00:00+00'); INSERT INTO broker_account (user_id, broker_id, created_at) SELECT id, 'zerodha', TIMESTAMPTZ '2026-01-02 00:00:00+00' FROM app_user WHERE public_id LIKE 'rs-curated-%' ORDER BY id; INSERT INTO cb_investment (user_id, basket_id, status, version_applied_id, created_at, broker_account_id) SELECT u.id, 7, 'ACTIVE', 7, TIMESTAMPTZ '2026-01-05 10:00:00+00', b.id FROM app_user u JOIN broker_account b ON b.user_id = u.id WHERE u.public_id = 'rs-curated-1'; INSERT INTO desk.rebalance_versions (version_id, created_ts, constituents_json, weights_json) VALUES ('rs-v-full', 1.0, '[]', '{}'), ('rs-v-part', 2.0, '[]', '{}'), ('rs-v-none', 3.0, '[]', '{}'), ('rs-v-empty', 4.0, '[]', '{}'); INSERT INTO desk.rebalance_orders (version_id, symbol, side, planned_qty, filled_qty) VALUES ('rs-v-full', 'AAA', 'BUY', 10, 10), ('rs-v-full', 'BBB', 'BUY', 5, 5), ('rs-v-part', 'AAA', 'BUY', 10, 4), ('rs-v-part', 'BBB', 'BUY', 5, 0), ('rs-v-part', 'CCC', 'SELL', NULL, NULL), ('rs-v-none', 'AAA', 'BUY', 10, 0); INSERT INTO cb_order_batch (investment_id, kind, desk_plan_id, status, created_at, user_id, broker_account_id) VALUES ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-v-full', 'PLANNED', TIMESTAMPTZ '2026-10-30 04:00:00+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-v-part', 'PLANNED', TIMESTAMPTZ '2026-10-30 04:00:01+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-v-full', 'PARTIAL', TIMESTAMPTZ '2026-10-30 04:00:02+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-v-part', 'PARTIAL', TIMESTAMPTZ '2026-10-30 04:00:03+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-v-none', 'PLANNED', TIMESTAMPTZ '2026-10-30 04:00:04+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'cb-sim-aaaaaaaa', 'PLANNED', TIMESTAMPTZ '2026-10-30 04:00:05+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-unknown', 'PLANNED', TIMESTAMPTZ '2026-10-30 04:00:06+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-v-empty', 'PLANNED', TIMESTAMPTZ '2026-10-30 04:00:07+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-v-full', 'EXECUTED', TIMESTAMPTZ '2026-10-30 04:00:08+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', NULL, 'PLANNED', TIMESTAMPTZ '2026-10-30 04:00:09+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))); ",
+      "note": "settled, partial, untouched, synthetic, unknown, empty-journal and already-PARTIAL batches; reads desk.rebalance_orders only"
+    },
+    {
+      "name": "sync-before-open",
+      "task": "baskfy.cb.sync_batches",
+      "args": {},
+      "now": "2026-10-30T09:00:00",
+      "seed_sql": "INSERT INTO app_user (public_id, email, created_at) VALUES ('rs-curated-1', 'rs.curated.one@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-2', 'rs.curated.two@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-3', '   ', TIMESTAMPTZ '2026-01-02 00:00:00+00'); INSERT INTO broker_account (user_id, broker_id, created_at) SELECT id, 'zerodha', TIMESTAMPTZ '2026-01-02 00:00:00+00' FROM app_user WHERE public_id LIKE 'rs-curated-%' ORDER BY id; INSERT INTO cb_investment (user_id, basket_id, status, version_applied_id, created_at, broker_account_id) SELECT u.id, 7, 'ACTIVE', 7, TIMESTAMPTZ '2026-01-05 10:00:00+00', b.id FROM app_user u JOIN broker_account b ON b.user_id = u.id WHERE u.public_id = 'rs-curated-1'; INSERT INTO desk.rebalance_versions (version_id, created_ts, constituents_json, weights_json) VALUES ('rs-v-full', 1.0, '[]', '{}'), ('rs-v-part', 2.0, '[]', '{}'), ('rs-v-none', 3.0, '[]', '{}'), ('rs-v-empty', 4.0, '[]', '{}'); INSERT INTO desk.rebalance_orders (version_id, symbol, side, planned_qty, filled_qty) VALUES ('rs-v-full', 'AAA', 'BUY', 10, 10), ('rs-v-full', 'BBB', 'BUY', 5, 5), ('rs-v-part', 'AAA', 'BUY', 10, 4), ('rs-v-part', 'BBB', 'BUY', 5, 0), ('rs-v-part', 'CCC', 'SELL', NULL, NULL), ('rs-v-none', 'AAA', 'BUY', 10, 0); INSERT INTO cb_order_batch (investment_id, kind, desk_plan_id, status, created_at, user_id, broker_account_id) VALUES ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-v-full', 'PLANNED', TIMESTAMPTZ '2026-10-30 04:00:00+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-v-part', 'PLANNED', TIMESTAMPTZ '2026-10-30 04:00:01+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-v-full', 'PARTIAL', TIMESTAMPTZ '2026-10-30 04:00:02+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-v-part', 'PARTIAL', TIMESTAMPTZ '2026-10-30 04:00:03+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-v-none', 'PLANNED', TIMESTAMPTZ '2026-10-30 04:00:04+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'cb-sim-aaaaaaaa', 'PLANNED', TIMESTAMPTZ '2026-10-30 04:00:05+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-unknown', 'PLANNED', TIMESTAMPTZ '2026-10-30 04:00:06+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-v-empty', 'PLANNED', TIMESTAMPTZ '2026-10-30 04:00:07+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-v-full', 'EXECUTED', TIMESTAMPTZ '2026-10-30 04:00:08+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', NULL, 'PLANNED', TIMESTAMPTZ '2026-10-30 04:00:09+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))); "
+    },
+    {
+      "name": "sync-after-close",
+      "task": "baskfy.cb.sync_batches",
+      "args": [],
+      "now": "2026-10-30T15:45:00",
+      "seed_sql": "INSERT INTO app_user (public_id, email, created_at) VALUES ('rs-curated-1', 'rs.curated.one@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-2', 'rs.curated.two@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-3', '   ', TIMESTAMPTZ '2026-01-02 00:00:00+00'); INSERT INTO broker_account (user_id, broker_id, created_at) SELECT id, 'zerodha', TIMESTAMPTZ '2026-01-02 00:00:00+00' FROM app_user WHERE public_id LIKE 'rs-curated-%' ORDER BY id; INSERT INTO cb_investment (user_id, basket_id, status, version_applied_id, created_at, broker_account_id) SELECT u.id, 7, 'ACTIVE', 7, TIMESTAMPTZ '2026-01-05 10:00:00+00', b.id FROM app_user u JOIN broker_account b ON b.user_id = u.id WHERE u.public_id = 'rs-curated-1'; INSERT INTO desk.rebalance_versions (version_id, created_ts, constituents_json, weights_json) VALUES ('rs-v-full', 1.0, '[]', '{}'), ('rs-v-part', 2.0, '[]', '{}'), ('rs-v-none', 3.0, '[]', '{}'), ('rs-v-empty', 4.0, '[]', '{}'); INSERT INTO desk.rebalance_orders (version_id, symbol, side, planned_qty, filled_qty) VALUES ('rs-v-full', 'AAA', 'BUY', 10, 10), ('rs-v-full', 'BBB', 'BUY', 5, 5), ('rs-v-part', 'AAA', 'BUY', 10, 4), ('rs-v-part', 'BBB', 'BUY', 5, 0), ('rs-v-part', 'CCC', 'SELL', NULL, NULL), ('rs-v-none', 'AAA', 'BUY', 10, 0); INSERT INTO cb_order_batch (investment_id, kind, desk_plan_id, status, created_at, user_id, broker_account_id) VALUES ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-v-full', 'PLANNED', TIMESTAMPTZ '2026-10-30 04:00:00+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-v-part', 'PLANNED', TIMESTAMPTZ '2026-10-30 04:00:01+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-v-full', 'PARTIAL', TIMESTAMPTZ '2026-10-30 04:00:02+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-v-part', 'PARTIAL', TIMESTAMPTZ '2026-10-30 04:00:03+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-v-none', 'PLANNED', TIMESTAMPTZ '2026-10-30 04:00:04+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'cb-sim-aaaaaaaa', 'PLANNED', TIMESTAMPTZ '2026-10-30 04:00:05+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-unknown', 'PLANNED', TIMESTAMPTZ '2026-10-30 04:00:06+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-v-empty', 'PLANNED', TIMESTAMPTZ '2026-10-30 04:00:07+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-v-full', 'EXECUTED', TIMESTAMPTZ '2026-10-30 04:00:08+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', NULL, 'PLANNED', TIMESTAMPTZ '2026-10-30 04:00:09+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))); "
+    },
+    {
+      "name": "sync-saturday",
+      "task": "baskfy.cb.sync_batches",
+      "args": {},
+      "now": "2026-10-31T10:00:00",
+      "seed_sql": "INSERT INTO app_user (public_id, email, created_at) VALUES ('rs-curated-1', 'rs.curated.one@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-2', 'rs.curated.two@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-3', '   ', TIMESTAMPTZ '2026-01-02 00:00:00+00'); INSERT INTO broker_account (user_id, broker_id, created_at) SELECT id, 'zerodha', TIMESTAMPTZ '2026-01-02 00:00:00+00' FROM app_user WHERE public_id LIKE 'rs-curated-%' ORDER BY id; INSERT INTO cb_investment (user_id, basket_id, status, version_applied_id, created_at, broker_account_id) SELECT u.id, 7, 'ACTIVE', 7, TIMESTAMPTZ '2026-01-05 10:00:00+00', b.id FROM app_user u JOIN broker_account b ON b.user_id = u.id WHERE u.public_id = 'rs-curated-1'; INSERT INTO desk.rebalance_versions (version_id, created_ts, constituents_json, weights_json) VALUES ('rs-v-full', 1.0, '[]', '{}'), ('rs-v-part', 2.0, '[]', '{}'), ('rs-v-none', 3.0, '[]', '{}'), ('rs-v-empty', 4.0, '[]', '{}'); INSERT INTO desk.rebalance_orders (version_id, symbol, side, planned_qty, filled_qty) VALUES ('rs-v-full', 'AAA', 'BUY', 10, 10), ('rs-v-full', 'BBB', 'BUY', 5, 5), ('rs-v-part', 'AAA', 'BUY', 10, 4), ('rs-v-part', 'BBB', 'BUY', 5, 0), ('rs-v-part', 'CCC', 'SELL', NULL, NULL), ('rs-v-none', 'AAA', 'BUY', 10, 0); INSERT INTO cb_order_batch (investment_id, kind, desk_plan_id, status, created_at, user_id, broker_account_id) VALUES ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-v-full', 'PLANNED', TIMESTAMPTZ '2026-10-30 04:00:00+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-v-part', 'PLANNED', TIMESTAMPTZ '2026-10-30 04:00:01+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-v-full', 'PARTIAL', TIMESTAMPTZ '2026-10-30 04:00:02+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-v-part', 'PARTIAL', TIMESTAMPTZ '2026-10-30 04:00:03+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-v-none', 'PLANNED', TIMESTAMPTZ '2026-10-30 04:00:04+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'cb-sim-aaaaaaaa', 'PLANNED', TIMESTAMPTZ '2026-10-30 04:00:05+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-unknown', 'PLANNED', TIMESTAMPTZ '2026-10-30 04:00:06+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-v-empty', 'PLANNED', TIMESTAMPTZ '2026-10-30 04:00:07+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', 'rs-v-full', 'EXECUTED', TIMESTAMPTZ '2026-10-30 04:00:08+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))), ((SELECT id FROM cb_investment WHERE created_at = TIMESTAMPTZ '2026-01-05 10:00:00+00'), 'REBALANCE', NULL, 'PLANNED', TIMESTAMPTZ '2026-10-30 04:00:09+00', (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), (SELECT id FROM broker_account WHERE user_id = (SELECT id FROM app_user WHERE public_id = 'rs-curated-1'))); "
+    },
+    {
+      "name": "sync-nothing",
+      "task": "baskfy.cb.sync_batches",
+      "args": {},
+      "now": "2026-10-30T13:15:00"
+    },
+    {
+      "name": "sync-unexpected-argument",
+      "task": "baskfy.cb.sync_batches",
+      "args": {
+        "as_of": "2026-10-30"
+      },
+      "now": "2026-10-30T13:15:00"
+    },
+    {
+      "name": "notify-beat-friday",
+      "task": "baskfy.cb.rebalance_notify",
+      "args": {},
+      "now": "2026-10-30T09:30:00",
+      "seed_sql": "INSERT INTO app_user (public_id, email, created_at) VALUES ('rs-curated-1', 'rs.curated.one@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-2', 'rs.curated.two@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-3', '   ', TIMESTAMPTZ '2026-01-02 00:00:00+00'); INSERT INTO broker_account (user_id, broker_id, created_at) SELECT id, 'zerodha', TIMESTAMPTZ '2026-01-02 00:00:00+00' FROM app_user WHERE public_id LIKE 'rs-curated-%' ORDER BY id; INSERT INTO cb_pending_action (user_id, type, payload, created_at, dismissed_at) VALUES ((SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), 'REBALANCE_AVAILABLE', '{\"basket_id\": 7, \"version_no\": 2, \"note\": \"first\"}'::jsonb, TIMESTAMPTZ '2026-10-29 12:00:00+00', NULL), ((SELECT id FROM app_user WHERE public_id = 'rs-curated-2'), 'REBALANCE_AVAILABLE', '{\"version_no\": null}'::jsonb, TIMESTAMPTZ '2026-10-29 12:00:01+00', NULL), ((SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), 'REBALANCE_AVAILABLE', '{\"basket_id\": 7, \"notified_at\": \"2026-10-29T04:00:00+00:00\", \"delivery\": \"email\"}'::jsonb, TIMESTAMPTZ '2026-10-29 12:00:02+00', NULL), ((SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), 'REBALANCE_AVAILABLE', '{\"basket_id\": 8}'::jsonb, TIMESTAMPTZ '2026-10-29 12:00:03+00', TIMESTAMPTZ '2026-10-29 13:00:00+00'), ((SELECT id FROM app_user WHERE public_id = 'rs-curated-2'), 'REBALANCE_AVAILABLE', '{\"basket_id\": 999999, \"version_no\": true}'::jsonb, TIMESTAMPTZ '2026-10-29 12:00:04+00', NULL), ((SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), 'REBALANCE_AVAILABLE', '{\"basket_id\": \"7\", \"notified_at\": \"\", \"version_no\": 3.0, \"ratio\": 1.50}'::jsonb, TIMESTAMPTZ '2026-10-29 12:00:05+00', NULL), ((SELECT id FROM app_user WHERE public_id = 'rs-curated-3'), 'REBALANCE_AVAILABLE', '{\"basket_id\": 9}'::jsonb, TIMESTAMPTZ '2026-10-29 12:00:06+00', NULL), ((SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), 'SIP_DUE', '{\"fire_key\": \"1:2026-10\"}'::jsonb, TIMESTAMPTZ '2026-10-29 12:00:07+00', NULL), ((SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), 'REBALANCE_AVAILABLE', '[1, 2]'::jsonb, TIMESTAMPTZ '2026-10-29 12:00:08+00', NULL); ",
+      "note": "sent: a named basket with a version, no basket, an unknown basket with version true, a string basket id with an empty notified_at and a float version, a non-object payload; skipped: already notified, a blank email; not selected: dismissed, SIP_DUE"
+    },
+    {
+      "name": "notify-inside-session",
+      "task": "baskfy.cb.rebalance_notify",
+      "args": {},
+      "now": "2026-10-30T13:15:00",
+      "seed_sql": "INSERT INTO app_user (public_id, email, created_at) VALUES ('rs-curated-1', 'rs.curated.one@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-2', 'rs.curated.two@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-3', '   ', TIMESTAMPTZ '2026-01-02 00:00:00+00'); INSERT INTO broker_account (user_id, broker_id, created_at) SELECT id, 'zerodha', TIMESTAMPTZ '2026-01-02 00:00:00+00' FROM app_user WHERE public_id LIKE 'rs-curated-%' ORDER BY id; INSERT INTO cb_pending_action (user_id, type, payload, created_at, dismissed_at) VALUES ((SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), 'REBALANCE_AVAILABLE', '{\"basket_id\": 7, \"version_no\": 2, \"note\": \"first\"}'::jsonb, TIMESTAMPTZ '2026-10-29 12:00:00+00', NULL), ((SELECT id FROM app_user WHERE public_id = 'rs-curated-2'), 'REBALANCE_AVAILABLE', '{\"version_no\": null}'::jsonb, TIMESTAMPTZ '2026-10-29 12:00:01+00', NULL), ((SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), 'REBALANCE_AVAILABLE', '{\"basket_id\": 7, \"notified_at\": \"2026-10-29T04:00:00+00:00\", \"delivery\": \"email\"}'::jsonb, TIMESTAMPTZ '2026-10-29 12:00:02+00', NULL), ((SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), 'REBALANCE_AVAILABLE', '{\"basket_id\": 8}'::jsonb, TIMESTAMPTZ '2026-10-29 12:00:03+00', TIMESTAMPTZ '2026-10-29 13:00:00+00'), ((SELECT id FROM app_user WHERE public_id = 'rs-curated-2'), 'REBALANCE_AVAILABLE', '{\"basket_id\": 999999, \"version_no\": true}'::jsonb, TIMESTAMPTZ '2026-10-29 12:00:04+00', NULL), ((SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), 'REBALANCE_AVAILABLE', '{\"basket_id\": \"7\", \"notified_at\": \"\", \"version_no\": 3.0, \"ratio\": 1.50}'::jsonb, TIMESTAMPTZ '2026-10-29 12:00:05+00', NULL), ((SELECT id FROM app_user WHERE public_id = 'rs-curated-3'), 'REBALANCE_AVAILABLE', '{\"basket_id\": 9}'::jsonb, TIMESTAMPTZ '2026-10-29 12:00:06+00', NULL), ((SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), 'SIP_DUE', '{\"fire_key\": \"1:2026-10\"}'::jsonb, TIMESTAMPTZ '2026-10-29 12:00:07+00', NULL), ((SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), 'REBALANCE_AVAILABLE', '[1, 2]'::jsonb, TIMESTAMPTZ '2026-10-29 12:00:08+00', NULL); "
+    },
+    {
+      "name": "notify-saturday",
+      "task": "baskfy.cb.rebalance_notify",
+      "args": {},
+      "now": "2026-10-31T09:30:00",
+      "seed_sql": "INSERT INTO app_user (public_id, email, created_at) VALUES ('rs-curated-1', 'rs.curated.one@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-2', 'rs.curated.two@example.test', TIMESTAMPTZ '2026-01-02 00:00:00+00'), ('rs-curated-3', '   ', TIMESTAMPTZ '2026-01-02 00:00:00+00'); INSERT INTO broker_account (user_id, broker_id, created_at) SELECT id, 'zerodha', TIMESTAMPTZ '2026-01-02 00:00:00+00' FROM app_user WHERE public_id LIKE 'rs-curated-%' ORDER BY id; INSERT INTO cb_pending_action (user_id, type, payload, created_at, dismissed_at) VALUES ((SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), 'REBALANCE_AVAILABLE', '{\"basket_id\": 7, \"version_no\": 2, \"note\": \"first\"}'::jsonb, TIMESTAMPTZ '2026-10-29 12:00:00+00', NULL), ((SELECT id FROM app_user WHERE public_id = 'rs-curated-2'), 'REBALANCE_AVAILABLE', '{\"version_no\": null}'::jsonb, TIMESTAMPTZ '2026-10-29 12:00:01+00', NULL), ((SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), 'REBALANCE_AVAILABLE', '{\"basket_id\": 7, \"notified_at\": \"2026-10-29T04:00:00+00:00\", \"delivery\": \"email\"}'::jsonb, TIMESTAMPTZ '2026-10-29 12:00:02+00', NULL), ((SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), 'REBALANCE_AVAILABLE', '{\"basket_id\": 8}'::jsonb, TIMESTAMPTZ '2026-10-29 12:00:03+00', TIMESTAMPTZ '2026-10-29 13:00:00+00'), ((SELECT id FROM app_user WHERE public_id = 'rs-curated-2'), 'REBALANCE_AVAILABLE', '{\"basket_id\": 999999, \"version_no\": true}'::jsonb, TIMESTAMPTZ '2026-10-29 12:00:04+00', NULL), ((SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), 'REBALANCE_AVAILABLE', '{\"basket_id\": \"7\", \"notified_at\": \"\", \"version_no\": 3.0, \"ratio\": 1.50}'::jsonb, TIMESTAMPTZ '2026-10-29 12:00:05+00', NULL), ((SELECT id FROM app_user WHERE public_id = 'rs-curated-3'), 'REBALANCE_AVAILABLE', '{\"basket_id\": 9}'::jsonb, TIMESTAMPTZ '2026-10-29 12:00:06+00', NULL), ((SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), 'SIP_DUE', '{\"fire_key\": \"1:2026-10\"}'::jsonb, TIMESTAMPTZ '2026-10-29 12:00:07+00', NULL), ((SELECT id FROM app_user WHERE public_id = 'rs-curated-1'), 'REBALANCE_AVAILABLE', '[1, 2]'::jsonb, TIMESTAMPTZ '2026-10-29 12:00:08+00', NULL); "
+    },
+    {
+      "name": "notify-nothing",
+      "task": "baskfy.cb.rebalance_notify",
+      "args": {},
+      "now": "2026-10-30T09:30:00"
+    }
+  ]
+}

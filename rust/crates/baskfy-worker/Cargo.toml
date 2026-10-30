@@ -36,6 +36,13 @@ regex = { workspace = true }
 # providers, sha2 for the API); no new third-party dependency (DECISIONS-RS R7.14).
 csv = { workspace = true }
 sha2 = { workspace = true }
+# Wave-6 lane ops_alerts: the webhook sweep POSTs a signed body (`baskfy_api.webhooks`) and the
+# ops alert webhook sink posts JSON, both through `baskfy_providers::net`'s guarded client (whose
+# builder is a `reqwest::ClientBuilder`: httpx does not follow redirects, so the sweep needs
+# `redirect::Policy::none()`), and the signature is HMAC-SHA256. Both already pinned in the
+# workspace and in the lock through baskfy-providers; no new crate (DECISIONS-RS R8.oa1).
+reqwest = { workspace = true }
+hmac = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

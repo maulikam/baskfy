@@ -537,7 +537,7 @@ async fn a_malformed_delta_raises_where_python_raises() {
     assert!(
         rv::enrich_orders(
             &mut c,
-            &[bad.clone()],
+            std::slice::from_ref(&bad),
             &empty_portfolio(),
             0.01,
             45,

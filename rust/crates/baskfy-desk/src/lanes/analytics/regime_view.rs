@@ -1631,7 +1631,8 @@ fn py_int_or0(v: &V) -> Result<i64, BuildError> {
     match v {
         V::Int(i) => Ok(*i),
         V::Bool(b) => Ok(i64::from(*b)),
-        V::Float(f) if f.is_finite() => {
+        V::Float(f) if f.is_finite() =>
+        {
             #[allow(clippy::cast_possible_truncation)]
             Ok(f.trunc() as i64)
         }
@@ -1659,9 +1660,8 @@ fn py_float_or0(v: &V) -> Result<f64, BuildError> {
         #[allow(clippy::cast_precision_loss)]
         V::Int(i) => Ok(*i as f64),
         V::Bool(b) => Ok(f64::from(u8::from(*b))),
-        V::Str(x) => crate::settings::py_float(x).ok_or_else(|| {
-            BuildError::Value(format!("could not convert string to float: '{x}'"))
-        }),
+        V::Str(x) => crate::settings::py_float(x)
+            .ok_or_else(|| BuildError::Value(format!("could not convert string to float: '{x}'"))),
         other => Err(BuildError::Value(format!(
             "float() argument must be a string or a real number, not '{}'",
             other.type_name()
@@ -1832,13 +1832,8 @@ pub async fn enrich_orders(
         row.insert(
             "tax_codes",
             V::List(
-                rv.map(|r| {
-                    r.codes
-                        .iter()
-                        .map(|c| V::Str((*c).to_owned()))
-                        .collect()
-                })
-                .unwrap_or_default(),
+                rv.map(|r| r.codes.iter().map(|c| V::Str((*c).to_owned())).collect())
+                    .unwrap_or_default(),
             ),
         );
         row.insert(
@@ -1847,7 +1842,10 @@ pub async fn enrich_orders(
         );
         row.insert(
             "liquidity_warning",
-            V::Bool(!super::regime::engine::feq(day_value, 0.0) && value > day_value * max_pos_vs_day_value),
+            V::Bool(
+                !super::regime::engine::feq(day_value, 0.0)
+                    && value > day_value * max_pos_vs_day_value,
+            ),
         );
         row.insert("order_status", get(&st, "status"));
         row.insert("filled_qty", get(&st, "filled_qty"));
@@ -1930,7 +1928,10 @@ pub async fn tax_detail(
                 "uncovered_qty",
                 V::Int((rv.requested_qty - rv.covered_qty).max(0)),
             ),
-            ("estimated_gain", rv.estimated_gain.map_or(V::None, V::Float)),
+            (
+                "estimated_gain",
+                rv.estimated_gain.map_or(V::None, V::Float),
+            ),
             ("flagged", V::Bool(rv.flagged)),
             ("data_unknown", V::Bool(rv.data_unknown)),
             (
@@ -2508,7 +2509,10 @@ pub async fn build(
         "proposed_orders",
         V::List(enriched.into_iter().map(V::Map).collect()),
     );
-    v.insert("tax_detail", V::List(detail.into_iter().map(V::Map).collect()));
+    v.insert(
+        "tax_detail",
+        V::List(detail.into_iter().map(V::Map).collect()),
+    );
     v.insert("proposed_sells", V::List(sells));
     v.insert("proposed_buys", V::List(buys));
     match regime_store::count_recovery_confirmations(conn).await {

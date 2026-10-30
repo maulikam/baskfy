@@ -315,7 +315,9 @@ pub trait IndexKite: Send + Sync {
 #[async_trait]
 impl IndexKite for crate::lanes::exec_core::kite_client::DeskKite {
     async fn instruments(&self) -> Result<Vec<PyValue>, String> {
-        Self::instruments(self, "NSE").await.map_err(|e| e.to_string())
+        Self::instruments(self, "NSE")
+            .await
+            .map_err(|e| e.to_string())
     }
 
     async fn historical(
@@ -607,7 +609,8 @@ pub async fn fetch_candles(
     while cursor <= end {
         let chunk_end = (cursor + Duration::days(CHUNK_DAYS)).min(end);
         limits.api_slot().await;
-        let rows = historical_with_retry(kite, token, cursor, chunk_end, attempts, base_delay).await?;
+        let rows =
+            historical_with_retry(kite, token, cursor, chunk_end, attempts, base_delay).await?;
         for r in &rows {
             let d = normalise_session_date(row_get(r, "date").unwrap_or(&PyValue::None))
                 .map_err(CacheError::Runtime)?;
@@ -660,9 +663,8 @@ pub async fn load_instruments(
     let field = |r: &PyValue, k: &str| row_get(r, k).cloned();
     let mut rows = Vec::with_capacity(dump.len());
     for r in &dump {
-        let need = |k: &str| {
-            field(r, k).ok_or_else(|| CacheError::Runtime(format!("KeyError: '{k}'")))
-        };
+        let need =
+            |k: &str| field(r, k).ok_or_else(|| CacheError::Runtime(format!("KeyError: '{k}'")));
         rows.push(dict([
             ("tradingsymbol", need("tradingsymbol")?),
             ("instrument_token", need("instrument_token")?),
@@ -748,7 +750,8 @@ pub async fn update_index_history(
     };
     let to = opts.end.unwrap_or_else(|| opts.clock.today());
     let frm = if opts.full_refresh || opts.start.is_some() {
-        opts.start.unwrap_or_else(|| NaiveDate::from_ymd_opt(2005, 1, 1).unwrap_or_default())
+        opts.start
+            .unwrap_or_else(|| NaiveDate::from_ymd_opt(2005, 1, 1).unwrap_or_default())
     } else {
         match last_date(conn, index_name, true).await? {
             Some(d) => d,
@@ -830,7 +833,10 @@ pub async fn build_all_signals(
         let candles = load(conn, &name, None, Some(end.unwrap_or(as_of)), true).await?;
         let sig = build_index_signals(&name, &candles, cfg, Some(as_of), None)
             .map_err(|e| CacheError::Runtime(e.to_string()))?;
-        if let Some(slot) = out.iter_mut().find(|(k, _): &&mut (String, IndexSignals)| *k == name) {
+        if let Some(slot) = out
+            .iter_mut()
+            .find(|(k, _): &&mut (String, IndexSignals)| *k == name)
+        {
             slot.1 = sig;
         } else {
             out.push((name, sig));

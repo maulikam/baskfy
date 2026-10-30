@@ -29,7 +29,9 @@ use crate::wire::{PyDict, PyValue, dict};
 
 use super::desk_settings::stored_overrides;
 use super::regime_view::{BuildError, DeskConstants, build};
-use super::web::{MultiDict, internal_error, json, missing_field, redirect_307, render, storage_500};
+use super::web::{
+    MultiDict, internal_error, json, missing_field, redirect_307, render, storage_500,
+};
 
 /// The lane's routes.
 pub fn routes() -> Router<AppState> {
@@ -182,11 +184,9 @@ async fn indices_constituents(State(state): State<AppState>, uri: Uri) -> Respon
         _ => Vec::new(),
     };
     let quotes = match kite {
-        Some(k) if !symbols.is_empty() => Some(
-            k.quotes(&symbols, "NSE")
-                .await
-                .map_err(|e| e.message),
-        ),
+        Some(k) if !symbols.is_empty() => {
+            Some(k.quotes(&symbols, "NSE").await.map_err(|e| e.message))
+        }
         _ => None,
     };
     json(

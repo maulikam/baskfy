@@ -4,67 +4,21 @@
 //!
 //! Goldens: `L1/options/never_naked.*` and `L1/options/simulate_fill.*` (`baskfy_core.options.execution.never_naked`, `.simulate_fill`).
 //!
-//! Ported so far: the leg roles, `never_naked` (Track C §2), the depth-ladder paper fill
-//! (§8.4), and the exit plumbing the condor's exits use (`first_by_precedence`,
-//! `drop_on_stale`, §8.5). The sequencing reducers, attempts, feed loss and the expiry-day slot
-//! are not yet ported.
-//!
-//! `ExecutionConfig` belongs to `baskfy_core.options.config` and `Level` to
-//! `baskfy_core.options.chain`; they live here until those modules are ported.
 
 use std::collections::BTreeMap;
 
-use chrono::NaiveTime;
+use chrono::{DateTime, FixedOffset};
 use rust_decimal::{Decimal, RoundingStrategy};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{CoreError, CoreResult};
+use crate::options::chain::as_f64;
+use crate::options::config::{OptionType, SLOT_SLEEVES, Sleeve, SleeveGroup, group_of};
 use crate::options::costs::{Side, add, mul, py_div, py_div_quantize};
+use crate::options::num::{self, seconds_between};
 
-/// Ports `baskfy_core.options.config.ExecutionConfig` — `04` §8's shared mechanics.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct ExecutionConfig {
-    /// Ticks a first attempt improves on the quoted side.
-    pub limit_improve_ticks: i64,
-    /// Seconds each attempt waits for a fill.
-    pub fill_wait_seconds: i64,
-    /// Whether a risk-reducing close gets a third, marketable LIMIT at the touch.
-    pub exit_final_marketable: bool,
-    /// Ticks worse each level past the first fills at in a paper fill (OP1.5).
-    pub latency_ticks: i64,
-    /// Minutes a plan lives.
-    pub plan_ttl_minutes: i64,
-    /// `04` §8.5: O1/O3 lose the feed only after this time.
-    pub feed_watch_from: NaiveTime,
-    /// `04` §8.5: O2 loses the feed only once a position is this old.
-    pub feed_grace_seconds: i64,
-}
-
-impl Default for ExecutionConfig {
-    fn default() -> Self {
-        Self {
-            limit_improve_ticks: 1,
-            fill_wait_seconds: 20,
-            exit_final_marketable: true,
-            latency_ticks: 1,
-            plan_ttl_minutes: 30,
-            feed_watch_from: NaiveTime::from_hms_opt(14, 0, 0).unwrap_or_default(),
-            feed_grace_seconds: 60,
-        }
-    }
-}
-
-/// One depth level: a price and the quantity resting there (units, not lots).
-///
-/// Ports `baskfy_core.options.chain.Level`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Level {
-    /// Price at this level.
-    pub price: Decimal,
-    /// Units resting there.
-    pub quantity: i64,
-}
+pub use crate::options::chain::Level;
+pub use crate::options::config::ExecutionConfig;
 
 /// Ports `baskfy_core.options.execution.LegRole`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -81,6 +35,24 @@ pub enum LegRole {
 }
 
 impl LegRole {
+    /// The enum's value.
+    pub fn value(self) -> &'static str {
+        match self {
+            LegRole::LongCall => "LONG_CALL",
+            LegRole::LongPut => "LONG_PUT",
+            LegRole::ShortCall => "SHORT_CALL",
+            LegRole::ShortPut => "SHORT_PUT",
+        }
+    }
+
+    /// The leg's option type.
+    pub fn option_type(self) -> OptionType {
+        match self {
+            LegRole::LongCall | LegRole::ShortCall => OptionType::Ce,
+            LegRole::LongPut | LegRole::ShortPut => OptionType::Pe,
+        }
+    }
+
     /// Whether the leg is bought to open.
     pub fn is_long(self) -> bool {
         matches!(self, LegRole::LongCall | LegRole::LongPut)
@@ -273,39 +245,274 @@ where
         .collect()
 }
 
+fn entry_rank(role: LegRole) -> u8 {
+    match role {
+        LegRole::LongPut => 0,
+        LegRole::LongCall => 1,
+        LegRole::ShortPut => 2,
+        LegRole::ShortCall => 3,
+    }
+}
+
+fn exit_rank(role: LegRole) -> u8 {
+    match role {
+        LegRole::ShortCall => 0,
+        LegRole::ShortPut => 1,
+        LegRole::LongCall => 2,
+        LegRole::LongPut => 3,
+    }
+}
+
+/// Every long before any short (§8.3); refuses a duplicate role or a short with no protecting long.
+pub fn entry_sequence(roles: &[LegRole]) -> CoreResult<Vec<LegRole>> {
+    let mut seen: Vec<LegRole> = Vec::new();
+    for r in roles {
+        if seen.contains(r) {
+            return Err(CoreError::InvalidInput(
+                "a structure has at most one leg per role".to_owned(),
+            ));
+        }
+        seen.push(*r);
+    }
+    for r in roles {
+        if let Some(p) = r.protector()
+            && !roles.contains(&p)
+        {
+            return Err(CoreError::InvalidInput(format!(
+                "{} has no {}: a naked short is Track C",
+                r.value(),
+                p.value()
+            )));
+        }
+    }
+    let mut out = roles.to_vec();
+    out.sort_by_key(|r| entry_rank(*r));
+    Ok(out)
+}
+
+/// Every short before any long (§8.3).
+pub fn exit_sequence(roles: &[LegRole]) -> Vec<LegRole> {
+    let mut out: Vec<LegRole> = Vec::new();
+    for r in roles {
+        if !out.contains(r) {
+            out.push(*r);
+        }
+    }
+    out.sort_by_key(|r| exit_rank(*r));
+    out
+}
+
+/// The entry reducer's step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum EntryStep {
+    /// Send the named leg.
+    Send,
+    /// Every leg filled.
+    Open,
+    /// Close what filled.
+    Abandon,
+}
+
+/// What the desk does next.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EntryAction {
+    /// The step.
+    pub step: EntryStep,
+    /// The leg to send.
+    pub leg: Option<LegRole>,
+    /// What to close, in exit order, with each filled quantity.
+    pub close: Vec<(LegRole, i64)>,
+}
+
+/// The entry reducer: `outcomes[i]` is the final filled quantity of `sequence[i]`.
+pub fn advance_entry(
+    sequence: &[LegRole],
+    quantity: i64,
+    outcomes: &[i64],
+) -> CoreResult<EntryAction> {
+    if outcomes.len() > sequence.len() {
+        return Err(CoreError::InvalidInput(
+            "more outcomes than legs".to_owned(),
+        ));
+    }
+    for (role, filled) in sequence.iter().zip(outcomes) {
+        if !(0..=quantity).contains(filled) {
+            return Err(CoreError::InvalidInput(format!(
+                "{} filled {filled} of {quantity}",
+                role.value()
+            )));
+        }
+    }
+    if outcomes.iter().any(|f| *f < quantity) {
+        let filled: Vec<(LegRole, i64)> = sequence
+            .iter()
+            .zip(outcomes)
+            .filter(|(_, f)| **f > 0)
+            .map(|(r, f)| (*r, *f))
+            .collect();
+        let roles: Vec<LegRole> = filled.iter().map(|(r, _)| *r).collect();
+        let close = exit_sequence(&roles)
+            .into_iter()
+            .filter_map(|r| filled.iter().find(|(x, _)| *x == r).copied())
+            .collect();
+        return Ok(EntryAction {
+            step: EntryStep::Abandon,
+            leg: None,
+            close,
+        });
+    }
+    if outcomes.len() == sequence.len() {
+        return Ok(EntryAction {
+            step: EntryStep::Open,
+            leg: None,
+            close: Vec::new(),
+        });
+    }
+    Ok(EntryAction {
+        step: EntryStep::Send,
+        leg: Some(sequence[outcomes.len()]),
+        close: Vec::new(),
+    })
+}
+
+/// The next leg to close: the first in exit order still open, never a long while its short is open.
+pub fn next_exit_leg(open_quantity: &[(LegRole, i64)]) -> Option<LegRole> {
+    let qty = |r: LegRole| {
+        open_quantity
+            .iter()
+            .find(|(x, _)| *x == r)
+            .map_or(0, |(_, q)| *q)
+    };
+    let roles: Vec<LegRole> = open_quantity.iter().map(|(r, _)| *r).collect();
+    for role in exit_sequence(&roles) {
+        if qty(role) <= 0 {
+            continue;
+        }
+        let protected_open = [LegRole::ShortCall, LegRole::ShortPut]
+            .into_iter()
+            .any(|s| s.protector() == Some(role) && qty(s) > 0);
+        if protected_open {
+            continue;
+        }
+        return Some(role);
+    }
+    None
+}
+
+/// One LIMIT order attempt.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Attempt {
+    /// 1, 2 or 3.
+    pub number: i64,
+    /// Buy or sell.
+    pub side: Side,
+    /// The limit.
+    pub price: Decimal,
+    /// The third, risk-reducing close at the touch.
+    pub marketable: bool,
+}
+
+/// §8.2: attempt 1 one tick through the touch, attempt 2 one more, attempt 3 only for a risk-reducing close.
+pub fn next_attempt(
+    number: i64,
+    side: Side,
+    bid: Decimal,
+    ask: Decimal,
+    tick: Decimal,
+    closing_reduces_risk: bool,
+    config: &ExecutionConfig,
+) -> CoreResult<Option<Attempt>> {
+    if number < 1 {
+        return Err(CoreError::InvalidInput("attempts count from 1".to_owned()));
+    }
+    let (direction, touch) = match side {
+        Side::Buy => (Decimal::ONE, ask),
+        Side::Sell => (Decimal::NEGATIVE_ONE, bid),
+    };
+    if number <= 2 {
+        let ticks = config.limit_improve_ticks + (number - 1);
+        let price = num::add(touch, num::muli(num::mul(direction, tick)?, ticks)?)?;
+        return Ok(Some(Attempt {
+            number,
+            side,
+            price: num::max(price, tick),
+            marketable: false,
+        }));
+    }
+    if number == 3 && closing_reduces_risk && config.exit_final_marketable {
+        return Ok(Some(Attempt {
+            number,
+            side,
+            price: num::max(touch, tick),
+            marketable: true,
+        }));
+    }
+    Ok(None)
+}
+
 /// §8.5 — `HARD_EXIT` with reason `FEED_LOST`.
-///
-/// With a position open: O1 and O3 lose the feed after `feed_watch_from` (14:00) once no index
-/// tick has come for `stale_index_seconds`; O2 at any time once the position is older than
-/// `feed_grace_seconds` and no tick has come for `stale_index_seconds`. No position, no exit.
-/// Times are IST wall-clock (`bars::ist` applied by the caller).
-///
-/// Ports `baskfy_core.options.execution.feed_lost`.
-#[must_use]
 pub fn feed_lost(
-    sleeve: crate::options::gating::Sleeve,
-    now: chrono::NaiveDateTime,
-    last_index_tick: Option<chrono::NaiveDateTime>,
-    position_opened_at: Option<chrono::NaiveDateTime>,
+    sleeve: Sleeve,
+    now: &DateTime<FixedOffset>,
+    last_index_tick: Option<&DateTime<FixedOffset>>,
+    position_opened_at: Option<&DateTime<FixedOffset>>,
     stale_index_seconds: i64,
     config: &ExecutionConfig,
 ) -> bool {
-    use crate::options::gating::{SleeveGroup, group_of};
     let Some(opened) = position_opened_at else {
         return false;
     };
-    // `(a - b).total_seconds() > n` on microseconds, exactly.
-    let older_than = |a: chrono::NaiveDateTime, b: chrono::NaiveDateTime, secs: i64| {
-        (a - b).num_microseconds().map_or(a > b, |us| {
-            i128::from(us) > i128::from(secs) * 1_000_000
-        })
-    };
-    let silent = last_index_tick.is_none_or(|t| older_than(now, t, stale_index_seconds));
+    let silent =
+        last_index_tick.is_none_or(|t| seconds_between(now, t) > as_f64(stale_index_seconds));
     if !silent {
         return false;
     }
     if group_of(sleeve) == SleeveGroup::O2 {
-        return older_than(now, opened, config.feed_grace_seconds);
+        return seconds_between(now, opened) > as_f64(config.feed_grace_seconds);
     }
     now.time() >= config.feed_watch_from
+}
+
+/// The expiry-day slot's verdict for a sleeve.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum SlotVerdict {
+    /// Nobody holds it.
+    Free,
+    /// This sleeve holds it.
+    HeldBySelf,
+    /// Another sleeve holds it.
+    SlotTaken,
+    /// O2: outside the slot.
+    OutsideSlot,
+}
+
+/// §8.6: one O1-or-O3 position per expiry day; O2 is outside it.
+pub fn slot_verdict(sleeve: Sleeve, holder: Option<Sleeve>) -> SlotVerdict {
+    if !SLOT_SLEEVES.contains(&sleeve) {
+        return SlotVerdict::OutsideSlot;
+    }
+    match holder {
+        None => SlotVerdict::Free,
+        Some(h) if h == sleeve => SlotVerdict::HeldBySelf,
+        Some(_) => SlotVerdict::SlotTaken,
+    }
+}
+
+/// The holder after `sleeve` confirms; a taken slot refuses.
+pub fn slot_after_confirm(sleeve: Sleeve, holder: Option<Sleeve>) -> CoreResult<Option<Sleeve>> {
+    match slot_verdict(sleeve, holder) {
+        SlotVerdict::SlotTaken => Err(CoreError::InvalidInput(format!(
+            "the expiry-day slot is held by {}",
+            holder.map_or("None", Sleeve::value)
+        ))),
+        SlotVerdict::OutsideSlot => Ok(holder),
+        SlotVerdict::Free | SlotVerdict::HeldBySelf => Ok(Some(sleeve)),
+    }
+}
+
+/// A lapsed or rejected plan frees the slot only if its sleeve held it.
+pub fn slot_after_release(sleeve: Sleeve, holder: Option<Sleeve>) -> Option<Sleeve> {
+    if holder == Some(sleeve) { None } else { holder }
 }

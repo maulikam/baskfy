@@ -10,13 +10,16 @@
 //! * `GET /explore/{slug}/performance` — the version-aware NAV over fully covered days;
 //! * `GET /watchlist` — the sole tenant's watched baskets.
 //!
-//! `POST /watchlist` and `DELETE /watchlist/{slug}` write and wait for the pool's write decision
-//! (R5.2); they are not registered, so Python keeps serving them. **No order or execute route.**
+//! `POST /watchlist` and `DELETE /watchlist/{slug}` are ported at wave 6 (lane api_routes,
+//! [`watchlist_writes`]; the delete is mounted by `watchlist.rs`, which owns the `/watchlist/...`
+//! paths). **No order or execute route.**
 //! Every route needs a signed-in caller; every read of `cb_basket` applies
 //! `curated_visibility.visible_baskets()` (not archived, `PUBLISHED`).
 //!
 //! Matching: Python registers `/explore/managers` and `/explore/collections` before
 //! `/explore/{slug}`, so the static paths win there exactly as axum's static-first rule makes them.
+
+mod watchlist_writes;
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -943,7 +946,13 @@ pub async fn list_watchlist(
     Ok(wire::json(&WatchlistOut { items, count }))
 }
 
-/// The GET routes of `baskfy_api.routers.explore`, relative to `/api/v1`.
+/// `DELETE /watchlist/{slug}` and its two static-path twins (`watchlist.rs` mounts them).
+pub(crate) use watchlist_writes::{
+    remove_watchlist, remove_watchlist_discover_preferences, remove_watchlist_instruments,
+};
+
+/// The routes of `baskfy_api.routers.explore`, relative to `/api/v1` (`POST /watchlist`
+/// included; the delete is mounted by `watchlist.rs`).
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/explore", get(list_explore_baskets))
@@ -957,5 +966,8 @@ pub fn router() -> Router<AppState> {
             get(get_explore_constituents),
         )
         .route("/explore/{slug}/performance", get(get_explore_performance))
-        .route("/watchlist", get(list_watchlist))
+        .route(
+            "/watchlist",
+            get(list_watchlist).post(watchlist_writes::add_watchlist),
+        )
 }

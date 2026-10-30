@@ -22,6 +22,7 @@ pub mod backtest;
 pub mod backtest_metrics;
 pub mod decimal;
 pub mod error;
+pub mod exposure;
 pub mod factor_registry;
 pub mod factors;
 pub mod fno;

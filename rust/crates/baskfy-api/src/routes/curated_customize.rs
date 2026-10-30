@@ -29,7 +29,7 @@ struct CustomizePlanOut {
     kind: &'static str,
     status: &'static str,
     desk_plan_id: String,
-    investment_id: i128,
+    investment_id: plans::PyIntOut,
     legs: Vec<plans::LegOut>,
     requested_amount: String,
     expires_at_hint: String,
@@ -77,7 +77,10 @@ pub async fn customize_investment(
         .cloned()
         .ok_or_else(internal_error)?;
     let plan = core::build_customize_plan(
-        &plans::ints(body.get("holdings")),
+        &plans::ints(
+            body.get("holdings"),
+            plans::raw_field(&received, "holdings"),
+        ),
         &plans::decimals(body.get("target_weights")),
         &plans::decimals(body.get("prices")),
         &amount,
@@ -89,7 +92,13 @@ pub async fn customize_investment(
         kind: "CUSTOMIZE",
         status: "PLANNED",
         desk_plan_id: plans::sim_plan_id(),
-        investment_id,
+        // Echoed as Python's exact `int` (the check above reads the saturated value: beyond
+        // `i128` only the sign matters to `< 1`).
+        investment_id: plans::PyIntOut(
+            crate::routes::common::lax_int(&raw_id)
+                .and_then(|p| p.canonical.parse().ok())
+                .unwrap_or_else(|| investment_id.into()),
+        ),
         legs: plans::legs_out(&plan),
         requested_amount: plan.requested_amount.to_sci_string(),
         expires_at_hint: wire::py_datetime_fixed(plan.expires_at_hint),

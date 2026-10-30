@@ -25,8 +25,9 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use baskfy_core::options::bars::{Bar, ist};
 use baskfy_core::options::config::OptionsConfig;
+use baskfy_core::options::execution::LegRole;
 use baskfy_core::options::exits::{
-    ExitVerdict, IndexState, LegMark, Marks, OpenLeg, OpenPosition, evaluate, mark,
+    ExitVerdict, FEED_LOST, IndexState, LegMark, OpenLeg, OpenPosition, evaluate, mark,
 };
 use chrono::{DateTime, Duration, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime, TimeZone};
 use rust_decimal::Decimal;
@@ -36,6 +37,28 @@ use super::store::{PgOptionsStore, Tracked};
 use crate::storage::Conn;
 use crate::wire::{PyDict, PyValue};
 use baskfy_providers::records::PyDateTime;
+
+/// Each leg's latest quote, by role.
+pub type Marks = BTreeMap<LegRole, LegMark>;
+
+/// A naive IST wall-clock time as an aware one (`ist()`'s inverse).
+#[must_use]
+pub fn aware_ist(at: NaiveDateTime) -> DateTime<FixedOffset> {
+    let tz = baskfy_core::options::num::ist_offset();
+    DateTime::from_naive_utc_and_offset(at - tz, tz)
+}
+
+/// `ExitVerdict("HARD_EXIT", FEED_LOST, None, None, True)`.
+#[must_use]
+pub fn feed_lost_verdict() -> ExitVerdict {
+    ExitVerdict {
+        code: "HARD_EXIT".to_owned(),
+        reason: FEED_LOST.to_owned(),
+        value_points: None,
+        marked_loss_inr: None,
+        stale: true,
+    }
+}
 
 /// NIFTY 50's Kite instrument token (the index the whole book reads).
 pub const NIFTY_50_TOKEN: i64 = 256_265;
@@ -101,7 +124,7 @@ impl TrackedPosition {
                     })
                     .collect(),
                 entry_points: t.entry_points,
-                opened_at: ist(&t.opened_at),
+                opened_at: t.opened_at,
                 risk_budget_inr: t.risk_budget_inr,
                 direction: t.direction,
                 range_high: t.range_high,
@@ -382,7 +405,7 @@ impl<S: PositionStore> NiftyOptionsMonitor<S> {
                 (
                     *minute,
                     Bar {
-                        ts: *minute,
+                        ts: aware_ist(*minute),
                         open: m.open,
                         high: m.high,
                         low: m.low,
@@ -427,8 +450,12 @@ impl<S: PositionStore> NiftyOptionsMonitor<S> {
             if let Some(price) = decimal_of(tick.get("last_price")) {
                 self.index(at, price);
             }
-        } else if let Some(PyValue::Int(t)) = token {
-            self.leg(*t, tick, at);
+        } else {
+            match token {
+                Some(PyValue::Int(t)) => self.leg(*t, tick, at),
+                Some(PyValue::Bool(b)) => self.leg(i64::from(*b), tick, at),
+                _ => {}
+            }
         }
         self.check_at(at).await
     }
@@ -438,7 +465,10 @@ impl<S: PositionStore> NiftyOptionsMonitor<S> {
     ///
     /// # Errors
     /// `exits.evaluate`'s `ValueError` (a malformed position), as Python raises it.
-    pub async fn check_at(&mut self, now: NaiveDateTime) -> Result<Vec<(i64, ExitVerdict)>, String> {
+    pub async fn check_at(
+        &mut self,
+        now: NaiveDateTime,
+    ) -> Result<Vec<(i64, ExitVerdict)>, String> {
         if due(self.state.refreshed_at, self.refresh_every, now) {
             self.refresh(Some(now)).await;
         }
@@ -447,7 +477,7 @@ impl<S: PositionStore> NiftyOptionsMonitor<S> {
         }
         let index = IndexState {
             spot: self.state.spot,
-            last_tick_at: self.state.last_index_tick,
+            last_tick_at: self.state.last_index_tick.map(aware_ist),
             bars: self.bars(),
         };
         let mut raised = Vec::new();
@@ -462,8 +492,15 @@ impl<S: PositionStore> NiftyOptionsMonitor<S> {
                 }
             }
             self.record_mark(&tracked, &marks, now).await?;
-            let verdict = evaluate(&tracked.position, &marks, &index, now, &self.options, false)
-                .map_err(|e| format!("ValueError: {e}"))?;
+            let verdict = evaluate(
+                &tracked.position,
+                &marks,
+                &index,
+                &aware_ist(now),
+                &self.options,
+                false,
+            )
+            .map_err(|e| format!("ValueError: {e}"))?;
             let Some(verdict) = verdict else {
                 continue;
             };
@@ -481,7 +518,7 @@ impl<S: PositionStore> NiftyOptionsMonitor<S> {
             if tracked.exit_plan_id.is_some() {
                 continue;
             }
-            self.raise_one(session_id, &tracked, ExitVerdict::feed_lost(), now, &mut raised)
+            self.raise_one(session_id, &tracked, feed_lost_verdict(), now, &mut raised)
                 .await;
         }
         raised
@@ -542,7 +579,14 @@ impl<S: PositionStore> NiftyOptionsMonitor<S> {
         if bid.is_none() && ask.is_none() {
             return;
         }
-        self.state.marks.insert(token, LegMark { bid, ask, at });
+        self.state.marks.insert(
+            token,
+            LegMark {
+                bid,
+                ask,
+                at: aware_ist(at),
+            },
+        );
     }
 
     async fn refresh(&mut self, now: Option<NaiveDateTime>) {
@@ -592,7 +636,7 @@ impl<S: PositionStore> NiftyOptionsMonitor<S> {
         };
         self.state.stored = stored
             .into_iter()
-            .map(|b| (floor_minute(b.ts), b))
+            .map(|b| (floor_minute(ist(&b.ts)), b))
             .collect();
         self.state.reconciled_at = Some(now);
     }
@@ -608,7 +652,7 @@ impl<S: PositionStore> NiftyOptionsMonitor<S> {
         {
             return Ok(());
         }
-        let current = mark(&tracked.position, marks, now, &self.options)
+        let current = mark(&tracked.position, marks, &aware_ist(now), &self.options)
             .map_err(|e| format!("decimal.InvalidOperation: {e}"))?;
         let Some(value) = current.value_points else {
             return Ok(());
@@ -635,7 +679,9 @@ impl<S: PositionStore> NiftyOptionsMonitor<S> {
             sleeve_value(tracked.position.sleeve),
             verdict.code,
             verdict.reason,
-            verdict.value_points.map_or_else(|| "None".to_owned(), py::dstr),
+            verdict
+                .value_points
+                .map_or_else(|| "None".to_owned(), py::dstr),
             verdict
                 .marked_loss_inr
                 .map_or_else(|| "None".to_owned(), py::dstr),
@@ -696,7 +742,9 @@ pub fn build_monitor<S: PositionStore>(
     day: NaiveDate,
 ) -> Option<NiftyOptionsMonitor<S>> {
     if !enabled {
-        emit("INFO desk.options_monitor BASKFY_OPTIONS_MONITOR_ENABLED is false; the options monitor is not built");
+        emit(
+            "INFO desk.options_monitor BASKFY_OPTIONS_MONITOR_ENABLED is false; the options monitor is not built",
+        );
         return None;
     }
     Some(NiftyOptionsMonitor::new(store, day))
@@ -761,10 +809,7 @@ pub fn tick_time(tick: &PyDict, day: NaiveDate, wall_time: &WallTime) -> NaiveDa
             Some(PyValue::Str(s)) => {
                 if let Some((n, off)) = py::parse_iso(s) {
                     return match off {
-                        Some(o) => o
-                            .from_local_datetime(&n)
-                            .single()
-                            .map_or(n, |a| ist(&a)),
+                        Some(o) => o.from_local_datetime(&n).single().map_or(n, |a| ist(&a)),
                         None => n,
                     };
                 }
@@ -786,7 +831,10 @@ mod tests {
         struct Nothing;
         #[async_trait]
         impl PositionStore for Nothing {
-            async fn open_positions(&mut self, _: NaiveDate) -> Result<Vec<TrackedPosition>, String> {
+            async fn open_positions(
+                &mut self,
+                _: NaiveDate,
+            ) -> Result<Vec<TrackedPosition>, String> {
                 Ok(Vec::new())
             }
             async fn raise_exit(

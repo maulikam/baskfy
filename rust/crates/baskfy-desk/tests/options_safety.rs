@@ -70,7 +70,8 @@ async fn state(settings: Settings, backend: &str, dir: &std::path::Path) -> AppS
 #[test]
 fn the_lab_is_frozen_so_the_flag_alone_wakes_nothing() {
     let s = flag_on();
-    let repo = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../kite-momentum-rebalancer");
+    let repo =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../kite-momentum-rebalancer");
     assert!(!gates::lab_present(&repo));
     assert!(!gates::lab_enabled(&s, &repo));
     assert!(!baskfy_desk::lanes::options::lab_enabled(&s));
@@ -79,13 +80,19 @@ fn the_lab_is_frozen_so_the_flag_alone_wakes_nothing() {
 #[test]
 fn ops_offers_no_strangle_control() {
     assert!(!ops::groups().contains(&"Options"));
-    assert!(!ops::OPERATIONS.iter().any(|o| o.name.starts_with("strangle")));
+    assert!(
+        !ops::OPERATIONS
+            .iter()
+            .any(|o| o.name.starts_with("strangle"))
+    );
 }
 
 #[tokio::test]
 async fn the_autorun_never_reaches_the_options_loop() {
     let dir = tempfile::tempdir().unwrap();
-    let mut conn = Db::connect_sqlite_path(&dir.path().join("p.db")).await.unwrap();
+    let mut conn = Db::connect_sqlite_path(&dir.path().join("p.db"))
+        .await
+        .unwrap();
     conn.migrate().await.unwrap();
     let lab = baskfy_desk::lanes::options::lab_enabled(&flag_on());
     let now = NaiveDate::from_ymd_opt(2026, 10, 27)
@@ -93,15 +100,18 @@ async fn the_autorun_never_reaches_the_options_loop() {
         .and_hms_opt(10, 0, 0)
         .unwrap();
     let items = autorun::needed(&mut conn, now, true, lab).await.unwrap();
-    assert!(!items.iter().any(|i| i
-        .get("op")
-        .is_some_and(|o| o.py_str().starts_with("strangle"))));
+    assert!(!items.iter().any(|i| {
+        i.get("op")
+            .is_some_and(|o| o.py_str().starts_with("strangle"))
+    }));
 }
 
 async fn send(app: &axum::Router, req: Request<Body>) -> (u16, String) {
     let r = app.clone().oneshot(req).await.unwrap();
     let status = r.status().as_u16();
-    let body = axum::body::to_bytes(r.into_body(), usize::MAX).await.unwrap();
+    let body = axum::body::to_bytes(r.into_body(), usize::MAX)
+        .await
+        .unwrap();
     (status, String::from_utf8_lossy(&body).into_owned())
 }
 
@@ -157,6 +167,10 @@ async fn a_confirm_that_is_not_true_is_400_before_any_read() {
     }
     // The same request with confirm=true reaches the store, which here refuses every connect:
     // the 400 above was decided before any read.
-    let (status, _) = send(&app, form("/nifty-options/execute", "plan_id=1&confirm=true")).await;
+    let (status, _) = send(
+        &app,
+        form("/nifty-options/execute", "plan_id=1&confirm=true"),
+    )
+    .await;
     assert_eq!(status, 500);
 }

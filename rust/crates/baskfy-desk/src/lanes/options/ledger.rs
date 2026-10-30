@@ -7,9 +7,8 @@ use chrono::{DateTime, Datelike, Duration, FixedOffset, NaiveDate, Weekday};
 use rust_decimal::Decimal;
 
 use super::core::{
-    BookCeilings, Mode, Pause, RealisedTrade, RiskConfig, SLEEVES, Side, Sleeve, Structure,
-    book_limits, evaluate_book, evaluate_sleeve, group_of, group_str, pnl_points, side_of,
-    sleeve_str,
+    BookCeilings, Mode, Pause, RealisedTrade, RiskConfig, SLEEVES, Side, Sleeve, book_limits,
+    evaluate_book, evaluate_sleeve, group_of, group_str, pnl_points, side_of, sleeve_str,
 };
 use super::py::{self, col, int, text};
 use super::store::{ExitVerdict, PgOptionsStore, StoreError};
@@ -411,7 +410,7 @@ async fn open_marked_inr(
             continue;
         }
         let st = text(col(r, "structure"));
-        let structure = Structure::parse(&st).ok_or_else(|| {
+        let structure = super::core::structure_of(&st).ok_or_else(|| {
             StoreError::Data(format!("ValueError: '{st}' is not a valid Structure"))
         })?;
         let pnl = pnl_points(

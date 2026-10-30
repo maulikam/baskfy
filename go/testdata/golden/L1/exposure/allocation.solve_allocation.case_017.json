@@ -1,0 +1,172 @@
+{
+ "fn": "baskfy_core.exposure.allocation.solve_allocation",
+ "inputs": {
+  "candidates": [
+   {
+    "cluster": "bank",
+    "liquidity": 73363850.0,
+    "price": 1190.52,
+    "rank": 1,
+    "score": 94.839,
+    "symbol": "X00"
+   },
+   {
+    "cluster": "bank",
+    "liquidity": 909794359.0,
+    "price": 1103.41,
+    "rank": 2,
+    "score": 54.052,
+    "symbol": "X01"
+   },
+   {
+    "cluster": "auto",
+    "liquidity": 70785568.0,
+    "price": 266.98,
+    "rank": 3,
+    "score": 22.255,
+    "symbol": "X02"
+   },
+   {
+    "cluster": "other",
+    "liquidity": 124678159.0,
+    "price": 1279.31,
+    "rank": 4,
+    "score": 9.981,
+    "symbol": "X03"
+   },
+   {
+    "cluster": "bank",
+    "liquidity": 577525846.0,
+    "price": 1886.03,
+    "rank": 5,
+    "score": 23.101,
+    "symbol": "X04"
+   },
+   {
+    "cluster": "bank",
+    "liquidity": 557108233.0,
+    "price": 2929.0,
+    "rank": 6,
+    "score": 40.271,
+    "symbol": "X05"
+   },
+   {
+    "cluster": "other",
+    "liquidity": 118674446.0,
+    "price": 1263.23,
+    "rank": 7,
+    "score": 14.184,
+    "symbol": "X06"
+   },
+   {
+    "cluster": "it",
+    "liquidity": 103952657.0,
+    "price": 2450.22,
+    "rank": 8,
+    "score": 31.54,
+    "symbol": "X07"
+   },
+   {
+    "cluster": "bank",
+    "liquidity": 548196721.0,
+    "price": 571.73,
+    "rank": 9,
+    "score": 57.549,
+    "symbol": "X08"
+   },
+   {
+    "cluster": "it",
+    "liquidity": 496918081.0,
+    "price": 188.21,
+    "rank": 10,
+    "score": 7.216,
+    "symbol": "X09"
+   },
+   {
+    "cluster": "auto",
+    "liquidity": 585976302.0,
+    "price": 2333.91,
+    "rank": 11,
+    "score": 53.64,
+    "symbol": "X10"
+   },
+   {
+    "cluster": "it",
+    "liquidity": 699295439.0,
+    "price": 906.3,
+    "rank": 12,
+    "score": 45.865,
+    "symbol": "X11"
+   }
+  ],
+  "cluster_cap": 40.0,
+  "half_factor": 0.5,
+  "half_sized": [
+   "X07",
+   "X10"
+  ],
+  "max_sleeve_w": 15.0,
+  "min_sleeve_w": 6.0,
+  "sleeve_pct": 100.0
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "dataclasses.asdict(Allocation). Inputs are JSON; each function is called from them after a JSON round trip. Dates are ISO days, enums their values, IndexSignals/BookWeights/RegimeState their as_dict(), Allocation and Position/Candidate/OrderLine dataclasses.asdict, tuples lists. A raise is {raises: {type, message}}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_exposure.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "cluster_weights": {
+   "auto": 14.74344,
+   "bank": 40.000002,
+   "it": 24.75,
+   "other": 13.006558
+  },
+  "half_sized": [
+   "X07",
+   "X10"
+  ],
+  "notes": [
+   "cluster cap applied: bank",
+   "cluster cap applied: bank",
+   "cluster cap applied: bank",
+   "cluster cap applied: bank",
+   "cluster cap applied: bank",
+   "cluster cap applied: bank",
+   "cluster cap applied: bank",
+   "cluster cap applied: bank",
+   "sleeve utilisation 92.5%"
+  ],
+  "sleeve_pct": 100.0,
+  "weights_nav": {
+   "X00": 11.154364,
+   "X01": 8.130876,
+   "X02": 10.99344,
+   "X03": 6.0,
+   "X04": 6.0,
+   "X05": 6.057843,
+   "X06": 7.006558,
+   "X07": 3.75,
+   "X08": 8.656919,
+   "X09": 6.0,
+   "X10": 3.75,
+   "X11": 15.0
+  },
+  "weights_sleeve": {
+   "X00": 11.154364,
+   "X01": 8.130876,
+   "X02": 10.99344,
+   "X03": 6.0,
+   "X04": 6.0,
+   "X05": 6.057843,
+   "X06": 7.006558,
+   "X07": 3.75,
+   "X08": 8.656919,
+   "X09": 6.0,
+   "X10": 3.75,
+   "X11": 15.0
+  }
+ }
+}

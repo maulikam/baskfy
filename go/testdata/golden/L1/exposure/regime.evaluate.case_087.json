@@ -1,0 +1,385 @@
+{
+ "fn": "baskfy_core.exposure.regime.evaluate",
+ "inputs": {
+  "as_of_date": "2026-06-05",
+  "book": {
+   "coverage_pct": 10.51,
+   "reason_codes": [
+    "BOOK_CLASSIFICATION_COVERAGE_LOW"
+   ],
+   "source": "config_default",
+   "weights": {
+    "largecap": 0.59,
+    "midcap": 0.926,
+    "smallcap": 0.192
+   }
+  },
+  "breadth": {
+   "as_of_date": "2026-05-22",
+   "audit_run_id": "run1",
+   "calculation_version": "v1",
+   "coverage_pct": 84.89,
+   "eligible_count": 500,
+   "observed_count": 500,
+   "pct_above_20dma": 18.53,
+   "universe_hash": "hash1",
+   "universe_id": "nifty500"
+  },
+  "cfg": {
+   "algorithm_version": "regime/1.0.0",
+   "bootstrap_policy": "observe_only",
+   "breadth_required": false,
+   "breadth_stale_days": 10,
+   "buffer_bps": 150,
+   "confirm_days": 3,
+   "default_book_weights": {
+    "largecap": 0.2,
+    "midcap": 0.3,
+    "smallcap": 0.5
+   },
+   "exchange": "NSE",
+   "exposure_tolerance_pct": 1.0,
+   "index_aliases": {
+    "NIFTY 500 MOMENTUM 50": [
+     "NIFTY500MOMENTM50"
+    ],
+    "NIFTY SMLCAP 250": [
+     "NIFTY SMALLCAP 250"
+    ]
+   },
+   "index_stale_days": 5,
+   "ma_lengths": [
+    20,
+    50,
+    200
+   ],
+   "min_breadth_coverage_pct": 90.0,
+   "min_classification_coverage_pct": 80.0,
+   "mode": "observe",
+   "momentum_sentinel": "NIFTY 500 MOMENTUM 50",
+   "r1_breadth_min": 55.0,
+   "r1_h200_min": 0.8,
+   "r1_h50_min": 0.8,
+   "r3_breadth_max": 40.0,
+   "r3_h200_max": 0.5,
+   "r4_bearish_stack_min": 0.6,
+   "r4_breadth_max": 30.0,
+   "r4_h200_max": 0.3,
+   "recovery_breadth_min": 55.0,
+   "recovery_confirm_evaluations": 2,
+   "recovery_h20_min": 0.5,
+   "segment": "INDICES",
+   "structural_indices": {
+    "largecap": "NIFTY 50",
+    "midcap": "NIFTY MIDCAP 150",
+    "smallcap": "NIFTY SMLCAP 250"
+   },
+   "tier_exposure_pct": {
+    "R1": 100.0,
+    "R2": 70.0,
+    "R3": 40.0,
+    "R4": 10.0
+   },
+   "weekly_evaluation_weekday": 4
+  },
+  "exposure": {
+   "actual_equity_pct": 67.823,
+   "execution_status": "not_planned",
+   "pending_buy_pct": 2.62,
+   "pending_sell_pct": 0.08
+  },
+  "index_signals": {
+   "NIFTY 50": {
+    "as_of_date": "2026-06-01",
+    "bearish_stack": true,
+    "close": 78.39,
+    "has_data": true,
+    "index_name": "NIFTY 50",
+    "instrument_token": null,
+    "is_stale": false,
+    "signals": {
+     "20": {
+      "close": 78.39,
+      "confirming_closes": 3,
+      "distance_pct": -3.6504424778761035,
+      "ma": 81.36,
+      "ma_length": 20,
+      "state": "below"
+     },
+     "200": {
+      "close": 78.39,
+      "confirming_closes": 3,
+      "distance_pct": -46.94416243654822,
+      "ma": 147.75,
+      "ma_length": 200,
+      "state": "unknown"
+     },
+     "50": {
+      "close": 78.39,
+      "confirming_closes": 3,
+      "distance_pct": -42.91020318986235,
+      "ma": 137.31,
+      "ma_length": 50,
+      "state": "unknown"
+     }
+    }
+   },
+   "NIFTY MIDCAP 150": {
+    "as_of_date": "2026-06-01",
+    "bearish_stack": false,
+    "close": 111.59,
+    "has_data": true,
+    "index_name": "NIFTY MIDCAP 150",
+    "instrument_token": null,
+    "is_stale": false,
+    "signals": {
+     "20": {
+      "close": 111.59,
+      "confirming_closes": 3,
+      "distance_pct": 68.56495468277946,
+      "ma": 66.2,
+      "ma_length": 20,
+      "state": "below"
+     },
+     "200": {
+      "close": 111.59,
+      "confirming_closes": 3,
+      "distance_pct": 83.05446194225723,
+      "ma": 60.96,
+      "ma_length": 200,
+      "state": "below"
+     },
+     "50": {
+      "close": 111.59,
+      "confirming_closes": 3,
+      "distance_pct": -19.638484804839408,
+      "ma": 138.86,
+      "ma_length": 50,
+      "state": "unknown"
+     }
+    }
+   },
+   "NIFTY SMLCAP 250": {
+    "as_of_date": "2026-06-01",
+    "bearish_stack": false,
+    "close": 112.04,
+    "has_data": true,
+    "index_name": "NIFTY SMLCAP 250",
+    "instrument_token": null,
+    "is_stale": false,
+    "signals": {
+     "20": {
+      "close": 112.04,
+      "confirming_closes": 3,
+      "distance_pct": 26.986285843817303,
+      "ma": 88.23,
+      "ma_length": 20,
+      "state": "unknown"
+     },
+     "200": {
+      "close": 112.04,
+      "confirming_closes": 3,
+      "distance_pct": -7.748044462741865,
+      "ma": 121.45,
+      "ma_length": 200,
+      "state": "below"
+     },
+     "50": {
+      "close": 112.04,
+      "confirming_closes": 3,
+      "distance_pct": -1.9858280115475413,
+      "ma": 114.31,
+      "ma_length": 50,
+      "state": "above"
+     }
+    }
+   }
+  },
+  "previous": {
+   "book_weights": null,
+   "last_transition_date": "2026-05-01",
+   "policy_tier": "R3",
+   "recovery_confirmations": 2,
+   "scheduled_week_end": "2026-05-29"
+  },
+  "scheduled_week_end": "2026-06-05",
+  "sentinel": null,
+  "signal_session_date": "2026-06-05"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "seeded sweep 58. Inputs are JSON; each function is called from them after a JSON round trip. Dates are ISO days, enums their values, IndexSignals/BookWeights/RegimeState their as_dict(), Allocation and Position/Candidate/OrderLine dataclasses.asdict, tuples lists. A raise is {raises: {type, message}}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_exposure.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "actual_equity_pct": 67.823,
+  "algorithm_version": "regime/1.0.0",
+  "as_of_date": "2026-06-05",
+  "bearish_stack_weight": 0.59,
+  "book_category_weights": {
+   "largecap": 0.59,
+   "midcap": 0.926,
+   "smallcap": 0.192
+  },
+  "book_weight_source": "config_default",
+  "breadth_coverage_pct": 84.89,
+  "breadth_pct": 18.53,
+  "config_hash": "82e4721fee802d95",
+  "data_stale": false,
+  "evaluation_id": "88a656d47bc6a3cd311de4b4",
+  "execution_status": "not_planned",
+  "exposure_gap_pct": 27.823,
+  "forced_action": "reduce_to_cap",
+  "health": {
+   "20": 0.0,
+   "200": 0.0,
+   "50": 0.192
+  },
+  "index_diagnostics": {
+   "NIFTY 50": {
+    "as_of_date": "2026-06-01",
+    "bearish_stack": true,
+    "close": 78.39,
+    "has_data": true,
+    "index_name": "NIFTY 50",
+    "instrument_token": null,
+    "is_stale": false,
+    "signals": {
+     "20": {
+      "close": 78.39,
+      "confirming_closes": 3,
+      "distance_pct": -3.6504424778761035,
+      "ma": 81.36,
+      "ma_length": 20,
+      "state": "below"
+     },
+     "200": {
+      "close": 78.39,
+      "confirming_closes": 3,
+      "distance_pct": -46.94416243654822,
+      "ma": 147.75,
+      "ma_length": 200,
+      "state": "unknown"
+     },
+     "50": {
+      "close": 78.39,
+      "confirming_closes": 3,
+      "distance_pct": -42.91020318986235,
+      "ma": 137.31,
+      "ma_length": 50,
+      "state": "unknown"
+     }
+    }
+   },
+   "NIFTY MIDCAP 150": {
+    "as_of_date": "2026-06-01",
+    "bearish_stack": false,
+    "close": 111.59,
+    "has_data": true,
+    "index_name": "NIFTY MIDCAP 150",
+    "instrument_token": null,
+    "is_stale": false,
+    "signals": {
+     "20": {
+      "close": 111.59,
+      "confirming_closes": 3,
+      "distance_pct": 68.56495468277946,
+      "ma": 66.2,
+      "ma_length": 20,
+      "state": "below"
+     },
+     "200": {
+      "close": 111.59,
+      "confirming_closes": 3,
+      "distance_pct": 83.05446194225723,
+      "ma": 60.96,
+      "ma_length": 200,
+      "state": "below"
+     },
+     "50": {
+      "close": 111.59,
+      "confirming_closes": 3,
+      "distance_pct": -19.638484804839408,
+      "ma": 138.86,
+      "ma_length": 50,
+      "state": "unknown"
+     }
+    }
+   },
+   "NIFTY SMLCAP 250": {
+    "as_of_date": "2026-06-01",
+    "bearish_stack": false,
+    "close": 112.04,
+    "has_data": true,
+    "index_name": "NIFTY SMLCAP 250",
+    "instrument_token": null,
+    "is_stale": false,
+    "signals": {
+     "20": {
+      "close": 112.04,
+      "confirming_closes": 3,
+      "distance_pct": 26.986285843817303,
+      "ma": 88.23,
+      "ma_length": 20,
+      "state": "unknown"
+     },
+     "200": {
+      "close": 112.04,
+      "confirming_closes": 3,
+      "distance_pct": -7.748044462741865,
+      "ma": 121.45,
+      "ma_length": 200,
+      "state": "below"
+     },
+     "50": {
+      "close": 112.04,
+      "confirming_closes": 3,
+      "distance_pct": -1.9858280115475413,
+      "ma": 114.31,
+      "ma_length": 50,
+      "state": "above"
+     }
+    }
+   }
+  },
+  "last_transition_date": "2026-05-01",
+  "manual_action_required": false,
+  "new_buys": "blocked",
+  "next_evaluation_date": "2026-06-12",
+  "override_active": false,
+  "pending_buy_pct": 2.62,
+  "pending_sell_pct": 0.08,
+  "policy_tier": "R3",
+  "previous_policy_tier": "R3",
+  "raw_candidate_tier": "R3",
+  "reason_codes": [
+   "SIGNAL_UNKNOWN",
+   "BREADTH_NOT_USED",
+   "BOOK_CLASSIFICATION_COVERAGE_LOW",
+   "R3_H200_WEAK",
+   "SENTINEL_UNKNOWN",
+   "RECOVERY_OVERRIDE_BREADTH_UNUSABLE",
+   "TRANSITION_HELD_STALE_DATA",
+   "NEW_BUYS_BLOCKED_DATA",
+   "EXPOSURE_GAP_PENDING"
+  ],
+  "reasons": [
+   "One or more index/MA pairs have not yet confirmed a side.",
+   "This configuration does not use breadth; breadth rules are inactive.",
+   "Market-cap classification coverage below the configured minimum.",
+   "Long-term health (H200) at or below the R3 threshold.",
+   "Momentum sentinel state is not yet confirmed.",
+   "Recovery override needs current, well-covered breadth.",
+   "Previous tier retained: inputs are degraded and no confirmed risk-off rule fired.",
+   "New entries blocked by unusable or stale data.",
+   "Actual equity exposure exceeds the policy cap."
+  ],
+  "scheduled_week_end": "2026-06-05",
+  "signal_session_date": "2026-06-05",
+  "target_equity_cap_pct": 40.0,
+  "transition_limited": false
+ }
+}

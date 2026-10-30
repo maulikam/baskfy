@@ -1,0 +1,73 @@
+{
+ "fn": "baskfy_core.exposure.regime.make_evaluation_id",
+ "inputs": {
+  "cfg": {
+   "algorithm_version": "regime/1.0.0",
+   "bootstrap_policy": "adopt_candidate",
+   "breadth_required": false,
+   "breadth_stale_days": 10,
+   "buffer_bps": 150,
+   "confirm_days": 3,
+   "default_book_weights": {
+    "largecap": 0.2,
+    "midcap": 0.3,
+    "smallcap": 0.5
+   },
+   "exchange": "NSE",
+   "exposure_tolerance_pct": 1.0,
+   "index_aliases": {
+    "NIFTY 500 MOMENTUM 50": [
+     "NIFTY500MOMENTM50"
+    ],
+    "NIFTY SMLCAP 250": [
+     "NIFTY SMALLCAP 250"
+    ]
+   },
+   "index_stale_days": 5,
+   "ma_lengths": [
+    20,
+    50,
+    200
+   ],
+   "min_breadth_coverage_pct": 85.5,
+   "min_classification_coverage_pct": 80.0,
+   "mode": "observe",
+   "momentum_sentinel": "NIFTY 500 MOMENTUM 50",
+   "r1_breadth_min": 55.0,
+   "r1_h200_min": 0.8,
+   "r1_h50_min": 0.8,
+   "r3_breadth_max": 40.0,
+   "r3_h200_max": 0.5,
+   "r4_bearish_stack_min": 0.6,
+   "r4_breadth_max": 30.0,
+   "r4_h200_max": 0.3,
+   "recovery_breadth_min": 55.0,
+   "recovery_confirm_evaluations": 2,
+   "recovery_h20_min": 0.5,
+   "segment": "INDICES",
+   "structural_indices": {
+    "largecap": "NIFTY 50",
+    "midcap": "NIFTY MIDCAP 150",
+    "smallcap": "NIFTY SMLCAP 250"
+   },
+   "tier_exposure_pct": {
+    "R1": 100.0,
+    "R2": 70.0,
+    "R3": 40.0,
+    "R4": 10.0
+   },
+   "weekly_evaluation_weekday": 4
+  },
+  "scheduled_week_end": "2026-06-12",
+  "signal_session_date": "2026-06-11"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "24 hex. Inputs are JSON; each function is called from them after a JSON round trip. Dates are ISO days, enums their values, IndexSignals/BookWeights/RegimeState their as_dict(), Allocation and Position/Candidate/OrderLine dataclasses.asdict, tuples lists. A raise is {raises: {type, message}}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_exposure.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": "82bdd4b5f8b5a406dc72f1a4"
+}

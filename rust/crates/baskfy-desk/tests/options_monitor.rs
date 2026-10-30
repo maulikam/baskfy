@@ -29,8 +29,8 @@ use baskfy_desk::lanes::options::clock::{
     self as op_clock, Bus, LegQuotes, QuoteRaw, Seams, run_session,
 };
 use baskfy_desk::lanes::options::monitor::{
-    Cadence, NIFTY_50_TOKEN, NiftyOptionsMonitor, PositionStore, TrackedPosition, build_monitor,
-    local_wall_time,
+    Cadence, NIFTY_50_TOKEN, NiftyOptionsMonitor, PositionStore, TrackedPosition, aware_ist,
+    build_monitor, local_wall_time,
 };
 use baskfy_desk::lanes::options::monitor_loop as L;
 use baskfy_desk::lanes::options::replay::{self, ListStore};
@@ -129,7 +129,9 @@ const KITE: &str = r#"{"session": {"authed": true}, "routes": {}, "quotes": {}, 
 /// database fails loudly.
 const DEAD: &str = "postgres://baskfy:rs-test-only@127.0.0.1:55432/rsd_nowhere";
 
-async fn state_with(tweak: impl FnOnce(&mut Settings)) -> (baskfy_desk::AppState, tempfile::TempDir) {
+async fn state_with(
+    tweak: impl FnOnce(&mut Settings),
+) -> (baskfy_desk::AppState, tempfile::TempDir) {
     let dir = tempfile::tempdir().unwrap();
     let kite_dir = dir.path().join("kite");
     std::fs::create_dir_all(kite_dir.join("instruments")).unwrap();
@@ -183,7 +185,10 @@ async fn main_without_a_user_is_exit_2_before_the_world() {
     let err = baskfy_desk::lanes::options::options_monitor_main(&state, &bad)
         .await
         .unwrap_err();
-    assert!(err.starts_with("ValueError: invalid literal for int()"), "{err}");
+    assert!(
+        err.starts_with("ValueError: invalid literal for int()"),
+        "{err}"
+    );
 }
 
 #[test]
@@ -215,7 +220,11 @@ fn the_runner_holds_no_gateway() {
 async fn each_fixture_raises_exactly_the_expected_exit() {
     for name in SCENARIOS {
         let monitor = replay::replay(&fixture(name)).await.unwrap();
-        assert_eq!(replay::as_json(&monitor.store.exits), expected(name), "{name}");
+        assert_eq!(
+            replay::as_json(&monitor.store.exits),
+            expected(name),
+            "{name}"
+        );
     }
 }
 
@@ -239,7 +248,10 @@ fn the_expectations_are_the_ones_06_names() {
     assert_eq!(codes("o2-time-stop"), pair("TIME_STOP", "RULE"));
     assert_eq!(codes("o3a-target"), pair("TARGET", "RULE"));
     assert_eq!(codes("o1-feed-lost"), pair("HARD_EXIT", "FEED_LOST"));
-    let feed = expected("o1-feed-lost")[0]["at"].as_str().unwrap().to_owned();
+    let feed = expected("o1-feed-lost")[0]["at"]
+        .as_str()
+        .unwrap()
+        .to_owned();
     assert!(feed.starts_with("2026-10-27T14:05"));
     assert_eq!(expected("o2-time-stop")[0]["at"], "2026-10-19T10:51:00");
 }
@@ -248,7 +260,10 @@ fn the_expectations_are_the_ones_06_names() {
 async fn the_cli_agrees() {
     for name in SCENARIOS {
         let args = vec![
-            fixtures().join(format!("{name}.json")).display().to_string(),
+            fixtures()
+                .join(format!("{name}.json"))
+                .display()
+                .to_string(),
             "--expect".to_owned(),
             fixtures()
                 .join(format!("{name}.expected.json"))
@@ -273,11 +288,7 @@ async fn marks_are_recorded_every_30_seconds_at_most() {
     let monitor = replay::replay(&fixture("o3a-target")).await.unwrap();
     let stamps: Vec<NaiveDateTime> = monitor.store.marks.iter().map(|m| m.2).collect();
     assert!(!stamps.is_empty());
-    assert!(
-        stamps
-            .windows(2)
-            .all(|w| (w[1] - w[0]).num_seconds() >= 30)
-    );
+    assert!(stamps.windows(2).all(|w| (w[1] - w[0]).num_seconds() >= 30));
 }
 
 // --- the restart -------------------------------------------------------------------------------
@@ -285,10 +296,15 @@ async fn marks_are_recorded_every_30_seconds_at_most() {
 #[tokio::test]
 async fn a_restart_at_1130_resumes_from_op_position() {
     let monitor = replay::replay(&fixture("o1-restart-1130")).await.unwrap();
-    let ids: Vec<i64> = monitor.store.positions.iter().map(|t| t.session_id).collect();
+    let ids: Vec<i64> = monitor
+        .store
+        .positions
+        .iter()
+        .map(|t| t.session_id)
+        .collect();
     assert_eq!(ids, vec![1]);
     let bars = monitor.bars();
-    assert_eq!(bars[0].ts, dt(2026, 10, 27, 9, 15, 0));
+    assert_eq!(bars[0].ts, aware_ist(dt(2026, 10, 27, 9, 15, 0)));
     assert_eq!(
         replay::as_json(&monitor.store.exits),
         expected("o1-restart-1130")
@@ -313,8 +329,12 @@ async fn a_position_already_exiting_is_not_evaluated_again() {
 #[test]
 fn no_placing_verb_in_the_code() {
     let options = src("src/lanes/options.rs");
-    let runner = &options[options.find("/// `Kite()`'s refusal without a key").unwrap()
-        ..options.find("/// Run one of the lane's background services by name").unwrap()];
+    let runner = &options[options
+        .find("/// `Kite()`'s refusal without a key")
+        .unwrap()
+        ..options
+            .find("/// Run one of the lane's background services by name")
+            .unwrap()];
     for (name, text) in [
         ("monitor.rs", src("src/lanes/options/monitor.rs")),
         ("clock.rs", src("src/lanes/options/clock.rs")),
@@ -365,7 +385,8 @@ impl QuoteRaw for FakeKite {
         self.calls.lock().unwrap().push(keys.to_vec());
         let mut out = PyDict::new();
         for key in keys {
-            let level = |p: f64| PyValue::List(vec![PyValue::Map(dict([("price", PyValue::Float(p))]))]);
+            let level =
+                |p: f64| PyValue::List(vec![PyValue::Map(dict([("price", PyValue::Float(p))]))]);
             out.insert(
                 key.clone(),
                 PyValue::Map(dict([
@@ -393,9 +414,24 @@ async fn at_most_one_call_per_interval() {
     };
     let mut quotes = LegQuotes::new(&kite, 5.0);
     let now = dt(2026, 10, 27, 14, 6, 0);
-    assert!(quotes.poll(&[NIFTY_50_TOKEN, 9001], now, 0.0).await.is_some());
-    assert!(quotes.poll(&[NIFTY_50_TOKEN, 9001], now, 4.9).await.is_none());
-    assert!(quotes.poll(&[NIFTY_50_TOKEN, 9001], now, 5.0).await.is_some());
+    assert!(
+        quotes
+            .poll(&[NIFTY_50_TOKEN, 9001], now, 0.0)
+            .await
+            .is_some()
+    );
+    assert!(
+        quotes
+            .poll(&[NIFTY_50_TOKEN, 9001], now, 4.9)
+            .await
+            .is_none()
+    );
+    assert!(
+        quotes
+            .poll(&[NIFTY_50_TOKEN, 9001], now, 5.0)
+            .await
+            .is_some()
+    );
     let want = vec!["256265".to_owned(), "9001".to_owned()];
     assert_eq!(*kite.calls.lock().unwrap(), vec![want.clone(), want]);
 }
@@ -505,8 +541,7 @@ struct Shared(Arc<Mutex<ListStore>>);
 impl PositionStore for Shared {
     async fn open_positions(&mut self, day: NaiveDate) -> Result<Vec<TrackedPosition>, String> {
         let mut s = self.0.lock().unwrap().clone();
-        let out = s.open_positions(day).await;
-        out
+        s.open_positions(day).await
     }
 
     async fn raise_exit(
@@ -539,8 +574,7 @@ impl PositionStore for Shared {
         until: NaiveDateTime,
     ) -> Result<Vec<Bar>, String> {
         let mut s = self.0.lock().unwrap().clone();
-        let out = s.index_minutes(day, until).await;
-        out
+        s.index_minutes(day, until).await
     }
 }
 
@@ -577,7 +611,10 @@ async fn an_idle_pass_judges_a_silent_feed() {
         .iter()
         .map(|e| (e.1.clone(), e.2.clone()))
         .collect();
-    assert_eq!(codes, vec![("HARD_EXIT".to_owned(), "FEED_LOST".to_owned())]);
+    assert_eq!(
+        codes,
+        vec![("HARD_EXIT".to_owned(), "FEED_LOST".to_owned())]
+    );
 }
 
 #[tokio::test]
@@ -712,7 +749,10 @@ fn head(sleeve: &str, structure: &str, detail: &str) -> Row {
             "risk_budget_inr".to_owned(),
             DbValue::Text("2500.00".to_owned()),
         ),
-        ("width_points".to_owned(), DbValue::Text("100.00".to_owned())),
+        (
+            "width_points".to_owned(),
+            DbValue::Text("100.00".to_owned()),
+        ),
         ("detail".to_owned(), DbValue::Json(detail.to_owned())),
     ])
 }
@@ -737,7 +777,8 @@ fn legs() -> Vec<Row> {
 
 #[test]
 fn o3a_reads_the_morning_range() {
-    let detail = r#"{"direction": "UP", "gate": {"range_high": "25182.00", "range_low": "24998.00"}}"#;
+    let detail =
+        r#"{"direction": "UP", "gate": {"range_high": "25182.00", "range_low": "24998.00"}}"#;
     let row = position_from_rows(&head("O3A", "DEBIT_SPREAD", detail), &legs()).unwrap();
     let tracked = TrackedPosition::from_tracked(&row);
     let p = &tracked.position;
@@ -749,7 +790,7 @@ fn o3a_reads_the_morning_range() {
     assert_eq!(fills, vec![d("35.05"), d("5.00")]);
     assert_eq!(tracked.tokens(), vec![9201, 9202]);
     // `_aware(opened_at)`: a naive time is IST.
-    assert_eq!(p.opened_at, dt(2026, 10, 20, 10, 22, 0));
+    assert_eq!(p.opened_at, aware_ist(dt(2026, 10, 20, 10, 22, 0)));
 }
 
 #[test]
@@ -763,7 +804,10 @@ fn o2_reads_the_opening_range_and_o3b_the_half_gap() {
         &legs()[..1],
     )
     .unwrap();
-    assert_eq!((o2.range_high, o2.range_low), (Some(d("25032")), Some(d("25008"))));
+    assert_eq!(
+        (o2.range_high, o2.range_low),
+        (Some(d("25032")), Some(d("25008")))
+    );
     let o3b = position_from_rows(
         &head(
             "O3B",
@@ -784,7 +828,10 @@ async fn run_dead(kind: &'static str) -> Vec<(String, String, NaiveDateTime)> {
     let mut monitor = NiftyOptionsMonitor::new(ListStore::new(vec![tracked], vec![]), day27());
     let kite = Broken(kind);
     let mut quotes = LegQuotes::new(&kite, 5.0);
-    let mut moments: Vec<NaiveDateTime> = (0..20).step_by(2).map(|s| dt(2026, 10, 27, 11, 0, s)).collect();
+    let mut moments: Vec<NaiveDateTime> = (0..20)
+        .step_by(2)
+        .map(|s| dt(2026, 10, 27, 11, 0, s))
+        .collect();
     moments.extend([dt(2026, 10, 27, 15, 31, 0); 4]);
     let mut seams = Script::new(moments);
     seams.ticking = Some(10.0);
@@ -919,7 +966,12 @@ fn a_crash_in_session_restarts_and_a_clean_exit_ends_the_day() {
     assert_eq!(seams.calls[0][1..], ["service", "options-monitor"]);
     #[allow(clippy::cast_precision_loss)]
     let retry = L::RETRY_SECONDS as f64;
-    assert!(seams.sleeps.iter().any(|s| (s - retry).abs() < f64::EPSILON));
+    assert!(
+        seams
+            .sleeps
+            .iter()
+            .any(|s| (s - retry).abs() < f64::EPSILON)
+    );
 }
 
 /// The lines of the block opened by the line `header` (indentation `indent`).
@@ -982,7 +1034,10 @@ fn the_image_carries_the_loop() {
 fn compose_runs_it_from_the_desk_block_with_money_flags_false() {
     let text = repo_file("decile-blueprint/infra/docker/compose.prod.yml");
     let own = block(&text, "  options-monitor:", 2);
-    assert!(own.iter().any(|l| l.trim() == "command: [options-monitor-loop]"));
+    assert!(
+        own.iter()
+            .any(|l| l.trim() == "command: [options-monitor-loop]")
+    );
     let env = service_env(&text, "options-monitor");
     let get = |k: &str| env.iter().find(|(key, _)| key == k).map(|(_, v)| v.clone());
     for sleeve in ["O1M", "O1W", "O2", "O3"] {
@@ -995,13 +1050,21 @@ fn compose_runs_it_from_the_desk_block_with_money_flags_false() {
     );
     assert_eq!(get("OPTIONS_ENABLED").as_deref(), Some("false"));
     assert_eq!(get("INTRADAY_ENABLED").as_deref(), Some("false"));
-    assert_eq!(get("DRY_RUN").as_deref(), Some("${BASKFY_DESK_DRY_RUN:-true}"));
+    assert_eq!(
+        get("DRY_RUN").as_deref(),
+        Some("${BASKFY_DESK_DRY_RUN:-true}")
+    );
 }
 
 #[test]
 fn no_options_auto_execute_variable_anywhere_in_compose() {
     let text = repo_file("decile-blueprint/infra/docker/compose.prod.yml");
-    assert!(regex::Regex::new(r"OPTIONS\w*AUTO").unwrap().find(&text).is_none());
+    assert!(
+        regex::Regex::new(r"OPTIONS\w*AUTO")
+            .unwrap()
+            .find(&text)
+            .is_none()
+    );
 }
 
 #[test]

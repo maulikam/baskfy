@@ -118,9 +118,7 @@ pub fn run_forever(seams: &mut dyn LoopSeams, program: &str, limit: Option<usize
         let mut argv = vec![program.to_owned()];
         argv.extend(ARGV.iter().map(|a| (*a).to_owned()));
         let rc = seams.call(&argv);
-        say(&format!(
-            "options-monitor: app.options_monitor exited {rc}"
-        ));
+        say(&format!("options-monitor: app.options_monitor exited {rc}"));
         fired += 1;
         // `rc != 0 and in_session(now())`: the clock is read only for a failed run.
         if rc != 0 && in_session(seams.now()) {

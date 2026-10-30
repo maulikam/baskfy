@@ -1,0 +1,24 @@
+{
+  "lane": "pipeline",
+  "note": "The foundation's wiring of wave-5 code (DECISIONS-RS R8.1). The bed holds 2026-10-29 published (run 103); 2026-10-30 is a derived session; 31 Oct is a weekend.",
+  "cases": [
+    {"name": "nightly-scheduled-before-cutoff", "task": "baskfy.pipeline.nightly", "args": {}, "now": "2026-10-30T13:15:00",
+     "note": "Beat's path at 13:15 on a session day not yet published: skipped until 18:00 IST (the two clocks)"},
+    {"name": "nightly-scheduled-one-second-before-cutoff", "task": "baskfy.pipeline.nightly", "args": [], "now": "2026-10-30T17:59:59"},
+    {"name": "nightly-scheduled-already-published", "task": "baskfy.pipeline.nightly", "args": {}, "now": "2026-10-29T19:00:00",
+     "note": "the second Beat entry (18:45) on a day the 15:50 run already published"},
+    {"name": "nightly-scheduled-weekend", "task": "baskfy.pipeline.nightly", "args": {}, "now": "2026-10-31T18:45:00"},
+    {"name": "nightly-bad-date", "task": "baskfy.pipeline.nightly", "args": {"trade_date": "29-10-2026"}, "now": "2026-10-30T09:00:00"},
+    {"name": "nightly-unknown-keyword", "task": "baskfy.pipeline.nightly", "args": {"day": "2026-10-29"}, "now": "2026-10-30T09:00:00"},
+    {"name": "catch-up-nothing-before-cutoff", "task": "baskfy.pipeline.session_catch_up", "args": {}, "now": "2026-10-30T13:15:00",
+     "note": "29 Oct landed; 30 Oct is still before SESSION_DATA_READY_IST, so nothing is proposed"},
+    {"name": "catch-up-nothing-saturday-morning", "task": "baskfy.pipeline.session_catch_up", "args": {"lookback_days": 3, "max_sessions": 1}, "now": "2026-10-31T06:45:00",
+     "seed_sql": "INSERT INTO pipeline_run (trade_date, status, started_at, finished_at, data_version) SELECT DATE '2026-10-30', 'succeeded', TIMESTAMPTZ '2026-10-30 13:30:00+00', TIMESTAMPTZ '2026-10-30 14:00:00+00', max(data_version) + 1 FROM pipeline_run",
+     "note": "the 06:45 Beat entry after a published Friday (seeded): nothing to do"},
+    {"name": "reprocess-kpigreen", "task": "baskfy.compute.reprocess_instrument", "args": {"instrument_id": 1549}, "now": "2026-10-30T03:00:00",
+     "note": "dividend + split; idempotent: the bed's adjusted series is rewritten to the same values"},
+    {"name": "reprocess-cupid-positional", "task": "baskfy.compute.reprocess_instrument", "args": [1], "now": "2026-10-30T03:00:00"},
+    {"name": "reprocess-no-actions", "task": "baskfy.compute.reprocess_instrument", "args": {"instrument_id": 3}, "now": "2026-10-30T03:00:00"},
+    {"name": "reprocess-missing-argument", "task": "baskfy.compute.reprocess_instrument", "args": {}, "now": "2026-10-30T03:00:00"}
+  ]
+}

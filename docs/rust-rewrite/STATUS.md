@@ -27,7 +27,11 @@ its golden tests run · `verified` — every golden for the module green, clippy
 | API GET routes (RS4b) | **139 of 140** mounted router GETs; 2,285 of 2,285 cases EQUAL at RS4c |
 | API write routes (RS4c) | **82 of 94 ported**, 1 partly, 11 on Python with reasons; 1,175 of 1,175 writes cases EQUAL with every side effect (section "Wave 4c integration") |
 | `cargo test --workspace` at RS4c | **green**: 64 test targets, 1,013 passed + 14 ignored (the same 14); **1,702 of 1,702 graded goldens** |
-| Worker, desk, execution, single binary | not started (next: **wave 5, the worker — the nightly first**) |
+| `baskfy-worker` foundation (RS5.0): steps, orchestrator, nightly task, settings, alerts, CLI, the replay provider, `nightly_diff.py` | **done** (RS5.0, section "Wave 5 foundation") |
+| `baskfy-worker` nightly (RS5): all 14 steps | **ported**; `nightly_diff.py --chain` **EQUAL in 7 of 7 scenarios** py,rs; catch-up decision 11 of 11 EQUAL (section "Wave 5 integration") |
+| `cargo test --workspace` at RS5.0 | **green**: 71 test targets, 1,038 passed + 14 ignored (the same 14); **1,702 of 1,702 graded goldens** |
+| `baskfy-worker` tasks (RS6.0): registry (76), Beat (61), CLI `task`, `task_diff.py`, replay upstream | **foundation done**; 4 tasks wired and EQUAL py,rs, 72 declared stubs in 15 lanes (section "Wave 6 foundation") |
+| Desk, execution, single binary | not started (the desk: its own workflow, `rs-desk`) |
 
 ## Wave 1 (RS1, RS1.1 — 29 Oct 2026) — swing and options ported, 126 of 126
 
@@ -455,6 +459,307 @@ a reporting slip, no code change.
   `fno::costs` takes role→price maps instead of `fno::condor::LegRole`. Each now has a real
   home in the crate (R3.4).
 
+## Wave 6 foundation (RS6.0, 30 Oct 2026) — the task registry, `task_diff.py`, the replay upstream
+
+**Not committed** (the integrator commits). Decisions R8.1–R8.3, all ⚠ UNREVIEWED.
+
+| Piece | Python | State |
+|---|---|---|
+| `tasks::registry` (76 tasks) | `celery_app` after `build_celery()` | **done**: names, Python functions, parameters (annotations, defaults), `bind`, `acks_late`, `autoretry_for`, backoff, `time_limit`, queue option; routing computed both ways; held equal to `tests/fixtures/python_task_registry.json` (`tools/parity/task_registry.py`) by `tests/task_registry.rs` (7 tests) |
+| `tasks::beat` (61 entries) | `BEAT_SCHEDULE` | **done**: crontabs in IST as written and as Celery expands them, intervals, kwargs, queue/expires/countdown; `due_at`; `baskfy-worker beat --now` |
+| `tasks::args` | CPython's call binding | **done**: CPython 3.12's order and messages (checked against the interpreter) |
+| `tasks::context` | `dt.datetime.now(tz=IST)`, `build_pipeline_dependencies` | **done**: the injected, advancing clock; the replay seams; the dependency builder moved from `main.rs` |
+| `tasks::pipeline` — `pipeline.nightly` (both paths), `pipeline.session_catch_up`, `compute.reprocess_instrument`, `pipeline.integrity_audit` | `celery_tasks.py` | **ported** (wave-5 code wired); `task_diff.py` **12 of 12 EQUAL py,rs** |
+| 72 tasks in 15 lanes | `celery_tasks.py`, `desk.py` | **declared stubs** (`TaskNotPorted`, every one driven through the registry by a test) |
+| CLI `task`, `tasks`, `beat` | Celery's worker | **done**; exit 0 / 75 (retryable) / 1 / 2 |
+| `tools/parity/task_diff.py` + `task_py.py` | — | **done**: cases per lane, injected clock both sides, every effect compared (R8.2) |
+| `tools/parity/replay_upstream.py` + the `session` bundle (`replay_build_session.py`) | — | **done** (R8.3); Kite historical minute candles not recorded yet |
+
+**The lanes** (`rust/crates/baskfy-worker/src/tasks/<lane>.rs`, `tools/parity/task_cases/<lane>.json`):
+
+| Lane | Tasks |
+|---|---|
+| `screener` | `compute.warm_screen_cache`, `alerts.dispatch` (both need the screener port, with R6.13 and R-gate.2) |
+| `api_routes` | `ops.resync`, `accounts.purge` **ported**; `overlap.catalyst_scan` gated (R8.ar4). API: `GET /overlap`, `/overlap/reviews` ×2, explore `/watchlist` ×2 ported; R7.15 closed; 7 screener routes stay on Python (R8.ar6) |
+| `curated` | `cb.compute_metrics`, `cb.sip_reminders`, `cb.derive_dividends`, `cb.sync_batches`, `cb.rebalance_notify` |
+| `backtest_engine` | `backtest.run` |
+| `sleeve_backtests` | `swing.backtest`, `vbt.backtest`, `options.backtest` |
+| `swing_eod` | `swing.detect`, `swing.eod`, `swing.weekend`, `swing.catalyst`, `swing.check_detect_fresh`  **ported (RS6 lane, R-se.1)**: all 5 in `PORTED`; task_diff EQUAL py,rs on 7 cases run (check_detect_fresh ok/stale, detect published/unpublished/bad-date/no-user, eod no-market-row); the other 20 cases in `swing_eod.json` not yet run (Maulik's code-first order); 14 DB tests `--ignored` (`BASKFY_RS_SWING_EOD_DB_URL`) |
+| `swing_live` | `swing.premarket`, `swing.scan_now`, `swing.scan_after_login`, `swing.scan_sweep`, `swing.timing_probe`, `swing.check_monitor_started`, `swing.check_orders_after_cutoff`, `swing.check_gtt_at_1515` — **all 8 ported**; `task_cases/swing_live.json` **43 of 43 EQUAL py,rs** (R8.x lane label R-sl.1). Added for reuse: `swing_live::published_session` (C3's one rule), `swing_live::producer` (`apply_async`), the detector's `ScanExtras`, core `live_gap`/`live_gap_score`, five `SWING_*` alert names; `swing_eod`'s plan pieces widened to `pub(crate)` (no body changed) |
+| `twt_jobs` | `twt.detect`, `twt.evening`, `twt.morning`, `twt.scan`, `twt.scan_publish` |
+| `vbt_jobs` | `vbt.detect`, `vbt.evening`, `vbt.morning`, `vbt.rescan`, `vbt.rescan_sweep`, `vbt.check_detect_fresh`, `vbt.check_orders_past_expiry`, `vbt.check_naked_positions`, `vbt.check_positions_without_bars` |
+| `portfolio` | `portfolio.eod_nav`, `pipeline.capture_kite_trades` |
+| `ops_alerts` | `ops.reap_abandoned_runs`, `ops.check_publish_deadline`, `ops.check_kite_token`, `ops.check_queue_backlog`, `alerts.sweep_webhooks`, `kite.login_nudge` (+ `refresh_kite_session_quietly`) |
+| `fno` | `fno.ingest_bhavcopy`, `fno.index_daily`, `fno.scan`, `fno.weekly`, `fno.alerts`, `fno.retest`, `fno.spread_sample` |
+| `options` | `options.refresh_master`, `collect_chain`, `index_bars`, `index_bars_eod`, `scan`, `plan_o1`, `plan_o2`, `plan_o3`, `weekly`, `checks`, `backfill_index_bars` |
+| `backfills` | `pipeline.bhavcopy_ingest`, `eq_bars.session` |
+| `clis` | `desk.daily`, `desk.autorun`, `desk.daily_check`, and the twelve `*_cli.py` modules as subcommands |
+
+- **swing_live (30 Oct, R-sl.1):** all 8 tasks ported. The first `task_diff` batch was 17 of 25 EQUAL; every DIFFER was an unmasked seed stamp or the login `run_id` quirk, both fixed in the cases. The full 43-case rerun was not done (CODE FIRST).
+
+### Wave 6 foundation — harness results (30 Oct 2026; bundles `base` sha256 33841c9f… (unchanged), `session` sha256 994dd6e6…)
+
+| Case file | Sides | Result | What it exercised |
+|---|---|---|---|
+| `pipeline.json` | **py,rs** | **12 of 12 EQUAL** | `pipeline.nightly` on Beat's path at 13:15 and 17:59:59 on an unpublished session (skipped until 18:00 IST), 19:00 on a published day, a Saturday; a bad date (`ValueError`), an unknown keyword (`TypeError`); `session_catch_up` before the cutoff and on a Saturday morning after a seeded publish; `reprocess_instrument` — KPIGREEN 633 bars over 4 actions, CUPID positional 701 bars, an instrument with no action 698 bars (`ohlcv_daily` 3,887,194 rows EQUAL each time), a missing argument |
+| `pipeline.json` | py,py | 12 of 12 EQUAL | the same, the harness against itself |
+| `fno.json` | py,py | 3 of 3 EQUAL | the real 28 Oct F&O zip parsed from the archive with no request (35,033 rows in the file, 15,125 kept), the 29 Oct ban list; 29 Oct with no file: archive miss, two 404s from the upstream, `MISSING` at 23:30, `FNO_BHAVCOPY_MISSING` mailed; the disabled refusal |
+| `options.json` | py,py | 5 of 5 EQUAL | through the production `kiteconnect` and a test token: `/instruments/NFO` (27,495 option contracts), three `/instruments/historical` minute pulls at 13:15:20 (76 recorded bars per index), one `/quote` of the recorded chain (105 rows); no session; collector disabled |
+
+The four wired tasks are the only ones `py,rs` can be EQUAL on; every other case file is the lanes' to
+fill (`fno.json` and `options.json` carry the foundation's proofs of the replay upstream, which a
+Rust side answers `NotPorted` today). Gates: `cargo fmt --check` clean, `cargo clippy --workspace
+--all-targets -D warnings` clean, `cargo test --workspace` on the bed **72 targets, 1,200 passed,
+0 failed, 45 ignored** (wave 5's 1,184 plus 16 new; the same 45 ignored), 1,702 of 1,702 goldens.
+Every database this work created was dropped; Redis 6 and 7 flushed; nothing listens on 18898/18899.
+
+**What the py,py runs caught in the harness** (R8.2): a process-wide `datetime` patch broke polars
+on both Python sides alike (fixed: production modules only); microsecond clock drift changed the
+options collector's greeks (fixed: the clock advances in whole seconds on both sides). Masks added,
+each printed: `fo_underlying_daily.updated_at`, `fo_ingest_day.updated_at` (Postgres `now()`), an
+alert's `raised_at` and a report's `seconds` in two payloads.
+
+**Open before a task cuts over (R8.1):** the Celery shim per task; the swing/VBT/TWT detect tasks
+need `steps::sleeves`' detectors with `pipeline_run_id: Option<i64>` (their lanes widen the
+signature, never fork the detector); the API's two copies of the Celery producer collapse into one
+public module the worker can use (the sweeps enqueue); `refresh_kite_session_quietly`; Kite
+historical minute candles in the `session` bundle (options index bars).
+
+## Wave 5 integration (RS5, 30 Oct 2026) — the nightly in Rust, all 14 steps, every chain scenario EQUAL
+
+The foundation (RS5.0) and five lanes (ingest, index, compute, gate, sleeves), each adversarially
+reviewed, merged and graded together on the bed (2026-10-29 replay day, bundle `base` sha256
+33841c9f…). The integrator ported the one step no lane owned, `refresh_basket` (R7.14), graded the
+catch-up decision (R7.15) and renumbered the lanes' decisions R7.9–R7.13.
+
+| Step | Rust | Graded (py,rs) |
+|---|---|---|
+| 1 `refresh_instruments`, 2 `fetch_daily_bars`, 3 `fetch_corporate_actions`, 4 `apply_adjustments` | `steps/ingest/` (R7.11) | ported; lane step runs fresh/rerun (+ gate-refuse for bars) EQUAL |
+| 5 `refresh_index_membership`, 6 `refresh_index_snapshots` (+ fundamentals) | `steps/index/` (R7.9) | ported; fresh/rerun/provider-failure-midway, `index-edges`, `fundamentals-refused` EQUAL |
+| 7 `compute_factors` (+ desk score), 8 `compute_market_health` | `steps/compute/` (R7.12) | ported; fresh/rerun/gate-refuse + three `--mutate` edge sets EQUAL |
+| 9 `data_quality_gate`, 10 `publish` | `steps/gate/` (R7.10) | ported (the `ranking_terms` warm path raises `NotPorted`, R-gate.2; none on the bed) |
+| 11 `refresh_basket` | `steps/sleeves/basket.rs` (R7.14) | **ported by the integrator**; `--step` fresh EQUAL with `FULLY_INVESTED` false and true (15 names, 43 suspect symbols) |
+| 12 `compute_swing`, 13 `compute_vbt`, 14 `compute_twt` | `steps/sleeves/` (R7.13) | ported; fresh/rerun + `--mutate` edges/nobars/thin EQUAL |
+| `catch_up.py` decision | `catch_up.rs`, `catch-up --now` | 11 of 11 moments EQUAL (`catch_up_diff.py`) |
+
+**`nightly_diff.py --chain`, Python vs Rust — 7 of 7 scenarios EQUAL** (payload, `pipeline_run`,
+`pipeline_run_step`, every touched table, 99 sequences, Redis, mail; masks only R7.7's):
+
+| Scenario | Outcome (both sides) | Tables compared besides the run tables |
+|---|---|---|
+| `fresh` | succeeded, `data_version` 44, 14 steps | 18 (`ohlcv_daily` 3,887,193, `factor_daily` 928,614, `index_member_daily` 1,081,620, `desk_score_daily` 218,553, `basket_snapshot` 1, …); Redis 11 keys |
+| `rerun` (house rule 7) | succeeded, `data_version` 45 | 18; Redis 11 keys |
+| `gate-refuse` | failed at `data_quality_gate`, chain rows committed | 10; 1 alert mail |
+| `non-trading-day` | aborted (2026-10-31, weekend) | 0 |
+| `provider-failure-midway` | failed at step 6, chain rolled back | 5; 1 alert mail |
+| `index-edges` | failed at `data_quality_gate` (the halved/raised snapshots) | 11; 1 alert mail |
+| `fundamentals-refused` | succeeded, `data_version` 44 | 17; Redis 11 keys |
+
+**Catch-up** (`tools/parity/catch_up_diff.py`, clock injected, never the system's): on the bed,
+2026-10-30 at 09:15, 13:15 and 17:59:59 IST proposes nothing; at 18:00:00 and 21:30 it proposes
+2026-10-30; on Saturday 31 Oct and Monday 2 Nov pre-open it proposes 2026-10-30. With 29 Oct's run
+deleted: 13:15 and 17:59:59 on the 29th propose nothing, 18:00:00 proposes the 29th. 11 of 11 EQUAL.
+A day still in session is never proposed.
+
+**Gates.** `cargo fmt --check` clean; `cargo clippy --workspace --all-targets -D warnings` clean;
+`cargo test --workspace` on the bed — 71 targets, **1,184 passed, 0 failed, 45 ignored** (the 14
+historical, 30 lane scratch-DB tests and 1 score-diff fixture test; the 30 pass with
+`BASKFY_RS_SCRATCH_DATABASE_URL` and `-- --ignored db_tests`), 1,702 of 1,702 goldens.
+
+**API re-graded.** GET, all six case files: **2,285 of 2,285 EQUAL** (`BASKFY_SOLE_USER_ID=1`).
+Writes: foundation, accounts, portfolio, sleeves, sleeves_nobroker, sleeves_nobroker_ratelimit
+EQUAL with every side effect EQUAL; **screens 259 of 260**, side effects EQUAL — the one difference,
+`probe-exit-huge-int`, is **pre-existing (RS4c) and clock-dependent**: graded at 12:36 IST the market
+is open, so `POST /cb/plans/exit` builds a plan instead of the closed-market body, and Rust's `i128`
+leg quantity saturates on Python's 42-digit integer (and the case masks neither `desk_plan_id`, a
+`uuid4`, nor `expires_at_hint`). `baskfy-api` is unchanged by this wave. Owner: the API (R7.15).
+
+**Audit.** No order, GTT or Kite write path in `baskfy-worker` (`law_two.rs`, and a grep); the only
+network is the providers' guarded client (the replay arms the block); no secret logged; `law_one`
+green; Python's worker and desk code unchanged (`git diff decile-blueprint kite-momentum-rebalancer`
+empty); `baskfy` unchanged (`ohlcv_daily` 3,887,194, `pipeline_run` 96, `pipeline_run_step` 679,
+`data_version` 44, `basket_snapshot` 0, before and after); the bed holds only `baskfy`; Redis
+indices 3, 4, 11, 12 empty; nothing of this run listens on 18xxx. Other agents' harnesses
+(`desk_diff.py`) shared the bed and the lock during the run; none of their databases was touched.
+
+**Open before the nightly cuts over:** R7.1's Celery shell-out; R7.4 (spans, metrics), R7.5
+(Sentry, webhook); R-gate.2's `ranking_terms` warm path; `BASKFY_DESK_ROOT` on the deployed binary
+(R7.14); the `session_catch_up` body (nightly per day, swing EOD, holiday demotion; R-gate.4);
+the residuals listed in R7.9–R7.13.
+
+**Next:** the worker's remaining Celery tasks — screen runs together with the 11 API write routes
+waiting on the screener (R6.13), backtests, the sleeves' evening and premarket jobs, holdings sync
+(read-only), alerts — then the desk.
+
+## Wave 5 foundation (RS5.0, 30 Oct 2026) — `baskfy-worker`, the replay provider, `nightly_diff.py`
+
+**Not committed** (the integrator commits). Decisions R4.14 (closed), R7.1–R7.7.
+
+| Piece | Python | State |
+|---|---|---|
+| S3 retries (R4.14) | boto3 legacy mode | **closed**: 5 attempts, botocore's retryable statuses/codes/socket errors, `random() * 2**(n-1)` backoff; `tests/s3_retry.rs` 8 cases on a loopback stub |
+| crate `baskfy-worker` (lib + bin) | `services/worker` | declared in the workspace; no new third-party dependency (R7.2) |
+| `steps.rs` | `steps.py` | **ported**: the 14 step strings in order, `NIGHTLY_CHAIN`, `POST_PUBLISH_STEPS`, statuses, `StepOutcome` (`dict.update` order), `record_step` (two upserts per step, JSON `null` for no detail, the failure row never replacing the failure), `open_run`/`adopt_run`/`close_run` |
+| `orchestrator.rs` | `orchestrator.py` | **ported**: `try_lock_pipeline` (Python's key `0x0BA5C1FA`), `run_nightly_pipeline` (aborted day, held lock, `HardFailure` caught and committed), the chain as one block per step (R7.6), the desk-score savepoint, the three post-publish wrappers that cannot raise |
+| `nightly.rs` | `celery_tasks.nightly_pipeline` (explicit date) | **ported**: three transactions, `fail_run`, the alerts, the return value |
+| `ops.rs`, `calendar.rs` | `ops.begin_run/fail_run/is_trading_day`, `calendar.classify/require_trading_day` | ported |
+| `alerts.rs` | `alerts.Alert/dispatch`, `ops.alert_for_outcome` | log + email ported; Sentry and webhook not (R7.5) |
+| `settings.rs` | `WorkerSettings` | ported, 53 fields held to a Python-generated fixture |
+| `catch_up.rs` | `catch_up.py` | constants (`SESSION_DATA_READY_IST = 18:00`) and `_has_had_time_to_publish` ported; the sweep is the **gate lane's** stub |
+| CLI | `pipeline_cli`, the Celery task | `nightly --date`, `step <name> --date --run-id [--context]`, `catch-up`, `--replay-bundle` |
+| step bodies | `tasks/*.py` | **declared stubs** (`NotPorted`) in `steps/{ingest,index,compute,gate,sleeves}.rs`, one file per lane |
+| replay provider | — | Rust `baskfy_providers::replay` + Python `tools/parity/replay_provider.py`; `replay_selfcheck.py` **22 of 22 calls EQUAL** on `base` and `provider-failure-midway` (R7.3) |
+| bundle builder | — | `tools/parity/replay_build.py --date 2026-10-29` (deterministic; three variants) |
+| harness | — | `tools/parity/nightly_diff.py` (`--chain`, `--step`, five scenarios, lock, budget, cleanup; R7.7) |
+
+**The harness proved (Python vs Python, 2026-10-29 replay day).** See "Wave 5 — harness results" below
+for every run's line; all tables, sequences, Redis and mail EQUAL with only the masks R7.7 lists.
+
+**The Rust skeleton runs end to end.** Python vs Rust on a non-trading day (2026-10-31) is
+**EQUAL** — payload, run rows, sequences, Redis, mail — because that path is all foundation code.
+On a trading day the Rust chain stops at step 1 with `NotPorted` (rolled back, run failed on its
+own transaction, `pipeline_failed` mailed), and `--probe-steps` shows every one of the 14 steps
+answering `NotPorted` through `baskfy-worker step`.
+
+### Wave 5 — harness results (RS5.0, 30 Oct 2026; 2026-10-29 replay day, bundle `base` sha256 33841c9f…)
+
+| Run | Sides | Result |
+|---|---|---|
+| `--chain --scenario fresh` | py,py | **EQUAL**: payload (succeeded, `data_version` 44), `pipeline_run` 96, `pipeline_run_step` 679, 18 touched tables (`ohlcv_daily` 3,887,193 rows, `factor_daily` 928,614, `index_member_daily` 1,081,620, `desk_score_daily` 218,553, …), 99 sequences, Redis 11 keys, mail 0 |
+| `--chain --scenario rerun` | py,py | **EQUAL** (idempotent re-run, house rule 7): `data_version` 45, the same tables, Redis 11 keys |
+| `--chain --scenario gate-refuse` | py,py | **EQUAL**: failed at `data_quality_gate` ("1687 bars against a 10-day median of 4216 (threshold 3795)"), run closed failed, chain rows committed, 1 alert mail |
+| `--chain --scenario provider-failure-midway` | py,py | **EQUAL**: `CapabilityNotAvailable` at step 6, chain rolled back, run failed on its own transaction, 1 alert mail |
+| `--chain --scenario non-trading-day` | **py,rs** | **EQUAL**: 2026-10-31 aborted ("is not an NSE trading day: weekend"), run rows and sequences equal — the foundation's own path |
+| `--step compute_market_health --scenario fresh` | py,py | **EQUAL** (prime of 7 steps cached as `rsn_primed_computemarkethealth_…`, reused by the next run) |
+| `--step compute_market_health --scenario fresh` | py,rs | DIFFERENT as expected: Rust raises `NotPorted`, rolled back |
+| `--chain --scenario fresh` | py,rs | DIFFERENT as expected: Rust stops at step 1 (`NotPorted`), run failed, `pipeline_failed` mailed |
+| `--probe-steps` | rs | every one of the 14 steps answers `NotPorted` (steps 12–14 record `skipped` with `skipped_reason: "NotPorted: …"` and exit 0, because the wrappers cannot raise) |
+
+Masks the Python-vs-Python runs needed, and nothing else (`TABLE_MASKS`, R7.7): `instrument.created_at/updated_at`,
+`basket_snapshot.computed_at/computed_ms`, `created_at` on `screen_run`, `sw_market_daily`, `sw_setup_daily`,
+`tw_breadth_daily`, `tw_signal_daily`, `tw_state_daily`, `vb_breadth_daily`, `vb_signal_daily`, and
+`refresh_basket`'s `computed_ms` detail. **No nondeterminism found in Python** beyond wall clocks and
+measured durations: every row, sequence, Redis value and mail body agreed across two runs (no
+`PYTHONHASHSEED` pinning). A Python chain over the replay takes ~3 minutes; a side pair with the
+digests ~8–9 minutes; a fresh 3 GB template ~1 minute.
+
+Also green at RS5.0: `replay_selfcheck.py` 22/22 on two bundles; `cargo fmt --check`, `clippy --workspace
+--all-targets -D warnings`, `cargo test --workspace` on the bed (71 targets, 1,038 passed, 14 ignored,
+1,702 goldens); `api_diff.py` GET 2,285 of 2,285 EQUAL (`BASKFY_SOLE_USER_ID=1`); writes spot check
+`writes_foundation.json` 74 of 74, side effects EQUAL. The bed holds only `baskfy` afterwards (caches
+dropped with `--drop-cache`), Redis indices 11 and 12 empty.
+
+### Wave 5 plan — the lanes (the foundation's contracts are fixed; R7.2, R7.6)
+
+| Lane | Owns | Python it ports | Grade with |
+|---|---|---|---|
+| **ingest** | `steps/ingest.rs` | `tasks/instruments`, `listings`, `bars` (+ `bhavcopy_backfill` as the bars need it), `corporate_actions`, `adjustments` (house rule 5: the nightly's **unbounded** `apply_adjustments` is deliberate), `calendar.reconcile_calendar` | `--step refresh_instruments … apply_adjustments`, scenarios `fresh` and `rerun` |
+| **index** | `steps/index.rs` | `tasks/membership`, `snapshots`, `fundamentals` | `--step refresh_index_membership`, `refresh_index_snapshots`; `provider-failure-midway` |
+| **compute** | `steps/compute.rs` | `tasks/factors` (the polars engine), `desk_score`, `market_health` — pulls `baskfy_core` modules with no goldens yet (goldens first) | `--step compute_factors`, `compute_market_health` |
+| **gate** | `steps/gate.rs`, `catch_up.rs` | `tasks/quality`, `publish` (cache purge + warm: needs the screener port shared with R6.13's routes), `catch_up` + `session_catch_up` | `--step data_quality_gate`, `publish`; `gate-refuse` |
+| **sleeves** | `steps/sleeves.rs` | `tasks/basket`, `swing.run_detect_swing`, `vbt.run_detect_vbt`, `twt.run_detect_twt` (law 2: detection places nothing) | `--step refresh_basket … compute_twt` |
+
+Then the integrator: `--chain` for all five scenarios, `py,rs`, EQUAL; the Celery shell-out (R7.1)
+is the cutover. Open before cutover: R7.4 (spans/metrics), R7.5 (webhook, Sentry), the
+`WorkerSettings` parser collapse (R7.2), Kite session refresh stays in the Celery task.
+
+## Wave 5 lane nightly-sleeves (RS5, 30 Oct 2026) — steps 12–14 ported, 6 of 6 runs EQUAL
+
+**Not committed** (the integrator commits). Decisions: R7.13.
+
+| Python | Rust | State |
+|---|---|---|
+| `tasks/swing.run_detect_swing` (nightly path) | `steps/sleeves/swing.rs` | **ported**; `--step compute_swing` EQUAL in `fresh` and `rerun` |
+| `tasks/vbt.run_detect_vbt` (nightly path) | `steps/sleeves/vbt.rs` | **ported**; `--step compute_vbt` EQUAL in `fresh` and `rerun` |
+| `tasks/twt.run_detect_twt` + `run_twt_manage_qulla` | `steps/sleeves/twt.rs` | **ported**; `--step compute_twt` EQUAL in `fresh` and `rerun`; `run_twt_ratchet` not ported (unreachable, R7.13) |
+| `baskfy_core.exits.qulla` | `steps/sleeves/qulla.rs` (private) | ported; lift into the core later |
+| `baskfy_core.precision` (sleeves' columns) | `steps/sleeves/precision.rs` (private copy) | ported; collapse with `factors::precision` later |
+| `swing.market.breadth_snapshot/ema/index_reading/market_gate/drawdown_pct`, `swing.indicators.liquid_expr` | `steps/sleeves/swing_market.rs` (private) | ported; move to `baskfy_core::swing::market` later |
+| `tasks/basket.run_refresh_basket` (step 11) | `steps/sleeves/basket.rs` | **ported by the RS5 integrator** (R7.14); `--step refresh_basket` EQUAL and every `--chain` EQUAL |
+
+Adversarial review (30 Oct): `nightly_diff.py --mutate` scenarios **edges**, **nobars**, **thin** over
+`fresh` for all three steps, plus edges over `rerun` for `compute_swing`: 10 of 10 EQUAL (R7.13,
+"Adversarial review"). One Python edge listed, not ported: VBT `signal_rows`' 100-row schema inference.
+
+Unit tests: 30 in the lane's modules (precision, conversions, ETF patterns, `with_storage_columns`,
+qulla `decide` on `test_twt_qulla.py`'s three scenarios, swing helpers, the gate, breadth, EMA, drawdown).
+`cargo clippy -p baskfy-worker --all-targets -D warnings` and `cargo test -p baskfy-worker` green.
+
+## Wave 5 lane nightly-ingest (RS5, 30 Oct 2026) — steps 1–4 ported, 8 of 8 step runs EQUAL (+ gate-refuse)
+
+**Not committed** (the integrator commits). Decision R7.11.
+
+| Piece | Python | State |
+|---|---|---|
+| `steps/ingest.rs` | the step bodies of `_run_chain` blocks 1–4 | the foundation's signatures, filled; `reprocess_instrument(conn, id, as_of)` added (public) |
+| `ingest/instruments.rs` | `tasks/instruments` (`run_refresh_instruments`, `_merge`, `_batched`, `active_instruments`), `tasks/listings` (`run_refresh_listings`, `store_listings`) | ported |
+| `ingest/bars.rs` | `tasks/bars` (bhavcopy leads, Kite top-up, fallback, M84 top-up), `bhavcopy_backfill` (`backfill_bars_from_bhavcopy` on the chain's transaction, `_rows_for_day`, `upsert_day`) | ported |
+| `ingest/calendar.rs` | `calendar.reconcile_calendar` + M62's publication check | ported |
+| `ingest/corporate_actions.rs` | `tasks/corporate_actions` | ported |
+| `ingest/adjustments.rs` | `tasks/adjustments` (`run_apply_adjustments`, `reprocess_instrument` with `as_of`, `_rescale_deep_segment`, the polars frame `_load_raw_bars` builds) | ported; the nightly passes no `as_of` (house rule 5) |
+| `ingest/adjust.rs` | `baskfy_core.adjustments` (pure) | ported, polars 1.43 decimal semantics reproduced (R7.11) |
+| `baskfy_core::decimal::WideDecimal` | — | **added** `mul_exact`, `rescale_exact`, `coefficient_len` |
+
+**Graded** (`nightly_diff.py --step <name>`, sides `py,rs`, 2026-10-29 bundle `base`): `refresh_instruments`
+fresh and rerun (`instrument` 11,524 rows, `instrument_id_seq` moved equally); `fetch_daily_bars` fresh and rerun
+(`ohlcv_daily` 3,887,193 rows, `trading_day` 5,844); `fetch_corporate_actions` fresh and rerun (`corporate_action`
+1,172 rows, its sequence); `apply_adjustments` fresh and rerun (`ohlcv_daily` after rebuilding the touched
+instruments, deep segments included) — **8 of 8 EQUAL**, every step row (status, counts, detail JSON), sequences,
+Redis (0 keys) and mail (0) included, with no mask beyond R7.7's. Also `fetch_daily_bars --scenario gate-refuse` (the thinned bundle, so the Kite pass and its per-symbol failures run): **EQUAL** (`ohlcv_daily` 3,884,676 rows).
+
+**Tests.** 29 unit tests in the lane's modules: `test_adjustments.py`'s factor formulas, refusals to guess, series
+continuity, cumulative products and idempotence; the polars rounding rules and a three-action history copied from a
+Python run; the frame's 100-row inference window; `_unadjust`/`_price`/`_issue_price`; `test_instrument_upsert_batching.py`'s
+four `_batched` assertions; the merge, the register's first-wins dedupe (PARIN), the corporate-action collapse
+(SIYSIL), the bhavcopy row matcher. The step-level database assertions of `test_pipeline_steps.py` (calendar,
+`record_step`) and `test_reference_data.py` (listings) are graded by the harness rather than re-run as Rust DB tests.
+
+**Adversarial review (30 Oct 2026).** One defect fixed: the raw-bar frame turned a value that does not fit
+`Decimal(38, s)` into a `ComputeError` where polars' `strict=False` gives null (R7.11, review correction). A
+differential of 1,900 generated histories (Python's `adjust_bars` + `_price`/`_factor`/`int(volume)`/`_issue_price`/
+deep-segment maths vs the Rust functions) agrees everywhere. Seven further harness runs, each **EQUAL**, with
+`--mutate` edges applied to both clones: `apply_adjustments` fresh (every resolver branch incl. INVALID/INSUFFICIENT,
+a new split rescaling a deep segment, deep rows at factor 0 and the zero-price fallback, raw-less rows across the
+100-row inference window, an all-`kite_adjusted` instrument) and fresh plain; `refresh_instruments` fresh (a re-listed
+symbol taking a new identity, register/Kite corrections); `fetch_daily_bars` fresh (unmatched bhavcopy series, names
+without tokens), fresh with the day not a session (bhavcopy lead and top-up read no day; full Kite pass), rerun with
+the day's rows already adjusted (AF 0.6); `fetch_corporate_actions` fresh (half the window re-inserted, half changed,
+one symbol unknown).
+
+**Open.** R7.11's residuals (`_issue_price` on a `NaN` payload; a database error's message inside the bhavcopy
+write; polars' overflow message text and the scale-over-38 panic, both unreachable on real prices); `provider-failure-midway` refuses step 6 only, so it does not reach this lane's code differently from `fresh`.
+
+## Wave 5 lane nightly-gate (RS5, 30 Oct 2026) — steps 9–10 and `catch_up.rs` ported, 5 of 5 step runs EQUAL
+
+**Not committed.** Decisions: DECISIONS-RS **R7.10** (lane labels R-gate.1–5), all ⚠ UNREVIEWED.
+
+| Python | Rust | State |
+|---|---|---|
+| `tasks/quality.py` (8 assertions, `GateReport`, `to_payload`) | `steps/gate.rs`, `steps/gate/quality.rs` | **ported** — the same SQL per check; `Decimal` moves; SQLAlchemy's `Numeric(14,2)` typing of `percentile_cont` reproduced (found by the harness) |
+| `statistics.median`/`fmean`/`pstdev`, `f"{x:.Nf}"`, `.0%` | `steps/gate/pystats.rs` | **ported bit for bit** (private big integer; 60 CPython lists + the bed's 59 medians) |
+| `tasks/publish.py` + `baskfy_api.screener` purge/warm (legacy SQL path, desk-score attach, provenance, `record_run`) | `steps/gate/publish.rs` | **ported**; a `ranking_terms` screen raises `NotPorted` (R-gate.2, cutover gate with R6.13) |
+| `catch_up.py` (`landed`, `gate_refused`, `unlanded`, demotion, `mark_inferred_holiday`; 18:00 IST) | `catch_up.rs` | **ported**; the Celery `session_catch_up` body (nightly per day + `swing_eod_task`) is not (R-gate.4) |
+| `tasks/basket.py` (`refresh_basket`, step 11) | `steps/sleeves/basket.rs` | **ported by the RS5 integrator** (R7.14; R-gate.5 closed) |
+
+**Graded** (`tools/parity/nightly_diff.py`, py vs rs, 2026-10-29 replay day):
+
+| Run | Result |
+|---|---|
+| `--step data_quality_gate --scenario fresh` | **EQUAL** (step row incl. every `observed`, run rows, sequences) |
+| `--step data_quality_gate --scenario gate-refuse` | **EQUAL** — the partial universe is refused on both sides: `[1] 1687 bars against a 10-day median of 4216 (threshold 3795)`, no `data_version` |
+| `--step data_quality_gate --scenario rerun` | **EQUAL** (house rule 7: the re-judged day writes the same row) |
+| `--step publish --scenario fresh` | **EQUAL** — `data_version` 44, `screen_run` 280 rows, 11 Redis keys, sequences |
+| `--step publish --scenario rerun` | **EQUAL** — `data_version` 45 (bumped once), the same 11 keys and rows |
+
+**Tests:** `cargo test -p baskfy-worker` — the lane's 40 unit tests (verdicts of every
+`test_quality_gate.py` / `test_quality_universe_sources.py` assertion, the catch-up filter, the
+statistics, publish helpers) plus 16 database tests (`steps/gate/db_tests.rs`, `TEMP` tables on
+`BASKFY_RS_SCRATCH_DATABASE_URL`, `ignored` without it; 16 of 16 pass on the bed container's
+`postgres` database). Clippy `-D warnings` clean for the crate; the lane's files are `rustfmt`-clean.
+
+**Open:** the `ranking_terms` warm path (R-gate.2), the
+`session_catch_up` task body (R-gate.4), Redis error texts in `cache_*_failed` (R-gate.2).
+
 ## Wave 4, step 1 — `baskfy-providers` (foundation RS4.0; adapters RS4a, 29 Oct 2026)
 
 The I/O stack is pinned once for every wave-4 porter (DECISIONS-RS R4.1, R4.2). The crate has no
@@ -676,6 +981,11 @@ R6.32). Graded by the new `writes_sleeves_nobroker_ratelimit.json`.
 **Cutover gates added:** `/auth/google` (verifier), any mailing route on a STARTTLS/AUTH or Resend
 deployment (R6.6). Still open from RS4b: the live Kite overlay, `/baskets` without a snapshot,
 `/brokers/callback`, `/backtests/{id}/events` in flight, `GET /overlap`.
+
+## Wave 6 lane backtest_engine (RS6, 30 Oct 2026) — `baskfy.backtest.run` ported
+
+* `tasks/backtest_engine/{job,loader,payload,risk_free}.rs`; `task_diff.py` backtest_engine.json 12/12 EQUAL py,rs (row incl. metrics_hash, Redis progress, three CSVs). DECISIONS-RS R-be.1–R-be.4.
+* Not ported: the API's inline executor (R-be.1); `ranking_terms` screens raise `NotPorted` (R-gate.2).
 
 ## Wave 4c lane writes-screens (RS4c, 30 Oct 2026) — 24 of the lane's 30 write routes ported
 
@@ -1219,7 +1529,9 @@ reasons (section "Wave 4c integration"). Before any write route cuts over: the b
 order (R6.17/R6.30), Google's verifier (R6.3), the mailer's STARTTLS/AUTH and Resend (R6.6), and
 the collapse of the duplicated validators and Celery producers.
 
-**Next — wave 5, the worker (`baskfy-worker`), the nightly first** (step 4 below): catch-up,
+**Done at RS5:** the nightly in Rust, all 14 steps, every `--chain` scenario EQUAL (section "Wave 5 integration").
+
+**Next — the worker's remaining Celery tasks** (screen runs with R6.13's routes, backtests, sleeves' evening/premarket jobs, holdings sync read-only, alerts), then the desk. Wave 5 began with the nightly (step 4 below): catch-up,
 publish and the quality gate, graded by `pipeline_run_step` rows equal to the Python run's on a
 bed clone (the writes harness's clones, R6.5, are the starting point). The screener port the 11
 remaining API write routes need (R6.13) is shared with the worker's screen runs and lands with it.
@@ -1283,7 +1595,7 @@ started` here.
 |---|---:|---|
 | `baskfy_core` | 3 | not started |
 | `baskfy_core.action_recovery` | 229 | not started |
-| `baskfy_core.adjustments` | 384 | not started |
+| `baskfy_core.adjustments` | 384 | ported in the worker (`steps/ingest/adjust.rs`, lane nightly-ingest, R7.11) |
 | `baskfy_core.allocation_ledger` | 978 | not started |
 | `baskfy_core.api_keys` | 178 | not started |
 | `baskfy_core.backtest` | 1927 | ported — 96/96 (helpers 71, engine 25) |
@@ -1479,3 +1791,62 @@ started` here.
 ranking 190, twt 306, vbt 326, fno 615). Ported: 65 modules (RS3; twt 12, vbt 13 and fno 20 added),
 **1,702 of 1,702** of their goldens green; 128 not started. Not yet marked `verified`: that
 needs Maulik's review of the R1.x/R2.x/R3.x entries.
+
+### Wave 5 lane **compute** (steps 7, 8 and the desk score; DECISIONS-RS R7.12) — not committed
+
+| Python | Rust | state |
+|---|---|---|
+| `tasks/factors`, `engine` (load_history, levels, fundamentals, true ATH) | `steps/compute/factors.rs` | ported |
+| `tasks/ranking.run_rank_columns`, `factors_ranking.cross_sectional_pctile`/`rank_persistence` | `steps/compute/ranking.rs` | ported |
+| `tasks/desk_score`, `desk_score_service.score_day`, `momentum_scan.build` (scan columns), `score.score` | `steps/compute/desk.rs`, `score.rs` | ported |
+| `tasks/market_health`, `breadth.breadth_query` | `steps/compute/market_health.rs` | ported |
+
+`nightly_diff.py` (py,rs; 2026-10-29 replay day), all **EQUAL** (tables, `pipeline_run_step` rows incl. detail
+JSON, sequences, Redis, mail): `--step compute_factors` fresh (`factor_daily` 928,614 rows, `desk_score_daily`
+218,553), rerun, gate-refuse; `--step compute_market_health` fresh, rerun, gate-refuse (`market_health_daily`
+4,260). Unit tests: 22 in the lane (Python's step-level assertions: lookback arithmetic, mom_pctile/persistence
+rules, risk cut, filters) plus an ignored differential of `score` against Python (40 generated scans, 0 diffs).
+
+### Wave 6 lane `twt_jobs` (30 Oct 2026)
+
+All five TWT tasks ported (`detect`, `evening`, `morning`, `scan`, `scan_publish`);
+`task_diff.py --cases tools/parity/task_cases/twt_jobs.json`: **30 of 30 EQUAL py,rs**.
+Lane unit tests 25 pass, scratch-DB tests 10 pass. Not covered by parity: a live scan that
+signals (DECISIONS-RS R8.twt_jobs). Open for the integrator: `task_registry.rs`'s stub count.
+
+### Wave 6 lane `sleeve_backtests` (30 Oct 2026; DECISIONS-RS R8.sb1)
+
+- `vbt.backtest`, `swing.backtest` ported (the swing engine `swing.backtest`+`swing.journal` ported in the worker, graded end to end; no goldens yet). TWT backtest ported (`run_twt_backtest`, no Celery task; `twt_backtest_diff.py`). `options.backtest` **not ported** (~6k lines of unported options core).
+- Results: see the case files `sleeve_backtests.json` / `sleeve_backtests_twt.json` (final counts in the lane report).
+- For Maulik: the swing backtest still reads `nifty-500` (not SW29's smallcap-250); a ≤2-session VBT window raises `DBAPIError` on a NaN in JSON (Python defect, reproduced).
+
+### Wave 6 lane `sleeve_backtests` (30 Oct 2026; DECISIONS-RS R8.sb1)
+
+`swing.backtest` and `vbt.backtest` ported (the swing engine `baskfy_core.swing.backtest` and
+`swing.journal` ported with it, in the worker, graded end to end); TWT's `run_twt_backtest`
+ported as a pub function (no Celery task in Python) with `examples/twt_backtest.rs` and
+`tools/parity/twt_backtest_diff.py`. `options.backtest` **not ported** (≈6,000 lines of
+unported options core; R8.sb1). Parity, `task_diff.py --cases task_cases/sleeve_backtests.json`
+py,rs: vbt 9 of 9 EQUAL (one after the NaN fix, run separately); swing 5 of 5 run EQUAL
+(7 months of trading with 16 trades, sleeve/cost override, error row, empty window, bad sleeve) —
+the year-long, end-defaults-to-today, positional, bad-date and no-user swing cases are written
+but were not run (CODE FIRST, 30 Oct). TWT 2 of 5 EQUAL: the three run cases stored EQUAL rows
+(params/stats/drift jsonb) but the payload differed in `by_reason`/`skipped` key order; fixed
+(Python's dict order restored) and **not re-run**. Lane unit tests 19 pass, scratch-DB tests 2
+pass. Open for the integrator: `tests/task_registry.rs`'s stub count (`REGISTRY.len() - 4`).
+
+### Wave 6 lane `vbt_jobs` (30 Oct 2026)
+
+* 9 of 9 VBT tasks ported. The worker compiles, the lane is clean under clippy -D warnings, and its 43 tests pass (26 unit, 17 scratch-DB).
+* **Parity not run:** the 57 cases in `task_cases/vbt_jobs.json` are written but have not been graded.
+* Open for the integrator: `task_registry.rs::every_stub_refuses_with_task_not_ported` (stub count), and a clippy error in `tasks/api_routes.rs:71` (another lane's file).
+
+* **Wave 6 lane `portfolio` (30 Oct 2026):** `baskfy.portfolio.eod_nav` and `baskfy.pipeline.capture_kite_trades` ported (`tasks/portfolio.rs`, `tasks/portfolio/{nav,ledger,capture,db_tests}.rs`, one additive pub item in `baskfy-api` `routes::trades`); `task_cases/portfolio.json` 21 of 21 EQUAL py,rs; lane tests 14 of 14 (8 on a scratch database). DECISIONS-RS R8.pf1-R8.pf4, UNREVIEWED.
+
+### Wave 6 lane `ops_alerts` (30 Oct 2026; DECISIONS-RS R8.oa1–R8.oa6)
+
+* **6 of 6 tasks ported** (`tasks/ops_alerts.rs` + `ops_alerts/{alerting,checks,webhooks,login_nudge,kite_session}.rs`): `ops.reap_abandoned_runs`, `ops.check_publish_deadline`, `ops.check_kite_token` (once per stored token per IST day, Redis `SET NX`, fail open), `ops.check_queue_backlog`, `alerts.sweep_webhooks` (SSRF re-check, signed POST, backoff, endpoint disabling), `kite.login_nudge` (the API's own login-URL builder, `O_EXCL` marker); and `refresh_kite_session_quietly` (`kite_session_cli.refresh_quietly`) in full outside the harness.
+* Additive items elsewhere: `baskfy-worker/Cargo.toml` `reqwest`, `hmac` (workspace pins, no new crate); `baskfy-api` `routes::brokers::{kite_login_url_for_worker, STATE_VALID_FOR_MINUTES}`, `routes::webhook_endpoints::{assert_public_webhook_url_with, webhook_host_encodable, WebhookUrlRefusal}` (+ private helpers in `brokers/writes.rs`, `webhook_endpoints/ssrf.rs`). No existing body changed.
+* Tests: 42 lane unit tests (ports of `test_ops_and_alerts.py`, `test_kite_login_nudge.py`, `test_kite_session_bridge.py`, `test_alert_tasks.py` where they are not Celery-config checks); clippy `-D warnings` clean on `baskfy-worker` and `baskfy-api`. `cargo test -p baskfy-worker`: all green except the foundation's `every_stub_refuses_with_task_not_ported` count (`REGISTRY.len() - 4`), which fails for every lane that ports anything (see R8.curated) — **for the integrator**.
+* Not ported here (R8.oa6): `action_recovery` (needs `baskfy_core.action_recovery` with goldens first); `purge_accounts` is `api_routes`'; `window`/`calendar`/`fundamentals`/`listings` are wave 5's; `telemetry` is R7.4.
+* `task_cases/ops_alerts.json`: 37 cases. `backlog-over-threshold` needs Redis index 5 pre-seeded (`RPUSH default x x x; RPUSH compute x x; RPUSH ingest x`).

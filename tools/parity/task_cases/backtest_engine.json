@@ -1,0 +1,234 @@
+{
+ "lane": "backtest_engine",
+ "note": "baskfy.backtest.run (DECISIONS-RS, lane labels R-be.1-R-be.4). Each case seeds its own queued row (user 1, a saved screen or an inline definition); the artefacts land in BASKFY_INVOICE_LOCAL_DIR={archive}, so the three CSVs are compared by sha256. started_at/finished_at are the injected clock (stamp).",
+ "cases": [
+  {
+   "name": "done-weekly-fragility-friday-session",
+   "task": "baskfy.backtest.run",
+   "args": {
+    "public_id": "bt0000000000000000000001"
+   },
+   "now": "2026-10-30T10:00:00",
+   "seed_sql": "INSERT INTO backtest (public_id, user_id, screen_id, config, status, created_at) VALUES ('bt0000000000000000000001', 1, 10, '{\"screen_public_id\":\"exmpl0000002\",\"screen_definition\":null,\"start\":\"2026-09-01\",\"end\":\"2026-10-28\",\"initial_capital\":\"1000000\",\"rebalance\":{\"frequency\":\"weekly\",\"day\":\"last_trading_day\"},\"selection\":{\"top_n\":10,\"hold_buffer\":5},\"weighting\":\"equal\",\"position_limits\":{\"max_weight\":\"0.10\",\"min_weight\":\"0.01\"},\"costs\":{\"brokerage_bps\":\"3\",\"stt_bps\":\"10\",\"slippage_bps\":\"15\",\"impact_model\":\"fixed\"},\"cash_policy\":\"hold_cash\",\"benchmark\":\"nifty-500\",\"risk_overlay\":{\"enabled\":false,\"rule\":\"index_above_200dma\"},\"dividends\":\"ignore\",\"risk_free_rate\":\"0\",\"risk_free_curve\":[]}'::jsonb, 'queued', TIMESTAMPTZ '2026-10-30 04:00:00+00');",
+   "env": {
+    "BASKFY_INVOICE_LOCAL_DIR": "{archive}"
+   },
+   "mask": {
+    "backtest": {
+     "started_at": "stamp",
+     "finished_at": "stamp"
+    }
+   },
+   "note": "saved screen exmpl0000002 (nifty-500, ret_12m, MA filters), weekly last day, top 10 + 5, fragility (base + four perturbations, offset screens): done, three CSVs, metrics + curve, done frame; a Friday inside the session"
+  },
+  {
+   "name": "done-weekly-no-fragility-after-close",
+   "task": "baskfy.backtest.run",
+   "args": [
+    "bt0000000000000000000002",
+    false
+   ],
+   "now": "2026-10-29T20:00:00",
+   "seed_sql": "INSERT INTO backtest (public_id, user_id, screen_id, config, status, created_at) VALUES ('bt0000000000000000000002', 1, 10, '{\"screen_public_id\":\"exmpl0000002\",\"screen_definition\":null,\"start\":\"2026-09-01\",\"end\":\"2026-10-28\",\"initial_capital\":\"1000000\",\"rebalance\":{\"frequency\":\"weekly\",\"day\":\"last_trading_day\"},\"selection\":{\"top_n\":10,\"hold_buffer\":5},\"weighting\":\"equal\",\"position_limits\":{\"max_weight\":\"0.10\",\"min_weight\":\"0.01\"},\"costs\":{\"brokerage_bps\":\"3\",\"stt_bps\":\"10\",\"slippage_bps\":\"15\",\"impact_model\":\"fixed\"},\"cash_policy\":\"hold_cash\",\"benchmark\":\"nifty-500\",\"risk_overlay\":{\"enabled\":false,\"rule\":\"index_above_200dma\"},\"dividends\":\"ignore\",\"risk_free_rate\":\"0\",\"risk_free_curve\":[]}'::jsonb, 'queued', TIMESTAMPTZ '2026-10-30 04:00:00+00');",
+   "env": {
+    "BASKFY_INVOICE_LOCAL_DIR": "{archive}"
+   },
+   "mask": {
+    "backtest": {
+     "started_at": "stamp",
+     "finished_at": "stamp"
+    }
+   },
+   "note": "positional args, fragility=False: no offset screens, an empty fragility list; after the close"
+  },
+  {
+   "name": "done-inline-definition-overlay-saturday",
+   "task": "baskfy.backtest.run",
+   "args": {
+    "public_id": "bt0000000000000000000003",
+    "fragility": true
+   },
+   "now": "2026-10-31T11:00:00",
+   "seed_sql": "INSERT INTO backtest (public_id, user_id, screen_id, config, status, created_at) VALUES ('bt0000000000000000000003', 1, NULL, '{\"screen_public_id\":null,\"screen_definition\":{\"pe\":{\"to\":null,\"from\":null,\"enabled\":false},\"index\":\"nifty-500\",\"price\":{\"to\":null,\"from\":null},\"series\":[\"EQ\"],\"sort_by\":\"sharpe_6m\",\"circuits\":{\"m1\":999,\"m3\":999,\"m6\":999,\"m9\":999,\"m12\":999},\"marketcap\":{\"to\":null,\"from\":null},\"regime_in\":null,\"factor_two\":{\"enabled\":false,\"sort_by\":null,\"sort_direction\":\"desc\"},\"factor_three\":{\"enabled\":false,\"sort_by\":null,\"sort_direction\":\"desc\"},\"missing_data\":\"penalize\",\"ranking_mode\":\"composite\",\"factor_ranges\":[],\"min_return_1y\":null,\"positive_days\":{\"m1\":0,\"m3\":0,\"m6\":0,\"m9\":0,\"m12\":0},\"ranking_scope\":\"filtered_results\",\"ranking_terms\":[],\"away_from_high\":{\"ath\":100,\"one_year\":100},\"custom_filters\":[{\"op\":\">=\",\"left\":\"ma_50\",\"right\":\"ma_200\",\"enabled\":true},{\"op\":\">=\",\"left\":\"vol_avg_1w\",\"right\":\"vol_avg_12m\",\"enabled\":true}],\"family_weights\":null,\"moving_average\":{\"enabled\":false,\"above_20\":false,\"above_50\":false,\"below_20\":false,\"below_50\":false,\"above_100\":false,\"above_200\":false,\"below_100\":false,\"below_200\":false},\"sort_direction\":\"desc\",\"historical_date\":null,\"ignore_top_beta\":{\"count\":0,\"enabled\":false},\"apply_filters_on\":\"all\",\"median_volume_1y\":null,\"ignore_above_beta\":100,\"ignore_top_volatility\":{\"count\":0,\"enabled\":false}},\"start\":\"2026-09-01\",\"end\":\"2026-10-28\",\"initial_capital\":\"1000000\",\"rebalance\":{\"frequency\":\"weekly\",\"day\":\"first_trading_day\"},\"selection\":{\"top_n\":8,\"hold_buffer\":0},\"weighting\":\"inverse_volatility\",\"position_limits\":{\"max_weight\":\"0.2\",\"min_weight\":\"0.05\"},\"costs\":{\"brokerage_bps\":\"5\",\"stt_bps\":\"10\",\"slippage_bps\":\"20\",\"impact_model\":\"fixed\"},\"cash_policy\":\"benchmark\",\"benchmark\":\"nifty-500\",\"risk_overlay\":{\"enabled\":true,\"rule\":\"index_above_200dma\"},\"dividends\":\"ignore\",\"risk_free_rate\":\"0\",\"risk_free_curve\":[]}'::jsonb, 'queued', TIMESTAMPTZ '2026-10-30 04:00:00+00');",
+   "env": {
+    "BASKFY_INVOICE_LOCAL_DIR": "{archive}"
+   },
+   "mask": {
+    "backtest": {
+     "started_at": "stamp",
+     "finished_at": "stamp"
+    }
+   },
+   "note": "no saved screen: the inline definition (custom filters), inverse-volatility weights, cash earns the benchmark, the 200-dma overlay on; a non-trading day"
+  },
+  {
+   "name": "done-reinvest-migrated-marketcap-before-open",
+   "task": "baskfy.backtest.run",
+   "args": {
+    "public_id": "bt0000000000000000000004",
+    "fragility": 0
+   },
+   "now": "2026-10-30T08:00:00",
+   "seed_sql": "INSERT INTO backtest (public_id, user_id, screen_id, config, status, created_at) VALUES ('bt0000000000000000000004', 1, 12, '{\"screen_public_id\":\"exmpl0000004\",\"screen_definition\":null,\"start\":\"2026-09-01\",\"end\":\"2026-10-28\",\"initial_capital\":\"1000000\",\"rebalance\":{\"frequency\":\"fortnightly\",\"day\":\"last_trading_day\"},\"selection\":{\"top_n\":12,\"hold_buffer\":4},\"weighting\":\"marketcap\",\"position_limits\":{\"max_weight\":\"0.10\",\"min_weight\":\"0.01\"},\"costs\":{\"brokerage_bps\":\"3\",\"stt_bps\":\"10\",\"slippage_bps\":\"15\",\"impact_model\":\"fixed\"},\"cash_policy\":\"hold_cash\",\"benchmark\":\"nifty-200\",\"risk_overlay\":{\"enabled\":false,\"rule\":\"index_above_200dma\"},\"dividends\":\"reinvest\",\"risk_free_rate\":\"0\",\"risk_free_curve\":[]}'::jsonb, 'queued', TIMESTAMPTZ '2026-10-30 04:00:00+00');",
+   "env": {
+    "BASKFY_INVOICE_LOCAL_DIR": "{archive}"
+   },
+   "mask": {
+    "backtest": {
+     "started_at": "stamp",
+     "finished_at": "stamp"
+    }
+   },
+   "note": "a pre-M39 row (dividends: reinvest) reads as ignore; marketcap weights; nifty-200 benchmark; fragility=0 is falsy; before the open"
+  },
+  {
+   "name": "done-unknown-benchmark-noted",
+   "task": "baskfy.backtest.run",
+   "args": {
+    "public_id": "bt0000000000000000000005",
+    "fragility": false
+   },
+   "now": "2026-10-30T13:15:00",
+   "seed_sql": "INSERT INTO backtest (public_id, user_id, screen_id, config, status, created_at) VALUES ('bt0000000000000000000005', 1, 10, '{\"screen_public_id\":null,\"screen_definition\":null,\"start\":\"2026-09-01\",\"end\":\"2026-10-28\",\"initial_capital\":\"1000000\",\"rebalance\":{\"frequency\":\"weekly\",\"day\":\"last_trading_day\"},\"selection\":{\"top_n\":6,\"hold_buffer\":2},\"weighting\":\"rank\",\"position_limits\":{\"max_weight\":\"0.10\",\"min_weight\":\"0.01\"},\"costs\":{\"brokerage_bps\":\"3\",\"stt_bps\":\"10\",\"slippage_bps\":\"15\",\"impact_model\":\"fixed\"},\"cash_policy\":\"hold_cash\",\"benchmark\":\"nifty-xyz\",\"risk_overlay\":{\"enabled\":false,\"rule\":\"index_above_200dma\"},\"dividends\":\"ignore\",\"risk_free_rate\":\"0\",\"risk_free_curve\":[]}'::jsonb, 'queued', TIMESTAMPTZ '2026-10-30 04:00:00+00');",
+   "env": {
+    "BASKFY_INVOICE_LOCAL_DIR": "{archive}"
+   },
+   "mask": {
+    "backtest": {
+     "started_at": "stamp",
+     "finished_at": "stamp"
+    }
+   },
+   "note": "a benchmark slug with no index_def row: the run completes, alpha/beta null, the note in the assumptions"
+  },
+  {
+   "name": "failed-coverage-monthly",
+   "task": "baskfy.backtest.run",
+   "args": {
+    "public_id": "bt0000000000000000000006"
+   },
+   "now": "2026-10-30T10:00:00",
+   "seed_sql": "INSERT INTO backtest (public_id, user_id, screen_id, config, status, created_at) VALUES ('bt0000000000000000000006', 1, 10, '{\"screen_public_id\":null,\"screen_definition\":null,\"start\":\"2025-01-01\",\"end\":\"2026-10-29\",\"initial_capital\":\"1000000\",\"rebalance\":{\"frequency\":\"monthly\",\"day\":\"last_trading_day\"},\"selection\":{\"top_n\":20,\"hold_buffer\":10},\"weighting\":\"equal\",\"position_limits\":{\"max_weight\":\"0.10\",\"min_weight\":\"0.01\"},\"costs\":{\"brokerage_bps\":\"3\",\"stt_bps\":\"10\",\"slippage_bps\":\"15\",\"impact_model\":\"fixed\"},\"cash_policy\":\"hold_cash\",\"benchmark\":\"nifty-500\",\"risk_overlay\":{\"enabled\":false,\"rule\":\"index_above_200dma\"},\"dividends\":\"ignore\",\"risk_free_rate\":\"0\",\"risk_free_curve\":[]}'::jsonb, 'queued', TIMESTAMPTZ '2026-10-30 04:00:00+00');",
+   "env": {
+    "BASKFY_INVOICE_LOCAL_DIR": "{archive}"
+   },
+   "mask": {
+    "backtest": {
+     "started_at": "stamp",
+     "finished_at": "stamp"
+    }
+   },
+   "note": "monthly 2025-01..2026-10: rebalance dates without factor rows or nifty-500 membership: failed, BacktestDataError on the row, the failed frame"
+  },
+  {
+   "name": "failed-too-many-screens",
+   "task": "baskfy.backtest.run",
+   "args": {
+    "public_id": "bt0000000000000000000007"
+   },
+   "now": "2026-10-30T10:00:00",
+   "seed_sql": "INSERT INTO backtest (public_id, user_id, screen_id, config, status, created_at) VALUES ('bt0000000000000000000007', 1, 10, '{\"screen_public_id\":null,\"screen_definition\":null,\"start\":\"2011-01-01\",\"end\":\"2026-10-29\",\"initial_capital\":\"1000000\",\"rebalance\":{\"frequency\":\"weekly\",\"day\":\"last_trading_day\"},\"selection\":{\"top_n\":20,\"hold_buffer\":10},\"weighting\":\"equal\",\"position_limits\":{\"max_weight\":\"0.10\",\"min_weight\":\"0.01\"},\"costs\":{\"brokerage_bps\":\"3\",\"stt_bps\":\"10\",\"slippage_bps\":\"15\",\"impact_model\":\"fixed\"},\"cash_policy\":\"hold_cash\",\"benchmark\":\"nifty-500\",\"risk_overlay\":{\"enabled\":false,\"rule\":\"index_above_200dma\"},\"dividends\":\"ignore\",\"risk_free_rate\":\"0\",\"risk_free_curve\":[]}'::jsonb, 'queued', TIMESTAMPTZ '2026-10-30 04:00:00+00');",
+   "env": {
+    "BASKFY_INVOICE_LOCAL_DIR": "{archive}"
+   },
+   "mask": {
+    "backtest": {
+     "started_at": "stamp",
+     "finished_at": "stamp"
+    }
+   },
+   "note": "weekly over fifteen years with offsets: above MAX_REBALANCE_DATES"
+  },
+  {
+   "name": "failed-empty-calendar",
+   "task": "baskfy.backtest.run",
+   "args": {
+    "public_id": "bt0000000000000000000008"
+   },
+   "now": "2026-10-30T10:00:00",
+   "seed_sql": "INSERT INTO backtest (public_id, user_id, screen_id, config, status, created_at) VALUES ('bt0000000000000000000008', 1, 10, '{\"screen_public_id\":null,\"screen_definition\":null,\"start\":\"2027-06-01\",\"end\":\"2027-06-30\",\"initial_capital\":\"1000000\",\"rebalance\":{\"frequency\":\"monthly\",\"day\":\"last_trading_day\"},\"selection\":{\"top_n\":20,\"hold_buffer\":10},\"weighting\":\"equal\",\"position_limits\":{\"max_weight\":\"0.10\",\"min_weight\":\"0.01\"},\"costs\":{\"brokerage_bps\":\"3\",\"stt_bps\":\"10\",\"slippage_bps\":\"15\",\"impact_model\":\"fixed\"},\"cash_policy\":\"hold_cash\",\"benchmark\":\"nifty-500\",\"risk_overlay\":{\"enabled\":false,\"rule\":\"index_above_200dma\"},\"dividends\":\"ignore\",\"risk_free_rate\":\"0\",\"risk_free_curve\":[]}'::jsonb, 'queued', TIMESTAMPTZ '2026-10-30 04:00:00+00');",
+   "env": {
+    "BASKFY_INVOICE_LOCAL_DIR": "{archive}"
+   },
+   "mask": {
+    "backtest": {
+     "started_at": "stamp",
+     "finished_at": "stamp"
+    }
+   },
+   "note": "a window the trading calendar does not reach"
+  },
+  {
+   "name": "failed-no-screen-no-definition",
+   "task": "baskfy.backtest.run",
+   "args": {
+    "public_id": "bt0000000000000000000009"
+   },
+   "now": "2026-10-30T10:00:00",
+   "seed_sql": "INSERT INTO backtest (public_id, user_id, screen_id, config, status, created_at) VALUES ('bt0000000000000000000009', 1, NULL, '{\"screen_public_id\":null,\"screen_definition\":null,\"start\":\"2026-09-01\",\"end\":\"2026-10-28\",\"initial_capital\":\"1000000\",\"rebalance\":{\"frequency\":\"monthly\",\"day\":\"last_trading_day\"},\"selection\":{\"top_n\":20,\"hold_buffer\":10},\"weighting\":\"equal\",\"position_limits\":{\"max_weight\":\"0.10\",\"min_weight\":\"0.01\"},\"costs\":{\"brokerage_bps\":\"3\",\"stt_bps\":\"10\",\"slippage_bps\":\"15\",\"impact_model\":\"fixed\"},\"cash_policy\":\"hold_cash\",\"benchmark\":\"nifty-500\",\"risk_overlay\":{\"enabled\":false,\"rule\":\"index_above_200dma\"},\"dividends\":\"ignore\",\"risk_free_rate\":\"0\",\"risk_free_curve\":[]}'::jsonb, 'queued', TIMESTAMPTZ '2026-10-30 04:00:00+00');",
+   "env": {
+    "BASKFY_INVOICE_LOCAL_DIR": "{archive}"
+   },
+   "mask": {
+    "backtest": {
+     "started_at": "stamp",
+     "finished_at": "stamp"
+    }
+   },
+   "note": "neither a saved screen nor an inline definition: BacktestError"
+  },
+  {
+   "name": "skipped-already-running",
+   "task": "baskfy.backtest.run",
+   "args": {
+    "public_id": "bt0000000000000000000010"
+   },
+   "now": "2026-10-30T10:00:00",
+   "seed_sql": "INSERT INTO backtest (public_id, user_id, screen_id, config, status, created_at) VALUES ('bt0000000000000000000010', 1, 10, '{\"screen_public_id\":\"exmpl0000002\",\"screen_definition\":null,\"start\":\"2026-09-01\",\"end\":\"2026-10-28\",\"initial_capital\":\"1000000\",\"rebalance\":{\"frequency\":\"weekly\",\"day\":\"last_trading_day\"},\"selection\":{\"top_n\":10,\"hold_buffer\":5},\"weighting\":\"equal\",\"position_limits\":{\"max_weight\":\"0.10\",\"min_weight\":\"0.01\"},\"costs\":{\"brokerage_bps\":\"3\",\"stt_bps\":\"10\",\"slippage_bps\":\"15\",\"impact_model\":\"fixed\"},\"cash_policy\":\"hold_cash\",\"benchmark\":\"nifty-500\",\"risk_overlay\":{\"enabled\":false,\"rule\":\"index_above_200dma\"},\"dividends\":\"ignore\",\"risk_free_rate\":\"0\",\"risk_free_curve\":[]}'::jsonb, 'running', TIMESTAMPTZ '2026-10-30 04:00:00+00');",
+   "env": {
+    "BASKFY_INVOICE_LOCAL_DIR": "{archive}"
+   },
+   "mask": {
+    "backtest": {
+     "started_at": "stamp",
+     "finished_at": "stamp"
+    }
+   },
+   "note": "a redelivered message for a run somebody already took: skipped, nothing written"
+  },
+  {
+   "name": "skipped-unknown-public-id",
+   "task": "baskfy.backtest.run",
+   "args": {
+    "public_id": "nope"
+   },
+   "now": "2026-10-30T10:00:00",
+   "env": {
+    "BASKFY_INVOICE_LOCAL_DIR": "{archive}"
+   },
+   "mask": {
+    "backtest": {
+     "started_at": "stamp",
+     "finished_at": "stamp"
+    }
+   },
+   "note": "no such row: skipped"
+  },
+  {
+   "name": "missing-argument",
+   "task": "baskfy.backtest.run",
+   "args": {},
+   "now": "2026-10-30T10:00:00",
+   "env": {
+    "BASKFY_INVOICE_LOCAL_DIR": "{archive}"
+   },
+   "mask": {
+    "backtest": {
+     "started_at": "stamp",
+     "finished_at": "stamp"
+    }
+   },
+   "note": "public_id is required: TypeError from the binding"
+  }
+ ]
+}

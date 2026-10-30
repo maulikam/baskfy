@@ -777,4 +777,167 @@ mod tests {
         );
         assert_eq!(month_bounds(d(2026, 2, 28)), (d(2026, 2, 1), d(2026, 3, 1)));
     }
+    type Kept = BTreeSet<(String, NaiveDate, Option<String>, Decimal)>;
+
+    fn kept() -> Kept {
+        retain(&super::super::fixtures::day_rows())
+            .into_iter()
+            .map(|r| {
+                (
+                    r.symbol.unwrap(),
+                    r.expiry.unwrap(),
+                    r.option_type,
+                    r.strike.unwrap_or(Decimal::ZERO).normalize(),
+                )
+            })
+            .collect()
+    }
+
+    fn k(
+        symbol: &str,
+        expiry: NaiveDate,
+        opt: Option<&str>,
+        strike: i64,
+    ) -> (String, NaiveDate, Option<String>, Decimal) {
+        (
+            symbol.to_owned(),
+            expiry,
+            opt.map(str::to_owned),
+            Decimal::from(strike),
+        )
+    }
+
+    /// `TestRetention` over the UDiFF fixture.
+    #[test]
+    fn every_future_is_kept_even_untraded() {
+        use super::super::fixtures::{feb, jan};
+        let kept = kept();
+        assert!(kept.contains(&k("SBIN", jan(), None, 0)));
+        assert!(
+            kept.contains(&k("SBIN", feb(), None, 0)),
+            "03 §1: everything for futures"
+        );
+        assert!(kept.contains(&k("NIFTY", jan(), None, 0)));
+    }
+
+    #[test]
+    fn options_of_the_two_nearest_monthlies_only() {
+        use super::super::fixtures::{feb, jan, mar, nifty_far};
+        let kept = kept();
+        assert!(kept.contains(&k("SBIN", jan(), Some("CE"), 820)));
+        assert!(kept.contains(&k("SBIN", feb(), Some("PE"), 820)));
+        assert!(
+            !kept.contains(&k("SBIN", mar(), Some("CE"), 820)),
+            "the third monthly"
+        );
+        assert!(
+            !kept.contains(&k("NIFTY", nifty_far(), Some("CE"), 25000)),
+            "a far half-yearly"
+        );
+    }
+
+    #[test]
+    fn index_weeklies_are_kept_a_stocks_non_monthly_is_not() {
+        use super::super::fixtures::{d, nifty_weeklies};
+        let kept = kept();
+        for weekly in nifty_weeklies() {
+            assert!(kept.iter().any(|r| r.0 == "NIFTY" && r.1 == weekly));
+        }
+        assert!(kept.contains(&k("BANKNIFTY", d(2030, 1, 21), Some("PE"), 55000)));
+        assert!(!kept.contains(&k("IDEA", d(2030, 1, 21), Some("CE"), 8)));
+    }
+
+    #[test]
+    fn monthly_is_the_months_last_listed_expiry_not_a_weekday() {
+        use super::super::fixtures::banknifty_jan;
+        assert_eq!(banknifty_jan().weekday(), chrono::Weekday::Mon);
+        assert!(kept().contains(&k("BANKNIFTY", banknifty_jan(), Some("CE"), 55000)));
+    }
+
+    #[test]
+    fn an_option_neither_traded_nor_open_is_dropped() {
+        use super::super::fixtures::jan;
+        let kept = kept();
+        assert!(
+            !kept.contains(&k("SBIN", jan(), Some("CE"), 900)),
+            "zero OI and zero volume"
+        );
+        assert!(
+            kept.contains(&k("SBIN", jan(), Some("CE"), 880)),
+            "zero OI but traded"
+        );
+    }
+
+    #[test]
+    fn an_empty_frame_retains_nothing() {
+        assert!(retain(&[]).is_empty());
+    }
+
+    /// `TestTheRowShape` over the fixture.
+    #[test]
+    fn the_fixture_rows_round_half_up_and_key_futures_zero_xx() {
+        use super::super::fixtures::{day_rows, jan};
+        let rows = contract_rows(&retain(&day_rows()));
+        let future = rows
+            .iter()
+            .find(|r| {
+                r.symbol.as_deref() == Some("SBIN")
+                    && r.expiry == Some(jan())
+                    && r.option_type == "XX"
+            })
+            .unwrap();
+        assert_eq!(
+            future.prices[4],
+            Some("810.36".parse().unwrap()),
+            "810.355 half-up"
+        );
+        assert_eq!(
+            future.turnover.unwrap().normalize(),
+            "1000000.56".parse::<Decimal>().unwrap()
+        );
+        let futures: Vec<_> = rows
+            .iter()
+            .filter(|r| {
+                r.instrument
+                    .as_deref()
+                    .is_some_and(|i| FUTURE_INSTRUMENTS.contains(&i))
+            })
+            .collect();
+        assert!(!futures.is_empty());
+        assert!(
+            futures
+                .iter()
+                .all(|r| r.strike.is_zero() && r.option_type == "XX")
+        );
+        let idea = rows
+            .iter()
+            .find(|r| r.symbol.as_deref() == Some("IDEA"))
+            .unwrap();
+        assert_eq!(idea.lot_size, Some(71_475));
+    }
+
+    /// `TestTheLastAttempt`, parametrised.
+    #[test]
+    fn missing_only_from_2330() {
+        use super::super::fixtures::day;
+        for (date, h, m, last) in [
+            (day(), 18, 30, false),
+            (day(), 22, 30, false),
+            (day(), 23, 30, true),
+            (super::super::fixtures::next(), 9, 0, true),
+        ] {
+            assert_eq!(
+                is_final_attempt(day(), date.and_hms_opt(h, m, 0).unwrap()),
+                last
+            );
+        }
+    }
+
+    #[test]
+    fn a_file_stamped_with_another_session_is_refused_by_the_parse() {
+        use super::super::fixtures::{day, next, parse, udiff_csv};
+        let err = parse(&udiff_csv(next()), day()).unwrap_err();
+        assert!(err.is_provider_error());
+        assert_eq!(super::super::fixtures::day_rows().len(), 17);
+    }
 }

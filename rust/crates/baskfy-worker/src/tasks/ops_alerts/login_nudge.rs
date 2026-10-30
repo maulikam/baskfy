@@ -664,4 +664,111 @@ mod tests {
             "2026-10-30 first\n"
         );
     }
+    /// `test_a_token_that_expires_mid_morning_is_seen_at_the_second_window`: a rotated key makes
+    /// the 08:12 token unreadable by 09:05, and the second window nudges.
+    #[tokio::test]
+    async fn a_token_unreadable_by_the_second_window_nudges() {
+        let dir = Dir::new("rotated");
+        let sink = Sink(RefCell::new(vec![]), true);
+        let fresh = store(&dir, Some(("tok", "2026-10-30T08:12:00")));
+        let first = nudge(
+            &dir,
+            &fresh,
+            &sink,
+            "2026-10-30T08:45:00",
+            NudgeWindow::First,
+            true,
+        )
+        .await;
+        assert!(!first.sent);
+        let rotated = AccessTokenStore::new(
+            dir.0.join("kite-token.enc"),
+            Secret::new("Yk0yV2xQd2dQZ0Y2bEVhR0xqU1l3bVVpWkJ4Q2JzaW8="),
+        );
+        let second = nudge(
+            &dir,
+            &rotated,
+            &sink,
+            "2026-10-30T09:05:00",
+            NudgeWindow::Second,
+            true,
+        )
+        .await;
+        assert!(second.sent);
+        assert_eq!(sink.0.borrow().len(), 1);
+    }
+
+    /// `test_no_recipient_configured_sends_nothing_and_raises_nothing`: the window stays
+    /// unclaimed, so a box configured at 09:00 still gets its 09:05 mail.
+    #[tokio::test]
+    async fn no_recipient_leaves_the_window_unclaimed() {
+        let dir = Dir::new("unclaimed");
+        let sink = Sink(RefCell::new(vec![]), true);
+        let none = store(&dir, None);
+        let inputs = NudgeInputs {
+            now: at("2026-10-30T08:45:00"),
+            token_store: &none,
+            mailer: &sink,
+            login_url_for: &url_for,
+            to: "",
+            state_dir: &dir.0,
+            window: NudgeWindow::First,
+            account: DEFAULT_ACCOUNT,
+        };
+        let r = run_login_nudge(&inputs, async { Ok(true) })
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(!r.sent);
+        let day = NaiveDate::from_ymd_opt(2026, 10, 30).unwrap();
+        assert!(!marker_path(&dir.0, day, NudgeWindow::First).exists());
+    }
+
+    /// `TestNothingSecretIsEverRendered` and `test_the_step_outcome_carries_what_happened`.
+    #[tokio::test]
+    async fn nothing_secret_is_rendered_and_the_detail_says_what_happened() {
+        let dir = Dir::new("secret");
+        let sink = Sink(RefCell::new(vec![]), true);
+        let stale = store(&dir, Some(("tok-secret-value", "2026-10-29T23:55:00")));
+        let r = nudge(
+            &dir,
+            &stale,
+            &sink,
+            "2026-10-30T08:45:00",
+            NudgeWindow::First,
+            true,
+        )
+        .await;
+        let m = sink.0.borrow()[0].clone();
+        let rendered = format!("{}{}{}", m.text, m.html, m.subject);
+        assert!(!rendered.contains("tok-secret-value"));
+        assert!(!rendered.contains(KEY));
+        assert!(!rendered.contains(&stale.path().display().to_string()));
+        for phrase in [
+            "your own box",
+            "no Zerodha password and no 2FA seed",
+            "Zerodha's own login page",
+            "idles",
+            "no order is possible today",
+            "Zerodha — Baskfy's Kite Connect app",
+        ] {
+            assert!(m.text.contains(phrase), "{phrase}");
+        }
+        let detail = r.as_detail();
+        assert_eq!(detail.get("sent"), Some(&OrderedJson::Bool(true)));
+        assert_eq!(detail.get("window"), Some(&s("first")));
+        let refusing = Sink(RefCell::new(vec![]), false);
+        let r = nudge(
+            &dir,
+            &stale,
+            &refusing,
+            "2026-11-02T08:45:00",
+            NudgeWindow::First,
+            true,
+        )
+        .await;
+        let joined = r.notes.join(" ");
+        assert!(!joined.contains("example.com"));
+        assert!(!joined.contains(&stale.path().display().to_string()));
+    }
 }

@@ -192,4 +192,109 @@ mod tests {
             ]
         );
     }
+    fn closed(
+        n: i64,
+        sleeve: FoSleeve,
+        r: &str,
+        net: &str,
+        simulated: bool,
+        on: NaiveDate,
+    ) -> ClosedTrade {
+        ClosedTrade {
+            position_id: n,
+            sleeve,
+            symbol: if sleeve == FoSleeve::F1N {
+                "NIFTY"
+            } else {
+                "ZQA"
+            }
+            .to_owned(),
+            simulated,
+            closed_on: on,
+            closed_at: None,
+            net_pnl_inr: net.parse().unwrap(),
+            r_multiple: r.parse().unwrap(),
+            closed_reason: "LOSS_CLOSE".to_owned(),
+            rolls: 0,
+        }
+    }
+
+    /// `test_one_line_per_pool_and_the_books_apart`.
+    #[test]
+    fn one_line_per_pool_and_the_books_apart() {
+        use baskfy_core::fno::config::{FnoCeilings, FnoConfig};
+        use baskfy_core::fno::ledger::{build_ledger, evaluate_pauses};
+        let friday = NaiveDate::from_ymd_opt(2026, 10, 30).unwrap();
+        let week_ago = NaiveDate::from_ymd_opt(2026, 10, 23).unwrap();
+        let trades = vec![
+            closed(1, FoSleeve::F1N, "0.40", "10000", true, friday),
+            closed(2, FoSleeve::F1N, "-0.70", "-17500", true, friday),
+            closed(3, FoSleeve::F1N, "-1.00", "-25000", false, friday),
+            closed(4, FoSleeve::F2, "1.50", "3000", true, friday),
+            closed(5, FoSleeve::F2, "-1", "-99", true, week_ago),
+        ];
+        assert_eq!(
+            week_lines(&trades, friday),
+            vec![
+                "F1N paper: 2 closed, ₹-7500, -0.30R (worst -0.70R)",
+                "F2 paper: 1 closed, ₹3000, 1.50R (worst 1.50R)",
+                "F1N LIVE: 1 closed, ₹-25000, -1.00R (worst -1.00R)",
+            ]
+        );
+        let pauses: Vec<(bool, Vec<FoPause>)> = [true, false]
+            .into_iter()
+            .map(|sim| {
+                let p = evaluate_pauses(
+                    &trades,
+                    sim,
+                    friday,
+                    Decimal::from(20_000),
+                    None,
+                    &FnoConfig::default(),
+                    &FnoCeilings::default(),
+                )
+                .unwrap();
+                (sim, p)
+            })
+            .collect();
+        let alert = weekly_alert(
+            &trades,
+            &build_ledger(&trades, &[], friday).unwrap(),
+            &pauses,
+            friday,
+        );
+        assert_eq!(alert.name, FnoName::Weekly);
+        assert!(
+            alert
+                .summary
+                .contains("paper book month to date: 4 closed, ₹-4599"),
+            "{}",
+            alert.summary
+        );
+        assert!(
+            alert
+                .summary
+                .contains("LIVE book month to date: 1 closed, ₹-25000")
+        );
+        let found = match alert.detail.get("pauses") {
+            Some(OrderedJson::Array(found)) => found.clone(),
+            _ => Vec::new(),
+        };
+        let got: Vec<(Option<&OrderedJson>, Option<&OrderedJson>)> = found
+            .iter()
+            .map(|p| (p.get("simulated"), p.get("scope")))
+            .collect();
+        assert_eq!(
+            got,
+            vec![(Some(&OrderedJson::Bool(false)), Some(&s("BOOK")))]
+        );
+    }
+
+    #[test]
+    fn a_quiet_week_says_so() {
+        let friday = NaiveDate::from_ymd_opt(2026, 10, 30).unwrap();
+        let ledger = baskfy_core::fno::ledger::build_ledger(&[], &[], friday).unwrap();
+        let alert = weekly_alert(&[], &ledger, &[], friday);
+        assert!(alert.summary.contains("no FO structure closed this week"));
+    }
 }

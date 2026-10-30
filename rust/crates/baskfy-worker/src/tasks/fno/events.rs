@@ -576,4 +576,153 @@ mod tests {
             Some(&s("2026-10-29T04:20:00+00:00"))
         );
     }
+    fn d(y: i32, m: u32, day: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(y, m, day).unwrap()
+    }
+
+    fn plan() -> PlanRow {
+        PlanRow {
+            plan_id: "F1N-20310725-1".to_owned(),
+            sleeve: "F1N".to_owned(),
+            symbol: "NIFTY".to_owned(),
+            structure: "IRON_CONDOR".to_owned(),
+            trade_date: d(2031, 7, 25),
+            lots: 2,
+            lot_size: 75,
+            credit_points: Some("112.40".parse().unwrap()),
+            debit_points: None,
+            max_loss_inr: Some("24500.00".parse().unwrap()),
+            margin_required_inr: None,
+            hard_exit_date: Some(d(2031, 8, 21)),
+            expires_at: "2031-07-25T04:20:00Z".parse().unwrap(),
+            status: "ISSUED".to_owned(),
+            detail: None,
+        }
+    }
+
+    fn journal(simulated: bool) -> JournalRow {
+        JournalRow {
+            position_id: 11,
+            sleeve: "F2".to_owned(),
+            symbol: "ZQA".to_owned(),
+            structure: "FUTURE".to_owned(),
+            closed_on: d(2031, 7, 25),
+            net_pnl_inr: "3019.50".parse().unwrap(),
+            costs_inr: "180.50".parse().unwrap(),
+            r_multiple: "0.30".parse().unwrap(),
+            closed_reason: "STOP".to_owned(),
+            sessions_held: 1,
+            rolls: 0,
+            simulated,
+        }
+    }
+
+    fn position(hard_exit: Option<NaiveDate>, legs: Option<serde_json::Value>) -> OpenRow {
+        OpenRow {
+            id: 21,
+            sleeve: "F1B".to_owned(),
+            symbol: "BANKNIFTY".to_owned(),
+            structure: "IRON_CONDOR".to_owned(),
+            entry_plan_id: "F1B-20310701-1".to_owned(),
+            hard_exit_date: hard_exit,
+            simulated: true,
+            legs,
+        }
+    }
+
+    /// `test_a_plan_alert_carries_what_the_confirm_needs`.
+    #[test]
+    fn a_plan_alert_carries_what_the_confirm_needs() {
+        let alert = plan_alert(&plan());
+        assert_eq!(
+            (alert.name, alert.severity),
+            (FnoName::Plan, Level::Warning)
+        );
+        for text in [
+            "F1N NIFTY IRON_CONDOR plan F1N-20310725-1 issued",
+            "2 lot(s) of 75",
+            "credit 112.40 pts",
+            "max loss ₹24500.00",
+            "hard exit 2031-08-21",
+            "by 09:50 IST or it lapses",
+        ] {
+            assert!(alert.summary.contains(text), "{text}");
+        }
+        let mut debit = plan();
+        debit.credit_points = None;
+        debit.debit_points = Some("40.00".parse().unwrap());
+        assert!(plan_alert(&debit).summary.contains("entry 40.00 pts"));
+        debit.debit_points = None;
+        assert!(plan_alert(&debit).summary.contains("price on the card"));
+    }
+
+    /// `test_an_exit_alert_names_its_mode_and_is_in_rupees_and_r`.
+    #[test]
+    fn an_exit_alert_names_its_mode_and_is_in_rupees_and_r() {
+        let summary = exit_alert(&journal(true)).summary;
+        for text in [
+            "F2 paper ZQA FUTURE closed (STOP) on 2031-07-25",
+            "net ₹3019.50",
+            "₹180.50 costs",
+            "0.30R",
+        ] {
+            assert!(summary.contains(text), "{text}");
+        }
+        assert!(exit_alert(&journal(false)).summary.contains("F2 LIVE"));
+    }
+
+    /// `test_hard_exit_tomorrow_and_late_exit`.
+    #[test]
+    fn hard_exit_tomorrow_and_late_exit() {
+        let notice = hard_exit_tomorrow_alert(
+            &position(Some(d(2031, 7, 28)), None),
+            d(2031, 7, 28),
+            "hard exit",
+        );
+        assert!(
+            notice
+                .summary
+                .contains("F1B paper BANKNIFTY IRON_CONDOR (position 21)")
+        );
+        assert!(notice.summary.contains("hard exit is tomorrow, 2031-07-28"));
+        let late = late_exit_alert(
+            &plan(),
+            "open past the 15:00 hard exit",
+            "2031-07-25T15:05:00+05:30",
+        );
+        assert_eq!(
+            (late.name, late.severity),
+            (FnoName::LateExit, Level::Critical)
+        );
+        assert!(
+            late.summary
+                .contains("LATE_EXIT: open past the 15:00 hard exit")
+        );
+    }
+
+    /// The F2 carry's `time_exit_date` stands in for a missing hard exit.
+    #[test]
+    fn a_carry_time_exit_is_read_when_no_hard_exit_is_set() {
+        let carry = serde_json::json!({"legs": [], "carry": {"time_exit_date": "2031-07-28"}});
+        assert_eq!(
+            hard_exit_of(&position(None, Some(carry))),
+            Some((d(2031, 7, 28), "time exit"))
+        );
+        assert_eq!(
+            hard_exit_of(&position(Some(d(2031, 8, 21)), None)),
+            Some((d(2031, 8, 21), "hard exit"))
+        );
+        assert_eq!(
+            hard_exit_of(&position(None, Some(serde_json::json!({"legs": []})))),
+            None
+        );
+    }
+
+    /// `claim` fails open: no cache, or a cache that cannot answer, delivers.
+    #[tokio::test]
+    async fn claim_fails_open() {
+        assert!(claim(None, "fno:alert:x").await);
+        let down = redis::Client::open("redis://127.0.0.1:1/0").unwrap();
+        assert!(claim(Some(&down), "fno:alert:x").await);
+    }
 }

@@ -855,7 +855,7 @@ unparseable Redis URL is no longer quoted in `guard_url`'s `ValueError` (a Redis
 password); `an_unparseable_redis_url_never_reaches_the_message` pins it. **How to reverse:** change
 the constant.
 
-## R4.14 — The raw archive signs S3 requests by hand (SigV4) with botocore's timeouts and no retries yet (RS4a, 29 Oct 2026) ⚠ UNREVIEWED
+## R4.14 — The raw archive signs S3 requests by hand (SigV4) with botocore's timeouts and no retries yet (RS4a, 29 Oct 2026; **retries closed at RS5.0, 30 Oct 2026**) ⚠ UNREVIEWED
 
 **Context.** R4.1 left the archive porter to choose between `aws-sdk-s3` and a hand-signed client.
 The archive needs exactly `PutObject`, `GetObject` and `HeadObject`, path-style, against R2 or S3.
@@ -876,6 +876,37 @@ This is recorded here and must close before the worker's nightly runs on Rust.
 chokepoint, for three verbs).
 
 **How to reverse.** Implement `S3ClientLike` over `aws-sdk-s3`; `S3RawArchive` does not change.
+
+**Closed (RS5.0, wave 5's foundation, 30 Oct 2026).** Read from the archive's own client rather
+than assumed: the Python archive builds `boto3.client("s3", endpoint_url=…, region_name=…, …)`
+with no `config`, so botocore 1.43.75 resolves `retry_mode` from `AWS_RETRY_MODE`/the config file,
+else **`legacy`** (`configprovider._DEFAULT_RETRY_MODE`; `AWS_NEW_RETRIES_2026` is unset, so
+`NEW_RETRIES_ENABLED` is false). Introspecting a client built offline confirmed the registered
+handler: `MaxAttemptsDecorator(max_attempts=5)` over `_retry.json`'s `__default__` policies plus
+`s3`'s two. `SigV4S3Client::send` now reproduces exactly that:
+
+* **Five attempts in all** (the first included), each re-signed (a fresh `x-amz-date`), the last
+  attempt's failure returned (`S3_MAX_ATTEMPTS`).
+* **Retried:** any transport error (botocore's `GENERAL_CONNECTION_ERROR` family —
+  `ConnectionError`, `ConnectionClosedError`, `ReadTimeoutError`, `EndpointConnectionError`, and
+  their subclasses `ConnectTimeoutError`, `SSLError`); statuses 429, 500, 502, 503, 504, 509; a
+  400 whose XML `<Code>` is `Throttling`, `ThrottlingException`, `ThrottledException`,
+  `RequestThrottledException`, `ProvisionedThroughputExceededException`, or S3's own
+  `RequestTimeout` / `BadDigest`. **Not retried:** every other answer (301, a plain 400, 403,
+  404, …) and a request refused before it is sent (the network block, a bad URL).
+* **Backoff:** `delay_exponential(base="rand", growth_factor=2)` — `random() * 2 ** (n - 1)`
+  seconds after the n-th failed attempt, a fresh draw each time — through the crate's `Sleeper`
+  and `Random` seams (`SigV4S3Client::with_seams`).
+* A GET's body is read after the retry loop, as botocore's `StreamingBody` is, so a body that
+  breaks mid-read is not retried in either language.
+
+Tested in `tests/s3_retry.rs` (8 cases) against a stub S3 on loopback with a recording sleeper and
+a fixed draw: the policy table, recover-after-500/503, five-and-out with sleeps `0.5, 1, 2, 4`,
+the code-named 400s retried and a plain 400 not, 429 retried and 403/404 answered at once, a
+dropped connection and a refused port retried, a blocked host never attempted. Not reproduced
+(unreachable against R2): `S3RegionRedirectorv2` (a 301/400 region redirect re-sent to the right
+region) and botocore's `_update_status_code` for 200-with-error bodies, which apply to
+`CopyObject`/`CompleteMultipartUpload`, neither of which the archive sends.
 
 ## R4.15 — RS4a integration: decision numbers renumbered, no new dependency (RS4a, 29 Oct 2026) ⚠ UNREVIEWED
 
@@ -2266,3 +2297,575 @@ row diff and graded instead through `GET /admin/actions` (task ids masked by poi
   suites with a test-environment shim (a `uv` on `PATH` that runs `python -m alembic` in the
   venv) rather than editing the helper: 65 passed.
 
+
+## R7.1 — Cutover schedules the Rust nightly through the Celery beat entry, which shells out to the binary (RS5.0, 30 Oct 2026) ⚠ UNREVIEWED
+
+**Context.** Python's nightly is a Celery task (`baskfy.pipeline.nightly`) fired by Beat at 15:50 and
+18:45 IST, plus the catch-up sweep (06:45 and on a Kite login). The Rust worker has no Celery: a
+Celery worker in Rust would mean reimplementing kombu's protocol and Beat's schedule for a job that
+runs once a night.
+
+**Choice.** `baskfy-worker nightly --date D` is the Rust entry point, and it implements the task's
+**explicit-date** body only (three transactions, the alert, the return value). At cutover the Beat
+entry keeps firing and its Python task keeps its scheduled-path guards — not a trading day, already
+published, before `SESSION_DATA_READY_IST` (18:00 IST), and `kite_session_cli.refresh_quietly()` —
+then **shells out** to `baskfy-worker nightly --date <resolved day>` and relays its JSON and exit
+code. The same holds for `session_catch_up` (`baskfy-worker catch-up`, the gate lane's). The
+binary exits 0 only for a succeeded run, 1 for a refused gate, an aborted day or a raised chain,
+2 for a usage or configuration error.
+
+**Rejected.** A Rust scheduler now (it would own the 18:00 guard before the steps it guards are
+ported, and two schedulers could fire one night twice — the advisory lock would save the data, not
+the alert noise); a Celery-protocol consumer in Rust (large, and it dies with the shell-out anyway
+once the whole worker is Rust, when the single `baskfy` binary's own scheduler can replace Beat).
+
+**How to reverse.** Point the Beat task back at `run_nightly_pipeline` (the Python body never
+left). Both chains take the same advisory lock (`PIPELINE_CHAIN_LOCK_KEY = 0x0BA5C1FA`, bound as a
+`bigint` in both), so a Python and a Rust chain can never run concurrently during the switch.
+
+## R7.2 — `baskfy-worker`: one crate, the API's `Settings` and `Mailer`, no new dependency (RS5.0, 30 Oct 2026) ⚠ UNREVIEWED
+
+* **Layout.** `rust/crates/baskfy-worker` (lib + bin `baskfy-worker`), declared in the workspace.
+  `steps.rs` mirrors `steps.py` (the 14 `PipelineStep` strings in order, `NIGHTLY_CHAIN`,
+  `POST_PUBLISH_STEPS`, `StepStatus`, `RunStatus`, `StepOutcome` with its detail in `dict.update`
+  order, `HardFailure`, `open_run`/`adopt_run`/`close_run`, `record_step`); `orchestrator.rs`
+  mirrors `orchestrator.py`; `nightly.rs` the task; `ops.rs`, `calendar.rs`, `alerts.rs`,
+  `catch_up.rs`, `settings.rs`, `deps.rs`, `window.rs` the pieces they need.
+* **Dependencies.** `baskfy-api` (lib) for `Settings` (the database URL, mail, the alert sinks)
+  and `Mailer` — Python's worker imports `baskfy_api.settings` and `baskfy_api.email`, so the
+  dependency runs the same way. Everything else (`sqlx`, `redis`, `tokio`, …) is already pinned;
+  **no new third-party dependency**. The cache handle is a lazy `redis::Client` (Python's
+  `Redis.from_url`, `None` when the URL does not parse).
+* **Settings.** `WorkerSettings` has Python's 53 fields, environment names (the three desk aliases
+  `DRY_RUN`, `OPTIONS_ENABLED`, `INTRADAY_ENABLED` included), defaults and constraints, held to
+  `tests/fixtures/python_worker_settings.json` (generated from `WorkerSettings.model_fields` in an
+  empty directory). Its coercion helpers duplicate `baskfy_api::settings`' private ones; collapse
+  them into one public module at the next API foundation change.
+* **The write pool.** The chain runs on `baskfy_db::WriteDb::begin()` — one transaction, as
+  Python's `session_scope`. The desk score's savepoint is sqlx's nested `begin()` on the chain's
+  connection (`SAVEPOINT`), Python's `begin_nested()`.
+* **Lanes own files, never `lib.rs` or the orchestrator.** `steps/ingest.rs` (steps 1–4 and the
+  calendar reconcile), `steps/index.rs` (5–6, fundamentals folded in), `steps/compute.rs` (7–8,
+  the desk score), `steps/gate.rs` (9–10, and `catch_up.rs`), `steps/sleeves.rs` (11–14). Each is
+  a declared stub returning `WorkerError::NotPorted`; its signatures are the orchestrator's
+  contract. `WorkerError::python_type()` gives the Python class every graded message needs
+  (`skipped_reason = "{type}: {message}"`, the failure row's `type`).
+* **Law 2.** `tests/law_two.rs` scans the crate for any order or GTT verb, Kite write endpoint or
+  execution crate.
+
+**How to reverse.** Delete the crate and its workspace line; nothing else depends on it.
+
+## R7.3 — The replay provider: one recorded day, two adapters, zero network (RS5.0, 30 Oct 2026) ⚠ UNREVIEWED
+
+**Context.** Grading the nightly differentially needs both chains to read the **same** provider
+answers, with no Kite, NSE or R2 call. Recorded HTTP would have to be replayed through two
+different HTTP stacks and parsers (whose agreement is wave 4's job, already graded); the worker's
+grading needs the inputs at the port.
+
+**Choice.** A provider adapter at the **port** level, in both languages, behind each language's
+production `CompositeProvider`: `baskfy_providers::replay::ReplayProvider` (Rust) and
+`tools/parity/replay_provider.py` (Python, harness-only). Both read a **bundle directory**
+(format 1): `manifest.json` (`trade_date`, `variant`, a `refuse` list) and one JSON file per call
+under `calls/` — records as pydantic's `model_dump(mode="json")`, bars and bhavcopy rows with
+decimal strings, built into frames on `DAILY_BARS_SCHEMA`/`BHAVCOPY_SCHEMA` exactly. A call the
+bundle cannot answer is `ProviderUnavailable("[replay] no recorded answer for <call>")` in both;
+a `refuse` entry raises the provider error class it names for a matching call (arguments compared
+by their string form). `daily_bars` answers only inside the recorded window and only for a recorded
+token (a token with no bar that day answers an empty frame, as Kite does); `equity_fundamentals`
+answers the recorded rows for the asked symbols in the asked order, each once.
+
+`tools/parity/replay_build.py` derives the bundles for a day from the bed (read-only; what each call
+is rebuilt from is in its docstring) — deterministic, so an unchanged bed rebuilds the same hash.
+The 2026-10-29 day: 11,241 Kite instruments (10,779 tokens, 3,635 with a bar), 2,653 + 585
+listings, a 4,205-row bhavcopy, 41 corporate actions since 22 Oct, 12 constituent files, 151 index
+snapshots, 3,518 fundamentals rows. Fidelity to the real night is partial and said so: the bed
+stores no raw bhavcopy for 29 Oct, Kite's and NSE's records are rebuilt from the merged
+`instrument` rows, and the real fundamentals fetch failed upstream that night (the bundle serves
+the latest stored row instead, to exercise the path). The archive tarball in
+`/Volumes/T7-Work/baskfy-aws-exit-20261029` holds raw files only up to 28 Oct for the bhavcopy, so
+it was not used; it was not modified.
+
+`replay_selfcheck.py` drives both adapters over a bundle with 22 calls (every method, answered and
+refused, plus the edges) and compares value for value: **22 of 22 EQUAL** over `base` and over
+`provider-failure-midway`. `tests/replay.rs` (5 cases) covers the Rust adapter alone.
+
+**The injection.** Python: `nightly_py.py` monkeypatches `baskfy_worker.providers.build_provider_stack`
+at process start (plus `kite_session_cli.refresh_quietly` and a loopback-only socket guard);
+production Python is unchanged. Rust: `baskfy-worker --replay-bundle DIR` swaps the stack and arms
+`net::block_network()`. The flag is a test seam in a production binary, chosen over an environment
+variable because a flag cannot be inherited by accident.
+
+**How to reverse.** Delete `replay.rs`, the example, the flag and the three Python files.
+
+## R7.4 — `record_step` writes a Rust `traceback`; the span and the histogram are not ported (RS5.0, 30 Oct 2026) ⚠ UNREVIEWED
+
+`record_step` upserts the `(run_id, step)` row twice (running, then final), so the identity
+sequence moves by two per step in both languages; on success the `error` column is the detail or
+JSON `null` (SQLAlchemy binds `None` into `JSONB` as `'null'` — checked by compiling Python's own
+statement); on failure `{"type", "message", "traceback", **detail}`, where Python's `traceback` is
+`traceback.format_exc(limit=20)` and Rust's is the error's `Debug`. They cannot match; the harness
+masks the key as `<set>`. It persists only for a failure the chain survives, which today is none (a
+raising step rolls the chain back). Not ported: the OpenTelemetry span per step and the
+`observe_step` histogram — the step row is the graded record; tracing returns with the single
+binary's observability work.
+
+## R7.5 — Alerts: the log line and email ported; Sentry and the webhook not (RS5.0, 30 Oct 2026) ⚠ UNREVIEWED
+
+`alerts.rs` ports `Alert`, `as_dict()` (stamped `raised_at`, Python's `isoformat`),
+`ops.alert_for_outcome`, the task's `pipeline_failed` alert for a raised chain, and `dispatch` to
+the log and to email through `baskfy_api::mailer` — the subject, text and HTML exactly as
+`_send_email` builds them, the body `json.dumps(…, indent=2)` with `ensure_ascii` (`pyjson.rs`).
+Sentry (no DSN on the local box) and the JSON webhook are not ported; a configured webhook logs
+that it is not. The harness masks `raised_at` in mail. The nightly's three alert paths (gate
+refusal, raised chain, none) are graded by the `gate-refuse`, `provider-failure-midway` and
+`fresh` scenarios once the steps land.
+
+## R7.6 — The chain is split into blocks; `step` runs one; Python's step mode is a pinned mirror (RS5.0, 30 Oct 2026) ⚠ UNREVIEWED
+
+**Context.** The brief asks for `baskfy-worker step <name> --date D --run-id N`, run into an open
+run, so a lane can be graded one step at a time on a clone primed by Python's chain. Python has no
+such entry point: `_run_chain` is one linear function.
+
+**Choice.** `orchestrator.rs` splits `_run_chain` into one **block** per step — the `record_step`
+plus the glue that belongs to it (`active_instruments` before step 2, the calendar reconcile after
+it, the desk score inside step 7, the gate's `HardFailure` after its row) — and `run_chain` walks
+`NIGHTLY_CHAIN` through `run_block`; the statements run in Python's order. `step` runs one block on
+one transaction after taking the chain lock: committed when it returns (a refused gate included —
+the row is written, the run is **not** closed, that is the full chain's job), rolled back when it
+raises. The only value a block needs from an earlier one that the database cannot answer is step
+3's `touched` set; `--context ctx.json` carries it (`{"touched": [ids]}`), written by the prime.
+
+For the Python side the harness mirrors `_run_chain` in `nightly_py.run_block` — the same task
+calls in the same order — and pins `orchestrator.py`'s source (`_run_chain`, the three wrappers,
+the desk-score step, `run_nightly_pipeline`) by SHA-256: `step` and `prime` refuse to run once it
+changes. The chain mode never uses the mirror; it runs `nightly_pipeline` itself.
+
+**Rejected.** Driving Python's real `_run_chain` with patched task functions to skip steps (the
+glue between blocks would still run, and asymmetrically with Rust); a production Python entry
+point for one step (the brief keeps production Python unchanged).
+
+## R7.7 — `nightly_diff.py`: digests, masks, the `fresh` day, cached templates (RS5.0, 30 Oct 2026) ⚠ UNREVIEWED
+
+* **Reuse.** `api_writes.py`'s container check, `psql`, sequences, Redis dump and SMTP sink; its
+  per-table full-row read could not scale (`ohlcv_daily` holds 5.25 M rows), so tables are compared
+  by an **order-free digest**: per row the JSON of its columns (masked columns replaced), `md5` per
+  row, `string_agg` sorted per bucket of `hashtext(primary key) & 1023`, and the differing buckets'
+  rows fetched and printed side by side. `pipeline_run`/`pipeline_run_step` are read in full.
+* **Masks.** Only values that differ between two correct runs: ids (as ranks in the run tables, the
+  payload's `run_id`), wall-clock stamps (`<before>`/`<during>` the side's own start, so "stamped by
+  this run" still has to agree), `duration_ms` (`<set>`), the failure row's `traceback` (R7.4), mail's
+  `raised_at`. Any further column mask goes in `TABLE_MASKS` with its reason; the report prints each.
+* **`fresh`.** The bed with the day's chain output deleted (`FRESH_DELETES`): the day's
+  `pipeline_run` (its steps cascade; the sleeves' `pipeline_run_id` columns are `SET NULL`) and the
+  day's rows of the fifteen tables the chain writes by date. Upserts with no dated trace
+  (`instrument`, `corporate_action`, `trading_day`, the adjusted history) stay; the chain rewrites
+  them idempotently.
+* **Templates and the budget.** `rsn_tpl_<kind>_<date>` (TimescaleDB jobs unscheduled, closed to
+  connections) and `rsn_primed_<step>_<hash>` are **kept** between runs — the brief's priming cache
+  — and evicted least-recently-used whenever a new database would exceed five besides `baskfy`. Every
+  database created *for the run* is dropped on exit (`atexit` and SIGINT/SIGTERM handlers).
+  `--drop-cache` removes the templates. A prime that fails is dropped, never cached.
+* **Environment.** Both sides run from an empty working directory (no `.env`), `TZ=UTC`,
+  `BASKFY_SOLE_USER_ID=1` (the box's sole tenant, so the sleeve steps run), alert mail to the sink,
+  no OTEL, no Sentry, no fixture directory, no Kite key, no S3 bucket.
+
+## R7.8 — Python behaviour the wave-5 foundation found, reproduced on purpose (RS5.0, 30 Oct 2026) ⚠ UNREVIEWED — **for Maulik**
+
+* **A refused gate commits the chain's rows.** `orchestrator.py`'s module docstring says a hard
+  failure rolls the transaction back; the code catches `HardFailure`, closes the run `failed` and
+  returns, and `session_scope` then **commits** — bars, factors and every step row of the refused
+  day land, only `data_version` does not (the `gate-refuse` scenario shows it). The Rust port does
+  the same. Whether the docstring or the code is the intent is a decision, not an edit (root
+  CLAUDE.md: the decision wins; here nobody wrote one down).
+* **A step with no detail stores JSON `null`, not SQL `NULL`,** in `pipeline_run_step.error` (and so
+  does the `running` row) — SQLAlchemy's `JSONB` binds `None` as `'null'`. Reproduced.
+* **The replay builder's first bundle had two candles for one Kite token** (462 tokens are shared on
+  the bed by a legacy `X-SM`/`X-SZ` row and its bare Emerge row), and Python's `upsert_bars` then
+  failed the fresh chain with `CardinalityViolationError` — on both sides identically, so the harness
+  graded it EQUAL. Real Kite returns one candle per token, so the bundle was fixed (one record and one
+  candle per token, the bare row's). Worth knowing for the ingest lane: the shared tokens are real,
+  and `active_instruments` hands both rows the same token.
+
+**How to reverse.** Each is a Python change first, then the same in Rust; the harness grades both.
+
+## R7.9 — Lane **index** (steps 5 and 6, fundamentals folded in): the calls (RS5, 30 Oct 2026) ⚠ UNREVIEWED
+
+Lane label; the integrator renumbers. Files: `rust/crates/baskfy-worker/src/steps/index.rs` and the
+private `steps/index/{membership,snapshots,fundamentals,universes,db_tests}.rs`.
+
+* **Bulk upserts as arrays.** Python sends one multi-row `INSERT ... VALUES` per universe / per
+  file; Rust sends the same rows as `INSERT ... SELECT * FROM UNNEST($1::smallint[], ...)` with the
+  same `ON CONFLICT` target, `SET` list and (membership) `WHERE index_member_daily.source !=
+  'nse_file'`. The rows written are identical; a repeated key fails both the same way ("cannot affect
+  row a second time"); arrays carry no 32,767-parameter ceiling, which no current batch reaches in
+  Python either. Numeric arrays are unconstrained `numeric[]`, so the assignment cast to
+  `numeric(18,4)` etc. rounds exactly as Python's per-parameter bind does.
+* **`Decimal` arithmetic is Python's context.** The guard's `level / anchor - 1`, its
+  `{move * 100:+.1f}` (half-even, as `Decimal.__format__` takes the context's rounding), `_pe_on`
+  and `_marketcap_cr` run on `baskfy_core::decimal::WideDecimal` (28 significant digits, then
+  `quantize(..., HALF_UP)`), and the stored numerics they read (`level`, `close_raw`) are selected
+  `::text` so the anchor keeps its stored scale in the message (`against 24398.7000`).
+* **`baskfy_core.universes` stays private to the lane** (`universes.rs`: the 15 pinned ids/slugs,
+  `slugify_index` with Python's `str.strip` whitespace set — it includes `\x1c`–`\x1f`, which
+  `char::is_whitespace` does not — `FIRST_NON_UNIVERSE_INDEX_ID`, `sorted(SME_SERIES)`). Lift it to
+  `baskfy-core` when a second lane needs it rather than keeping two copies.
+* **Python's `getattr(provider, ...)` duck-typing** collapses to the composite's methods (it has
+  all five). The exception sets are kept exactly: `_from_named_method` swallows any provider-tree
+  error, `_from_provider` only `UnexpectedPayload`, `refresh_membership` records any provider-tree
+  error per universe; an error outside the tree (`ErrorKind::Foreign`) raises in all three.
+* **Unreachable-in-practice error classes.** A second dashboard id past 32,767 in one batch fails
+  in Python inside asyncpg's int16 encoder; Rust refuses it before binding as `DBAPIError` with a
+  similar message. A `WideDecimal` failure maps to `InvalidOperation`. Neither path has data that
+  reaches it.
+* **Database tests on temp tables.** The Python DB tests for these modules (`test_reference_data`
+  membership/source/registration, `test_snapshots`, `test_fundamentals`) are ported as 14 tests that
+  create `TEMP` tables shaped like production (keys, the `source` CHECK, numeric scales) on one
+  connection to a scratch database named by `BASKFY_RS_SCRATCH_DATABASE_URL` (the bed container's
+  `postgres` database; `baskfy` refused); without it they are `ignored`. Nothing persists. The worker
+  crate has no `build.rs`/`cfg(bed)` and the lane does not own its `Cargo.toml`, hence `#[ignore]`.
+
+**Graded** (`nightly_diff.py --step`, py vs rs, 2026-10-29 replay, bundle `33841c9f…`): `refresh_index_membership` fresh and rerun, `refresh_index_snapshots` fresh, rerun and provider-failure-midway — all **EQUAL** (payload, `pipeline_run`, `pipeline_run_step`, `index_member_daily`, `index_snapshot_daily`, `fundamental_daily`, sequences, Redis, mail), with no mask beyond R7.7's.
+
+**How to reverse.** Each bullet is local to the lane's files.
+
+## R7.10 — Lane **gate** (steps 9 and 10, `catch_up.rs`): the calls (RS5, 30 Oct 2026) ⚠ UNREVIEWED
+
+Lane labels in the code: `R-gate.1`–`R-gate.5` (renumber at integration).
+
+* **R-gate.1 — The gate is ported whole; every number is Python's.** `steps/gate/quality.rs` ports
+  `tasks/quality.py`'s eight checks with the SQL SQLAlchemy compiles for each (same text, same bind
+  order — assertion 2's offender list has no `ORDER BY`, so the plan's row order is kept by keeping
+  the statement). Assertion 2's move is `Decimal` arithmetic in the default context
+  (`WideDecimal`), the limit is `Decimal(repr(setting))`, `float(move)` goes through the decimal
+  string; assertion 1's `statistics.median` keeps Python's int-or-float (an even count gives
+  `4216.5`, stored as a JSON float); `f"{x:.0f}"`/`.2f`/`.0%` round half to even on the exact
+  binary value (Rust's `{:.N}` does the same). The step detail is `report.to_payload()` and the
+  `GateReport` handed to the orchestrator keeps its fields (`observed` lives in the detail only).
+  The gate reads its thresholds from `WorkerSettings::from_env()`, as Python's
+  `get_worker_settings()`. **Found by the harness:** SQLAlchemy types
+  `percentile_cont(...).within_group(ret_12m)` as the column's `Numeric(14, 2)`, so assertion 8's
+  medians reach Python as `float(Decimal("%.2f" % value))` — Postgres's `-18.009999999999998`
+  is read as `-18.01`, which moves the stored mean and sigma in their last digits. Reproduced.
+* **R-gate.3 — `statistics.fmean`/`pstdev` reproduced bit for bit with a private big integer.**
+  Assertion 8 stores `mean`, `sigma`, `band` as JSON numbers. `fmean` is `fsum(data)/n` (an exactly
+  rounded sum); `pstdev` (CPython 3.12) is the correctly rounded square root of the exact rational
+  variance (`_ss` with `Fraction`s, `_float_sqrt_of_frac` with round-to-odd). A naive `f64`
+  computation differs in the last bits, so `steps/gate/pystats.rs` carries a ~200-line unsigned big
+  integer (add, sub, mul, shifts, long division, `isqrt`) — cheaper than a new dependency
+  (`num-bigint` is only transitive). Held to CPython by 60 random lists (`pystats_cases.txt`,
+  seed 20261030) and the bed's 59 real `ret_12m` medians (`pystats_bed_medians.txt`), all bit-equal.
+* **R-gate.2 — `publish` ports the screener's warm-up for the legacy SQL path only; a
+  `ranking_terms` screen raises.** `run_publish` needs `baskfy_api.screener`'s
+  `current_data_version`, `purge_screen_cache` and `warm_screen_cache` (`top_screen_definitions`,
+  `run_screen` with `resolve_as_of`, `execute_screen`, `_attach_desk_columns`, `screen_provenance`,
+  `payload_with_provenance`, `record_run`, `json_number`). No Rust module executed a screen (R6.13),
+  so `steps/gate/publish.rs` ports that half privately over `baskfy_core::screener`
+  (`build_screen_query`, `cache_key`, `canonical_json`, `ScreenDefinition::model_validate`), with
+  asyncpg's cell types (`numeric` → `Decimal` at its stored scale) and a restatement of the API's
+  crate-private `csv_export::executable` (the expanding-`IN` rendering). The **ranking-engine path**
+  (`rank_definition` over a pandas object frame) is not ported: no saved screen on the bed has
+  `ranking_terms`; meeting one, `publish` raises `NotPorted` (the chain rolls back, the alert says
+  why) rather than warm it differently from Python. **Cutover gate**, shared with R6.13: port the
+  ranking-engine execution once, for both. Also approximated: a Redis failure's message
+  (`cache_purge_failed`/`cache_warm_failed` carry redis-rs's text, not redis-py's); the key, its
+  value and its `EX 172800` are Python's.
+* **R-gate.4 — `catch_up.py` ported; the Celery task `session_catch_up` is not.** `catch_up.rs` has
+  `landed_sessions`, `gate_refused_sessions`, `unlanded_sessions` (today excluded before
+  `SESSION_DATA_READY_IST` = 18:00 IST — never a day still in session; the calendar read without an
+  exchange filter, as Python's), `demote_derived_after_missing_bhavcopy` and
+  `calendar.mark_inferred_holiday` (public here; the ingest lane's reconcile can share it), plus
+  `split_sweep` (the `max_sessions` bound). The task body runs `nightly_pipeline` per day and then
+  `swing_eod_task` (the desk's swing plan — a later wave) and the bhavcopy publication probe; it
+  stays on Celery/Python until the swing EOD half is ported. The foundation's `catch-up` command
+  calls `unlanded_sessions` only.
+* **R-gate.5 — `refresh_basket` is not ported by this lane.** Its stub lives in `steps/sleeves.rs`
+  (the sleeves lane's file, called by the orchestrator), and its body is the desk's: it imports the
+  desk's `app.config`, reads the newest `kite-momentum-rebalancer/data/uploads/scan_*.csv` **by
+  file mtime**, and runs `momentum_scan.build` → `score.apply_filters`/`score` (pandas quantile
+  clips and `rank(pct=True)`) → `basket.build_plan` (398 lines), with no goldens for any of them.
+  Porting it half-way would store a basket Python would not. It belongs with the desk wave
+  (`baskfy-desk` shares `score`/`basket`/`app.config`); goldens first. Until then the stub raises
+  `NotPorted` and the chain on Rust stops at step 11 — a **cutover gate**. (On the box the step
+  writes nothing — run 103 skipped, "no basket could be built", because the container has no
+  uploads; under the harness Python finds the repo's uploads and builds one.)
+* **Database tests** follow R7.9: `steps/gate/db_tests.rs` (16 tests: every
+  `test_quality_gate.py` assertion test and the finder half of `test_session_catch_up.py`) run on
+  `TEMP` tables in the scratch database named by `BASKFY_RS_SCRATCH_DATABASE_URL`; `ignored`
+  without it. The pure verdicts are tested always (`steps/gate/tests.rs`, `catch_up.rs`).
+
+**How to reverse.** Each bullet is local to the lane's files (`steps/gate.rs`, `steps/gate/`,
+`catch_up.rs`).
+
+## R7.11 — Lane **ingest** (steps 1–4 and the calendar reconcile): the calls (RS5, 30 Oct 2026) ⚠ UNREVIEWED
+
+**Scope.** `steps/ingest.rs` (the foundation's signatures, unchanged) and private submodules
+`steps/ingest/{instruments,bars,calendar,corporate_actions,adjustments,adjust,frame}.rs` port
+`tasks/instruments`, `tasks/listings` (`run_refresh_listings`, `store_listings`), `tasks/bars`,
+the part of `bhavcopy_backfill` the step calls (`backfill_bars_from_bhavcopy` on the chain's own
+transaction, `_rows_for_day`, `upsert_day`), `calendar.reconcile_calendar` with the M62
+publication check, `tasks/corporate_actions`, `tasks/adjustments` (`run_apply_adjustments`,
+`reprocess_instrument` with its `as_of` bound, `_rescale_deep_segment`) and
+`baskfy_core.adjustments`. `reprocess_instrument` is public from `steps::ingest` for a
+point-in-time caller; the nightly passes `as_of = None` (house rule 5's deliberate "as of today"
+series — not "fixed").
+
+* **`baskfy_core.adjustments` lives in the worker (`ingest/adjust.rs`), pure.** It had no Rust
+  home and the lane owns only `steps/ingest/`. Nothing in it touches I/O, so it moves to the core
+  unchanged when someone wants it there. Its Python unit tests (`test_adjustments.py`) are ported
+  beside it. **Reverse:** move the file to `baskfy-core/src/adjustments.rs`.
+* **The adjusted prices reproduce polars 1.43's decimal arithmetic, not Python's.** Python's
+  `adjust_bars` multiplies polars `Decimal` columns: every factor literal is `Decimal(38,10)`
+  (rounded half-even), and a column product is the exact product rounded **once**, half-even, to
+  the wider of the two scales — measured against the installed polars (`2.5e-10 → 2e-10`,
+  `3.5e-10 → 4e-10`, `Decimal(38,25) × Decimal(38,10)` keeps 25 places exactly) and pinned by
+  `adjust.rs`'s `polars_rounds_half_even_once_at_the_wider_scale` and a three-action history
+  copied from a Python run. The factors themselves stay Python-context `Decimal`
+  (`WideDecimal`). Two exact operations were **added** to `baskfy_core::decimal::WideDecimal`
+  for it — `mul_exact`, `rescale_exact` and `coefficient_len` (no existing item changed).
+* **`_load_raw_bars`' frame is reproduced, inference window included.** The frame is built from a
+  list of dicts with `strict=False`, so each decimal column is `Decimal(38, s)` with `s` the
+  widest scale among the **first 100 rows** (polars' `infer_schema_length`), and later values are
+  rounded half-even onto `s` (measured). A row without `open_raw` is `open / adj_factor` in
+  Python's 28-digit context, so `s` can reach 20-odd and the product's scale with it — on the bed,
+  1,330 of the touched instruments' rows take that path. The loader reads every numeric as
+  **text**, so each value keeps the scale asyncpg hands Python (`numeric(18,4)` → 4 places).
+  *Review correction (30 Oct 2026):* a value that needs more than 38 digits at `s` is **null**
+  under `strict=False` (measured: `[1.000…01 (scale 35), 108159362.54…, 558.2000]` →
+  `[…, None, …]`), not an error; the port raised `ComputeError` there and now yields null, which
+  then fails the `NOT NULL` write on both sides alike. `s > 38` is a polars panic; the port raises
+  `PanicException` (residual: Python's escapes `record_step` as a `BaseException`). A reviewer's
+  differential (1,900 generated histories through Python's `adjust_bars`, `_price`, `_factor`,
+  `int(volume)`, `_issue_price` and the deep-segment maths vs the Rust functions) agrees on every
+  row, including the overflow cases where both sides refuse.
+* **Statement shape: `UNNEST` instead of multi-row `VALUES`; the rows per statement are Python's
+  where they are observable.** Each identity-keyed upsert (`instrument`, `corporate_action`)
+  consumes one sequence value per proposed row, so the instrument merge keeps Python's 2,048-row
+  batches, the register and the corporate actions one statement each; `ohlcv_daily` (no identity)
+  keeps the 2,000/1,000-row chunks so a duplicate key fails where Python's would. The Kite rows
+  are written in one buffered pass across instruments (Python: one statement per instrument after
+  the fetch) — the same rows, the same conflict targets. The deep-segment rescale issues one
+  `UPDATE` per changed row by primary key, as the ORM's flush does (an `UPDATE … FROM UNNEST`
+  over compressed chunks was not risked).
+* **`reconcile_calendar` writes the same verdicts in two statements** (observed days, inferred
+  holidays) and does not issue the final "still provisional" count, which nothing reads.
+* **Provider errors are caught exactly where Python's `except ProviderError` is**
+  (`ProviderError::is_provider_error`); a non-provider error propagates. `CredentialsMissing` is
+  recognised by kind and prefixed as Python's `f"CredentialsMissing: {exc}"`.
+* **Residuals, none reachable on the replay day:** `_issue_price` parses a string payload with
+  `WideDecimal` (Python's `Decimal` also accepts `NaN`/`Infinity`, which would make the action
+  `INVALID` with decimal's signal text; here it is `None`, i.e. `INSUFFICIENT_DATA`); a database
+  error inside the bhavcopy write is recorded with the Rust error's message, not SQLAlchemy's
+  (and aborts the transaction on both sides alike).
+
+**How to reverse.** Every bullet is local to the lane's files and the three added `WideDecimal`
+methods; `steps/ingest.rs` can return to its `NotPorted` stubs.
+
+## R7.12 — Lane **compute** (steps 7 and 8, the desk score folded into 7): the calls (RS5, 30 Oct 2026) ⚠ UNREVIEWED
+
+Files: `rust/crates/baskfy-worker/src/steps/compute.rs` and `steps/compute/{factors,ranking,desk,score,market_health,numeric}.rs`.
+No new dependency, no edit outside the lane's files.
+
+* **Python modules with no Rust home, ported as private submodules (R2.3's pattern).**
+  `tasks/factors`, `engine` (I/O half), `tasks/ranking` with `factors_ranking.cross_sectional_pctile`
+  and `rank_persistence`, `tasks/desk_score` with `desk_score_service.score_day`/`project`, the
+  scan half of `momentum_scan.build` (the columns `score.required` reads; `unadjusted_symbols` is not
+  ported — `score_day` never reads `suspect_symbols`), `score.apply_filters`/`score.score` with
+  `DESK_CONFIG`'s values, `tasks/market_health` with `breadth.breadth_query`'s compiled SQL. The factor
+  arithmetic is `baskfy_core::factors::compute_factors` (goldens), untouched.
+* **How a float reaches a `numeric` column.** asyncpg binds a Python float as `Decimal(float)` — the
+  exact binary — and PostgreSQL rounds it to the column's scale, half away from zero. `rust_decimal`
+  cannot hold an exact double, so `numeric::float_to_numeric` rounds the integer `m·2^e` itself (u128),
+  giving PostgreSQL's digits; the scale comes from `pg_attribute` (`format_type`), so the writer binds
+  exactly the frame's columns that `factor_daily` has (a column the frame lacks is neither inserted nor
+  updated, as Python's payload). A float bound to an integer column truncates (`int(obj)`).
+  The desk score's `_stored` is different on purpose and reproduced as such: half-up on Python's
+  **shortest repr** (`Decimal(str(x))`), not on the binary (`quantize_half_up_repr`).
+* **One upsert per table, not Python's bind-parameter chunks.** `INSERT ... SELECT * FROM UNNEST(...)
+  ON CONFLICT DO UPDATE`; the same rows. The two cross-sectional columns are one `UPDATE ... FROM UNNEST`
+  each (Python's executemany). The bar history (3 calendar years, ~3 M rows) and the desk's bars are read
+  through a server-side cursor (`DECLARE ... FETCH 50000`) inside the chain's transaction — Python's
+  `stream(...).partitions(50_000)`; no `futures` crate needed.
+* **polars' `sum_horizontal` is a tree, not a left fold.** `blend_expr` over four columns adds
+  `(a + b) + (c + d)`; the left fold split ties differently and moved 1,259 stored `mom_pctile` values on
+  the replay day until fixed (measured: 0 of 20,000 random rows differ from the pairwise sum).
+* **pandas/NumPy reproduced operation for operation in `score.rs`**: `np.percentile`'s linear method with
+  `_lerp`, `clip` with NaN bounds ignored, `rank(pct=True)`, `sum()` from integer 0, `np.round` as
+  `rint(x·10)/10`, and the SCORE sort: pandas `nargsort` over NumPy's **unstable** `aquicksort_`
+  (median-of-three introsort, `SMALL_QUICKSORT = 15`, heapsort fallback) — arm64 has no SIMD argsort, so
+  the generic one is the one Python runs. Checked against `np.argsort(kind="quicksort")` on 3,000 random
+  tie-heavy arrays (0 differences), and the whole `score` + `_stored` against Python on 40 generated
+  scans of up to 1,500 rows with NaNs and ties (`score_matches_python_on_generated_scans`, ignored by
+  default: it needs `BASKFY_SCORE_DIFF_JSON`, a dump from the lane's generator). If the box ever runs
+  NumPy on x86 with AVX-512, its argsort is x86-simd-sort and the tie order of equal SCOREs would differ
+  **in Python** too — the rank is then platform-dependent in both languages; a stable sort would be a
+  Python change first (it is the desk's code, so Maulik's call).
+* **Order-dependent reads kept as Python issues them.** `risk_masks`' cut breaks ties in the order
+  `index_member_daily` rows come back (no `ORDER BY` in Python); the Rust query is the same statement and
+  the sort is stable descending, as `list.sort(reverse=True)`. `assert_mask_matches_membership` reports the
+  first 20 in the same unordered read.
+* **Not reproduced: one pandas failure mode.** If an entire scan column were NULL, pandas would make it
+  `object` dtype and `score.score` would raise `TypeError` on a comparison; Rust treats the column as NaN
+  and scores. Unreachable on real data (every column has values); noted, not ported.
+
+**How to reverse.** Delete `steps/compute/` and restore the stub; nothing else depends on it.
+
+## R7.13 — Lane **nightly-sleeves** (steps 12–14: `compute_swing`, `compute_vbt`, `compute_twt`): the calls (RS5, 30 Oct 2026) ⚠ UNREVIEWED
+
+Lane label; the integrator renumbers. Files: `rust/crates/baskfy-worker/src/steps/sleeves.rs` and the
+private `steps/sleeves/{common,precision,qulla,swing,swing_market,twt,vbt}.rs`.
+
+* **Two workspace dependencies added to the worker's manifest**, both already pinned in the
+  workspace: `polars` (the detectors hand `baskfy_core` frames) and `regex` (VBT/TWT's ETF patterns,
+  `re.IGNORECASE` + `search`). No new third-party crate.
+* **Python modules with no Rust home live with the lane (R2.3).** `precision.rs` copies
+  `baskfy_core.precision` (`COLUMN_PRECISION`, `INTEGER_COLUMNS`, `round_expr`, `integer_expr`,
+  `quantise`; the core's copy is private to `factors`); `qulla.rs` ports `baskfy_core.exits.qulla`
+  (`mean`, `adr_pct`, `trail_for`, `decide`) over `WideDecimal` (Python's 28-digit context);
+  `swing_market.rs` ports the parts of `swing.market`/`swing.indicators` the core has not
+  (`breadth_snapshot`, `ema`, `index_reading`, `market_gate`, `drawdown_pct`, `liquid_expr`), with
+  CPython 3.12's compensated `sum()` and Python's `round(x, 2)`. Lift them into `baskfy-core` when
+  `swing::market`, `exits` and `precision` get their own modules; then delete these copies.
+* **Bars and floats are read as `::float8`.** Postgres's `numeric → float8` is correctly rounded,
+  which is exactly Python's `float(Decimal)`; Decimals that stay Decimals in Python (`tw_position`,
+  the TWT exchange series, `sw_position`, `sw_fill`, `sw_config`) are read with `baskfy_db::row`
+  (scale kept) and computed in `WideDecimal`.
+* **What Python writes is reproduced cell by cell.** A float written through `_decimal` is
+  `Decimal(repr(x))` (`baskfy_core::py`); `_int` is truncation; precision applies exactly when
+  Python's would — the column is a float **and** in the table (`common::stored` reads the frame's
+  dtype). Postgres then rounds into the column's scale on both sides alike.
+* **One upsert per row** instead of SQLAlchemy's multi-row `VALUES` chunks: the same rows and the
+  same `ON CONFLICT` set lists. A duplicate key inside one chunk would fail Python and not Rust; no
+  frame can produce one (keys are unique per day).
+* **`tw_position` is updated only when a value changed**, then with `updated_at = now()`: the ORM's
+  flush emits no `UPDATE` for an unchanged row (and so `updated_at` stays), and Rust does the same.
+  Written columns are the queue ones and `trail` only — never `stop_price`, `gtt_trigger`,
+  `quantity_open` (law 2).
+* **`run_twt_ratchet` is not ported.** `config.exits.qulla_exits` is a code default (`True`) that no
+  setting can change (`load_twt_config` reads only `stop_pct`/`trail_pct`), so the nightly never
+  reaches the 20 % ratchet. If it ever did, Rust raises `NotPorted` and the wrapper records the step
+  `skipped`. Port it the day the flag becomes a setting.
+* **Unreachable in the nightly, not ported:** `extra_bars`/`provisional=True` (LV8 live scans),
+  `reference_date`, `scan`, `live_index_level`. The provisional-straggler sweeps that a **real**
+  run performs are ported.
+* **`execution_enabled`** (swing) is accepted and read by nothing, as in Python since A10.
+* **`refresh_basket` (step 11) is not in this lane's brief** and stays `NotPorted`; it needs
+  `baskfy_api.baskets.build_current_basket` (the `/baskets` live build, an API cutover gate). Until
+  someone ports it the Rust chain stops at step 11 (its wrapper, unlike 12–14, lets the error out).
+
+**Graded.** `nightly_diff.py --step compute_swing|compute_vbt|compute_twt`, scenarios `fresh` and
+`rerun`, sides `py,rs`: **6 of 6 EQUAL** (payload, `pipeline_run`, `pipeline_run_step`, `sw_setup_daily`
+509 / `sw_market_daily` 41, `vb_signal_daily` 551 / `vb_breadth_daily` 33, `tw_state_daily` 1,580 /
+`tw_breadth_daily` 32, sequences, Redis, mail) with no mask beyond R7.7's. `rerun` exercises the
+settled-ladder branch of `write_market_row` (the bed's 29 Oct row is `settled_by: swing-eod`).
+`gate-refuse`, `provider-failure-midway` and `non-trading-day` never reach steps 12–14. Not exercised
+by the bed's day: a `tw_position` whose queue changes (its six OPEN positions already carry tonight's
+decision), any `tw_signal_daily` row, a thin session — covered by unit tests ported from
+`test_twt_qulla.py`, `test_swing_detect.py`'s helpers and `test_vbt_detect.py`'s universe tests.
+
+**Adversarial review (30 Oct 2026).** `nightly_diff.py` gained `--mutate FILE` (one SQL file applied
+identically to both clones before either side runs; its sha256 is printed) and a `tw_position.updated_at`
+stamp mask (the ORM's `onupdate=func.now()`, reached only when a queue changes). Three mutations over
+`fresh`, each run for all three steps: **edges** (a real swing book — closes inside/after the date, a
+null `r_multiple`, a simulated close, an OPEN line on a name with no bar, a PARTIAL with SELL and BUY
+fills, an entry after the date — a peak above NAV and a lock; a daytime scan's provisional
+`sw_setup_daily`/`sw_market_daily` leftovers, the market row settled with `drawdown_pct` 0; changed
+`vb_config`/`tw_config`; provisional VBT/TWT leftovers, one TWT signal referenced by a `tw_order`; five
+`tw_position` queues tonight must rewrite, a NULL trail, a GTT above the stop, a recent entry),
+**nobars** (edges with every 29 Oct bar deleted: swing's `no instrument has a bar` + `_drop_provisional_day`,
+VBT/TWT's `not a session`), **thin** (150 of 4,205 bars kept and the three config rows deleted: the
+thin-session rows, the defaults path, `sleeve_drawdown` with no config). All EQUAL with no mask beyond
+the two stamps; `--scenario rerun` with edges too. Listed, not ported: VBT's `signal_rows` rebuilds its
+frame with `pl.DataFrame(list_of_dicts)` (100-row schema inference), so a column `None` in the first
+100 scan hits and non-null later raises polars' `ComputeError` in Python (the step goes `skipped`) while
+Rust writes the rows. No bed day reaches it (it needs 100+ hits all lacking, say, a 200-session SMA ahead
+of one that has it); reproducing polars' message byte for byte is not worth the fragility. The fix
+belongs in Python (`infer_schema_length=None`), after which both agree.
+
+**How to reverse.** Every bullet is local to the lane's files and two manifest lines.
+
+## R7.14 — Step 11, `refresh_basket`, ported by the integrator; the harness pins the desk's `.env` (RS5, 30 Oct 2026) ⚠ UNREVIEWED — **for Maulik**
+
+**Context.** The gate and sleeves lanes both left step 11 a `NotPorted` stub (R-gate.5 in R7.10;
+R7.13 item 3). Python's step never raises, but the Rust stub did, so every Rust `--chain` stopped at
+step 11 and rolled back `publish`'s `data_version`: the wave could not be graded. On the bed the box's
+own run 103 skipped the step ("no basket could be built": no uploaded scan inside the container), but
+the harness runs Python from this checkout, where `kite-momentum-rebalancer/data/uploads/` holds one
+`scan_*.csv` (271 symbols, read-only regression corpus), so Python builds and stores a 15-name basket.
+
+**Choice.** Ported whole in `steps/sleeves/basket.rs`: `_carried` (the newest `scan_*.csv` by mtime that
+has the wanted columns, read with pandas' `utf-8-sig` and default NA spellings), `_bars` (every bar on
+or before the date for those symbols, no exchange filter, `float(Decimal)` with NULL as 0.0),
+`momentum_scan.build` (through the compute lane's `build_scan`, now `pub(crate)` with `DeskBars` and
+`Carried`), `unadjusted_symbols`, `score.score` (the compute lane's), and the slice of
+`baskfy_core.basket.build_plan` an empty book reaches (cash band, selection by rank with the 0.85
+quantile, score-proportional weights with the 15% cap, the 6% floor, `round(·, 2)`, order sizing with
+the 1%-of-day-value cap, `stop_from_vol`, the no-trade band with `costs.cost_pct`), then the
+`basket_snapshot` upsert on `(as_of, data_version)`. Facts reproduced on purpose, **for Maulik**:
+
+* `build_current_basket` passes no `data_version` to `momentum_scan.build`, so every snapshot's
+  `data_version` is **1** and `screen_run_id` is `sha256("desk_momentum_v1|<date>|1")[:16]`, whatever
+  `publish` bumped — contrary to the module docstring ("the basket's identity includes it"). Two nights
+  on one date therefore overwrite one row. Rust reproduces the code.
+* `DESK_ROOT` is source-relative in Python; in Rust it is `BASKFY_DESK_ROOT` when set, else the desk
+  beside the workspace (`CARGO_MANIFEST_DIR/../../../kite-momentum-rebalancer`). Cutover gate: the
+  deployed binary must be given `BASKFY_DESK_ROOT`.
+* The desk's `app.config` runs `load_dotenv()` at import, which walks up from `<DESK_ROOT>/app` to the
+  first `.env` — on this Mac, the desk's real `.env` (Kite keys, `FULLY_INVESTED=true`). Python's
+  harness side therefore loaded those keys into its environment during every RS5.0/lane chain run (none
+  was printed or logged). `nightly_diff.py`'s `TEST_ENV` now pins every key that file carries
+  (`FULLY_INVESTED=false`, the Kite keys empty, `DRY_RUN=true`, ...); python-dotenv never overrides a set
+  key. Rust's `fully_invested()` reads `FULLY_INVESTED` the same way (environment, then only that
+  key's line of the first `.env` found).
+* A build failure is recorded as `skipped_reason = "{type}: {message}"` with Python's hint and the
+  chain continues; an empty scan raises Python's `AttributeError: 'DataFrame' object has no attribute
+  'ma_50'` text; `invest == 0` raises `ZeroDivisionError: float division by zero`.
+
+`csv` and `sha2` join `baskfy-worker`'s manifest; both were already exact-pinned in the workspace
+(providers, API), so no new third-party dependency.
+
+**Rejected.** Making the Rust stub record `skipped` like a failed build — it would store no snapshot
+where Python stores one, so `basket_snapshot` and the step row would differ on every graded chain.
+Deferring to the desk wave (R-gate.5's suggestion) — it blocks the wave's acceptance on code that is
+~500 lines and pure.
+
+**Not reproduced (unreachable with an empty book).** Holdings, runners, exits, the replacement edge,
+the half-size rule (a scan frame never carries `listed_on`), cluster warnings, `plan_cost`, the
+`plan_id` (`uuid4`, not stored). A CSV with a non-numeric cell in a numeric column raises a
+`ValueError` here where pandas would keep the column as strings and fail later with another message.
+
+**Graded.** `--step refresh_basket --scenario fresh` py,rs **EQUAL** (`basket_snapshot` 1 row, 15
+names, 43 suspect symbols, masks `computed_at`/`computed_ms` only), and again with
+`FULLY_INVESTED=true` on both sides; then every `--chain` scenario (R7.15).
+
+**How to reverse.** Restore the stub in `sleeves.rs` (one function) and drop `basket.rs`; drop the
+`TEST_ENV` keys (re-exposing the harness to the desk's `.env`).
+
+## R7.15 — Wave 5 integration: the lanes renumbered, the catch-up decision graded, the bed (RS5, 30 Oct 2026) ⚠ UNREVIEWED
+
+* **Renumbering.** The lanes' entries `R7.index`, `R7.gate`, `R7.ingest`, `R7.compute`, `R7.sleeves`
+  are now **R7.9–R7.13** in file order (every reference in the docs and sources updated); their
+  internal labels (`R-gate.1`…`R-gate.5`, numbered sub-items) are kept. R-gate.5 (`refresh_basket`)
+  is closed by R7.14.
+* **Catch-up.** `baskfy-worker catch-up` now prints its decision — `{"checked_through": D,
+  "sessions": [...]}` from `unlanded_sessions(through=today IST, lookback_days=7, now=now IST)` — on a
+  transaction it rolls back, and takes `--now YYYY-MM-DDTHH:MM[:SS]` (naive IST) so the clock can be
+  injected. `tools/parity/catch_up_diff.py` asks Python and Rust the same question on one clone at
+  moments inside the session, a second before 18:00 IST, at it, after it, on a Saturday and on the
+  next Monday's pre-open, on the bed and with 2026-10-29's run deleted. Running the nightly for each
+  answer, the swing EOD and the derived-holiday demotion stay with the Celery task (R-gate.4): the
+  cutover keeps Python's beat entry around the binary (R7.1).
+* **Integration edits only.** `compute.rs` exposes `desk` and `score` to the crate; `desk.rs`'s
+  `DeskBars`, `Carried` and `build_scan` become `pub(crate)`. No lane logic changed; no test was
+  weakened; no golden or tolerance touched. Python's worker production code is unchanged.
+
+* **Found while re-grading the API, not fixed (pre-existing, RS4c).** `writes_screens.json`'s
+  `probe-exit-huge-int` differs when graded during market hours: the session is open, so
+  `POST /cb/plans/exit` builds a plan, and Rust's `i128` leg quantity saturates on the case's 42-digit
+  integer where Python's `int` is exact; the case also masks neither `desk_plan_id` (`uuid4`) nor
+  `expires_at_hint`. At RS4c it was graded after the close and took the closed-market branch.
+  `baskfy-api` is unchanged by this wave. The fix belongs to the API (an unbounded quantity, or
+  Python's refusal reproduced) plus the two masks; until then the case is red between 09:15 and
+  15:30 IST.
+
+**How to reverse.** Revert the visibility edits with R7.14; `catch-up` without `--now` reads the
+system clock as before (its new stdout line is additive).

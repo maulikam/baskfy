@@ -17,7 +17,13 @@
 //!   plan's own legs). No new dependency: the generator is a xorshift (DECISIONS-RS R8.FX3).
 //!
 //! Skipped without `BASKFY_RS_FNO_TEST_PG`.
-#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::too_many_lines)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::too_many_lines,
+    clippy::print_stderr
+)]
 
 mod fno_world;
 
@@ -35,7 +41,7 @@ use baskfy_desk::ids::HarnessIds;
 use baskfy_desk::lanes::fno::fno_exec::store::FoQuote;
 use baskfy_desk::lanes::options::py;
 use baskfy_desk::settings::Settings;
-use baskfy_desk::storage::{Db, DbConfig, Param};
+use baskfy_desk::storage::{Db, Param};
 use baskfy_desk::{AppState, DeskPaths, build_state};
 use chrono::{DateTime, Duration, FixedOffset};
 use fno_world::*;
@@ -54,8 +60,17 @@ fn underlying(s: FoSleeve) -> &'static str {
 
 /// Journal events that mean the broker was called (or answered). None may appear.
 const BROKER_EVENTS: [&str; 11] = [
-    "placed", "rejected", "error", "gtt_placed", "gtt_modified", "gtt_deleted", "gtt_error",
-    "gtt_modify_error", "gtt_delete_error", "order_cancelled", "order_cancel_error",
+    "placed",
+    "rejected",
+    "error",
+    "gtt_placed",
+    "gtt_modified",
+    "gtt_deleted",
+    "gtt_error",
+    "gtt_modify_error",
+    "gtt_delete_error",
+    "order_cancelled",
+    "order_cancel_error",
 ];
 
 fn rows4() -> Vec<(bool, bool, bool, bool)> {
@@ -73,7 +88,15 @@ fn rows4() -> Vec<(bool, bool, bool, bool)> {
 }
 
 /// `set_flags(...)` on one settings value: true when the row is LIVE.
-fn set_flags(s: &mut Settings, sleeve: FoSleeve, dry_off: bool, options: bool, carry: bool, execution: bool, intraday: bool) -> bool {
+fn set_flags(
+    s: &mut Settings,
+    sleeve: FoSleeve,
+    dry_off: bool,
+    options: bool,
+    carry: bool,
+    execution: bool,
+    intraday: bool,
+) -> bool {
     s.dry_run = !dry_off;
     s.options_enabled = options;
     s.fno_carry_enabled = carry;
@@ -99,7 +122,11 @@ fn kite_fixture(books: &[(String, FoQuote)]) -> Value {
     let f = |d: rust_decimal::Decimal| py::dstr(d).parse::<f64>().unwrap();
     for (sym, q) in books {
         let level = |l: &Vec<baskfy_core::options::execution::Level>| {
-            Value::Array(l.iter().map(|x| json!({"price": f(x.price), "quantity": x.quantity})).collect())
+            Value::Array(
+                l.iter()
+                    .map(|x| json!({"price": f(x.price), "quantity": x.quantity}))
+                    .collect(),
+            )
         };
         quotes.insert(
             format!("NFO:{sym}"),
@@ -113,6 +140,7 @@ fn kite_fixture(books: &[(String, FoQuote)]) -> Value {
 }
 
 static MIGRATED: tokio::sync::OnceCell<()> = tokio::sync::OnceCell::const_new();
+static TURN: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 /// The desk itself (`Desk(w, monkeypatch)`): its own `AppState` over the bed clone, the sole
 /// user the world's, the replay Kite answering the world's books, the clock settable.
@@ -128,8 +156,13 @@ fn desk_app() -> PathBuf {
 }
 
 impl Desk {
-    async fn new(uid: i64, books: &[(String, FoQuote)], now: DateTime<FixedOffset>, settings: Settings) -> Self {
-        let url = std::env::var(ENV).unwrap();
+    async fn new(
+        db: &Db,
+        uid: i64,
+        books: &[(String, FoQuote)],
+        now: DateTime<FixedOffset>,
+        settings: Settings,
+    ) -> Self {
         let dir = tempfile::tempdir().unwrap();
         std::os::unix::fs::symlink(desk_app(), dir.path().join("app")).unwrap();
         std::fs::create_dir(dir.path().join("data")).unwrap();
@@ -142,19 +175,11 @@ impl Desk {
         settings.sole_broker_account_id = 1;
         settings.kite_api_key = "test-api-key".to_owned();
         let clock = Arc::new(FixedClock::new(now));
-        let db = Db::open(DbConfig {
-            backend: "postgres".to_owned(),
-            schema: "desk".to_owned(),
-            database_url: url,
-            db_path: dir.path().join("unused.db"),
-        })
-        .await
-        .unwrap();
         let state = build_state(StateParts {
             settings,
             clock: clock.clone(),
             ids: Arc::new(HarnessIds::new("fno-safety-db")),
-            db,
+            db: db.clone(),
             kite: kite.clone(),
             paths: DeskPaths::under(dir.path()),
             harness: None,
@@ -164,11 +189,12 @@ impl Desk {
                 state.db.connect().await.unwrap().migrate().await.unwrap();
             })
             .await;
-        Self { state, clock, kite, dir }
-    }
-
-    fn set(&self, f: impl FnOnce(&mut Settings)) {
-        f(&mut self.state.settings.write().unwrap());
+        Self {
+            state,
+            clock,
+            kite,
+            dir,
+        }
     }
 
     /// `client.post("/fno/execute", data=form)`.
@@ -176,12 +202,18 @@ impl Desk {
         let enc = |s: &str| {
             s.bytes()
                 .map(|b| match b {
-                    b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' => (b as char).to_string(),
+                    b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' => {
+                        (b as char).to_string()
+                    }
                     _ => format!("%{b:02X}"),
                 })
                 .collect::<String>()
         };
-        let body = form.iter().map(|(k, v)| format!("{}={}", enc(k), enc(v))).collect::<Vec<_>>().join("&");
+        let body = form
+            .iter()
+            .map(|(k, v)| format!("{}={}", enc(k), enc(v)))
+            .collect::<Vec<_>>()
+            .join("&");
         let req = Request::post("/fno/execute")
             .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
             .body(Body::from(body))
@@ -192,13 +224,27 @@ impl Desk {
             .await
             .unwrap();
         let status = resp.status().as_u16();
-        let text = String::from_utf8(to_bytes(resp.into_body(), usize::MAX).await.unwrap().to_vec()).unwrap();
+        let text = String::from_utf8(
+            to_bytes(resp.into_body(), usize::MAX)
+                .await
+                .unwrap()
+                .to_vec(),
+        )
+        .unwrap();
         (status, text)
     }
 
     async fn post(&self, plan_id: &str) -> (u16, Value) {
-        let (s, t) = self.post_form(&[("plan_id".into(), plan_id.into()), ("confirm".into(), "true".into())]).await;
-        (s, serde_json::from_str(&t).unwrap_or_else(|e| panic!("{s} {t}: {e}")))
+        let (s, t) = self
+            .post_form(&[
+                ("plan_id".into(), plan_id.into()),
+                ("confirm".into(), "true".into()),
+            ])
+            .await;
+        (
+            s,
+            serde_json::from_str(&t).unwrap_or_else(|e| panic!("{s} {t}: {e}")),
+        )
     }
 
     /// Every journal line the desk's own FO gateways wrote.
@@ -227,7 +273,10 @@ impl Desk {
 async fn raise_plan(w: &mut World, sleeve: FoSleeve) -> (String, DateTime<FixedOffset>) {
     let issued = if group_of(sleeve) == FoSleeveGroup::F2 {
         f2_scan(w).await;
-        w.books(vec![(FUT_NOV.to_owned(), book_last("1399.90", "1400.00", "1400.00"))]);
+        w.books(vec![(
+            FUT_NOV.to_owned(),
+            book_last("1399.90", "1400.00", "1400.00"),
+        )]);
         at(f2_entry(), 9, 20)
     } else {
         f1_scan_on(w, sleeve.value(), underlying(sleeve)).await;
@@ -241,13 +290,24 @@ async fn raise_plan(w: &mut World, sleeve: FoSleeve) -> (String, DateTime<FixedO
 }
 
 fn all_books(w: &World) -> Vec<(String, FoQuote)> {
-    w.quotes.0.lock().unwrap().iter().map(|(k, v)| (k.clone(), v.clone())).collect()
+    w.quotes
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect()
 }
 
 /// `assert_no_broker(w)` over the world's and the desk's journals.
 fn assert_no_broker(w: &World, desk: &Desk) -> Vec<Value> {
     assert_eq!(w.broker_calls(), 0);
-    assert_eq!(desk.kite.write_calls().len(), 0, "{:?}", desk.kite.write_calls());
+    assert_eq!(
+        desk.kite.write_calls().len(),
+        0,
+        "{:?}",
+        desk.kite.write_calls()
+    );
     let mut events = w.journal_events();
     events.extend(desk.journal_events());
     for e in &events {
@@ -266,30 +326,61 @@ async fn carry_and_exit(w: &mut World, sleeve: FoSleeve, plan_id: &str, pid: i64
         land_future(&w.market, f2_entry(), nov(), "1450", "1449");
         let night = w.night(f2_entry()).await;
         assert_eq!(night.marked, 1);
-        assert_eq!(night.trailed, vec!["RELIANCE:1340.00->1390.00:DRY_RUN_GTT_MODIFY".to_owned()]);
+        assert_eq!(
+            night.trailed,
+            vec!["RELIANCE:1340.00->1390.00:DRY_RUN_GTT_MODIFY".to_owned()]
+        );
         w.books(vec![
-            (FUT_NOV.to_owned(), book_last("1430.00", "1430.10", "1430.05")),
-            (FUT_DEC.to_owned(), book_last("1438.00", "1438.10", "1438.05")),
+            (
+                FUT_NOV.to_owned(),
+                book_last("1430.00", "1430.10", "1430.05"),
+            ),
+            (
+                FUT_DEC.to_owned(),
+                book_last("1438.00", "1438.10", "1438.05"),
+            ),
         ]);
-        assert_eq!(w.tick(at(hard_exit(), 15, 0)).await.actions, vec![format!("{plan_id}-R1")]);
+        assert_eq!(
+            w.tick(at(hard_exit(), 15, 0)).await.actions,
+            vec![format!("{plan_id}-R1")]
+        );
         assert!(is_null(&w.position(pid).await, "closed_at")); // rolled, not closed
         let day = before(dec_(), 10);
-        w.books(vec![(FUT_DEC.to_owned(), book_last("1380.00", "1380.10", "1380.00"))]);
-        assert_eq!(w.tick(at(day, 10, 0)).await.actions, vec![format!("{plan_id}-X")]);
+        w.books(vec![(
+            FUT_DEC.to_owned(),
+            book_last("1380.00", "1380.10", "1380.00"),
+        )]);
+        assert_eq!(
+            w.tick(at(day, 10, 0)).await.actions,
+            vec![format!("{plan_id}-X")]
+        );
     } else {
         let u = underlying(sleeve);
-        land_condor(&w.market, u, f1_entry(), &[("SHORT_CALL", "58"), ("SHORT_PUT", "54"), ("LONG_CALL", "12"), ("LONG_PUT", "10")]);
+        land_condor(
+            &w.market,
+            u,
+            f1_entry(),
+            &[
+                ("SHORT_CALL", "58"),
+                ("SHORT_PUT", "54"),
+                ("LONG_CALL", "12"),
+                ("LONG_PUT", "10"),
+            ],
+        );
         assert_eq!(w.night(f1_entry()).await.marked, 1);
         assert!(w.tick(at(hard_exit(), 14, 59)).await.actions.is_empty());
-        assert_eq!(w.tick(at(hard_exit(), 15, 0)).await.actions, vec![format!("{plan_id}-X")]);
+        assert_eq!(
+            w.tick(at(hard_exit(), 15, 0)).await.actions,
+            vec![format!("{plan_id}-X")]
+        );
     }
     let pos = w.position(pid).await;
     assert!(!is_null(&pos, "closed_at"));
     tcol(&pos, "closed_reason")
 }
 
-async fn fresh(prefix: &str) -> Option<World> {
-    let mut conn = connect().await?;
+async fn fresh(db: &Db, prefix: &str) -> Option<World> {
+    let mut conn = db.connect().await.ok()?;
     let uid = new_user(&mut conn, prefix).await;
     Some(World::new(conn, uid).await)
 }
@@ -300,11 +391,15 @@ async fn the_flag_matrix_through_the_desk_reaches_no_broker() {
         eprintln!("{ENV} is not set: skipped");
         return;
     }
+    let _turn = TURN.lock().await;
+    let worlds = open_db("public").await.unwrap();
+    let desks = open_db("desk").await.unwrap();
     for sleeve in SLEEVES {
         for (dry_off, options, carry, execution) in rows4() {
             let row = (sleeve, dry_off, options, carry, execution);
-            let mut w = fresh("fo11").await.unwrap();
+            let mut w = fresh(&worlds, "fo11").await.unwrap();
             let uid = w.uid;
+            let task_desks = desks.clone();
             let outcome = tokio::spawn(async move {
                 w.set(|s| all_off(s, true, false));
                 let (plan_id, issued) = raise_plan(&mut w, sleeve).await;
@@ -313,17 +408,31 @@ async fn the_flag_matrix_through_the_desk_reaches_no_broker() {
                 w.set(|ws| {
                     set_flags(ws, sleeve, dry_off, options, carry, execution, true);
                 });
-                let desk = Desk::new(uid, &all_books(&w), issued + Duration::minutes(2), s).await;
+                let desk = Desk::new(
+                    &task_desks,
+                    uid,
+                    &all_books(&w),
+                    issued + Duration::minutes(2),
+                    s,
+                )
+                .await;
                 let (status, body) = desk.post(&plan_id).await;
                 if live {
-                    assert_eq!((status, body["code"].as_str().unwrap()), (409, "LIVE_NOT_BUILT"), "{row:?}");
+                    assert_eq!(
+                        (status, body["code"].as_str().unwrap()),
+                        (409, "LIVE_NOT_BUILT"),
+                        "{row:?}"
+                    );
                     assert!(w.fills(&plan_id).await.is_empty());
                     assert_eq!(tcol(&w.plan_row(&plan_id).await, "status"), "ISSUED");
                 } else if execution && !(options && carry) {
                     assert_eq!(status, 200, "{row:?} {body}");
                     assert_eq!(body["outcome"], "ABANDONED_PARTIAL", "{row:?} {body}");
                     let detail = body["detail"].as_str().unwrap_or_default();
-                    assert!(detail.contains("OPTIONS_ENABLED") || detail.contains("CARRY"), "{row:?} {body}");
+                    assert!(
+                        detail.contains("OPTIONS_ENABLED") || detail.contains("CARRY"),
+                        "{row:?} {body}"
+                    );
                     assert!(w.fills(&plan_id).await.is_empty());
                 } else {
                     assert_eq!(status, 200, "{row:?} {body}");
@@ -339,8 +448,21 @@ async fn the_flag_matrix_through_the_desk_reaches_no_broker() {
                     assert_eq!(ids, BTreeSet::from([plan_id.clone()]));
                     let pid = body["position_id"].as_i64().unwrap();
                     let reason = carry_and_exit(&mut w, sleeve, &plan_id, pid).await;
-                    assert_eq!(reason, if sleeve == FoSleeve::F2 { "STOP" } else { "HARD_EXIT" }, "{row:?}");
-                    let every = w.rows("SELECT bool_and(simulated) AS s FROM fo_fill WHERE user_id = ?", &[Param::Int(uid)]).await;
+                    assert_eq!(
+                        reason,
+                        if sleeve == FoSleeve::F2 {
+                            "STOP"
+                        } else {
+                            "HARD_EXIT"
+                        },
+                        "{row:?}"
+                    );
+                    let every = w
+                        .rows(
+                            "SELECT bool_and(simulated) AS s FROM fo_fill WHERE user_id = ?",
+                            &[Param::Int(uid)],
+                        )
+                        .await;
                     assert!(py::truthy(col(&every[0], "s")));
                 }
                 assert_no_broker(&w, &desk);
@@ -348,7 +470,7 @@ async fn the_flag_matrix_through_the_desk_reaches_no_broker() {
                 w
             })
             .await;
-            let mut conn = connect().await.unwrap();
+            let mut conn = worlds.connect().await.unwrap();
             drop_user(&mut conn, uid).await;
             if let Err(e) = outcome {
                 std::panic::resume_unwind(e.into_panic());
@@ -383,17 +505,83 @@ impl Draw {
     /// `st.text(max_size=n)`: any code point but a surrogate.
     fn text(&mut self, max: usize) -> String {
         let len = self.below(max + 1);
-        let pool: [char; 16] = ['a', 'Z', '0', '-', '_', ' ', '&', '=', '%', '+', '\0', 'é', '€', '\u{1F600}', '\n', ':'];
+        let pool: [char; 16] = [
+            'a',
+            'Z',
+            '0',
+            '-',
+            '_',
+            ' ',
+            '&',
+            '=',
+            '%',
+            '+',
+            '\0',
+            'é',
+            '€',
+            '\u{1F600}',
+            '\n',
+            ':',
+        ];
         (0..len)
-            .map(|_| if self.bool() { pool[self.below(pool.len())] } else { char::from_u32(0x20 + u32::try_from(self.below(0x2000)).unwrap()).unwrap_or('x') })
+            .map(|_| {
+                if self.bool() {
+                    pool[self.below(pool.len())]
+                } else {
+                    char::from_u32(0x20 + u32::try_from(self.below(0x2000)).unwrap()).unwrap_or('x')
+                }
+            })
             .collect()
     }
 }
 
-const CONFIRMS: [&str; 12] = ["True", "TRUE", "1", "yes", "on", "", "false", " true", "true ", "t", "null", "true\0"];
-const TAMPER_FIELDS: [&str; 14] = ["product", "exchange", "qty", "quantity", "side", "tradingsymbol", "sleeve", "mode", "dry_run", "order_type", "price", "variety", "fo_plan", "structure"];
-const TAMPER_VALUES: [&str; 23] = ["MIS", "CNC", "NRML", "BO", "CO", "NSE", "BFO", "MCX", "CDS", "NFO", "999999", "-1", "SELL", "BUY", "SGBMAR31", "LIVE", "false", "0", "MARKET", "F2", "F1N", "NAKED_SHORT", "AMO"];
-const PLAN_CHOICES: [&str; 8] = ["own", "own", "own", "foreign", "exit", "roll", "garbage", "prefix"];
+const CONFIRMS: [&str; 12] = [
+    "True", "TRUE", "1", "yes", "on", "", "false", " true", "true ", "t", "null", "true\0",
+];
+const TAMPER_FIELDS: [&str; 14] = [
+    "product",
+    "exchange",
+    "qty",
+    "quantity",
+    "side",
+    "tradingsymbol",
+    "sleeve",
+    "mode",
+    "dry_run",
+    "order_type",
+    "price",
+    "variety",
+    "fo_plan",
+    "structure",
+];
+const TAMPER_VALUES: [&str; 23] = [
+    "MIS",
+    "CNC",
+    "NRML",
+    "BO",
+    "CO",
+    "NSE",
+    "BFO",
+    "MCX",
+    "CDS",
+    "NFO",
+    "999999",
+    "-1",
+    "SELL",
+    "BUY",
+    "SGBMAR31",
+    "LIVE",
+    "false",
+    "0",
+    "MARKET",
+    "F2",
+    "F1N",
+    "NAKED_SHORT",
+    "AMO",
+];
+const PLAN_CHOICES: [&str; 8] = [
+    "own", "own", "own", "foreign", "exit", "roll", "garbage", "prefix",
+];
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_execute_route_fuzz_forms_no_order_toward_the_broker() {
@@ -401,6 +589,9 @@ async fn the_execute_route_fuzz_forms_no_order_toward_the_broker() {
         eprintln!("{ENV} is not set: skipped");
         return;
     }
+    let _turn = TURN.lock().await;
+    let worlds = open_db("public").await.unwrap();
+    let desks = open_db("desk").await.unwrap();
     let mut g = Draw(0x00F0_11F0_5AFE_2026);
     for example in 0..100 {
         let sleeve = SLEEVES[g.below(3)];
@@ -413,7 +604,11 @@ async fn the_execute_route_fuzz_forms_no_order_toward_the_broker() {
             2 => g.pick(&CONFIRMS).to_owned(),
             _ => g.text(6),
         };
-        let minutes = if g.bool() { i64::try_from(g.below(30)).unwrap() } else { i64::try_from(g.below(121)).unwrap() };
+        let minutes = if g.bool() {
+            i64::try_from(g.below(30)).unwrap()
+        } else {
+            i64::try_from(g.below(121)).unwrap()
+        };
         let mut tamper: Vec<(String, String)> = Vec::new();
         for _ in 0..g.below(6) {
             let k = g.pick(&TAMPER_FIELDS).to_owned();
@@ -428,9 +623,10 @@ async fn the_execute_route_fuzz_forms_no_order_toward_the_broker() {
         let case = format!(
             "#{example} {sleeve:?} dry={dry_run} intraday={intraday} {choice} confirm={confirm:?} +{minutes}m tamper={tamper:?} twice={twice} garbage={garbage:?}"
         );
-        let mut other = fresh("fo11").await.unwrap();
-        let mut w = fresh("fo11").await.unwrap();
+        let mut other = fresh(&worlds, "fo11").await.unwrap();
+        let mut w = fresh(&worlds, "fo11").await.unwrap();
         let (ouid, uid) = (other.uid, w.uid);
+        let task_desks = desks.clone();
         let outcome = tokio::spawn(async move {
             for world in [&other, &w] {
                 world.set(|s| all_off(s, dry_run, intraday));
@@ -448,7 +644,7 @@ async fn the_execute_route_fuzz_forms_no_order_toward_the_broker() {
             let mut s = Settings::defaults().unwrap();
             all_off(&mut s, dry_run, intraday);
             let now = issued + Duration::minutes(minutes);
-            let desk = Desk::new(uid, &all_books(&w), now, s).await;
+            let desk = Desk::new(&task_desks, uid, &all_books(&w), now, s).await;
             let expires = py::aware(col(&w.plan_row(&own_id).await, "expires_at")).unwrap();
             let mut form = tamper.clone();
             form.retain(|(k, _)| k != "plan_id" && k != "confirm");
@@ -493,7 +689,7 @@ async fn the_execute_route_fuzz_forms_no_order_toward_the_broker() {
             (other, w)
         })
         .await;
-        let mut conn = connect().await.unwrap();
+        let mut conn = worlds.connect().await.unwrap();
         drop_user(&mut conn, uid).await;
         drop_user(&mut conn, ouid).await;
         if let Err(e) = outcome {
@@ -501,4 +697,3 @@ async fn the_execute_route_fuzz_forms_no_order_toward_the_broker() {
         }
     }
 }
-

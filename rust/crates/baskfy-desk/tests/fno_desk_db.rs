@@ -168,8 +168,8 @@ async fn new_user(conn: &mut Conn, sleeve_rows: bool) -> i64 {
         conn,
         "INSERT INTO public.app_user (public_id, email) VALUES (?, ?) RETURNING id",
         &[
-            Param::Text(format!("fo8-{}", &tag[..8])),
-            Param::Text(format!("fo8-{}@x.test", &tag[8..16])),
+            Param::Text(format!("fo8-{tag}")),
+            Param::Text(format!("fo8-{tag}@x.test")),
         ],
     )
     .await;
@@ -864,6 +864,18 @@ async fn an_unknown_plan_is_404() {
     let uid = new_user(&mut conn, true).await;
     let desk = Desk::new(&url, uid, &json!({}), at(f1_entry(), 9, 25), |_| {}).await;
     let (status, body) = desk.post("F1N-19990101-NOPE-u0", Some("true")).await;
+    assert_eq!((status, &body["code"]), (404, &json!("UNKNOWN_PLAN")));
+    drop_user(&mut conn, uid).await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_plan_id_with_a_nul_is_unknown_not_a_server_error() {
+    let Some(url) = url() else { return };
+    let _turn = DESK_LOCK.lock().await;
+    let mut conn = connect(&url).await;
+    let uid = new_user(&mut conn, true).await;
+    let desk = Desk::new(&url, uid, &json!({}), at(f1_entry(), 9, 25), |_| {}).await;
+    let (status, body) = desk.post("F1N-19990101-NOPE-u0\0", Some("true")).await;
     assert_eq!((status, &body["code"]), (404, &json!("UNKNOWN_PLAN")));
     drop_user(&mut conn, uid).await;
 }

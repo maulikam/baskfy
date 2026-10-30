@@ -18,12 +18,12 @@
 //! NFO dump, `quote()`, minute history and the plan tasks' margin *calculator*
 //! (`consider_positions=False`). No auto-execute setting exists for the options sleeves.
 
-mod alerting;
+pub(crate) mod alerting;
 mod checks;
-mod collector;
-mod common;
-mod index_bars;
-mod master;
+pub(crate) mod collector;
+pub(crate) mod common;
+pub(crate) mod index_bars;
+pub(crate) mod master;
 mod model;
 mod plan;
 mod plan_o2;

@@ -1459,7 +1459,10 @@ class TestLateLogin:
                 raise value
             return value
 
-        assert swing_monitor.wait_for_session(authed, sleep=lambda s: None)
+        in_session = dt.datetime(2026, 8, 19, 10, 0, tzinfo=swing_monitor.IST)
+        assert swing_monitor.wait_for_session(
+            authed, now=lambda: in_session, sleep=lambda s: None,
+        )
 
 
 #: 10:30 on DAY (a Wednesday), inside the session; 08:59 and 15:31 are outside it.

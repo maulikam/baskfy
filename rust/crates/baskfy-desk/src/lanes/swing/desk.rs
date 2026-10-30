@@ -25,11 +25,10 @@ use chrono::{DateTime, Datelike, Duration, FixedOffset, NaiveDate, NaiveTime, Ti
 use rust_decimal::{Decimal, RoundingStrategy};
 
 use super::execute::{
-    ExecContext, ExecError, ExecOutcome, OrderReport, OrderSource, OrderUpdate, SWING_JOURNAL_NAME,
-    TokioTimer, cutoff_open_orders, execute_line, on_order_update, rearm_gtt, swing_gates,
-    swing_stop_band,
+    ExecContext, ExecError, ExecOutcome, OrderReport, OrderSource, OrderUpdate, TokioTimer,
+    cutoff_open_orders, execute_line, on_order_update, rearm_gtt, swing_gates, swing_stop_band,
 };
-use super::live_gate::{KiteLevel, LiveLevel};
+use super::live_gate::{DeskLevel, LiveLevel};
 use super::rules::{py_dec, quantize};
 use super::store::{
     Catalyst, LineRow, MarketScan, PgSwingStore, PlanRow, PositionRow, ScanRun, SessionRow,
@@ -1299,9 +1298,9 @@ pub async fn open_store(state: &AppState) -> Result<PgSwingStore, StorageError> 
     let conn = state.db.connect().await?;
     let pg = state.db.config().is_postgres();
     let live_level: Option<Arc<dyn LiveLevel>> = if pg {
-        Some(Arc::new(KiteLevel::new(
-            state.kite.clone(),
-            &settings.swing_index_slug,
+        Some(Arc::new(DeskLevel::new(
+            desk_gateway(state).map(crate::lanes::exec_core::desk::DeskGateway::kite),
+            state.settings.clone(),
         )))
     } else {
         None
@@ -1346,14 +1345,9 @@ pub async fn swing_gateway(state: &AppState) -> Option<Arc<dyn Gateway>> {
         let _ = gw.risk().await;
     }
     let settings = state.settings_snapshot();
-    let band = swing_stop_band(&settings).unwrap_or_default();
-    Some(crate::lanes::twt::sleeve_gateway(
-        state,
-        "swing",
-        SWING_JOURNAL_NAME,
-        band,
-        swing_gates,
-    ))
+    // An inverted band is Python's `StopBand` raising inside `build_swing_gateway`: a 500.
+    let band = swing_stop_band(&settings).ok()?;
+    Some(super::gateway::swing_sleeve_gateway(state, band))
 }
 
 /// `Kite()` can be constructed: `KITE_API_KEY` is set (`kite_client.Kite.__init__`).
@@ -1836,6 +1830,8 @@ pub fn routes() -> Router<AppState> {
 mod scenario;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_catalyst;
 #[cfg(test)]
 mod tests_routes;
 #[cfg(test)]

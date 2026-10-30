@@ -260,28 +260,23 @@ async fn test_the_spy_is_not_blind_the_live_cell_is_stopped_by_the_fake() {
 #[test]
 fn test_the_route_builds_no_gateway_at_import_and_resolves_the_flag_per_order() {
     // Nothing in Rust runs at import; the desk builds the swing gateway inside the request
-    // (`swing_gateway(&state)`), handing it the FUNCTION `swing_gates`, which the sleeve
-    // gateway calls at the moment of each order with the settings as they stand then.
+    // (`swing_gateway(&state)`), and the sleeve gateway's gates are a closure that reads the
+    // settings and calls `swing_gates` at the moment of each order.
     let code = code_only(DESK_RS);
     let start = code.find("pub async fn swing_gateway(").unwrap();
     let body = &code[start..start + code[start..].find("\n}\n").unwrap()];
-    assert!(
-        body.contains("swing_gates,"),
-        "the gates are handed as a callable"
-    );
-    assert!(
-        !body.contains("swing_gates(&"),
-        "never as a value read once"
-    );
+    assert!(body.contains("swing_sleeve_gateway(state, band)"), "{body}");
     assert!(!code.contains("static SWING_GATEWAY") && !code.contains("OnceLock<"));
-    // `twt::sleeve_gateway` (the derived gateway) reads the settings per order.
-    let twt = include_str!("../../../twt.rs");
-    let start = twt.find("fn sleeve_gateway(").unwrap();
-    let body = &twt[start..start + twt[start..].find("\n}\n").unwrap()];
+    let gw = code_only(include_str!("../../gateway.rs")) + "\n";
+    let start = gw.find("fn swing_sleeve_gateway(").unwrap();
+    let body = &gw[start..start + gw[start..].find("\n}\n").unwrap()];
+    let gates = &body[body.find("gates: Arc::new(move ||").unwrap()..];
+    let gates = &gates[..gates.find("journal_path").unwrap()];
     assert!(
-        body.contains("settings_snapshot()") || body.contains("settings.read()"),
-        "{body}"
+        gates.contains("settings.read()") && gates.contains("swing_gates(&s)"),
+        "the gates are read per order: {gates}"
     );
+    assert!(!gw.contains("OnceLock<"));
 }
 
 // =======================================================================================
@@ -299,21 +294,6 @@ const PLACING: [&str; 7] = [
 ];
 const STRATEGY_ONLY: [&str; 4] = [r"\bself\.gw\b", r"\bkc\.", r"kiteconnect", r"kite_client"];
 
-/// The Rust strategy keeps its watchlist's token sequence in a field the porter named `order`
-/// (`order: Vec<i64>`). That is the one meaning of the word the scan may meet; every hit must be
-/// that sequence (DECISIONS-RS R8.15.1 asks the owning lane to rename it, after which this list
-/// matches nothing and the scan is Python's exactly).
-fn is_token_sequence(line: &str) -> bool {
-    let l = line.trim();
-    l == "order: Vec<i64>,"
-        || l == "order,"
-        || l.starts_with("let order: Vec<i64> =")
-        || l.starts_with("let state = order.iter()")
-        || l.starts_with("self.order.clone()")
-        || l.starts_with("self.order.push(")
-        || l.starts_with("self.order.retain(")
-}
-
 fn hits(code: &str, pattern: &str) -> Vec<String> {
     let re = regex::Regex::new(pattern).unwrap();
     code.lines()
@@ -327,14 +307,7 @@ fn test_the_strategy_code_never_names() {
     let code = code_only(BREAKOUT_RS);
     for pattern in PLACING.iter().chain(STRATEGY_ONLY.iter()) {
         let found = hits(&code, pattern);
-        if *pattern == r"\border\b" {
-            assert!(
-                found.iter().all(|l| is_token_sequence(l)),
-                "breakout.rs names {pattern}: {found:?}"
-            );
-        } else {
-            assert!(found.is_empty(), "breakout.rs names {pattern}: {found:?}");
-        }
+        assert!(found.is_empty(), "breakout.rs names {pattern}: {found:?}");
     }
 }
 

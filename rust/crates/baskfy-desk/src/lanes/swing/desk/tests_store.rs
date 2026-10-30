@@ -609,9 +609,11 @@ async fn test_store_schema_prefix_qualifies_every_table() {
             for cap in re.captures_iter(line) {
                 let word = &cap[1];
                 assert!(
-                    matches!(word, "SET" | "the" | "a" | "an" | "this" | "that" | "it")
-                        || word.chars().all(|c| c.is_lowercase() && c != '_')
-                            && !DECOYS.contains(&word),
+                    matches!(
+                        word,
+                        "SET" | "NOWAIT" | "the" | "a" | "an" | "this" | "that" | "it"
+                    ) || word.chars().all(|c| c.is_lowercase() && c != '_')
+                        && !DECOYS.contains(&word),
                     "{name}: an unqualified table in {line:?}"
                 );
             }
@@ -1031,7 +1033,7 @@ fn test_the_lock_statement_is_for_update_on_postgres_and_begin_immediate_on_sqli
     let start = source.rfind("async fn lock_begin").unwrap();
     let end = source.rfind("async fn session_context(&mut self").unwrap();
     let lock = &source[start..end];
-    assert!(lock.contains("FOR UPDATE") && lock.contains("BEGIN IMMEDIATE"));
+    assert!(lock.contains("FOR UPDATE NOWAIT") && lock.contains("BEGIN IMMEDIATE"));
     assert!(lock.contains("ROLLBACK") && lock.contains("COMMIT"));
 }
 

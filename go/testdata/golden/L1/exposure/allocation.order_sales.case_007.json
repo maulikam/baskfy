@@ -1,0 +1,202 @@
+{
+ "fn": "baskfy_core.exposure.allocation.order_sales",
+ "inputs": {
+  "nearby_band": 1,
+  "positions": [
+   {
+    "average_price": 232.03,
+    "cluster": "other",
+    "guard_exit": false,
+    "liquidity": 0.0,
+    "price": 194.03,
+    "quantity": 21,
+    "rank": 3,
+    "symbol": "P00"
+   },
+   {
+    "average_price": 302.81,
+    "cluster": "other",
+    "guard_exit": false,
+    "liquidity": 0.0,
+    "price": 40.8,
+    "quantity": 383,
+    "rank": 23,
+    "symbol": "P01"
+   },
+   {
+    "average_price": 21.79,
+    "cluster": "other",
+    "guard_exit": false,
+    "liquidity": 0.0,
+    "price": 477.34,
+    "quantity": 491,
+    "rank": 20,
+    "symbol": "P02"
+   },
+   {
+    "average_price": 377.83,
+    "cluster": "other",
+    "guard_exit": true,
+    "liquidity": 0.0,
+    "price": 11.85,
+    "quantity": 153,
+    "rank": 4,
+    "symbol": "P03"
+   },
+   {
+    "average_price": 357.79,
+    "cluster": "other",
+    "guard_exit": false,
+    "liquidity": 0.0,
+    "price": 62.56,
+    "quantity": 120,
+    "rank": 29,
+    "symbol": "P04"
+   },
+   {
+    "average_price": 456.77,
+    "cluster": "other",
+    "guard_exit": false,
+    "liquidity": 0.0,
+    "price": 397.0,
+    "quantity": 198,
+    "rank": 31,
+    "symbol": "P05"
+   },
+   {
+    "average_price": 401.28,
+    "cluster": "other",
+    "guard_exit": false,
+    "liquidity": 0.0,
+    "price": 99.64,
+    "quantity": 255,
+    "rank": 19,
+    "symbol": "P06"
+   },
+   {
+    "average_price": 118.07,
+    "cluster": "other",
+    "guard_exit": false,
+    "liquidity": 0.0,
+    "price": 84.14,
+    "quantity": 396,
+    "rank": 20,
+    "symbol": "P07"
+   },
+   {
+    "average_price": 39.51,
+    "cluster": "other",
+    "guard_exit": false,
+    "liquidity": 0.0,
+    "price": 393.3,
+    "quantity": 402,
+    "rank": 12,
+    "symbol": "P08"
+   }
+  ],
+  "tax_flagged": [
+   "P01",
+   "P02"
+  ]
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "positions in sale order. Inputs are JSON; each function is called from them after a JSON round trip. Dates are ISO days, enums their values, IndexSignals/BookWeights/RegimeState their as_dict(), Allocation and Position/Candidate/OrderLine dataclasses.asdict, tuples lists. A raise is {raises: {type, message}}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_exposure.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": [
+  {
+   "average_price": 377.83,
+   "cluster": "other",
+   "guard_exit": true,
+   "liquidity": 0.0,
+   "price": 11.85,
+   "quantity": 153,
+   "rank": 4,
+   "symbol": "P03"
+  },
+  {
+   "average_price": 456.77,
+   "cluster": "other",
+   "guard_exit": false,
+   "liquidity": 0.0,
+   "price": 397.0,
+   "quantity": 198,
+   "rank": 31,
+   "symbol": "P05"
+  },
+  {
+   "average_price": 357.79,
+   "cluster": "other",
+   "guard_exit": false,
+   "liquidity": 0.0,
+   "price": 62.56,
+   "quantity": 120,
+   "rank": 29,
+   "symbol": "P04"
+  },
+  {
+   "average_price": 302.81,
+   "cluster": "other",
+   "guard_exit": false,
+   "liquidity": 0.0,
+   "price": 40.8,
+   "quantity": 383,
+   "rank": 23,
+   "symbol": "P01"
+  },
+  {
+   "average_price": 118.07,
+   "cluster": "other",
+   "guard_exit": false,
+   "liquidity": 0.0,
+   "price": 84.14,
+   "quantity": 396,
+   "rank": 20,
+   "symbol": "P07"
+  },
+  {
+   "average_price": 21.79,
+   "cluster": "other",
+   "guard_exit": false,
+   "liquidity": 0.0,
+   "price": 477.34,
+   "quantity": 491,
+   "rank": 20,
+   "symbol": "P02"
+  },
+  {
+   "average_price": 401.28,
+   "cluster": "other",
+   "guard_exit": false,
+   "liquidity": 0.0,
+   "price": 99.64,
+   "quantity": 255,
+   "rank": 19,
+   "symbol": "P06"
+  },
+  {
+   "average_price": 39.51,
+   "cluster": "other",
+   "guard_exit": false,
+   "liquidity": 0.0,
+   "price": 393.3,
+   "quantity": 402,
+   "rank": 12,
+   "symbol": "P08"
+  },
+  {
+   "average_price": 232.03,
+   "cluster": "other",
+   "guard_exit": false,
+   "liquidity": 0.0,
+   "price": 194.03,
+   "quantity": 21,
+   "rank": 3,
+   "symbol": "P00"
+  }
+ ]
+}

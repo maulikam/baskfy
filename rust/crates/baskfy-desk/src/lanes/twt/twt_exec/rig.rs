@@ -118,7 +118,8 @@ impl Spy {
     /// How many lines the gateway journalled (none when it was asked nothing).
     pub fn journal_lines(&self) -> usize {
         let path = self.core.journal_path();
-        std::fs::read_to_string(path).map_or(0, |t| t.lines().filter(|l| !l.trim().is_empty()).count())
+        std::fs::read_to_string(path)
+            .map_or(0, |t| t.lines().filter(|l| !l.trim().is_empty()).count())
     }
 
     /// `_record(call, result)`: tape it, and refuse anything but a dry-run answer **on every
@@ -128,9 +129,7 @@ impl Spy {
         let status = result
             .get("status")
             .map_or_else(|| "None".to_owned(), PyValue::py_str);
-        TAPE.lock()
-            .unwrap()
-            .push((call.to_owned(), status.clone()));
+        TAPE.lock().unwrap().push((call.to_owned(), status.clone()));
         assert!(
             status.starts_with("DRY_RUN"),
             "{call} answered {status:?} with BASKFY_TWT_EXECUTION_ENABLED false — that is a real \
@@ -205,7 +204,10 @@ impl Gateway for Flaky {
         let id = req.gtt_id;
         self.cancelled.lock().unwrap().push(req);
         if self.cancel_ok {
-            return Ok(dict([("status", s("GTT_DELETED")), ("gtt_id", PyValue::Int(id))]));
+            return Ok(dict([
+                ("status", s("GTT_DELETED")),
+                ("gtt_id", PyValue::Int(id)),
+            ]));
         }
         Ok(dict([
             ("status", s("GTT_DELETE_ERROR")),

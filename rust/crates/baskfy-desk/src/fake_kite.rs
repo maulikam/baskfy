@@ -85,6 +85,7 @@ pub struct ReplayKite {
     orders_placed: AtomicI64,
     gtts_placed: AtomicI64,
     api_key: String,
+    access_tokens: Mutex<Vec<Secret>>,
 }
 
 fn get<'a>(map: &'a PyDict, key: &str) -> Option<&'a PyValue> {
@@ -163,6 +164,7 @@ impl ReplayKite {
             orders_placed: AtomicI64::new(0),
             gtts_placed: AtomicI64::new(0),
             api_key: api_key.to_owned(),
+            access_tokens: Mutex::new(Vec::new()),
         })
     }
 
@@ -170,6 +172,15 @@ impl ReplayKite {
     #[must_use]
     pub fn calls(&self) -> Vec<KiteCall> {
         self.calls.lock().map(|c| c.clone()).unwrap_or_default()
+    }
+
+    /// Every token handed to `set_access_token`, in order.
+    #[must_use]
+    pub fn access_tokens(&self) -> Vec<Secret> {
+        self.access_tokens
+            .lock()
+            .map(|t| t.clone())
+            .unwrap_or_default()
     }
 
     /// Only the order/GTT calls — what must be EQUAL between the two desks.
@@ -338,7 +349,11 @@ impl KiteReads for ReplayKite {
         )
     }
 
-    fn set_access_token(&self, _token: &Secret) {}
+    fn set_access_token(&self, token: &Secret) {
+        if let Ok(mut t) = self.access_tokens.lock() {
+            t.push(token.clone());
+        }
+    }
 
     async fn generate_session(
         &self,

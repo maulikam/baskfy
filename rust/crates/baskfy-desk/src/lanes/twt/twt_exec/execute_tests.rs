@@ -69,7 +69,16 @@ async fn confirm(
     line_id: i64,
     last_price: Option<&str>,
 ) -> ExecResult<ExecOutcome> {
-    confirm_on(store, None, plan_id, line_id, "true", now(), last_price.map(d)).await
+    confirm_on(
+        store,
+        None,
+        plan_id,
+        line_id,
+        "true",
+        now(),
+        last_price.map(d),
+    )
+    .await
 }
 
 /// `confirm(..., gateway=g, last_price=...)`.
@@ -80,7 +89,16 @@ async fn confirm_via(
     line_id: i64,
     last_price: Option<&str>,
 ) -> ExecResult<ExecOutcome> {
-    confirm_on(store, Some(g), plan_id, line_id, "true", now(), last_price.map(d)).await
+    confirm_on(
+        store,
+        Some(g),
+        plan_id,
+        line_id,
+        "true",
+        now(),
+        last_price.map(d),
+    )
+    .await
 }
 
 fn status_of(e: &ExecError) -> u16 {
@@ -158,8 +176,11 @@ async fn test_a_plan_expired_by_one_second_is_still_expired() {
 
 #[tokio::test]
 async fn test_a_sell_at_open_line_for_a_name_the_sleeve_does_not_hold_is_blocked() {
-    let (store, plan_id, line_id) =
-        a_store_with("SELL_AT_OPEN", twenty_five_lakh(), &[("quantity", Val::Int(100))]);
+    let (store, plan_id, line_id) = a_store_with(
+        "SELL_AT_OPEN",
+        twenty_five_lakh(),
+        &[("quantity", Val::Int(100))],
+    );
     let outcome = confirm(&store, &plan_id, line_id, None).await.unwrap();
     assert_eq!(outcome.status, "BLOCKED");
     assert!(
@@ -272,7 +293,11 @@ async fn test_a_fourth_entry_in_one_session_is_blocked_by_the_session_cap() {
         .await
         .unwrap();
     assert_eq!(outcome.status, "BLOCKED");
-    assert!(outcome.reason.starts_with("SESSION_CAP"), "{}", outcome.reason);
+    assert!(
+        outcome.reason.starts_with("SESSION_CAP"),
+        "{}",
+        outcome.reason
+    );
     assert_eq!(store.m().line(line_id).s("state"), "REJECTED");
     assert_eq!(store.m().orders.len(), 3);
 }
@@ -387,7 +412,11 @@ async fn test_a_stop_never_falls_a_raise_at_the_resting_trigger_is_blocked() {
         .await
         .unwrap();
     assert_eq!(outcome.status, "BLOCKED");
-    assert!(outcome.reason.contains("a stop never falls"), "{}", outcome.reason);
+    assert!(
+        outcome.reason.contains("a stop never falls"),
+        "{}",
+        outcome.reason
+    );
     assert_eq!((flaky.cancelled(), flaky.armed()), (0, 0));
 }
 
@@ -400,7 +429,11 @@ async fn test_a_new_stop_below_the_resting_one_is_blocked() {
         .await
         .unwrap();
     assert_eq!(outcome.status, "BLOCKED");
-    assert!(outcome.reason.contains("a stop never falls"), "{}", outcome.reason);
+    assert!(
+        outcome.reason.contains("a stop never falls"),
+        "{}",
+        outcome.reason
+    );
     assert_eq!(flaky.cancelled(), 0);
 }
 
@@ -431,7 +464,11 @@ async fn test_a_trigger_at_or_above_last_price_is_blocked() {
         .await
         .unwrap();
     assert_eq!(outcome.status, "BLOCKED");
-    assert!(outcome.reason.contains("would fire at once"), "{}", outcome.reason);
+    assert!(
+        outcome.reason.contains("would fire at once"),
+        "{}",
+        outcome.reason
+    );
     assert_eq!((flaky.cancelled(), flaky.armed()), (0, 0));
 }
 
@@ -444,7 +481,11 @@ async fn test_a_trigger_with_no_last_price_to_check_it_above_last_is_blocked() {
         .await
         .unwrap();
     assert_eq!(outcome.status, "BLOCKED");
-    assert!(outcome.reason.contains("no last price"), "{}", outcome.reason);
+    assert!(
+        outcome.reason.contains("no last price"),
+        "{}",
+        outcome.reason
+    );
     assert_eq!(flaky.cancelled(), 0);
 }
 
@@ -489,7 +530,11 @@ async fn test_when_the_cancel_fails_the_old_stop_is_still_resting() {
         .unwrap();
     assert_eq!(outcome.status, "BLOCKED");
     assert!(!outcome.naked);
-    assert!(outcome.reason.contains("still resting"), "{}", outcome.reason);
+    assert!(
+        outcome.reason.contains("still resting"),
+        "{}",
+        outcome.reason
+    );
     let mut m = store.m();
     let position = m.position(position_id);
     assert_eq!(position.val("gtt_id"), Val::from("551234"));
@@ -609,7 +654,11 @@ async fn test_rearm_refuses_a_position_that_already_has_a_trigger() {
         .await
         .unwrap();
     assert_eq!(outcome.status, "BLOCKED");
-    assert!(outcome.reason.contains("already resting"), "{}", outcome.reason);
+    assert!(
+        outcome.reason.contains("already resting"),
+        "{}",
+        outcome.reason
+    );
 }
 
 #[tokio::test]
@@ -630,7 +679,11 @@ async fn test_rearm_refuses_a_stop_at_or_above_the_last_price() {
         .await
         .unwrap();
     assert_eq!(outcome.status, "BLOCKED");
-    assert!(outcome.reason.contains("is not protection"), "{}", outcome.reason);
+    assert!(
+        outcome.reason.contains("is not protection"),
+        "{}",
+        outcome.reason
+    );
 }
 
 async fn sweep(store: &MemoryStore, gw: &dyn Gateway, prices: &[(&str, &str)]) -> x::SweepReport {
@@ -910,7 +963,10 @@ async fn test_halt_says_what_it_did_in_one_line() {
     let report = halt(&store, "true").await.unwrap();
     let line = report.line();
     assert_eq!(line.matches('\n').count(), 0);
-    assert!(line.contains("\u{20b9}2500000.00") && line.contains("\u{20b9}0"), "{line}");
+    assert!(
+        line.contains("\u{20b9}2500000.00") && line.contains("\u{20b9}0"),
+        "{line}"
+    );
     assert!(line.contains("untouched"), "{line}");
 }
 
@@ -1086,12 +1142,11 @@ async fn test_the_spy_saw_no_place_answer_anything_but_dry_run() {
     assert!(outcome.simulated);
     let tape = TAPE.lock().unwrap().clone();
     assert!(tape.contains(&("place".to_owned(), "DRY_RUN".to_owned())));
-    assert!(tape.iter().all(|(_, s)| s.starts_with("DRY_RUN")), "{tape:?}");
     assert!(
-        !tape
-            .iter()
-            .any(|(_, s)| s == "PLACED" || s == "GTT_PLACED")
+        tape.iter().all(|(_, s)| s.starts_with("DRY_RUN")),
+        "{tape:?}"
     );
+    assert!(!tape.iter().any(|(_, s)| s == "PLACED" || s == "GTT_PLACED"));
 }
 
 // =============================================================================================
@@ -1292,10 +1347,7 @@ async fn test_the_line_names_its_position_when_a_name_holds_two() {
     let (store, plan_id, line_id) = sell(100);
     let first = held(&store, None, None);
     let second = held(&store, Some(100), None);
-    store
-        .m()
-        .line(line_id)
-        .set("position_id", Val::Int(second));
+    store.m().line(line_id).set("position_id", Val::Int(second));
     confirm(&store, &plan_id, line_id, Some("110.00"))
         .await
         .unwrap();

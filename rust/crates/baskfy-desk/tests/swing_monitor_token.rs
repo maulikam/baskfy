@@ -84,6 +84,10 @@ fn test_a_token_written_after_start_is_picked_up_without_a_restart() {
     rewrite(&c, "second-token");
     assert!(c.kite.refresh_token_if_changed().unwrap());
     assert_eq!(blob(&c), "second-token");
+    assert_eq!(
+        c.kc.access_tokens().last().map(|t| t.expose().to_owned()),
+        Some("second-token".to_owned())
+    );
     assert!(!c.kite.refresh_token_if_changed().unwrap(), "reloaded once");
     assert!(c.kc.write_calls().is_empty());
 }

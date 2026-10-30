@@ -155,7 +155,7 @@ impl Gateway for NoSleeveGateway {
     }
 }
 
-type GatewayCache = Mutex<Vec<(usize, &'static str, Arc<dyn Gateway>)>>;
+type GatewayCache = Mutex<Vec<(std::sync::Weak<dyn Gateway>, &'static str, Arc<dyn Gateway>)>>;
 
 static SLEEVE_GATEWAYS: GatewayCache = Mutex::new(Vec::new());
 
@@ -168,11 +168,15 @@ pub(crate) fn sleeve_gateway(
     stop_band: crate::gateway::StopBand,
     gates: fn(&crate::settings::Settings) -> crate::gateway::ProductGates,
 ) -> Arc<dyn Gateway> {
-    let key = Arc::as_ptr(&state.gateway).cast::<()>() as usize;
-    if let Ok(cache) = SLEEVE_GATEWAYS.lock()
-        && let Some((_, _, gw)) = cache.iter().find(|(k, s, _)| *k == key && *s == sleeve)
-    {
-        return gw.clone();
+    let key = Arc::downgrade(&state.gateway);
+    if let Ok(mut cache) = SLEEVE_GATEWAYS.lock() {
+        cache.retain(|(w, _, _)| w.strong_count() > 0);
+        if let Some((_, _, gw)) = cache
+            .iter()
+            .find(|(w, s, _)| w.ptr_eq(&key) && *s == sleeve)
+        {
+            return gw.clone();
+        }
     }
     let settings = state.settings.clone();
     let journal = std::path::Path::new(crate::gateway::JOURNAL)

@@ -21,13 +21,19 @@ use super::evening::{
     EveningInputs, EveningReport, SOURCE_EVENING, SOURCE_MORNING, last_detected_session,
     run_vbt_evening,
 };
+use super::live::build_live_plan_vbt;
 use super::ops::{
     CheckInputs, check_detect_fresh, check_naked_positions, check_orders_past_expiry,
     check_positions_without_bars,
 };
-use super::rescan::{last_published_session, unpublished_runs};
+use super::rescan::{
+    REASON_PUBLISHED, claim_run, last_published_session, run_vbt_rescan, unpublished_runs,
+};
 use super::sleeve::load_sleeve;
+use crate::settings::WorkerSettings;
 use crate::steps::{StepOutcome, StepStatus};
+use crate::tasks::TaskContext;
+use crate::tasks::context::TaskClock;
 
 const IGNORE: &str =
     "needs BASKFY_RS_SCRATCH_DATABASE_URL (a scratch database, never baskfy): run with --ignored";
@@ -149,7 +155,9 @@ async fn scratch() -> PgConnection {
          updated_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (user_id, session_date)); \
          CREATE TEMP TABLE vb_scan_run (id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, \
          user_id bigint NOT NULL, requested_at timestamptz NOT NULL DEFAULT now(), \
-         status varchar(16) NOT NULL DEFAULT 'QUEUED', task_id varchar(64));",
+         status varchar(16) NOT NULL DEFAULT 'QUEUED', task_id varchar(64), \
+         session_date date, provisional boolean NOT NULL DEFAULT false, detail jsonb, \
+         error text, started_at timestamptz, finished_at timestamptz);",
     )
     .await;
     conn
@@ -777,4 +785,468 @@ async fn a_detector_that_has_written_nothing_raises_and_a_long_weekend_is_not_st
         field(field(&out, "alert"), "alert"),
         &OrderedJson::Str("VBT_DETECT_STALE".to_owned())
     );
+}
+
+fn ctx_at(day: u32, h: u32, m: u32) -> TaskContext {
+    let base = Settings::default();
+    let db = baskfy_db::WriteDb::connect_lazy(&base.db_settings()).unwrap();
+    TaskContext::new(
+        db,
+        settings(),
+        WorkerSettings::default(),
+        TaskClock::starting_at_ist(d(day).and_hms_opt(h, m, 0).unwrap()),
+        None,
+        None,
+    )
+}
+
+fn text(json: &OrderedJson) -> &str {
+    match json {
+        OrderedJson::Str(s) => s.as_str(),
+        other => panic!("not a string: {other:?}"),
+    }
+}
+
+async fn queued(conn: &mut PgConnection, user_id: i64) -> i64 {
+    scalar_i64(
+        conn,
+        &format!(
+            "INSERT INTO vb_scan_run (user_id, requested_at, status) \
+             VALUES ({user_id}, '2026-09-07 02:59+00', 'QUEUED') RETURNING id"
+        ),
+    )
+    .await
+}
+
+#[tokio::test]
+#[ignore = "needs BASKFY_RS_SCRATCH_DATABASE_URL"]
+async fn a_queued_row_is_claimed_once_and_an_unknown_one_never() {
+    let mut conn = scratch().await;
+    let id = queued(&mut conn, 2).await;
+    let claimed = claim_run(&mut conn, id, at_ist(7, 8, 30)).await.unwrap();
+    assert_eq!(claimed.map(|c| c.user_id), Some(2), "the row's own user");
+    let (status, started): (String, Option<DateTime<Utc>>) =
+        sqlx::query_as("SELECT status, started_at FROM vb_scan_run WHERE id = $1")
+            .bind(id)
+            .fetch_one(&mut conn)
+            .await
+            .unwrap();
+    assert_eq!(
+        (status.as_str(), started),
+        ("RUNNING", Some(at_ist(7, 8, 30)))
+    );
+    assert!(
+        claim_run(&mut conn, id, at_ist(7, 8, 31))
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        claim_run(&mut conn, 999_999, at_ist(7, 8, 31))
+            .await
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[tokio::test]
+#[ignore = "needs BASKFY_RS_SCRATCH_DATABASE_URL"]
+async fn a_run_with_nothing_published_fails_on_the_row_rather_than_raising() {
+    let mut conn = scratch().await;
+    let id = queued(&mut conn, USER).await;
+    let out = run_vbt_rescan(&ctx_at(7, 8, 30), &mut conn, id, false)
+        .await
+        .unwrap();
+    assert_eq!(
+        field(&out, "status"),
+        &OrderedJson::Str("FAILED".to_owned())
+    );
+    assert!(
+        text(field(&out, "error")).starts_with(
+            "ValueError: the pipeline has published no session on or before 2026-09-07"
+        )
+    );
+    let (status, error, finished): (String, Option<String>, Option<DateTime<Utc>>) =
+        sqlx::query_as("SELECT status, error, finished_at FROM vb_scan_run WHERE id = $1")
+            .bind(id)
+            .fetch_one(&mut conn)
+            .await
+            .unwrap();
+    assert_eq!(status, "FAILED");
+    assert_eq!(error.as_deref(), Some(text(field(&out, "error"))));
+    assert!(finished.is_some());
+}
+
+#[tokio::test]
+#[ignore = "needs BASKFY_RS_SCRATCH_DATABASE_URL"]
+async fn a_quiet_session_finishes_done_and_a_finished_row_is_skipped() {
+    let mut conn = seeded().await;
+    exec(
+        &mut conn,
+        "INSERT INTO pipeline_run (trade_date, data_version) VALUES ('2026-09-04', 9)",
+    )
+    .await;
+    let id = queued(&mut conn, USER).await;
+    let out = run_vbt_rescan(&ctx_at(7, 8, 30), &mut conn, id, false)
+        .await
+        .unwrap();
+    assert_eq!(field(&out, "status"), &OrderedJson::Str("DONE".to_owned()));
+    assert_eq!(
+        field(&out, "session_date"),
+        &OrderedJson::Str("2026-09-04".to_owned())
+    );
+    assert_eq!(field(&out, "provisional"), &OrderedJson::Bool(false));
+    let detail = field(&out, "detail");
+    assert_eq!(field(detail, "signals"), &OrderedJson::Int(0));
+    assert_eq!(
+        field(detail, "reason"),
+        &OrderedJson::Str(REASON_PUBLISHED.to_owned())
+    );
+    assert_eq!(field(&out, "error"), &OrderedJson::Null);
+    assert_eq!(
+        scalar_i64(
+            &mut conn,
+            &format!(
+                "SELECT count(*) FROM vb_scan_run WHERE id = {id} AND status = 'DONE' \
+                      AND session_date = '2026-09-04' AND detail IS NOT NULL"
+            )
+        )
+        .await,
+        1
+    );
+    // Before the open the published session is detected plain: no plan, no order.
+    assert_eq!(
+        scalar_i64(&mut conn, "SELECT count(*) FROM vb_plan").await,
+        0
+    );
+    let again = run_vbt_rescan(&ctx_at(7, 8, 31), &mut conn, id, false)
+        .await
+        .unwrap();
+    assert_eq!(
+        field(&again, "skipped"),
+        &OrderedJson::Str("not QUEUED — already claimed or finished".to_owned())
+    );
+}
+
+// --- test_live_scan.py (VBT's live plan) ---------------------------------------------------------
+
+async fn live_plan(conn: &mut PgConnection) -> super::live::PlanBuild {
+    build_live_plan_vbt(conn, USER, d(3), false, at_ist(3, 13, 15))
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+#[ignore = "needs BASKFY_RS_SCRATCH_DATABASE_URL"]
+async fn a_vbt_signal_becomes_a_live_plan_of_buy_at_market_lines() {
+    let mut conn = seeded().await;
+    let built = live_plan(&mut conn).await;
+    assert_eq!(built.entries, 3);
+    assert!(!built.kept);
+    let (plan_id, source, built_at, expires): (String, String, DateTime<Utc>, DateTime<Utc>) =
+        sqlx::query_as("SELECT plan_id::text, source, built_at, expires_at FROM vb_plan")
+            .fetch_one(&mut conn)
+            .await
+            .unwrap();
+    assert_eq!(Some(plan_id), built.plan_id);
+    assert_eq!(source, "LIVE");
+    assert_eq!(expires - built_at, chrono::Duration::minutes(30));
+    let lines: Vec<(String, String, String)> =
+        sqlx::query_as("SELECT kind, state, note FROM vb_plan_line ORDER BY instrument_id")
+            .fetch_all(&mut conn)
+            .await
+            .unwrap();
+    assert_eq!(lines.len(), 3);
+    for (kind, state, note) in &lines {
+        assert_eq!(
+            (kind.as_str(), state.as_str()),
+            ("BUY_AT_MARKET", "PROPOSED")
+        );
+        assert!(
+            note.starts_with("live scan 13:15: buy now, at market; "),
+            "{note}"
+        );
+    }
+    // No settle, no exits and no order from a live scan.
+    assert_eq!(
+        scalar_i64(&mut conn, "SELECT count(*) FROM vb_session").await,
+        0
+    );
+    assert_eq!(
+        scalar_i64(&mut conn, "SELECT count(*) FROM vb_order").await,
+        0
+    );
+}
+
+#[tokio::test]
+#[ignore = "needs BASKFY_RS_SCRATCH_DATABASE_URL"]
+async fn no_vbt_signal_means_no_live_plan() {
+    let mut conn = seeded().await;
+    exec(
+        &mut conn,
+        "DELETE FROM vb_signal_daily WHERE state = 'SIGNAL'",
+    )
+    .await;
+    let built = live_plan(&mut conn).await;
+    assert_eq!((built.plan_id, built.entries, built.kept), (None, 0, false));
+    assert_eq!(
+        scalar_i64(&mut conn, "SELECT count(*) FROM vb_plan").await,
+        0
+    );
+}
+
+#[tokio::test]
+#[ignore = "needs BASKFY_RS_SCRATCH_DATABASE_URL"]
+async fn a_rescan_keeps_a_live_plan_whose_line_is_at_the_broker() {
+    let mut conn = seeded().await;
+    let first = live_plan(&mut conn).await;
+    exec(
+        &mut conn,
+        "UPDATE vb_plan_line SET state = 'SENT' WHERE instrument_id = 1",
+    )
+    .await;
+    let second = live_plan(&mut conn).await;
+    assert!(second.kept);
+    assert_eq!(second.plan_id, first.plan_id);
+    assert_eq!(second.entries, 0);
+    assert_eq!(
+        scalar_i64(&mut conn, "SELECT count(*) FROM vb_plan").await,
+        1
+    );
+    assert_eq!(
+        scalar_i64(&mut conn, "SELECT count(*) FROM vb_plan_line").await,
+        3
+    );
+    // A plan with nothing in flight is rebuilt under a new id instead.
+    exec(&mut conn, "UPDATE vb_plan_line SET state = 'PROPOSED'").await;
+    let third = live_plan(&mut conn).await;
+    assert!(!third.kept);
+    assert_ne!(third.plan_id, first.plan_id);
+    assert_eq!(
+        scalar_i64(&mut conn, "SELECT count(*) FROM vb_plan").await,
+        1
+    );
+}
+
+#[tokio::test]
+#[ignore = "needs BASKFY_RS_SCRATCH_DATABASE_URL"]
+async fn a_name_with_a_working_order_is_not_offered_again() {
+    let mut conn = seeded().await;
+    exec(
+        &mut conn,
+        "INSERT INTO vb_order (user_id, instrument_id, signal_date, limit_price, stop_price, \
+         quantity, state) VALUES (1, 1, '2026-09-03', 500.00, 440.00, 10, 'SENT')",
+    )
+    .await;
+    let built = live_plan(&mut conn).await;
+    assert_eq!(built.entries, 2);
+    assert_eq!(
+        scalar_i64(
+            &mut conn,
+            "SELECT count(*) FROM vb_plan_line WHERE instrument_id = 1"
+        )
+        .await,
+        0
+    );
+    assert_eq!(
+        scalar_i64(
+            &mut conn,
+            "SELECT instrument_id FROM vb_plan_skip WHERE reason = 'ALREADY_WORKING'"
+        )
+        .await,
+        1
+    );
+}
+
+// --- test_vbt_evening.py, test_vbt_tenancy.py ----------------------------------------------------
+
+#[tokio::test]
+#[ignore = "needs BASKFY_RS_SCRATCH_DATABASE_URL"]
+async fn every_line_is_proposed_and_the_morning_is_a_second_row_with_its_own_lines() {
+    let mut conn = seeded().await;
+    exec(
+        &mut conn,
+        "INSERT INTO vb_position (user_id, instrument_id, entry_date, entry_avg, quantity_open, \
+         initial_stop, stop_price) VALUES (1, 5, '2026-09-02', 90.0000, 100, 79.20, 79.20)",
+    )
+    .await;
+    evening(&mut conn, d(3), SOURCE_EVENING, false, evening_at(3)).await;
+    evening(&mut conn, d(3), SOURCE_MORNING, false, evening_at(3)).await;
+    assert_eq!(
+        scalar_i64(
+            &mut conn,
+            "SELECT count(*) FROM vb_plan_line WHERE state <> 'PROPOSED'"
+        )
+        .await,
+        0
+    );
+    let per_source: Vec<(String, i64)> = sqlx::query_as(
+        "SELECT p.source, count(l.id) FROM vb_plan p JOIN vb_plan_line l ON l.plan_id = p.id \
+         GROUP BY p.source ORDER BY p.source",
+    )
+    .fetch_all(&mut conn)
+    .await
+    .unwrap();
+    assert_eq!(
+        per_source,
+        [("EVENING".to_owned(), 4), ("MORNING".to_owned(), 4)]
+    );
+    assert_eq!(
+        scalar_i64(&mut conn, "SELECT count(*) FROM vb_order").await,
+        0
+    );
+}
+
+#[tokio::test]
+#[ignore = "needs BASKFY_RS_SCRATCH_DATABASE_URL"]
+async fn an_evening_writes_only_its_users_rows_and_leaves_another_book_alone() {
+    let mut conn = seeded().await;
+    exec(
+        &mut conn,
+        "INSERT INTO vb_config (user_id, sleeve_capital_inr) VALUES (2, 1000000.00); \
+         INSERT INTO vb_breadth_daily VALUES (2, '2026-09-03', 'OPEN', false); \
+         INSERT INTO vb_signal_daily VALUES \
+           (2, '2026-09-03', 4, 'SIGNAL', 40.00, 990000000, 990000000, false); \
+         INSERT INTO vb_order (user_id, instrument_id, signal_date, limit_price, stop_price, \
+           quantity, state) VALUES (2, 1, '2026-08-01', 500.00, 440.00, 10, 'PROPOSED'); \
+         INSERT INTO vb_position (user_id, instrument_id, entry_date, entry_avg, quantity_open, \
+           initial_stop, stop_price) VALUES (2, 3, '2026-09-01', 250.0000, 10, 220, 220)",
+    )
+    .await;
+    let (_, report) = evening(&mut conn, d(3), SOURCE_EVENING, false, evening_at(3)).await;
+    let report = report.unwrap();
+    // User 2's open position in CORE is not user 1's: CORE is still bought, nothing is armed.
+    assert_eq!((report.entries, report.arms), (3, 0));
+    for table in ["vb_plan", "vb_plan_line", "vb_plan_skip", "vb_session"] {
+        assert_eq!(
+            scalar_i64(
+                &mut conn,
+                &format!("SELECT count(*) FROM {table} WHERE user_id <> 1")
+            )
+            .await,
+            0,
+            "{table}"
+        );
+    }
+    assert_eq!(
+        scalar_i64(
+            &mut conn,
+            "SELECT count(*) FROM vb_order WHERE user_id = 2 AND state = 'PROPOSED' \
+             AND expires_after_session IS NULL AND sessions_worked = 0"
+        )
+        .await,
+        1
+    );
+    assert_eq!(
+        scalar_i64(
+            &mut conn,
+            "SELECT count(*) FROM vb_config_audit WHERE user_id = 2"
+        )
+        .await,
+        0
+    );
+}
+
+#[tokio::test]
+#[ignore = "needs BASKFY_RS_SCRATCH_DATABASE_URL"]
+async fn a_close_below_the_trail_ma_becomes_tomorrows_sell() {
+    let mut conn = seeded().await;
+    // Sixty sessions ending on 4 Sep: flat at 100, then a close of 80 on the last one.
+    exec(
+        &mut conn,
+        "DELETE FROM trading_day; \
+         INSERT INTO trading_day \
+           SELECT 1, g::date, true FROM generate_series(DATE '2026-05-01', DATE '2026-09-30', \
+           INTERVAL '1 day') g WHERE extract(isodow FROM g) < 6; \
+         INSERT INTO ohlcv_daily (instrument_id, date, open, high, low, close, close_raw, volume) \
+           SELECT 5, t.date, 100, 101, 99, 100, 100, 100000 FROM trading_day t \
+           WHERE t.date < '2026-09-04' AND t.date >= '2026-06-10'; \
+         INSERT INTO ohlcv_daily (instrument_id, date, open, high, low, close, close_raw, volume) \
+           VALUES (5, '2026-09-04', 100, 100, 79, 80, 80, 100000); \
+         INSERT INTO vb_position (user_id, instrument_id, entry_date, entry_avg, quantity_open, \
+           initial_stop, stop_price, gtt_id) VALUES (1, 5, '2026-07-01', 100.0000, 500, 70.00, \
+           70.00, 'gtt-1')",
+    )
+    .await;
+    let (_, report) = evening(&mut conn, d(4), SOURCE_EVENING, false, evening_at(4)).await;
+    assert_eq!(report.unwrap().sells, 1);
+    let (quantity, reason, position_id): (i32, Option<String>, Option<i64>) = sqlx::query_as(
+        "SELECT quantity, reason, position_id FROM vb_plan_line WHERE kind = 'SELL_AT_OPEN'",
+    )
+    .fetch_one(&mut conn)
+    .await
+    .unwrap();
+    let held = scalar_i64(
+        &mut conn,
+        "SELECT id FROM vb_position WHERE instrument_id = 5",
+    )
+    .await;
+    assert_eq!(
+        (quantity, reason.as_deref(), position_id),
+        (500, Some("MA_TRAIL"), Some(held))
+    );
+    let (queued_for, why): (Option<NaiveDate>, Option<String>) = sqlx::query_as(
+        "SELECT exit_queued_for, exit_reason_queued FROM vb_position WHERE instrument_id = 5",
+    )
+    .fetch_one(&mut conn)
+    .await
+    .unwrap();
+    assert_eq!(queued_for, Some(d(7)));
+    assert_eq!(why.as_deref(), Some("MA_TRAIL"));
+}
+
+// --- test_vbt_ops.py -----------------------------------------------------------------------------
+
+#[tokio::test]
+#[ignore = "needs BASKFY_RS_SCRATCH_DATABASE_URL"]
+async fn every_live_state_can_be_late_and_no_terminal_one_or_unadopted_one_is() {
+    let mut conn = scratch().await;
+    let settings = settings();
+    let inputs = CheckInputs {
+        now: at_ist(8, 21, 40),
+        user_id: USER,
+        settings: &settings,
+    };
+    for state in ["PROPOSED", "CONFIRMED", "SENT", "PARTIAL"] {
+        exec(&mut conn, "DELETE FROM vb_order").await;
+        exec(
+            &mut conn,
+            &format!(
+                "INSERT INTO vb_order (user_id, instrument_id, signal_date, limit_price, \
+                 stop_price, quantity, state, expires_after_session) VALUES \
+                 (1, 1, '2026-09-01', 10, 9, 1, '{state}', '2026-09-07')"
+            ),
+        )
+        .await;
+        let out = check_orders_past_expiry(&mut conn, &inputs).await.unwrap();
+        assert_eq!(field(&out, "past_expiry"), &OrderedJson::Int(1), "{state}");
+        let orders = field(field(field(&out, "alert"), "detail"), "orders");
+        let OrderedJson::Array(orders) = orders else {
+            panic!("a list")
+        };
+        assert_eq!(
+            field(&orders[0], "state"),
+            &OrderedJson::Str(state.to_owned())
+        );
+        assert_eq!(
+            field(&orders[0], "expires_after_session"),
+            &OrderedJson::Str("2026-09-07".to_owned())
+        );
+    }
+    exec(&mut conn, "DELETE FROM vb_order").await;
+    exec(
+        &mut conn,
+        "INSERT INTO vb_order (user_id, instrument_id, signal_date, limit_price, stop_price, \
+         quantity, state, expires_after_session) VALUES \
+         (1, 1, '2026-07-01', 10, 9, 1, 'FILLED', '2026-07-03'), \
+         (1, 2, '2026-07-01', 10, 9, 1, 'CANCELLED', '2026-07-03'), \
+         (1, 3, '2026-07-01', 10, 9, 1, 'EXPIRED', '2026-07-03'), \
+         (1, 4, '2026-07-01', 10, 9, 1, 'REJECTED', '2026-07-03'), \
+         (1, 5, '2026-07-01', 10, 9, 1, 'SENT', NULL), \
+         (2, 6, '2026-07-01', 10, 9, 1, 'SENT', '2026-07-03')",
+    )
+    .await;
+    let out = check_orders_past_expiry(&mut conn, &inputs).await.unwrap();
+    assert_eq!(field(&out, "past_expiry"), &OrderedJson::Int(0));
+    assert_eq!(field(&out, "alert"), &OrderedJson::Null);
 }

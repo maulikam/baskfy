@@ -1,9 +1,9 @@
-//! `twt_scan_task.apply_async(args=[run_id], queue="compute")` — the one message this lane
-//! publishes (the TW12 publisher). Kombu's Redis transport, as the API's producer writes it
+//! `twt_scan_task.apply_async(args=[run_id], queue="compute")` (the TW12 publisher) and
+//! `vbt_rescan_task.apply_async(...)` (the VB12 sweep), shared by both lanes. Kombu's Redis
+//! transport, as the API's producer writes it
 //! (`baskfy_api` `routes::sleeves::writes::celery_message`, crate-private there): the message
 //! JSON (protocol 2, the body base64), `LPUSH`ed on the queue's list after the queue's binding
-//! is `SADD`ed. Routing is the task's own option (`queue=compute`), which for `baskfy.twt.scan`
-//! is also its route.
+//! is `SADD`ed. Routing is the call's `queue=compute`, which for both tasks is also its route.
 //!
 //! The task id is a fresh uuid4 taken from Postgres (`gen_random_uuid()`), so the lane needs no
 //! new dependency. **Law 2:** the message is a scan request; a scan places nothing.
@@ -14,7 +14,7 @@ use sqlx::PgConnection;
 use crate::error::WorkerError;
 use crate::pyjson::{self, object, s};
 
-/// The queue `baskfy.twt.scan` is published to (`QUEUE_COMPUTE`).
+/// The queue the scan and the rescan are published to (`QUEUE_COMPUTE`).
 pub(crate) const QUEUE_COMPUTE: &str = "compute";
 
 /// RFC 4648 base64 with padding (`base64.b64encode`).
@@ -187,6 +187,11 @@ mod tests {
             message("baskfy.twt.scan", &[118], QUEUE_COMPUTE, "t", "r", "d").unwrap_or_default();
         let v: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
         assert_eq!(v["headers"]["task"], "baskfy.twt.scan");
+        let vbt =
+            message("baskfy.vbt.rescan", &[7], QUEUE_COMPUTE, "t", "r", "d").unwrap_or_default();
+        let w: serde_json::Value = serde_json::from_str(&vbt).unwrap_or_default();
+        assert_eq!(w["headers"]["task"], "baskfy.vbt.rescan");
+        assert_eq!(w["properties"]["delivery_info"]["routing_key"], "compute");
         assert_eq!(v["headers"]["argsrepr"], "[118]");
         assert_eq!(v["properties"]["delivery_info"]["routing_key"], "compute");
         assert_eq!(

@@ -1,0 +1,18 @@
+{
+  "lane": "sleeve_backtests_twt",
+  "note": "TW9's backtest through tools/twt/backtest.py's _run (no Celery task; graded by tools/parity/twt_backtest_diff.py). Payload: the script's report dict with key order (params, stats and drift as written). started_at is the injected clock's first second on both sides; finished_at advances with real elapsed time. Windows are short: the nine-year default is a manual run.",
+  "cases": [
+    {"name": "twt-window-with-etf-denominator", "task": "tools/twt/backtest.py", "args": {"start": "2025-04-01", "end": "2026-10-29"}, "now": "2026-10-30T11:00:00",
+     "mask": {"tw_backtest_run": {"finished_at": "elapsed", "created_at": "stamp"}}, "payload_mask": ["/finished_at"],
+     "note": "a Friday in session: two books, the ETF counterfactual measured, one row"},
+    {"name": "twt-end-is-last-published-session", "task": "tools/twt/backtest.py", "args": {"start": "2026-01-01", "sleeve": "2500000", "skip_etf_denominator": true}, "now": "2026-10-31T09:00:00",
+     "mask": {"tw_backtest_run": {"finished_at": "elapsed", "created_at": "stamp"}}, "payload_mask": ["/finished_at"],
+     "note": "a Saturday: end defaults to the newest ohlcv_daily date (2026-10-29), the sleeve at 25 lakh, no counterfactual"},
+    {"name": "twt-across-the-oos-split", "task": "tools/twt/backtest.py", "args": {"start": "2022-06-01", "end": "2023-06-30", "skip_etf_denominator": true}, "now": "2026-10-30T19:00:00",
+     "mask": {"tw_backtest_run": {"finished_at": "elapsed", "created_at": "stamp"}}, "payload_mask": ["/finished_at"],
+     "note": "both halves of 04 §12's 2023-01-01 split, so in/out-of-sample CAGR and windows are written"},
+    {"name": "twt-no-bars", "task": "tools/twt/backtest.py", "args": {"start": "2010-01-01", "end": "2010-03-31"}, "now": "2026-10-30T08:00:00",
+     "note": "ValueError after the insert; the script's session.begin() rolls the row back"},
+    {"name": "twt-bad-end", "task": "tools/twt/backtest.py", "args": {"end": "2026-13-01"}, "now": "2026-10-30T08:00:00"}
+  ]
+}

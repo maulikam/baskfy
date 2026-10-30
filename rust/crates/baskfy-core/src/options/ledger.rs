@@ -8,8 +8,7 @@
 //! **gross** is the signed cash of every fill (a sale brings premium in, a purchase pays it
 //! out); **entry** and **exit** are the two halves' cash, unsigned; **costs** are `04` §6.1's
 //! charges over every executed order; **net** = gross - costs; `r_multiple = net / R`; MFE and
-//! MAE are the best and worst marked P&L, in R. `pnl_points` is not yet ported (it needs
-//! `structures.Structure`).
+//! MAE are the best and worst marked P&L, in R.
 
 use chrono::{DateTime, FixedOffset};
 use rust_decimal::{Decimal, RoundingStrategy};
@@ -19,6 +18,20 @@ use crate::error::{CoreError, CoreResult};
 use crate::options::costs::{
     ChargeBreakdown, CostFill, CostRates, Side, add, charges, mul, paise, py_div_quantize, sub,
 };
+use crate::options::structures::Structure;
+
+/// Marked P&L per unit, a gain positive: a condor's credit less its close cost; otherwise value less paid.
+pub fn pnl_points(
+    structure: Structure,
+    entry_points: Decimal,
+    value_points: Decimal,
+) -> CoreResult<Decimal> {
+    if structure == Structure::IronCondor {
+        sub(entry_points, value_points)
+    } else {
+        sub(value_points, entry_points)
+    }
+}
 
 /// One executed fill: side, price per unit, units, and whether it closed the position.
 ///

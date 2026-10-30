@@ -346,7 +346,7 @@ fn to_payload(v: &OrderedJson) -> Payload {
 }
 
 /// `_definition_hash(screen)`: `None` when the saved definition no longer validates.
-fn definition_hash(definition: &OrderedJson) -> Option<String> {
+pub(crate) fn definition_hash(definition: &OrderedJson) -> Option<String> {
     ScreenDefinition::model_validate(&to_payload(definition))
         .ok()
         .map(|d| d.definition_hash())

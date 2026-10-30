@@ -18,11 +18,12 @@
 //! | `reference_export_io` | [`reference_export_io`] | path half ported; rows wait on core |
 //! | `kite` | [`kite`] | ported (with kiteconnect's read-only REST half, DECISIONS-RS R4.10) |
 //! | `nse` | [`nse`] | ported (DECISIONS-RS R4.11) |
-//! | `archive` | [`archive`] | ported (hand-signed SigV4, DECISIONS-RS R4.14) |
+//! | `archive` | [`archive`] | ported (hand-signed SigV4 with boto3's legacy retries, DECISIONS-RS R4.14) |
 //! | `composite` | [`composite`] | ported |
 //! | `fixtures` | [`fixtures`] | ported; Parquet files wait on DECISIONS-RS R4.12 |
 //! | `factory` | [`factory`] | ported (DECISIONS-RS R4.13) |
 //! | `fixture_builder`, `cli` | — | not started |
+//! | (harness: `tools/parity/replay_provider.py`) | [`replay`] | the replay adapter for grading the worker (DECISIONS-RS R7.3) |
 //!
 //! Four modules have no Python twin: [`clock`] (the injected `time.monotonic`/`time.sleep`/
 //! `random` seams as traits), [`net`] (the network chokepoint and the test-suite block that
@@ -42,6 +43,7 @@ pub mod py;
 pub mod ratelimit;
 pub mod records;
 pub mod reference_export_io;
+pub mod replay;
 pub mod retry;
 pub mod secret;
 pub mod settings;

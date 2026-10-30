@@ -1,0 +1,35 @@
+{
+ "fn": "baskfy_core.options.backtest.run",
+ "inputs": {
+  "min_sessions": 12,
+  "outcomes": [],
+  "sleeve": "O1M",
+  "tier": "3"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "Decimals are strings; enums are their values; datetimes carry +05:30. Config is OptionsConfig() defaults, written into the inputs. Regenerate with `uv run python ../tools/parity/golden_options.py` from decile-blueprint; packages/core/tests/test_options_goldens.py recomputes every case from these inputs.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "by_year": [],
+  "caveats": [
+   "Observed sample: 0 sessions.",
+   "Insufficient sample: 0 of 12 observed sessions."
+  ],
+  "date_from": null,
+  "date_to": null,
+  "expectancy_r": null,
+  "max_drawdown_r": "0",
+  "net_pnl_inr": "0",
+  "sessions": 0,
+  "skipped_by_reason": [],
+  "sleeve": "O1M",
+  "tier": "3",
+  "traded": 0,
+  "win_rate": null
+ }
+}

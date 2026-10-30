@@ -1,0 +1,26 @@
+{
+ "fn": "baskfy_core.exposure.allocation.solve_allocation",
+ "inputs": {
+  "candidates": [],
+  "cluster_cap": 25.0,
+  "half_factor": 0.5,
+  "half_sized": [],
+  "max_sleeve_w": 15.0,
+  "min_sleeve_w": 6.0,
+  "sleeve_pct": 100.0
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "dataclasses.asdict(Allocation). Inputs are JSON; each function is called from them after a JSON round trip. Dates are ISO days, enums their values, IndexSignals/BookWeights/RegimeState their as_dict(), Allocation and Position/Candidate/OrderLine dataclasses.asdict, tuples lists. A raise is {raises: {type, message}}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_exposure.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "raises": {
+   "message": "no eligible constituents to allocate to",
+   "type": "AllocationError"
+  }
+ }
+}

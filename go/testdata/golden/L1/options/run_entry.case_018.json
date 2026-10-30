@@ -1,0 +1,140 @@
+{
+ "fn": "baskfy_core.options.executor.run_entry",
+ "inputs": {
+  "books": {
+   "LONG_CALL": {
+    "ask": "10.20",
+    "bid": "10.00"
+   },
+   "LONG_PUT": {
+    "ask": "8.55",
+    "bid": "8.40"
+   },
+   "SHORT_CALL": {
+    "ask": "20.30",
+    "bid": "20.05"
+   },
+   "SHORT_PUT": {
+    "ask": "19.10",
+    "bid": "18.90"
+   }
+  },
+  "config": {
+   "exit_final_marketable": true,
+   "feed_grace_seconds": 60,
+   "feed_watch_from": "14:00:00",
+   "fill_wait_seconds": 20,
+   "latency_ticks": 1,
+   "limit_improve_ticks": 1,
+   "plan_ttl_minutes": 30
+  },
+  "quantity": 65,
+  "roles": [
+   "LONG_CALL"
+  ],
+  "script": [
+   17,
+   65,
+   65,
+   65,
+   0,
+   65,
+   65,
+   55,
+   0,
+   65,
+   29,
+   65,
+   0,
+   3,
+   65,
+   65,
+   3,
+   65,
+   63,
+   65,
+   29,
+   65,
+   0,
+   53
+  ],
+  "sleeve": "O2",
+  "tick": "0.05"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "Decimals are strings; enums are their values; datetimes carry +05:30. Config is OptionsConfig() defaults, written into the inputs. Regenerate with `uv run python ../tools/parity/golden_options.py` from decile-blueprint; packages/core/tests/test_options_goldens.py recomputes every case from these inputs.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "entry": {
+   "events": [
+    {
+     "attempt": 1,
+     "closing": false,
+     "filled": 17,
+     "marketable": false,
+     "price": "10.25",
+     "requested": 65,
+     "role": "LONG_CALL",
+     "side": "BUY"
+    },
+    {
+     "attempt": 2,
+     "closing": false,
+     "filled": 48,
+     "marketable": false,
+     "price": "10.30",
+     "requested": 48,
+     "role": "LONG_CALL",
+     "side": "BUY"
+    }
+   ],
+   "fills": {
+    "LONG_CALL": [
+     {
+      "avg_price": "10.25",
+      "quantity": 17
+     },
+     {
+      "avg_price": "10.30",
+      "quantity": 48
+     }
+    ]
+   },
+   "outcome": "OPEN",
+   "position": {
+    "LONG_CALL": 65
+   }
+  },
+  "exit": {
+   "events": [
+    {
+     "attempt": 1,
+     "closing": true,
+     "filled": 65,
+     "marketable": false,
+     "price": "9.95",
+     "requested": 65,
+     "role": "LONG_CALL",
+     "side": "SELL"
+    }
+   ],
+   "fills": {
+    "LONG_CALL": [
+     {
+      "avg_price": "9.95",
+      "quantity": 65
+     }
+    ]
+   },
+   "outcome": "FLAT",
+   "position": {
+    "LONG_CALL": 0
+   }
+  }
+ }
+}

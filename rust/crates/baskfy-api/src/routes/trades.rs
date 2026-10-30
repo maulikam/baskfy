@@ -15,6 +15,10 @@ use serde::Serialize;
 
 mod writes;
 
+/// The worker's evening capture of Kite's trades reuses the import's storage (wave 6, lane
+/// portfolio; DECISIONS-RS R8.pf1).
+pub use writes::{CaptureCounts, CaptureFill, capture_store_and_date};
+
 use crate::auth::{Principal, require_authenticated};
 use crate::problems::Problem;
 use crate::query::{QueryParams, Validation};

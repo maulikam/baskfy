@@ -309,6 +309,19 @@ pub(crate) fn env_stripped(name: &str) -> String {
     std::env::var(name).unwrap_or_default().trim().to_owned()
 }
 
+/// `broker_oauth.STATE_TTL_SECONDS // 60`: how long a minted `state` stays consumable, in whole
+/// minutes (`KiteLoginUrl.valid_for_minutes`).
+pub const STATE_VALID_FOR_MINUTES: i64 = 30;
+
+/// `broker_oauth.kite_login_url(api_key=, user_id=)` — **the single builder**, shared with the
+/// worker's SW18 login nudge (wave 6, lane ops_alerts), so the `state` the worker mints is one
+/// the callback accepts: a fresh one-time `state`, registered in this process and — when
+/// `BASKFY_BROKER_OAUTH_STATE_PATH` is set — in the shared state file. Returns `(url, state)`.
+#[must_use]
+pub fn kite_login_url_for_worker(api_key: &str, user_id: i64) -> (String, String) {
+    writes::kite_login_url_default(api_key, user_id)
+}
+
 /// `_connect_configured`: key, secret, and a redirect that comes back to this deployment.
 fn connect_configured(state: &AppState) -> bool {
     if env_stripped("BASKFY_KITE_API_KEY").is_empty()

@@ -14,7 +14,7 @@ use axum::extract::{Extension, RawQuery, State};
 use axum::response::Response;
 use baskfy_db::{OrderedJson, row};
 use baskfy_providers::ports::ReferenceProvider;
-use baskfy_providers::publication::bhavcopy_publication_check;
+use baskfy_providers::publication::{PublicationCheck, bhavcopy_publication_check};
 use baskfy_providers::settings::get_provider_settings;
 use baskfy_providers::tokens::AccessTokenStore;
 use chrono::{DateTime, Datelike, Duration, FixedOffset, NaiveDate, NaiveTime, Utc};
@@ -307,10 +307,17 @@ fn kite_session_finding(
     }
 }
 
-/// `_wrong_holiday_findings(calendar, publication)`.
-async fn wrong_holiday_findings(
+/// `_wrong_holiday_findings(calendar, publication)`: `publication` is called only when the
+/// window holds a candidate (the API builds the provider stack then; the worker hands in the one
+/// it already holds).
+async fn wrong_holiday_findings<F, Fut>(
     calendar: &[(NaiveDate, bool, Option<String>)],
-) -> Result<(Vec<Finding>, Vec<String>), Problem> {
+    publication: F,
+) -> Result<(Vec<Finding>, Vec<String>), Problem>
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = Result<Option<PublicationCheck>, Problem>>,
+{
     let candidates: Vec<NaiveDate> = calendar
         .iter()
         .filter(|(day, is_open, name)| {
@@ -326,10 +333,7 @@ async fn wrong_holiday_findings(
     if candidates.is_empty() {
         return Ok((Vec::new(), Vec::new()));
     }
-    // `admin.publication_source()`: the provider stack, built only now that it is needed.
-    let stack = super::providers::production_stack().await?;
-    let reference: Arc<dyn ReferenceProvider> = stack;
-    let Some(published) = bhavcopy_publication_check(Some(reference)) else {
+    let Some(published) = publication().await? else {
         let named: Vec<String> = candidates
             .iter()
             .take(NAMED_IN_NOTE)
@@ -507,8 +511,71 @@ pub(crate) fn days_param(raw: Option<&str>) -> Result<i64, Problem> {
 /// 500.
 pub(crate) async fn build_plan(state: &AppState, days: i64) -> Result<ResyncPlanOut, Problem> {
     let now = utc_now().with_timezone(&ist());
-    let (start, end) = window_for(&state.settings.publish_deadline_ist, days, now);
-    let pool = state.db.pool();
+    let mut conn = state.db.pool().acquire().await.map_err(db)?;
+    let plan = inspect_pending(
+        &mut conn,
+        &state.settings.publish_deadline_ist,
+        days,
+        now,
+        || async {
+            // `admin.publication_source()`: the provider stack, built only now that it is needed.
+            let stack = super::providers::production_stack().await?;
+            let reference: Arc<dyn ReferenceProvider> = stack;
+            Ok(bhavcopy_publication_check(Some(reference)))
+        },
+    )
+    .await?;
+    drop(conn);
+    let last_resync = last_outcome(state).await?;
+    Ok(ResyncPlanOut {
+        window_start: plan.window_start,
+        window_end: plan.window_end,
+        trading_days_checked: plan.trading_days_checked,
+        pending: !plan.findings.is_empty(),
+        findings: plan.findings,
+        unresolved: plan.unresolved,
+        last_resync,
+    })
+}
+
+/// `ResyncPlan`: what one inspection found (the window, the findings sorted by date then kind,
+/// the questions it could not answer).
+#[derive(Debug, Clone)]
+pub struct InspectedPlan {
+    /// `window_start`.
+    pub window_start: NaiveDate,
+    /// `window_end`.
+    pub window_end: NaiveDate,
+    /// `trading_days_checked`.
+    pub trading_days_checked: i64,
+    /// `findings`, in Python's order.
+    pub findings: Vec<ResyncFindingOut>,
+    /// `unresolved`.
+    pub unresolved: Vec<String>,
+}
+
+/// `inspect_pending(session, settings=, publication=, now=, days=)` — **writes nothing**. Shared
+/// by `GET`/`POST /admin/resync` and the worker's `baskfy.ops.resync` (wave 6, lane api_routes),
+/// which inspects before and after its repairs exactly as Python's does. `deadline` is
+/// `Settings.publish_deadline_ist`; `publication` is called only when the window holds a weekday
+/// the calendar inferred to be a holiday.
+///
+/// # Errors
+/// 500 (the database, the provider settings), or `publication`'s own.
+pub async fn inspect_pending<F, Fut>(
+    conn: &mut sqlx::PgConnection,
+    deadline: &str,
+    days: i64,
+    now: DateTime<FixedOffset>,
+    publication: F,
+) -> Result<InspectedPlan, Problem>
+where
+    F: FnOnce() -> Fut,
+    Fut: std::future::Future<Output = Result<Option<PublicationCheck>, Problem>>,
+{
+    let now = now.with_timezone(&ist());
+    let (start, end) = window_for(deadline, days, now);
+    let pool = &mut *conn;
 
     let rows = sqlx::query(
         "SELECT date, is_trading_day, holiday_name FROM trading_day WHERE exchange_id = $1 \
@@ -517,7 +584,7 @@ pub(crate) async fn build_plan(state: &AppState, days: i64) -> Result<ResyncPlan
     .bind(NSE_EXCHANGE_ID)
     .bind(start)
     .bind(end)
-    .fetch_all(pool)
+    .fetch_all(&mut *pool)
     .await
     .map_err(db)?;
     let mut calendar = Vec::with_capacity(rows.len());
@@ -534,7 +601,7 @@ pub(crate) async fn build_plan(state: &AppState, days: i64) -> Result<ResyncPlan
     )
     .bind(start)
     .bind(end)
-    .fetch_all(pool)
+    .fetch_all(&mut *pool)
     .await
     .map_err(db)?
     .iter()
@@ -551,7 +618,7 @@ pub(crate) async fn build_plan(state: &AppState, days: i64) -> Result<ResyncPlan
     )
     .bind(start)
     .bind(end)
-    .fetch_all(pool)
+    .fetch_all(&mut *pool)
     .await
     .map_err(db)?
     .iter()
@@ -559,7 +626,7 @@ pub(crate) async fn build_plan(state: &AppState, days: i64) -> Result<ResyncPlan
     .collect::<Result<_, Problem>>()?;
     let history_start: Option<NaiveDate> =
         sqlx::query_scalar("SELECT min(trade_date) FROM pipeline_run")
-            .fetch_one(pool)
+            .fetch_one(&mut *pool)
             .await
             .map_err(db)?;
 
@@ -613,7 +680,8 @@ pub(crate) async fn build_plan(state: &AppState, days: i64) -> Result<ResyncPlan
             expected_bars: Some(decimal_int(med)),
         });
     }
-    let (holiday_findings, holiday_unresolved) = wrong_holiday_findings(&calendar).await?;
+    let (holiday_findings, holiday_unresolved) =
+        wrong_holiday_findings(&calendar, publication).await?;
     findings.extend(holiday_findings);
     unresolved.extend(holiday_unresolved);
     let (kite_finding, kite_unresolved) = kite_session_finding(now)?;
@@ -623,7 +691,6 @@ pub(crate) async fn build_plan(state: &AppState, days: i64) -> Result<ResyncPlan
         (a.trade_date.unwrap_or(NaiveDate::MAX), a.kind)
             .cmp(&(b.trade_date.unwrap_or(NaiveDate::MAX), b.kind))
     });
-    let last_resync = last_outcome(state).await?;
     let findings: Vec<ResyncFindingOut> = findings
         .into_iter()
         .map(|f| ResyncFindingOut {
@@ -635,14 +702,12 @@ pub(crate) async fn build_plan(state: &AppState, days: i64) -> Result<ResyncPlan
             expected_bars: f.expected_bars,
         })
         .collect();
-    Ok(ResyncPlanOut {
+    Ok(InspectedPlan {
         window_start: start,
         window_end: end,
         trading_days_checked: i64::try_from(open_days.len()).unwrap_or(i64::MAX),
-        pending: !findings.is_empty(),
         findings,
         unresolved,
-        last_resync,
     })
 }
 

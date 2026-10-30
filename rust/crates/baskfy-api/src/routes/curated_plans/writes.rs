@@ -7,11 +7,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use axum::extract::Request;
 use axum::response::Response;
 use baskfy_core::decimal::WideDecimal;
+use baskfy_db::OrderedJson;
 use chrono::{DateTime, FixedOffset, NaiveDate, TimeDelta};
-use serde::Serialize;
+use num_bigint::BigInt;
+use serde::{Serialize, Serializer};
 
 use super::core::{self, Plan};
+use crate::body::Received;
 use crate::problems::{Problem, ProblemType, internal_error, pipeline_degraded};
+use crate::routes::common::lax_int;
 use crate::routes::screens::body_model::{self, Errors, Model, Ty, V, opt, req};
 use crate::routes::screens::write_kit::{self, db};
 use crate::state::AppState;
@@ -58,12 +62,66 @@ pub(crate) fn decimals(v: &V) -> BTreeMap<String, WideDecimal> {
         .collect()
 }
 
-/// A validated `dict[str, int]`.
-pub(crate) fn ints(v: &V) -> BTreeMap<String, i128> {
+/// The raw JSON a body carried for one top-level field (a repeated key already kept its last
+/// value when the body was read).
+pub(crate) fn raw_field<'a>(received: &'a Received, name: &str) -> Option<&'a OrderedJson> {
+    match received {
+        Received::Json(OrderedJson::Object(entries)) => entries
+            .iter()
+            .rev()
+            .find(|(k, _)| k == name)
+            .map(|(_, v)| v),
+        _ => None,
+    }
+}
+
+/// The exact `int` pydantic's lax mode builds from one JSON value already validated as an `int`
+/// (`V::Int` saturates beyond `i128`; Python's int does not — R7.15, R8.ar1).
+fn exact_int(raw: &OrderedJson) -> Option<BigInt> {
+    match raw {
+        OrderedJson::Bool(b) => Some(BigInt::from(u8::from(*b))),
+        OrderedJson::Int(i) => Some(BigInt::from(*i)),
+        OrderedJson::UInt(u) => Some(BigInt::from(*u)),
+        OrderedJson::BigInt(text) => text.parse().ok(),
+        // An integral finite float (validation refused the rest): `int(f)`, exactly.
+        OrderedJson::Float(f) => format!("{f:.0}").parse().ok(),
+        OrderedJson::Str(s) => lax_int(s).and_then(|p| p.canonical.parse().ok()),
+        _ => None,
+    }
+}
+
+/// A validated `dict[str, int]`, every value Python's exact `int` (read back from `raw`, the
+/// field's JSON object; the validated `i128` when `raw` has no such key).
+pub(crate) fn ints(v: &V, raw: Option<&OrderedJson>) -> BTreeMap<String, BigInt> {
+    let raw_entries: &[(String, OrderedJson)] = match raw {
+        Some(OrderedJson::Object(entries)) => entries,
+        _ => &[],
+    };
     v.entries()
         .iter()
-        .filter_map(|(k, x)| x.int().map(|n| (k.clone(), n)))
+        .filter_map(|(k, x)| {
+            let exact = raw_entries
+                .iter()
+                .rev()
+                .find(|(rk, _)| rk == k)
+                .and_then(|(_, rv)| exact_int(rv));
+            exact
+                .or_else(|| x.int().map(BigInt::from))
+                .map(|n| (k.clone(), n))
+        })
         .collect()
+}
+
+/// A Python `int` on the wire: a JSON integer literal of any size.
+#[derive(Debug, Clone)]
+pub(crate) struct PyIntOut(pub(crate) BigInt);
+
+impl Serialize for PyIntOut {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let raw = serde_json::value::RawValue::from_string(self.0.to_string())
+            .map_err(serde::ser::Error::custom)?;
+        raw.serialize(serializer)
+    }
 }
 
 /// `PlanLegOut`.
@@ -71,7 +129,7 @@ pub(crate) fn ints(v: &V) -> BTreeMap<String, i128> {
 pub(crate) struct LegOut {
     symbol: String,
     side: &'static str,
-    quantity: i128,
+    quantity: PyIntOut,
     ref_price: String,
 }
 
@@ -82,7 +140,7 @@ pub(crate) fn legs_out(plan: &Plan) -> Vec<LegOut> {
         .map(|l| LegOut {
             symbol: l.symbol.clone(),
             side: l.side,
-            quantity: l.quantity,
+            quantity: PyIntOut(l.quantity.clone()),
             ref_price: l.ref_price.to_sci_string(),
         })
         .collect()
@@ -182,11 +240,16 @@ fn preview(plan: &Plan) -> Response {
 
 /// Reads and validates a body (no dependencies run before it: the routes take no principal).
 async fn validated(request: Request, model: &Model) -> Result<V, Problem> {
+    validated_with_raw(request, model).await.map(|(v, _)| v)
+}
+
+/// [`validated`], keeping the body as received (the exact ints are read back from it).
+async fn validated_with_raw(request: Request, model: &Model) -> Result<(V, Received), Problem> {
     let received = write_kit::read(request).await?;
     let mut e = Errors::new();
     let body = body_model::body(&mut e, &received, model, true);
     e.finish()?;
-    body.ok_or_else(internal_error)
+    Ok((body.ok_or_else(internal_error)?, received))
 }
 
 /// `POST /cb/plans/invest` (`plan_invest`).
@@ -241,7 +304,7 @@ pub async fn plan_apply(
         ],
         forbid_extra: false,
     };
-    let body = validated(request, &model).await?;
+    let (body, received) = validated_with_raw(request, &model).await?;
     if let Some(closed) = hours_or_closed(&state).await? {
         return Ok(closed);
     }
@@ -251,7 +314,7 @@ pub async fn plan_apply(
         .cloned()
         .ok_or_else(internal_error)?;
     let plan = core::build_apply_plan(
-        &ints(body.get("holdings")),
+        &ints(body.get("holdings"), raw_field(&received, "holdings")),
         &decimals(body.get("target_weights")),
         &decimals(body.get("prices")),
         &amount,
@@ -284,12 +347,12 @@ pub async fn plan_exit(
         ],
         forbid_extra: false,
     };
-    let body = validated(request, &model).await?;
+    let (body, received) = validated_with_raw(request, &model).await?;
     if let Some(closed) = hours_or_closed(&state).await? {
         return Ok(closed);
     }
     let plan = core::build_exit_plan(
-        &ints(body.get("holdings")),
+        &ints(body.get("holdings"), raw_field(&received, "holdings")),
         &decimals(body.get("prices")),
         now_ist(),
         body.get("requested_amount").dec().cloned(),

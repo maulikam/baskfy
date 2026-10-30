@@ -25,7 +25,7 @@
 
 mod adjust;
 mod adjustments;
-mod bars;
+pub(crate) mod bars;
 mod calendar;
 mod corporate_actions;
 mod frame;

@@ -1,23 +1,40 @@
 //! `index_repair` (SW16): re-fetch a window of index levels from NSE through step 6's guarded writer.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::Arc;
+use std::future::Future;
+use std::pin::Pin;
 
-use baskfy_db::{OrderedJson, WriteDb};
+use baskfy_db::WriteDb;
+use baskfy_providers::ProviderError;
 use baskfy_providers::nse::NseProvider;
 use baskfy_providers::records::IndexSnapshot;
 use chrono::{Days, NaiveDate};
 use rust_decimal::Decimal;
 use sqlx::PgConnection;
 
-use super::common::{Canned, canned, described, iso, slugify_index, trading_days_in};
-use crate::deps::PipelineDependencies;
+use super::common::{described, iso, trading_days_in};
 use crate::error::WorkerError;
-use crate::steps::StepOutcome;
-use crate::steps::index::refresh_index_snapshots;
+use crate::steps::index::snapshots::{GUARD_LOOKBACK_DAYS, SnapshotResult, store_snapshots};
+use crate::steps::index::universes::slugify_index;
 use crate::window::DateWindow;
 
-const GUARD_LOOKBACK_DAYS: u64 = 14;
+/// The one provider method the repair needs: NSE in production, a stub in tests.
+pub trait SnapshotSource: Sync {
+    /// `index_snapshots(on)`.
+    fn index_snapshots(
+        &self,
+        on: NaiveDate,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<IndexSnapshot>, ProviderError>> + Send + '_>>;
+}
+
+impl SnapshotSource for NseProvider {
+    fn index_snapshots(
+        &self,
+        on: NaiveDate,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<IndexSnapshot>, ProviderError>> + Send + '_>> {
+        Box::pin(Self::index_snapshots(self, on))
+    }
+}
 
 fn reported_slugs() -> BTreeSet<String> {
     baskfy_providers::nse::INDEX_SLUG_TO_NSE_NAME
@@ -26,12 +43,17 @@ fn reported_slugs() -> BTreeSet<String> {
         .collect()
 }
 
-#[derive(Debug, Clone)]
-pub(super) struct DayChange {
-    day: NaiveDate,
-    slug: String,
-    before: Option<Decimal>,
-    after: Option<Decimal>,
+/// `DayChange`: one reported slug's level before and after one day's rewrite.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DayChange {
+    /// The session.
+    pub day: NaiveDate,
+    /// The `index_def` slug.
+    pub slug: String,
+    /// The stored level before.
+    pub before: Option<Decimal>,
+    /// The stored level after.
+    pub after: Option<Decimal>,
 }
 
 fn show(level: Option<Decimal>) -> String {
@@ -39,7 +61,9 @@ fn show(level: Option<Decimal>) -> String {
 }
 
 impl DayChange {
-    fn line(&self) -> String {
+    /// `line()`.
+    #[must_use]
+    pub fn line(&self) -> String {
         let mark = if self.before == self.after { "=" } else { "->" };
         format!(
             "{} {}: {} {mark} {}",
@@ -51,24 +75,37 @@ impl DayChange {
     }
 }
 
+/// `RepairReport`.
 #[derive(Debug)]
-pub(super) struct Report {
-    window: DateWindow,
-    trading_days: usize,
-    days_done: usize,
-    rows_written: i64,
-    changes: Vec<DayChange>,
-    refused: Vec<String>,
-    failures: Vec<(String, String)>,
-    anchors: BTreeMap<String, String>,
+pub struct Report {
+    /// The window asked for.
+    pub window: DateWindow,
+    /// Trading days in it.
+    pub trading_days: usize,
+    /// Days rewritten (or rolled back, in a dry run).
+    pub days_done: usize,
+    /// Rows the writer wrote.
+    pub rows_written: i64,
+    /// Reported slugs' before/after, per day.
+    pub changes: Vec<DayChange>,
+    /// The guard's refusals, each named.
+    pub refused: Vec<String>,
+    /// Day to its failure, in order.
+    pub failures: Vec<(String, String)>,
+    /// Slug to the level day one is judged against.
+    pub anchors: BTreeMap<String, String>,
 }
 
 impl Report {
-    pub(super) fn succeeded(&self) -> bool {
+    /// `succeeded`: no failed day, and at least one trading day.
+    #[must_use]
+    pub fn succeeded(&self) -> bool {
         self.failures.is_empty() && self.trading_days > 0
     }
 
-    fn rewritten(&self) -> usize {
+    /// `rewritten()`: reported levels that changed.
+    #[must_use]
+    pub fn rewritten(&self) -> usize {
         self.changes.iter().filter(|c| c.before != c.after).count()
     }
 }
@@ -127,59 +164,27 @@ fn select(snapshots: Vec<IndexSnapshot>, wanted: Option<&BTreeSet<String>>) -> V
     }
 }
 
-fn refused_of(step: &StepOutcome) -> Vec<String> {
-    step.detail
-        .iter()
-        .find(|(k, _)| k == "refused")
-        .map(|(_, v)| match v {
-            OrderedJson::Array(items) => items
-                .iter()
-                .filter_map(|i| match i {
-                    OrderedJson::Str(s) => Some(s.clone()),
-                    _ => None,
-                })
-                .collect(),
-            _ => Vec::new(),
-        })
-        .unwrap_or_default()
-}
-
-struct DayResult {
-    rows_written: i64,
-    refused: Vec<String>,
-    before: BTreeMap<String, Option<Decimal>>,
-    after: BTreeMap<String, Option<Decimal>>,
-}
+type Levels = BTreeMap<String, Option<Decimal>>;
 
 async fn repair_day(
     db: &WriteDb,
     day: NaiveDate,
-    snapshots: Vec<IndexSnapshot>,
+    snapshots: &[IndexSnapshot],
     reported: &[String],
     dry_run: bool,
-) -> Result<DayResult, WorkerError> {
-    let deps = PipelineDependencies::new(Arc::new(canned(Canned {
-        bhavcopy: None,
-        snapshots,
-    })?));
+) -> Result<(SnapshotResult, Levels, Levels), WorkerError> {
     let mut tx = db.begin().await?;
     let attempt = async {
         let before = levels(&mut tx, day, reported).await?;
-        let mut step = StepOutcome::default();
-        refresh_index_snapshots(&mut tx, &deps, &mut step, day).await?;
+        let result = store_snapshots(&mut tx, day, snapshots).await?;
         let after = levels(&mut tx, day, reported).await?;
-        Ok::<_, WorkerError>(DayResult {
-            rows_written: step.rows_out,
-            refused: refused_of(&step),
-            before,
-            after,
-        })
+        Ok::<_, WorkerError>((result, before, after))
     }
     .await;
     match attempt {
-        Ok(result) if !dry_run => {
+        Ok(done) if !dry_run => {
             tx.commit().await?;
-            Ok(result)
+            Ok(done)
         }
         other => {
             tx.rollback().await?;
@@ -188,14 +193,20 @@ async fn repair_day(
     }
 }
 
-pub(super) async fn repair_index_snapshots(
+/// `repair_index_snapshots(provider, window, slugs=, dry_run=)`: ascending, a transaction per day.
+///
+/// # Errors
+/// The database's, and a non-provider error from the source.
+pub async fn repair_index_snapshots(
     db: &WriteDb,
-    provider: &NseProvider,
+    provider: &dyn SnapshotSource,
     window: DateWindow,
     slugs: Option<&[String]>,
     dry_run: bool,
 ) -> Result<Report, WorkerError> {
-    let wanted: Option<BTreeSet<String>> = slugs.map(|s| s.iter().cloned().collect());
+    let wanted: Option<BTreeSet<String>> = slugs
+        .filter(|s| !s.is_empty())
+        .map(|s| s.iter().cloned().collect());
     let reported: Vec<String> = wanted
         .clone()
         .unwrap_or_else(reported_slugs)
@@ -233,23 +244,24 @@ pub(super) async fn repair_index_snapshots(
             ));
             continue;
         }
-        let result = match repair_day(db, day, snapshots, &reported, dry_run).await {
-            Ok(r) => r,
-            Err(e) => {
-                report.failures.push((iso(day), described(&e)));
-                continue;
-            }
-        };
+        let (result, before, after) =
+            match repair_day(db, day, &snapshots, &reported, dry_run).await {
+                Ok(r) => r,
+                Err(e) => {
+                    report.failures.push((iso(day), described(&e)));
+                    continue;
+                }
+            };
         report.days_done += 1;
         report.rows_written += result.rows_written;
         report.refused.extend(result.refused);
         for slug in &reported {
-            if result.before.contains_key(slug) || result.after.contains_key(slug) {
+            if before.contains_key(slug) || after.contains_key(slug) {
                 report.changes.push(DayChange {
                     day,
                     slug: slug.clone(),
-                    before: result.before.get(slug).copied().flatten(),
-                    after: result.after.get(slug).copied().flatten(),
+                    before: before.get(slug).copied().flatten(),
+                    after: after.get(slug).copied().flatten(),
                 });
             }
         }
@@ -257,7 +269,9 @@ pub(super) async fn repair_index_snapshots(
     Ok(report)
 }
 
-pub(super) fn format_report(report: &Report) -> String {
+/// `format_report(report)`.
+#[must_use]
+pub fn format_report(report: &Report) -> String {
     let mut lines = vec![format!(
         "{} trading day(s) in {}; {} repaired; {} row(s) written; {} reported level(s) changed; \
          {} refused; {} day(s) failed",

@@ -6,21 +6,20 @@ use baskfy_db::WriteDb;
 use baskfy_providers::composite::CompositeProvider;
 use chrono::{Duration, NaiveDate};
 use polars::prelude::DataFrame;
-use rust_decimal::Decimal;
 use sqlx::PgConnection;
 use tokio::task::JoinSet;
 
-use super::common::{date_at, decimal_at, int_at, text_at};
 use crate::error::WorkerError;
+use crate::steps::ingest::bars::{kite_rows, upsert_kite_rows};
 use crate::window::DateWindow;
 
-pub(super) const DEFAULT_CHUNK_DAYS: i64 = 2000;
+/// docs/09: at most 2,000-day slices per instrument.
+pub const DEFAULT_CHUNK_DAYS: i64 = 2000;
 const KIND_BARS: &str = "bars";
 const PENDING: &str = "pending";
 const RUNNING: &str = "running";
 const DONE: &str = "done";
 const FAILED: &str = "failed";
-const UPSERT_CHUNK: usize = 2000;
 
 #[derive(Debug, Clone)]
 struct Unit {
@@ -30,14 +29,21 @@ struct Unit {
     window: DateWindow,
 }
 
+/// `BackfillReport`.
 #[derive(Debug, Default)]
-pub(super) struct Report {
-    pub(super) planned: usize,
-    pub(super) already_done: i64,
-    pub(super) completed: usize,
-    pub(super) failed: usize,
-    pub(super) rows_written: i64,
-    pub(super) errors: Vec<String>,
+pub struct Report {
+    /// Cursor rows offered by the plan.
+    pub planned: usize,
+    /// Units already `done` before this run.
+    pub already_done: i64,
+    /// Units completed by this run.
+    pub completed: usize,
+    /// Units that failed in this run.
+    pub failed: usize,
+    /// Bar rows offered to the upsert.
+    pub rows_written: i64,
+    /// `"{symbol} {window}: {error}"` per failed unit.
+    pub errors: Vec<String>,
 }
 
 fn chunk_windows(window: DateWindow, chunk_days: i64) -> Result<Vec<DateWindow>, WorkerError> {
@@ -193,70 +199,26 @@ async fn mark(
     Ok(())
 }
 
-async fn upsert_bars(
-    conn: &mut PgConnection,
-    instrument_id: i64,
-    frame: &DataFrame,
-) -> Result<i64, WorkerError> {
-    let n = frame.height();
-    if n == 0 {
-        return Ok(0);
-    }
-    let mut dates = Vec::with_capacity(n);
-    let mut prices: [Vec<Option<Decimal>>; 4] = Default::default();
-    let mut volume = Vec::with_capacity(n);
-    let mut source = Vec::with_capacity(n);
-    for i in 0..n {
-        dates.push(date_at(frame, "date", i)?);
-        for (k, col) in ["open", "high", "low", "close"].iter().enumerate() {
-            prices[k].push(decimal_at(frame, col, i)?);
-        }
-        volume.push(int_at(frame, "volume", i)?);
-        source.push(text_at(frame, "source", i)?);
-    }
-    let mut written = 0;
-    for at in (0..n).step_by(UPSERT_CHUNK) {
-        let to = (at + UPSERT_CHUNK).min(n);
-        sqlx::query(
-            "INSERT INTO ohlcv_daily (instrument_id, date, open, high, low, close, volume, \
-             close_raw, volume_raw, open_raw, high_raw, low_raw, adj_factor, source) \
-             SELECT $1, u.date, u.open, u.high, u.low, u.close, u.volume, u.close, u.volume, \
-             u.open, u.high, u.low, 1, u.source \
-             FROM UNNEST($2::date[], $3::numeric[], $4::numeric[], $5::numeric[], \
-             $6::numeric[], $7::int8[], $8::varchar[]) \
-             AS u(date, open, high, low, close, volume, source) \
-             ON CONFLICT (instrument_id, date) DO UPDATE SET \
-             open = CASE WHEN (ohlcv_daily.adj_factor != 1) THEN ohlcv_daily.open ELSE excluded.open END, \
-             high = CASE WHEN (ohlcv_daily.adj_factor != 1) THEN ohlcv_daily.high ELSE excluded.high END, \
-             low = CASE WHEN (ohlcv_daily.adj_factor != 1) THEN ohlcv_daily.low ELSE excluded.low END, \
-             close_raw = excluded.close_raw, volume_raw = excluded.volume_raw, \
-             open_raw = excluded.open_raw, high_raw = excluded.high_raw, \
-             low_raw = excluded.low_raw, source = excluded.source",
-        )
-        .bind(instrument_id)
-        .bind(&dates[at..to])
-        .bind(&prices[0][at..to])
-        .bind(&prices[1][at..to])
-        .bind(&prices[2][at..to])
-        .bind(&prices[3][at..to])
-        .bind(&volume[at..to])
-        .bind(&source[at..to])
-        .execute(&mut *conn)
-        .await?;
-        written += i64::try_from(to - at).unwrap_or(i64::MAX);
-    }
-    Ok(written)
+/// `run_backfill`'s keyword arguments.
+#[derive(Debug, Clone, Copy)]
+pub struct Options<'a> {
+    /// Symbols to plan, or every listed instrument.
+    pub symbols: Option<&'a [String]>,
+    /// Fetches in flight at once.
+    pub concurrency: usize,
+    /// Skip `done` units.
+    pub resume: bool,
+    /// Days per cursor.
+    pub chunk_days: i64,
+    /// Stop starting units after this many complete (a kill, for tests).
+    pub stop_after: Option<usize>,
 }
 
-pub(super) struct Options<'a> {
-    pub(super) symbols: Option<&'a [String]>,
-    pub(super) concurrency: usize,
-    pub(super) resume: bool,
-    pub(super) chunk_days: i64,
-    pub(super) stop_after: Option<usize>,
-}
-
-pub(super) async fn run_backfill(
+/// `run_backfill(provider, window, ...)`: plan, then every outstanding unit, a transaction each.
+///
+/// # Errors
+/// The database's, and a non-provider error from a fetch.
+pub async fn run_backfill(
     db: &WriteDb,
     provider: Arc<CompositeProvider>,
     window: DateWindow,
@@ -307,7 +269,8 @@ pub(super) async fn run_backfill(
             match fetched {
                 Ok(frame) => {
                     let mut tx = db.begin().await?;
-                    let written = upsert_bars(&mut tx, unit.instrument_id, &frame).await?;
+                    let rows = kite_rows(unit.instrument_id, &frame)?;
+                    let written = upsert_kite_rows(&mut tx, &rows).await?;
                     mark_on(&mut tx, unit, DONE, Some(written), None, false).await?;
                     tx.commit().await?;
                     report.rows_written += written;

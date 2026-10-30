@@ -14,8 +14,8 @@
 
 mod fundamentals;
 mod membership;
-mod snapshots;
-mod universes;
+pub(crate) mod snapshots;
+pub(crate) mod universes;
 
 #[cfg(test)]
 mod db_tests;

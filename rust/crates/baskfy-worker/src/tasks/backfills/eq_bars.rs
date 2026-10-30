@@ -1,9 +1,12 @@
 //! `eq_bars` (LV5): one-minute bars for the swing book's liquid universe into `eq_minute_bar`.
 
 use std::collections::BTreeMap;
+use std::future::Future;
+use std::pin::Pin;
 use std::time::Instant;
 
 use baskfy_db::{OrderedJson, WriteDb};
+use baskfy_providers::ProviderError;
 use baskfy_providers::kite::{KiteProvider, MINUTE_MAX_DAYS_PER_REQUEST, MinuteBound};
 use baskfy_providers::records::MinuteBarRecord;
 use baskfy_providers::tokens::ist;
@@ -15,15 +18,11 @@ use super::common::{cent, count, iso};
 use crate::error::WorkerError;
 use crate::pyjson::{object, s};
 use crate::steps::log_warning;
-use crate::steps::sleeves::for_swing_live::{
-    config_row, dates, day_number, floats, ints, is_liquid, load_swing_bars, lookback_start,
-    strings, swing_config,
-};
+use crate::tasks::swing_live::scan::{liquid_universe, load_swing_config};
 
 const SOURCE_KITE: &str = "KITE_HIST";
 const UPSERT_CHUNK: usize = 2000;
 const CHECKPOINT_EVERY_NAMES: usize = 25;
-const LOOKBACK_SESSIONS: i64 = 200;
 
 /// One liquid name: our id, its symbol and Kite's token.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -74,6 +73,29 @@ impl BarsReport {
     }
 }
 
+/// Python's `BarReader`: one-minute bars for a token over `[lo, hi]`.
+pub trait MinuteReader: Sync {
+    /// `minute_bars(token, start, end)`.
+    fn minute_bars(
+        &self,
+        token: i64,
+        lo: MinuteBound,
+        hi: MinuteBound,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<MinuteBarRecord>, ProviderError>> + Send + '_>>;
+}
+
+impl MinuteReader for KiteProvider {
+    fn minute_bars(
+        &self,
+        token: i64,
+        lo: MinuteBound,
+        hi: MinuteBound,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<MinuteBarRecord>, ProviderError>> + Send + '_>>
+    {
+        Box::pin(Self::minute_bars(self, token, lo, hi))
+    }
+}
+
 fn ist_at(day: NaiveDate, at: NaiveTime) -> Result<DateTime<FixedOffset>, WorkerError> {
     day.and_time(at)
         .and_local_timezone(ist())
@@ -88,7 +110,9 @@ fn session_bounds(
     Ok((ist_at(day, at(9, 15))?, ist_at(day, at(15, 30))?))
 }
 
-fn closed_bars(bars: Vec<MinuteBarRecord>, now: DateTime<FixedOffset>) -> Vec<MinuteBarRecord> {
+/// `closed_bars(bars, now)`: only the minutes finished by `now`.
+#[must_use]
+pub fn closed_bars(bars: Vec<MinuteBarRecord>, now: DateTime<FixedOffset>) -> Vec<MinuteBarRecord> {
     bars.into_iter()
         .filter(|b| {
             b.ts.aware()
@@ -97,7 +121,24 @@ fn closed_bars(bars: Vec<MinuteBarRecord>, now: DateTime<FixedOffset>) -> Vec<Mi
         .collect()
 }
 
-fn day_windows(start: NaiveDate, end: NaiveDate) -> Vec<(NaiveDate, NaiveDate)> {
+fn inverted(start: NaiveDate, end: NaiveDate) -> WorkerError {
+    WorkerError::python(
+        "ValueError",
+        format!("end {} precedes start {}", iso(end), iso(start)),
+    )
+}
+
+/// `day_windows(start, end)`: Kite's 60-day minute windows, inclusive both ends.
+///
+/// # Errors
+/// `ValueError` when `end` precedes `start`.
+pub fn day_windows(
+    start: NaiveDate,
+    end: NaiveDate,
+) -> Result<Vec<(NaiveDate, NaiveDate)>, WorkerError> {
+    if end < start {
+        return Err(inverted(start, end));
+    }
     let span = Duration::days(MINUTE_MAX_DAYS_PER_REQUEST - 1);
     let mut out = Vec::new();
     let mut cursor = start;
@@ -106,75 +147,51 @@ fn day_windows(start: NaiveDate, end: NaiveDate) -> Vec<(NaiveDate, NaiveDate)> 
         out.push((cursor, chunk_end));
         cursor = chunk_end + Duration::days(1);
     }
-    out
+    Ok(out)
 }
 
-/// `liquid_names(session, as_of=, user_id=)`: the swing book's `liquid_universe` over the user's
+/// `liquid_names(session, as_of=, user_id=)`: the swing book's liquid universe with Kite tokens.
+///
+/// # Errors
+/// The database's and the indicator computation's.
 pub async fn liquid_names(
     conn: &mut PgConnection,
     as_of: NaiveDate,
     user_id: i64,
 ) -> Result<Vec<EqName>, WorkerError> {
-    let config = swing_config(config_row(conn, user_id).await?.as_ref());
-    let start = lookback_start(conn, as_of, LOOKBACK_SESSIONS).await?;
-    let bars = load_swing_bars(conn, start, as_of).await?;
-    if bars.height() == 0 {
+    let config = load_swing_config(conn, user_id).await?;
+    let universe = liquid_universe(conn, as_of, &config).await?;
+    if universe.is_empty() {
         return Ok(Vec::new());
     }
-    let frame = baskfy_core::swing::setups::with_swing_indicators(&bars, &config)
-        .map_err(|e| WorkerError::python("ComputeError", e.to_string()))?;
-    let ids = ints(&frame, "instrument_id")?;
-    let symbols = strings(&frame, "symbol")?;
-    let vol = floats(&frame, "vol_avg_rvol")?;
-    let close = floats(&frame, "close")?;
-    let day = dates(&frame, "date")?;
-    let adr = floats(&frame, "adr_pct")?;
-    let turnover = floats(&frame, "turnover_avg")?;
-    let mut last: BTreeMap<i64, usize> = BTreeMap::new();
-    let mut order = Vec::new();
-    for (i, id) in ids.iter().enumerate() {
-        let Some(id) = *id else { continue };
-        if last.insert(id, i).is_none() {
-            order.push(id);
-        }
-    }
-    let as_of_day = day_number(as_of);
-    let mut picked: Vec<(String, i64)> = Vec::new();
-    for id in order {
-        let Some(&i) = last.get(&id) else { continue };
-        if !is_liquid(adr[i], turnover[i], close[i], &config.liquidity)
-            || day[i] != Some(as_of_day)
-            || vol[i].is_none()
-            || close[i].is_none()
-        {
-            continue;
-        }
-        picked.push((symbols[i].clone().unwrap_or_default(), id));
-    }
-    picked.sort_by(|a, b| a.0.cmp(&b.0));
-    if picked.is_empty() {
-        return Ok(Vec::new());
-    }
-    let wanted: Vec<i64> = picked.iter().map(|(_, id)| *id).collect();
+    let ids: Vec<i64> = universe.iter().map(|n| n.instrument_id).collect();
     let rows: Vec<(i64, Option<i64>)> =
         sqlx::query_as("SELECT id, kite_token FROM instrument WHERE id = ANY($1)")
-            .bind(&wanted)
+            .bind(&ids)
             .fetch_all(&mut *conn)
             .await?;
     let tokens: BTreeMap<i64, Option<i64>> = rows.into_iter().collect();
-    Ok(picked
+    Ok(universe
         .into_iter()
-        .filter_map(|(symbol, id)| {
-            tokens.get(&id).copied().flatten().map(|kite_token| EqName {
-                instrument_id: id,
-                symbol,
-                kite_token,
-            })
+        .filter_map(|name| {
+            tokens
+                .get(&name.instrument_id)
+                .copied()
+                .flatten()
+                .map(|kite_token| EqName {
+                    instrument_id: name.instrument_id,
+                    symbol: name.symbol,
+                    kite_token,
+                })
         })
         .collect())
 }
 
-async fn upsert_bars(
+/// `upsert_bars(session, instrument_id, bars)`: the rows sent; high below low is dropped.
+///
+/// # Errors
+/// The database's.
+pub async fn upsert_bars(
     conn: &mut PgConnection,
     instrument_id: i64,
     bars: Vec<MinuteBarRecord>,
@@ -245,14 +262,14 @@ async fn latest_ts(
     Ok(value.map(|v| v.with_timezone(&ist())))
 }
 
-fn skipped(e: &baskfy_providers::ProviderError) -> String {
+fn skipped(e: &ProviderError) -> String {
     format!("{}: {e}", e.python_type())
 }
 
 /// `reconcile_session(session, reader, day, now=, names=, checkpoint=session.commit)` under
 pub async fn reconcile_session(
     db: &WriteDb,
-    reader: &KiteProvider,
+    reader: &dyn MinuteReader,
     day: NaiveDate,
     now: DateTime<FixedOffset>,
     names: &[EqName],
@@ -293,17 +310,14 @@ pub async fn reconcile_session(
 /// `backfill(session, reader, start, end, now=, names=, checkpoint=session.commit)`: per name,
 pub async fn backfill(
     db: &WriteDb,
-    reader: &KiteProvider,
+    reader: &dyn MinuteReader,
     start: NaiveDate,
     end: NaiveDate,
     now: DateTime<FixedOffset>,
     names: &[EqName],
 ) -> Result<BarsReport, WorkerError> {
     if end < start {
-        return Err(WorkerError::python(
-            "ValueError",
-            format!("end {} precedes start {}", iso(end), iso(start)),
-        ));
+        return Err(inverted(start, end));
     }
     let started = Instant::now();
     let mut report = BarsReport {
@@ -323,7 +337,7 @@ pub async fn backfill(
         if last.is_some() {
             report.resumed_from.push((name.symbol.clone(), iso(resume)));
         }
-        for (w_lo, w_hi) in day_windows(resume, end) {
+        for (w_lo, w_hi) in day_windows(resume, end)? {
             match reader
                 .minute_bars(
                     name.kite_token,

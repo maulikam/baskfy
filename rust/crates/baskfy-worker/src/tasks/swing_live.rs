@@ -30,7 +30,7 @@ mod probe;
 pub mod producer;
 pub mod published_session;
 mod quotes;
-mod scan;
+pub(crate) mod scan;
 
 use std::path::PathBuf;
 

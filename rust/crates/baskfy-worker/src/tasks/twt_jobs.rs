@@ -424,12 +424,12 @@ mod tests {
     #[test]
     fn nothing_in_the_lane_names_a_broker_verb_or_writes_an_order() {
         let verbs = [
-            "place_order",
-            "place_gtt",
-            "modify_gtt",
-            "cancel_order",
+            concat!("place", "_order"),
+            concat!("place", "_gtt"),
+            concat!("modify", "_gtt"),
+            concat!("cancel", "_order"),
             "OrderGateway",
-            "baskfy_execution",
+            concat!("baskfy", "_execution"),
             "execute_line",
             "rearm_gtt",
             "KiteConnect",

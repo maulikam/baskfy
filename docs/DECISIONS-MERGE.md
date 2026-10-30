@@ -8533,3 +8533,18 @@ here in mac tonight"*.
 - **Not yet done:** `terraform destroy`, emptying `baskfy-archive` and ECR, deleting the SES SMTP
   user — after Maulik's go-ahead. `baskfy.com`'s nameservers point at Route 53
   (`aws-metadata/route53-nameservers.txt`); the zone holds only the two staging A records.
+
+## LOCAL-1 — DRY_RUN off for the API container only on the Mac (30 Oct 2026, Maulik's choice in session)
+
+**Context.** `tools/deploy/local.sh` forced `DRY_RUN=true` in every service. The API reads `DRY_RUN`
+as "never call Kite" (`broker_oauth.simulated_exchange_reasons`, `broker_holdings`,
+`broker_trades`), so the Zerodha login's `request_token` exchange answered 503 and holdings/trades
+read nothing. Asked, Maulik chose "API only: DRY_RUN off".
+**Choice.** `compose.local.yml` sets `DRY_RUN=false` on the `api` service alone. The API has no
+order, GTT or Kite write call (no `place_order`, no `baskfy_execution` gateway use); the desk,
+monitors, workers and `twt-auto` keep `DRY_RUN=true`; every execute/auto flag stays false; the
+Kite app has no registered static IP, so Kite refuses API orders regardless.
+**Rejected.** A separate read-only broker switch (cleaner, but a code change and an image rebuild);
+staying unconnected (no holdings, no live marks).
+**Reverse.** Delete `environment: {DRY_RUN: "false"}` from the `api` line in `local.sh` and
+`/Volumes/T7-Work/baskfy-local/compose.local.yml`, then recreate `api`.

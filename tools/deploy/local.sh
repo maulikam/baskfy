@@ -86,7 +86,10 @@ services:
   caddy: {ports: !override ["127.0.0.1:8480:80"]}
   # The web service takes no env_file, so the local sign-in account is named here, for it alone.
   web:           {environment: {BASKFY_LOCAL_SIGNIN_PUBLIC_ID: "\${BASKFY_LOCAL_SIGNIN_PUBLIC_ID:-}"}}
-  api:           {volumes: ["$HOME_DIR/box/secrets/ssh:/var/lib/baskfy/.ssh:ro"]}
+  # Maulik, 30 Oct 2026: DRY_RUN off for the API alone, so the Kite login exchange and the holdings/
+  # trades reads work. The API has no order path; every other service keeps DRY_RUN=true and every
+  # execute/auto flag stays false; with no registered static IP Kite refuses API orders anyway.
+  api:           {environment: {DRY_RUN: "false"}, volumes: ["$HOME_DIR/box/secrets/ssh:/var/lib/baskfy/.ssh:ro"]}
   worker:        {volumes: ["$HOME_DIR/box/secrets/ssh:/var/lib/baskfy/.ssh:ro"]}
   ingest-worker: {volumes: ["$HOME_DIR/box/secrets/ssh:/var/lib/baskfy/.ssh:ro"]}
   beat:          {volumes: ["$HOME_DIR/box/secrets/ssh:/var/lib/baskfy/.ssh:ro"]}

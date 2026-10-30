@@ -402,3 +402,230 @@ async fn equity_is_capital_plus_realised_plus_the_marked_open_and_a_stale_mark_f
     assert_eq!(sleeve.quantized_equity().unwrap(), dec("2501434.50"));
     assert_eq!(sleeve.stale_marks(), 1);
 }
+
+async fn sleeve() -> PgConnection {
+    let mut conn = scratch().await;
+    exec(
+        &mut conn,
+        "INSERT INTO trading_day VALUES (1, '2026-09-01', true), (1, '2026-09-02', true); \
+         INSERT INTO tw_config (user_id, sleeve_capital_inr) VALUES (1, 2500000.00); \
+         INSERT INTO tw_breadth_daily VALUES (1, '2026-09-01', 'OPEN', false);",
+    )
+    .await;
+    conn
+}
+
+async fn name(conn: &mut PgConnection, id: i64, symbol: &str, close: &str) {
+    exec(
+        conn,
+        &format!(
+            "INSERT INTO instrument VALUES ({id}, '{symbol}'); \
+             INSERT INTO ohlcv_daily (instrument_id, date, close) VALUES ({id}, '2026-09-01', {close});"
+        ),
+    )
+    .await;
+}
+
+async fn signal(conn: &mut PgConnection, id: i64, symbol: &str, rank: i64) {
+    name(conn, id, symbol, "100.0000").await;
+    exec(
+        conn,
+        &format!(
+            "INSERT INTO tw_state_daily VALUES (1, '2026-09-01', {id}); \
+             INSERT INTO tw_signal_daily VALUES (1, '2026-09-01', {id}, 'SIGNAL', {rank}, \
+             500000000, 100.00);"
+        ),
+    )
+    .await;
+}
+
+async fn position(conn: &mut PgConnection, id: i64, gtt: &str, next: &str) {
+    exec(
+        conn,
+        &format!(
+            "INSERT INTO tw_position (user_id, instrument_id, entry_avg, stop_price, high_since, \
+             gtt_id, gtt_trigger, next_trigger, next_trigger_for, quantity_open) \
+             VALUES (1, {id}, 100.0000, 80.00, 100.0000, {gtt}, {next}, 100);"
+        ),
+    )
+    .await;
+}
+
+async fn skip_reasons(conn: &mut PgConnection) -> Vec<String> {
+    sqlx::query_scalar("SELECT reason FROM tw_plan_skip ORDER BY id")
+        .fetch_all(&mut *conn)
+        .await
+        .unwrap()
+}
+
+async fn line_kinds(conn: &mut PgConnection) -> Vec<String> {
+    sqlx::query_scalar("SELECT kind FROM tw_plan_line ORDER BY id")
+        .fetch_all(&mut *conn)
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+#[ignore = "needs BASKFY_RS_SCRATCH_DATABASE_URL"]
+async fn at_most_three_entries_a_session_and_the_rest_are_skips() {
+    let mut conn = sleeve().await;
+    for index in 0..5 {
+        signal(
+            &mut conn,
+            index + 1,
+            &format!("NAME{index}"),
+            1_000_000 - index,
+        )
+        .await;
+    }
+    let (_, report) = evening(&mut conn, d(1), SOURCE_EVENING, noon(1)).await;
+    assert_eq!(report.unwrap().entries, 3);
+    assert_eq!(
+        skip_reasons(&mut conn).await,
+        ["SESSION_CAP", "SESSION_CAP"]
+    );
+    let bought: Vec<i64> =
+        sqlx::query_scalar("SELECT instrument_id FROM tw_plan_line ORDER BY instrument_id")
+            .fetch_all(&mut conn)
+            .await
+            .unwrap();
+    assert_eq!(bought, [1, 2, 3]);
+}
+
+#[tokio::test]
+#[ignore = "needs BASKFY_RS_SCRATCH_DATABASE_URL"]
+async fn a_buy_line_is_a_tenth_of_the_sleeve_with_a_twenty_percent_stop() {
+    let mut conn = sleeve().await;
+    signal(&mut conn, 1, "TWTCO", 1).await;
+    let (_, report) = evening(&mut conn, d(1), SOURCE_EVENING, noon(1)).await;
+    let report = report.unwrap();
+    let (quantity, value, stop, client): (i32, Decimal, Decimal, String) =
+        sqlx::query_as("SELECT quantity, value_inr, stop_price, client_id FROM tw_plan_line")
+            .fetch_one(&mut conn)
+            .await
+            .unwrap();
+    assert_eq!(
+        (quantity, value, stop),
+        (2_500, dec("250000.00"), dec("80.00"))
+    );
+    assert_eq!(client, format!("{}:TWTCO", report.plan_id));
+    let (equity, exposure, hash): (Decimal, Decimal, String) =
+        sqlx::query_as("SELECT sleeve_equity_inr, total_new_exposure_inr, plan_hash FROM tw_plan")
+            .fetch_one(&mut conn)
+            .await
+            .unwrap();
+    assert_eq!((equity, exposure), (dec("2500000.00"), dec("250000.00")));
+    assert_eq!(hash.len(), 64);
+}
+
+#[tokio::test]
+#[ignore = "needs BASKFY_RS_SCRATCH_DATABASE_URL"]
+async fn a_name_at_the_per_name_cap_is_not_bought_again() {
+    let mut conn = sleeve().await;
+    signal(&mut conn, 1, "TWTCO", 1).await;
+    position(&mut conn, 1, "'GTT-1', 80.00", "NULL, NULL").await;
+    position(&mut conn, 1, "'GTT-2', 80.00", "NULL, NULL").await;
+    let (_, report) = evening(&mut conn, d(1), SOURCE_EVENING, noon(1)).await;
+    assert_eq!(report.unwrap().entries, 0);
+    assert_eq!(skip_reasons(&mut conn).await, ["ALREADY_HELD"]);
+}
+
+#[tokio::test]
+#[ignore = "needs BASKFY_RS_SCRATCH_DATABASE_URL"]
+async fn the_session_cap_counts_orders_sent_on_the_day_the_plan_executes() {
+    let mut conn = sleeve().await;
+    for (id, symbol, rank) in [(1, "AAA", 3), (2, "BBB", 2), (3, "CCC", 1)] {
+        signal(&mut conn, id, symbol, rank).await;
+    }
+    exec(
+        &mut conn,
+        "INSERT INTO tw_order (user_id, instrument_id, signal_date, side, state, created_at) \
+         VALUES (1, 1, '2026-09-01', 'BUY', 'FILLED', '2026-09-01 04:00:00+00');",
+    )
+    .await;
+    let (_, tonight) = evening(&mut conn, d(1), SOURCE_EVENING, noon(1)).await;
+    assert_eq!(tonight.unwrap().entries, 3);
+    exec(
+        &mut conn,
+        "INSERT INTO tw_order (user_id, instrument_id, signal_date, side, state, created_at) \
+         VALUES (1, 1, '2026-09-01', 'BUY', 'CONFIRMED', '2026-09-02 10:00:00+00');",
+    )
+    .await;
+    let (_, morning) = evening(&mut conn, d(1), SOURCE_MORNING, noon(2)).await;
+    assert_eq!(morning.unwrap().entries, 2);
+}
+
+#[tokio::test]
+#[ignore = "needs BASKFY_RS_SCRATCH_DATABASE_URL"]
+async fn a_naked_position_is_an_arm_line_stored_before_the_entries() {
+    let mut conn = sleeve().await;
+    name(&mut conn, 7, "NAKEDCO", "100.0000").await;
+    position(&mut conn, 7, "NULL, NULL", "NULL, NULL").await;
+    signal(&mut conn, 1, "TWTCO", 1).await;
+    let (_, report) = evening(&mut conn, d(1), SOURCE_EVENING, noon(1)).await;
+    let report = report.unwrap();
+    assert_eq!((report.arms, report.naked, report.entries), (1, 1, 1));
+    assert_eq!(line_kinds(&mut conn).await, ["ARM_GTT", "BUY_AT_OPEN"]);
+    let (quantity, stop, client): (i32, Decimal, String) = sqlx::query_as(
+        "SELECT quantity, stop_price, client_id FROM tw_plan_line WHERE kind = 'ARM_GTT'",
+    )
+    .fetch_one(&mut conn)
+    .await
+    .unwrap();
+    assert_eq!((quantity, stop), (100, dec("80.00")));
+    assert_eq!(client, format!("{}:NAKEDCO:ARM_GTT", report.plan_id));
+}
+
+#[tokio::test]
+#[ignore = "needs BASKFY_RS_SCRATCH_DATABASE_URL"]
+async fn the_ratchet_carries_both_triggers_and_only_for_its_own_session() {
+    let mut conn = sleeve().await;
+    name(&mut conn, 8, "RATCHETCO", "130.0000").await;
+    position(&mut conn, 8, "'GTT-1', 80.00", "104.00, '2026-09-01'").await;
+    let (_, report) = evening(&mut conn, d(1), SOURCE_EVENING, noon(1)).await;
+    let report = report.unwrap();
+    assert_eq!(report.ratchets, 1);
+    let (stop, previous, high, client): (Decimal, Decimal, Decimal, String) = sqlx::query_as(
+        "SELECT stop_price, previous_trigger, high_since, client_id FROM tw_plan_line \
+         WHERE kind = 'RAISE_GTT_STOP'",
+    )
+    .fetch_one(&mut conn)
+    .await
+    .unwrap();
+    assert_eq!(
+        (stop, previous, high),
+        (dec("104.00"), dec("80.00"), dec("100.0000"))
+    );
+    assert_eq!(
+        client,
+        format!("{}:RATCHETCO:RAISE_GTT_STOP", report.plan_id)
+    );
+    exec(
+        &mut conn,
+        "UPDATE tw_position SET next_trigger_for = '2026-08-31'",
+    )
+    .await;
+    let (_, stale) = evening(&mut conn, d(1), SOURCE_EVENING, noon(1)).await;
+    assert_eq!(stale.unwrap().ratchets, 0);
+}
+
+#[tokio::test]
+#[ignore = "needs BASKFY_RS_SCRATCH_DATABASE_URL"]
+async fn a_close_far_under_the_stop_is_never_a_sell_at_open() {
+    let mut conn = sleeve().await;
+    name(&mut conn, 9, "HOLDCO", "40.0000").await;
+    position(&mut conn, 9, "'GTT-1', 80.00", "NULL, NULL").await;
+    signal(&mut conn, 1, "TWTCO", 1).await;
+    evening(&mut conn, d(1), SOURCE_EVENING, noon(1)).await;
+    assert!(
+        !line_kinds(&mut conn)
+            .await
+            .iter()
+            .any(|kind| kind == "SELL_AT_OPEN")
+    );
+    let states: Vec<String> = sqlx::query_scalar("SELECT DISTINCT state FROM tw_plan_line")
+        .fetch_all(&mut conn)
+        .await
+        .unwrap();
+    assert_eq!(states, ["PROPOSED"]);
+}

@@ -116,7 +116,7 @@ pub(crate) fn decide(
 }
 
 /// `decide_session(session, now)`; `Err(message)` is `ScanNotRunnable`.
-async fn decide_session(
+pub(super) async fn decide_session(
     conn: &mut PgConnection,
     now_ist: NaiveDateTime,
 ) -> Result<Result<ScanDecision, String>, WorkerError> {
@@ -150,7 +150,7 @@ pub(crate) async fn unpublished_runs(
 }
 
 /// The claimed row's user and what it already says (a failure leaves those as they were).
-struct Claimed {
+pub(super) struct Claimed {
     user_id: i64,
     provisional: bool,
     session_date: Option<NaiveDate>,
@@ -158,7 +158,7 @@ struct Claimed {
 }
 
 /// `claim_run`: `RUNNING` and `started_at`, or `None` for a row that is not `QUEUED`.
-async fn claim_run(
+pub(super) async fn claim_run(
     conn: &mut PgConnection,
     run_id: i64,
     started_at: DateTime<Utc>,

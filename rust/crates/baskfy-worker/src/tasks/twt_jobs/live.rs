@@ -216,7 +216,7 @@ pub(crate) fn provisional_daily_bars(
 }
 
 /// `live_names`: the universe's `(id, symbol)`, sorted by symbol.
-async fn live_names(
+pub(super) async fn live_names(
     conn: &mut PgConnection,
     ids: &BTreeSet<i64>,
 ) -> Result<Vec<LiveName>, WorkerError> {
@@ -243,7 +243,7 @@ async fn live_names(
 
 /// `swing_scan_now.last_factors`: `instrument_id -> adj_factor` of the bar published for `on`
 /// (a null factor reads `1.0`).
-async fn last_factors(
+pub(super) async fn last_factors(
     conn: &mut PgConnection,
     on: NaiveDate,
     ids: &[i64],
@@ -287,11 +287,11 @@ async fn live_frame(
 
 /// `PlanBuild`.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-struct PlanBuild {
-    plan_id: Option<String>,
-    entries: i64,
-    kept: bool,
-    already_ordered: i64,
+pub(super) struct PlanBuild {
+    pub(super) plan_id: Option<String>,
+    pub(super) entries: i64,
+    pub(super) kept: bool,
+    pub(super) already_ordered: i64,
 }
 
 /// `_in_flight_live_plan`: today's `LIVE` plan's id when any of its lines is in flight.
@@ -316,7 +316,7 @@ async fn in_flight_live_plan(
 
 /// `build_live_plan_twt`: entries only, sized on the live close; a plan with a line at the
 /// broker is kept, a name with an order today is not offered again.
-async fn build_live_plan_twt(
+pub(super) async fn build_live_plan_twt(
     conn: &mut PgConnection,
     user_id: i64,
     trade_date: NaiveDate,
@@ -415,6 +415,17 @@ pub(crate) async fn run_twt_live(
     let universe = load_twt_universe(conn, &config).await?;
     let names = live_names(conn, &universe).await?;
     let build = live_frame(conn, &names, decision, quotes).await?;
+    run_twt_live_on(conn, user_id, decision, &build, now, execution_enabled).await
+}
+
+pub(crate) async fn run_twt_live_on(
+    conn: &mut PgConnection,
+    user_id: i64,
+    decision: &ScanDecision,
+    build: &BarBuild,
+    now: DateTime<Utc>,
+    execution_enabled: bool,
+) -> Result<OrderedJson, WorkerError> {
     let mut outcome = StepOutcome::default();
     let signals = run_detect_twt_for(
         conn,

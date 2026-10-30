@@ -13,146 +13,25 @@
 //! anything — the cancel and the GTT are order-shaped and belong to the desk's confirm. Silent on
 //! a weekend: there is no evening on a Saturday.
 //!
-//! [`crate::alerts::AlertName`] is the nightly's closed set; this lane does not widen it (another
-//! lane's file), so the four names are spelled here with `alerts.py`'s values and
-//! `ops.RUNBOOKS`' one runbook, and the payload and mail are built exactly as
-//! `alerts.dispatch`/`_send_email` build them (as the `twt_jobs` lane does for its two).
+//! The alerts go through the `twt_jobs` lane's shared sleeve-alert dispatch (runbook 8).
 
 use std::collections::BTreeMap;
 
 use baskfy_api::Settings;
-use baskfy_api::mailer::{Mailer, Message};
 use baskfy_db::OrderedJson;
 use chrono::{DateTime, Datelike, Duration, NaiveDate, Utc, Weekday};
 use sqlx::{PgConnection, Row as _};
 
 use super::evening::{IST_MINUTES, iso};
-use crate::alerts::py_isoformat;
 use crate::error::WorkerError;
-use crate::pyjson::{self, int, object, s};
-use crate::steps::{log_error, log_warning};
-
-/// `ops.RUNBOOKS[AlertName.VBT_*]`: runbook 8 for all four.
-pub(crate) const RUNBOOK: &str = "docs/runbooks/08-vbt-evening.md";
+use crate::pyjson::{int, object, s};
+use crate::tasks::twt_jobs::alerting::{SleeveAlert, VBT_RUNBOOK, dispatch};
 
 /// `_QUIET_DAYS`: calendar days, not sessions.
 const QUIET_DAYS: i64 = 7;
 
 /// `VBT_DETECT_STALE`'s window: a breadth row at most four days old is fresh.
 const FRESH_DAYS: i64 = 4;
-
-/// One alert, by its `AlertName` value.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct VbtAlert {
-    pub(crate) name: &'static str,
-    pub(crate) severity: &'static str,
-    pub(crate) summary: String,
-    pub(crate) labels: Vec<(String, String)>,
-    pub(crate) detail: OrderedJson,
-}
-
-impl VbtAlert {
-    /// `Alert.as_dict()`.
-    fn as_dict(&self, raised_at: DateTime<Utc>) -> OrderedJson {
-        object([
-            ("alert", s(self.name)),
-            ("severity", s(self.severity)),
-            ("summary", s(self.summary.clone())),
-            (
-                "labels",
-                object(self.labels.iter().map(|(k, v)| (k.clone(), s(v.clone())))),
-            ),
-            ("detail", self.detail.clone()),
-            ("runbook", s(RUNBOOK)),
-            ("raised_at", s(py_isoformat(raised_at))),
-        ])
-    }
-}
-
-/// `html.escape(text)` (`quote=True`).
-fn html_escape(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    for c in text.chars() {
-        match c {
-            '&' => out.push_str("&amp;"),
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            '"' => out.push_str("&quot;"),
-            '\'' => out.push_str("&#x27;"),
-            c => out.push(c),
-        }
-    }
-    out
-}
-
-/// `dispatch(alert, settings)`: the payload plus `delivered_to`. Never fails.
-pub(crate) async fn dispatch(
-    alert: &VbtAlert,
-    settings: &Settings,
-    raised_at: DateTime<Utc>,
-) -> OrderedJson {
-    let payload = alert.as_dict(raised_at);
-    let labels: Vec<String> = alert
-        .labels
-        .iter()
-        .map(|(k, v)| format!("alert_{k}={v}"))
-        .collect();
-    log_error(&format!(
-        "alert alert={} severity={} summary={:?} runbook={RUNBOOK} {}",
-        alert.name,
-        alert.severity,
-        alert.summary,
-        labels.join(" ")
-    ));
-    let mut delivered = vec!["log"];
-    if !settings.ops_alert_email.is_empty() && send_email(alert, &payload, settings).await {
-        delivered.push("email");
-    }
-    if !settings.ops_alert_webhook_url.is_empty() {
-        log_warning("the alert webhook sink is not ported to Rust (DECISIONS-RS R7.5)");
-    }
-    if delivered == ["log"] {
-        log_warning(
-            "alerts have no delivery sink configured; set BASKFY_SENTRY_DSN, \
-             BASKFY_OPS_ALERT_EMAIL or BASKFY_OPS_ALERT_WEBHOOK_URL",
-        );
-    }
-    let OrderedJson::Object(mut entries) = payload else {
-        return payload;
-    };
-    pyjson::update(&mut entries, "delivered_to", pyjson::strings(delivered));
-    OrderedJson::Object(entries)
-}
-
-/// `_send_email`: the whole payload verbatim.
-async fn send_email(alert: &VbtAlert, payload: &OrderedJson, settings: &Settings) -> bool {
-    let body = match pyjson::dumps_indent2(payload) {
-        Ok(body) => body,
-        Err(e) => {
-            log_error(&format!(
-                "alert email failed alert={} error={e}",
-                alert.name
-            ));
-            return false;
-        }
-    };
-    let message = Message {
-        to: settings.ops_alert_email.clone(),
-        subject: format!(
-            "[decile/{}] {}: {}",
-            settings.environment, alert.severity, alert.summary
-        ),
-        text: format!("{}\n\nRunbook: {RUNBOOK}\n\n{body}\n", alert.summary),
-        html: format!(
-            "<p><strong>{}</strong></p><p>Runbook: {}</p><pre>{}</pre>",
-            html_escape(&alert.summary),
-            html_escape(RUNBOOK),
-            html_escape(&body)
-        ),
-        reply_to: None,
-    };
-    Mailer::from_settings(settings).deliver(&message).await
-}
 
 /// What a check needs besides the database.
 pub(crate) struct CheckInputs<'a> {
@@ -213,7 +92,7 @@ pub(crate) async fn check_detect_fresh(
             ("alert", OrderedJson::Null),
         ]));
     }
-    let alert = VbtAlert {
+    let alert = SleeveAlert {
         name: "VBT_DETECT_STALE",
         severity: "warning",
         summary: format!(
@@ -223,6 +102,7 @@ pub(crate) async fn check_detect_fresh(
         ),
         labels: trade_date_label(day),
         detail: object([("latest", opt_iso(latest))]),
+        runbook: VBT_RUNBOOK,
     };
     Ok(object([
         ("date", s(iso(day))),
@@ -276,7 +156,7 @@ pub(crate) async fn check_orders_past_expiry(
         ]));
     }
     let n = len_i64(rows.len());
-    let alert = VbtAlert {
+    let alert = SleeveAlert {
         name: "VBT_ORDER_PAST_EXPIRY",
         severity: "critical",
         summary: format!(
@@ -285,6 +165,7 @@ pub(crate) async fn check_orders_past_expiry(
         ),
         labels: trade_date_label(day),
         detail: object([("orders", OrderedJson::Array(orders))]),
+        runbook: VBT_RUNBOOK,
     };
     Ok(object([
         ("date", s(iso(day))),
@@ -330,7 +211,7 @@ pub(crate) async fn check_naked_positions(
             ])
         })
         .collect();
-    let alert = VbtAlert {
+    let alert = SleeveAlert {
         name: "VBT_POSITION_NAKED",
         severity: "critical",
         summary: format!(
@@ -339,6 +220,7 @@ pub(crate) async fn check_naked_positions(
         ),
         labels: trade_date_label(day),
         detail: object([("positions", OrderedJson::Array(positions))]),
+        runbook: VBT_RUNBOOK,
     };
     Ok(object([
         ("date", s(iso(day))),
@@ -414,7 +296,7 @@ pub(crate) async fn check_positions_without_bars(
             ])
         })
         .collect();
-    let alert = VbtAlert {
+    let alert = SleeveAlert {
         name: "VBT_POSITION_NO_BAR",
         severity: "warning",
         summary: format!(
@@ -424,6 +306,7 @@ pub(crate) async fn check_positions_without_bars(
         ),
         labels: trade_date_label(day),
         detail: object([("positions", OrderedJson::Array(positions))]),
+        runbook: VBT_RUNBOOK,
     };
     Ok(object([
         ("date", s(iso(day))),
@@ -441,10 +324,11 @@ mod tests {
     #[test]
     fn the_four_names_share_runbook_eight() {
         // test_vbt_ops.py::test_every_vbt_alert_names_the_same_runbook_and_it_exists.
-        assert_eq!(RUNBOOK, "docs/runbooks/08-vbt-evening.md");
+        assert_eq!(VBT_RUNBOOK, "docs/runbooks/08-vbt-evening.md");
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
         assert!(
-            root.join("decile-blueprint").join(RUNBOOK).exists() || root.join(RUNBOOK).exists(),
+            root.join("decile-blueprint").join(VBT_RUNBOOK).exists()
+                || root.join(VBT_RUNBOOK).exists(),
             "runbook 8 is missing"
         );
     }
@@ -470,13 +354,5 @@ mod tests {
         };
         let keys: Vec<&str> = entries.iter().map(|(k, _)| k.as_str()).collect();
         assert_eq!(keys, ["date", "checked", "reason"]);
-    }
-
-    #[test]
-    fn html_escape_is_pythons() {
-        assert_eq!(
-            html_escape("a<b> & \"c\" 'd'"),
-            "a&lt;b&gt; &amp; &quot;c&quot; &#x27;d&#x27;"
-        );
     }
 }

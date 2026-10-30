@@ -25,7 +25,7 @@ use chrono::{DateTime, Duration, NaiveDate, Utc};
 use rust_decimal::Decimal;
 use sqlx::{PgConnection, Row as _};
 
-use super::alerting::{TwtAlert, dispatch};
+use super::alerting::{SleeveAlert, TWT_RUNBOOK, dispatch};
 use super::sleeve::{
     LoadedSleeve, book_state, config_row, evening_config, load_sleeve, slot_multiplier,
 };
@@ -425,7 +425,7 @@ async fn raise_adjustment_alert(
             ])
         })
         .collect();
-    let alert = TwtAlert {
+    let alert = SleeveAlert {
         name: "TWT_ADJUSTMENT_RESET",
         severity: "critical",
         summary: format!(
@@ -436,6 +436,7 @@ async fn raise_adjustment_alert(
         ),
         labels: vec![("trade_date".to_owned(), iso(as_of))],
         detail: object([("positions", OrderedJson::Array(positions))]),
+        runbook: TWT_RUNBOOK,
     };
     dispatch(&alert, settings, raised_at).await;
 }
@@ -481,7 +482,7 @@ async fn raise_evening_alert(
         .collect();
     crate::pyjson::update(&mut detail, "lines", OrderedJson::Array(lines));
     crate::pyjson::update(&mut detail, "skipped", OrderedJson::Array(skipped));
-    let alert = TwtAlert {
+    let alert = SleeveAlert {
         name: "TWT_EVENING",
         severity: "warning",
         summary: format!(
@@ -500,6 +501,7 @@ async fn raise_evening_alert(
             ("source".to_owned(), report.source.clone()),
         ],
         detail: OrderedJson::Object(detail),
+        runbook: TWT_RUNBOOK,
     };
     dispatch(&alert, settings, raised_at).await;
 }

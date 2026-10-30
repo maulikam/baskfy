@@ -157,7 +157,7 @@ pub fn build_state(parts: StateParts) -> AppState {
     let mut templates = Templates::new(&paths.templates, &asset_v, options_enabled);
     crate::lanes::register_templates(&mut templates);
     let settings: SharedSettings = Arc::new(std::sync::RwLock::new(settings));
-    let reads: Arc<dyn KiteReads> = kite.clone();
+    let kite_for_reads = kite.clone();
     let gateway = crate::lanes::exec_core::gateway(crate::lanes::exec_core::GatewayParts {
         kite,
         settings: settings.clone(),
@@ -166,6 +166,7 @@ pub fn build_state(parts: StateParts) -> AppState {
         journal_path: paths.resolve(crate::gateway::JOURNAL),
         db: db.clone(),
     });
+    let reads = crate::lanes::exec_core::limited_reads(kite_for_reads, &gateway, &settings);
     AppState {
         settings,
         clock,

@@ -1,0 +1,99 @@
+{
+ "fn": "baskfy_core.options.backtest.run",
+ "inputs": {
+  "min_sessions": 60,
+  "outcomes": [
+   {
+    "closed_reason": null,
+    "mae_points": "-12.25",
+    "mfe_points": "80.5",
+    "net_pnl_inr": null,
+    "r_multiple": null,
+    "skip_reason": null,
+    "trade_date": "2026-10-20",
+    "traded": true,
+    "trigger_time": "10:19:00"
+   },
+   {
+    "closed_reason": null,
+    "mae_points": "0",
+    "mfe_points": "0",
+    "net_pnl_inr": null,
+    "r_multiple": null,
+    "skip_reason": null,
+    "trade_date": "2026-10-13",
+    "traded": true,
+    "trigger_time": "09:45:00"
+   },
+   {
+    "closed_reason": null,
+    "mae_points": null,
+    "mfe_points": null,
+    "net_pnl_inr": null,
+    "r_multiple": null,
+    "skip_reason": "NOT_CONTAINED",
+    "trade_date": "2026-10-27",
+    "traded": false,
+    "trigger_time": null
+   },
+   {
+    "closed_reason": null,
+    "mae_points": null,
+    "mfe_points": null,
+    "net_pnl_inr": null,
+    "r_multiple": null,
+    "skip_reason": "EVENT_DAY",
+    "trade_date": "2025-10-28",
+    "traded": false,
+    "trigger_time": null
+   }
+  ],
+  "sleeve": "O2",
+  "tier": "1"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "Decimals are strings; enums are their values; datetimes carry +05:30. Config is OptionsConfig() defaults, written into the inputs. Regenerate with `uv run python ../tools/parity/golden_options.py` from decile-blueprint; packages/core/tests/test_options_goldens.py recomputes every case from these inputs.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "by_year": [
+   [
+    2025,
+    1,
+    0
+   ],
+   [
+    2026,
+    3,
+    2
+   ]
+  ],
+  "caveats": [
+   "No P&L. This measures selectivity, not profitability."
+  ],
+  "date_from": "2025-10-28",
+  "date_to": "2026-10-27",
+  "expectancy_r": null,
+  "max_drawdown_r": null,
+  "net_pnl_inr": null,
+  "sessions": 4,
+  "skipped_by_reason": [
+   [
+    "EVENT_DAY",
+    1
+   ],
+   [
+    "NOT_CONTAINED",
+    1
+   ]
+  ],
+  "sleeve": "O2",
+  "tier": "1",
+  "traded": 2,
+  "win_rate": null
+ }
+}

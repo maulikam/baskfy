@@ -162,6 +162,17 @@ POST/PUT/PATCH/DELETE) and runs its statements in `session::run`, Python's `get_
 on `Ok`, roll back on `Err` (R6.2); bodies go through `body::receive` + `body::validate_model`.
 **No route may place, modify or cancel an order** (law 2); `routes::public` is never mounted (D9).
 
+## Grading the worker: `tools/parity/nightly_diff.py` (wave 5; R7.3, R7.6, R7.7)
+
+The nightly is graded like a write: two sides (`py` — the production Python with the replay
+provider injected by harness code — and `rs` — `baskfy-worker --replay-bundle`), two clones of the
+bed, one replayed trading day (`replay_build.py`, identical inputs to both), and every table,
+sequence, run row, Redis key and alert mail compared. `--chain` runs the whole night;
+`--step <name>` primes a clone with Python's chain up to the step and runs only that step on both
+sides. A lane's step is done when its `--step` runs are EQUAL in `fresh` and `rerun`; the wave is
+done when `--chain` is EQUAL in all five scenarios. Usage: `tools/parity/README.md`. Heavy runs take
+the machine-wide lock; never more than five databases besides `baskfy`.
+
 ## Building — the only invocation
 
 ```bash

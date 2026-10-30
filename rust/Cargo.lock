@@ -364,6 +364,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "baskfy-worker"
+version = "0.1.0"
+dependencies = [
+ "baskfy-api",
+ "baskfy-core",
+ "baskfy-db",
+ "baskfy-providers",
+ "chrono",
+ "csv",
+ "polars",
+ "redis",
+ "regex",
+ "rust_decimal",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "bincode"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

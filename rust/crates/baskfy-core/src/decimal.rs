@@ -620,6 +620,36 @@ impl WideDecimal {
     }
 }
 
+/// Exact, context-free operations — added at wave 5 (lane nightly-ingest, DECISIONS-RS R7.11)
+/// for arithmetic that is **not** Python's `decimal` context: polars' fixed-scale `Decimal`
+/// columns multiply exactly and round once to the result's scale, with no 28-digit limit.
+impl WideDecimal {
+    /// `self * other` exactly: every coefficient digit kept, no context rounding.
+    #[must_use]
+    pub fn mul_exact(&self, other: &Self) -> Self {
+        let neg = self.neg ^ other.neg;
+        let exp = self.exp + other.exp;
+        if self.is_zero() || other.is_zero() {
+            return Self::triple(neg, "0", exp);
+        }
+        let product = Big::parse(&self.digits).mul(&Big::parse(&other.digits));
+        Self::triple(neg, &product.digits(), exp)
+    }
+
+    /// The same value at exponent `exp`, rounded by `mode`, with **no** digit limit (Python's
+    /// `_rescale`; [`WideDecimal::quantize`] is this plus the context's 28-digit check).
+    #[must_use]
+    pub fn rescale_exact(&self, exp: i64, mode: Rounding) -> Self {
+        self.rescale(exp, mode)
+    }
+
+    /// How many digits the coefficient holds (`len(d.as_tuple().digits)`; `1` for zero).
+    #[must_use]
+    pub fn coefficient_len(&self) -> usize {
+        self.digits.len()
+    }
+}
+
 impl Default for WideDecimal {
     fn default() -> Self {
         Self::zero()

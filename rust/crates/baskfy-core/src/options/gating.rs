@@ -12,69 +12,47 @@
 //! half-flipped configuration is refused by the gateway itself. There is no auto-execute input
 //! here and none may be added (PACK.3).
 //!
-//! `Sleeve`, `SleeveGroup`, `group_of` and `Mode` belong to `baskfy_core.options.config`; they
-//! live here until `options::config` is ported (that file is outside this port's ownership).
 
 use serde::{Deserialize, Serialize};
 
-/// Ports `baskfy_core.options.config.Sleeve` — the five sleeve codes (the `op_sleeve` enum).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-pub enum Sleeve {
-    /// `O1M` — the monthly condor.
-    #[serde(rename = "O1M")]
-    O1m,
-    /// `O1W` — the weekly condor.
-    #[serde(rename = "O1W")]
-    O1w,
-    /// `O2` — the directional long.
-    #[serde(rename = "O2")]
-    O2,
-    /// `O3A` — expiry setup A.
-    #[serde(rename = "O3A")]
-    O3a,
-    /// `O3B` — expiry setup B.
-    #[serde(rename = "O3B")]
-    O3b,
-}
+pub use crate::options::config::{Mode, Sleeve, SleeveGroup, group_of};
 
-/// Ports `baskfy_core.options.config.SleeveGroup`: `O3A`/`O3B` are one group, `O3`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-pub enum SleeveGroup {
-    /// `O1M`.
-    #[serde(rename = "O1M")]
-    O1m,
-    /// `O1W`.
-    #[serde(rename = "O1W")]
-    O1w,
-    /// `O2`.
-    #[serde(rename = "O2")]
-    O2,
-    /// `O3`.
-    #[serde(rename = "O3")]
-    O3,
-}
+/// Each sleeve group's execution flag env name.
+pub const EXECUTION_FLAG_ENV: [(SleeveGroup, &str); 4] = [
+    (SleeveGroup::O1m, "BASKFY_OPTIONS_O1M_EXECUTION_ENABLED"),
+    (SleeveGroup::O1w, "BASKFY_OPTIONS_O1W_EXECUTION_ENABLED"),
+    (SleeveGroup::O2, "BASKFY_OPTIONS_O2_EXECUTION_ENABLED"),
+    (SleeveGroup::O3, "BASKFY_OPTIONS_O3_EXECUTION_ENABLED"),
+];
 
-/// The config/flag group a sleeve code belongs to.
-///
-/// Ports `baskfy_core.options.config.group_of`.
-pub fn group_of(sleeve: Sleeve) -> SleeveGroup {
-    match sleeve {
-        Sleeve::O1m => SleeveGroup::O1m,
-        Sleeve::O1w => SleeveGroup::O1w,
-        Sleeve::O2 => SleeveGroup::O2,
-        Sleeve::O3a | Sleeve::O3b => SleeveGroup::O3,
-    }
-}
+/// The three operational flags; they move no money (PACK.11) and default false.
+pub const OPERATIONAL_FLAG_ENV: [&str; 3] = [
+    "BASKFY_OPTIONS_MONITOR_ENABLED",
+    "BASKFY_OPTIONS_COLLECT_ENABLED",
+    "BASKFY_OPTIONS_SCAN_ENABLED",
+];
 
-/// Ports `baskfy_core.options.config.Mode` — fixed by `options_gates()` at 09:15.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "UPPERCASE")]
-pub enum Mode {
-    /// Simulated: journalled `simulated=true`, no broker call.
-    Paper,
-    /// Real orders.
-    Live,
-}
+/// The desk's two product switches the options book shares.
+pub const DESK_SWITCH_ENV: [&str; 2] = ["OPTIONS_ENABLED", "INTRADAY_ENABLED"];
+
+/// The six system-only ceilings, by `OptionsCeilings` field.
+pub const CEILING_ENV: [(&str, &str); 6] = [
+    (
+        "risk_per_trade_inr_max",
+        "BASKFY_OPTIONS_RISK_PER_TRADE_INR_MAX",
+    ),
+    ("risk_pct_max", "BASKFY_OPTIONS_RISK_PCT_MAX"),
+    ("max_lots_max", "BASKFY_OPTIONS_MAX_LOTS_MAX"),
+    (
+        "book_daily_loss_inr_max",
+        "BASKFY_OPTIONS_BOOK_DAILY_LOSS_INR_MAX",
+    ),
+    (
+        "book_monthly_loss_inr_max",
+        "BASKFY_OPTIONS_BOOK_MONTHLY_LOSS_INR_MAX",
+    ),
+    ("hard_exit_latest", "BASKFY_OPTIONS_HARD_EXIT_LATEST"),
+];
 
 /// The switches as one process read them at startup. Every default is the safe one.
 ///

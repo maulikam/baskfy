@@ -31,6 +31,65 @@ use crate::problems::{Problem, ProblemType, not_found};
 use crate::state::AppState;
 use crate::wire;
 
+/// Why `baskfy_api.webhooks.assert_public_webhook_url` refused a URL (wave 6, lane ops_alerts:
+/// the worker's webhook sweep re-checks every endpoint at delivery time).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WebhookUrlRefusal {
+    /// `WebhookUrlNotPublic(message)` — the sweep records the message and fails the delivery.
+    NotPublic(String),
+    /// A `ValueError`/`UnicodeError` Python does not catch there (a bad port, an unencodable
+    /// host): the sweep raises it.
+    Unhandled(String),
+}
+
+impl From<ssrf::Refusal> for WebhookUrlRefusal {
+    fn from(value: ssrf::Refusal) -> Self {
+        match value {
+            ssrf::Refusal::BadRequest(m) => Self::NotPublic(m),
+            ssrf::Refusal::Unhandled(m) => Self::Unhandled(m),
+        }
+    }
+}
+
+impl From<WebhookUrlRefusal> for ssrf::Refusal {
+    fn from(value: WebhookUrlRefusal) -> Self {
+        match value {
+            WebhookUrlRefusal::NotPublic(m) => Self::BadRequest(m),
+            WebhookUrlRefusal::Unhandled(m) => Self::Unhandled(m),
+        }
+    }
+}
+
+/// `baskfy_api.webhooks.assert_public_webhook_url(url)` with the resolution injected:
+/// `resolve(host, port)` answers the addresses `getaddrinfo` would, or the refusal. The same
+/// checks the create route's guard applies (`ssrf::assert_public`), for the worker's sweep.
+///
+/// # Errors
+/// [`WebhookUrlRefusal`].
+pub async fn assert_public_webhook_url_with<F, Fut>(
+    url: &str,
+    resolve: F,
+) -> Result<(), WebhookUrlRefusal>
+where
+    F: FnOnce(String, u16) -> Fut,
+    Fut: std::future::Future<Output = Result<Vec<std::net::IpAddr>, WebhookUrlRefusal>>,
+{
+    ssrf::assert_public_resolving(url, |host, port| async move {
+        resolve(host, port).await.map_err(ssrf::Refusal::from)
+    })
+    .await
+    .map_err(WebhookUrlRefusal::from)
+}
+
+/// The checks `getaddrinfo` applies to `host` before resolving (an embedded NUL, the `idna`
+/// codec's label lengths): Python raises them uncaught.
+///
+/// # Errors
+/// [`WebhookUrlRefusal::Unhandled`].
+pub fn webhook_host_encodable(host: &str) -> Result<(), WebhookUrlRefusal> {
+    ssrf::host_encodable(host).map_err(WebhookUrlRefusal::from)
+}
+
 /// `HISTORY_LIMIT`.
 pub const HISTORY_LIMIT: i64 = 50;
 /// `_KNOWN_EVENTS`.

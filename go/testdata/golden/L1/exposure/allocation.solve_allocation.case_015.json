@@ -1,0 +1,53 @@
+{
+ "fn": "baskfy_core.exposure.allocation.solve_allocation",
+ "inputs": {
+  "candidates": [
+   {
+    "cluster": "other",
+    "liquidity": 0.0,
+    "price": 10.0,
+    "rank": 1,
+    "score": -5.0,
+    "symbol": "A"
+   },
+   {
+    "cluster": "other",
+    "liquidity": 0.0,
+    "price": 10.0,
+    "rank": 2,
+    "score": 0.0,
+    "symbol": "B"
+   }
+  ],
+  "cluster_cap": 100.0,
+  "half_factor": 0.5,
+  "half_sized": [],
+  "max_sleeve_w": 50.0,
+  "min_sleeve_w": 1.0,
+  "sleeve_pct": 10.0
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "dataclasses.asdict(Allocation). Inputs are JSON; each function is called from them after a JSON round trip. Dates are ISO days, enums their values, IndexSignals/BookWeights/RegimeState their as_dict(), Allocation and Position/Candidate/OrderLine dataclasses.asdict, tuples lists. A raise is {raises: {type, message}}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_exposure.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "cluster_weights": {
+   "other": 100.0
+  },
+  "half_sized": [],
+  "notes": [],
+  "sleeve_pct": 10.0,
+  "weights_nav": {
+   "A": 5.0,
+   "B": 5.0
+  },
+  "weights_sleeve": {
+   "A": 50.0,
+   "B": 50.0
+  }
+ }
+}

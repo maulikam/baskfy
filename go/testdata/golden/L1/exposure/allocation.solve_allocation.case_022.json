@@ -1,0 +1,136 @@
+{
+ "fn": "baskfy_core.exposure.allocation.solve_allocation",
+ "inputs": {
+  "candidates": [
+   {
+    "cluster": "it",
+    "liquidity": 173174366.0,
+    "price": 2330.36,
+    "rank": 1,
+    "score": 61.247,
+    "symbol": "X00"
+   },
+   {
+    "cluster": "other",
+    "liquidity": 62693532.0,
+    "price": 2178.33,
+    "rank": 2,
+    "score": 47.876,
+    "symbol": "X01"
+   },
+   {
+    "cluster": "auto",
+    "liquidity": 784488203.0,
+    "price": 1596.87,
+    "rank": 3,
+    "score": 68.551,
+    "symbol": "X02"
+   },
+   {
+    "cluster": "it",
+    "liquidity": 192114825.0,
+    "price": 1685.29,
+    "rank": 4,
+    "score": 11.505,
+    "symbol": "X03"
+   },
+   {
+    "cluster": "auto",
+    "liquidity": 562167657.0,
+    "price": 302.26,
+    "rank": 5,
+    "score": 5.178,
+    "symbol": "X04"
+   },
+   {
+    "cluster": "auto",
+    "liquidity": 326288024.0,
+    "price": 2738.34,
+    "rank": 6,
+    "score": 76.239,
+    "symbol": "X05"
+   },
+   {
+    "cluster": "it",
+    "liquidity": 693038272.0,
+    "price": 1822.35,
+    "rank": 7,
+    "score": 97.363,
+    "symbol": "X06"
+   },
+   {
+    "cluster": "auto",
+    "liquidity": 508244107.0,
+    "price": 1604.52,
+    "rank": 8,
+    "score": 45.782,
+    "symbol": "X07"
+   },
+   {
+    "cluster": "pharma",
+    "liquidity": 922861429.0,
+    "price": 1574.4,
+    "rank": 9,
+    "score": 25.518,
+    "symbol": "X08"
+   }
+  ],
+  "cluster_cap": 25.0,
+  "half_factor": 0.5,
+  "half_sized": [],
+  "max_sleeve_w": 15.0,
+  "min_sleeve_w": 6.0,
+  "sleeve_pct": 40.0
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "dataclasses.asdict(Allocation). Inputs are JSON; each function is called from them after a JSON round trip. Dates are ISO days, enums their values, IndexSignals/BookWeights/RegimeState their as_dict(), Allocation and Position/Candidate/OrderLine dataclasses.asdict, tuples lists. A raise is {raises: {type, message}}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_exposure.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "cluster_weights": {
+   "auto": 25.014486,
+   "it": 25.000076,
+   "other": 15.0,
+   "pharma": 15.0
+  },
+  "half_sized": [],
+  "notes": [
+   "cluster cap applied: auto, it",
+   "cluster cap applied: auto, it",
+   "cluster cap applied: auto, it",
+   "cluster cap applied: auto, it",
+   "cluster cap applied: auto, it",
+   "cluster cap applied: auto, it",
+   "cluster cap applied: auto, it",
+   "cluster cap applied: auto, it",
+   "sleeve utilisation 80.0%"
+  ],
+  "sleeve_pct": 40.0,
+  "weights_nav": {
+   "X00": 3.800015,
+   "X01": 6.0,
+   "X02": 2.602897,
+   "X03": 2.4,
+   "X04": 2.4,
+   "X05": 2.602897,
+   "X06": 3.800015,
+   "X07": 2.4,
+   "X08": 6.0
+  },
+  "weights_sleeve": {
+   "X00": 9.500038,
+   "X01": 15.0,
+   "X02": 6.507243,
+   "X03": 6.0,
+   "X04": 6.0,
+   "X05": 6.507243,
+   "X06": 9.500038,
+   "X07": 6.0,
+   "X08": 15.0
+  }
+ }
+}

@@ -1,0 +1,161 @@
+{
+ "fn": "baskfy_core.exposure.allocation.solve_allocation",
+ "inputs": {
+  "candidates": [
+   {
+    "cluster": "pharma",
+    "liquidity": 0.0,
+    "price": 100.0,
+    "rank": 1,
+    "score": 80,
+    "symbol": "H0"
+   },
+   {
+    "cluster": "pharma",
+    "liquidity": 0.0,
+    "price": 100.0,
+    "rank": 2,
+    "score": 79,
+    "symbol": "H1"
+   },
+   {
+    "cluster": "pharma",
+    "liquidity": 0.0,
+    "price": 100.0,
+    "rank": 3,
+    "score": 78,
+    "symbol": "H2"
+   },
+   {
+    "cluster": "pharma",
+    "liquidity": 0.0,
+    "price": 100.0,
+    "rank": 4,
+    "score": 77,
+    "symbol": "H3"
+   },
+   {
+    "cluster": "pharma",
+    "liquidity": 0.0,
+    "price": 100.0,
+    "rank": 5,
+    "score": 76,
+    "symbol": "H4"
+   },
+   {
+    "cluster": "pharma",
+    "liquidity": 0.0,
+    "price": 100.0,
+    "rank": 6,
+    "score": 75,
+    "symbol": "H5"
+   },
+   {
+    "cluster": "c0",
+    "liquidity": 0.0,
+    "price": 100.0,
+    "rank": 10,
+    "score": 60,
+    "symbol": "R0"
+   },
+   {
+    "cluster": "c1",
+    "liquidity": 0.0,
+    "price": 100.0,
+    "rank": 11,
+    "score": 59,
+    "symbol": "R1"
+   },
+   {
+    "cluster": "c2",
+    "liquidity": 0.0,
+    "price": 100.0,
+    "rank": 12,
+    "score": 58,
+    "symbol": "R2"
+   },
+   {
+    "cluster": "c3",
+    "liquidity": 0.0,
+    "price": 100.0,
+    "rank": 13,
+    "score": 57,
+    "symbol": "R3"
+   },
+   {
+    "cluster": "c4",
+    "liquidity": 0.0,
+    "price": 100.0,
+    "rank": 14,
+    "score": 56,
+    "symbol": "R4"
+   },
+   {
+    "cluster": "c5",
+    "liquidity": 0.0,
+    "price": 100.0,
+    "rank": 15,
+    "score": 55,
+    "symbol": "R5"
+   }
+  ],
+  "cluster_cap": 25.0,
+  "half_factor": 0.5,
+  "half_sized": [],
+  "max_sleeve_w": 30.0,
+  "min_sleeve_w": 1.0,
+  "sleeve_pct": 100.0
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "dataclasses.asdict(Allocation). Inputs are JSON; each function is called from them after a JSON round trip. Dates are ISO days, enums their values, IndexSignals/BookWeights/RegimeState their as_dict(), Allocation and Position/Candidate/OrderLine dataclasses.asdict, tuples lists. A raise is {raises: {type, message}}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_exposure.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "cluster_weights": {
+   "c0": 13.043478,
+   "c1": 12.826087,
+   "c2": 12.608696,
+   "c3": 12.391304,
+   "c4": 12.173913,
+   "c5": 11.956522,
+   "pharma": 25.0
+  },
+  "half_sized": [],
+  "notes": [
+   "cluster cap applied: pharma"
+  ],
+  "sleeve_pct": 100.0,
+  "weights_nav": {
+   "H0": 4.301075,
+   "H1": 4.247312,
+   "H2": 4.193548,
+   "H3": 4.139785,
+   "H4": 4.086022,
+   "H5": 4.032258,
+   "R0": 13.043478,
+   "R1": 12.826087,
+   "R2": 12.608696,
+   "R3": 12.391304,
+   "R4": 12.173913,
+   "R5": 11.956522
+  },
+  "weights_sleeve": {
+   "H0": 4.301075,
+   "H1": 4.247312,
+   "H2": 4.193548,
+   "H3": 4.139785,
+   "H4": 4.086022,
+   "H5": 4.032258,
+   "R0": 13.043478,
+   "R1": 12.826087,
+   "R2": 12.608696,
+   "R3": 12.391304,
+   "R4": 12.173913,
+   "R5": 11.956522
+  }
+ }
+}

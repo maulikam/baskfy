@@ -1,0 +1,257 @@
+{
+ "lane": "sleeve_backtests",
+ "note": "Lane sleeve_backtests (wave 6): the sleeves' on-demand research backtests. Each run appends one *_backtest_run row; started_at is the injected clock's first second on both sides, finished_at advances with real elapsed time (compared <null>/<set>), created_at is Postgres now() (stamp), and error carries Python's traceback or Rust's origin line (compared <null>/<set>; the payload compares the class and message). The bed holds bars 2017-01-02..2026-10-29; windows are kept short so a case is minutes, not the nine-year run.",
+ "cases": [
+  {
+   "name": "vbt-window-friday-in-session",
+   "task": "baskfy.vbt.backtest",
+   "args": {
+    "start": "2025-10-01",
+    "end": "2026-10-29"
+   },
+   "now": "2026-10-30T11:00:00",
+   "mask": {
+    "vb_backtest_run": {
+     "finished_at": "elapsed",
+     "created_at": "stamp"
+    }
+   },
+   "payload_mask": [
+    "/finished_at"
+   ],
+   "note": "a Friday inside the session: three books over one detection pass, one row with stats and drift"
+  },
+  {
+   "name": "vbt-end-defaults-to-today-saturday",
+   "task": "baskfy.vbt.backtest",
+   "args": [
+    "2026-03-02"
+   ],
+   "now": "2026-10-31T09:00:00",
+   "mask": {
+    "vb_backtest_run": {
+     "finished_at": "elapsed",
+     "created_at": "stamp"
+    }
+   },
+   "payload_mask": [
+    "/finished_at"
+   ],
+   "note": "positional start; end is date.today() (UTC under TZ=UTC) on a non-trading Saturday morning, past the last bar"
+  },
+  {
+   "name": "vbt-before-session-start-empty-string",
+   "task": "baskfy.vbt.backtest",
+   "args": {
+    "start": "",
+    "end": "2018-12-31"
+   },
+   "now": "2026-10-30T08:00:00",
+   "mask": {
+    "vb_backtest_run": {
+     "finished_at": "elapsed",
+     "created_at": "stamp"
+    }
+   },
+   "payload_mask": [
+    "/finished_at"
+   ],
+   "note": "an empty start is falsy, so DEFAULT_START (2017-10-16); a short history with the warm-up starting before the first bar"
+  },
+  {
+   "name": "vbt-no-bars-in-window-after-close",
+   "task": "baskfy.vbt.backtest",
+   "args": {
+    "start": "2010-01-01",
+    "end": "2010-06-30"
+   },
+   "now": "2026-10-30T19:00:00",
+   "note": "ValueError after the row is inserted: run_in_session rolls it back, the identity sequence remembers it"
+  },
+  {
+   "name": "vbt-two-sessions-nan-stats",
+   "task": "baskfy.vbt.backtest",
+   "args": {
+    "start": "2026-10-28",
+    "end": "2026-10-29"
+   },
+   "now": "2026-10-30T19:00:00",
+   "payload_mask": [
+    "/error"
+   ],
+   "note": "two sessions: the books summarise with a NaN (no variance), json.dumps writes the bare NaN token and Postgres refuses it; Python raises DBAPIError (its message carries SQLAlchemy's SQL and parameter dump, masked), the whole run rolls back, only the identity sequence moves"
+  },
+  {
+   "name": "vbt-bad-date",
+   "task": "baskfy.vbt.backtest",
+   "args": {
+    "start": "29-10-2026"
+   },
+   "now": "2026-10-30T09:00:00"
+  },
+  {
+   "name": "vbt-start-not-a-string",
+   "task": "baskfy.vbt.backtest",
+   "args": {
+    "start": 20261029
+   },
+   "now": "2026-10-30T09:00:00"
+  },
+  {
+   "name": "vbt-unknown-keyword",
+   "task": "baskfy.vbt.backtest",
+   "args": {
+    "begin": "2026-01-01"
+   },
+   "now": "2026-10-30T09:00:00"
+  },
+  {
+   "name": "vbt-no-sole-user",
+   "task": "baskfy.vbt.backtest",
+   "args": {},
+   "now": "2026-10-30T09:00:00",
+   "env": {
+    "BASKFY_SOLE_USER_ID": ""
+   }
+  },
+  {
+   "name": "swing-window-friday-in-session",
+   "task": "baskfy.swing.backtest",
+   "args": {
+    "start": "2025-11-03",
+    "end": "2026-10-29"
+   },
+   "now": "2026-10-30T11:00:00",
+   "mask": {
+    "sw_backtest_run": {
+     "finished_at": "elapsed",
+     "error": "elapsed"
+    }
+   },
+   "payload_mask": [
+    "/finished_at"
+   ],
+   "note": "a year of 04 §11 on the bed: three books (the index read, nifty-500 or its fallback), the row committed in flight and finished"
+  },
+  {
+   "name": "swing-end-defaults-to-today-ist-saturday",
+   "task": "baskfy.swing.backtest",
+   "args": {
+    "start": "2026-07-01"
+   },
+   "now": "2026-10-31T09:00:00",
+   "mask": {
+    "sw_backtest_run": {
+     "finished_at": "elapsed",
+     "error": "elapsed"
+    }
+   },
+   "payload_mask": [
+    "/finished_at"
+   ],
+   "note": "end is datetime.now(IST).date() on a non-trading Saturday; the calendar ends on the last session"
+  },
+  {
+   "name": "swing-sleeve-and-cost-before-session",
+   "task": "baskfy.swing.backtest",
+   "args": {
+    "start": "2026-04-01",
+    "end": "2026-10-29",
+    "sleeve_inr": "2500000",
+    "cost_pct_per_side": "0.2"
+   },
+   "now": "2026-10-30T08:00:00",
+   "mask": {
+    "sw_backtest_run": {
+     "finished_at": "elapsed",
+     "error": "elapsed"
+    }
+   },
+   "payload_mask": [
+    "/finished_at"
+   ],
+   "note": "money arrives as strings and is Decimal all the way"
+  },
+  {
+   "name": "swing-positional-after-close",
+   "task": "baskfy.swing.backtest",
+   "args": [
+    "2026-09-01",
+    "2026-10-29",
+    null,
+    "0.13"
+   ],
+   "now": "2026-10-30T19:00:00",
+   "mask": {
+    "sw_backtest_run": {
+     "finished_at": "elapsed",
+     "error": "elapsed"
+    }
+   },
+   "payload_mask": [
+    "/finished_at"
+   ]
+  },
+  {
+   "name": "swing-end-before-start-error-row",
+   "task": "baskfy.swing.backtest",
+   "args": {
+    "start": "2026-10-29",
+    "end": "2026-10-01"
+   },
+   "now": "2026-10-30T19:00:00",
+   "mask": {
+    "sw_backtest_run": {
+     "finished_at": "elapsed",
+     "error": "elapsed"
+    }
+   },
+   "note": "ValueError from the engine's check: the row was committed on the way in and is finished with its error, then the error leaves"
+  },
+  {
+   "name": "swing-before-any-bar",
+   "task": "baskfy.swing.backtest",
+   "args": {
+    "start": "2010-01-01",
+    "end": "2010-02-26"
+   },
+   "now": "2026-10-30T09:00:00",
+   "mask": {
+    "sw_backtest_run": {
+     "finished_at": "elapsed",
+     "error": "elapsed"
+    }
+   },
+   "payload_mask": [
+    "/finished_at"
+   ],
+   "note": "no bars and no index in the window: breadth-only, the INDEX_ABSENT caveat, zero trades"
+  },
+  {
+   "name": "swing-bad-sleeve",
+   "task": "baskfy.swing.backtest",
+   "args": {
+    "start": "2026-10-01",
+    "sleeve_inr": "ten lakh"
+   },
+   "now": "2026-10-30T09:00:00"
+  },
+  {
+   "name": "swing-bad-date",
+   "task": "baskfy.swing.backtest",
+   "args": {
+    "end": "2026-02-30"
+   },
+   "now": "2026-10-30T09:00:00"
+  },
+  {
+   "name": "swing-no-sole-user",
+   "task": "baskfy.swing.backtest",
+   "args": {},
+   "now": "2026-10-30T09:00:00",
+   "env": {
+    "BASKFY_SOLE_USER_ID": ""
+   }
+  }
+ ]
+}

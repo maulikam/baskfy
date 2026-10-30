@@ -1,0 +1,1950 @@
+{
+ "fn": "baskfy_core.exposure.regime.build_index_signals",
+ "inputs": {
+  "as_of": null,
+  "candles": [
+   {
+    "close": 49.74,
+    "date": "2026-01-01",
+    "high": 50.2374,
+    "is_final": true,
+    "low": 49.2426,
+    "open": 49.74
+   },
+   {
+    "close": 48.47,
+    "date": "2026-01-02",
+    "high": 48.9547,
+    "is_final": true,
+    "low": 47.9853,
+    "open": 48.47
+   },
+   {
+    "close": 50.17,
+    "date": "2026-01-03",
+    "high": 50.6717,
+    "is_final": true,
+    "low": 49.6683,
+    "open": 50.17
+   },
+   {
+    "close": 48.95,
+    "date": "2026-01-04",
+    "high": 49.4395,
+    "is_final": true,
+    "low": 48.4605,
+    "open": 48.95
+   },
+   {
+    "close": 48.11,
+    "date": "2026-01-05",
+    "high": 48.5911,
+    "is_final": true,
+    "low": 47.6289,
+    "open": 48.11
+   },
+   {
+    "close": 48.99,
+    "date": "2026-01-06",
+    "high": 49.4799,
+    "is_final": true,
+    "low": 48.5001,
+    "open": 48.99
+   },
+   {
+    "close": 50.82,
+    "date": "2026-01-07",
+    "high": 51.3282,
+    "is_final": true,
+    "low": 50.3118,
+    "open": 50.82
+   },
+   {
+    "close": 51.11,
+    "date": "2026-01-08",
+    "high": 51.6211,
+    "is_final": true,
+    "low": 50.5989,
+    "open": 51.11
+   },
+   {
+    "close": 50.21,
+    "date": "2026-01-09",
+    "high": 50.7121,
+    "is_final": true,
+    "low": 49.7079,
+    "open": 50.21
+   },
+   {
+    "close": 50.59,
+    "date": "2026-01-10",
+    "high": 51.0959,
+    "is_final": true,
+    "low": 50.0841,
+    "open": 50.59
+   },
+   {
+    "close": 50.0,
+    "date": "2026-01-11",
+    "high": 50.5,
+    "is_final": true,
+    "low": 49.5,
+    "open": 50.0
+   },
+   {
+    "close": 50.46,
+    "date": "2026-01-12",
+    "high": 50.9646,
+    "is_final": true,
+    "low": 49.9554,
+    "open": 50.46
+   },
+   {
+    "close": 50.07,
+    "date": "2026-01-13",
+    "high": 50.5707,
+    "is_final": true,
+    "low": 49.5693,
+    "open": 50.07
+   },
+   {
+    "close": 52.06,
+    "date": "2026-01-14",
+    "high": 52.5806,
+    "is_final": true,
+    "low": 51.5394,
+    "open": 52.06
+   },
+   {
+    "close": 52.24,
+    "date": "2026-01-15",
+    "high": 52.7624,
+    "is_final": true,
+    "low": 51.7176,
+    "open": 52.24
+   },
+   {
+    "close": 52.27,
+    "date": "2026-01-16",
+    "high": 52.7927,
+    "is_final": true,
+    "low": 51.7473,
+    "open": 52.27
+   },
+   {
+    "close": 52.43,
+    "date": "2026-01-17",
+    "high": 52.9543,
+    "is_final": true,
+    "low": 51.9057,
+    "open": 52.43
+   },
+   {
+    "close": 53.4,
+    "date": "2026-01-18",
+    "high": 53.934,
+    "is_final": true,
+    "low": 52.866,
+    "open": 53.4
+   },
+   {
+    "close": 53.12,
+    "date": "2026-01-19",
+    "high": 53.6512,
+    "is_final": true,
+    "low": 52.5888,
+    "open": 53.12
+   },
+   {
+    "close": 53.17,
+    "date": "2026-01-20",
+    "high": 53.7017,
+    "is_final": true,
+    "low": 52.6383,
+    "open": 53.17
+   },
+   {
+    "close": 53.46,
+    "date": "2026-01-21",
+    "high": 53.9946,
+    "is_final": true,
+    "low": 52.9254,
+    "open": 53.46
+   },
+   {
+    "close": 52.0,
+    "date": "2026-01-22",
+    "high": 52.52,
+    "is_final": true,
+    "low": 51.48,
+    "open": 52.0
+   },
+   {
+    "close": 52.61,
+    "date": "2026-01-23",
+    "high": 53.1361,
+    "is_final": true,
+    "low": 52.0839,
+    "open": 52.61
+   },
+   {
+    "close": 51.78,
+    "date": "2026-01-24",
+    "high": 52.2978,
+    "is_final": true,
+    "low": 51.2622,
+    "open": 51.78
+   },
+   {
+    "close": 51.05,
+    "date": "2026-01-25",
+    "high": 51.5605,
+    "is_final": true,
+    "low": 50.5395,
+    "open": 51.05
+   },
+   {
+    "close": 51.75,
+    "date": "2026-01-26",
+    "high": 52.2675,
+    "is_final": true,
+    "low": 51.2325,
+    "open": 51.75
+   },
+   {
+    "close": 51.38,
+    "date": "2026-01-27",
+    "high": 51.8938,
+    "is_final": true,
+    "low": 50.8662,
+    "open": 51.38
+   },
+   {
+    "close": 51.93,
+    "date": "2026-01-28",
+    "high": 52.4493,
+    "is_final": true,
+    "low": 51.4107,
+    "open": 51.93
+   },
+   {
+    "close": 50.9,
+    "date": "2026-01-29",
+    "high": 51.409,
+    "is_final": true,
+    "low": 50.391,
+    "open": 50.9
+   },
+   {
+    "close": 51.56,
+    "date": "2026-01-30",
+    "high": 52.0756,
+    "is_final": true,
+    "low": 51.0444,
+    "open": 51.56
+   },
+   {
+    "close": 53.22,
+    "date": "2026-01-31",
+    "high": 53.7522,
+    "is_final": true,
+    "low": 52.6878,
+    "open": 53.22
+   },
+   {
+    "close": 53.13,
+    "date": "2026-02-01",
+    "high": 53.6613,
+    "is_final": true,
+    "low": 52.5987,
+    "open": 53.13
+   },
+   {
+    "close": 53.71,
+    "date": "2026-02-02",
+    "high": 54.2471,
+    "is_final": true,
+    "low": 53.1729,
+    "open": 53.71
+   },
+   {
+    "close": 52.8,
+    "date": "2026-02-03",
+    "high": 53.328,
+    "is_final": true,
+    "low": 52.272,
+    "open": 52.8
+   },
+   {
+    "close": 51.84,
+    "date": "2026-02-04",
+    "high": 52.3584,
+    "is_final": true,
+    "low": 51.3216,
+    "open": 51.84
+   },
+   {
+    "close": 51.36,
+    "date": "2026-02-05",
+    "high": 51.8736,
+    "is_final": true,
+    "low": 50.8464,
+    "open": 51.36
+   },
+   {
+    "close": 50.96,
+    "date": "2026-02-06",
+    "high": 51.4696,
+    "is_final": true,
+    "low": 50.4504,
+    "open": 50.96
+   },
+   {
+    "close": 49.28,
+    "date": "2026-02-07",
+    "high": 49.7728,
+    "is_final": true,
+    "low": 48.7872,
+    "open": 49.28
+   },
+   {
+    "close": 50.18,
+    "date": "2026-02-08",
+    "high": 50.6818,
+    "is_final": true,
+    "low": 49.6782,
+    "open": 50.18
+   },
+   {
+    "close": 48.95,
+    "date": "2026-02-09",
+    "high": 49.4395,
+    "is_final": true,
+    "low": 48.4605,
+    "open": 48.95
+   },
+   {
+    "close": 49.42,
+    "date": "2026-02-10",
+    "high": 49.9142,
+    "is_final": true,
+    "low": 48.9258,
+    "open": 49.42
+   },
+   {
+    "close": 48.21,
+    "date": "2026-02-11",
+    "high": 48.6921,
+    "is_final": true,
+    "low": 47.7279,
+    "open": 48.21
+   },
+   {
+    "close": 47.08,
+    "date": "2026-02-12",
+    "high": 47.5508,
+    "is_final": true,
+    "low": 46.6092,
+    "open": 47.08
+   },
+   {
+    "close": 46.2,
+    "date": "2026-02-13",
+    "high": 46.662,
+    "is_final": true,
+    "low": 45.738,
+    "open": 46.2
+   },
+   {
+    "close": 45.82,
+    "date": "2026-02-14",
+    "high": 46.2782,
+    "is_final": true,
+    "low": 45.3618,
+    "open": 45.82
+   },
+   {
+    "close": 44.97,
+    "date": "2026-02-15",
+    "high": 45.4197,
+    "is_final": true,
+    "low": 44.5203,
+    "open": 44.97
+   },
+   {
+    "close": 43.93,
+    "date": "2026-02-16",
+    "high": 44.3693,
+    "is_final": true,
+    "low": 43.4907,
+    "open": 43.93
+   },
+   {
+    "close": 44.76,
+    "date": "2026-02-17",
+    "high": 45.2076,
+    "is_final": true,
+    "low": 44.3124,
+    "open": 44.76
+   },
+   {
+    "close": 44.0,
+    "date": "2026-02-18",
+    "high": 44.44,
+    "is_final": true,
+    "low": 43.56,
+    "open": 44.0
+   },
+   {
+    "close": 44.34,
+    "date": "2026-02-19",
+    "high": 44.7834,
+    "is_final": true,
+    "low": 43.8966,
+    "open": 44.34
+   },
+   {
+    "close": 44.61,
+    "date": "2026-02-20",
+    "high": 45.0561,
+    "is_final": true,
+    "low": 44.1639,
+    "open": 44.61
+   },
+   {
+    "close": 44.98,
+    "date": "2026-02-21",
+    "high": 45.4298,
+    "is_final": true,
+    "low": 44.5302,
+    "open": 44.98
+   },
+   {
+    "close": 44.76,
+    "date": "2026-02-22",
+    "high": 45.2076,
+    "is_final": true,
+    "low": 44.3124,
+    "open": 44.76
+   },
+   {
+    "close": 46.78,
+    "date": "2026-02-23",
+    "high": 47.2478,
+    "is_final": true,
+    "low": 46.3122,
+    "open": 46.78
+   },
+   {
+    "close": 47.28,
+    "date": "2026-02-24",
+    "high": 47.7528,
+    "is_final": true,
+    "low": 46.8072,
+    "open": 47.28
+   },
+   {
+    "close": 47.3,
+    "date": "2026-02-25",
+    "high": 47.773,
+    "is_final": true,
+    "low": 46.827,
+    "open": 47.3
+   },
+   {
+    "close": 47.52,
+    "date": "2026-02-26",
+    "high": 47.9952,
+    "is_final": true,
+    "low": 47.0448,
+    "open": 47.52
+   },
+   {
+    "close": 46.46,
+    "date": "2026-02-27",
+    "high": 46.9246,
+    "is_final": true,
+    "low": 45.9954,
+    "open": 46.46
+   },
+   {
+    "close": 46.44,
+    "date": "2026-02-28",
+    "high": 46.9044,
+    "is_final": true,
+    "low": 45.9756,
+    "open": 46.44
+   },
+   {
+    "close": 46.99,
+    "date": "2026-03-01",
+    "high": 47.4599,
+    "is_final": true,
+    "low": 46.5201,
+    "open": 46.99
+   },
+   {
+    "close": 45.82,
+    "date": "2026-03-02",
+    "high": 46.2782,
+    "is_final": true,
+    "low": 45.3618,
+    "open": 45.82
+   },
+   {
+    "close": 45.38,
+    "date": "2026-03-03",
+    "high": 45.8338,
+    "is_final": true,
+    "low": 44.9262,
+    "open": 45.38
+   },
+   {
+    "close": 44.35,
+    "date": "2026-03-04",
+    "high": 44.7935,
+    "is_final": true,
+    "low": 43.9065,
+    "open": 44.35
+   },
+   {
+    "close": 44.34,
+    "date": "2026-03-05",
+    "high": 44.7834,
+    "is_final": true,
+    "low": 43.8966,
+    "open": 44.34
+   },
+   {
+    "close": 43.09,
+    "date": "2026-03-06",
+    "high": 43.5209,
+    "is_final": true,
+    "low": 42.6591,
+    "open": 43.09
+   },
+   {
+    "close": 44.02,
+    "date": "2026-03-07",
+    "high": 44.4602,
+    "is_final": true,
+    "low": 43.5798,
+    "open": 44.02
+   },
+   {
+    "close": 43.07,
+    "date": "2026-03-08",
+    "high": 43.5007,
+    "is_final": true,
+    "low": 42.6393,
+    "open": 43.07
+   },
+   {
+    "close": 42.13,
+    "date": "2026-03-09",
+    "high": 42.5513,
+    "is_final": true,
+    "low": 41.7087,
+    "open": 42.13
+   },
+   {
+    "close": 42.45,
+    "date": "2026-03-10",
+    "high": 42.8745,
+    "is_final": true,
+    "low": 42.0255,
+    "open": 42.45
+   },
+   {
+    "close": 43.12,
+    "date": "2026-03-11",
+    "high": 43.5512,
+    "is_final": true,
+    "low": 42.6888,
+    "open": 43.12
+   },
+   {
+    "close": 41.49,
+    "date": "2026-03-12",
+    "high": 41.9049,
+    "is_final": true,
+    "low": 41.0751,
+    "open": 41.49
+   },
+   {
+    "close": 41.32,
+    "date": "2026-03-13",
+    "high": 41.7332,
+    "is_final": true,
+    "low": 40.9068,
+    "open": 41.32
+   },
+   {
+    "close": 41.13,
+    "date": "2026-03-14",
+    "high": 41.5413,
+    "is_final": true,
+    "low": 40.7187,
+    "open": 41.13
+   },
+   {
+    "close": 40.36,
+    "date": "2026-03-15",
+    "high": 40.7636,
+    "is_final": true,
+    "low": 39.9564,
+    "open": 40.36
+   },
+   {
+    "close": 38.62,
+    "date": "2026-03-16",
+    "high": 39.0062,
+    "is_final": true,
+    "low": 38.2338,
+    "open": 38.62
+   },
+   {
+    "close": 39.05,
+    "date": "2026-03-17",
+    "high": 39.4405,
+    "is_final": true,
+    "low": 38.6595,
+    "open": 39.05
+   },
+   {
+    "close": 38.86,
+    "date": "2026-03-18",
+    "high": 39.2486,
+    "is_final": true,
+    "low": 38.4714,
+    "open": 38.86
+   },
+   {
+    "close": 37.56,
+    "date": "2026-03-19",
+    "high": 37.9356,
+    "is_final": true,
+    "low": 37.1844,
+    "open": 37.56
+   },
+   {
+    "close": 37.99,
+    "date": "2026-03-20",
+    "high": 38.3699,
+    "is_final": true,
+    "low": 37.6101,
+    "open": 37.99
+   },
+   {
+    "close": 38.61,
+    "date": "2026-03-21",
+    "high": 38.9961,
+    "is_final": true,
+    "low": 38.2239,
+    "open": 38.61
+   },
+   {
+    "close": 39.1,
+    "date": "2026-03-22",
+    "high": 39.491,
+    "is_final": true,
+    "low": 38.709,
+    "open": 39.1
+   },
+   {
+    "close": 39.29,
+    "date": "2026-03-23",
+    "high": 39.6829,
+    "is_final": true,
+    "low": 38.8971,
+    "open": 39.29
+   },
+   {
+    "close": 39.62,
+    "date": "2026-03-24",
+    "high": 40.0162,
+    "is_final": true,
+    "low": 39.2238,
+    "open": 39.62
+   },
+   {
+    "close": 40.21,
+    "date": "2026-03-25",
+    "high": 40.6121,
+    "is_final": true,
+    "low": 39.8079,
+    "open": 40.21
+   },
+   {
+    "close": 39.61,
+    "date": "2026-03-26",
+    "high": 40.0061,
+    "is_final": true,
+    "low": 39.2139,
+    "open": 39.61
+   },
+   {
+    "close": 39.56,
+    "date": "2026-03-27",
+    "high": 39.9556,
+    "is_final": true,
+    "low": 39.1644,
+    "open": 39.56
+   },
+   {
+    "close": 39.41,
+    "date": "2026-03-28",
+    "high": 39.8041,
+    "is_final": true,
+    "low": 39.0159,
+    "open": 39.41
+   },
+   {
+    "close": 38.92,
+    "date": "2026-03-29",
+    "high": 39.3092,
+    "is_final": true,
+    "low": 38.5308,
+    "open": 38.92
+   },
+   {
+    "close": 38.83,
+    "date": "2026-03-30",
+    "high": 39.2183,
+    "is_final": true,
+    "low": 38.4417,
+    "open": 38.83
+   },
+   {
+    "close": 39.41,
+    "date": "2026-03-31",
+    "high": 39.8041,
+    "is_final": true,
+    "low": 39.0159,
+    "open": 39.41
+   },
+   {
+    "close": 39.17,
+    "date": "2026-04-01",
+    "high": 39.5617,
+    "is_final": true,
+    "low": 38.7783,
+    "open": 39.17
+   },
+   {
+    "close": 39.22,
+    "date": "2026-04-02",
+    "high": 39.6122,
+    "is_final": true,
+    "low": 38.8278,
+    "open": 39.22
+   },
+   {
+    "close": 39.13,
+    "date": "2026-04-03",
+    "high": 39.5213,
+    "is_final": true,
+    "low": 38.7387,
+    "open": 39.13
+   },
+   {
+    "close": 39.84,
+    "date": "2026-04-04",
+    "high": 40.2384,
+    "is_final": true,
+    "low": 39.4416,
+    "open": 39.84
+   },
+   {
+    "close": 38.33,
+    "date": "2026-04-05",
+    "high": 38.7133,
+    "is_final": true,
+    "low": 37.9467,
+    "open": 38.33
+   },
+   {
+    "close": 39.73,
+    "date": "2026-04-06",
+    "high": 40.1273,
+    "is_final": true,
+    "low": 39.3327,
+    "open": 39.73
+   },
+   {
+    "close": 39.06,
+    "date": "2026-04-07",
+    "high": 39.4506,
+    "is_final": true,
+    "low": 38.6694,
+    "open": 39.06
+   },
+   {
+    "close": 39.07,
+    "date": "2026-04-08",
+    "high": 39.4607,
+    "is_final": true,
+    "low": 38.6793,
+    "open": 39.07
+   },
+   {
+    "close": 38.32,
+    "date": "2026-04-09",
+    "high": 38.7032,
+    "is_final": true,
+    "low": 37.9368,
+    "open": 38.32
+   },
+   {
+    "close": 37.46,
+    "date": "2026-04-10",
+    "high": 37.8346,
+    "is_final": true,
+    "low": 37.0854,
+    "open": 37.46
+   },
+   {
+    "close": 38.32,
+    "date": "2026-04-11",
+    "high": 38.7032,
+    "is_final": true,
+    "low": 37.9368,
+    "open": 38.32
+   },
+   {
+    "close": 37.5,
+    "date": "2026-04-12",
+    "high": 37.875,
+    "is_final": true,
+    "low": 37.125,
+    "open": 37.5
+   },
+   {
+    "close": 37.45,
+    "date": "2026-04-13",
+    "high": 37.8245,
+    "is_final": true,
+    "low": 37.0755,
+    "open": 37.45
+   },
+   {
+    "close": 37.8,
+    "date": "2026-04-14",
+    "high": 38.178,
+    "is_final": true,
+    "low": 37.422,
+    "open": 37.8
+   },
+   {
+    "close": 37.31,
+    "date": "2026-04-15",
+    "high": 37.6831,
+    "is_final": true,
+    "low": 36.9369,
+    "open": 37.31
+   },
+   {
+    "close": 37.25,
+    "date": "2026-04-16",
+    "high": 37.6225,
+    "is_final": true,
+    "low": 36.8775,
+    "open": 37.25
+   },
+   {
+    "close": 36.61,
+    "date": "2026-04-17",
+    "high": 36.9761,
+    "is_final": true,
+    "low": 36.2439,
+    "open": 36.61
+   },
+   {
+    "close": 36.47,
+    "date": "2026-04-18",
+    "high": 36.8347,
+    "is_final": true,
+    "low": 36.1053,
+    "open": 36.47
+   },
+   {
+    "close": 35.88,
+    "date": "2026-04-19",
+    "high": 36.2388,
+    "is_final": true,
+    "low": 35.5212,
+    "open": 35.88
+   },
+   {
+    "close": 35.62,
+    "date": "2026-04-20",
+    "high": 35.9762,
+    "is_final": true,
+    "low": 35.2638,
+    "open": 35.62
+   },
+   {
+    "close": 35.71,
+    "date": "2026-04-21",
+    "high": 36.0671,
+    "is_final": true,
+    "low": 35.3529,
+    "open": 35.71
+   },
+   {
+    "close": 36.39,
+    "date": "2026-04-22",
+    "high": 36.7539,
+    "is_final": true,
+    "low": 36.0261,
+    "open": 36.39
+   },
+   {
+    "close": 35.39,
+    "date": "2026-04-23",
+    "high": 35.7439,
+    "is_final": true,
+    "low": 35.0361,
+    "open": 35.39
+   },
+   {
+    "close": 35.3,
+    "date": "2026-04-24",
+    "high": 35.653,
+    "is_final": true,
+    "low": 34.947,
+    "open": 35.3
+   },
+   {
+    "close": 34.99,
+    "date": "2026-04-25",
+    "high": 35.3399,
+    "is_final": true,
+    "low": 34.6401,
+    "open": 34.99
+   },
+   {
+    "close": 34.5,
+    "date": "2026-04-26",
+    "high": 34.845,
+    "is_final": true,
+    "low": 34.155,
+    "open": 34.5
+   },
+   {
+    "close": 35.15,
+    "date": "2026-04-27",
+    "high": 35.5015,
+    "is_final": true,
+    "low": 34.7985,
+    "open": 35.15
+   },
+   {
+    "close": 36.17,
+    "date": "2026-04-28",
+    "high": 36.5317,
+    "is_final": true,
+    "low": 35.8083,
+    "open": 36.17
+   },
+   {
+    "close": 36.14,
+    "date": "2026-04-29",
+    "high": 36.5014,
+    "is_final": true,
+    "low": 35.7786,
+    "open": 36.14
+   },
+   {
+    "close": 36.54,
+    "date": "2026-04-30",
+    "high": 36.9054,
+    "is_final": true,
+    "low": 36.1746,
+    "open": 36.54
+   },
+   {
+    "close": 37.36,
+    "date": "2026-05-01",
+    "high": 37.7336,
+    "is_final": true,
+    "low": 36.9864,
+    "open": 37.36
+   },
+   {
+    "close": 36.37,
+    "date": "2026-05-02",
+    "high": 36.7337,
+    "is_final": true,
+    "low": 36.0063,
+    "open": 36.37
+   },
+   {
+    "close": 38.34,
+    "date": "2026-05-03",
+    "high": 38.7234,
+    "is_final": true,
+    "low": 37.9566,
+    "open": 38.34
+   },
+   {
+    "close": 38.33,
+    "date": "2026-05-04",
+    "high": 38.7133,
+    "is_final": true,
+    "low": 37.9467,
+    "open": 38.33
+   },
+   {
+    "close": 39.83,
+    "date": "2026-05-05",
+    "high": 40.2283,
+    "is_final": true,
+    "low": 39.4317,
+    "open": 39.83
+   },
+   {
+    "close": 38.67,
+    "date": "2026-05-06",
+    "high": 39.0567,
+    "is_final": true,
+    "low": 38.2833,
+    "open": 38.67
+   },
+   {
+    "close": 38.15,
+    "date": "2026-05-07",
+    "high": 38.5315,
+    "is_final": true,
+    "low": 37.7685,
+    "open": 38.15
+   },
+   {
+    "close": 37.81,
+    "date": "2026-05-08",
+    "high": 38.1881,
+    "is_final": true,
+    "low": 37.4319,
+    "open": 37.81
+   },
+   {
+    "close": 36.84,
+    "date": "2026-05-09",
+    "high": 37.2084,
+    "is_final": true,
+    "low": 36.4716,
+    "open": 36.84
+   },
+   {
+    "close": 37.55,
+    "date": "2026-05-10",
+    "high": 37.9255,
+    "is_final": true,
+    "low": 37.1745,
+    "open": 37.55
+   },
+   {
+    "close": 38.1,
+    "date": "2026-05-11",
+    "high": 38.481,
+    "is_final": true,
+    "low": 37.719,
+    "open": 38.1
+   },
+   {
+    "close": 37.46,
+    "date": "2026-05-12",
+    "high": 37.8346,
+    "is_final": true,
+    "low": 37.0854,
+    "open": 37.46
+   },
+   {
+    "close": 37.14,
+    "date": "2026-05-13",
+    "high": 37.5114,
+    "is_final": true,
+    "low": 36.7686,
+    "open": 37.14
+   },
+   {
+    "close": 37.71,
+    "date": "2026-05-14",
+    "high": 38.0871,
+    "is_final": true,
+    "low": 37.3329,
+    "open": 37.71
+   },
+   {
+    "close": 38.77,
+    "date": "2026-05-15",
+    "high": 39.1577,
+    "is_final": true,
+    "low": 38.3823,
+    "open": 38.77
+   },
+   {
+    "close": 39.62,
+    "date": "2026-05-16",
+    "high": 40.0162,
+    "is_final": true,
+    "low": 39.2238,
+    "open": 39.62
+   },
+   {
+    "close": 40.27,
+    "date": "2026-05-17",
+    "high": 40.6727,
+    "is_final": true,
+    "low": 39.8673,
+    "open": 40.27
+   },
+   {
+    "close": 40.36,
+    "date": "2026-05-18",
+    "high": 40.7636,
+    "is_final": true,
+    "low": 39.9564,
+    "open": 40.36
+   },
+   {
+    "close": 41.82,
+    "date": "2026-05-19",
+    "high": 42.2382,
+    "is_final": true,
+    "low": 41.4018,
+    "open": 41.82
+   },
+   {
+    "close": 42.78,
+    "date": "2026-05-20",
+    "high": 43.2078,
+    "is_final": true,
+    "low": 42.3522,
+    "open": 42.78
+   },
+   {
+    "close": 41.53,
+    "date": "2026-05-21",
+    "high": 41.9453,
+    "is_final": true,
+    "low": 41.1147,
+    "open": 41.53
+   },
+   {
+    "close": 41.15,
+    "date": "2026-05-22",
+    "high": 41.5615,
+    "is_final": true,
+    "low": 40.7385,
+    "open": 41.15
+   },
+   {
+    "close": 41.2,
+    "date": "2026-05-23",
+    "high": 41.612,
+    "is_final": true,
+    "low": 40.788,
+    "open": 41.2
+   },
+   {
+    "close": 40.66,
+    "date": "2026-05-24",
+    "high": 41.0666,
+    "is_final": true,
+    "low": 40.2534,
+    "open": 40.66
+   },
+   {
+    "close": 40.46,
+    "date": "2026-05-25",
+    "high": 40.8646,
+    "is_final": true,
+    "low": 40.0554,
+    "open": 40.46
+   },
+   {
+    "close": 40.12,
+    "date": "2026-05-26",
+    "high": 40.5212,
+    "is_final": true,
+    "low": 39.7188,
+    "open": 40.12
+   },
+   {
+    "close": 41.09,
+    "date": "2026-05-27",
+    "high": 41.5009,
+    "is_final": true,
+    "low": 40.6791,
+    "open": 41.09
+   },
+   {
+    "close": 41.37,
+    "date": "2026-05-28",
+    "high": 41.7837,
+    "is_final": true,
+    "low": 40.9563,
+    "open": 41.37
+   },
+   {
+    "close": 42.1,
+    "date": "2026-05-29",
+    "high": 42.521,
+    "is_final": true,
+    "low": 41.679,
+    "open": 42.1
+   },
+   {
+    "close": 43.07,
+    "date": "2026-05-30",
+    "high": 43.5007,
+    "is_final": true,
+    "low": 42.6393,
+    "open": 43.07
+   },
+   {
+    "close": 43.78,
+    "date": "2026-05-31",
+    "high": 44.2178,
+    "is_final": true,
+    "low": 43.3422,
+    "open": 43.78
+   },
+   {
+    "close": 42.16,
+    "date": "2026-06-01",
+    "high": 42.5816,
+    "is_final": true,
+    "low": 41.7384,
+    "open": 42.16
+   },
+   {
+    "close": 42.4,
+    "date": "2026-06-02",
+    "high": 42.824,
+    "is_final": true,
+    "low": 41.976,
+    "open": 42.4
+   },
+   {
+    "close": 41.61,
+    "date": "2026-06-03",
+    "high": 42.0261,
+    "is_final": true,
+    "low": 41.1939,
+    "open": 41.61
+   },
+   {
+    "close": 41.54,
+    "date": "2026-06-04",
+    "high": 41.9554,
+    "is_final": true,
+    "low": 41.1246,
+    "open": 41.54
+   },
+   {
+    "close": 43.03,
+    "date": "2026-06-05",
+    "high": 43.4603,
+    "is_final": true,
+    "low": 42.5997,
+    "open": 43.03
+   },
+   {
+    "close": 44.44,
+    "date": "2026-06-06",
+    "high": 44.8844,
+    "is_final": true,
+    "low": 43.9956,
+    "open": 44.44
+   },
+   {
+    "close": 43.5,
+    "date": "2026-06-07",
+    "high": 43.935,
+    "is_final": true,
+    "low": 43.065,
+    "open": 43.5
+   },
+   {
+    "close": 44.65,
+    "date": "2026-06-08",
+    "high": 45.0965,
+    "is_final": true,
+    "low": 44.2035,
+    "open": 44.65
+   },
+   {
+    "close": 44.31,
+    "date": "2026-06-09",
+    "high": 44.7531,
+    "is_final": true,
+    "low": 43.8669,
+    "open": 44.31
+   },
+   {
+    "close": 45.81,
+    "date": "2026-06-10",
+    "high": 46.2681,
+    "is_final": true,
+    "low": 45.3519,
+    "open": 45.81
+   },
+   {
+    "close": 45.21,
+    "date": "2026-06-11",
+    "high": 45.6621,
+    "is_final": true,
+    "low": 44.7579,
+    "open": 45.21
+   },
+   {
+    "close": 44.38,
+    "date": "2026-06-12",
+    "high": 44.8238,
+    "is_final": true,
+    "low": 43.9362,
+    "open": 44.38
+   },
+   {
+    "close": 44.41,
+    "date": "2026-06-13",
+    "high": 44.8541,
+    "is_final": true,
+    "low": 43.9659,
+    "open": 44.41
+   },
+   {
+    "close": 45.23,
+    "date": "2026-06-14",
+    "high": 45.6823,
+    "is_final": true,
+    "low": 44.7777,
+    "open": 45.23
+   },
+   {
+    "close": 44.17,
+    "date": "2026-06-15",
+    "high": 44.6117,
+    "is_final": true,
+    "low": 43.7283,
+    "open": 44.17
+   },
+   {
+    "close": 44.83,
+    "date": "2026-06-16",
+    "high": 45.2783,
+    "is_final": true,
+    "low": 44.3817,
+    "open": 44.83
+   },
+   {
+    "close": 43.98,
+    "date": "2026-06-17",
+    "high": 44.4198,
+    "is_final": true,
+    "low": 43.5402,
+    "open": 43.98
+   },
+   {
+    "close": 44.27,
+    "date": "2026-06-18",
+    "high": 44.7127,
+    "is_final": true,
+    "low": 43.8273,
+    "open": 44.27
+   },
+   {
+    "close": 44.89,
+    "date": "2026-06-19",
+    "high": 45.3389,
+    "is_final": true,
+    "low": 44.4411,
+    "open": 44.89
+   },
+   {
+    "close": 43.6,
+    "date": "2026-06-20",
+    "high": 44.036,
+    "is_final": true,
+    "low": 43.164,
+    "open": 43.6
+   },
+   {
+    "close": 42.37,
+    "date": "2026-06-21",
+    "high": 42.7937,
+    "is_final": true,
+    "low": 41.9463,
+    "open": 42.37
+   },
+   {
+    "close": 42.24,
+    "date": "2026-06-22",
+    "high": 42.6624,
+    "is_final": true,
+    "low": 41.8176,
+    "open": 42.24
+   },
+   {
+    "close": 42.4,
+    "date": "2026-06-23",
+    "high": 42.824,
+    "is_final": true,
+    "low": 41.976,
+    "open": 42.4
+   },
+   {
+    "close": 42.88,
+    "date": "2026-06-24",
+    "high": 43.3088,
+    "is_final": true,
+    "low": 42.4512,
+    "open": 42.88
+   },
+   {
+    "close": 41.65,
+    "date": "2026-06-25",
+    "high": 42.0665,
+    "is_final": true,
+    "low": 41.2335,
+    "open": 41.65
+   },
+   {
+    "close": 41.78,
+    "date": "2026-06-26",
+    "high": 42.1978,
+    "is_final": true,
+    "low": 41.3622,
+    "open": 41.78
+   },
+   {
+    "close": 41.44,
+    "date": "2026-06-27",
+    "high": 41.8544,
+    "is_final": true,
+    "low": 41.0256,
+    "open": 41.44
+   },
+   {
+    "close": 43.0,
+    "date": "2026-06-28",
+    "high": 43.43,
+    "is_final": true,
+    "low": 42.57,
+    "open": 43.0
+   },
+   {
+    "close": 44.45,
+    "date": "2026-06-29",
+    "high": 44.8945,
+    "is_final": true,
+    "low": 44.0055,
+    "open": 44.45
+   },
+   {
+    "close": 43.45,
+    "date": "2026-06-30",
+    "high": 43.8845,
+    "is_final": true,
+    "low": 43.0155,
+    "open": 43.45
+   },
+   {
+    "close": 42.53,
+    "date": "2026-07-01",
+    "high": 42.9553,
+    "is_final": true,
+    "low": 42.1047,
+    "open": 42.53
+   },
+   {
+    "close": 43.77,
+    "date": "2026-07-02",
+    "high": 44.2077,
+    "is_final": true,
+    "low": 43.3323,
+    "open": 43.77
+   },
+   {
+    "close": 44.56,
+    "date": "2026-07-03",
+    "high": 45.0056,
+    "is_final": true,
+    "low": 44.1144,
+    "open": 44.56
+   },
+   {
+    "close": 44.48,
+    "date": "2026-07-04",
+    "high": 44.9248,
+    "is_final": true,
+    "low": 44.0352,
+    "open": 44.48
+   },
+   {
+    "close": 43.92,
+    "date": "2026-07-05",
+    "high": 44.3592,
+    "is_final": true,
+    "low": 43.4808,
+    "open": 43.92
+   },
+   {
+    "close": 44.01,
+    "date": "2026-07-06",
+    "high": 44.4501,
+    "is_final": true,
+    "low": 43.5699,
+    "open": 44.01
+   },
+   {
+    "close": 44.41,
+    "date": "2026-07-07",
+    "high": 44.8541,
+    "is_final": true,
+    "low": 43.9659,
+    "open": 44.41
+   },
+   {
+    "close": 44.34,
+    "date": "2026-07-08",
+    "high": 44.7834,
+    "is_final": true,
+    "low": 43.8966,
+    "open": 44.34
+   },
+   {
+    "close": 44.45,
+    "date": "2026-07-09",
+    "high": 44.8945,
+    "is_final": true,
+    "low": 44.0055,
+    "open": 44.45
+   },
+   {
+    "close": 44.38,
+    "date": "2026-07-10",
+    "high": 44.8238,
+    "is_final": true,
+    "low": 43.9362,
+    "open": 44.38
+   },
+   {
+    "close": 43.26,
+    "date": "2026-07-11",
+    "high": 43.6926,
+    "is_final": true,
+    "low": 42.8274,
+    "open": 43.26
+   },
+   {
+    "close": 43.93,
+    "date": "2026-07-12",
+    "high": 44.3693,
+    "is_final": true,
+    "low": 43.4907,
+    "open": 43.93
+   },
+   {
+    "close": 45.51,
+    "date": "2026-07-13",
+    "high": 45.9651,
+    "is_final": true,
+    "low": 45.0549,
+    "open": 45.51
+   },
+   {
+    "close": 47.05,
+    "date": "2026-07-14",
+    "high": 47.5205,
+    "is_final": true,
+    "low": 46.5795,
+    "open": 47.05
+   },
+   {
+    "close": 45.02,
+    "date": "2026-07-15",
+    "high": 45.4702,
+    "is_final": true,
+    "low": 44.5698,
+    "open": 45.02
+   },
+   {
+    "close": 45.1,
+    "date": "2026-07-16",
+    "high": 45.551,
+    "is_final": true,
+    "low": 44.649,
+    "open": 45.1
+   },
+   {
+    "close": 44.66,
+    "date": "2026-07-17",
+    "high": 45.1066,
+    "is_final": true,
+    "low": 44.2134,
+    "open": 44.66
+   },
+   {
+    "close": 43.43,
+    "date": "2026-07-18",
+    "high": 43.8643,
+    "is_final": true,
+    "low": 42.9957,
+    "open": 43.43
+   },
+   {
+    "close": 43.86,
+    "date": "2026-07-19",
+    "high": 44.2986,
+    "is_final": true,
+    "low": 43.4214,
+    "open": 43.86
+   },
+   {
+    "close": 43.64,
+    "date": "2026-07-20",
+    "high": 44.0764,
+    "is_final": true,
+    "low": 43.2036,
+    "open": 43.64
+   },
+   {
+    "close": 42.82,
+    "date": "2026-07-21",
+    "high": 43.2482,
+    "is_final": true,
+    "low": 42.3918,
+    "open": 42.82
+   },
+   {
+    "close": 44.86,
+    "date": "2026-07-22",
+    "high": 45.3086,
+    "is_final": true,
+    "low": 44.4114,
+    "open": 44.86
+   },
+   {
+    "close": 44.23,
+    "date": "2026-07-23",
+    "high": 44.6723,
+    "is_final": true,
+    "low": 43.7877,
+    "open": 44.23
+   },
+   {
+    "close": 43.9,
+    "date": "2026-07-24",
+    "high": 44.339,
+    "is_final": true,
+    "low": 43.461,
+    "open": 43.9
+   },
+   {
+    "close": 43.73,
+    "date": "2026-07-25",
+    "high": 44.1673,
+    "is_final": true,
+    "low": 43.2927,
+    "open": 43.73
+   },
+   {
+    "close": 41.95,
+    "date": "2026-07-26",
+    "high": 42.3695,
+    "is_final": true,
+    "low": 41.5305,
+    "open": 41.95
+   },
+   {
+    "close": 42.48,
+    "date": "2026-07-27",
+    "high": 42.9048,
+    "is_final": true,
+    "low": 42.0552,
+    "open": 42.48
+   },
+   {
+    "close": 41.99,
+    "date": "2026-07-28",
+    "high": 42.4099,
+    "is_final": true,
+    "low": 41.5701,
+    "open": 41.99
+   },
+   {
+    "close": 42.97,
+    "date": "2026-07-29",
+    "high": 43.3997,
+    "is_final": true,
+    "low": 42.5403,
+    "open": 42.97
+   },
+   {
+    "close": 43.18,
+    "date": "2026-07-30",
+    "high": 43.6118,
+    "is_final": true,
+    "low": 42.7482,
+    "open": 43.18
+   },
+   {
+    "close": 43.86,
+    "date": "2026-07-31",
+    "high": 44.2986,
+    "is_final": true,
+    "low": 43.4214,
+    "open": 43.86
+   },
+   {
+    "close": 43.75,
+    "date": "2026-08-01",
+    "high": 44.1875,
+    "is_final": true,
+    "low": 43.3125,
+    "open": 43.75
+   },
+   {
+    "close": 43.47,
+    "date": "2026-08-02",
+    "high": 43.9047,
+    "is_final": true,
+    "low": 43.0353,
+    "open": 43.47
+   },
+   {
+    "close": 44.22,
+    "date": "2026-08-03",
+    "high": 44.6622,
+    "is_final": true,
+    "low": 43.7778,
+    "open": 44.22
+   },
+   {
+    "close": 44.66,
+    "date": "2026-08-04",
+    "high": 45.1066,
+    "is_final": true,
+    "low": 44.2134,
+    "open": 44.66
+   },
+   {
+    "close": 45.9,
+    "date": "2026-08-05",
+    "high": 46.359,
+    "is_final": true,
+    "low": 45.441,
+    "open": 45.9
+   },
+   {
+    "close": 47.74,
+    "date": "2026-08-06",
+    "high": 48.2174,
+    "is_final": true,
+    "low": 47.2626,
+    "open": 47.74
+   },
+   {
+    "close": 45.41,
+    "date": "2026-08-07",
+    "high": 45.8641,
+    "is_final": true,
+    "low": 44.9559,
+    "open": 45.41
+   },
+   {
+    "close": 46.05,
+    "date": "2026-08-08",
+    "high": 46.5105,
+    "is_final": true,
+    "low": 45.5895,
+    "open": 46.05
+   },
+   {
+    "close": 45.7,
+    "date": "2026-08-09",
+    "high": 46.157,
+    "is_final": true,
+    "low": 45.243,
+    "open": 45.7
+   },
+   {
+    "close": 45.18,
+    "date": "2026-08-10",
+    "high": 45.6318,
+    "is_final": true,
+    "low": 44.7282,
+    "open": 45.18
+   },
+   {
+    "close": 45.13,
+    "date": "2026-08-11",
+    "high": 45.5813,
+    "is_final": true,
+    "low": 44.6787,
+    "open": 45.13
+   },
+   {
+    "close": 43.9,
+    "date": "2026-08-12",
+    "high": 44.339,
+    "is_final": true,
+    "low": 43.461,
+    "open": 43.9
+   },
+   {
+    "close": 42.97,
+    "date": "2026-08-13",
+    "high": 43.3997,
+    "is_final": true,
+    "low": 42.5403,
+    "open": 42.97
+   },
+   {
+    "close": 42.66,
+    "date": "2026-08-14",
+    "high": 43.0866,
+    "is_final": true,
+    "low": 42.2334,
+    "open": 42.66
+   },
+   {
+    "close": 43.61,
+    "date": "2026-08-15",
+    "high": 44.0461,
+    "is_final": true,
+    "low": 43.1739,
+    "open": 43.61
+   },
+   {
+    "close": 43.26,
+    "date": "2026-08-16",
+    "high": 43.6926,
+    "is_final": true,
+    "low": 42.8274,
+    "open": 43.26
+   },
+   {
+    "close": 43.56,
+    "date": "2026-08-17",
+    "high": 43.9956,
+    "is_final": true,
+    "low": 43.1244,
+    "open": 43.56
+   },
+   {
+    "close": 44.75,
+    "date": "2026-08-18",
+    "high": 45.1975,
+    "is_final": true,
+    "low": 44.3025,
+    "open": 44.75
+   }
+  ],
+  "cfg": {
+   "algorithm_version": "regime/1.0.0",
+   "bootstrap_policy": "observe_only",
+   "breadth_required": true,
+   "breadth_stale_days": 10,
+   "buffer_bps": 0,
+   "confirm_days": 1,
+   "default_book_weights": {
+    "largecap": 0.2,
+    "midcap": 0.3,
+    "smallcap": 0.5
+   },
+   "exchange": "NSE",
+   "exposure_tolerance_pct": 1.0,
+   "index_aliases": {
+    "NIFTY 500 MOMENTUM 50": [
+     "NIFTY500MOMENTM50"
+    ],
+    "NIFTY SMLCAP 250": [
+     "NIFTY SMALLCAP 250"
+    ]
+   },
+   "index_stale_days": 5,
+   "ma_lengths": [
+    20,
+    50,
+    200
+   ],
+   "min_breadth_coverage_pct": 90.0,
+   "min_classification_coverage_pct": 80.0,
+   "mode": "observe",
+   "momentum_sentinel": "NIFTY 500 MOMENTUM 50",
+   "r1_breadth_min": 55.0,
+   "r1_h200_min": 0.8,
+   "r1_h50_min": 0.8,
+   "r3_breadth_max": 40.0,
+   "r3_h200_max": 0.5,
+   "r4_bearish_stack_min": 0.6,
+   "r4_breadth_max": 30.0,
+   "r4_h200_max": 0.3,
+   "recovery_breadth_min": 55.0,
+   "recovery_confirm_evaluations": 2,
+   "recovery_h20_min": 0.5,
+   "segment": "INDICES",
+   "structural_indices": {
+    "largecap": "NIFTY 50",
+    "midcap": "NIFTY MIDCAP 150",
+    "smallcap": "NIFTY SMLCAP 250"
+   },
+   "tier_exposure_pct": {
+    "R1": 100.0,
+    "R2": 70.0,
+    "R3": 40.0,
+    "R4": 10.0
+   },
+   "weekly_evaluation_weekday": 4
+  },
+  "index_name": "NIFTY 50",
+  "instrument_token": null
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "as_dict() of the signals. Inputs are JSON; each function is called from them after a JSON round trip. Dates are ISO days, enums their values, IndexSignals/BookWeights/RegimeState their as_dict(), Allocation and Position/Candidate/OrderLine dataclasses.asdict, tuples lists. A raise is {raises: {type, message}}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_exposure.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "as_of_date": "2026-08-18",
+  "bearish_stack": false,
+  "close": 44.75,
+  "has_data": true,
+  "index_name": "NIFTY 50",
+  "instrument_token": null,
+  "is_stale": false,
+  "signals": {
+   "20": {
+    "close": 44.75,
+    "confirming_closes": 1,
+    "distance_pct": 0.6794456443484531,
+    "ma": 44.448,
+    "ma_length": 20,
+    "state": "above"
+   },
+   "200": {
+    "close": 44.75,
+    "confirming_closes": 20,
+    "distance_pct": 5.5684714746913055,
+    "ma": 42.38954999999999,
+    "ma_length": 200,
+    "state": "above"
+   },
+   "50": {
+    "close": 44.75,
+    "confirming_closes": 1,
+    "distance_pct": 1.3521165039749095,
+    "ma": 44.15299999999996,
+    "ma_length": 50,
+    "state": "above"
+   }
+  }
+ }
+}

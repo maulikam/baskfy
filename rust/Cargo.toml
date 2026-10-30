@@ -46,6 +46,9 @@ serde = { version = "=1.0.229", features = ["derive"] }
 # inputs). DECISIONS-RS R2.1.
 serde_json = { version = "=1.0.154", features = ["float_roundtrip", "raw_value"] }
 thiserror = { version = "=2.0.21" }
+# Python's unbounded `int` where a route echoes or computes one (DECISIONS-RS R8.ar1). Already in
+# the build through redis; pinning it adds no crate.
+num-bigint = { version = "=0.4.8" }
 
 # ---------------------------------------------------------------------------------------------
 # I/O stack for baskfy-providers and every wave-4 crate after it (DECISIONS-RS R4.1). Never a
@@ -87,6 +90,7 @@ tempfile = { version = "=3.27.0" }
 # ---------------------------------------------------------------------------------------------
 baskfy-db = { path = "crates/baskfy-db" }
 baskfy-api = { path = "crates/baskfy-api" }
+baskfy-worker = { path = "crates/baskfy-worker" }
 # Postgres only, runtime queries only (no macros: Alembic owns the schema and no build may need a
 # live database), rustls over ring with webpki roots (no OpenSSL). rust_decimal/chrono/json are
 # the numeric, timestamptz/date and jsonb decoders.

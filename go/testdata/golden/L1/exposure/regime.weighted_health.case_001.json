@@ -1,0 +1,154 @@
+{
+ "fn": "baskfy_core.exposure.regime.weighted_health",
+ "inputs": {
+  "book": {
+   "coverage_pct": 100.0,
+   "reason_codes": [],
+   "source": "full_risk_target",
+   "weights": {
+    "largecap": 0.829,
+    "midcap": 0.254,
+    "smallcap": 0.935
+   }
+  },
+  "cfg": {
+   "algorithm_version": "regime/1.0.0",
+   "bootstrap_policy": "observe_only",
+   "breadth_required": true,
+   "breadth_stale_days": 10,
+   "buffer_bps": 150,
+   "confirm_days": 3,
+   "default_book_weights": {
+    "largecap": 0.2,
+    "midcap": 0.3,
+    "smallcap": 0.5
+   },
+   "exchange": "NSE",
+   "exposure_tolerance_pct": 1.0,
+   "index_aliases": {
+    "NIFTY 500 MOMENTUM 50": [
+     "NIFTY500MOMENTM50"
+    ],
+    "NIFTY SMLCAP 250": [
+     "NIFTY SMALLCAP 250"
+    ]
+   },
+   "index_stale_days": 5,
+   "ma_lengths": [
+    20,
+    50,
+    200
+   ],
+   "min_breadth_coverage_pct": 90.0,
+   "min_classification_coverage_pct": 80.0,
+   "mode": "observe",
+   "momentum_sentinel": "NIFTY 500 MOMENTUM 50",
+   "r1_breadth_min": 55.0,
+   "r1_h200_min": 0.8,
+   "r1_h50_min": 0.8,
+   "r3_breadth_max": 40.0,
+   "r3_h200_max": 0.5,
+   "r4_bearish_stack_min": 0.6,
+   "r4_breadth_max": 30.0,
+   "r4_h200_max": 0.3,
+   "recovery_breadth_min": 55.0,
+   "recovery_confirm_evaluations": 2,
+   "recovery_h20_min": 0.5,
+   "segment": "INDICES",
+   "structural_indices": {
+    "largecap": "NIFTY 50",
+    "midcap": "NIFTY MIDCAP 150",
+    "smallcap": "NIFTY SMLCAP 250"
+   },
+   "tier_exposure_pct": {
+    "R1": 100.0,
+    "R2": 70.0,
+    "R3": 40.0,
+    "R4": 10.0
+   },
+   "weekly_evaluation_weekday": 4
+  },
+  "index_signals": {
+   "NIFTY 50": {
+    "as_of_date": "2026-06-01",
+    "bearish_stack": true,
+    "close": 137.1,
+    "has_data": true,
+    "index_name": "NIFTY 50",
+    "instrument_token": null,
+    "is_stale": false,
+    "signals": {
+     "20": {
+      "close": 137.1,
+      "confirming_closes": 3,
+      "distance_pct": 5.267199017199009,
+      "ma": 130.24,
+      "ma_length": 20,
+      "state": "below"
+     },
+     "200": {
+      "close": 137.1,
+      "confirming_closes": 3,
+      "distance_pct": -4.765212559044185,
+      "ma": 143.96,
+      "ma_length": 200,
+      "state": "below"
+     },
+     "50": {
+      "close": 137.1,
+      "confirming_closes": 3,
+      "distance_pct": 0.0,
+      "ma": 137.1,
+      "ma_length": 50,
+      "state": "below"
+     }
+    }
+   },
+   "NIFTY MIDCAP 150": {
+    "as_of_date": "2026-06-01",
+    "bearish_stack": false,
+    "close": 147.16,
+    "has_data": true,
+    "index_name": "NIFTY MIDCAP 150",
+    "instrument_token": null,
+    "is_stale": true,
+    "signals": {
+     "20": {
+      "close": 147.16,
+      "confirming_closes": 3,
+      "distance_pct": 53.004782699105824,
+      "ma": 96.18,
+      "ma_length": 20,
+      "state": "above"
+     },
+     "200": {
+      "close": 147.16,
+      "confirming_closes": 3,
+      "distance_pct": 76.87499999999999,
+      "ma": 83.2,
+      "ma_length": 200,
+      "state": "below"
+     },
+     "50": {
+      "close": 147.16,
+      "confirming_closes": 3,
+      "distance_pct": 8.789827751903601,
+      "ma": 135.27,
+      "ma_length": 50,
+      "state": "below"
+     }
+    }
+   }
+  },
+  "ma_length": 20
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "weighted health. Inputs are JSON; each function is called from them after a JSON round trip. Dates are ISO days, enums their values, IndexSignals/BookWeights/RegimeState their as_dict(), Allocation and Position/Candidate/OrderLine dataclasses.asdict, tuples lists. A raise is {raises: {type, message}}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_exposure.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": 0.254
+}

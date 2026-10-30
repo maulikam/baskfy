@@ -400,3 +400,86 @@ pub async fn sync_todays_trades(
     let reason = read_reason()?;
     Ok(wire::json(&report(None, None, 0, reason)))
 }
+
+// ---------------------------------------------------------------------------------------------
+// The worker's evening capture (wave 6, lane portfolio)
+// ---------------------------------------------------------------------------------------------
+
+/// One execution from Kite's read-only `GET /trades`, as the worker's
+/// `baskfy.pipeline.capture_kite_trades` hands it to [`capture_store_and_date`]
+/// (`baskfy_core.tradebook.TradeFill`). `executed_at` is IST wall time: `_executed_at` reads a
+/// naive stamp as IST, and the caller converts an aware one to IST first.
+#[derive(Debug, Clone)]
+pub struct CaptureFill {
+    /// The symbol.
+    pub symbol: String,
+    /// `NSE` or `BSE`.
+    pub exchange: String,
+    /// `BUY` (else `SELL`).
+    pub is_buy: bool,
+    /// Shares.
+    pub quantity: baskfy_core::decimal::WideDecimal,
+    /// Rupees.
+    pub price: baskfy_core::decimal::WideDecimal,
+    /// The fill's date.
+    pub trade_date: chrono::NaiveDate,
+    /// Kite's trade id.
+    pub trade_id: String,
+    /// Kite's order id.
+    pub order_id: Option<String>,
+    /// ISIN.
+    pub isin: Option<String>,
+    /// IST wall time.
+    pub executed_at: Option<NaiveDateTime>,
+}
+
+/// What [`capture_store_and_date`] did: `StoreReport` and `HistoryReport`'s counts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CaptureCounts {
+    /// `store.received`.
+    pub received: usize,
+    /// `store.inserted`.
+    pub inserted: usize,
+    /// `store.unresolved`, sorted.
+    pub unresolved: Vec<String>,
+    /// `history.dated`.
+    pub dated_holdings: usize,
+}
+
+/// The storage half of `broker_trades.capture_kite_trades(session, user_id=)`, after the read:
+/// `ensure_default_broker_account(session, user_id, broker_id="zerodha")`, `store_fills(...,
+/// source=TradeSource.KITE_API)` and `apply_trade_history`, on the caller's transaction (the
+/// caller commits). Added for the worker (DECISIONS-RS R8.pf1); the routes above are unchanged.
+///
+/// # Errors
+/// As the three steps.
+pub async fn capture_store_and_date(
+    conn: &mut PgConnection,
+    user_id: i64,
+    fills: Vec<CaptureFill>,
+) -> Result<CaptureCounts, Problem> {
+    let account = ensure_default_broker_account(conn, user_id, "zerodha").await?;
+    let parsed: Vec<ParsedFill> = fills
+        .into_iter()
+        .map(|f| ParsedFill {
+            symbol: f.symbol,
+            exchange: f.exchange,
+            is_buy: f.is_buy,
+            quantity: f.quantity,
+            price: f.price,
+            trade_date: f.trade_date,
+            trade_id: f.trade_id,
+            order_id: f.order_id,
+            isin: f.isin,
+            executed_at: f.executed_at,
+        })
+        .collect();
+    let store = store_fills(conn, &parsed, user_id, account, "KITE_API").await?;
+    let history = apply_trade_history(conn, user_id, account).await?;
+    Ok(CaptureCounts {
+        received: store.received,
+        inserted: store.inserted,
+        unresolved: store.unresolved,
+        dated_holdings: history.dated,
+    })
+}

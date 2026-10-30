@@ -1,0 +1,133 @@
+{
+ "fn": "baskfy_core.exposure.allocation.solve_allocation",
+ "inputs": {
+  "candidates": [
+   {
+    "cluster": "pharma",
+    "liquidity": 143836019.0,
+    "price": 1933.94,
+    "rank": 1,
+    "score": 94.011,
+    "symbol": "X00"
+   },
+   {
+    "cluster": "it",
+    "liquidity": 746935410.0,
+    "price": 2902.96,
+    "rank": 2,
+    "score": 88.4,
+    "symbol": "X01"
+   },
+   {
+    "cluster": "it",
+    "liquidity": 989881583.0,
+    "price": 2655.95,
+    "rank": 3,
+    "score": 10.318,
+    "symbol": "X02"
+   },
+   {
+    "cluster": "auto",
+    "liquidity": 994078540.0,
+    "price": 492.78,
+    "rank": 4,
+    "score": 83.412,
+    "symbol": "X03"
+   },
+   {
+    "cluster": "pharma",
+    "liquidity": 319207043.0,
+    "price": 1269.62,
+    "rank": 5,
+    "score": 40.977,
+    "symbol": "X04"
+   },
+   {
+    "cluster": "other",
+    "liquidity": 459212098.0,
+    "price": 68.25,
+    "rank": 6,
+    "score": 72.493,
+    "symbol": "X05"
+   },
+   {
+    "cluster": "other",
+    "liquidity": 624303147.0,
+    "price": 1159.19,
+    "rank": 7,
+    "score": 70.612,
+    "symbol": "X06"
+   },
+   {
+    "cluster": "it",
+    "liquidity": 971724263.0,
+    "price": 202.23,
+    "rank": 8,
+    "score": 51.714,
+    "symbol": "X07"
+   },
+   {
+    "cluster": "bank",
+    "liquidity": 905992790.0,
+    "price": 804.04,
+    "rank": 9,
+    "score": 11.373,
+    "symbol": "X08"
+   }
+  ],
+  "cluster_cap": 40.0,
+  "half_factor": 0.5,
+  "half_sized": [
+   "X00"
+  ],
+  "max_sleeve_w": 15.0,
+  "min_sleeve_w": 6.0,
+  "sleeve_pct": 10.0
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "dataclasses.asdict(Allocation). Inputs are JSON; each function is called from them after a JSON round trip. Dates are ISO days, enums their values, IndexSignals/BookWeights/RegimeState their as_dict(), Allocation and Position/Candidate/OrderLine dataclasses.asdict, tuples lists. A raise is {raises: {type, message}}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_exposure.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "cluster_weights": {
+   "auto": 15.0,
+   "bank": 6.0,
+   "it": 32.437324,
+   "other": 30.0,
+   "pharma": 12.812676
+  },
+  "half_sized": [
+   "X00"
+  ],
+  "notes": [
+   "sleeve utilisation 96.2%"
+  ],
+  "sleeve_pct": 10.0,
+  "weights_nav": {
+   "X00": 0.375,
+   "X01": 1.5,
+   "X02": 0.6,
+   "X03": 1.5,
+   "X04": 0.906268,
+   "X05": 1.5,
+   "X06": 1.5,
+   "X07": 1.143732,
+   "X08": 0.6
+  },
+  "weights_sleeve": {
+   "X00": 3.75,
+   "X01": 15.0,
+   "X02": 6.0,
+   "X03": 15.0,
+   "X04": 9.062676,
+   "X05": 15.0,
+   "X06": 15.0,
+   "X07": 11.437324,
+   "X08": 6.0
+  }
+ }
+}

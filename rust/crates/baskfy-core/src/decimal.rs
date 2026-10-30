@@ -620,6 +620,36 @@ impl WideDecimal {
     }
 }
 
+/// Exact, context-free operations — added at wave 5 (lane nightly-ingest, DECISIONS-RS R7.11)
+/// for arithmetic that is **not** Python's `decimal` context: polars' fixed-scale `Decimal`
+/// columns multiply exactly and round once to the result's scale, with no 28-digit limit.
+impl WideDecimal {
+    /// `self * other` exactly: every coefficient digit kept, no context rounding.
+    #[must_use]
+    pub fn mul_exact(&self, other: &Self) -> Self {
+        let neg = self.neg ^ other.neg;
+        let exp = self.exp + other.exp;
+        if self.is_zero() || other.is_zero() {
+            return Self::triple(neg, "0", exp);
+        }
+        let product = Big::parse(&self.digits).mul(&Big::parse(&other.digits));
+        Self::triple(neg, &product.digits(), exp)
+    }
+
+    /// The same value at exponent `exp`, rounded by `mode`, with **no** digit limit (Python's
+    /// `_rescale`; [`WideDecimal::quantize`] is this plus the context's 28-digit check).
+    #[must_use]
+    pub fn rescale_exact(&self, exp: i64, mode: Rounding) -> Self {
+        self.rescale(exp, mode)
+    }
+
+    /// How many digits the coefficient holds (`len(d.as_tuple().digits)`; `1` for zero).
+    #[must_use]
+    pub fn coefficient_len(&self) -> usize {
+        self.digits.len()
+    }
+}
+
 impl Default for WideDecimal {
     fn default() -> Self {
         Self::zero()
@@ -797,5 +827,80 @@ impl<'de> Deserialize<'de> for WideDecimal {
             }
         }
         deserializer.deserialize_any(V)
+    }
+}
+
+/// `Decimal.sqrt()` — added at wave 6 (lane curated, DECISIONS-RS R8.curated) for
+/// `baskfy_core.curated_metrics.annualized_volatility`. Written step for step from CPython's
+/// `_pydecimal.Decimal.sqrt` (correctly rounded half-even, ideal exponent `floor(exp / 2)` when
+/// the root is exact); `libmpdec`'s `mpd_qsqrt` agrees with it digit for digit (checked on
+/// 200,000 random operands before this was written).
+impl WideDecimal {
+    /// `self.sqrt()` in the default context (28 digits, half-even).
+    ///
+    /// # Errors
+    /// [`DecimalError`] for a negative operand (Python's `InvalidOperation`).
+    pub fn sqrt(&self) -> Result<Self, DecimalError> {
+        if self.is_zero() {
+            return Ok(Self::triple(self.neg, "0", self.exp >> 1).fix());
+        }
+        if self.neg {
+            return Err(DecimalError(
+                "[<class 'decimal.InvalidOperation'>]".to_owned(),
+            ));
+        }
+        let prec = PREC + 1;
+        let len = len_i64(&self.digits);
+        let mut e = self.exp >> 1;
+        let (c_digits, l) = if self.exp & 1 != 0 {
+            (format!("{}0", self.digits), (len >> 1) + 1)
+        } else {
+            (self.digits.clone(), (len + 1) >> 1)
+        };
+        let shift = prec - l;
+        let (c, mut exact) = if shift >= 0 {
+            (Big::parse(&format!("{c_digits}{}", zeros(2 * shift))), true)
+        } else {
+            let divisor = Big::parse(&format!("1{}", zeros(-2 * shift)));
+            let (q, r) = Big::parse(&c_digits)
+                .divmod(&divisor)
+                .ok_or_else(|| DecimalError("division by zero".to_owned()))?;
+            (q, r.is_zero())
+        };
+        e -= shift;
+        let two = Big::parse("2");
+        let mut n = Big::parse(&format!("1{}", zeros(prec)));
+        loop {
+            let (q, _) = c
+                .divmod(&n)
+                .ok_or_else(|| DecimalError("division by zero".to_owned()))?;
+            if n.cmp_big(&q) != Ordering::Greater {
+                break;
+            }
+            let (half, _) = n
+                .add(&q)
+                .divmod(&two)
+                .ok_or_else(|| DecimalError("division by zero".to_owned()))?;
+            n = half;
+        }
+        exact = exact && n.mul(&n).cmp_big(&c) == Ordering::Equal;
+        let mut digits = n.digits();
+        if exact {
+            if shift >= 0 {
+                let keep = digits
+                    .len()
+                    .saturating_sub(usize::try_from(shift).unwrap_or(0));
+                digits.truncate(keep.max(1));
+            } else {
+                digits.push_str(&zeros(-shift));
+            }
+            e += shift;
+        } else {
+            let last = digits.as_bytes().last().copied().unwrap_or(b'0');
+            if last == b'0' || last == b'5' {
+                digits = Big::parse(&digits).incremented().digits();
+            }
+        }
+        Ok(Self::triple(false, &digits, e).fix())
     }
 }

@@ -1,0 +1,207 @@
+{
+ "fn": "baskfy_core.exposure.allocation.solve_allocation",
+ "inputs": {
+  "candidates": [
+   {
+    "cluster": "",
+    "liquidity": 643246910.0,
+    "price": 2136.45,
+    "rank": 1,
+    "score": 79.999,
+    "symbol": "X00"
+   },
+   {
+    "cluster": "",
+    "liquidity": 361346769.0,
+    "price": 135.17,
+    "rank": 2,
+    "score": 9.424,
+    "symbol": "X01"
+   },
+   {
+    "cluster": "other",
+    "liquidity": 51729536.0,
+    "price": 2509.11,
+    "rank": 3,
+    "score": 11.387,
+    "symbol": "X02"
+   },
+   {
+    "cluster": "it",
+    "liquidity": 489805021.0,
+    "price": 1599.02,
+    "rank": 4,
+    "score": 2.865,
+    "symbol": "X03"
+   },
+   {
+    "cluster": "",
+    "liquidity": 932572146.0,
+    "price": 2395.12,
+    "rank": 5,
+    "score": 1.328,
+    "symbol": "X04"
+   },
+   {
+    "cluster": "other",
+    "liquidity": 66984306.0,
+    "price": 284.91,
+    "rank": 6,
+    "score": 89.888,
+    "symbol": "X05"
+   },
+   {
+    "cluster": "bank",
+    "liquidity": 846287495.0,
+    "price": 764.06,
+    "rank": 7,
+    "score": 73.942,
+    "symbol": "X06"
+   },
+   {
+    "cluster": "it",
+    "liquidity": 740088763.0,
+    "price": 2271.76,
+    "rank": 8,
+    "score": 24.244,
+    "symbol": "X07"
+   },
+   {
+    "cluster": "auto",
+    "liquidity": 77663134.0,
+    "price": 1486.91,
+    "rank": 9,
+    "score": 97.598,
+    "symbol": "X08"
+   },
+   {
+    "cluster": "bank",
+    "liquidity": 617357042.0,
+    "price": 869.08,
+    "rank": 10,
+    "score": 91.136,
+    "symbol": "X09"
+   },
+   {
+    "cluster": "it",
+    "liquidity": 332441167.0,
+    "price": 241.64,
+    "rank": 11,
+    "score": 64.634,
+    "symbol": "X10"
+   },
+   {
+    "cluster": "other",
+    "liquidity": 568193936.0,
+    "price": 2081.73,
+    "rank": 12,
+    "score": 65.502,
+    "symbol": "X11"
+   },
+   {
+    "cluster": "pharma",
+    "liquidity": 972536500.0,
+    "price": 191.38,
+    "rank": 13,
+    "score": 2.234,
+    "symbol": "X12"
+   },
+   {
+    "cluster": "auto",
+    "liquidity": 291565622.0,
+    "price": 660.9,
+    "rank": 14,
+    "score": 10.852,
+    "symbol": "X13"
+   },
+   {
+    "cluster": "auto",
+    "liquidity": 767402590.0,
+    "price": 1399.34,
+    "rank": 15,
+    "score": 52.137,
+    "symbol": "X14"
+   },
+   {
+    "cluster": "pharma",
+    "liquidity": 978147611.0,
+    "price": 1651.74,
+    "rank": 16,
+    "score": 99.337,
+    "symbol": "X15"
+   }
+  ],
+  "cluster_cap": 25.0,
+  "half_factor": 0.5,
+  "half_sized": [
+   "X01",
+   "X11",
+   "X14"
+  ],
+  "max_sleeve_w": 15.0,
+  "min_sleeve_w": 6.0,
+  "sleeve_pct": 40.0
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "dataclasses.asdict(Allocation). Inputs are JSON; each function is called from them after a JSON round trip. Dates are ISO days, enums their values, IndexSignals/BookWeights/RegimeState their as_dict(), Allocation and Position/Candidate/OrderLine dataclasses.asdict, tuples lists. A raise is {raises: {type, message}}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_exposure.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "cluster_weights": {
+   "auto": 16.523283,
+   "bank": 14.047155,
+   "it": 18.0,
+   "other": 30.607336,
+   "pharma": 14.452988
+  },
+  "half_sized": [
+   "X01",
+   "X11",
+   "X14"
+  ],
+  "notes": [
+   "sleeve utilisation 93.6%"
+  ],
+  "sleeve_pct": 40.0,
+  "weights_nav": {
+   "X00": 2.722976,
+   "X01": 0.160385,
+   "X02": 2.4,
+   "X03": 2.4,
+   "X04": 2.4,
+   "X05": 3.059574,
+   "X06": 2.51681,
+   "X07": 2.4,
+   "X08": 3.322004,
+   "X09": 3.102053,
+   "X10": 2.4,
+   "X11": 1.5,
+   "X12": 2.4,
+   "X13": 2.4,
+   "X14": 0.88731,
+   "X15": 3.381195
+  },
+  "weights_sleeve": {
+   "X00": 6.807439,
+   "X01": 0.400963,
+   "X02": 6.0,
+   "X03": 6.0,
+   "X04": 6.0,
+   "X05": 7.648934,
+   "X06": 6.292024,
+   "X07": 6.0,
+   "X08": 8.305009,
+   "X09": 7.755131,
+   "X10": 6.0,
+   "X11": 3.75,
+   "X12": 6.0,
+   "X13": 6.0,
+   "X14": 2.218274,
+   "X15": 8.452988
+  }
+ }
+}

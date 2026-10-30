@@ -5,7 +5,8 @@
 //! Goldens: `L1/swing/evaluate_trigger.*` (`baskfy_core.swing.opening_range.evaluate_trigger`).
 //!
 //! Ported so far: [`OpeningRange`], [`TriggerState`], [`TriggerVerdict`] and
-//! [`evaluate_trigger`]. `opening_range`, `live_gap` and `live_gap_score` are not yet ported.
+//! [`evaluate_trigger`], and (wave 6, lane swing_live) [`live_gap`] / [`live_gap_score`].
+//! `opening_range` is not yet ported.
 
 use chrono::{NaiveDateTime, NaiveTime};
 use rust_decimal::Decimal;
@@ -260,6 +261,112 @@ pub fn evaluate_trigger(
     })
 }
 
+/// `SESSION_MINUTES`: NSE's cash session, 09:15-15:30 (a fact about the exchange).
+pub const SESSION_MINUTES: i64 = 375;
+
+/// `_FULL_MARKS` for the pre-open score: full marks at twice the detector's threshold.
+const LIVE_FULL_MARKS: i64 = 2;
+
+/// Ports `LiveGapVerdict`: is this an EP at the open, and the two numbers that say why.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LiveGapVerdict {
+    /// Gap and pace both at or over their floors.
+    pub is_candidate: bool,
+    /// The gap over the previous close, percent, two places.
+    pub gap_pct: Decimal,
+    /// Volume so far over the pro-rated average day, two places.
+    pub volume_pace: Decimal,
+}
+
+fn arithmetic(e: crate::decimal::DecimalError) -> CoreError {
+    CoreError::Arithmetic(e.to_string())
+}
+
+fn narrow(value: &crate::decimal::WideDecimal) -> CoreResult<Decimal> {
+    value.try_to_decimal().map_err(arithmetic)
+}
+
+/// Ports `live_gap` (docs/swing/04 §7.3): gap >= `live_min_gap_pct` and volume running at
+/// `live_min_volume_pace` times an average day's, pro-rated to the minutes elapsed. Decimal
+/// arithmetic in Python's default context (28 digits, half-even); the two numbers are
+/// quantized to `0.01`. Added by wave 6, lane swing_live (the premarket gap scan).
+///
+/// # Errors
+/// [`CoreError::Arithmetic`] for a config number that is not finite, or a quotient too large
+/// to quantize.
+pub fn live_gap(
+    prev_close: Decimal,
+    last_price: Decimal,
+    volume_so_far: i64,
+    avg_daily_volume: Decimal,
+    minutes_elapsed: i64,
+    config: &OpeningRangeConfig,
+) -> CoreResult<LiveGapVerdict> {
+    use crate::decimal::{Rounding, WideDecimal};
+    if prev_close <= Decimal::ZERO || avg_daily_volume <= Decimal::ZERO || minutes_elapsed <= 0 {
+        return Ok(LiveGapVerdict {
+            is_candidate: false,
+            gap_pct: Decimal::ZERO,
+            volume_pace: Decimal::ZERO,
+        });
+    }
+    let gap = WideDecimal::from(last_price)
+        .div(&WideDecimal::from(prev_close))
+        .map_err(arithmetic)?
+        .sub(&WideDecimal::from(1_i64))
+        .mul(&WideDecimal::from(100_i64));
+    let expected = WideDecimal::from(avg_daily_volume)
+        .mul(&WideDecimal::from(minutes_elapsed))
+        .div(&WideDecimal::from(SESSION_MINUTES))
+        .map_err(arithmetic)?;
+    let ratio = if expected > WideDecimal::zero() {
+        WideDecimal::from(volume_so_far)
+            .div(&expected)
+            .map_err(arithmetic)?
+    } else {
+        WideDecimal::zero()
+    };
+    let floor = |x: f64| {
+        crate::py::decimal_from_float_str(x)
+            .map(WideDecimal::from)
+            .map_err(arithmetic)
+    };
+    let ok = gap >= floor(config.live_min_gap_pct)? && ratio >= floor(config.live_min_volume_pace)?;
+    Ok(LiveGapVerdict {
+        is_candidate: ok,
+        gap_pct: narrow(&gap.quantize(-2, Rounding::HalfEven).map_err(arithmetic)?)?,
+        volume_pace: narrow(&ratio.quantize(-2, Rounding::HalfEven).map_err(arithmetic)?)?,
+    })
+}
+
+/// Ports `live_gap_score` (`04` §7.3, SW10.5 / A14): the provisional EP score of a live gap at
+/// the pre-open — the gap and the pace on the detectors' scale (full marks at twice the
+/// threshold), 35 each, out of 70; two places. Added by wave 6, lane swing_live.
+///
+/// # Errors
+/// [`CoreError::Arithmetic`] for a threshold that is zero or not finite.
+pub fn live_gap_score(
+    verdict: &LiveGapVerdict,
+    config: &crate::swing::setups::EpConfig,
+) -> CoreResult<Decimal> {
+    use crate::decimal::{Rounding, WideDecimal};
+    let zero = WideDecimal::zero();
+    let one = WideDecimal::from(1_i64);
+    let clamp = |value: Decimal, threshold: f64| -> CoreResult<WideDecimal> {
+        let scale = WideDecimal::from(LIVE_FULL_MARKS).mul(&WideDecimal::from(
+            crate::py::decimal_from_float_str(threshold).map_err(arithmetic)?,
+        ));
+        let x = WideDecimal::from(value).div(&scale).map_err(arithmetic)?;
+        let x = if zero > x { zero.clone() } else { x };
+        Ok(if x > one { one.clone() } else { x })
+    };
+    let gap = clamp(verdict.gap_pct, config.min_gap_pct)?;
+    let pace = clamp(verdict.volume_pace, config.min_rvol)?;
+    let thirty_five = WideDecimal::from(35_i64);
+    let score = thirty_five.mul(&gap).add(&thirty_five.mul(&pace));
+    narrow(&score.quantize(-2, Rounding::HalfEven).map_err(arithmetic)?)
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -315,5 +422,42 @@ mod tests {
         assert!(run("100", f64::NAN).is_err());
         assert!(run("0", f64::INFINITY).is_err());
         assert_eq!(run("0", 1e30).unwrap().state, TriggerState::Triggered);
+    }
+
+    fn dec(text: &str) -> Decimal {
+        Decimal::from_str(text).unwrap()
+    }
+
+    /// Values checked against Python's `live_gap` / `live_gap_score` (DEFAULT_SWING_CONFIG).
+    #[test]
+    fn a_live_gap_needs_both_the_gap_and_the_pace() {
+        let config = OpeningRangeConfig::default();
+        let ep = crate::swing::setups::EpConfig::default();
+        let v = live_gap(dec("100"), dec("112"), 30_000, dec("1000000"), 16, &config).unwrap();
+        assert!(!v.is_candidate);
+        assert_eq!(v.gap_pct.to_string(), "12.00");
+        assert_eq!(v.volume_pace.to_string(), "0.70");
+        let v = live_gap(dec("100"), dec("112"), 200_000, dec("1000000"), 16, &config).unwrap();
+        assert!(v.is_candidate);
+        assert_eq!(v.volume_pace.to_string(), "4.69");
+        assert_eq!(live_gap_score(&v, &ep).unwrap().to_string(), "48.36");
+        let none = live_gap(dec("0"), dec("112"), 1, dec("1"), 16, &config).unwrap();
+        assert!(!none.is_candidate);
+        assert_eq!(none.gap_pct.to_string(), "0");
+        let v = live_gap(
+            dec("233.45"),
+            dec("259.9"),
+            123_457,
+            dec("523411.33333333334"),
+            7,
+            &config,
+        )
+        .unwrap();
+        assert!(v.is_candidate);
+        assert_eq!(
+            (v.gap_pct.to_string(), v.volume_pace.to_string()),
+            ("11.33".to_owned(), "12.64".to_owned())
+        );
+        assert_eq!(live_gap_score(&v, &ep).unwrap().to_string(), "54.83");
     }
 }

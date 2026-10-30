@@ -10,78 +10,15 @@
 //! `ROUND_HALF_EVEN`, the ideal exponent on an exact quotient). `rust_decimal` alone keeps a
 //! 29th digit and a different scale on exact quotients, which a byte-exact golden refuses.
 //!
-//! `Side` and `CostRates` belong to `baskfy_core.options.config`; they live here until
-//! `options::config` is ported (that file is outside this port's ownership).
 
-use chrono::NaiveDate;
+use chrono::{NaiveDate, NaiveTime};
 use rust_decimal::{Decimal, RoundingStrategy};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{CoreError, CoreResult};
+use crate::options::num;
 
-/// Ports `baskfy_core.options.config.Side`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(rename_all = "UPPERCASE")]
-pub enum Side {
-    /// `BUY`.
-    Buy,
-    /// `SELL`.
-    Sell,
-}
-
-/// Ports `baskfy_core.options.config.CostRates` — every statutory and broker rate as a dated
-/// field (`04` §6, verified by OP0, read 22 Sep 2026). Defaults are Python's.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct CostRates {
-    /// Flat brokerage per executed F&O order, ₹.
-    pub brokerage_per_order_inr: Decimal,
-    /// STT on the sale of an option, percent of premium.
-    pub stt_sell_premium_pct: Decimal,
-    /// STT on an exercised option, percent of intrinsic.
-    pub stt_exercise_intrinsic_pct: Decimal,
-    /// NSE options transaction charge, percent of premium.
-    pub exchange_txn_pct: Decimal,
-    /// SEBI turnover fee, ₹ per crore.
-    pub sebi_per_crore_inr: Decimal,
-    /// IPFT, ₹ per crore.
-    pub ipft_per_crore_inr: Decimal,
-    /// Stamp duty on the buy side, percent.
-    pub stamp_buy_pct: Decimal,
-    /// GST, percent of brokerage + exchange + SEBI + IPFT.
-    pub gst_pct: Decimal,
-    /// MIS auto square-off charge per order, ₹.
-    pub auto_squareoff_inr: Decimal,
-    /// Tier 2's synthetic half-spread, percent of premium.
-    pub synthetic_half_spread_pct: Decimal,
-    /// Tier 2's synthetic half-spread floor, ₹ per unit.
-    pub synthetic_half_spread_min_inr: Decimal,
-    /// The day every rate was last checked against its primary source.
-    pub reviewed_on: NaiveDate,
-    /// Days after `reviewed_on` before the review warning fires.
-    pub review_after_days: i64,
-}
-
-impl Default for CostRates {
-    fn default() -> Self {
-        Self {
-            brokerage_per_order_inr: Decimal::new(20, 0),
-            stt_sell_premium_pct: Decimal::new(15, 2),
-            stt_exercise_intrinsic_pct: Decimal::new(15, 2),
-            exchange_txn_pct: Decimal::new(3553, 5),
-            sebi_per_crore_inr: Decimal::new(10, 0),
-            ipft_per_crore_inr: Decimal::new(1, 2),
-            stamp_buy_pct: Decimal::new(3, 3),
-            gst_pct: Decimal::new(18, 0),
-            auto_squareoff_inr: Decimal::new(50, 0),
-            synthetic_half_spread_pct: Decimal::new(15, 1),
-            synthetic_half_spread_min_inr: Decimal::new(10, 2),
-            // OPTIONS_COST_RATES_REVIEWED_ON = 2026-09-22; a constant date is always valid.
-            reviewed_on: NaiveDate::from_ymd_opt(2026, 9, 22).unwrap_or_default(),
-            review_after_days: 90,
-        }
-    }
-}
+pub use crate::options::config::{CostRates, Side};
 
 /// One executed (or planned) order: its side, its price per unit and its units.
 ///
@@ -366,4 +303,128 @@ pub(crate) fn add(a: Decimal, b: Decimal) -> CoreResult<Decimal> {
 /// Checked `a - b`, i.e. Python's `a + (-b)`, with [`add`]'s zero sign.
 pub(crate) fn sub(a: Decimal, b: Decimal) -> CoreResult<Decimal> {
     add(a, -b)
+}
+
+/// STT on an ITM long left to settle (`04` §6.3); zero for an OTM leg.
+pub fn exercise_stt(
+    intrinsic_points: Decimal,
+    quantity: i64,
+    rates: &CostRates,
+) -> CoreResult<Decimal> {
+    let base = num::muli(num::max(intrinsic_points, Decimal::ZERO), quantity)?;
+    num::paise(num::div(
+        num::mul(base, rates.stt_exercise_intrinsic_pct)?,
+        HUNDRED,
+    )?)
+}
+
+/// A long leg still open when a session ends.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HeldLong {
+    /// Strike.
+    pub strike: Decimal,
+    /// A call.
+    pub is_call: bool,
+    /// Units.
+    pub quantity: i64,
+}
+
+/// The expiry-day STT trap (`04` §6.3): zero unless the hard exit is at or past settlement.
+pub fn settlement_stt(
+    held: &[HeldLong],
+    settlement_price: Decimal,
+    hard_exit_time: NaiveTime,
+    settle: NaiveTime,
+    rates: &CostRates,
+) -> CoreResult<Decimal> {
+    if hard_exit_time < settle {
+        return Ok(Decimal::new(0, 2));
+    }
+    let mut total = Decimal::ZERO;
+    for leg in held {
+        let value = if leg.is_call {
+            num::sub(settlement_price, leg.strike)?
+        } else {
+            num::sub(leg.strike, settlement_price)?
+        };
+        total = num::add(total, exercise_stt(value, leg.quantity, rates)?)?;
+    }
+    num::paise(total)
+}
+
+/// Tier 2's crossing cost per unit (`04` §6.2).
+pub fn synthetic_half_spread(premium: Decimal, rates: &CostRates) -> CoreResult<Decimal> {
+    let pct = num::div(num::mul(premium, rates.synthetic_half_spread_pct)?, HUNDRED)?;
+    Ok(num::max(pct, rates.synthetic_half_spread_min_inr))
+}
+
+/// O1: `(1 - profit_take_frac) * credit_inr`.
+pub fn expected_gain_o1(credit_inr: Decimal, profit_take_frac: Decimal) -> CoreResult<Decimal> {
+    num::mul(num::sub(Decimal::ONE, profit_take_frac)?, credit_inr)
+}
+
+/// O2: `target_frac * E * qty`.
+pub fn expected_gain_o2(entry: Decimal, qty: i64, target_frac: Decimal) -> CoreResult<Decimal> {
+    num::muli(num::mul(target_frac, entry)?, qty)
+}
+
+/// O3: `(target_frac_of_width * width - debit) * qty`.
+pub fn expected_gain_o3(
+    width: Decimal,
+    debit: Decimal,
+    qty: i64,
+    target_frac_of_width: Decimal,
+) -> CoreResult<Decimal> {
+    num::muli(
+        num::sub(num::mul(target_frac_of_width, width)?, debit)?,
+        qty,
+    )
+}
+
+/// The cost test's verdict.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum CostVerdict {
+    /// Passes.
+    Ok,
+    /// Costs too much of the gain.
+    RejectedCost,
+}
+
+/// The cost test's answer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CostTest {
+    /// The verdict.
+    pub verdict: CostVerdict,
+    /// Round trip over expected gain; `None` when the gain is not positive.
+    pub cost_share: Option<Decimal>,
+}
+
+/// `cost_share = round trip / expected gain <= cost_share_max` (`04` §6.4).
+pub fn cost_test(
+    round_trip_inr: Decimal,
+    expected_gain_inr: Decimal,
+    share_max: Decimal,
+) -> CoreResult<CostTest> {
+    if expected_gain_inr <= Decimal::ZERO {
+        return Ok(CostTest {
+            verdict: CostVerdict::RejectedCost,
+            cost_share: None,
+        });
+    }
+    let share = num::div(round_trip_inr, expected_gain_inr)?;
+    let verdict = if share <= share_max {
+        CostVerdict::Ok
+    } else {
+        CostVerdict::RejectedCost
+    };
+    Ok(CostTest {
+        verdict,
+        cost_share: Some(share),
+    })
+}
+
+/// More than `review_after_days` since the rates were last checked.
+pub fn rates_review_due(rates: &CostRates, today: NaiveDate) -> bool {
+    (today - rates.reviewed_on).num_days() > rates.review_after_days
 }

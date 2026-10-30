@@ -1,0 +1,376 @@
+{
+ "generated_by": "WorkerSettings.model_fields (decile-blueprint/services/worker/src/baskfy_worker/settings.py)",
+ "fields": [
+  {
+   "name": "redis_url",
+   "env": "BASKFY_REDIS_URL",
+   "default": {
+    "str": "redis://localhost:6380/0"
+   }
+  },
+  {
+   "name": "celery_broker_url",
+   "env": "BASKFY_CELERY_BROKER_URL",
+   "default": {
+    "str": ""
+   }
+  },
+  {
+   "name": "celery_result_backend",
+   "env": "BASKFY_CELERY_RESULT_BACKEND",
+   "default": {
+    "str": ""
+   }
+  },
+  {
+   "name": "ingest_concurrency",
+   "env": "BASKFY_INGEST_CONCURRENCY",
+   "default": {
+    "int": 3
+   }
+  },
+  {
+   "name": "gate_min_bar_ratio",
+   "env": "BASKFY_GATE_MIN_BAR_RATIO",
+   "default": {
+    "float": "0.9"
+   }
+  },
+  {
+   "name": "gate_max_unexplained_return",
+   "env": "BASKFY_GATE_MAX_UNEXPLAINED_RETURN",
+   "default": {
+    "float": "0.5"
+   }
+  },
+  {
+   "name": "gate_membership_tolerance",
+   "env": "BASKFY_GATE_MEMBERSHIP_TOLERANCE",
+   "default": {
+    "float": "0.05"
+   }
+  },
+  {
+   "name": "gate_index_level_tolerance",
+   "env": "BASKFY_GATE_INDEX_LEVEL_TOLERANCE",
+   "default": {
+    "float": "0.001"
+   }
+  },
+  {
+   "name": "gate_ret_median_sigma",
+   "env": "BASKFY_GATE_RET_MEDIAN_SIGMA",
+   "default": {
+    "float": "3.0"
+   }
+  },
+  {
+   "name": "swing_execution_enabled",
+   "env": "BASKFY_SWING_EXECUTION_ENABLED",
+   "default": {
+    "bool": false
+   }
+  },
+  {
+   "name": "swing_monitor_enabled",
+   "env": "BASKFY_SWING_MONITOR_ENABLED",
+   "default": {
+    "bool": false
+   }
+  },
+  {
+   "name": "swing_ep_premarket_enabled",
+   "env": "BASKFY_SWING_EP_PREMARKET_ENABLED",
+   "default": {
+    "bool": false
+   }
+  },
+  {
+   "name": "swing_risk_per_trade_pct_max",
+   "env": "BASKFY_SWING_RISK_PER_TRADE_PCT_MAX",
+   "default": {
+    "float": "1.0"
+   }
+  },
+  {
+   "name": "swing_max_position_pct_max",
+   "env": "BASKFY_SWING_MAX_POSITION_PCT_MAX",
+   "default": {
+    "float": "30.0"
+   }
+  },
+  {
+   "name": "swing_max_open_positions_max",
+   "env": "BASKFY_SWING_MAX_OPEN_POSITIONS_MAX",
+   "default": {
+    "int": 20
+   }
+  },
+  {
+   "name": "swing_index_slug",
+   "env": "BASKFY_SWING_INDEX_SLUG",
+   "default": {
+    "str": "nifty-smallcap-250"
+   }
+  },
+  {
+   "name": "swing_timing_probe",
+   "env": "BASKFY_SWING_TIMING_PROBE",
+   "default": {
+    "bool": false
+   }
+  },
+  {
+   "name": "swing_timing_probe_dir",
+   "env": "BASKFY_SWING_TIMING_PROBE_DIR",
+   "default": {
+    "str": "docs/swing/status"
+   }
+  },
+  {
+   "name": "vbt_execution_enabled",
+   "env": "BASKFY_VBT_EXECUTION_ENABLED",
+   "default": {
+    "bool": false
+   }
+  },
+  {
+   "name": "vbt_nightly_enabled",
+   "env": "BASKFY_VBT_NIGHTLY_ENABLED",
+   "default": {
+    "bool": true
+   }
+  },
+  {
+   "name": "vbt_max_open_positions_max",
+   "env": "BASKFY_VBT_MAX_OPEN_POSITIONS_MAX",
+   "default": {
+    "int": 15
+   }
+  },
+  {
+   "name": "vbt_max_position_pct_max",
+   "env": "BASKFY_VBT_MAX_POSITION_PCT_MAX",
+   "default": {
+    "float": "15.0"
+   }
+  },
+  {
+   "name": "vbt_stop_pct_max",
+   "env": "BASKFY_VBT_STOP_PCT_MAX",
+   "default": {
+    "float": "15.0"
+   }
+  },
+  {
+   "name": "twt_execution_enabled",
+   "env": "BASKFY_TWT_EXECUTION_ENABLED",
+   "default": {
+    "bool": false
+   }
+  },
+  {
+   "name": "twt_nightly_enabled",
+   "env": "BASKFY_TWT_NIGHTLY_ENABLED",
+   "default": {
+    "bool": true
+   }
+  },
+  {
+   "name": "twt_max_open_positions_max",
+   "env": "BASKFY_TWT_MAX_OPEN_POSITIONS_MAX",
+   "default": {
+    "int": 15
+   }
+  },
+  {
+   "name": "twt_max_position_pct_max",
+   "env": "BASKFY_TWT_MAX_POSITION_PCT_MAX",
+   "default": {
+    "float": "15.0"
+   }
+  },
+  {
+   "name": "twt_stop_pct_max",
+   "env": "BASKFY_TWT_STOP_PCT_MAX",
+   "default": {
+    "float": "25.0"
+   }
+  },
+  {
+   "name": "twt_trail_pct_min",
+   "env": "BASKFY_TWT_TRAIL_PCT_MIN",
+   "default": {
+    "float": "18.0"
+   }
+  },
+  {
+   "name": "options_o1m_execution_enabled",
+   "env": "BASKFY_OPTIONS_O1M_EXECUTION_ENABLED",
+   "default": {
+    "bool": false
+   }
+  },
+  {
+   "name": "options_o1w_execution_enabled",
+   "env": "BASKFY_OPTIONS_O1W_EXECUTION_ENABLED",
+   "default": {
+    "bool": false
+   }
+  },
+  {
+   "name": "options_o2_execution_enabled",
+   "env": "BASKFY_OPTIONS_O2_EXECUTION_ENABLED",
+   "default": {
+    "bool": false
+   }
+  },
+  {
+   "name": "options_o3_execution_enabled",
+   "env": "BASKFY_OPTIONS_O3_EXECUTION_ENABLED",
+   "default": {
+    "bool": false
+   }
+  },
+  {
+   "name": "options_monitor_enabled",
+   "env": "BASKFY_OPTIONS_MONITOR_ENABLED",
+   "default": {
+    "bool": false
+   }
+  },
+  {
+   "name": "options_collect_enabled",
+   "env": "BASKFY_OPTIONS_COLLECT_ENABLED",
+   "default": {
+    "bool": false
+   }
+  },
+  {
+   "name": "options_scan_enabled",
+   "env": "BASKFY_OPTIONS_SCAN_ENABLED",
+   "default": {
+    "bool": false
+   }
+  },
+  {
+   "name": "eq_bars_enabled",
+   "env": "BASKFY_EQ_BARS_ENABLED",
+   "default": {
+    "bool": true
+   }
+  },
+  {
+   "name": "options_desk_dry_run",
+   "env": "DRY_RUN",
+   "default": {
+    "str": "true"
+   }
+  },
+  {
+   "name": "options_desk_options_enabled",
+   "env": "OPTIONS_ENABLED",
+   "default": {
+    "str": "false"
+   }
+  },
+  {
+   "name": "options_desk_intraday_enabled",
+   "env": "INTRADAY_ENABLED",
+   "default": {
+    "str": "false"
+   }
+  },
+  {
+   "name": "options_risk_per_trade_inr_max",
+   "env": "BASKFY_OPTIONS_RISK_PER_TRADE_INR_MAX",
+   "default": {
+    "decimal": "25000"
+   }
+  },
+  {
+   "name": "options_risk_pct_max",
+   "env": "BASKFY_OPTIONS_RISK_PCT_MAX",
+   "default": {
+    "decimal": "1.0"
+   }
+  },
+  {
+   "name": "options_max_lots_max",
+   "env": "BASKFY_OPTIONS_MAX_LOTS_MAX",
+   "default": {
+    "int": 10
+   }
+  },
+  {
+   "name": "options_book_daily_loss_inr_max",
+   "env": "BASKFY_OPTIONS_BOOK_DAILY_LOSS_INR_MAX",
+   "default": {
+    "decimal": "30000"
+   }
+  },
+  {
+   "name": "options_book_monthly_loss_inr_max",
+   "env": "BASKFY_OPTIONS_BOOK_MONTHLY_LOSS_INR_MAX",
+   "default": {
+    "decimal": "75000"
+   }
+  },
+  {
+   "name": "options_hard_exit_latest",
+   "env": "BASKFY_OPTIONS_HARD_EXIT_LATEST",
+   "default": {
+    "time": "15:00:00"
+   }
+  },
+  {
+   "name": "fno_scan_enabled",
+   "env": "BASKFY_FNO_SCAN_ENABLED",
+   "default": {
+    "bool": false
+   }
+  },
+  {
+   "name": "fno_monitor_enabled",
+   "env": "BASKFY_FNO_MONITOR_ENABLED",
+   "default": {
+    "bool": false
+   }
+  },
+  {
+   "name": "kite_login_nudge_enabled",
+   "env": "BASKFY_KITE_LOGIN_NUDGE_ENABLED",
+   "default": {
+    "bool": false
+   }
+  },
+  {
+   "name": "kite_login_nudge_to",
+   "env": "BASKFY_KITE_LOGIN_NUDGE_TO",
+   "default": {
+    "str": ""
+   }
+  },
+  {
+   "name": "task_max_retries",
+   "env": "BASKFY_TASK_MAX_RETRIES",
+   "default": {
+    "int": 3
+   }
+  },
+  {
+   "name": "task_max_redeliveries",
+   "env": "BASKFY_TASK_MAX_REDELIVERIES",
+   "default": {
+    "int": 3
+   }
+  },
+  {
+   "name": "task_retry_backoff_seconds",
+   "env": "BASKFY_TASK_RETRY_BACKOFF_SECONDS",
+   "default": {
+    "int": 60
+   }
+  }
+ ]
+}

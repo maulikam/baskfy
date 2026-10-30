@@ -1,0 +1,762 @@
+{
+  "lane": "options",
+  "note": "Lane options (RS6): every task at the clocks that change its answer (before/inside/after the session, a Friday, a Saturday), its refusals and failure paths. The scan and the three plan families are graded on their gates only (DECISIONS-RS R8.op2). The first five cases are the foundation's proof of the replay upstream (R8.3).",
+  "cases": [
+    {
+      "name": "refresh-master-from-replayed-dump",
+      "task": "baskfy.options.refresh_master",
+      "args": {},
+      "now": "2026-10-29T19:30:00",
+      "bundle": "session",
+      "kite": true,
+      "note": "a test Kite key and a token issued at now; /instruments/NFO from the replay upstream",
+      "payload_mask": [
+        "/seconds"
+      ]
+    },
+    {
+      "name": "refresh-master-no-session",
+      "task": "baskfy.options.refresh_master",
+      "args": {},
+      "now": "2026-10-29T19:30:00",
+      "bundle": "session"
+    },
+    {
+      "name": "index-bars-at-1315",
+      "task": "baskfy.options.index_bars",
+      "args": {},
+      "now": "2026-10-29T13:15:20",
+      "bundle": "session",
+      "kite": true,
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true"
+      },
+      "seed_sql": "DELETE FROM op_index_minute WHERE ts >= TIMESTAMPTZ '2026-10-29 12:00:00+05:30';",
+      "note": "the recorded NIFTY 50 / INDIA VIX minute candles from the replay upstream's /instruments/historical; the bed's bars after 12:00 removed so the pull has work",
+      "payload_mask": [
+        "/seconds"
+      ]
+    },
+    {
+      "name": "collect-chain-at-1315",
+      "task": "baskfy.options.collect_chain",
+      "args": {},
+      "now": "2026-10-29T13:15:20",
+      "bundle": "session",
+      "kite": true,
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true"
+      },
+      "seed_sql": "DELETE FROM op_chain_snapshot WHERE ts >= TIMESTAMPTZ '2026-10-29 13:15:00+05:30';",
+      "note": "one minute of the NIFTY chain: the recorded quotes at 13:15 through /quote",
+      "payload_mask": [
+        "/seconds"
+      ]
+    },
+    {
+      "name": "collect-chain-disabled",
+      "task": "baskfy.options.collect_chain",
+      "args": {},
+      "now": "2026-10-29T13:15:20"
+    },
+    {
+      "name": "refresh-master-changes-alerted",
+      "task": "baskfy.options.refresh_master",
+      "args": {},
+      "now": "2026-10-29T19:30:00",
+      "bundle": "session",
+      "kite": true,
+      "seed_sql": "UPDATE op_expiry SET lot_size = lot_size + 1 WHERE underlying = 'NIFTY' AND expiry_date = (SELECT min(expiry_date) FROM op_expiry WHERE underlying = 'NIFTY' AND expiry_date >= DATE '2026-10-29'); INSERT INTO op_expiry (underlying, expiry_date, kind, lot_size, first_seen, seen_on, detail) VALUES ('NIFTY', DATE '2027-06-01', 'WEEKLY', 65, DATE '2026-10-01', DATE '2026-10-01', '{\"history\": []}'); UPDATE op_expiry SET detail = '{\"withdrawn_on\": \"2026-10-20\"}' WHERE underlying = 'NIFTY' AND expiry_date = (SELECT max(expiry_date) FROM op_expiry WHERE underlying = 'NIFTY' AND expiry_date < DATE '2027-06-01'); INSERT INTO op_contract (instrument_token, tradingsymbol, underlying, expiry, strike, option_type, lot_size, tick_size, first_seen, last_seen, expired) VALUES (999000001, 'ZZZTEST26NOV100CE', 'ZZZTEST', DATE '2026-11-24', 100, 'CE', 1, 0.05, DATE '2026-10-01', DATE '2026-10-01', false);",
+      "payload_mask": [
+        "/alert/raised_at"
+      ],
+      "note": "a NIFTY lot size moved, a future NIFTY expiry withdrawn (absent from the dump), a withdrawn expiry restored, an underlying delisted: OPTIONS_MASTER_CHANGED mailed"
+    },
+    {
+      "name": "refresh-master-explicit-date",
+      "task": "baskfy.options.refresh_master",
+      "args": {
+        "as_of": "2026-10-29"
+      },
+      "now": "2026-10-30T08:00:00",
+      "bundle": "session",
+      "kite": true
+    },
+    {
+      "name": "refresh-master-empty-string-date-is-today",
+      "task": "baskfy.options.refresh_master",
+      "args": {
+        "as_of": ""
+      },
+      "now": "2026-10-29T19:30:00",
+      "bundle": "session"
+    },
+    {
+      "name": "refresh-master-bad-date",
+      "task": "baskfy.options.refresh_master",
+      "args": {
+        "as_of": "2026-13-01"
+      },
+      "now": "2026-10-29T19:30:00",
+      "bundle": "session",
+      "kite": true
+    },
+    {
+      "name": "refresh-master-int-date",
+      "task": "baskfy.options.refresh_master",
+      "args": {
+        "as_of": 20261029
+      },
+      "now": "2026-10-29T19:30:00",
+      "bundle": "session",
+      "kite": true
+    },
+    {
+      "name": "collect-chain-rerun-same-minute",
+      "task": "baskfy.options.collect_chain",
+      "args": {},
+      "now": "2026-10-29T13:15:20",
+      "bundle": "session",
+      "kite": true,
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true"
+      },
+      "payload_mask": [
+        "/seconds"
+      ],
+      "note": "the bed already holds the 13:15 minute: nothing inserted (house rule 7)"
+    },
+    {
+      "name": "collect-chain-at-0935",
+      "task": "baskfy.options.collect_chain",
+      "args": {},
+      "now": "2026-10-29T09:35:10",
+      "bundle": "session",
+      "kite": true,
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true"
+      },
+      "seed_sql": "DELETE FROM op_chain_snapshot WHERE ts >= TIMESTAMPTZ '2026-10-29 09:35:00+05:30' AND ts < TIMESTAMPTZ '2026-10-29 09:36:00+05:30';",
+      "payload_mask": [
+        "/seconds"
+      ]
+    },
+    {
+      "name": "collect-chain-at-1529",
+      "task": "baskfy.options.collect_chain",
+      "args": {},
+      "now": "2026-10-29T15:29:30",
+      "bundle": "session",
+      "kite": true,
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true"
+      },
+      "seed_sql": "DELETE FROM op_chain_snapshot WHERE ts >= TIMESTAMPTZ '2026-10-29 15:29:00+05:30' AND ts < TIMESTAMPTZ '2026-10-29 15:30:00+05:30';",
+      "payload_mask": [
+        "/seconds"
+      ]
+    },
+    {
+      "name": "collect-chain-no-spot-hint",
+      "task": "baskfy.options.collect_chain",
+      "args": {},
+      "now": "2026-10-29T13:15:20",
+      "bundle": "session",
+      "kite": true,
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true"
+      },
+      "seed_sql": "DELETE FROM op_chain_snapshot WHERE ts >= TIMESTAMPTZ '2026-10-29 13:15:00+05:30' AND ts < TIMESTAMPTZ '2026-10-29 13:16:00+05:30'; DELETE FROM op_index_minute WHERE instrument_id IN (SELECT id FROM instrument WHERE symbol = 'NIFTY 50') AND ts >= TIMESTAMPTZ '2026-10-25 00:00:00+05:30';",
+      "payload_mask": [
+        "/seconds"
+      ],
+      "note": "no NIFTY 50 bar in four days: one more quote() for the spot alone"
+    },
+    {
+      "name": "collect-chain-no-master",
+      "task": "baskfy.options.collect_chain",
+      "args": {},
+      "now": "2026-10-29T13:15:20",
+      "bundle": "session",
+      "kite": true,
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true"
+      },
+      "seed_sql": "UPDATE op_contract SET expired = true WHERE underlying = 'NIFTY';",
+      "payload_mask": [
+        "/seconds"
+      ]
+    },
+    {
+      "name": "collect-chain-at-argument",
+      "task": "baskfy.options.collect_chain",
+      "args": {
+        "at": "2026-10-29T13:15:40+05:30"
+      },
+      "now": "2026-10-29T13:15:20",
+      "bundle": "session",
+      "kite": true,
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true"
+      },
+      "seed_sql": "DELETE FROM op_chain_snapshot WHERE ts >= TIMESTAMPTZ '2026-10-29 13:15:00+05:30' AND ts < TIMESTAMPTZ '2026-10-29 13:16:00+05:30';",
+      "payload_mask": [
+        "/seconds"
+      ]
+    },
+    {
+      "name": "collect-chain-before-open",
+      "task": "baskfy.options.collect_chain",
+      "args": {},
+      "now": "2026-10-29T09:14:59",
+      "bundle": "session",
+      "kite": true,
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true"
+      }
+    },
+    {
+      "name": "collect-chain-after-close",
+      "task": "baskfy.options.collect_chain",
+      "args": {},
+      "now": "2026-10-29T15:30:01",
+      "bundle": "session",
+      "kite": true,
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true"
+      }
+    },
+    {
+      "name": "collect-chain-no-kite-session",
+      "task": "baskfy.options.collect_chain",
+      "args": {},
+      "now": "2026-10-29T13:15:20",
+      "bundle": "session",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true"
+      }
+    },
+    {
+      "name": "collect-chain-saturday",
+      "task": "baskfy.options.collect_chain",
+      "args": {},
+      "now": "2026-10-31T13:15:20",
+      "bundle": "session",
+      "kite": true,
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true"
+      }
+    },
+    {
+      "name": "collect-chain-bad-at",
+      "task": "baskfy.options.collect_chain",
+      "args": {
+        "at": "yesterday"
+      },
+      "now": "2026-10-29T13:15:20",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true"
+      }
+    },
+    {
+      "name": "index-bars-rerun-idempotent",
+      "task": "baskfy.options.index_bars",
+      "args": {},
+      "now": "2026-10-29T13:15:20",
+      "bundle": "session",
+      "kite": true,
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true"
+      },
+      "payload_mask": [
+        "/seconds"
+      ]
+    },
+    {
+      "name": "index-bars-disabled",
+      "task": "baskfy.options.index_bars",
+      "args": {},
+      "now": "2026-10-29T13:15:20",
+      "bundle": "session",
+      "kite": true
+    },
+    {
+      "name": "index-bars-no-kite-session",
+      "task": "baskfy.options.index_bars",
+      "args": {},
+      "now": "2026-10-29T13:15:20",
+      "bundle": "session",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true"
+      }
+    },
+    {
+      "name": "index-bars-saturday",
+      "task": "baskfy.options.index_bars",
+      "args": {},
+      "now": "2026-10-31T11:00:00",
+      "bundle": "session",
+      "kite": true,
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true"
+      }
+    },
+    {
+      "name": "index-bars-eod-reconcile",
+      "task": "baskfy.options.index_bars_eod",
+      "args": {},
+      "now": "2026-10-29T16:00:00",
+      "bundle": "session",
+      "kite": true,
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true"
+      },
+      "seed_sql": "DELETE FROM op_index_minute WHERE ts >= TIMESTAMPTZ '2026-10-29 11:00:00+05:30';",
+      "payload_mask": [
+        "/seconds"
+      ]
+    },
+    {
+      "name": "index-bars-eod-explicit-friday",
+      "task": "baskfy.options.index_bars_eod",
+      "args": {
+        "trade_date": "2026-10-29"
+      },
+      "now": "2026-10-30T16:00:00",
+      "bundle": "session",
+      "kite": true,
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true"
+      },
+      "payload_mask": [
+        "/seconds"
+      ]
+    },
+    {
+      "name": "index-bars-eod-disabled",
+      "task": "baskfy.options.index_bars_eod",
+      "args": {},
+      "now": "2026-10-29T16:00:00",
+      "bundle": "session",
+      "kite": true
+    },
+    {
+      "name": "index-bars-eod-no-kite-session",
+      "task": "baskfy.options.index_bars_eod",
+      "args": {},
+      "now": "2026-10-29T16:00:00",
+      "bundle": "session",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true"
+      }
+    },
+    {
+      "name": "index-bars-eod-saturday",
+      "task": "baskfy.options.index_bars_eod",
+      "args": {},
+      "now": "2026-10-31T16:00:00",
+      "bundle": "session",
+      "kite": true,
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true"
+      }
+    },
+    {
+      "name": "index-bars-eod-bad-date",
+      "task": "baskfy.options.index_bars_eod",
+      "args": {
+        "trade_date": "29-10-2026"
+      },
+      "now": "2026-10-29T16:00:00",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true"
+      }
+    },
+    {
+      "name": "backfill-index-bars-three-days",
+      "task": "baskfy.options.backfill_index_bars",
+      "args": {
+        "date_from": "2026-10-27",
+        "date_to": "2026-10-29"
+      },
+      "now": "2026-10-29T19:00:00",
+      "bundle": "session",
+      "kite": true,
+      "seed_sql": "DELETE FROM op_index_minute WHERE ts >= TIMESTAMPTZ '2026-10-29 12:00:00+05:30';",
+      "payload_mask": [
+        "/seconds"
+      ]
+    },
+    {
+      "name": "backfill-index-bars-default-end",
+      "task": "baskfy.options.backfill_index_bars",
+      "args": [
+        "2026-10-29"
+      ],
+      "now": "2026-10-29T19:00:00",
+      "bundle": "session",
+      "kite": true,
+      "payload_mask": [
+        "/seconds"
+      ]
+    },
+    {
+      "name": "backfill-index-bars-inverted",
+      "task": "baskfy.options.backfill_index_bars",
+      "args": {
+        "date_from": "2026-10-29",
+        "date_to": "2026-10-27"
+      },
+      "now": "2026-10-29T19:00:00",
+      "bundle": "session",
+      "kite": true
+    },
+    {
+      "name": "backfill-index-bars-no-kite-session",
+      "task": "baskfy.options.backfill_index_bars",
+      "args": {
+        "date_from": "2026-10-27"
+      },
+      "now": "2026-10-29T19:00:00",
+      "bundle": "session"
+    },
+    {
+      "name": "backfill-index-bars-missing-argument",
+      "task": "baskfy.options.backfill_index_bars",
+      "args": {},
+      "now": "2026-10-29T19:00:00"
+    },
+    {
+      "name": "backfill-index-bars-int-date",
+      "task": "baskfy.options.backfill_index_bars",
+      "args": {
+        "date_from": 20261027
+      },
+      "now": "2026-10-29T19:00:00",
+      "bundle": "session",
+      "kite": true
+    },
+    {
+      "name": "checks-not-due",
+      "task": "baskfy.options.checks",
+      "args": {},
+      "now": "2026-10-29T09:21:00",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true",
+        "BASKFY_OPTIONS_SCAN_ENABLED": "true"
+      }
+    },
+    {
+      "name": "checks-0920-every-sleeve-scanned",
+      "task": "baskfy.options.checks",
+      "args": {},
+      "now": "2026-10-29T09:20:10",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true",
+        "BASKFY_OPTIONS_SCAN_ENABLED": "true"
+      }
+    },
+    {
+      "name": "checks-0920-scan-missing-alerted",
+      "task": "baskfy.options.checks",
+      "args": {},
+      "now": "2026-10-29T09:20:10",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true",
+        "BASKFY_OPTIONS_SCAN_ENABLED": "true"
+      },
+      "seed_sql": "DELETE FROM op_scan WHERE sleeve = 'O2' AND ts >= TIMESTAMPTZ '2026-10-29 09:15:00+05:30';",
+      "payload_mask": [
+        "/sent/0/raised_at"
+      ]
+    },
+    {
+      "name": "checks-0920-scan-flag-off",
+      "task": "baskfy.options.checks",
+      "args": {},
+      "now": "2026-10-29T09:20:10"
+    },
+    {
+      "name": "checks-1020-o1-day",
+      "task": "baskfy.options.checks",
+      "args": {},
+      "now": "2026-10-27T10:20:05",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true",
+        "BASKFY_OPTIONS_SCAN_ENABLED": "true"
+      },
+      "bundle": "session"
+    },
+    {
+      "name": "checks-1020-not-o1-day",
+      "task": "baskfy.options.checks",
+      "args": {},
+      "now": "2026-10-29T10:20:05",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true",
+        "BASKFY_OPTIONS_SCAN_ENABLED": "true"
+      }
+    },
+    {
+      "name": "checks-1020-monitor-off",
+      "task": "baskfy.options.checks",
+      "args": {},
+      "now": "2026-10-29T10:20:05"
+    },
+    {
+      "name": "checks-1433-flat",
+      "task": "baskfy.options.checks",
+      "args": {},
+      "now": "2026-10-29T14:33:00"
+    },
+    {
+      "name": "checks-1503-open-position-critical",
+      "task": "baskfy.options.checks",
+      "args": {},
+      "now": "2026-10-29T15:03:30",
+      "seed_sql": "INSERT INTO op_position (session_id, user_id, leg_ids, entry_points, entry_inr, lots, opened_at, hard_exit_at, simulated) VALUES (41, 1, '{}', 100.00, 6500.00, 1, TIMESTAMPTZ '2026-10-28 10:00:00+05:30', TIMESTAMPTZ '2026-10-28 15:00:00+05:30', true);",
+      "payload_mask": [
+        "/sent/0/raised_at"
+      ]
+    },
+    {
+      "name": "checks-1535-collector-full-day",
+      "task": "baskfy.options.checks",
+      "args": {},
+      "now": "2026-10-29T15:35:00",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true",
+        "BASKFY_OPTIONS_SCAN_ENABLED": "true"
+      }
+    },
+    {
+      "name": "checks-1535-collector-gap-alerted",
+      "task": "baskfy.options.checks",
+      "args": {},
+      "now": "2026-10-29T15:35:00",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true",
+        "BASKFY_OPTIONS_SCAN_ENABLED": "true"
+      },
+      "seed_sql": "DELETE FROM op_chain_snapshot WHERE ts >= TIMESTAMPTZ '2026-10-29 14:00:00+05:30' AND ts < TIMESTAMPTZ '2026-10-29 15:30:00+05:30';",
+      "payload_mask": [
+        "/sent/0/raised_at"
+      ]
+    },
+    {
+      "name": "checks-saturday",
+      "task": "baskfy.options.checks",
+      "args": {},
+      "now": "2026-10-31T09:20:00",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true",
+        "BASKFY_OPTIONS_SCAN_ENABLED": "true"
+      }
+    },
+    {
+      "name": "weekly-friday-skips-only",
+      "task": "baskfy.options.weekly",
+      "args": {},
+      "now": "2026-10-30T16:00:00",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true"
+      },
+      "payload_mask": [
+        "/sent/raised_at"
+      ]
+    },
+    {
+      "name": "weekly-friday-with-journal",
+      "task": "baskfy.options.weekly",
+      "args": {},
+      "now": "2026-10-30T16:00:00",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true"
+      },
+      "payload_mask": [
+        "/sent/raised_at"
+      ],
+      "seed_sql": "INSERT INTO op_journal (session_id, user_id, sleeve, trade_date, expiry_used, structure, entry_inr, exit_inr, gross_pnl_inr, costs_inr, net_pnl_inr, risk_budget_inr, r_multiple, closed_reason, minutes_held, simulated, sizing_mode) VALUES (41, 1, 'O2', DATE '2026-10-28', DATE '2026-11-03', 'LONG_OPTION', 6500.00, 5200.00, -1300.00, 60.00, -1360.00, 1000.00, -1.36, 'STOP', 33, true, 'PAPER_ONE_LOT'), (40, 1, 'O2', DATE '2026-10-27', DATE '2026-11-03', 'LONG_OPTION', 6500.00, 9060.50, 2560.50, 60.00, 2500.50, 1000.00, 2.50, 'TARGET', 41, true, 'PAPER_ONE_LOT'), (38, 1, 'O1M', DATE '2026-10-27', DATE '2026-10-27', 'IRON_CONDOR', 3000.00, 2000.00, 1000.00, 100.00, 900.00, 3000.00, 0.30, 'PROFIT_TAKE', 120, true, 'BUDGET');"
+    },
+    {
+      "name": "weekly-monitor-off",
+      "task": "baskfy.options.weekly",
+      "args": {},
+      "now": "2026-10-30T16:00:00"
+    },
+    {
+      "name": "weekly-no-sole-user",
+      "task": "baskfy.options.weekly",
+      "args": {},
+      "now": "2026-10-30T16:00:00",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true",
+        "BASKFY_SOLE_USER_ID": ""
+      }
+    },
+    {
+      "name": "weekly-at-argument",
+      "task": "baskfy.options.weekly",
+      "args": {
+        "at": "2026-10-25T18:00:00"
+      },
+      "now": "2026-10-30T16:00:00",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true"
+      },
+      "payload_mask": [
+        "/sent/raised_at"
+      ]
+    },
+    {
+      "name": "scan-disabled",
+      "task": "baskfy.options.scan",
+      "args": {},
+      "now": "2026-10-29T13:15:20"
+    },
+    {
+      "name": "scan-collect-off",
+      "task": "baskfy.options.scan",
+      "args": {},
+      "now": "2026-10-29T13:15:20",
+      "env": {
+        "BASKFY_OPTIONS_SCAN_ENABLED": "true"
+      }
+    },
+    {
+      "name": "scan-outside-window",
+      "task": "baskfy.options.scan",
+      "args": {},
+      "now": "2026-10-29T15:31:00",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_SCAN_ENABLED": "true"
+      }
+    },
+    {
+      "name": "scan-no-sole-user",
+      "task": "baskfy.options.scan",
+      "args": {},
+      "now": "2026-10-29T13:15:20",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_SCAN_ENABLED": "true",
+        "BASKFY_SOLE_USER_ID": ""
+      }
+    },
+    {
+      "name": "scan-saturday",
+      "task": "baskfy.options.scan",
+      "args": {},
+      "now": "2026-10-31T13:15:20",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_SCAN_ENABLED": "true"
+      }
+    },
+    {
+      "name": "plan-o1-disabled",
+      "task": "baskfy.options.plan_o1",
+      "args": {},
+      "now": "2026-10-27T10:05:00"
+    },
+    {
+      "name": "plan-o1-collect-off",
+      "task": "baskfy.options.plan_o1",
+      "args": {},
+      "now": "2026-10-27T10:05:00",
+      "env": {
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true"
+      }
+    },
+    {
+      "name": "plan-o1-outside-window",
+      "task": "baskfy.options.plan_o1",
+      "args": {},
+      "now": "2026-10-27T10:16:01",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true"
+      }
+    },
+    {
+      "name": "plan-o1-saturday",
+      "task": "baskfy.options.plan_o1",
+      "args": {},
+      "now": "2026-10-31T10:16:00",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true"
+      }
+    },
+    {
+      "name": "plan-o2-outside-window",
+      "task": "baskfy.options.plan_o2",
+      "args": {},
+      "now": "2026-10-29T13:34:01",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true"
+      }
+    },
+    {
+      "name": "plan-o2-no-sole-user",
+      "task": "baskfy.options.plan_o2",
+      "args": {},
+      "now": "2026-10-29T11:00:00",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true",
+        "BASKFY_SOLE_USER_ID": ""
+      }
+    },
+    {
+      "name": "plan-o2-saturday",
+      "task": "baskfy.options.plan_o2",
+      "args": {},
+      "now": "2026-10-31T09:30:00",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true"
+      }
+    },
+    {
+      "name": "plan-o3-before-window",
+      "task": "baskfy.options.plan_o3",
+      "args": {},
+      "now": "2026-10-29T09:44:59",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true"
+      }
+    },
+    {
+      "name": "plan-o3-saturday",
+      "task": "baskfy.options.plan_o3",
+      "args": {},
+      "now": "2026-10-31T13:34:00",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true"
+      }
+    },
+    {
+      "name": "plan-o3-disabled",
+      "task": "baskfy.options.plan_o3",
+      "args": {},
+      "now": "2026-10-29T11:00:00"
+    }
+  ]
+}

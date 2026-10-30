@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use baskfy_core::decimal::WideDecimal;
 use chrono::{DateTime, FixedOffset, NaiveDate, NaiveTime, TimeDelta, TimeZone};
+use num_bigint::{BigInt, Sign};
 
 /// `SESSION_OPEN` (09:15 IST).
 fn session_open() -> NaiveTime {
@@ -65,8 +66,8 @@ pub struct Leg {
     pub symbol: String,
     /// `side` (`BUY`/`SELL`).
     pub side: &'static str,
-    /// `quantity` (a Python int; whole shares).
-    pub quantity: i128,
+    /// `quantity` (a Python int — unbounded, as Python's is: DECISIONS-RS R8.ar1; whole shares).
+    pub quantity: BigInt,
     /// `ref_price` (the posted `Decimal`).
     pub ref_price: WideDecimal,
 }
@@ -89,6 +90,11 @@ fn expires(now: DateTime<FixedOffset>) -> DateTime<FixedOffset> {
     now + TimeDelta::minutes(30)
 }
 
+/// `n > 0` for a Python `int`.
+fn is_positive(n: &BigInt) -> bool {
+    n.sign() == Sign::Plus
+}
+
 fn positive(d: &WideDecimal) -> bool {
     !d.is_zero() && !d.is_sign_negative()
 }
@@ -98,9 +104,8 @@ fn positive(d: &WideDecimal) -> bool {
 /// Not `quantize(0)`: `to_integral_value` has no 28-digit limit, so a quotient such as
 /// `1.5E+29` is the integer `150000000000000000000000000000` in Python, where `quantize` would
 /// raise `InvalidOperation` (found in review). Read from the value's `str()`: sign, coefficient
-/// and exponent, then truncated toward zero. Beyond `i128` (Python's int is unbounded) it is the
-/// error.
-fn to_int(d: &WideDecimal) -> Result<i128, String> {
+/// and exponent, then truncated toward zero. Unbounded, as Python's `int` is (R8.ar1).
+fn to_int(d: &WideDecimal) -> Result<BigInt, String> {
     let text = d.to_sci_string();
     let (negative, body) = match text.strip_prefix('-') {
         Some(rest) => (true, rest),
@@ -115,20 +120,17 @@ fn to_int(d: &WideDecimal) -> Result<i128, String> {
     let mut digits = format!("{whole}{frac}");
     if exp >= 0 {
         let zeros = usize::try_from(exp).map_err(|e| e.to_string())?;
-        if zeros > 40 {
-            return Err(format!("integer part of {text} exceeds 128 bits"));
-        }
         digits.push_str(&"0".repeat(zeros));
     } else {
         let cut = usize::try_from(exp.unsigned_abs()).map_err(|e| e.to_string())?;
         digits.truncate(digits.len().saturating_sub(cut));
     }
     if digits.is_empty() {
-        return Ok(0);
+        return Ok(BigInt::default());
     }
     let magnitude = digits
-        .parse::<i128>()
-        .map_err(|_| format!("integer part of {text} exceeds 128 bits"))?;
+        .parse::<BigInt>()
+        .map_err(|_| format!("bad integer part in {text}"))?;
     Ok(if negative { -magnitude } else { magnitude })
 }
 
@@ -140,7 +142,7 @@ pub fn shares_at_amount(
     amount: &WideDecimal,
     prices: &[WideDecimal],
     weights: &[WideDecimal],
-) -> Result<Vec<i128>, String> {
+) -> Result<Vec<BigInt>, String> {
     if amount.is_sign_negative() && !amount.is_zero() {
         return Err("amount cannot be negative".to_owned());
     }
@@ -204,7 +206,7 @@ pub fn build_invest_plan(
     let legs = symbols
         .iter()
         .zip(qtys)
-        .filter(|(_, q)| *q > 0)
+        .filter(|(_, q)| is_positive(q))
         .map(|(s, q)| Leg {
             symbol: s.clone(),
             side: "BUY",
@@ -225,7 +227,7 @@ pub fn build_invest_plan(
 /// # Errors
 /// The `ValueError`'s message.
 pub fn build_apply_plan(
-    holdings: &BTreeMap<String, i128>,
+    holdings: &BTreeMap<String, BigInt>,
     target_weights: &BTreeMap<String, WideDecimal>,
     prices: &BTreeMap<String, WideDecimal>,
     amount: &WideDecimal,
@@ -261,27 +263,27 @@ pub fn build_apply_plan(
         .iter()
         .map(|s| price_of(prices, s))
         .collect();
-    let targets: BTreeMap<String, i128> = positive_symbols
+    let targets: BTreeMap<String, BigInt> = positive_symbols
         .into_iter()
         .zip(shares_at_amount(amount, &price_list, &weights)?)
         .collect();
     let mut legs = Vec::new();
     for s in &symbols {
-        let current = holdings.get(s).copied().unwrap_or(0);
-        let target = targets.get(s).copied().unwrap_or(0);
-        let delta = target.saturating_sub(current);
-        if delta > 0 {
+        let current = holdings.get(s).cloned().unwrap_or_default();
+        let target = targets.get(s).cloned().unwrap_or_default();
+        let delta = target - current;
+        if is_positive(&delta) {
             legs.push(Leg {
                 symbol: s.clone(),
                 side: "BUY",
                 quantity: delta,
                 ref_price: price_of(prices, s),
             });
-        } else if delta < 0 {
+        } else if delta.sign() == Sign::Minus {
             legs.push(Leg {
                 symbol: s.clone(),
                 side: "SELL",
-                quantity: delta.saturating_neg(),
+                quantity: -delta,
                 ref_price: price_of(prices, s),
             });
         }
@@ -299,7 +301,7 @@ pub fn build_apply_plan(
 /// # Errors
 /// The `ValueError`'s message.
 pub fn build_customize_plan(
-    holdings: &BTreeMap<String, i128>,
+    holdings: &BTreeMap<String, BigInt>,
     target_weights: &BTreeMap<String, WideDecimal>,
     prices: &BTreeMap<String, WideDecimal>,
     amount: &WideDecimal,
@@ -315,7 +317,7 @@ pub fn build_customize_plan(
 /// # Errors
 /// The `ValueError`'s message.
 pub fn build_exit_plan(
-    holdings: &BTreeMap<String, i128>,
+    holdings: &BTreeMap<String, BigInt>,
     prices: &BTreeMap<String, WideDecimal>,
     now: DateTime<FixedOffset>,
     requested_amount: Option<WideDecimal>,
@@ -325,7 +327,7 @@ pub fn build_exit_plan(
     }
     let symbols: Vec<String> = holdings
         .iter()
-        .filter(|(_, q)| **q > 0)
+        .filter(|(_, q)| is_positive(q))
         .map(|(s, _)| s.clone())
         .collect();
     if symbols.is_empty() {
@@ -351,7 +353,7 @@ pub fn build_exit_plan(
         .map(|s| Leg {
             symbol: s.clone(),
             side: "SELL",
-            quantity: holdings[s],
+            quantity: holdings[s].clone(),
             ref_price: price_of(prices, s),
         })
         .collect();
@@ -391,25 +393,34 @@ mod tests {
         // precision limit, so these are integers, not `InvalidOperation`.
         let now = ist(2026, 10, 30, 10, 0);
         let qty = |amount: &str, w: &str, p: &str| {
-            build_invest_plan(&map(&[("A", w)]), &map(&[("A", p)]), &d(amount), now)
-                .map(|plan| plan.legs.iter().map(|l| l.quantity).collect::<Vec<_>>())
+            build_invest_plan(&map(&[("A", w)]), &map(&[("A", p)]), &d(amount), now).map(|plan| {
+                plan.legs
+                    .iter()
+                    .map(|l| l.quantity.to_string())
+                    .collect::<Vec<_>>()
+            })
         };
         assert_eq!(
             qty("1.5E+29", "1", "1").unwrap(),
-            vec![150_000_000_000_000_000_000_000_000_000]
+            vec!["150000000000000000000000000000"]
         );
         assert_eq!(
             qty("1E+30", "0.5", "3").unwrap(),
-            vec![166_666_666_666_666_666_666_666_666_700]
+            vec!["166666666666666666666666666700"]
         );
-        assert_eq!(qty("12345.6789", "0.3333", "7.77").unwrap(), vec![529]);
+        assert_eq!(qty("12345.6789", "0.3333", "7.77").unwrap(), vec!["529"]);
         assert_eq!(
             qty("99999999999999999999999999999999", "1", "0.01").unwrap(),
-            vec![10_000_000_000_000_000_000_000_000_000_000_000]
+            vec!["10000000000000000000000000000000000"]
         );
-        assert_eq!(to_int(&d("-7.9")).unwrap(), -7);
-        assert_eq!(to_int(&d("0E-7")).unwrap(), 0);
-        assert_eq!(to_int(&d("0.999")).unwrap(), 0);
+        // Beyond 128 bits Python's int is still exact (R8.ar1): `int(Decimal("1E+45"))`.
+        assert_eq!(
+            qty("1E+45", "1", "1").unwrap(),
+            vec!["1000000000000000000000000000000000000000000000"]
+        );
+        assert_eq!(to_int(&d("-7.9")).unwrap().to_string(), "-7");
+        assert_eq!(to_int(&d("0E-7")).unwrap().to_string(), "0");
+        assert_eq!(to_int(&d("0.999")).unwrap().to_string(), "0");
     }
 
     #[test]
@@ -425,7 +436,13 @@ mod tests {
         let legs: Vec<(String, &str, i128)> = plan
             .legs
             .iter()
-            .map(|l| (l.symbol.clone(), l.side, l.quantity))
+            .map(|l| {
+                (
+                    l.symbol.clone(),
+                    l.side,
+                    l.quantity.to_string().parse().unwrap(),
+                )
+            })
             .collect();
         assert_eq!(
             legs,
@@ -438,8 +455,11 @@ mod tests {
             crate::wire::py_datetime_fixed(plan.expires_at_hint),
             "2026-10-30T10:30:00+05:30"
         );
-        let holdings: BTreeMap<String, i128> =
-            [("TCS".to_owned(), 30), ("WIPRO".to_owned(), 10)].into();
+        let holdings: BTreeMap<String, BigInt> = [
+            ("TCS".to_owned(), BigInt::from(30)),
+            ("WIPRO".to_owned(), BigInt::from(10)),
+        ]
+        .into();
         let apply = build_apply_plan(
             &holdings,
             &map(&[("TCS", "0.5"), ("INFY", "0.5")]),
@@ -451,7 +471,13 @@ mod tests {
         let legs: Vec<(String, &str, i128)> = apply
             .legs
             .iter()
-            .map(|l| (l.symbol.clone(), l.side, l.quantity))
+            .map(|l| {
+                (
+                    l.symbol.clone(),
+                    l.side,
+                    l.quantity.to_string().parse().unwrap(),
+                )
+            })
             .collect();
         assert_eq!(
             legs,
@@ -477,6 +503,53 @@ mod tests {
             build_invest_plan(&map(&[("A", "1"), ("B", "1")]), &map(&[]), &d("1"), now)
                 .unwrap_err(),
             "missing prices for: A, B"
+        );
+    }
+
+    /// R7.15 / R8.ar1: `probe-exit-huge-int` in the session. Python's answer
+    /// (`build_exit_plan(holdings={"A": 123456789012345678901234567890123456789012, "B": -5},
+    /// prices={"A": Decimal(1), "B": Decimal("1E+5")}, ...)`): one SELL leg of the exact 42-digit
+    /// quantity, and `requested_amount` rounded to the context's 28 digits.
+    #[test]
+    fn an_exit_beyond_128_bits_is_pythons_int() {
+        let now = ist(2026, 10, 30, 12, 36);
+        let huge: BigInt = "123456789012345678901234567890123456789012"
+            .parse()
+            .unwrap();
+        let holdings: BTreeMap<String, BigInt> = [
+            ("A".to_owned(), huge.clone()),
+            ("B".to_owned(), BigInt::from(-5)),
+        ]
+        .into();
+        let exit =
+            build_exit_plan(&holdings, &map(&[("A", "1"), ("B", "1E+5")]), now, None).unwrap();
+        assert_eq!(exit.legs.len(), 1);
+        assert_eq!(exit.legs[0].quantity, huge);
+        assert_eq!(
+            exit.requested_amount.to_sci_string(),
+            "1.234567890123456789012345679E+41"
+        );
+        // And a SELL delta beyond 128 bits in an apply plan.
+        let apply = build_apply_plan(
+            &holdings,
+            &map(&[("C", "1")]),
+            &map(&[("A", "1"), ("B", "1"), ("C", "1")]),
+            &d("10"),
+            now,
+        )
+        .unwrap();
+        let legs: Vec<(String, &str, String)> = apply
+            .legs
+            .iter()
+            .map(|l| (l.symbol.clone(), l.side, l.quantity.to_string()))
+            .collect();
+        assert_eq!(
+            legs,
+            vec![
+                ("A".to_owned(), "SELL", huge.to_string()),
+                ("B".to_owned(), "BUY", "5".to_owned()),
+                ("C".to_owned(), "BUY", "10".to_owned()),
+            ]
         );
     }
 

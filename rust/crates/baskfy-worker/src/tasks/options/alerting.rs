@@ -32,6 +32,8 @@ pub(crate) enum OptionsName {
     Weekly,
     /// `OPTIONS_CHECK_FAILED`.
     CheckFailed,
+    /// `OPTIONS_PLAN`.
+    Plan,
 }
 
 impl OptionsName {
@@ -41,6 +43,7 @@ impl OptionsName {
             Self::MasterChanged => "OPTIONS_MASTER_CHANGED",
             Self::Weekly => "OPTIONS_WEEKLY",
             Self::CheckFailed => "OPTIONS_CHECK_FAILED",
+            Self::Plan => "OPTIONS_PLAN",
         }
     }
 }

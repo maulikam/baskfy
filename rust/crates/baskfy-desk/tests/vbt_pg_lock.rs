@@ -253,3 +253,112 @@ async fn two_tabs_at_once_take_one_entry_between_them() {
         .unwrap();
     result
 }
+
+/// Nested blocks open one transaction; a row the holder **updated** is a 409 at once, not a
+/// wait on the session insert; a row held by another transaction without the per-user lock is
+/// the `55P03` refusal, rolled back.
+#[tokio::test]
+#[ignore = "needs the bed: BASKFY_RS_TEST_DATABASE_URL naming an rsd_* clone of it, then --ignored"]
+async fn nested_blocks_commit_once_and_a_held_row_never_waits() {
+    use baskfy_desk::lanes::vbt::store::SessionBump;
+
+    let url = std::env::var("BASKFY_RS_TEST_DATABASE_URL").unwrap();
+    let name = url.rsplit('/').next().unwrap().split('?').next().unwrap();
+    assert!(
+        name.starts_with("rsd_"),
+        "{name}: only an rsd_* clone is ever written"
+    );
+    let db = Db::open(DbConfig {
+        backend: "postgres".to_owned(),
+        schema: "public".to_owned(),
+        database_url: url.clone(),
+        db_path: std::path::PathBuf::new(),
+    })
+    .await
+    .unwrap();
+    let mut setup = db.connect().await.unwrap();
+    let tag = format!(
+        "{:x}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+            ^ u128::from(std::process::id())
+    );
+    let uid = one_int(
+        &mut setup,
+        "INSERT INTO app_user (public_id, email) VALUES (?, ?) RETURNING id",
+        &[
+            Param::Text(format!("vbnest-rs-{tag}")),
+            Param::Text(format!("vbnest-rs-{tag}@x.test")),
+        ],
+    )
+    .await;
+    let day = now().date_naive();
+    let wait = std::time::Duration::from_secs(5);
+    let result = async {
+        let mut a = PgVbtStore::new(db.connect().await.unwrap(), uid, "public", None);
+        let mut b = PgVbtStore::new(db.connect().await.unwrap(), uid, "public", None);
+        a.lock_session_for_update(day).await.unwrap();
+        a.lock_session_for_update(day).await.unwrap();
+        a.bump_session(
+            day,
+            SessionBump {
+                mode: "DRY_RUN".to_owned(),
+                confirms: 1,
+                ..SessionBump::default()
+            },
+        )
+        .await
+        .unwrap();
+        a.unlock_session().await.unwrap();
+        assert!(a.session_locked(), "the inner exit does not commit");
+        let busy = tokio::time::timeout(wait, b.lock_session_for_update(day))
+            .await
+            .expect("the second lock waited instead of refusing");
+        assert!(matches!(busy, Err(StoreError::SessionBusy)), "{busy:?}");
+        assert!(!b.session_locked());
+        assert_eq!(
+            b.session(day)
+                .await
+                .unwrap()
+                .map_or(0, |r| r.int("confirms")),
+            0
+        );
+        a.unlock_session().await.unwrap();
+        assert!(!a.session_locked());
+        assert_eq!(b.session(day).await.unwrap().unwrap().int("confirms"), 1);
+
+        let mut holder = db.connect().await.unwrap();
+        holder.execute("BEGIN", &[]).await.unwrap();
+        holder
+            .execute(
+                "SELECT 1 FROM vb_session WHERE user_id = ? AND session_date = ? FOR UPDATE",
+                &[Param::Int(uid), Param::Date(day)],
+            )
+            .await
+            .unwrap();
+        let row_busy = tokio::time::timeout(wait, b.lock_session_for_update(day))
+            .await
+            .expect("a held row waited instead of refusing");
+        assert!(
+            matches!(row_busy, Err(StoreError::SessionBusy)),
+            "{row_busy:?}"
+        );
+        assert!(!b.session_locked());
+        assert_eq!(
+            b.entries_taken(day).await.unwrap(),
+            0,
+            "b is out of the aborted transaction"
+        );
+        holder.execute("ROLLBACK", &[]).await.unwrap();
+        b.lock_session_for_update(day).await.unwrap();
+        b.unlock_session().await.unwrap();
+    }
+    .await;
+    setup
+        .execute("DELETE FROM app_user WHERE id = ?", &[Param::Int(uid)])
+        .await
+        .unwrap();
+    result
+}

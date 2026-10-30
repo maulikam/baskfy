@@ -89,7 +89,7 @@ impl Mem {
         self.next
     }
 
-    fn find<'a>(rows: &'a mut [Rec], id: i64) -> Option<&'a mut Rec> {
+    fn find(rows: &mut [Rec], id: i64) -> Option<&mut Rec> {
         rows.iter_mut().find(|r| r.int("id") == id)
     }
 
@@ -439,8 +439,7 @@ impl TwtStore for MemoryStore {
         if left <= 0 {
             return Ok(false);
         }
-        m.config
-            .set("first_live_entries_left", Val::Int(left - 1));
+        m.config.set("first_live_entries_left", Val::Int(left - 1));
         m.position(position_id).set("half_size", Val::Bool(true));
         m.counted.push(position_id);
         m.audit.push(Rec::of([
@@ -478,8 +477,7 @@ impl TwtStore for MemoryStore {
             ("at", Val::Stamp(now)),
             ("changed_by", Val::from(changed_by)),
         ]));
-        m.config
-            .set("sleeve_capital_inr", Val::Dec(Decimal::ZERO));
+        m.config.set("sleeve_capital_inr", Val::Dec(Decimal::ZERO));
         Ok(before)
     }
 

@@ -322,7 +322,16 @@ fn every_stub_refuses_with_task_not_ported() {
             other => panic!("{}: expected TaskNotPorted, got {other:?}", spec.name),
         }
     }
-    assert_eq!(stubs, REGISTRY.len() - 4);
+    let ported = REGISTRY.iter().filter(|t| t.is_ported()).count();
+    for spec in REGISTRY.iter() {
+        for name in spec.lane.ported() {
+            assert!(
+                REGISTRY.iter().any(|t| t.name == *name),
+                "{name} is PORTED but not registered"
+            );
+        }
+    }
+    assert_eq!(stubs + ported, REGISTRY.len());
     let e = WorkerError::TaskNotPorted {
         task: "baskfy.fno.scan",
         lane: "fno",

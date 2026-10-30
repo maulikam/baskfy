@@ -7,10 +7,6 @@
 //! (`swing_catalyst.run_swing_catalyst` with an explicit symbol set), then wakes the Laya sidecar.
 //! Progress goes to Redis; the lock the API took is released at the end, whatever happened.
 //!
-//! **Not cut over (R8.ar4):** the feed's loop is the `swing_eod` lane's (`tasks/swing_eod/
-//! catalyst.rs`), private to that lane and without Python's `symbols=` argument. Until that lane
-//! exposes it, [`feed_loop`] answers `NotPorted` and the task is not in `PORTED`; everything
-//! around the loop — the view, the status document, the wake key, the lock — is here and tested.
 //! Law 2: filings are read, never anything placed.
 
 use baskfy_api::routes::overlap::view;
@@ -18,9 +14,15 @@ use baskfy_db::OrderedJson;
 use chrono::{DateTime, Timelike, Utc};
 use redis::AsyncCommands as _;
 
+use baskfy_providers::nse::NseProvider;
+use redis::aio::MultiplexedConnection;
+use tokio::sync::mpsc;
+
 use super::super::TaskContext;
+use super::super::swing_eod::for_catalyst_scan::{OnSymbol, build_provider, run_swing_catalyst};
 use crate::error::WorkerError;
 use crate::pyjson::{self, int, s};
+use crate::steps::StepOutcome;
 
 /// `overlap_scan.LAYA_WAKE_KEY`.
 pub const LAYA_WAKE_KEY: &str = "laya:wake";
@@ -62,21 +64,30 @@ fn error_text(e: &WorkerError) -> String {
 }
 
 /// The swing feed's loop over an explicit symbol set: `run_swing_catalyst(session, outcome, day,
-/// user_id=, provider=, symbols=)` → `report.as_detail()`.
+/// user_id=, provider=, symbols=, on_symbol=)` → `report.as_detail()`.
 ///
 /// # Errors
-/// `NotPorted` until the `swing_eod` lane exposes its loop with a `symbols` argument (R8.ar4).
-#[allow(clippy::unused_async)]
-async fn feed_loop(
-    _conn: &mut sqlx::PgConnection,
-    _day: chrono::NaiveDate,
-    _user_id: i64,
-    _symbols: &[(String, i64)],
+/// The database's (a provider error on a name is the feed's own fail-soft count).
+pub async fn feed_loop(
+    conn: &mut sqlx::PgConnection,
+    day: chrono::NaiveDate,
+    user_id: i64,
+    provider: &NseProvider,
+    symbols: &[(String, i64)],
+    on_symbol: Option<OnSymbol<'_>>,
 ) -> Result<OrderedJson, WorkerError> {
-    Err(WorkerError::TaskNotPorted {
-        task: "swing_catalyst.run_swing_catalyst(symbols=)",
-        lane: "swing_eod",
-    })
+    let mut outcome = StepOutcome::default();
+    let report = run_swing_catalyst(
+        conn,
+        &mut outcome,
+        day,
+        user_id,
+        Some(provider),
+        Some(symbols),
+        on_symbol,
+    )
+    .await?;
+    Ok(report.as_detail())
 }
 
 /// The names the page lists for `scope`, sorted by symbol (`dict(sorted({symbol: id}))`).
@@ -98,6 +109,26 @@ pub async fn listed_symbols(
     }
     symbols.sort_by(|a, b| a.0.cmp(&b.0));
     Ok(symbols)
+}
+
+/// `on_symbol`'s `_progress(done, total)`: every name's count saved to the status key, in order.
+async fn write_progress(
+    mut cache: MultiplexedConnection,
+    key: String,
+    mut status: Vec<(String, OrderedJson)>,
+    mut receiver: mpsc::UnboundedReceiver<(i64, i64)>,
+) -> Result<(), WorkerError> {
+    while let Some((done, total)) = receiver.recv().await {
+        pyjson::update(&mut status, "done", int(done));
+        pyjson::update(&mut status, "total", int(total));
+        let text = pyjson::dumps(&OrderedJson::Object(status.clone()))
+            .map_err(|e| WorkerError::python("ValueError", e))?;
+        let _: () = cache
+            .set_ex(&key, text, STATUS_TTL_SECONDS)
+            .await
+            .map_err(|e| WorkerError::python("ConnectionError", e.to_string()))?;
+    }
+    Ok(())
 }
 
 fn pyjson_update(entries: &mut Vec<(String, i64)>, key: String, value: i64) {
@@ -136,6 +167,7 @@ pub async fn run(ctx: &TaskContext, user_id: i64, scope: &str) -> Result<Ordered
         .await
         .map_err(redis_err)?;
     let day = ctx.today_ist();
+    let provider = build_provider().await?;
     let scope_all = scope == "all";
 
     let outcome: Result<OrderedJson, WorkerError> = async {
@@ -149,7 +181,31 @@ pub async fn run(ctx: &TaskContext, user_id: i64, scope: &str) -> Result<Ordered
             .set_ex(&key, save(&status)?, STATUS_TTL_SECONDS)
             .await
             .map_err(redis_err)?;
-        let detail = feed_loop(&mut tx, day, user_id, &symbols).await?;
+        let (sender, receiver) = mpsc::unbounded_channel();
+        let writer = tokio::spawn(write_progress(
+            cache.clone(),
+            key.clone(),
+            status.clone(),
+            receiver,
+        ));
+        let mut progress = move |done: i64, total: i64| {
+            let _ = sender.send((done, total));
+        };
+        let detail = feed_loop(
+            &mut tx,
+            day,
+            user_id,
+            &provider,
+            &symbols,
+            Some(&mut progress),
+        )
+        .await;
+        drop(progress);
+        let written = writer
+            .await
+            .map_err(|e| WorkerError::python("RuntimeError", e.to_string()))?;
+        let detail = detail?;
+        written?;
         // `on_symbol(len, len)` after the last name.
         if total > 0 {
             pyjson::update(&mut status, "done", int(total));

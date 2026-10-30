@@ -1528,8 +1528,176 @@ class TestTheSessionLock:
 
     def test_the_lock_statement_is_for_update_on_postgres_and_begin_immediate_on_sqlite(self):
         source = inspect.getsource(PgSwingStore.lock_session_for_update)
-        assert "FOR UPDATE" in source and "BEGIN IMMEDIATE" in source
+        assert "FOR UPDATE NOWAIT" in source and "BEGIN IMMEDIATE" in source
         assert "ROLLBACK" in source and "COMMIT" in source
+
+
+class _LockBusy(Exception):
+    sqlstate = "55P03"
+
+
+class _RecordingConn:
+    def __init__(self, *, busy: bool = False) -> None:
+        self.sql: list[str] = []
+        self.busy = busy
+
+    def execute(self, sql: str, params: object = ()) -> _RecordingConn:  # noqa: ARG002
+        self.sql.append(" ".join(sql.split()))
+        if self.busy and "NOWAIT" in sql:
+            raise _LockBusy('could not obtain lock on row in relation "sw_session"')
+        return self
+
+
+def _verbs(conn: _RecordingConn) -> list[str]:
+    return [s if s.startswith("SELECT") else s.split()[0] for s in conn.sql]
+
+
+SW_ROW_LOCK = (
+    "SELECT session_date FROM public.sw_session WHERE user_id = ? AND session_date = ? "
+    "FOR UPDATE NOWAIT"
+)
+
+
+class TestTheSessionLockNeverWaits:
+    def test_postgres_upserts_then_opens_locks_nowait_and_commits(self):
+        conn = _RecordingConn()
+        store = PgSwingStore(conn, user_id=USER, schema="public")
+        with store.lock_session_for_update(TODAY):
+            conn.execute("UPDATE public.sw_plan_line SET state = 'CONFIRMED'")
+        assert _verbs(conn) == ["INSERT", "BEGIN", SW_ROW_LOCK, "UPDATE", "COMMIT"]
+
+    def test_a_held_row_is_a_409_rolled_back_before_anything_runs(self):
+        conn = _RecordingConn(busy=True)
+        store = PgSwingStore(conn, user_id=USER, schema="public")
+        ran = []
+        with pytest.raises(HTTPException) as refused, store.lock_session_for_update(TODAY):
+            ran.append(True)
+        assert refused.value.status_code == 409
+        assert str(refused.value.detail).startswith("SESSION_BUSY")
+        assert ran == []
+        assert _verbs(conn)[-1] == "ROLLBACK" and "COMMIT" not in _verbs(conn)
+
+    def test_an_exception_inside_rolls_back(self):
+        conn = _RecordingConn()
+        store = PgSwingStore(conn, user_id=USER, schema="public")
+        with pytest.raises(RuntimeError), store.lock_session_for_update(TODAY):
+            raise RuntimeError("the broker call blew up")
+        assert _verbs(conn)[-1] == "ROLLBACK" and "COMMIT" not in _verbs(conn)
+
+
+def _pg_url() -> str | None:
+    import os  # noqa: PLC0415
+
+    url = os.environ.get("BASKFY_TEST_DATABASE_URL")
+    return None if not url else url.replace("postgresql+asyncpg://", "postgresql://")
+
+
+requires_db = pytest.mark.skipif(_pg_url() is None, reason="BASKFY_TEST_DATABASE_URL is not set")
+
+
+class _SlowGateway:
+    def __init__(self) -> None:
+        self.places: list[str] = []
+
+    async def place(self, **kwargs: object) -> dict:
+        import asyncio  # noqa: PLC0415
+
+        self.places.append(str(kwargs["symbol"]))
+        await asyncio.sleep(0.4)
+        return {"status": "DRY_RUN", "order_id": f"dry-{kwargs['symbol']}"}
+
+
+@requires_db
+class TestTwoConfirmsAtOnce:
+    def test_one_is_sent_and_the_other_is_refused_without_waiting(self, monkeypatch):
+        import asyncio  # noqa: PLC0415
+
+        from app import swing_execute as X  # noqa: PLC0415
+        from app.analytics.pg import Connection  # noqa: PLC0415
+
+        monkeypatch.setattr(C, "DRY_RUN", True)
+        monkeypatch.setattr(C, "SWING_EXECUTION_ENABLED", False)
+        url = _pg_url()
+        assert url is not None
+        now = dt.datetime(2026, 10, 30, 10, 0, tzinfo=IST)
+        today = now.date()
+        setup = Connection(url)
+        tag = uuid.uuid4().hex[:8]
+        uid = int(setup.execute(
+            "INSERT INTO app_user (public_id, email) VALUES (?, ?) RETURNING id",
+            (f"swlock-{tag}", f"swlock-{tag}@x.test"),
+        ).fetchone()["id"])  # fmt: skip
+        try:
+            instruments = [
+                (int(r["id"]), str(r["symbol"]))
+                for r in setup.execute(
+                    "SELECT id, symbol FROM instrument WHERE symbol IS NOT NULL "
+                    "AND symbol NOT LIKE 'SGB%' AND symbol ~ '^[A-Z]+$' ORDER BY id LIMIT 2"
+                ).fetchall()
+            ]
+            plan_id = str(uuid.uuid4())
+            pk = int(setup.execute(
+                "INSERT INTO sw_plan (plan_id, user_id, as_of, source, built_at, expires_at, "
+                "plan_hash, gate, exposure_level) VALUES (?, ?, ?, 'MORNING', ?, ?, 'h', "
+                "'GREEN', 2) RETURNING id",
+                (plan_id, uid, today, now - dt.timedelta(minutes=1),
+                 now + dt.timedelta(minutes=29)),
+            ).fetchone()["id"])  # fmt: skip
+            line_ids: list[int] = []
+            for iid, sym in instruments:
+                pos = int(setup.execute(
+                    "INSERT INTO sw_position (user_id, instrument_id, setup, entry_date, "
+                    "entry_avg, quantity_entered, initial_stop, stop, trail, quantity_open) "
+                    "VALUES (?, ?, 'FLAG', ?, 100, 10, 90, 90, 'MA10', 10) RETURNING id",
+                    (uid, iid, today - dt.timedelta(days=5)),
+                ).fetchone()["id"])  # fmt: skip
+                line_ids.append(int(setup.execute(
+                    "INSERT INTO sw_plan_line (plan_id, user_id, kind, instrument_id, quantity, "
+                    "client_id, position_id) VALUES (?, ?, 'SELL_AT_OPEN', ?, 10, ?, ?) "
+                    "RETURNING id",
+                    (pk, uid, iid, f"{plan_id}:{sym}:SELL", pos),
+                ).fetchone()["id"]))  # fmt: skip
+
+            conns = [Connection(url), Connection(url)]
+            stores = [PgSwingStore(c, user_id=uid, schema="public") for c in conns]
+            gw = _SlowGateway()
+
+            async def both() -> list[object]:
+                return await asyncio.gather(
+                    *(
+                        X.execute_line(store, gw, plan_id=plan_id, line_id=line_id,
+                                       confirm="true", now=now, last_price=Decimal("120"))
+                        for store, line_id in zip(stores, line_ids, strict=True)
+                    ),
+                    return_exceptions=True,
+                )
+
+            try:
+                outcomes = asyncio.run(both())
+            finally:
+                for c in conns:
+                    c.close()
+            sent = [o for o in outcomes if isinstance(o, X.ExecOutcome)]
+            busy = [o for o in outcomes if isinstance(o, HTTPException)]
+            assert len(sent) == 1 and sent[0].status == "SIMULATED", outcomes
+            assert len(busy) == 1 and busy[0].status_code == 409, outcomes
+            assert str(busy[0].detail).startswith("SESSION_BUSY")
+            assert len(gw.places) == 1, "the refused confirm sent nothing"
+            states = sorted(
+                str(r["state"])
+                for r in setup.execute(
+                    "SELECT state FROM sw_plan_line WHERE user_id = ?", (uid,)
+                ).fetchall()
+            )
+            assert states == ["FILLED", "PROPOSED"], states
+            confirms = setup.execute(
+                "SELECT confirms FROM sw_session WHERE user_id = ? AND session_date = ?",
+                (uid, today),
+            ).fetchone()["confirms"]
+            assert int(confirms) == 1
+        finally:
+            setup.execute("DELETE FROM app_user WHERE id = ?", (uid,))
+            setup.close()
 
 
 class TestTheSessionContext:

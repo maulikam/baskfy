@@ -46,7 +46,8 @@ confirm still needs to say so, and say why.
 THE LOCK (SW10.4, STANDING-ANSWERS A5)
 --------------------------------------
 `lock_session_for_update` is the store's half of the confirm-time gate: one transaction per
-confirm, holding the day's ``sw_session`` row (``SELECT … FOR UPDATE``; ``BEGIN IMMEDIATE`` on
+confirm, holding the day's ``sw_session`` row (``SELECT … FOR UPDATE NOWAIT``, a held row is
+409 ``SESSION_BUSY``; ``BEGIN IMMEDIATE`` on
 the sqlite twin, which has no row locks) from before the book is re-derived until after the
 gateway has answered and the rows are written. The desk's connections are autocommit, so the
 transaction is opened and closed here explicitly; an exception rolls it back, and
@@ -261,6 +262,15 @@ def _jsonable(value: Any) -> Any:  # noqa: ANN401 - the whole point is "any valu
 
 
 # --- the store ----------------------------------------------------------------------------
+
+
+#: Postgres's SQLSTATE for ``FOR UPDATE NOWAIT`` finding the row held (``lock_not_available``).
+LOCK_NOT_AVAILABLE = "55P03"
+#: What a confirm that finds the session row held answers (409).
+SESSION_BUSY = (
+    "SESSION_BUSY: another confirm of this session is in flight; nothing was sent — "
+    "confirm again"
+)
 
 
 class PgSwingStore:
@@ -627,30 +637,50 @@ class PgSwingStore:
     def lock_session_for_update(self, day: dt.date) -> Iterator[None]:
         """One confirm, one transaction, the day's session row locked throughout.
 
-        The row is inserted first if the day has none (the monitor and the evening upsert it
-        too; `ON CONFLICT DO NOTHING` keeps theirs), then selected `FOR UPDATE`: a second
-        confirm of the same session blocks here until this one commits, and then re-reads a
-        book that includes it. sqlite has no row lock — `BEGIN IMMEDIATE` takes the database's
-        write lock, which serialises the same way for a one-file desk. The connections are
-        autocommit (`analytics.db.connect`, `analytics.pg.Connection`), so `BEGIN` / `COMMIT`
-        / `ROLLBACK` are issued as statements; nothing else in this module opens a transaction.
+        Postgres: the row is inserted first only when no committed row exists (autocommit, so a
+        racing confirm never waits on a holder's uncommitted update of it), then ``BEGIN`` and
+        ``FOR UPDATE NOWAIT``; a held
+        row is a 409 ``SESSION_BUSY`` before anything is read or sent, never a wait inside the
+        async route. sqlite: ``BEGIN IMMEDIATE`` and the insert inside it. An exception rolls
+        the transaction back; a clean exit commits.
         """
-        self.conn.execute("BEGIN IMMEDIATE" if self._sqlite else "BEGIN")
-        try:
+        mode = "DRY_RUN" if C.DRY_RUN or not C.SWING_EXECUTION_ENABLED else "LIVE"
+        insert = (
+            f"INSERT INTO {self.t('sw_session')} (user_id, session_date, mode, monitor_ran, "
+            "signals, confirms, fills, manage_actions, notes) "
+            "VALUES (?, ?, ?, false, 0, 0, 0, 0, 'swing-desk') "
+            "ON CONFLICT (user_id, session_date) DO NOTHING"
+        )
+        params = (self.user_id, _bind(day), mode)
+        if self._sqlite:
+            self.conn.execute("BEGIN IMMEDIATE")
+            try:
+                self.conn.execute(insert, params)
+            except BaseException:
+                self.conn.execute("ROLLBACK")
+                raise
+        else:
             self.conn.execute(
                 f"INSERT INTO {self.t('sw_session')} (user_id, session_date, mode, monitor_ran, "
                 "signals, confirms, fills, manage_actions, notes) "
-                "VALUES (?, ?, ?, false, 0, 0, 0, 0, 'swing-desk') "
+                "SELECT ?, ?, ?, false, 0, 0, 0, 0, 'swing-desk' WHERE NOT EXISTS ("
+                f"SELECT 1 FROM {self.t('sw_session')} WHERE user_id = ? AND session_date = ?) "
                 "ON CONFLICT (user_id, session_date) DO NOTHING",
-                (self.user_id, _bind(day), "DRY_RUN" if C.DRY_RUN or not C.SWING_EXECUTION_ENABLED
-                 else "LIVE"),
+                (*params, self.user_id, _bind(day)),
             )
-            if not self._sqlite:
+            self.conn.execute("BEGIN")
+            try:
                 self.conn.execute(
                     f"SELECT session_date FROM {self.t('sw_session')} "
-                    "WHERE user_id = ? AND session_date = ? FOR UPDATE",
+                    "WHERE user_id = ? AND session_date = ? FOR UPDATE NOWAIT",
                     (self.user_id, _bind(day)),
                 )
+            except Exception as exc:
+                self.conn.execute("ROLLBACK")
+                if getattr(exc, "sqlstate", None) == LOCK_NOT_AVAILABLE:
+                    raise HTTPException(409, SESSION_BUSY) from exc
+                raise
+        try:
             yield
         except BaseException:
             self.conn.execute("ROLLBACK")

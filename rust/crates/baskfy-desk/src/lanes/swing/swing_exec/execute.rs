@@ -24,7 +24,9 @@ use super::super::rules::{
     closed_pnl, dec_of_float, exit_average, float_g, market_protection_pct, marketable_limit,
     money, py_dec, q2, quantize, r_multiple, skip_str,
 };
-use super::super::store::{Fields, LineRow, PositionRow, SleeveConfig, StoreError, SwingStore};
+use super::super::store::{
+    Fields, LineRow, PositionRow, SESSION_BUSY, SleeveConfig, StoreError, SwingStore,
+};
 use super::super::values::Val;
 use crate::gateway::{
     CancelOrder, DeleteGtt, Gateway, GatewayError, GttStop, ModifyGtt, PlaceOrder, ProductGates,
@@ -109,6 +111,13 @@ pub enum ExecError {
     /// The gateway raised (an untouchable instrument, a caller's bug).
     #[error(transparent)]
     Gateway(#[from] GatewayError),
+}
+
+async fn lock_session(store: &mut dyn SwingStore, day: NaiveDate) -> Result<(), ExecError> {
+    match store.lock_begin(day).await {
+        Err(StoreError::SessionBusy) => Err(http(409, SESSION_BUSY)),
+        other => other.map_err(Into::into),
+    }
 }
 
 fn http(status: u16, detail: impl Into<String>) -> ExecError {
@@ -703,7 +712,7 @@ pub async fn execute_line_observed(
     let body = async {
         // `with store.lock_session_for_update(day):` — entering it can raise too (the store
         // rolls its own `BEGIN` back), and that is the `except Exception` branch below.
-        store.lock_begin(day).await?;
+        lock_session(store, day).await?;
         let inner = async {
             let current = store.line(line_id).await?;
             let Some(line) = current.filter(|c| c.state == "PROPOSED") else {
@@ -1333,7 +1342,7 @@ pub async fn on_order_update(
     let day = session_day(&now);
     let simulated = swing_gates(settings).dry_run;
     let mode = if simulated { "DRY_RUN" } else { "LIVE" };
-    store.lock_begin(day).await?;
+    lock_session(store, day).await?;
     let body = async {
         let current = store.line(line.id).await?;
         let Some(current) = current.filter(|c| c.state == "SENT") else {
@@ -1684,7 +1693,7 @@ pub async fn cutoff_open_orders(
             continue;
         }
         cancelled += 1;
-        store.lock_begin(day).await?;
+        lock_session(store, day).await?;
         let body = async {
             let held = match current.position_id {
                 Some(p) => store.position(p).await?.map_or(0, |pos| pos.quantity_open),

@@ -38,7 +38,17 @@ pub enum StoreError {
     /// A caller's bug.
     #[error("ValueError: {0}")]
     Value(String),
+    /// `HTTPException(409, SESSION_BUSY)`: the session row is held by another confirm.
+    #[error("{SESSION_BUSY}")]
+    SessionBusy,
 }
+
+/// Postgres's SQLSTATE for `FOR UPDATE NOWAIT` finding the row held (`LOCK_NOT_AVAILABLE`).
+pub const LOCK_NOT_AVAILABLE: &str = "55P03";
+
+/// `SESSION_BUSY`: what a confirm that finds the session row held answers (409).
+pub const SESSION_BUSY: &str = "SESSION_BUSY: another confirm of this session is in flight; \
+                                nothing was sent — confirm again";
 
 /// `sw_plan` as the store returns it.
 #[derive(Debug, Clone, PartialEq)]
@@ -1345,43 +1355,58 @@ impl SwingStore for PgSwingStore {
 
     async fn lock_begin(&mut self, day: NaiveDate) -> Result<(), StoreError> {
         let sqlite = !self.conn.is_postgres();
-        self.conn
-            .execute(if sqlite { "BEGIN IMMEDIATE" } else { "BEGIN" }, &[])
-            .await?;
         let mode = if self.settings.dry_run || !self.settings.swing_execution_enabled {
             "DRY_RUN"
         } else {
             "LIVE"
         };
-        let insert = format!(
-            "INSERT INTO {} (user_id, session_date, mode, monitor_ran, \
-             signals, confirms, fills, manage_actions, notes) \
-             VALUES (?, ?, ?, false, 0, 0, 0, 0, 'swing-desk') \
-             ON CONFLICT (user_id, session_date) DO NOTHING",
-            self.t("sw_session")
-        );
+        let table = self.t("sw_session");
         let params = [
             Param::Int(self.user_id),
             day_param(day),
             Param::Text(mode.to_owned()),
         ];
-        let result = async {
-            self.conn.execute(&insert, &params).await?;
-            if !sqlite {
-                let lock = format!(
-                    "SELECT session_date FROM {} \
-                     WHERE user_id = ? AND session_date = ? FOR UPDATE",
-                    self.t("sw_session")
-                );
-                self.conn
-                    .execute(&lock, &[Param::Int(self.user_id), day_param(day)])
-                    .await?;
+        if sqlite {
+            self.conn.execute("BEGIN IMMEDIATE", &[]).await?;
+            let insert = format!(
+                "INSERT INTO {table} (user_id, session_date, mode, monitor_ran, \
+                 signals, confirms, fills, manage_actions, notes) \
+                 VALUES (?, ?, ?, false, 0, 0, 0, 0, 'swing-desk') \
+                 ON CONFLICT (user_id, session_date) DO NOTHING"
+            );
+            if let Err(e) = self.conn.execute(&insert, &params).await {
+                let _ = self.conn.execute("ROLLBACK", &[]).await;
+                return Err(e.into());
             }
-            Ok::<(), StorageError>(())
+            return Ok(());
         }
-        .await;
-        if let Err(e) = result {
+        // Outside the transaction, only when absent: a racing confirm never waits on the holder.
+        let insert = format!(
+            "INSERT INTO {table} (user_id, session_date, mode, monitor_ran, \
+             signals, confirms, fills, manage_actions, notes) \
+             SELECT ?, ?, ?, false, 0, 0, 0, 0, 'swing-desk' WHERE NOT EXISTS (\
+             SELECT 1 FROM {table} WHERE user_id = ? AND session_date = ?) \
+             ON CONFLICT (user_id, session_date) DO NOTHING"
+        );
+        let mut insert_params = params.to_vec();
+        insert_params.extend([Param::Int(self.user_id), day_param(day)]);
+        self.conn.execute(&insert, &insert_params).await?;
+        self.conn.execute("BEGIN", &[]).await?;
+        let lock = format!(
+            "SELECT session_date FROM {table} \
+             WHERE user_id = ? AND session_date = ? FOR UPDATE NOWAIT"
+        );
+        if let Err(e) = self
+            .conn
+            .execute(&lock, &[Param::Int(self.user_id), day_param(day)])
+            .await
+        {
             let _ = self.conn.execute("ROLLBACK", &[]).await;
+            if let StorageError::Driver(sqlx::Error::Database(db)) = &e
+                && db.code().as_deref() == Some(LOCK_NOT_AVAILABLE)
+            {
+                return Err(StoreError::SessionBusy);
+            }
             return Err(e.into());
         }
         Ok(())

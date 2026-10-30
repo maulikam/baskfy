@@ -2,140 +2,23 @@
 //! four tests that guard SW18 for the monitor process — the desk's Kite wrapper re-reads the
 //! token blob when its mtime moves, so a morning login reaches a long-running monitor without a
 //! restart; an unchanged blob costs one stat and no reload; `is_authed` refreshes first; a
-//! missing blob is not an error.
-//!
-//! It lives under `tests/` because the broker double must implement the order-verb trait, which
-//! only the gateway's lane may name inside `src/` (law 2, `non_negotiables.rs`). The double
-//! records `set_access_token` and answers `profile`; everything else refuses. No network.
+//! missing blob is not an error. The broker is the replay fake (writes refused, never sent).
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, RwLock};
 
-use async_trait::async_trait;
 use baskfy_desk::clock::{Clock, FixedClock};
-use baskfy_desk::kite::{
-    GttParams, KiteError, KiteExceptionKind, KiteReads, KiteWrites, OrderParams,
-};
+use baskfy_desk::fake_kite::ReplayKite;
 use baskfy_desk::lanes::exec_core::kite_client::DeskKite;
 use baskfy_desk::lanes::exec_core::token_store::store_for;
 use baskfy_desk::settings::{Settings, SharedSettings};
-use baskfy_desk::wire::{PyDict, PyValue};
-use baskfy_providers::secret::Secret;
 
-/// `FakeKC`: `set_access_token` recorded, `profile` answers.
-#[derive(Default)]
-struct FakeKc {
-    seen: Mutex<Vec<String>>,
-}
-
-fn refused() -> KiteError {
-    KiteError::Kite {
-        kind: KiteExceptionKind::General,
-        message: "not used by this test".to_owned(),
-        code: 500,
-    }
-}
-
-#[async_trait]
-impl KiteReads for FakeKc {
-    fn login_url(&self) -> String {
-        String::new()
-    }
-    fn set_access_token(&self, token: &Secret) {
-        self.seen.lock().unwrap().push(token.expose().to_owned());
-    }
-    async fn generate_session(&self, _r: &str, _s: &Secret) -> Result<PyValue, KiteError> {
-        Err(refused())
-    }
-    async fn profile(&self) -> Result<PyValue, KiteError> {
-        let mut m = PyDict::default();
-        m.insert("user_id", PyValue::Str("AB1234".to_owned()));
-        Ok(PyValue::Map(m))
-    }
-    async fn holdings(&self) -> Result<PyValue, KiteError> {
-        Err(refused())
-    }
-    async fn positions(&self) -> Result<PyValue, KiteError> {
-        Err(refused())
-    }
-    async fn margins(&self, _s: Option<&str>) -> Result<PyValue, KiteError> {
-        Err(refused())
-    }
-    async fn ltp(&self, _i: &[String]) -> Result<PyValue, KiteError> {
-        Err(refused())
-    }
-    async fn ohlc(&self, _i: &[String]) -> Result<PyValue, KiteError> {
-        Err(refused())
-    }
-    async fn quote(&self, _i: &[String]) -> Result<PyValue, KiteError> {
-        Err(refused())
-    }
-    async fn instruments(&self, _e: Option<&str>) -> Result<PyValue, KiteError> {
-        Err(refused())
-    }
-    async fn historical_data(
-        &self,
-        _t: i64,
-        _f: &str,
-        _to: &str,
-        _i: &str,
-        _c: bool,
-        _o: bool,
-    ) -> Result<PyValue, KiteError> {
-        Err(refused())
-    }
-    async fn orders(&self) -> Result<PyValue, KiteError> {
-        Err(refused())
-    }
-    async fn order_history(&self, _o: &str) -> Result<PyValue, KiteError> {
-        Err(refused())
-    }
-    async fn trades(&self) -> Result<PyValue, KiteError> {
-        Err(refused())
-    }
-    async fn get_gtts(&self) -> Result<PyValue, KiteError> {
-        Err(refused())
-    }
-    async fn basket_order_margins(
-        &self,
-        _p: &[PyValue],
-        _c: bool,
-        _m: Option<&str>,
-    ) -> Result<PyValue, KiteError> {
-        Err(refused())
-    }
-}
-
-#[async_trait]
-impl KiteWrites for FakeKc {
-    async fn place_order(&self, _o: &OrderParams) -> Result<String, KiteError> {
-        panic!("the token test placed an order");
-    }
-    async fn modify_order(&self, _v: &str, _o: &str, _p: &PyDict) -> Result<String, KiteError> {
-        panic!("the token test modified an order");
-    }
-    async fn cancel_order(
-        &self,
-        _v: &str,
-        _o: &str,
-        _p: Option<&str>,
-    ) -> Result<String, KiteError> {
-        panic!("the token test cancelled an order");
-    }
-    async fn place_gtt(&self, _g: &GttParams) -> Result<PyValue, KiteError> {
-        panic!("the token test placed a GTT");
-    }
-    async fn modify_gtt(&self, _t: i64, _g: &GttParams) -> Result<PyValue, KiteError> {
-        panic!("the token test modified a GTT");
-    }
-    async fn delete_gtt(&self, _t: i64) -> Result<PyValue, KiteError> {
-        panic!("the token test deleted a GTT");
-    }
-}
+const FIXTURE: &str =
+    r#"{"session": {"authed": true}, "routes": {"user.profile": {"data": {"user_id": "AB1234"}}}}"#;
 
 struct Client {
     kite: DeskKite,
-    kc: Arc<FakeKc>,
+    kc: Arc<ReplayKite>,
     path: std::path::PathBuf,
     _dir: tempfile::TempDir,
 }
@@ -154,7 +37,8 @@ fn client(token: &str) -> Client {
     s.shared_read_limits_redis_url = String::new();
     store_for(&path, "").unwrap().save(token, None).unwrap();
     let settings: SharedSettings = Arc::new(RwLock::new(s));
-    let kc = Arc::new(FakeKc::default());
+    std::fs::write(dir.path().join("kite.json"), FIXTURE).unwrap();
+    let kc = Arc::new(ReplayKite::load(dir.path(), None, "key").unwrap());
     let at = chrono::DateTime::parse_from_rfc3339("2026-08-19T09:10:00+05:30").unwrap();
     let kite = DeskKite::new(
         kc.clone(),
@@ -169,8 +53,15 @@ fn client(token: &str) -> Client {
     }
 }
 
-fn seen(c: &Client) -> Vec<String> {
-    c.kc.seen.lock().unwrap().clone()
+/// The token the blob holds now (what a reload hands the broker).
+fn blob(c: &Client) -> String {
+    store_for(&c.path, "")
+        .unwrap()
+        .load()
+        .unwrap()
+        .value
+        .expose()
+        .to_owned()
 }
 
 /// Another process saves a new token, and its mtime moves on.
@@ -186,10 +77,15 @@ fn rewrite(c: &Client, token: &str) {
 fn test_a_token_written_after_start_is_picked_up_without_a_restart() {
     let c = client("first-token");
     c.kite.ready().unwrap();
-    assert_eq!(seen(&c), ["first-token"]);
+    assert!(
+        !c.kite.refresh_token_if_changed().unwrap(),
+        "loaded at start"
+    );
     rewrite(&c, "second-token");
     assert!(c.kite.refresh_token_if_changed().unwrap());
-    assert_eq!(seen(&c).last().unwrap(), "second-token");
+    assert_eq!(blob(&c), "second-token");
+    assert!(!c.kite.refresh_token_if_changed().unwrap(), "reloaded once");
+    assert!(c.kc.write_calls().is_empty());
 }
 
 #[test]
@@ -197,7 +93,8 @@ fn test_an_unchanged_blob_costs_one_stat_and_no_reload() {
     let c = client("first-token");
     assert!(!c.kite.refresh_token_if_changed().unwrap());
     assert!(!c.kite.refresh_token_if_changed().unwrap());
-    assert_eq!(seen(&c), ["first-token"]);
+    assert_eq!(blob(&c), "first-token");
+    assert!(c.kc.calls().is_empty(), "a stat, never a broker call");
 }
 
 #[tokio::test]
@@ -206,7 +103,11 @@ async fn test_is_authed_refreshes_first() {
     c.kite.ready().unwrap();
     rewrite(&c, "third-token");
     assert!(c.kite.is_authed().await);
-    assert_eq!(seen(&c).last().unwrap(), "third-token");
+    assert!(
+        !c.kite.refresh_token_if_changed().unwrap(),
+        "is_authed already reloaded the new blob"
+    );
+    assert_eq!(blob(&c), "third-token");
 }
 
 #[test]

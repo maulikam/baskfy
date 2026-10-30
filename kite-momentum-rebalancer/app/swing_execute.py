@@ -690,7 +690,7 @@ async def execute_line(  # noqa: PLR0913 - the request's parts, named
                 store.lock_session_for_update(day):
             # SW10.4: the whole confirm — the re-derivation, the gateway call, the writes —
             # runs with the day's session row locked, so a second confirm of the same
-            # session (another tab, a double click) waits and then sees this one's book. The
+            # session (another tab, a double click) is refused 409 SESSION_BUSY, never waits. The
             # line's state is read again under the lock: two requests that both passed
             # `_validate` on a PROPOSED line must not both send it.
             current = store.line(line_id)

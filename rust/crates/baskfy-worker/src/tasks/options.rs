@@ -25,9 +25,9 @@ pub(crate) mod common;
 pub(crate) mod index_bars;
 pub(crate) mod master;
 mod model;
-mod plan;
-mod plan_o2;
-mod plan_o3;
+pub(crate) mod plan;
+pub(crate) mod plan_o2;
+pub(crate) mod plan_o3;
 mod scan;
 mod weekly;
 
@@ -323,7 +323,9 @@ async fn session_day(
 }
 
 /// `kite_margin_reader(build_options_kite().general) if kite_session_usable() else None`.
-async fn margin_reader(ctx: &TaskContext) -> Result<Option<plan::MarginReader>, WorkerError> {
+pub(crate) async fn margin_reader(
+    ctx: &TaskContext,
+) -> Result<Option<plan::MarginReader>, WorkerError> {
     if !kite_session_usable(ctx) {
         return Ok(None);
     }

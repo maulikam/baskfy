@@ -37,6 +37,10 @@ fn worker(args: &[&str]) -> Output {
         .env("BASKFY_SOLE_USER_ID", "1")
         .env("DRY_RUN", "true")
         .env("BASKFY_REDIS_URL", "redis://127.0.0.1:56379/9")
+        .env(
+            "BASKFY_KITE_TOKEN_PATH",
+            "/nonexistent/baskfy-clis/kite-token.enc",
+        )
         .output()
         .unwrap()
 }
@@ -197,4 +201,70 @@ async fn the_pipeline_aborts_a_non_trading_day() {
     );
     assert_eq!(payload.get("gate"), Some(&OrderedJson::Null));
     assert_eq!(count(runs).await, before);
+}
+
+fn sleeves(payload: &OrderedJson) -> Vec<OrderedJson> {
+    match payload.get("sleeves") {
+        Some(OrderedJson::Array(items)) => items.clone(),
+        other => panic!("no sleeves: {other:?}"),
+    }
+}
+
+#[tokio::test]
+#[ignore = "needs BASKFY_RS_CLIS_DB_URL"]
+async fn the_options_plan_builders_decide_a_session_once() {
+    for (command, at, labels) in [
+        ("plan", "2026-10-29T10:00", 2),
+        ("plan-o2", "2026-10-29T10:30", 1),
+        ("plan-o3", "2026-10-29T09:45", 2),
+    ] {
+        let first = worker(&["options", command, "--at", at]);
+        assert_eq!(
+            first.status.code(),
+            Some(0),
+            "{command}: {}",
+            String::from_utf8_lossy(&first.stderr)
+        );
+        let a = json(&first);
+        assert_eq!(
+            a.get("at"),
+            Some(&OrderedJson::Str(format!("{at}:00+05:30"))),
+            "{command}"
+        );
+        assert!(
+            matches!(a.get("alerts"), Some(OrderedJson::Array(_))),
+            "{command}"
+        );
+        assert!(
+            matches!(a.get("lapsed"), Some(OrderedJson::Array(_))),
+            "{command}"
+        );
+        assert_eq!(sleeves(&a).len(), labels, "{command}");
+        let sessions = count("SELECT count(*) FROM op_plan").await;
+        let second = json(&worker(&["options", command, "--at", at]));
+        assert_eq!(
+            sleeves(&a),
+            sleeves(&second),
+            "{command}: a decided session changed"
+        );
+        assert_eq!(
+            count("SELECT count(*) FROM op_plan").await,
+            sessions,
+            "{command}"
+        );
+    }
+}
+
+#[tokio::test]
+#[ignore = "needs BASKFY_RS_CLIS_DB_URL"]
+async fn an_options_plan_on_a_sunday_is_skipped() {
+    let out = worker(&["options", "plan-o2", "--at", "2026-10-25T10:30"]);
+    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(
+        json(&out),
+        OrderedJson::Object(vec![(
+            "skipped".to_owned(),
+            OrderedJson::Str("not an NSE trading day".to_owned())
+        )])
+    );
 }

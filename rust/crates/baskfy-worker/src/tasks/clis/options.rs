@@ -1,5 +1,5 @@
-//! `baskfy_worker.options_cli` as a subcommand. `probe` and the three plan builders are refused:
-//! neither has a Rust port, and no command here has an order path.
+//! `baskfy_worker.options_cli` as a subcommand. `probe` is refused (no Rust port); no command
+//! here has an order path.
 
 mod seed;
 
@@ -17,7 +17,7 @@ use crate::error::WorkerError;
 use crate::tasks::TaskContext;
 use crate::tasks::context::sole_user_id;
 use crate::tasks::fno::common::fromisoformat_datetime;
-use crate::tasks::options::{collector, common, index_bars, master};
+use crate::tasks::options::{collector, common, index_bars, master, plan, plan_o2, plan_o3};
 
 const CHOICES: [&str; 8] = [
     "seed",
@@ -41,14 +41,6 @@ const SPEC: Spec = Spec {
 pub(super) const PROBE_REFUSED: &str = "options_cli probe is not ported: OP0's six live Kite \
      reads (and the basket_order_margins calculator POST) stay in Python; run `python -m \
      baskfy_worker.options_cli probe`";
-
-/// Why a plan builder is not run from Rust.
-pub(super) fn plan_refused(command: &str) -> String {
-    format!(
-        "options_cli {command}: the plan builder is not ported to Rust (DECISIONS-RS R8.op2); \
-         run `python -m baskfy_worker.options_cli {command}`"
-    )
-}
 
 fn skipped(why: &str) -> OrderedJson {
     OrderedJson::Object(vec![(
@@ -108,16 +100,58 @@ pub(super) async fn run(args: &[String]) -> Outcome {
         plan => {
             let ctx = context()?;
             let at = plan_moment(parsed.get("--at"), common::now_ist(&ctx))?;
-            let out = plan_gate(&ctx, at).await;
+            let out = run_plan(&ctx, plan, at).await;
             ctx.db.close().await;
-            match out? {
-                Some(refusal) => refusal,
-                None => return Err(Failure::Exit(plan_refused(plan))),
-            }
+            out?
         }
     };
     emit(&result);
     Ok(ExitCode::SUCCESS)
+}
+
+/// `_plan` / `_plan_o2` / `_plan_o3`: the builder once at `at`, ignoring the monitor flag but
+/// nothing else; alerts are printed as summaries, never sent.
+pub(super) async fn run_plan(
+    ctx: &TaskContext,
+    command: &str,
+    at: DateTime<FixedOffset>,
+) -> Result<OrderedJson, Failure> {
+    let Some(user_id) = sole_user_id() else {
+        return Ok(skipped("no BASKFY_SOLE_USER_ID configured"));
+    };
+    let margin = if command == "plan-o2" {
+        None
+    } else {
+        crate::tasks::options::margin_reader(ctx).await?
+    };
+    if let Some(refusal) = plan_gate(ctx, at).await? {
+        return Ok(refusal);
+    }
+    let mut tx = ctx.db.begin().await?;
+    let built = match command {
+        "plan" => plan::plan_o1_minute(&mut tx, user_id, at, margin.as_ref(), &ctx.worker).await,
+        "plan-o2" => plan_o2::plan_o2_minute(&mut tx, user_id, at, &ctx.worker).await,
+        _ => plan_o3::plan_o3_minute(&mut tx, user_id, at, margin.as_ref(), &ctx.worker).await,
+    };
+    let (mut report, alerts) = match built {
+        Ok(b) => b,
+        Err(e) => {
+            let _ = tx.rollback().await;
+            return Err(Failure::Raised(e));
+        }
+    };
+    tx.commit().await?;
+    crate::pyjson::update(
+        &mut report,
+        "alerts",
+        OrderedJson::Array(
+            alerts
+                .iter()
+                .map(|a| OrderedJson::Str(a.summary.clone()))
+                .collect(),
+        ),
+    );
+    Ok(OrderedJson::Object(report))
 }
 
 /// The refusals Python answers before planning: the tenant, then the NSE calendar.
@@ -285,10 +319,5 @@ mod tests {
             plan_moment(Some("tomorrow"), now),
             Err(Failure::Exit(_))
         ));
-    }
-
-    #[test]
-    fn the_plan_refusal_names_the_python_command() {
-        assert!(plan_refused("plan-o2").contains("options_cli plan-o2"));
     }
 }

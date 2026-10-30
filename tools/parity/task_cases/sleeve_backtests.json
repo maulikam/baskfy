@@ -1,6 +1,6 @@
 {
  "lane": "sleeve_backtests",
- "note": "Lane sleeve_backtests (wave 6): the sleeves' on-demand research backtests. Each run appends one *_backtest_run row; started_at is the injected clock's first second on both sides, finished_at advances with real elapsed time (compared <null>/<set>), created_at is Postgres now() (stamp), and error carries Python's traceback or Rust's origin line (compared <null>/<set>; the payload compares the class and message). The bed holds bars 2017-01-02..2026-10-29; windows are kept short so a case is minutes, not the nine-year run.",
+ "note": "Lane sleeve_backtests (wave 6): the sleeves' on-demand research backtests (swing, VBT, options). Each run appends one *_backtest_run row; started_at is the injected clock's first second on both sides, finished_at advances with real elapsed time (compared <null>/<set>), created_at is Postgres now() (stamp), and error carries Python's traceback or Rust's origin line (compared <null>/<set>; the payload compares the class and message). The bed holds bars 2017-01-02..2026-10-29; windows are kept short so a case is minutes, not the nine-year run.",
  "cases": [
   {
    "name": "vbt-window-friday-in-session",
@@ -252,6 +252,175 @@
    "env": {
     "BASKFY_SOLE_USER_ID": ""
    }
+  },
+  {
+   "name": "options-tier1-o1w-october",
+   "task": "baskfy.options.backtest",
+   "args": {
+    "sleeve": "O1W",
+    "tier": "1",
+    "date_from": "2026-10-01",
+    "date_to": "2026-10-29"
+   },
+   "now": "2026-10-30T11:00:00",
+   "mask": {
+    "op_backtest_run": {
+     "ran_at": "stamp"
+    }
+   },
+   "note": "Tier 1 over the bed's stored October minutes: the weekly condor's gate per day, one row with the ±25 % sensitivity on its three thresholds, the git sha beside it; a Friday inside the session"
+  },
+  {
+   "name": "options-tier1-o3b-event-day-saturday",
+   "task": "baskfy.options.backtest",
+   "args": [
+    "O3B",
+    "1",
+    "2026-10-26"
+   ],
+   "now": "2026-10-31T11:00:00",
+   "mask": {
+    "op_backtest_run": {
+     "ran_at": "stamp"
+    }
+   },
+   "seed_sql": "INSERT INTO op_event_day (user_id, date, reason, source) VALUES (1, DATE '2026-10-27', 'MANUAL', 'USER');",
+   "note": "positional args, date_to omitted (today, a Saturday): the tenant's event day is skipped as EVENT_DAY, never a signal"
+  },
+  {
+   "name": "options-tier1-withdrawn-expiry-before-open",
+   "task": "baskfy.options.backtest",
+   "args": {
+    "sleeve": "O2",
+    "tier": "1",
+    "date_from": "2026-10-20",
+    "date_to": "2026-10-29"
+   },
+   "now": "2026-10-30T08:00:00",
+   "mask": {
+    "op_backtest_run": {
+     "ran_at": "stamp"
+    }
+   },
+   "seed_sql": "UPDATE op_expiry SET detail = '{\"withdrawn_on\": \"2026-10-01\"}' WHERE underlying = 'NIFTY' AND expiry_date >= DATE '2026-10-20';",
+   "note": "every expiry from the window on is withdrawn: the master no longer calendars those days, so they are counted uncalendared, never guessed"
+  },
+  {
+   "name": "options-tier2-o2-last-week",
+   "task": "baskfy.options.backtest",
+   "args": {
+    "sleeve": "O2",
+    "tier": "2",
+    "date_from": "2026-10-23",
+    "date_to": "2026-10-29"
+   },
+   "now": "2026-10-29T20:00:00",
+   "mask": {
+    "op_backtest_run": {
+     "ran_at": "stamp"
+    }
+   },
+   "note": "Tier 2: the modelled chain (flat India VIX Black-76) through the plan builder, executor and exits; the model caveats on the row; after the close"
+  },
+  {
+   "name": "options-tier3-o1w-stored-chain",
+   "task": "baskfy.options.backtest",
+   "args": {
+    "sleeve": "O1W",
+    "tier": "3",
+    "date_from": "2026-10-27",
+    "date_to": "2026-10-29"
+   },
+   "now": "2026-10-30T10:00:00",
+   "mask": {
+    "op_backtest_run": {
+     "ran_at": "stamp"
+    }
+   },
+   "note": "Tier 3: only the stored op_chain_snapshot minutes price a day; a day without them is a counted skip"
+  },
+  {
+   "name": "options-empty-window",
+   "task": "baskfy.options.backtest",
+   "args": {
+    "sleeve": "O3A",
+    "tier": "2",
+    "date_from": "2031-01-01",
+    "date_to": "2031-01-31"
+   },
+   "now": "2026-10-30T10:00:00",
+   "mask": {
+    "op_backtest_run": {
+     "ran_at": "stamp"
+    }
+   },
+   "note": "no stored minutes in the window: zero trading days, a row still appended"
+  },
+  {
+   "name": "options-ends-before-it-starts",
+   "task": "baskfy.options.backtest",
+   "args": {
+    "sleeve": "O1M",
+    "tier": "1",
+    "date_from": "2026-10-29",
+    "date_to": "2026-10-01"
+   },
+   "now": "2026-10-30T10:00:00",
+   "note": "ValueError before any read; nothing written"
+  },
+  {
+   "name": "options-bad-sleeve",
+   "task": "baskfy.options.backtest",
+   "args": {
+    "sleeve": "o9",
+    "tier": "1",
+    "date_from": "2026-10-01"
+   },
+   "now": "2026-10-30T10:00:00"
+  },
+  {
+   "name": "options-bad-tier",
+   "task": "baskfy.options.backtest",
+   "args": {
+    "sleeve": "O1M",
+    "tier": "4",
+    "date_from": "2026-10-01"
+   },
+   "now": "2026-10-30T10:00:00"
+  },
+  {
+   "name": "options-bad-date",
+   "task": "baskfy.options.backtest",
+   "args": {
+    "sleeve": "O1M",
+    "tier": "1",
+    "date_from": "2026/10/01"
+   },
+   "now": "2026-10-30T10:00:00"
+  },
+  {
+   "name": "options-date-not-a-string",
+   "task": "baskfy.options.backtest",
+   "args": {
+    "sleeve": "O1M",
+    "tier": "1",
+    "date_from": 20261001
+   },
+   "now": "2026-10-30T10:00:00"
+  },
+  {
+   "name": "options-no-sole-user",
+   "task": "baskfy.options.backtest",
+   "args": {
+    "sleeve": "bogus",
+    "tier": "9",
+    "date_from": "2026-10-01"
+   },
+   "now": "2026-10-30T10:00:00",
+   "env": {
+    "BASKFY_SOLE_USER_ID": ""
+   },
+   "note": "no tenant: skipped before the sleeve or tier is read"
   }
  ]
 }

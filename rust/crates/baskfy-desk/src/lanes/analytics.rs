@@ -13,8 +13,8 @@
 //! the evaluation CLI `regime_run.py`, its engine and `/indices*` stay on Python — DECISIONS-RS R-ar.1).
 //! **Lane analytics_views** ([`analytics_views`]): see its module docs.
 //!
-//! **Not ported yet (loud):** the routes and modules no lane above names (`/performance*`,
-//! `/tradebook*`, `/indices*`, `/options*`, `index_view`, `nse_indices`, `regime_run`, …) still
+//! **Not ported yet (loud):** the routes and modules no lane above names
+//! (`/tradebook*`, `/indices*`, `/options*`, `index_view`, `nse_indices`, `regime_run`, …) still
 //! answer the app's 404 and the Python desk serves them. See `docs/rust-rewrite/STATUS.md`.
 //!
 //! The lane never edits `lib.rs`, `app.rs` or `lanes.rs`.

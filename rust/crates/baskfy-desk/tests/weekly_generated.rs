@@ -914,9 +914,10 @@ fn the_score_is_unchanged_since_it_moved_to_core() {
     let expected: Value = serde_json::from_slice(&std::fs::read(golden_path).unwrap()).unwrap();
     let cfg = ScoringConfig::default();
     let mut checked = 0;
+    let mut absent = Vec::new();
     for (name, want) in expected.as_object().unwrap() {
         let Ok(raw) = std::fs::read(Path::new(CORPUS).join(name)) else {
-            eprintln!("{name} is not present; data/uploads is untracked");
+            absent.push(name.clone());
             continue;
         };
         let sc = score(&load_scan(&raw, &cfg).unwrap(), &cfg).unwrap();
@@ -948,7 +949,11 @@ fn the_score_is_unchanged_since_it_moved_to_core() {
         assert_eq!(top, want_top, "{name}: top 10");
         checked += 1;
     }
-    eprintln!("checked {checked} corpus scans");
+    assert_eq!(
+        checked + absent.len(),
+        expected.as_object().unwrap().len(),
+        "untracked corpus scans: {absent:?}"
+    );
 }
 
 #[test]

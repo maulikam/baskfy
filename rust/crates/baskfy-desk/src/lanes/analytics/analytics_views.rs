@@ -18,13 +18,16 @@
 //! `ops.py` → `ops`, `daily_runs.py` → `daily_runs`. `db.py`/`pg.py` are the foundation's
 //! `storage` module.
 //!
-//! **Not ported yet (loud):** `metrics.py`, `benchmark.py`, `performance_view.py` and the
-//! routes `GET /performance`, `GET /performance/data` — they still answer the app's 404 and
-//! the Python desk serves them. See the lane's STATUS entry.
+//! * [`metrics`], [`benchmark`], [`performance_view`] — `metrics.py`, `benchmark.py`,
+//!   `performance_view.py` and `main._holdings_block`, rendered by `GET /performance` and
+//!   `GET /performance/data`.
 
 pub mod autorun;
 pub mod backtest_view;
+pub mod benchmark;
 pub mod corporate_actions;
+pub mod metrics;
+pub mod performance_view;
 pub mod protection;
 
 use axum::Router;
@@ -43,7 +46,55 @@ pub const REGIME_BACKTEST_PATH: &str = "data/outputs/regime_backtest.json";
 
 /// The lane's routes.
 pub fn routes() -> Router<AppState> {
-    Router::new().route("/regime/backtest", get_only(get(regime_backtest)))
+    Router::new()
+        .route("/regime/backtest", get_only(get(regime_backtest)))
+        .route("/performance", get_only(get(performance_page)))
+        .route("/performance/data", get_only(get(performance_data)))
+}
+
+async fn performance_view(state: &AppState) -> Result<crate::wire::PyDict, String> {
+    let mut conn = state.db.connect().await.map_err(|e| e.to_string())?;
+    conn.migrate().await.map_err(|e| e.to_string())?;
+    performance_view::build(&mut conn)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// `GET /performance`: the stored record, then the live holdings block.
+async fn performance_page(State(state): State<AppState>, uri: Uri) -> Response<Body> {
+    let view = match performance_view(&state).await {
+        Ok(v) => v,
+        Err(e) => return internal_error(&e),
+    };
+    let holdings = match performance_view::holdings_block(&state).await {
+        Ok(h) => h,
+        Err(e) => return internal_error(&e),
+    };
+    render(
+        &state,
+        uri.path(),
+        "performance.html",
+        dict([("p", PyValue::Map(view)), ("h", PyValue::Map(holdings))]),
+    )
+}
+
+/// `GET /performance/data`: the view model as Starlette's `JSONResponse` (NaN refused).
+async fn performance_data(State(state): State<AppState>) -> Response<Body> {
+    let view = match performance_view(&state).await {
+        Ok(v) => v,
+        Err(e) => return internal_error(&e),
+    };
+    match performance_view::starlette_json(&PyValue::Map(view)) {
+        Ok(text) => {
+            let mut r = Response::new(Body::from(text));
+            r.headers_mut().insert(
+                header::CONTENT_TYPE,
+                HeaderValue::from_static("application/json"),
+            );
+            r
+        }
+        Err(e) => internal_error(&e),
+    }
 }
 
 /// FastAPI's `@app.get`: the route's methods are `{"GET"}` alone, so `HEAD` (which axum's

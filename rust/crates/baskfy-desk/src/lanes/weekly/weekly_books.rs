@@ -65,6 +65,43 @@ pub fn routes() -> Router<AppState> {
     Router::new()
 }
 
+/// `baskfy-desk snapshot [args]` (`python -m app.analytics.snapshot`): read-only, never an order.
+pub async fn snapshot_cli(state: &AppState, argv: &[String]) -> snapshot::CliOutcome {
+    let settings = state.settings_snapshot();
+    let Some(kite) = state
+        .gateway
+        .as_any()
+        .and_then(|a| a.downcast_ref::<crate::lanes::exec_core::desk::DeskGateway>())
+        .map(crate::lanes::exec_core::desk::DeskGateway::kite)
+    else {
+        return snapshot::CliOutcome {
+            code: 1,
+            stderr: vec!["RuntimeError: the desk's Kite wrapper is not wired".to_owned()],
+            ..snapshot::CliOutcome::default()
+        };
+    };
+    let mut conn = match state.db.connect().await {
+        Ok(c) => c,
+        Err(e) => {
+            return snapshot::CliOutcome {
+                code: 1,
+                stderr: vec![e.to_string()],
+                ..snapshot::CliOutcome::default()
+            };
+        }
+    };
+    let base = snapshot::CollectOptions {
+        on_date: None,
+        price_source: "holdings",
+        cash: None,
+        allow_stale_cash: false,
+        today: state.clock.now_ist().date_naive(),
+        include_untouchable_in_nav: settings.include_untouchable_in_nav,
+        root: &state.paths.root,
+    };
+    snapshot::cli(argv, kite.as_ref(), &mut conn, base, settings.dry_run).await
+}
+
 /// `datetime.fromtimestamp(ts)` (naive, the process zone = IST), microseconds rounded half-even
 /// as CPython does. `None` for a non-finite or out-of-range stamp (Python raises).
 #[must_use]

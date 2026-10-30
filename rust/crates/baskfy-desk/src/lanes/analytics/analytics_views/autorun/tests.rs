@@ -210,3 +210,28 @@ fn the_decision_module_runs_nothing() {
         assert!(!src.contains(token), "{token}");
     }
 }
+
+#[test]
+fn login_starts_the_collection() {
+    let src = include_str!("../../../session.rs");
+    assert!(src.contains(r#"ops::start(&mut conn, state, "autorun", &[])"#));
+    assert!(src.contains("logged_in=1"));
+}
+
+#[test]
+fn a_failed_autostart_never_costs_the_login() {
+    let src = include_str!("../../../session.rs");
+    let i = src.find("match post_login_autorun(&state).await").unwrap();
+    let arm = &src[i..i + 400];
+    assert!(arm.contains("Err(e) =>"));
+    assert!(arm.contains("redirect_307"));
+    assert!(!arm[..arm.find("redirect_307").unwrap()].contains("return"));
+}
+
+#[test]
+fn the_runner_places_no_orders() {
+    let src = include_str!("../../../../../../../../kite-momentum-rebalancer/scripts/autorun.py");
+    for token in ["place_order", "place_gtt", "modify_order", "cancel_order"] {
+        assert!(!src.contains(token), "{token}");
+    }
+}

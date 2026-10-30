@@ -1,0 +1,973 @@
+{
+ "fn": "baskfy_core.options.plan_o3.decide_o3",
+ "inputs": {
+  "ceilings": {
+   "book_daily_loss_inr_max": "30000",
+   "book_monthly_loss_inr_max": "75000",
+   "hard_exit_latest": "15:00:00",
+   "max_lots_max": 10,
+   "risk_pct_max": "1.0",
+   "risk_per_trade_inr_max": "25000"
+  },
+  "context": {
+   "event_days": [],
+   "sleeves": {
+    "O3B": {
+     "book": {
+      "max_lots": null,
+      "mode": "PAPER",
+      "real_journal_rows": 0,
+      "risk_per_trade_pct": null,
+      "sleeve_capital_inr": "0"
+     },
+     "paused": false,
+     "session_state": "PLANNED"
+    }
+   },
+   "slot_holder": null
+  },
+  "margin": null,
+  "margin_in_use_inr": "0",
+  "margin_pool_inr": "0",
+  "market": {
+   "bars": [
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25198",
+     "open": "25200",
+     "ts": "2026-10-13T09:15:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:16:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T09:17:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:18:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T09:19:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:20:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T09:21:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:22:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T09:23:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:24:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T09:25:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:26:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T09:27:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:28:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T09:29:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:30:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T09:31:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:32:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T09:33:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:34:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T09:35:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:36:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T09:37:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:38:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T09:39:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:40:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T09:41:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:42:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T09:43:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:44:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T09:45:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:46:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T09:47:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:48:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T09:49:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:50:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T09:51:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:52:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T09:53:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:54:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T09:55:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:56:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T09:57:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T09:58:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T09:59:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T10:00:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T10:01:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T10:02:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T10:03:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T10:04:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T10:05:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T10:06:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T10:07:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T10:08:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T10:09:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T10:10:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T10:11:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T10:12:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T10:13:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T10:14:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T10:15:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T10:16:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T10:17:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T10:18:00+05:30"
+    },
+    {
+     "close": "25210",
+     "high": "25212",
+     "low": "25188",
+     "open": "25190",
+     "ts": "2026-10-13T10:19:00+05:30"
+    },
+    {
+     "close": "25190",
+     "high": "25212",
+     "low": "25188",
+     "open": "25210",
+     "ts": "2026-10-13T10:20:00+05:30"
+    }
+   ],
+   "contracts": [
+    {
+     "expiry": "2026-10-06",
+     "instrument_token": 61,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26100625000CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-06",
+     "instrument_token": 62,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26100625000PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 183,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325000CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-13",
+     "instrument_token": 184,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26101325000PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 305,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025000CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-20",
+     "instrument_token": 306,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102025000PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-27",
+     "instrument_token": 427,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102725000CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-10-27",
+     "instrument_token": 428,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26102725000PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-11-03",
+     "instrument_token": 549,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26110325000CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-11-03",
+     "instrument_token": 550,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26110325000PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-11-10",
+     "instrument_token": 671,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26111025000CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-11-10",
+     "instrument_token": 672,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26111025000PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-11-17",
+     "instrument_token": 793,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26111725000CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-11-17",
+     "instrument_token": 794,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26111725000PE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-11-24",
+     "instrument_token": 915,
+     "lot_size": 65,
+     "option_type": "CE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26112425000CE",
+     "underlying": "NIFTY"
+    },
+    {
+     "expiry": "2026-11-24",
+     "instrument_token": 916,
+     "lot_size": 65,
+     "option_type": "PE",
+     "strike": "25000",
+     "tick_size": "0.05",
+     "tradingsymbol": "NIFTY26112425000PE",
+     "underlying": "NIFTY"
+    }
+   ],
+   "daily_closes": [
+    "23820",
+    "23840",
+    "23860",
+    "23880",
+    "23900",
+    "23920",
+    "23940",
+    "23960",
+    "23980",
+    "24000",
+    "24020",
+    "24040",
+    "24060",
+    "24080",
+    "24100",
+    "24120",
+    "24140",
+    "24160",
+    "24180",
+    "24200",
+    "24220",
+    "24240",
+    "24260",
+    "24280",
+    "24300",
+    "24320",
+    "24340",
+    "24360",
+    "24380",
+    "24400",
+    "24420",
+    "24440",
+    "24460",
+    "24480",
+    "24500",
+    "24520",
+    "24540",
+    "24560",
+    "24580",
+    "24600",
+    "24620",
+    "24640",
+    "24660",
+    "24680",
+    "24700",
+    "24720",
+    "24740",
+    "24760",
+    "24780",
+    "24800",
+    "24820",
+    "24840",
+    "24860",
+    "24880",
+    "24900",
+    "24920",
+    "24940",
+    "24960",
+    "24980",
+    "25000"
+   ],
+   "trade_date": "2026-10-13",
+   "trading_day": true,
+   "vix_prev_close": "14"
+  },
+  "mode": "PAPER",
+  "now": "2026-10-13T10:20:20+05:30",
+  "options": {
+   "calendar": {
+    "allowed_underlyings": [
+     "NIFTY"
+    ],
+    "market_close": "15:30:00",
+    "market_open": "09:15:00",
+    "underlying": "NIFTY"
+   },
+   "chain": {
+    "depth_levels": 3,
+    "greeks_model": "black76-parity-v1",
+    "iv_lower": 0.01,
+    "iv_tolerance": 1e-06,
+    "iv_upper": 5.0,
+    "max_spread_pct": "3.0",
+    "min_oi_lots": 200,
+    "min_premium": "0.50",
+    "oi_unit": "UNITS",
+    "rate": 0.065,
+    "snapshot_strikes": 15,
+    "stale_index_seconds": 30,
+    "stale_quote_seconds": 15,
+    "stale_scan_seconds": 120
+   },
+   "condor_monthly": {
+    "cost_share_max": "0.20",
+    "credit_floor_frac": "0.25",
+    "credit_target_frac": "0.30",
+    "delta_max": "0.25",
+    "delta_min": "0.20",
+    "delta_target": "0.22",
+    "entry_window_end": "10:15:00",
+    "er_max": "0.30",
+    "gap_max_pct": "0.75",
+    "hard_exit_time": "14:30:00",
+    "max_lots": 3,
+    "min_bars": 45,
+    "observation_end": "09:59:00",
+    "observation_start": "09:15:00",
+    "opening_range_end": "09:44:00",
+    "plan_time": "10:00:00",
+    "profit_take_frac": "0.50",
+    "range_max_pct": "0.80",
+    "reserve_per_lot_inr": "1000",
+    "risk_per_trade_pct": "1.0",
+    "stop_frac": "1.50",
+    "strike_buffer_points": "0",
+    "tier3_min_sessions": 12,
+    "variant": "MONTHLY",
+    "wing_width_points": "150"
+   },
+   "condor_weekly": {
+    "cost_share_max": "0.20",
+    "credit_floor_frac": "0.25",
+    "credit_target_frac": "0.30",
+    "delta_max": "0.25",
+    "delta_min": "0.20",
+    "delta_target": "0.22",
+    "entry_window_end": "10:15:00",
+    "er_max": "0.30",
+    "gap_max_pct": "0.75",
+    "hard_exit_time": "14:30:00",
+    "max_lots": 2,
+    "min_bars": 45,
+    "observation_end": "09:59:00",
+    "observation_start": "09:15:00",
+    "opening_range_end": "09:44:00",
+    "plan_time": "10:00:00",
+    "profit_take_frac": "0.50",
+    "range_max_pct": "0.80",
+    "reserve_per_lot_inr": "1000",
+    "risk_per_trade_pct": "0.5",
+    "stop_frac": "1.50",
+    "strike_buffer_points": "0",
+    "tier3_min_sessions": 20,
+    "variant": "WEEKLY",
+    "wing_width_points": "150"
+   },
+   "costs": {
+    "auto_squareoff_inr": "50",
+    "brokerage_per_order_inr": "20",
+    "exchange_txn_pct": "0.03553",
+    "gst_pct": "18",
+    "ipft_per_crore_inr": "0.01",
+    "review_after_days": 90,
+    "reviewed_on": "2026-09-22",
+    "sebi_per_crore_inr": "10",
+    "stamp_buy_pct": "0.003",
+    "stt_exercise_intrinsic_pct": "0.15",
+    "stt_sell_premium_pct": "0.15",
+    "synthetic_half_spread_min_inr": "0.10",
+    "synthetic_half_spread_pct": "1.5"
+   },
+   "directional": {
+    "bar_minutes": 5,
+    "buffer_pct": "0.05",
+    "cost_share_max": "0.15",
+    "delta_max": "0.75",
+    "delta_min": "0.50",
+    "entry_window_end": "13:30:00",
+    "entry_window_start": "09:30:00",
+    "gap_max_pct": "1.0",
+    "hard_exit_time": "15:00:00",
+    "itm_steps": 1,
+    "max_lots": 2,
+    "opening_range_bars": 15,
+    "opening_range_end": "09:29:00",
+    "opening_range_start": "09:15:00",
+    "or_max_pct": "0.90",
+    "premium_cap_pct": "10",
+    "reserve_per_lot_inr": "300",
+    "risk_per_trade_pct": "0.5",
+    "stop_frac": "0.30",
+    "target_frac": "0.60",
+    "tier3_min_sessions": 60,
+    "time_stop_min_gain": "0.10",
+    "time_stop_minutes": 45,
+    "trend_ema_days": 20,
+    "vix_max": "22"
+   },
+   "execution": {
+    "exit_final_marketable": true,
+    "feed_grace_seconds": 60,
+    "feed_watch_from": "14:00:00",
+    "fill_wait_seconds": 20,
+    "latency_ticks": 1,
+    "limit_improve_ticks": 1,
+    "plan_ttl_minutes": 30
+   },
+   "expiry_setups": {
+    "bar_minutes": 5,
+    "cost_share_max": "0.20",
+    "hard_exit_time": "14:45:00",
+    "max_debit_frac": "0.55",
+    "max_lots": 2,
+    "o3a_buffer_pct": "0.05",
+    "o3a_enabled": true,
+    "o3a_entry_window_end": "13:30:00",
+    "o3a_er_min": "0.40",
+    "o3a_range_bars": 60,
+    "o3a_range_end": "10:14:00",
+    "o3a_range_max_pct": "1.20",
+    "o3a_range_start": "09:15:00",
+    "o3a_window_end": "13:00:00",
+    "o3a_window_start": "10:19:00",
+    "o3b_enabled": true,
+    "o3b_gap_max_pct": "1.50",
+    "o3b_gap_min_pct": "0.50",
+    "o3b_hold_end": "09:44:00",
+    "o3b_plan_time": "09:45:00",
+    "o3b_window_end": "10:00:00",
+    "reserve_per_lot_inr": "500",
+    "risk_per_trade_pct": "0.5",
+    "stop_frac_of_debit": "0.50",
+    "target_frac_of_width": "0.80",
+    "tier3_min_sessions": 20,
+    "width_points": "100"
+   },
+   "risk": {
+    "book_daily_loss_pct": "1.5",
+    "book_monthly_loss_pct": "5",
+    "budget_breach_frac": "1.0",
+    "daily_loss_r": "2",
+    "monthly_loss_r": "8",
+    "weekly_loss_r": "4"
+   },
+   "sizing": {
+    "first_live_risk_multiplier": "0.5",
+    "first_live_trades": 5
+   }
+  },
+  "sleeve": "O3A",
+  "snapshots": [],
+  "user_id": 7
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "Decimals are strings; enums are their values; datetimes carry +05:30. Config is OptionsConfig() defaults, written into the inputs. Regenerate with `uv run python ../tools/parity/golden_options.py` from decile-blueprint; packages/core/tests/test_options_goldens.py recomputes every case from these inputs.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "decision": {
+   "as_of_minute": null,
+   "candidate": null,
+   "costs": null,
+   "direction": null,
+   "expiry": "2026-10-13",
+   "half_gap": null,
+   "legs": [],
+   "now": "2026-10-13T10:20:20+05:30",
+   "numbers": {
+    "bars": 60,
+    "er_min": "0.40",
+    "level_down": "25175.41",
+    "level_up": "25224.61",
+    "low_er_breaks": [],
+    "prev_close": "25000.00",
+    "range_high": "25212.00",
+    "range_low": "25188.00",
+    "range_max_pct": "1.20",
+    "range_pct": "0.0960",
+    "setup": "RANGE_BREAK",
+    "window_end": "13:00",
+    "window_start": "10:19"
+   },
+   "range_high": "25212",
+   "range_low": "25188",
+   "reasons": [
+    "NO_TRIGGER_YET"
+   ],
+   "sleeve": "O3A",
+   "state": "NOT_READY",
+   "trade_date": "2026-10-13",
+   "verdict": null
+  },
+  "outcome": {
+   "decision_numbers": {
+    "bars": 60,
+    "er_min": "0.40",
+    "level_down": "25175.41",
+    "level_up": "25224.61",
+    "low_er_breaks": [],
+    "prev_close": "25000.00",
+    "range_high": "25212.00",
+    "range_low": "25188.00",
+    "range_max_pct": "1.20",
+    "range_pct": "0.0960",
+    "setup": "RANGE_BREAK",
+    "window_end": "13:00",
+    "window_start": "10:19"
+   },
+   "decision_reasons": [
+    "NO_TRIGGER_YET"
+   ],
+   "decision_state": "NOT_READY",
+   "plan": null,
+   "reasons": [
+    "NO_TRIGGER_YET"
+   ],
+   "state": "NOT_READY"
+  }
+ }
+}

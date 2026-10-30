@@ -1,197 +1,561 @@
-//! Port of `baskfy_core.options.condor` (`decile-blueprint/packages/core/src/baskfy_core/options/condor.py`).
-//!
-//! O1 — the hedged condor on an expiry day, monthly and weekly (docs/options/04 §3).
-//!
-//! Goldens: `L1/options/exit_decision.*` (`baskfy_core.options.condor.exit_decision`).
-//!
-//! Ported so far: the exits (condor §7) — profit at `D ≤ profit_take_frac * C`, stop at
-//! `D ≥ stop_frac * C`, a touch of either short strike, the hard exit, and `04` §9.2's budget
-//! breach, one decision by `HARD_EXIT > STRIKE_TOUCH > STOP > PROFIT`; profit is never taken on
-//! a stale mark (§7.7). The gate (`observe`) and the structure (`build`) are not yet ported.
-//!
-//! `CondorConfig`, `CondorVariant` and `RiskConfig` belong to `baskfy_core.options.config`, and
-//! `trade_breached` to `baskfy_core.options.risk`; they live here until those modules are
-//! ported (outside this port's ownership).
+//! Port of `baskfy_core.options.condor`: O1, the hedged condor on an expiry day (`04` §3).
 
-use chrono::{DateTime, FixedOffset, NaiveTime};
+use std::collections::BTreeMap;
+
+use chrono::{DateTime, FixedOffset, NaiveDate, NaiveTime};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{CoreError, CoreResult};
-use crate::options::costs::mul;
-use crate::options::execution::{drop_on_stale, first_by_precedence};
+use crate::options::bars::{
+    Bar, bar_at, closed, efficiency_ratio, er_points, high_low, pct, window, window_settled,
+};
+use crate::options::chain::is_liquid;
+use crate::options::config::{OptionType, OptionsCeilings, OptionsConfig, Side};
+use crate::options::costs::expected_gain_o1;
+use crate::options::execution::{LegRole, drop_on_stale, first_by_precedence};
+use crate::options::num::{self, from_float, py_str};
+use crate::options::sizing::risk_per_lot_condor;
+use crate::options::structures::{
+    Candidate, CandidateLeg, ChainView, Known, PricedQuote, Rejection, SleeveBook, Structure,
+    cost_gate, leg, rejected, round_trip, size_for,
+};
 
-/// Ports `baskfy_core.options.config.CondorVariant`.
+pub use crate::options::config::{CondorConfig, CondorVariant, RiskConfig};
+pub use crate::options::risk::trade_breached;
+
+/// Condor `04` §2.1-§2.6, in the order they are reported.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "UPPERCASE")]
-pub enum CondorVariant {
-    /// O1-M.
-    Monthly,
-    /// O1-W.
-    Weekly,
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum GateReason {
+    /// The opening gap is too big.
+    GapTooBig,
+    /// The observation range is too wide.
+    RangeTooWide,
+    /// The last close left the opening range.
+    NotContained,
+    /// The efficiency ratio is too high.
+    ErTooHigh,
+    /// An event day.
+    EventDay,
+    /// The window is incomplete.
+    IncompleteObservation,
 }
 
-/// O1 (`04` §3; condor `04` §2, §4, §5.3, §6, §7, §9). Two instances, never shared.
-///
-/// Ports `baskfy_core.options.config.CondorConfig`; [`Default`] is `condor_monthly`,
-/// [`CondorConfig::weekly`] is `condor_weekly`.
+impl GateReason {
+    /// The enum's value.
+    pub fn value(self) -> &'static str {
+        match self {
+            GateReason::GapTooBig => "GAP_TOO_BIG",
+            GateReason::RangeTooWide => "RANGE_TOO_WIDE",
+            GateReason::NotContained => "NOT_CONTAINED",
+            GateReason::ErTooHigh => "ER_TOO_HIGH",
+            GateReason::EventDay => "EVENT_DAY",
+            GateReason::IncompleteObservation => "INCOMPLETE_OBSERVATION",
+        }
+    }
+}
+
+/// What the gate measured.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct CondorConfig {
-    /// Monthly or weekly.
-    pub variant: CondorVariant,
-    /// Gate: largest opening gap, percent.
-    pub gap_max_pct: Decimal,
-    /// Gate: widest observation range, percent.
-    pub range_max_pct: Decimal,
-    /// Gate: highest Kaufman efficiency ratio.
-    pub er_max: Decimal,
-    /// Observation window start.
-    pub observation_start: NaiveTime,
-    /// Observation window end.
-    pub observation_end: NaiveTime,
-    /// Opening range end.
-    pub opening_range_end: NaiveTime,
-    /// Bars a complete observation window has.
-    pub min_bars: i64,
-    /// Short-strike `|delta|` floor.
-    pub delta_min: Decimal,
-    /// Short-strike `|delta|` ceiling.
-    pub delta_max: Decimal,
-    /// Short-strike `|delta|` target.
-    pub delta_target: Decimal,
-    /// Points beyond the opening range a short must sit.
-    pub strike_buffer_points: Decimal,
-    /// Wing width, points.
-    pub wing_width_points: Decimal,
-    /// Credit floor as a fraction of the width.
-    pub credit_floor_frac: Decimal,
-    /// Credit target as a fraction of the width.
-    pub credit_target_frac: Decimal,
-    /// Profit at `D ≤ profit_take_frac * C`.
-    pub profit_take_frac: Decimal,
-    /// Stop at `D ≥ stop_frac * C`.
-    pub stop_frac: Decimal,
-    /// When the plan is built.
-    pub plan_time: NaiveTime,
-    /// Last moment a plan may be confirmed.
-    pub entry_window_end: NaiveTime,
-    /// The hard exit.
-    pub hard_exit_time: NaiveTime,
-    /// Largest cost share of the expected gain.
-    pub cost_share_max: Decimal,
-    /// Risk per trade, percent of capital.
-    pub risk_per_trade_pct: Decimal,
-    /// Lot cap.
-    pub max_lots: i64,
-    /// Reserve per lot, ₹.
-    pub reserve_per_lot_inr: Decimal,
-    /// Sessions before tier 3.
-    pub tier3_min_sessions: i64,
+pub struct GateNumbers {
+    /// Previous close.
+    pub prev_close: Decimal,
+    /// Bars in the observation window.
+    pub bars: i64,
+    /// The 09:15 open.
+    pub open_0915: Option<Decimal>,
+    /// The gap, percent.
+    pub gap_pct: Option<Decimal>,
+    /// Observation high.
+    pub obs_high: Option<Decimal>,
+    /// Observation low.
+    pub obs_low: Option<Decimal>,
+    /// Observation range, percent.
+    pub range_pct: Option<Decimal>,
+    /// Opening range high.
+    pub or_high: Option<Decimal>,
+    /// Opening range low.
+    pub or_low: Option<Decimal>,
+    /// The last close.
+    pub last_close: Option<Decimal>,
+    /// Inside the opening range.
+    pub contained: Option<bool>,
+    /// Kaufman's ER.
+    pub er: Option<Decimal>,
 }
 
-fn hm(h: u32, m: u32) -> NaiveTime {
-    // Every caller passes a constant valid wall-clock time.
-    NaiveTime::from_hms_opt(h, m, 0).unwrap_or_default()
-}
-
-impl Default for CondorConfig {
-    fn default() -> Self {
-        Self {
-            variant: CondorVariant::Monthly,
-            gap_max_pct: Decimal::new(75, 2),
-            range_max_pct: Decimal::new(80, 2),
-            er_max: Decimal::new(30, 2),
-            observation_start: hm(9, 15),
-            observation_end: hm(9, 59),
-            opening_range_end: hm(9, 44),
-            min_bars: 45,
-            delta_min: Decimal::new(20, 2),
-            delta_max: Decimal::new(25, 2),
-            delta_target: Decimal::new(22, 2),
-            strike_buffer_points: Decimal::new(0, 0),
-            wing_width_points: Decimal::new(150, 0),
-            credit_floor_frac: Decimal::new(25, 2),
-            credit_target_frac: Decimal::new(30, 2),
-            profit_take_frac: Decimal::new(50, 2),
-            stop_frac: Decimal::new(150, 2),
-            plan_time: hm(10, 0),
-            entry_window_end: hm(10, 15),
-            hard_exit_time: hm(14, 30),
-            cost_share_max: Decimal::new(20, 2),
-            risk_per_trade_pct: Decimal::new(10, 1),
-            max_lots: 3,
-            reserve_per_lot_inr: Decimal::new(1000, 0),
-            tier3_min_sessions: 12,
-        }
-    }
-}
-
-impl CondorConfig {
-    /// `OptionsConfig().condor_weekly`: the monthly defaults with the weekly variant, 0.5 %
-    /// risk, two lots and twenty tier-3 sessions.
-    pub fn weekly() -> Self {
-        Self {
-            variant: CondorVariant::Weekly,
-            risk_per_trade_pct: Decimal::new(5, 1),
-            max_lots: 2,
-            tier3_min_sessions: 20,
-            ..Self::default()
-        }
-    }
-
-    /// The `OptionsConfig()` default instance for a variant.
-    pub fn for_variant(variant: CondorVariant) -> Self {
-        match variant {
-            CondorVariant::Monthly => Self::default(),
-            CondorVariant::Weekly => Self::weekly(),
-        }
-    }
-}
-
-/// `04` §9 — per-sleeve limits in R, per-trade breach, the book's derived ₹ limits.
-///
-/// Ports `baskfy_core.options.config.RiskConfig`.
+/// Condor §2's verdict; `trade` iff final with no reason.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(default)]
-pub struct RiskConfig {
-    /// Daily loss limit, R.
-    pub daily_loss_r: Decimal,
-    /// Weekly loss limit, R.
-    pub weekly_loss_r: Decimal,
-    /// Monthly loss limit, R.
-    pub monthly_loss_r: Decimal,
-    /// A marked loss beyond `risk_budget * budget_breach_frac` closes the position.
-    pub budget_breach_frac: Decimal,
-    /// Book daily loss, percent.
-    pub book_daily_loss_pct: Decimal,
-    /// Book monthly loss, percent.
-    pub book_monthly_loss_pct: Decimal,
+pub struct DayVerdict {
+    /// The window is settled.
+    pub final_: bool,
+    /// Every reason.
+    pub reasons: Vec<GateReason>,
+    /// The numbers.
+    pub numbers: GateNumbers,
 }
 
-impl Default for RiskConfig {
-    fn default() -> Self {
-        Self {
-            daily_loss_r: Decimal::new(2, 0),
-            weekly_loss_r: Decimal::new(4, 0),
-            monthly_loss_r: Decimal::new(8, 0),
-            budget_breach_frac: Decimal::new(10, 1),
-            book_daily_loss_pct: Decimal::new(15, 1),
-            book_monthly_loss_pct: Decimal::new(5, 0),
-        }
+impl DayVerdict {
+    /// Final with no reason.
+    pub fn trade(&self) -> bool {
+        self.final_ && self.reasons.is_empty()
     }
 }
 
-/// `04` §9.2: a marked loss beyond `risk_budget * budget_breach_frac` closes the position
-/// (`STOP`) whatever the sleeve's own rule says. `marked_loss_inr` is a positive loss.
-///
-/// Ports `baskfy_core.options.risk.trade_breached`.
-pub fn trade_breached(
-    marked_loss_inr: Decimal,
-    risk_budget_inr: Decimal,
-    config: &RiskConfig,
-) -> CoreResult<bool> {
-    Ok(marked_loss_inr > mul(risk_budget_inr, config.budget_breach_frac)?)
+/// Condor `04` §2 over the closed bars of the observation window.
+pub fn observe(
+    bars: &[Bar],
+    prev_close: Decimal,
+    now: &DateTime<FixedOffset>,
+    event_day: bool,
+    config: &CondorConfig,
+    grace_seconds: i64,
+) -> CoreResult<DayVerdict> {
+    if prev_close <= Decimal::ZERO {
+        return Err(CoreError::InvalidInput(
+            "the previous close must be positive".to_owned(),
+        ));
+    }
+    let seen = closed(bars, now);
+    let obs = window(&seen, config.observation_start, config.observation_end);
+    let opening = window(&seen, config.observation_start, config.opening_range_end);
+    let open_0915 = bar_at(&obs, config.observation_start).map(|b| b.open);
+    let gap = open_0915
+        .map(|o| {
+            num::sub(o, prev_close)
+                .and_then(|g| pct(g, prev_close))
+                .and_then(num::abs)
+        })
+        .transpose()?;
+    let hl = high_low(&obs);
+    let obs_range = hl
+        .map(|(h, l)| num::sub(h, l).and_then(|r| pct(r, prev_close)))
+        .transpose()?;
+    let or_hl = high_low(&opening);
+    let opening_done = bar_at(&opening, config.opening_range_end).is_some();
+    let last = obs.last().map(|b| b.close);
+    let contained = match (or_hl, last) {
+        (Some((h, l)), Some(c)) if opening_done => Some(l <= c && c <= h),
+        _ => None,
+    };
+    let er = if obs.len() > 1 {
+        Some(efficiency_ratio(&er_points(&obs))?)
+    } else {
+        None
+    };
+    let n_obs = i64::try_from(obs.len()).unwrap_or(i64::MAX);
+    let complete = n_obs >= config.min_bars && bar_at(&obs, config.observation_end).is_some();
+    let final_ = window_settled(&obs, config.observation_end, now, grace_seconds);
+    let mut reasons = Vec::new();
+    if gap.is_some_and(|g| g > config.gap_max_pct) {
+        reasons.push(GateReason::GapTooBig);
+    }
+    if obs_range.is_some_and(|r| r > config.range_max_pct) {
+        reasons.push(GateReason::RangeTooWide);
+    }
+    if complete && contained == Some(false) {
+        reasons.push(GateReason::NotContained);
+    }
+    if complete && er.is_some_and(|e| e > config.er_max) {
+        reasons.push(GateReason::ErTooHigh);
+    }
+    if event_day {
+        reasons.push(GateReason::EventDay);
+    }
+    if final_ && !complete {
+        reasons.push(GateReason::IncompleteObservation);
+    }
+    Ok(DayVerdict {
+        final_,
+        reasons,
+        numbers: GateNumbers {
+            prev_close,
+            bars: n_obs,
+            open_0915,
+            gap_pct: gap,
+            obs_high: hl.map(|x| x.0),
+            obs_low: hl.map(|x| x.1),
+            range_pct: obs_range,
+            or_high: or_hl.map(|x| x.0),
+            or_low: or_hl.map(|x| x.1),
+            last_close: last,
+            contained,
+            er,
+        },
+    })
+}
+
+fn abs_delta(priced: &PricedQuote) -> CoreResult<Option<Decimal>> {
+    priced
+        .delta()
+        .map(|d| from_float(d).and_then(num::abs))
+        .transpose()
+}
+
+/// Condor §4.1-§4.2: the liquid short in the delta band and beyond the opening range, nearest the target.
+pub fn select_short<'a>(
+    view: &'a ChainView,
+    option_type: OptionType,
+    bound: Decimal,
+    quantity: i64,
+    lot_size: i64,
+    config: &CondorConfig,
+    options: &OptionsConfig,
+) -> CoreResult<Option<&'a PricedQuote>> {
+    let mut best: Option<(Decimal, Decimal, &PricedQuote)> = None;
+    for priced in view.of_type(option_type) {
+        let Some(delta) = abs_delta(priced)? else {
+            continue;
+        };
+        if !(config.delta_min <= delta && delta <= config.delta_max) {
+            continue;
+        }
+        let beyond = match option_type {
+            OptionType::Ce => priced.strike() > num::add(bound, config.strike_buffer_points)?,
+            OptionType::Pe => priced.strike() < num::sub(bound, config.strike_buffer_points)?,
+        };
+        if !beyond {
+            continue;
+        }
+        if !is_liquid(
+            &priced.quote,
+            quantity,
+            Side::Sell,
+            lot_size,
+            &options.chain,
+            false,
+        )?
+        .ok
+        {
+            continue;
+        }
+        let further = match option_type {
+            OptionType::Ce => num::neg(priced.strike())?,
+            OptionType::Pe => priced.strike(),
+        };
+        let key = (num::abs(num::sub(delta, config.delta_target)?)?, further);
+        if best.as_ref().is_none_or(|(a, b, _)| key < (*a, *b)) {
+            best = Some((key.0, key.1, priced));
+        }
+    }
+    Ok(best.map(|(_, _, p)| p))
+}
+
+fn wing<'a>(
+    view: &'a ChainView,
+    short: &PricedQuote,
+    width: Decimal,
+    quantity: i64,
+    lot_size: i64,
+    options: &OptionsConfig,
+) -> CoreResult<Option<&'a PricedQuote>> {
+    let strike = match short.option_type() {
+        OptionType::Ce => num::add(short.strike(), width)?,
+        OptionType::Pe => num::sub(short.strike(), width)?,
+    };
+    let Some(w) = view.get(strike, short.option_type()) else {
+        return Ok(None);
+    };
+    if w.quote.bid.is_none() || w.quote.ask.is_none() {
+        return Ok(None);
+    }
+    let ok = is_liquid(
+        &w.quote,
+        quantity,
+        Side::Buy,
+        lot_size,
+        &options.chain,
+        true,
+    )?
+    .ok;
+    Ok(if ok { Some(w) } else { None })
+}
+
+/// Condor §4.4: shorts at bid, wings at ask.
+pub fn credit_points(
+    short_call: &PricedQuote,
+    short_put: &PricedQuote,
+    long_call: &PricedQuote,
+    long_put: &PricedQuote,
+) -> CoreResult<Decimal> {
+    for q in [short_call, short_put, long_call, long_put] {
+        if q.quote.bid.is_none() || q.quote.ask.is_none() {
+            return Err(CoreError::InvalidInput(
+                "a condor leg needs a two-sided quote".to_owned(),
+            ));
+        }
+    }
+    let z = Decimal::ZERO;
+    let total = num::add(
+        short_call.quote.bid.unwrap_or(z),
+        short_put.quote.bid.unwrap_or(z),
+    )?;
+    let total = num::sub(total, long_call.quote.ask.unwrap_or(z))?;
+    num::sub(total, long_put.quote.ask.unwrap_or(z))
+}
+
+/// Every input of `build` besides the view and the configs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CondorBuild {
+    /// Opening range high.
+    pub or_high: Decimal,
+    /// Opening range low.
+    pub or_low: Decimal,
+    /// The master's lot size.
+    pub lot_size: Option<i64>,
+    /// The sleeve's book.
+    pub book: SleeveBook,
+    /// The slot is free.
+    pub slot_free: bool,
+    /// The sleeve or book is paused.
+    pub paused: bool,
+    /// Expiry.
+    pub expiry: NaiveDate,
+}
+
+/// The condor a plan would carry, or the first refusal (`04` §3/§6/§7).
+pub fn build(
+    view: Option<&ChainView>,
+    inputs: &CondorBuild,
+    config: &CondorConfig,
+    options: &OptionsConfig,
+    ceilings: &OptionsCeilings,
+) -> CoreResult<Candidate> {
+    let structure = Structure::IronCondor;
+    let expiry = inputs.expiry;
+    let refuse = |code: Rejection, message: String, known: Known| {
+        Ok(rejected(structure, expiry, code, message, known))
+    };
+    if inputs.paused {
+        return refuse(
+            Rejection::RejectedPaused,
+            "the sleeve or book is paused".to_owned(),
+            Known::default(),
+        );
+    }
+    if !inputs.slot_free {
+        return refuse(
+            Rejection::RejectedSlotTaken,
+            "another sleeve holds today's slot".to_owned(),
+            Known::default(),
+        );
+    }
+    let Some(view) = view else {
+        return refuse(
+            Rejection::RejectedNoChain,
+            "no chain for the expiry".to_owned(),
+            Known::default(),
+        );
+    };
+    let lot_size = match inputs.lot_size {
+        Some(l) if l > 0 => l,
+        _ => {
+            return refuse(
+                Rejection::RejectedNoLotSize,
+                "the master has no lot size".to_owned(),
+                Known::default(),
+            );
+        }
+    };
+    let sized =
+        |legs: Vec<CandidateLeg>, points: Option<Decimal>, extra: BTreeMap<String, String>| Known {
+            direction: None,
+            legs,
+            points,
+            lot_size: Some(lot_size),
+            extra,
+        };
+    let band = format!(
+        "[{}, {}]",
+        py_str(config.delta_min),
+        py_str(config.delta_max)
+    );
+    let Some(short_call) = select_short(
+        view,
+        OptionType::Ce,
+        inputs.or_high,
+        lot_size,
+        lot_size,
+        config,
+        options,
+    )?
+    else {
+        return refuse(
+            Rejection::RejectedNoShortCall,
+            format!(
+                "no liquid CE with |delta| in {band} above {}",
+                py_str(num::add(inputs.or_high, config.strike_buffer_points)?)
+            ),
+            sized(Vec::new(), None, BTreeMap::new()),
+        );
+    };
+    let Some(short_put) = select_short(
+        view,
+        OptionType::Pe,
+        inputs.or_low,
+        lot_size,
+        lot_size,
+        config,
+        options,
+    )?
+    else {
+        return refuse(
+            Rejection::RejectedNoShortPut,
+            format!(
+                "no liquid PE with |delta| in {band} below {}",
+                py_str(num::sub(inputs.or_low, config.strike_buffer_points)?)
+            ),
+            sized(Vec::new(), None, BTreeMap::new()),
+        );
+    };
+    let width = config.wing_width_points;
+    let long_call = wing(view, short_call, width, lot_size, lot_size, options)?;
+    let long_put = wing(view, short_put, width, lot_size, lot_size, options)?;
+    let (Some(long_call), Some(long_put)) = (long_call, long_put) else {
+        return refuse(
+            Rejection::RejectedNoWing,
+            format!(
+                "a wing {} points out is missing, one-sided or too thin",
+                py_str(width)
+            ),
+            sized(Vec::new(), None, BTreeMap::new()),
+        );
+    };
+    let tick = view.tick;
+    let ex = &options.execution;
+    let legs = vec![
+        leg(LegRole::LongPut, long_put, tick, ex)?,
+        leg(LegRole::LongCall, long_call, tick, ex)?,
+        leg(LegRole::ShortPut, short_put, tick, ex)?,
+        leg(LegRole::ShortCall, short_call, tick, ex)?,
+    ];
+    let quotes = [long_put, long_call, short_put, short_call];
+    let credit = credit_points(short_call, short_put, long_call, long_put)?;
+    let floor = num::mul(config.credit_floor_frac, width)?;
+    let mut extra = BTreeMap::new();
+    extra.insert("credit_floor_points".to_owned(), py_str(floor));
+    extra.insert(
+        "credit_target_points".to_owned(),
+        py_str(num::mul(config.credit_target_frac, width)?),
+    );
+    extra.insert("wing_width_points".to_owned(), py_str(width));
+    if credit < floor {
+        return refuse(
+            Rejection::RejectedCredit,
+            format!(
+                "credit {} < floor {} ({} * {})",
+                py_str(credit),
+                py_str(floor),
+                py_str(config.credit_floor_frac),
+                py_str(width)
+            ),
+            sized(legs, Some(credit), extra),
+        );
+    }
+    let per_lot = risk_per_lot_condor(width, credit, lot_size, config.reserve_per_lot_inr)?;
+    let sizing = size_for(
+        &inputs.book,
+        config.risk_per_trade_pct,
+        config.max_lots,
+        per_lot,
+        Some(lot_size),
+        &options.sizing,
+        ceilings,
+    )?;
+    if let Some(code) = sizing.rejection {
+        return refuse(
+            code.into(),
+            sizing.message,
+            sized(legs, Some(credit), extra),
+        );
+    }
+    let quantity = sizing.lots * lot_size;
+    let mut thin = Vec::new();
+    for (lg, q) in legs.iter().zip(quotes) {
+        let wing_leg = lg.role.is_long();
+        if !is_liquid(
+            &q.quote,
+            quantity,
+            lg.entry_side(),
+            lot_size,
+            &options.chain,
+            wing_leg,
+        )?
+        .ok
+        {
+            thin.push(lg.role.value());
+        }
+    }
+    if !thin.is_empty() {
+        return refuse(
+            Rejection::RejectedIlliquid,
+            format!("not liquid for {quantity} units: {}", thin.join(", ")),
+            sized(legs, Some(credit), extra),
+        );
+    }
+    let trip = round_trip(&legs, quantity, tick, &options.costs, ex)?;
+    let credit_inr = num::muli(credit, quantity)?;
+    let gain = expected_gain_o1(credit_inr, config.profit_take_frac)?;
+    let (share, passes) = cost_gate(trip, gain, config.cost_share_max)?;
+    let mut warnings = Vec::new();
+    if num::div(trip, Decimal::from(sizing.lots))? > config.reserve_per_lot_inr {
+        warnings.push("RESERVE_EXCEEDED".to_owned());
+    }
+    extra.insert("credit_inr".to_owned(), py_str(num::paise(credit_inr)?));
+    let message = if passes {
+        sizing.message.clone()
+    } else {
+        format!(
+            "cost share {} > {} (round trip ₹{})",
+            share.map_or_else(|| "None".to_owned(), py_str),
+            py_str(config.cost_share_max),
+            py_str(trip)
+        )
+    };
+    Ok(Candidate {
+        structure,
+        expiry,
+        direction: None,
+        legs,
+        points: Some(credit),
+        lot_size: Some(lot_size),
+        lots: if passes { sizing.lots } else { 0 },
+        sizing_mode: Some(sizing.sizing_mode),
+        risk_per_lot_inr: Some(per_lot),
+        r_inr: Some(sizing.r_inr),
+        max_loss_inr: Some(num::muli(num::sub(width, credit)?, quantity)?),
+        round_trip_inr: Some(trip),
+        expected_gain_inr: Some(gain),
+        cost_share: share,
+        rejection: if passes {
+            None
+        } else {
+            Some(Rejection::RejectedCost)
+        },
+        message,
+        half_size: sizing.half_size,
+        warnings,
+        extra,
+    })
+}
+
+/// Condor §7's `D`: shorts at ask, wings at bid, per unit.
+pub fn cost_to_close(legs: &[CandidateLeg]) -> CoreResult<Decimal> {
+    let mut total = Decimal::ZERO;
+    for lg in legs {
+        let (Some(bid), Some(ask)) = (lg.bid, lg.ask) else {
+            return Err(CoreError::InvalidInput(
+                "a mark needs a two-sided quote".to_owned(),
+            ));
+        };
+        total = if lg.role.is_long() {
+            num::add(total, num::neg(bid)?)?
+        } else {
+            num::add(total, ask)?
+        };
+    }
+    Ok(total)
 }
 
 /// Ports `baskfy_core.options.condor.CondorExit`.
@@ -275,12 +639,12 @@ pub fn exit_decision(
     {
         fired.push(CondorExit::StrikeTouch);
     }
-    if tick.cost_now >= mul(config.stop_frac, tick.entry_credit)?
+    if tick.cost_now >= num::mul(config.stop_frac, tick.entry_credit)?
         || trade_breached(tick.marked_loss_inr, tick.risk_budget_inr, risk)?
     {
         fired.push(CondorExit::Stop);
     }
-    if tick.cost_now <= mul(config.profit_take_frac, tick.entry_credit)? {
+    if tick.cost_now <= num::mul(config.profit_take_frac, tick.entry_credit)? {
         fired.push(CondorExit::Profit);
     }
     if tick.manual {

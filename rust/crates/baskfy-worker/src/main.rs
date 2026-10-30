@@ -453,6 +453,18 @@ fn beat_due(now: Option<chrono::NaiveDateTime>) -> ExitCode {
 
 fn main() -> ExitCode {
     let raw: Vec<String> = std::env::args().skip(1).collect();
+    if raw
+        .first()
+        .is_some_and(|c| tasks::backfills::cli::is_subcommand(c))
+    {
+        return match tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+        {
+            Ok(rt) => rt.block_on(tasks::backfills::cli::run(&raw)),
+            Err(e) => fail(&format!("cannot start the runtime: {e}")),
+        };
+    }
     let args = match parse_args(&raw) {
         Ok(a) => a,
         Err(e) => return fail(&e),

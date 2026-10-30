@@ -22,11 +22,11 @@ use baskfy_desk::clock::{Clock, FixedClock, ist};
 use baskfy_desk::fake_kite::ReplayKite;
 use baskfy_desk::gateway::{GatesFn, PlaceOrder, ProductGates, TenantIds};
 use baskfy_desk::ids::HarnessIds;
-use baskfy_desk::kite::KiteWrites;
 use baskfy_desk::lanes::exec_core::order_gateway::{GatewayOptions, OrderGateway};
 use baskfy_desk::lanes::exec_core::risk::{RiskBacking, RiskConfig, RiskLayer, RiskManager};
 use baskfy_desk::lanes::options::core::{
-    EntryAction, Structure, advance_entry, entry_sequence, exit_sequence, next_exit_leg,
+    Direction, EntryAction, Structure, advance_entry, direction_of, entry_sequence, exit_sequence,
+    next_exit_leg, structure_of,
 };
 use baskfy_desk::lanes::options::{clock as op_clock, desk, execute, gates};
 use baskfy_desk::settings::Settings;
@@ -218,9 +218,8 @@ impl Bed {
                 .await
                 .unwrap(),
         );
-        let kite: Arc<dyn KiteWrites> = self.kite.clone();
         OrderGateway::new(
-            kite,
+            self.kite.clone(),
             risk,
             GatewayOptions {
                 gates,
@@ -540,9 +539,11 @@ fn a_long_is_never_offered_while_its_short_is_open() {
 #[test]
 fn every_structure_parses_from_its_python_name() {
     for name in ["IRON_CONDOR", "LONG_OPTION", "DEBIT_SPREAD"] {
-        assert!(Structure::parse(name).is_some(), "{name}");
+        assert_eq!(structure_of(name).map(Structure::value), Some(name));
     }
-    assert!(Structure::parse("SHORT_STRANGLE").is_none());
+    assert!(structure_of("SHORT_STRANGLE").is_none());
+    assert_eq!(direction_of("UP"), Some(Direction::Up));
+    assert!(direction_of("up").is_none());
 }
 
 // --- B10: token death (test_options_hardening.py) ---------------------------------------------

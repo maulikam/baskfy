@@ -30,7 +30,7 @@ use hmac::{Hmac, Mac};
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC, utf8_percent_encode};
 use sha2::{Digest, Sha256};
 
-use crate::clock::{Clock, SystemClock};
+use crate::clock::{Clock, Random, Sleeper, SystemClock, ThreadRandom, TokioSleeper};
 use crate::errors::ProviderError;
 use crate::net::GuardedClient;
 use crate::py::repr_str;
@@ -483,6 +483,8 @@ pub struct SigV4S3Client {
     access_key_id: Secret,
     secret_access_key: Secret,
     clock: std::sync::Arc<dyn Clock>,
+    sleeper: std::sync::Arc<dyn Sleeper>,
+    random: std::sync::Arc<dyn Random>,
 }
 
 impl std::fmt::Debug for SigV4S3Client {
@@ -522,9 +524,31 @@ impl SigV4S3Client {
             access_key_id,
             secret_access_key,
             clock: std::sync::Arc::new(SystemClock),
+            sleeper: std::sync::Arc::new(TokioSleeper),
+            random: std::sync::Arc::new(ThreadRandom),
         })
     }
 
+    /// The same client with its seams replaced: the wall clock it signs with, how it waits
+    /// between attempts and where its backoff jitter comes from (tests drive retries with these).
+    #[must_use]
+    pub fn with_seams(
+        mut self,
+        clock: std::sync::Arc<dyn Clock>,
+        sleeper: std::sync::Arc<dyn Sleeper>,
+        random: std::sync::Arc<dyn Random>,
+    ) -> Self {
+        self.clock = clock;
+        self.sleeper = sleeper;
+        self.random = random;
+        self
+    }
+
+    /// One request with botocore's **legacy** retry policy (DECISIONS-RS R4.14, closed): up to
+    /// [`S3_MAX_ATTEMPTS`] attempts, re-signed each time, retrying exactly what botocore 1.43's
+    /// `_retry.json` retries for `s3` and sleeping `random() * 2 ** (attempt - 1)` seconds
+    /// between attempts (`delay_exponential(base="rand", growth_factor=2)`). The last attempt's
+    /// failure is the one returned.
     async fn send(
         &self,
         method: reqwest::Method,
@@ -532,6 +556,34 @@ impl SigV4S3Client {
         key: &str,
         body: Option<(&[u8], &str, &BTreeMap<String, String>)>,
     ) -> Result<reqwest::Response, S3Failure> {
+        let mut attempt: u32 = 1;
+        loop {
+            let outcome = self.send_once(method.clone(), bucket, key, body).await?;
+            let retry = match &outcome {
+                Attempt::Answered(_) => return finish(outcome),
+                Attempt::Transport(_) => true,
+                Attempt::Refused { status, code } => s3_retryable(status.as_u16(), code.as_deref()),
+            };
+            if !retry || attempt >= S3_MAX_ATTEMPTS {
+                return finish(outcome);
+            }
+            let exponent = i32::try_from(attempt - 1).unwrap_or(i32::MAX);
+            self.sleeper
+                .sleep(self.random.random() * 2f64.powi(exponent))
+                .await;
+            attempt += 1;
+        }
+    }
+
+    /// One signed attempt. `Err` only for a failure before anything was sent (a bad URL, the
+    /// network block), which botocore does not retry either.
+    async fn send_once(
+        &self,
+        method: reqwest::Method,
+        bucket: &str,
+        key: &str,
+        body: Option<(&[u8], &str, &BTreeMap<String, String>)>,
+    ) -> Result<Attempt, S3Failure> {
         let path = format!(
             "/{}/{}",
             utf8_percent_encode(bucket, S3_KEY),
@@ -584,13 +636,88 @@ impl SigV4S3Client {
         if let Some((b, _, _)) = body {
             builder = builder.body(b.to_vec());
         }
-        let response = builder.send().await?;
+        let response = match builder.send().await {
+            Ok(response) => response,
+            // botocore's GENERAL_CONNECTION_ERROR family: a refused or reset connection, a
+            // connect or read timeout, a TLS failure — every transport error is retried.
+            Err(e) => return Ok(Attempt::Transport(e)),
+        };
         let status = response.status();
-        if !status.is_success() {
-            return Err(format!("S3 answered {status}").into());
+        if status.is_success() {
+            return Ok(Attempt::Answered(response));
         }
-        Ok(response)
+        // The error code is in the XML body (`<Error><Code>…</Code>`); a HEAD has none, and a
+        // body that cannot be read leaves the code unknown — retried only on its status.
+        let text = response.text().await.unwrap_or_default();
+        Ok(Attempt::Refused {
+            status,
+            code: s3_error_code(&text),
+        })
     }
+}
+
+/// botocore's legacy `max_attempts` for every service (`_retry.json` `__default__`): five
+/// requests in all, the first one included.
+pub const S3_MAX_ATTEMPTS: u32 = 5;
+
+/// What one attempt produced.
+enum Attempt {
+    /// A 2xx.
+    Answered(reqwest::Response),
+    /// Nothing came back.
+    Transport(reqwest::Error),
+    /// A non-2xx, with the S3 error code when the body carried one.
+    Refused {
+        status: reqwest::StatusCode,
+        code: Option<String>,
+    },
+}
+
+fn finish(outcome: Attempt) -> Result<reqwest::Response, S3Failure> {
+    match outcome {
+        Attempt::Answered(response) => Ok(response),
+        Attempt::Transport(e) => Err(e.into()),
+        Attempt::Refused { status, code } => Err(match code {
+            Some(code) => format!("S3 answered {status} ({code})"),
+            None => format!("S3 answered {status}"),
+        }
+        .into()),
+    }
+}
+
+/// Does botocore 1.43's legacy policy for `s3` retry this answer? The status-only policies
+/// (`general_server_error` 500, `bad_gateway` 502, `service_unavailable` 503,
+/// `gateway_timeout` 504, `limit_exceeded` 509, `too_many_requests` 429) and the 400s it
+/// names by error code: the four throttling codes, `ProvisionedThroughputExceededException`,
+/// and S3's own `RequestTimeout` and `BadDigest`. Anything else (403, 404, a plain 400) is an
+/// answer, not a transient failure.
+#[must_use]
+pub fn s3_retryable(status: u16, code: Option<&str>) -> bool {
+    match status {
+        429 | 500 | 502 | 503 | 504 | 509 => true,
+        400 => matches!(
+            code,
+            Some(
+                "Throttling"
+                    | "ThrottlingException"
+                    | "ThrottledException"
+                    | "RequestThrottledException"
+                    | "ProvisionedThroughputExceededException"
+                    | "RequestTimeout"
+                    | "BadDigest"
+            )
+        ),
+        _ => false,
+    }
+}
+
+/// The `<Code>` of an S3 XML error body, as botocore's parser reads `Error.Code`.
+#[must_use]
+pub fn s3_error_code(body: &str) -> Option<String> {
+    let start = body.find("<Code>")? + "<Code>".len();
+    let len = body[start..].find("</Code>")?;
+    let code = body[start..start + len].trim();
+    (!code.is_empty()).then(|| code.to_owned())
 }
 
 #[async_trait]

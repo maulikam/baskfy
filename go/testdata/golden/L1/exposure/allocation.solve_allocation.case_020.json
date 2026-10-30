@@ -1,0 +1,123 @@
+{
+ "fn": "baskfy_core.exposure.allocation.solve_allocation",
+ "inputs": {
+  "candidates": [
+   {
+    "cluster": "pharma",
+    "liquidity": 908350285.0,
+    "price": 790.73,
+    "rank": 1,
+    "score": 69.923,
+    "symbol": "X00"
+   },
+   {
+    "cluster": "other",
+    "liquidity": 779275836.0,
+    "price": 676.15,
+    "rank": 2,
+    "score": 36.214,
+    "symbol": "X01"
+   },
+   {
+    "cluster": "it",
+    "liquidity": 806272506.0,
+    "price": 676.89,
+    "rank": 3,
+    "score": 33.637,
+    "symbol": "X02"
+   },
+   {
+    "cluster": "it",
+    "liquidity": 200718065.0,
+    "price": 2222.22,
+    "rank": 4,
+    "score": 82.015,
+    "symbol": "X03"
+   },
+   {
+    "cluster": "bank",
+    "liquidity": 790324022.0,
+    "price": 2195.7,
+    "rank": 5,
+    "score": 49.785,
+    "symbol": "X04"
+   },
+   {
+    "cluster": "other",
+    "liquidity": 956558561.0,
+    "price": 589.0,
+    "rank": 6,
+    "score": 47.752,
+    "symbol": "X05"
+   },
+   {
+    "cluster": "pharma",
+    "liquidity": 955045631.0,
+    "price": 2811.69,
+    "rank": 7,
+    "score": 45.276,
+    "symbol": "X06"
+   },
+   {
+    "cluster": "it",
+    "liquidity": 470609902.0,
+    "price": 669.18,
+    "rank": 8,
+    "score": 37.099,
+    "symbol": "X07"
+   }
+  ],
+  "cluster_cap": 30.0,
+  "half_factor": 0.5,
+  "half_sized": [
+   "X04"
+  ],
+  "max_sleeve_w": 15.0,
+  "min_sleeve_w": 6.0,
+  "sleeve_pct": 100.0
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "dataclasses.asdict(Allocation). Inputs are JSON; each function is called from them after a JSON round trip. Dates are ISO days, enums their values, IndexSignals/BookWeights/RegimeState their as_dict(), Allocation and Position/Candidate/OrderLine dataclasses.asdict, tuples lists. A raise is {raises: {type, message}}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_exposure.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "cluster_weights": {
+   "bank": 3.75,
+   "it": 30.0,
+   "other": 30.0,
+   "pharma": 30.0
+  },
+  "half_sized": [
+   "X04"
+  ],
+  "notes": [
+   "cluster cap applied: it",
+   "sleeve utilisation 93.8%"
+  ],
+  "sleeve_pct": 100.0,
+  "weights_nav": {
+   "X00": 15.0,
+   "X01": 15.0,
+   "X02": 8.499148,
+   "X03": 12.126951,
+   "X04": 3.75,
+   "X05": 15.0,
+   "X06": 15.0,
+   "X07": 9.373901
+  },
+  "weights_sleeve": {
+   "X00": 15.0,
+   "X01": 15.0,
+   "X02": 8.499148,
+   "X03": 12.126951,
+   "X04": 3.75,
+   "X05": 15.0,
+   "X06": 15.0,
+   "X07": 9.373901
+  }
+ }
+}

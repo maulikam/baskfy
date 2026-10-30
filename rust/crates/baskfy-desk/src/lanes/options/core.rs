@@ -138,6 +138,26 @@ pub const fn mode_str(mode: Mode) -> &'static str {
 /// (wave D2), re-exported here so the lane's paths stay.
 pub use baskfy_core::options::structures::{Direction, Structure};
 
+/// `Structure(text)`.
+#[must_use]
+pub fn structure_of(text: &str) -> Option<Structure> {
+    [
+        Structure::IronCondor,
+        Structure::LongOption,
+        Structure::DebitSpread,
+    ]
+    .into_iter()
+    .find(|s| s.value() == text)
+}
+
+/// `Direction(text)`.
+#[must_use]
+pub fn direction_of(text: &str) -> Option<Direction> {
+    [Direction::Up, Direction::Down]
+        .into_iter()
+        .find(|d| d.value() == text)
+}
+
 /// `OptionsConfig().hard_exit_time(sleeve)`: O1 14:30, O2 15:00, O3 14:45 (`04` §3.2, §4.5,
 /// §5.3).
 #[must_use]

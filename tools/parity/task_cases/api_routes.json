@@ -1,0 +1,189 @@
+{
+ "lane": "api_routes",
+ "note": "Wave 6 lane api_routes: baskfy.accounts.purge, baskfy.ops.resync, baskfy.overlap.catalyst_scan (DECISIONS-RS R8.ar3, R8.ar4).",
+ "cases": [
+  {
+   "name": "purge-nothing-due",
+   "task": "baskfy.accounts.purge",
+   "args": {},
+   "now": "2026-10-30T03:00:00",
+   "note": "the bed holds no account_deletion row: considered 0, both notes null"
+  },
+  {
+   "name": "purge-mixed",
+   "task": "baskfy.accounts.purge",
+   "args": [],
+   "now": "2026-10-30T03:00:00",
+   "seed_sql": "INSERT INTO app_user (public_id, email, name, password_hash, email_verified_at, deleted_at, created_at) VALUES ('rsgone000001', 'gone@example.com', 'Gone', 'x', '2026-01-01T00:00:00Z', '2026-10-20T00:00:00Z', '2026-01-01T00:00:00Z'), ('rspaid000001', 'paid@example.com', 'Paid Person', 'argon2-hash', '2026-01-02T00:00:00Z', '2026-10-20T00:00:00Z', '2026-01-01T00:00:00Z'), ('rsback000001', 'back@example.com', 'Back', NULL, NULL, NULL, '2026-01-01T00:00:00Z'), ('rswait000001', 'wait@example.com', NULL, NULL, NULL, '2026-10-28T00:00:00Z', '2026-01-01T00:00:00Z'), ('rsedge000001', 'edge@example.com', NULL, NULL, NULL, '2026-10-22T00:00:00Z', '2026-01-01T00:00:00Z'), ('rsdone000001', 'done@example.com', NULL, NULL, NULL, '2026-10-01T00:00:00Z', '2026-01-01T00:00:00Z');\nINSERT INTO payment (user_id, amount_inr, status, invoice_number, created_at) SELECT id, 500.00, 'captured', 'RS-0001', '2026-02-01T00:00:00Z' FROM app_user WHERE public_id = 'rspaid000001';\nINSERT INTO consent_record (user_id, kind, document_version, granted_at) SELECT id, 'terms', 'v1', '2026-01-01T00:00:00Z' FROM app_user WHERE public_id IN ('rspaid000001', 'rsgone000001');\nINSERT INTO refresh_token (user_id, family_id, token_hash, issued_at, expires_at) SELECT id, 'fam-' || public_id, 'hash-' || public_id, '2026-10-01T00:00:00Z', '2026-12-01T00:00:00Z' FROM app_user WHERE public_id IN ('rspaid000001', 'rsgone000001');\nINSERT INTO account_deletion (user_id, requested_at, purge_after, purged_at) SELECT id, '2026-10-20T00:00:00Z', CASE public_id WHEN 'rswait000001' THEN TIMESTAMPTZ '2026-11-04T00:00:00Z' WHEN 'rsedge000001' THEN TIMESTAMPTZ '2026-10-29T21:30:00Z' ELSE TIMESTAMPTZ '2026-10-27T00:00:00Z' END, CASE public_id WHEN 'rsdone000001' THEN TIMESTAMPTZ '2026-10-28T00:00:00Z' END FROM app_user WHERE public_id LIKE 'rs%000001';\n",
+   "note": "five pending rows: one never paid (deleted, consent and refresh token cascade), one paid (anonymised in place, its consent and refresh token deleted, the invoice kept), one reactivated (cancelled_at), one inside its window (untouched), one whose purge_after is exactly the clock's first second (<= now: purged); and one already purged (skipped)"
+  },
+  {
+   "name": "purge-one-second-early",
+   "task": "baskfy.accounts.purge",
+   "args": {},
+   "now": "2026-10-30T02:59:59",
+   "seed_sql": "INSERT INTO app_user (public_id, email, name, password_hash, email_verified_at, deleted_at, created_at) VALUES ('rsgone000001', 'gone@example.com', 'Gone', 'x', '2026-01-01T00:00:00Z', '2026-10-20T00:00:00Z', '2026-01-01T00:00:00Z'), ('rspaid000001', 'paid@example.com', 'Paid Person', 'argon2-hash', '2026-01-02T00:00:00Z', '2026-10-20T00:00:00Z', '2026-01-01T00:00:00Z'), ('rsback000001', 'back@example.com', 'Back', NULL, NULL, NULL, '2026-01-01T00:00:00Z'), ('rswait000001', 'wait@example.com', NULL, NULL, NULL, '2026-10-28T00:00:00Z', '2026-01-01T00:00:00Z'), ('rsedge000001', 'edge@example.com', NULL, NULL, NULL, '2026-10-22T00:00:00Z', '2026-01-01T00:00:00Z'), ('rsdone000001', 'done@example.com', NULL, NULL, NULL, '2026-10-01T00:00:00Z', '2026-01-01T00:00:00Z');\nINSERT INTO payment (user_id, amount_inr, status, invoice_number, created_at) SELECT id, 500.00, 'captured', 'RS-0001', '2026-02-01T00:00:00Z' FROM app_user WHERE public_id = 'rspaid000001';\nINSERT INTO consent_record (user_id, kind, document_version, granted_at) SELECT id, 'terms', 'v1', '2026-01-01T00:00:00Z' FROM app_user WHERE public_id IN ('rspaid000001', 'rsgone000001');\nINSERT INTO refresh_token (user_id, family_id, token_hash, issued_at, expires_at) SELECT id, 'fam-' || public_id, 'hash-' || public_id, '2026-10-01T00:00:00Z', '2026-12-01T00:00:00Z' FROM app_user WHERE public_id IN ('rspaid000001', 'rsgone000001');\nINSERT INTO account_deletion (user_id, requested_at, purge_after, purged_at) SELECT id, '2026-10-20T00:00:00Z', CASE public_id WHEN 'rswait000001' THEN TIMESTAMPTZ '2026-11-04T00:00:00Z' WHEN 'rsedge000001' THEN TIMESTAMPTZ '2026-10-29T21:30:00Z' ELSE TIMESTAMPTZ '2026-10-27T00:00:00Z' END, CASE public_id WHEN 'rsdone000001' THEN TIMESTAMPTZ '2026-10-28T00:00:00Z' END FROM app_user WHERE public_id LIKE 'rs%000001';\n",
+   "note": "the edge account's purge_after is 03:00:00 IST: one second before it is not due"
+  },
+  {
+   "name": "purge-bad-argument",
+   "task": "baskfy.accounts.purge",
+   "args": {
+    "limit": 1
+   },
+   "now": "2026-10-30T03:00:00",
+   "note": "the task takes no argument: CPython's TypeError"
+  },
+  {
+   "name": "resync-nothing-pending",
+   "task": "baskfy.ops.resync",
+   "args": {
+    "actor_user_id": 1,
+    "days": 1
+   },
+   "now": "2026-10-29T21:00:00",
+   "mask": {
+    "admin_action": {
+     "created_at": "stamp",
+     "detail": "uuid"
+    }
+   },
+   "note": "window 2026-10-28..2026-10-29 (after the 20:15 deadline): both days published, no thin day; no token store on the host is an unresolved note, so nothing is acted on and the empty report is recorded"
+  },
+  {
+   "name": "resync-before-deadline",
+   "task": "baskfy.ops.resync",
+   "args": [
+    1,
+    1
+   ],
+   "now": "2026-10-30T19:00:00",
+   "mask": {
+    "admin_action": {
+     "created_at": "stamp",
+     "detail": "uuid"
+    }
+   },
+   "note": "19:00 IST is before the deadline: the window ends yesterday (the two clocks), positional arguments"
+  },
+  {
+   "name": "resync-missing-runs",
+   "task": "baskfy.ops.resync",
+   "args": {
+    "actor_user_id": 1,
+    "days": 5
+   },
+   "now": "2026-10-26T21:00:00",
+   "mask": {
+    "admin_action": {
+     "created_at": "stamp",
+     "detail": "uuid"
+    }
+   },
+   "payload_mask": [
+    "/queued/0",
+    "/queued/1",
+    "/queued/2",
+    "/queued/3"
+   ],
+   "note": "window 2026-10-21..2026-10-26: 22 and 23 Oct never published, so two nightlies are queued on `default` (compared message by message in Redis) and excused from still_pending"
+  },
+  {
+   "name": "resync-thin-today",
+   "task": "baskfy.ops.resync",
+   "args": {
+    "actor_user_id": 1,
+    "days": 2
+   },
+   "now": "2026-10-30T21:00:00",
+   "mask": {
+    "admin_action": {
+     "created_at": "stamp",
+     "detail": "uuid"
+    }
+   },
+   "payload_mask": [
+    "/queued/0",
+    "/queued/1"
+   ],
+   "note": "30 Oct is thin and unpublished: the bhavcopy re-ingest finds no recorded file (failed), the nightly is still queued for the missing run, and the thin day stays pending"
+  },
+  {
+   "name": "resync-kite-token",
+   "task": "baskfy.ops.resync",
+   "args": {
+    "actor_user_id": 1,
+    "days": 2
+   },
+   "now": "2026-10-30T21:00:00",
+   "kite": true,
+   "mask": {
+    "admin_action": {
+     "created_at": "stamp",
+     "detail": "uuid"
+    }
+   },
+   "payload_mask": [
+    "/queued/0",
+    "/queued/1"
+   ],
+   "note": "a token issued at the case's moment: no kite_session finding"
+  },
+  {
+   "name": "resync-long-window",
+   "task": "baskfy.ops.resync",
+   "args": {
+    "actor_user_id": 1,
+    "days": 400
+   },
+   "now": "2026-10-30T21:00:00",
+   "mask": {
+    "admin_action": {
+     "created_at": "stamp",
+     "detail": "uuid"
+    }
+   },
+   "payload_mask": [
+    "/queued/0",
+    "/queued/1",
+    "/queued/2",
+    "/queued/3",
+    "/queued/4",
+    "/queued/5",
+    "/queued/6",
+    "/queued/7",
+    "/queued/8",
+    "/queued/9"
+   ],
+   "note": "400 days: twelve missing runs (ten queued, two deferred by MAX_RERUNS), eight inferred holidays probed through the replay (none published), the thin day"
+  },
+  {
+   "name": "resync-broker-down",
+   "task": "baskfy.ops.resync",
+   "args": {
+    "actor_user_id": 1,
+    "days": 5
+   },
+   "now": "2026-10-26T21:00:00",
+   "mask": {
+    "admin_action": {
+     "created_at": "stamp",
+     "detail": "uuid"
+    }
+   },
+   "env": {
+    "BASKFY_CELERY_BROKER_URL": "redis://127.0.0.1:18817/7"
+   },
+   "note": "the broker refuses (nothing listens on 18817): each nightly is a failed line, not a raised task, and still_pending names the two days"
+  },
+  {
+   "name": "resync-missing-argument",
+   "task": "baskfy.ops.resync",
+   "args": {
+    "actor_user_id": 1
+   },
+   "now": "2026-10-30T21:00:00",
+   "note": "CPython's TypeError for the missing `days`"
+  }
+ ]
+}

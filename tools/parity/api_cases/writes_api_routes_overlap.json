@@ -1,0 +1,292 @@
+{
+ "mode": "writes",
+ "lane": "api-routes-overlap",
+ "note": "Wave 6 lane api_routes: GET /overlap (R5.21) and PUT/DELETE /overlap/reviews (R6.29), which re-read a row through the same view. Sole tenant: user 1. Redis is each side's own index, so the read's two notes for the sidecar (catalyst_tag:wanted, candidate_review:wanted) are compared key by key.",
+ "env": {
+  "BASKFY_SOLE_USER_ID": "1"
+ },
+ "db_mask": {
+  "candidate_review_label": [
+   "created_at",
+   "updated_at"
+  ]
+ },
+ "tables": [
+  "candidate_review_label"
+ ],
+ "cases": [
+  {
+   "name": "ov-get-anon",
+   "method": "GET",
+   "path": "/api/v1/overlap"
+  },
+  {
+   "name": "ov-get-owner",
+   "method": "GET",
+   "path": "/api/v1/overlap",
+   "user": "owner",
+   "capture": {
+    "iid": "json:/data/0/instrument_id",
+    "iid2": "json:/data/1/instrument_id"
+   }
+  },
+  {
+   "name": "ov-get-all",
+   "method": "GET",
+   "path": "/api/v1/overlap?scope=all",
+   "user": "owner",
+   "capture": {
+    "tail": "json:/data/34/instrument_id"
+   }
+  },
+  {
+   "name": "ov-get-actionable",
+   "method": "GET",
+   "path": "/api/v1/overlap?scope=actionable",
+   "user": "owner"
+  },
+  {
+   "name": "ov-get-badscope",
+   "method": "GET",
+   "path": "/api/v1/overlap?scope=everything",
+   "user": "owner"
+  },
+  {
+   "name": "ov-get-emptyscope",
+   "method": "GET",
+   "path": "/api/v1/overlap?scope=",
+   "user": "owner"
+  },
+  {
+   "name": "ov-get-plain",
+   "method": "GET",
+   "path": "/api/v1/overlap",
+   "user": "plain"
+  },
+  {
+   "name": "ov-get-subscriber",
+   "method": "GET",
+   "path": "/api/v1/overlap?scope=all",
+   "user": "subscriber"
+  },
+  {
+   "name": "ov-get-slash",
+   "method": "GET",
+   "path": "/api/v1/overlap/",
+   "user": "owner"
+  },
+  {
+   "name": "ov-rev-anon",
+   "method": "PUT",
+   "path": "/api/v1/overlap/reviews",
+   "body": {
+    "instrument_id": 1,
+    "label": "skip"
+   }
+  },
+  {
+   "name": "ov-rev-plain",
+   "method": "PUT",
+   "path": "/api/v1/overlap/reviews",
+   "user": "plain",
+   "body": {
+    "instrument_id": 1,
+    "label": "skip"
+   }
+  },
+  {
+   "name": "ov-rev-badlabel",
+   "method": "PUT",
+   "path": "/api/v1/overlap/reviews",
+   "user": "owner",
+   "body": {
+    "instrument_id": 1,
+    "label": "buy"
+   }
+  },
+  {
+   "name": "ov-rev-missing",
+   "method": "PUT",
+   "path": "/api/v1/overlap/reviews",
+   "user": "owner",
+   "body": {
+    "label": "skip",
+    "note": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+   }
+  },
+  {
+   "name": "ov-rev-nobody",
+   "method": "PUT",
+   "path": "/api/v1/overlap/reviews",
+   "user": "owner"
+  },
+  {
+   "name": "ov-rev-badjson",
+   "method": "PUT",
+   "path": "/api/v1/overlap/reviews",
+   "user": "owner",
+   "raw_body": "{oops",
+   "headers": {
+    "Content-Type": "application/json"
+   }
+  },
+  {
+   "name": "ov-rev-notlisted",
+   "method": "PUT",
+   "path": "/api/v1/overlap/reviews",
+   "user": "owner",
+   "body": {
+    "instrument_id": 999999999,
+    "label": "skip"
+   }
+  },
+  {
+   "name": "ov-rev-huge",
+   "method": "PUT",
+   "path": "/api/v1/overlap/reviews",
+   "user": "owner",
+   "body": {
+    "instrument_id": 123456789012345678901234567890,
+    "label": "skip"
+   }
+  },
+  {
+   "name": "ov-rev-strid",
+   "method": "PUT",
+   "path": "/api/v1/overlap/reviews",
+   "user": "owner",
+   "raw_body": "{\"instrument_id\": \" ${iid} \", \"label\": \"look_first\", \"note\": \"  first look  \"}",
+   "headers": {
+    "Content-Type": "application/json"
+   }
+  },
+  {
+   "name": "ov-rev-update",
+   "method": "PUT",
+   "path": "/api/v1/overlap/reviews",
+   "user": "owner",
+   "body": {
+    "instrument_id": "${iid}",
+    "label": "skip",
+    "note": null
+   }
+  },
+  {
+   "name": "ov-rev-same",
+   "method": "PUT",
+   "path": "/api/v1/overlap/reviews",
+   "user": "owner",
+   "body": {
+    "instrument_id": "${iid}",
+    "label": "skip"
+   }
+  },
+  {
+   "name": "ov-rev-second",
+   "method": "PUT",
+   "path": "/api/v1/overlap/reviews",
+   "user": "owner",
+   "body": {
+    "instrument_id": "${iid2}",
+    "label": "worth_a_look",
+    "note": "   ",
+    "extra": 1
+   }
+  },
+  {
+   "name": "ov-rev-tail",
+   "method": "PUT",
+   "path": "/api/v1/overlap/reviews",
+   "user": "owner",
+   "body": {
+    "instrument_id": "${tail}",
+    "label": "look_first"
+   }
+  },
+  {
+   "name": "ov-get-labelled",
+   "method": "GET",
+   "path": "/api/v1/overlap",
+   "user": "owner"
+  },
+  {
+   "name": "ov-get-labelled-all",
+   "method": "GET",
+   "path": "/api/v1/overlap?scope=all",
+   "user": "owner"
+  },
+  {
+   "name": "ov-unrev-anon",
+   "method": "DELETE",
+   "path": "/api/v1/overlap/reviews?instrument_id=${iid}"
+  },
+  {
+   "name": "ov-unrev-noparam",
+   "method": "DELETE",
+   "path": "/api/v1/overlap/reviews",
+   "user": "owner"
+  },
+  {
+   "name": "ov-unrev-badint",
+   "method": "DELETE",
+   "path": "/api/v1/overlap/reviews?instrument_id=abc",
+   "user": "owner"
+  },
+  {
+   "name": "ov-unrev-plain",
+   "method": "DELETE",
+   "path": "/api/v1/overlap/reviews?instrument_id=${iid}",
+   "user": "plain"
+  },
+  {
+   "name": "ov-unrev-notlisted",
+   "method": "DELETE",
+   "path": "/api/v1/overlap/reviews?instrument_id=999999999",
+   "user": "owner"
+  },
+  {
+   "name": "ov-unrev-ok",
+   "method": "DELETE",
+   "path": "/api/v1/overlap/reviews?instrument_id=${iid}",
+   "user": "owner"
+  },
+  {
+   "name": "ov-unrev-again",
+   "method": "DELETE",
+   "path": "/api/v1/overlap/reviews?instrument_id=${iid}",
+   "user": "owner"
+  },
+  {
+   "name": "ov-unrev-spaced",
+   "method": "DELETE",
+   "path": "/api/v1/overlap/reviews?instrument_id=%20${iid2}%20",
+   "user": "owner"
+  },
+  {
+   "name": "ov-rev-post",
+   "method": "POST",
+   "path": "/api/v1/overlap/reviews",
+   "user": "owner",
+   "body": {
+    "instrument_id": 1,
+    "label": "skip"
+   }
+  },
+  {
+   "name": "ov-reviews-export",
+   "method": "GET",
+   "path": "/api/v1/overlap/reviews/export",
+   "user": "owner",
+   "mask": [
+    "labelled_at"
+   ],
+   "note": "labelled_at is the row's updated_at, stamped by Postgres now()"
+  },
+  {
+   "name": "ov-get-end",
+   "method": "GET",
+   "path": "/api/v1/overlap?scope=all",
+   "user": "owner"
+  }
+ ]
+}

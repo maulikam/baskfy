@@ -283,6 +283,7 @@ dependencies = [
  "baskfy-providers",
  "chrono",
  "hmac",
+ "num-bigint",
  "percent-encoding",
  "rand 0.9.5",
  "regex",
@@ -393,6 +394,30 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
+]
+
+[[package]]
+name = "baskfy-worker"
+version = "0.1.0"
+dependencies = [
+ "baskfy-api",
+ "baskfy-core",
+ "baskfy-db",
+ "baskfy-providers",
+ "chrono",
+ "csv",
+ "hmac",
+ "polars",
+ "redis",
+ "regex",
+ "reqwest",
+ "rust_decimal",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "thiserror",
+ "tokio",
 ]
 
 [[package]]

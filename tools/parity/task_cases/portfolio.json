@@ -1,0 +1,164 @@
+{
+  "lane": "portfolio",
+  "note": "Lane portfolio (DECISIONS-RS R8.pf1-R8.pf4): baskfy.portfolio.eod_nav at every clock that matters (inside a session, before it, after the close, a Saturday, an explicit past date) and its refusals; baskfy.pipeline.capture_kite_trades through each of read_kite_trades_today's reasons and the live read-only GET /trades on the replay upstream.",
+  "cases": [
+    {
+      "name": "nav-after-close-today",
+      "task": "baskfy.portfolio.eod_nav",
+      "args": {},
+      "now": "2026-10-29T19:30:00",
+      "note": "Beat's 19:30 default: today in IST, a day with bars; both users' rows upserted over the bed's own 2026-10-29 rows, the since-grouped marks already stamped"
+    },
+    {
+      "name": "nav-explicit-past-date",
+      "task": "baskfy.portfolio.eod_nav",
+      "args": {"as_of": "2026-10-15"},
+      "now": "2026-10-30T13:15:00",
+      "note": "a re-run of an old date during a session: the portfolios created later still get a row (a capital portfolio valued at what it held), prices on or before the date"
+    },
+    {
+      "name": "nav-inside-session-today",
+      "task": "baskfy.portfolio.eod_nav",
+      "args": [],
+      "now": "2026-10-30T13:15:00",
+      "note": "Friday 13:15: no bar for today yet, so the job refuses to claim today (no rows)"
+    },
+    {
+      "name": "nav-before-session-today",
+      "task": "baskfy.portfolio.eod_nav",
+      "args": {"as_of": ""},
+      "now": "2026-10-30T08:00:00",
+      "note": "an empty string is Python-falsy: today, which has no bar"
+    },
+    {
+      "name": "nav-saturday",
+      "task": "baskfy.portfolio.eod_nav",
+      "args": {},
+      "now": "2026-10-31T19:30:00",
+      "note": "a non-trading day: no bars, no rows"
+    },
+    {
+      "name": "nav-zero-is-today",
+      "task": "baskfy.portfolio.eod_nav",
+      "args": [0],
+      "now": "2026-10-29T20:00:00",
+      "note": "0 is Python-falsy: today"
+    },
+    {
+      "name": "nav-int-date-refused",
+      "task": "baskfy.portfolio.eod_nav",
+      "args": [20261029],
+      "now": "2026-10-29T20:00:00",
+      "note": "fromisoformat's TypeError"
+    },
+    {
+      "name": "nav-bad-date-refused",
+      "task": "baskfy.portfolio.eod_nav",
+      "args": {"as_of": "2026-13-01"},
+      "now": "2026-10-29T20:00:00"
+    },
+    {
+      "name": "nav-bad-keyword",
+      "task": "baskfy.portfolio.eod_nav",
+      "args": {"day": "2026-10-29"},
+      "now": "2026-10-29T20:00:00"
+    },
+    {
+      "name": "nav-flows-recon-and-a-lens",
+      "task": "baskfy.portfolio.eod_nav",
+      "args": {"as_of": "2026-10-29"},
+      "now": "2026-10-29T20:00:00",
+      "seed_sql": "INSERT INTO portfolio_cash_flow (broker_account_id, portfolio_id, kind, amount, occurred_on, instrument_id, quantity, note, created_at) VALUES (1, NULL, 'EXTERNAL_DEPOSIT', 25000.00, '2026-10-20', NULL, NULL, 'seed', '2026-10-20T10:00:00Z'), (1, NULL, 'EXTERNAL_DEPOSIT', 1234.56, '2026-10-29', NULL, NULL, 'seed', '2026-10-29T10:00:00Z'), (1, NULL, 'EXTERNAL_WITHDRAWAL', 100.10, '2026-10-29', NULL, NULL, 'seed', '2026-10-29T10:00:00Z'), (1, 4, 'ASSIGN', 10000.00, '2026-10-29', NULL, NULL, 'seed', '2026-10-29T10:00:00Z'), (1, 4, 'RELEASE', 333.33, '2026-10-29', NULL, NULL, 'seed', '2026-10-29T10:00:00Z'), (1, 4, 'BUY', 2451.38, '2026-10-29', 2448, 5, 'seed', '2026-10-29T10:00:00Z'), (1, 5, 'ASSIGN', 500.00, '2026-10-28', NULL, NULL, 'seed', '2026-10-28T10:00:00Z'), (1, 5, 'DIVIDEND', 12.35, '2026-10-29', NULL, NULL, 'seed', '2026-10-29T10:00:00Z'), (1, NULL, 'EXTERNAL_DEPOSIT', 999.00, '2026-11-02', NULL, NULL, 'seed', '2026-11-02T10:00:00Z'); INSERT INTO reconciliation_item (user_id, instrument_id, broker_account_id, quantity, reason, state, detected_on) VALUES (1, 11355, 1, 100, 'UNALLOCATED_HOLDING', 'OPEN', '2026-10-28'), (1, 12753, 1, 5, 'UNALLOCATED_HOLDING', 'OPEN', '2026-10-30'); UPDATE portfolio SET kind = 'MONITORING' WHERE id = 8;",
+      "note": "cash flows of every kind on and before the date (and one after it), an open item on LIQUIDCASE (frozen) and one detected after the date (ignored), and a capital portfolio flipped to a lens (its row pruned)"
+    },
+    {
+      "name": "nav-holding-split-across-portfolios",
+      "task": "baskfy.portfolio.eod_nav",
+      "args": {"as_of": "2026-10-29"},
+      "now": "2026-10-29T20:00:00",
+      "seed_sql": "INSERT INTO portfolio_holding (portfolio_id, instrument_id, quantity, avg_price, added_on, broker_account_id, portfolio_kind, history_source) VALUES (4, 2448, 50.0000, 490.0000, '2026-10-20', 1, 'CAPITAL', 'NONE');",
+      "note": "one instrument in two capital portfolios: the job loads one Holding per row, so allocation_ledger refuses it as over-allocated (Python's own behaviour, reproduced) and nothing is written"
+    },
+    {
+      "name": "nav-cash-into-a-lens-refused",
+      "task": "baskfy.portfolio.eod_nav",
+      "args": {"as_of": "2026-10-29"},
+      "now": "2026-10-29T20:00:00",
+      "seed_sql": "UPDATE portfolio SET kind = 'MONITORING' WHERE id = 8; INSERT INTO portfolio_cash_flow (broker_account_id, portfolio_id, kind, amount, occurred_on, note, created_at) VALUES (1, 8, 'ASSIGN', 10.00, '2026-10-29', 'seed', '2026-10-29T10:00:00Z');",
+      "note": "_refuse_monitoring_flows: ValueError, the transaction rolled back"
+    },
+    {
+      "name": "capture-dry-run",
+      "task": "baskfy.pipeline.capture_kite_trades",
+      "args": [],
+      "now": "2026-10-29T20:15:00",
+      "note": "DRY_RUN=true (the harness default): no broker read"
+    },
+    {
+      "name": "capture-not-a-session",
+      "task": "baskfy.pipeline.capture_kite_trades",
+      "args": {},
+      "now": "2026-10-31T20:15:00",
+      "note": "a Saturday the calendar names closed: silent"
+    },
+    {
+      "name": "capture-day-not-in-calendar",
+      "task": "baskfy.pipeline.capture_kite_trades",
+      "args": {},
+      "now": "2027-06-15T20:15:00",
+      "env": {"DRY_RUN": "false"},
+      "note": "a day the calendar does not carry is a session; no app key configured"
+    },
+    {
+      "name": "capture-no-session-stored",
+      "task": "baskfy.pipeline.capture_kite_trades",
+      "args": {},
+      "now": "2026-10-29T20:15:00",
+      "env": {"DRY_RUN": "false", "BASKFY_KITE_API_KEY": "replay-api-key", "BASKFY_KITE_TOKEN_PATH": "/nonexistent-task-diff/broker-token.enc"},
+      "note": "a key but no stored token"
+    },
+    {
+      "name": "capture-live-read-after-close",
+      "task": "baskfy.pipeline.capture_kite_trades",
+      "args": {},
+      "now": "2026-10-29T20:15:00",
+      "bundle": "session",
+      "kite": true,
+      "env": {"DRY_RUN": "false"},
+      "note": "the read-only GET /trades on the replay upstream (empty, as Kite's is after its flush); the account exists; apply_trade_history re-dates the holdings from the bed's 10k broker_trade rows"
+    },
+    {
+      "name": "capture-live-read-inside-session",
+      "task": "baskfy.pipeline.capture_kite_trades",
+      "args": {},
+      "now": "2026-10-29T13:15:00",
+      "bundle": "session",
+      "kite": true,
+      "env": {"DRY_RUN": "false"},
+      "seed_sql": "UPDATE portfolio_holding SET history_source = 'NONE', first_bought_on = NULL WHERE portfolio_id = 3;",
+      "note": "no time guard: a 13:15 run reads too; the pile's dates reset first so the replay re-dates them"
+    },
+    {
+      "name": "capture-no-sole-tenant",
+      "task": "baskfy.pipeline.capture_kite_trades",
+      "args": {},
+      "now": "2026-10-29T20:15:00",
+      "env": {"BASKFY_SOLE_USER_ID": ""},
+      "note": "no BASKFY_SOLE_USER_ID and no seeded e2e account: the pipeline-degraded Problem, raised before any read"
+    },
+    {
+      "name": "capture-sole-tenant-not-a-number",
+      "task": "baskfy.pipeline.capture_kite_trades",
+      "args": {},
+      "now": "2026-10-29T20:15:00",
+      "env": {"BASKFY_SOLE_USER_ID": "one"},
+      "note": "a non-number is 'unset' (with Python's warning) and falls to the e2e lookup"
+    },
+    {
+      "name": "capture-unexpected-argument",
+      "task": "baskfy.pipeline.capture_kite_trades",
+      "args": ["2026-10-29"],
+      "now": "2026-10-29T20:15:00"
+    }
+  ]
+}

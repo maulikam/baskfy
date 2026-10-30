@@ -1,0 +1,151 @@
+{
+ "fn": "baskfy_core.exposure.allocation.solve_allocation",
+ "inputs": {
+  "candidates": [
+   {
+    "cluster": "",
+    "liquidity": 333184683.0,
+    "price": 543.78,
+    "rank": 1,
+    "score": 48.325,
+    "symbol": "X00"
+   },
+   {
+    "cluster": "auto",
+    "liquidity": 463697380.0,
+    "price": 2915.26,
+    "rank": 2,
+    "score": 80.282,
+    "symbol": "X01"
+   },
+   {
+    "cluster": "it",
+    "liquidity": 170833656.0,
+    "price": 263.91,
+    "rank": 3,
+    "score": 74.592,
+    "symbol": "X02"
+   },
+   {
+    "cluster": "auto",
+    "liquidity": 806695480.0,
+    "price": 461.94,
+    "rank": 4,
+    "score": 13.577,
+    "symbol": "X03"
+   },
+   {
+    "cluster": "auto",
+    "liquidity": 657611024.0,
+    "price": 2481.27,
+    "rank": 5,
+    "score": 15.471,
+    "symbol": "X04"
+   },
+   {
+    "cluster": "it",
+    "liquidity": 22375278.0,
+    "price": 1650.49,
+    "rank": 6,
+    "score": 35.69,
+    "symbol": "X05"
+   },
+   {
+    "cluster": "bank",
+    "liquidity": 527054466.0,
+    "price": 2181.85,
+    "rank": 7,
+    "score": 80.136,
+    "symbol": "X06"
+   },
+   {
+    "cluster": "it",
+    "liquidity": 826329097.0,
+    "price": 1307.09,
+    "rank": 8,
+    "score": 93.429,
+    "symbol": "X07"
+   },
+   {
+    "cluster": "pharma",
+    "liquidity": 501660758.0,
+    "price": 762.99,
+    "rank": 9,
+    "score": 21.893,
+    "symbol": "X08"
+   },
+   {
+    "cluster": "other",
+    "liquidity": 419593540.0,
+    "price": 984.71,
+    "rank": 10,
+    "score": 76.604,
+    "symbol": "X09"
+   }
+  ],
+  "cluster_cap": 30.0,
+  "half_factor": 0.5,
+  "half_sized": [
+   "X00"
+  ],
+  "max_sleeve_w": 15.0,
+  "min_sleeve_w": 6.0,
+  "sleeve_pct": 100.0
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "dataclasses.asdict(Allocation). Inputs are JSON; each function is called from them after a JSON round trip. Dates are ISO days, enums their values, IndexSignals/BookWeights/RegimeState their as_dict(), Allocation and Position/Candidate/OrderLine dataclasses.asdict, tuples lists. A raise is {raises: {type, message}}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_exposure.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "cluster_weights": {
+   "auto": 27.0,
+   "bank": 15.0,
+   "it": 30.000012,
+   "other": 18.75,
+   "pharma": 6.0
+  },
+  "half_sized": [
+   "X00"
+  ],
+  "notes": [
+   "cluster cap applied: it",
+   "cluster cap applied: it",
+   "cluster cap applied: it",
+   "cluster cap applied: it",
+   "cluster cap applied: it",
+   "cluster cap applied: it",
+   "cluster cap applied: it",
+   "cluster cap applied: it",
+   "sleeve utilisation 96.8%"
+  ],
+  "sleeve_pct": 100.0,
+  "weights_nav": {
+   "X00": 3.75,
+   "X01": 15.0,
+   "X02": 12.000006,
+   "X03": 6.0,
+   "X04": 6.0,
+   "X05": 6.0,
+   "X06": 15.0,
+   "X07": 12.000006,
+   "X08": 6.0,
+   "X09": 15.0
+  },
+  "weights_sleeve": {
+   "X00": 3.75,
+   "X01": 15.0,
+   "X02": 12.000006,
+   "X03": 6.0,
+   "X04": 6.0,
+   "X05": 6.0,
+   "X06": 15.0,
+   "X07": 12.000006,
+   "X08": 6.0,
+   "X09": 15.0
+  }
+ }
+}

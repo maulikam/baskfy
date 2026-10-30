@@ -201,18 +201,27 @@ pub async fn get_discover_preferences(
 /// The watchlist routes, relative to `/api/v1`.
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/watchlist/{slug}", super::common::write_only())
+        // `explore.remove_watchlist` (wave 6): Starlette tries it before this router's routes, so a
+        // DELETE of either static path below is that route with the segment as the slug.
+        .route(
+            "/watchlist/{slug}",
+            delete(super::explore::remove_watchlist),
+        )
         .route(
             "/watchlist/instruments/{symbol}",
             delete(writes::remove_instrument_watch),
         )
         .route(
             "/watchlist/instruments",
-            get(list_instrument_watchlist).post(writes::add_instrument_watch),
+            get(list_instrument_watchlist)
+                .post(writes::add_instrument_watch)
+                .delete(super::explore::remove_watchlist_instruments),
         )
         .route(
             "/watchlist/discover-preferences",
-            get(get_discover_preferences).put(writes::put_discover_preferences),
+            get(get_discover_preferences)
+                .put(writes::put_discover_preferences)
+                .delete(super::explore::remove_watchlist_discover_preferences),
         )
 }
 

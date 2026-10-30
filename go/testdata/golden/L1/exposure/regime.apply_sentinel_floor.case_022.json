@@ -1,0 +1,21 @@
+{
+ "fn": "baskfy_core.exposure.regime.apply_sentinel_floor",
+ "inputs": {
+  "sentinel": null,
+  "tier": "R4"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "[tier, codes]. Inputs are JSON; each function is called from them after a JSON round trip. Dates are ISO days, enums their values, IndexSignals/BookWeights/RegimeState their as_dict(), Allocation and Position/Candidate/OrderLine dataclasses.asdict, tuples lists. A raise is {raises: {type, message}}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_exposure.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": [
+  "R4",
+  [
+   "SENTINEL_UNKNOWN"
+  ]
+ ]
+}

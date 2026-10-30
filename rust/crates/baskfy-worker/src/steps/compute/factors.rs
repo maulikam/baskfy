@@ -543,7 +543,9 @@ pub(crate) enum Kind {
 
 /// `_WRITABLE_COLUMNS`, from the table itself (the ORM model is the migration's), in column
 /// order, minus the three masks.
-pub(crate) async fn writable_columns(conn: &mut PgConnection) -> Result<Vec<(String, Kind)>, WorkerError> {
+pub(crate) async fn writable_columns(
+    conn: &mut PgConnection,
+) -> Result<Vec<(String, Kind)>, WorkerError> {
     let rows: Vec<(String, String)> = sqlx::query_as(
         "SELECT a.attname::text, format_type(a.atttypid, a.atttypmod) FROM pg_attribute a \
          WHERE a.attrelid = 'factor_daily'::regclass AND a.attnum > 0 AND NOT a.attisdropped \

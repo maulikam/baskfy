@@ -1,0 +1,39 @@
+{
+ "fn": "baskfy_core.options.backtest.tier2_quote",
+ "inputs": {
+  "kind": "PE",
+  "rate": 0.065,
+  "rates": {
+   "auto_squareoff_inr": "50",
+   "brokerage_per_order_inr": "20",
+   "exchange_txn_pct": "0.03553",
+   "gst_pct": "18",
+   "ipft_per_crore_inr": "0.01",
+   "review_after_days": 90,
+   "reviewed_on": "2026-09-22",
+   "sebi_per_crore_inr": "10",
+   "stamp_buy_pct": "0.003",
+   "stt_exercise_intrinsic_pct": "0.15",
+   "stt_sell_premium_pct": "0.15",
+   "synthetic_half_spread_min_inr": "0.10",
+   "synthetic_half_spread_pct": "1.5"
+  },
+  "spot": "25000",
+  "strike": "23000",
+  "vix_close": "15",
+  "years": 0.005479452054794521
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "Decimals are strings; enums are their values; datetimes carry +05:30. Config is OptionsConfig() defaults, written into the inputs. Regenerate with `uv run python ../tools/parity/golden_options.py` from decile-blueprint; packages/core/tests/test_options_goldens.py recomputes every case from these inputs.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "ask": "0.100000000001886707044329864",
+  "bid": "0",
+  "model": "0.000000000001886707044329864"
+ }
+}

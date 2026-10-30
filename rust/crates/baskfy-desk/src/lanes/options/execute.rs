@@ -546,10 +546,16 @@ pub async fn execute_exit(
         store
             .close_position(plan.session_id, exit_plan_id, closed_at, reason)
             .await?;
-        applied =
-            super::ledger::after_close(store, plan.session_id, plan.sleeve, reason, closed_at, mode)
-                .await
-                .map_err(|e| ExecError::Other(e.py_text()))?;
+        applied = super::ledger::after_close(
+            store,
+            plan.session_id,
+            plan.sleeve,
+            reason,
+            closed_at,
+            mode,
+        )
+        .await
+        .map_err(|e| ExecError::Other(e.py_text()))?;
     }
     let mut detail = PyDict::new();
     detail.insert("reason", PyValue::Str(reason.to_owned()));

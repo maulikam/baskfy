@@ -1,0 +1,144 @@
+{
+ "fn": "baskfy_core.options.executor.run_exit",
+ "inputs": {
+  "books": {
+   "LONG_CALL": {
+    "ask": "10.20",
+    "bid": "10.00"
+   },
+   "LONG_PUT": {
+    "ask": "8.55",
+    "bid": "8.40"
+   },
+   "SHORT_CALL": {
+    "ask": "20.30",
+    "bid": "20.05"
+   },
+   "SHORT_PUT": {
+    "ask": "19.10",
+    "bid": "18.90"
+   }
+  },
+  "config": {
+   "exit_final_marketable": true,
+   "feed_grace_seconds": 60,
+   "feed_watch_from": "14:00:00",
+   "fill_wait_seconds": 20,
+   "latency_ticks": 1,
+   "limit_improve_ticks": 1,
+   "plan_ttl_minutes": 30
+  },
+  "position": {
+   "LONG_CALL": 65,
+   "LONG_PUT": 65,
+   "SHORT_CALL": 65,
+   "SHORT_PUT": 65
+  },
+  "quantity": 65,
+  "script": [
+   30,
+   35
+  ],
+  "sleeve": "O1M",
+  "tick": "0.05"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "Decimals are strings; enums are their values; datetimes carry +05:30. Config is OptionsConfig() defaults, written into the inputs. Regenerate with `uv run python ../tools/parity/golden_options.py` from decile-blueprint; packages/core/tests/test_options_goldens.py recomputes every case from these inputs.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "events": [
+   {
+    "attempt": 1,
+    "closing": true,
+    "filled": 30,
+    "marketable": false,
+    "price": "20.35",
+    "requested": 65,
+    "role": "SHORT_CALL",
+    "side": "BUY"
+   },
+   {
+    "attempt": 2,
+    "closing": true,
+    "filled": 35,
+    "marketable": false,
+    "price": "20.40",
+    "requested": 35,
+    "role": "SHORT_CALL",
+    "side": "BUY"
+   },
+   {
+    "attempt": 1,
+    "closing": true,
+    "filled": 65,
+    "marketable": false,
+    "price": "19.15",
+    "requested": 65,
+    "role": "SHORT_PUT",
+    "side": "BUY"
+   },
+   {
+    "attempt": 1,
+    "closing": true,
+    "filled": 65,
+    "marketable": false,
+    "price": "9.95",
+    "requested": 65,
+    "role": "LONG_CALL",
+    "side": "SELL"
+   },
+   {
+    "attempt": 1,
+    "closing": true,
+    "filled": 65,
+    "marketable": false,
+    "price": "8.35",
+    "requested": 65,
+    "role": "LONG_PUT",
+    "side": "SELL"
+   }
+  ],
+  "fills": {
+   "LONG_CALL": [
+    {
+     "avg_price": "9.95",
+     "quantity": 65
+    }
+   ],
+   "LONG_PUT": [
+    {
+     "avg_price": "8.35",
+     "quantity": 65
+    }
+   ],
+   "SHORT_CALL": [
+    {
+     "avg_price": "20.35",
+     "quantity": 30
+    },
+    {
+     "avg_price": "20.40",
+     "quantity": 35
+    }
+   ],
+   "SHORT_PUT": [
+    {
+     "avg_price": "19.15",
+     "quantity": 65
+    }
+   ]
+  },
+  "outcome": "FLAT",
+  "position": {
+   "LONG_CALL": 0,
+   "LONG_PUT": 0,
+   "SHORT_CALL": 0,
+   "SHORT_PUT": 0
+  }
+ }
+}

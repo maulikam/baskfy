@@ -1,0 +1,64 @@
+{
+ "fn": "baskfy_core.options.backtest.run",
+ "inputs": {
+  "min_sessions": 20,
+  "outcomes": [
+   {
+    "closed_reason": null,
+    "mae_points": null,
+    "mfe_points": null,
+    "net_pnl_inr": "0.00",
+    "r_multiple": "0.00",
+    "skip_reason": null,
+    "trade_date": "2026-02-17",
+    "traded": true,
+    "trigger_time": null
+   },
+   {
+    "closed_reason": null,
+    "mae_points": null,
+    "mfe_points": null,
+    "net_pnl_inr": "0.00",
+    "r_multiple": "0.00",
+    "skip_reason": null,
+    "trade_date": "2026-02-17",
+    "traded": true,
+    "trigger_time": null
+   }
+  ],
+  "sleeve": "O1W",
+  "tier": "3"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "Decimals are strings; enums are their values; datetimes carry +05:30. Config is OptionsConfig() defaults, written into the inputs. Regenerate with `uv run python ../tools/parity/golden_options.py` from decile-blueprint; packages/core/tests/test_options_goldens.py recomputes every case from these inputs.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "by_year": [
+   [
+    2026,
+    2,
+    2
+   ]
+  ],
+  "caveats": [
+   "Observed sample: 2 sessions.",
+   "Insufficient sample: 2 of 20 observed sessions."
+  ],
+  "date_from": "2026-02-17",
+  "date_to": "2026-02-17",
+  "expectancy_r": "0.00",
+  "max_drawdown_r": "0",
+  "net_pnl_inr": "0",
+  "sessions": 2,
+  "skipped_by_reason": [],
+  "sleeve": "O1W",
+  "tier": "3",
+  "traded": 2,
+  "win_rate": "0"
+ }
+}

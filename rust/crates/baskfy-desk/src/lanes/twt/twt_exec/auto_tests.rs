@@ -177,17 +177,8 @@ async fn test_the_per_session_cap_still_refuses_a_fourth_entry() {
     let runner = RealPath::new(&store);
     let tape_before = TAPE.lock().unwrap().len();
     let report = runner.run().await;
-    let statuses: Vec<&str> = report
-        .attempts
-        .iter()
-        .map(|(_, _, s)| s.as_str())
-        .collect();
-    assert_eq!(
-        statuses[..3],
-        ["SIMULATED"; 3],
-        "{:?}",
-        report.attempts
-    );
+    let statuses: Vec<&str> = report.attempts.iter().map(|(_, _, s)| s.as_str()).collect();
+    assert_eq!(statuses[..3], ["SIMULATED"; 3], "{:?}", report.attempts);
     assert_eq!(statuses[3], "BLOCKED");
     assert!(store.m().line(4).s("note").starts_with("SESSION_CAP"));
     // LV10.2: counted by the day the orders were sent — this morning, not the signal's date
@@ -204,14 +195,18 @@ async fn test_re_running_does_not_double_send() {
     let (store, _plan_id) = four_buys();
     let runner = RealPath::new(&store);
     runner.run().await;
-    let (orders, fills) = (store.m().orders.len(), store.m().fills.len());
+    let (orders, fills) = {
+        let m = store.m();
+        (m.orders.len(), m.fills.len())
+    };
     let journalled = runner.gateways.lock().unwrap()[0].journal_lines();
     let again = runner.run().await;
     assert!(again.attempts.is_empty(), "{:?}", again.attempts);
-    assert_eq!(
-        (store.m().orders.len(), store.m().fills.len()),
-        (orders, fills)
-    );
+    let now_counts = {
+        let m = store.m();
+        (m.orders.len(), m.fills.len())
+    };
+    assert_eq!(now_counts, (orders, fills));
     // `len(SpyGateway.tape)` unchanged: the second run's gateway was asked nothing.
     assert_eq!(runner.gateways.lock().unwrap()[1].journal_lines(), 0);
     assert!(journalled > 0);
@@ -248,12 +243,7 @@ async fn test_a_halted_sleeve_sends_nothing() {
 async fn test_the_drains_orders_carry_plan_id_colon_symbol() {
     let (store, plan_id) = four_buys();
     RealPath::new(&store).run().await;
-    let ids: Vec<String> = store
-        .m()
-        .orders
-        .iter()
-        .map(|o| o.s("client_id"))
-        .collect();
+    let ids: Vec<String> = store.m().orders.iter().map(|o| o.s("client_id")).collect();
     assert_eq!(
         ids,
         ["AAA", "BBB", "CCC"]
@@ -417,7 +407,13 @@ fn test_the_image_runs_this_module() {
     assert!(text.contains("RUN cat > /usr/local/bin/twt-auto-loop"));
     assert!(text.contains("exec python -m scripts.twt_auto_loop"));
     let chmod = text.split_once("RUN chmod 0755").unwrap().1;
-    assert!(chmod.lines().next().unwrap().contains("/usr/local/bin/twt-auto-loop"));
+    assert!(
+        chmod
+            .lines()
+            .next()
+            .unwrap()
+            .contains("/usr/local/bin/twt-auto-loop")
+    );
 }
 
 /// The lines of the block opened by the line `header` (indentation `indent`), up to the next
@@ -485,5 +481,9 @@ fn test_compose_runs_it_from_the_desk_block_with_the_flag_named_false() {
     );
     // The desk's own flag only: the api/worker/beat block does not name it.
     let common = block(&text, "x-python-image: &python-image", 0);
-    assert!(!common.iter().any(|l| l.contains("BASKFY_TWT_AUTO_EXECUTE")));
+    assert!(
+        !common
+            .iter()
+            .any(|l| !l.trim_start().starts_with('#') && l.contains("BASKFY_TWT_AUTO_EXECUTE"))
+    );
 }

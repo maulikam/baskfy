@@ -523,6 +523,8 @@ pub struct PgVbtStore {
     pub broker_account_id: Option<i64>,
     /// `_lock_depth > 0` with a transaction this store opened (R8.VB1).
     lock_opened: bool,
+    /// `_lock_depth`: open `lock_session_for_update` blocks; only the outermost commits.
+    lock_depth: u32,
 }
 
 impl std::fmt::Debug for PgVbtStore {
@@ -544,6 +546,7 @@ impl PgVbtStore {
             schema: schema.to_owned(),
             broker_account_id,
             lock_opened: false,
+            lock_depth: 0,
         }
     }
 
@@ -1251,17 +1254,26 @@ impl VbtStore for PgVbtStore {
     }
 
     async fn lock_session_for_update(&mut self, day: NaiveDate) -> StoreResult<()> {
+        // NOT EXISTS first: a bare ON CONFLICT waits on a row another confirm's open
+        // transaction has updated (R8.TD1/R8.VB1).
+        let table = self.t("vb_session");
         let sql = format!(
-            "INSERT INTO {} (user_id, session_date) VALUES (?, ?) \
-             ON CONFLICT (user_id, session_date) DO NOTHING",
-            self.t("vb_session")
+            "INSERT INTO {table} (user_id, session_date) SELECT ?, ? \
+             WHERE NOT EXISTS (SELECT 1 FROM {table} WHERE user_id = ? AND session_date = ?) \
+             ON CONFLICT (user_id, session_date) DO NOTHING"
         );
         let params = [Param::Int(self.user_id), Param::Date(day)];
-        self.conn.execute(&sql, &params).await?;
+        let insert = [
+            Param::Int(self.user_id),
+            Param::Date(day),
+            Param::Int(self.user_id),
+            Param::Date(day),
+        ];
+        self.conn.execute(&sql, &insert).await?;
         if !self.schema.is_empty() {
             // R8.VB1: the outermost block opens the transaction the locks are held by, and a
             // held lock is refused (409) rather than waited on.
-            let opened = !self.lock_opened;
+            let opened = self.lock_depth == 0 && !self.lock_opened;
             if opened {
                 self.conn.execute("BEGIN", &[]).await?;
             }
@@ -1291,11 +1303,16 @@ impl VbtStore for PgVbtStore {
                 Err(e) => return Err(e.into()),
             }
         }
+        self.lock_depth += 1;
         Ok(())
     }
 
     async fn unlock_session(&mut self) -> StoreResult<()> {
-        if self.lock_opened {
+        if self.lock_depth == 0 {
+            return Ok(());
+        }
+        self.lock_depth -= 1;
+        if self.lock_depth == 0 && self.lock_opened {
             self.lock_opened = false;
             self.conn.execute("COMMIT", &[]).await?;
         }

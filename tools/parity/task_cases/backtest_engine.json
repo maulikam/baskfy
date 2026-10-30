@@ -178,6 +178,45 @@
    "note": "neither a saved screen nor an inline definition: BacktestError"
   },
   {
+   "name": "done-delisted-holding",
+   "task": "baskfy.backtest.run",
+   "args": [
+    "bt0000000000000000000011",
+    false
+   ],
+   "now": "2026-10-30T10:00:00",
+   "seed_sql": "UPDATE instrument SET delisted_on = DATE '2026-10-12' WHERE id % 2 = 0; INSERT INTO backtest (public_id, user_id, screen_id, config, status, created_at) VALUES ('bt0000000000000000000011', 1, 10, '{\"screen_public_id\":\"exmpl0000002\",\"screen_definition\":null,\"start\":\"2026-09-01\",\"end\":\"2026-10-28\",\"initial_capital\":\"1000000\",\"rebalance\":{\"frequency\":\"weekly\",\"day\":\"last_trading_day\"},\"selection\":{\"top_n\":10,\"hold_buffer\":5},\"weighting\":\"equal\",\"position_limits\":{\"max_weight\":\"0.10\",\"min_weight\":\"0.01\"},\"costs\":{\"brokerage_bps\":\"3\",\"stt_bps\":\"10\",\"slippage_bps\":\"15\",\"impact_model\":\"fixed\"},\"cash_policy\":\"hold_cash\",\"benchmark\":\"nifty-500\",\"risk_overlay\":{\"enabled\":false,\"rule\":\"index_above_200dma\"},\"dividends\":\"ignore\",\"risk_free_rate\":\"0\",\"risk_free_curve\":[]}'::jsonb, 'queued', TIMESTAMPTZ '2026-10-30 04:00:00+00');",
+   "env": {
+    "BASKFY_INVOICE_LOCAL_DIR": "{archive}"
+   },
+   "mask": {
+    "backtest": {
+     "started_at": "stamp",
+     "finished_at": "stamp"
+    }
+   },
+   "note": "every even-id instrument delisted on 2026-10-12, mid-window: held names are liquidated at their last close (reason delist, the delistings metric), and later screens still pick them; no fragility"
+  },
+  {
+   "name": "failed-invalid-inline-definition",
+   "task": "baskfy.backtest.run",
+   "args": {
+    "public_id": "bt0000000000000000000012"
+   },
+   "now": "2026-10-30T10:00:00",
+   "seed_sql": "INSERT INTO backtest (public_id, user_id, screen_id, config, status, created_at) VALUES ('bt0000000000000000000012', 1, NULL, '{\"screen_public_id\":null,\"screen_definition\":{\"index\":\"nifty-500\",\"top_n\":5,\"sort_by\":\"nonsense\",\"circuits\":{\"m1\":1.5},\"custom_filters\":[{\"op\":\"~\",\"left\":\"ma_50\",\"right\":\"ma_200\",\"enabled\":true}]},\"start\":\"2026-09-01\",\"end\":\"2026-10-28\",\"initial_capital\":\"1000000\",\"rebalance\":{\"frequency\":\"weekly\",\"day\":\"last_trading_day\"},\"selection\":{\"top_n\":10,\"hold_buffer\":5},\"weighting\":\"equal\",\"position_limits\":{\"max_weight\":\"0.10\",\"min_weight\":\"0.01\"},\"costs\":{\"brokerage_bps\":\"3\",\"stt_bps\":\"10\",\"slippage_bps\":\"15\",\"impact_model\":\"fixed\"},\"cash_policy\":\"hold_cash\",\"benchmark\":\"nifty-500\",\"risk_overlay\":{\"enabled\":false,\"rule\":\"index_above_200dma\"},\"dividends\":\"ignore\",\"risk_free_rate\":\"0\",\"risk_free_curve\":[]}'::jsonb, 'queued', TIMESTAMPTZ '2026-10-30 04:00:00+00');",
+   "env": {
+    "BASKFY_INVOICE_LOCAL_DIR": "{archive}"
+   },
+   "mask": {
+    "backtest": {
+     "started_at": "stamp",
+     "finished_at": "stamp"
+    }
+   },
+   "note": "an inline definition ScreenDefinition refuses (unknown sort_by, a fractional circuit, a bad operator, an extra key): failed, pydantic's ValidationError text on the row and in the failed frame"
+  },
+  {
    "name": "skipped-already-running",
    "task": "baskfy.backtest.run",
    "args": {

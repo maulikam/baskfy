@@ -416,6 +416,85 @@ pub(crate) async fn assert_public(url: &str) -> Result<(), Refusal> {
     Ok(())
 }
 
+/// The checks `getaddrinfo` applies to a host before it resolves anything (an embedded NUL, the
+/// `idna` codec's label lengths) — Python's uncaught `ValueError`/`UnicodeError`. For a resolver
+/// passed to [`assert_public_resolving`] (wave 6, lane ops_alerts).
+///
+/// # Errors
+/// [`Refusal::Unhandled`] with Python's message.
+pub(crate) fn host_encodable(host: &str) -> Result<(), Refusal> {
+    if host.contains('\0') {
+        return Err(Refusal::Unhandled("embedded null character".to_owned()));
+    }
+    if !idna_ascii_ok(host) {
+        return Err(Refusal::Unhandled("label empty or too long".to_owned()));
+    }
+    Ok(())
+}
+
+/// [`assert_public`] with the resolution step injected: `resolve(host, port)` answers every
+/// address the name resolves to, or the refusal (`"webhook host '…' does not resolve"`). The
+/// worker's webhook sweep passes its own (the delivery-time half of AUDIT 2.6, through the
+/// guarded resolver, so the harness's network block reaches it); everything before and after the
+/// resolution is [`assert_public`]'s, unchanged (wave 6, lane ops_alerts).
+///
+/// # Errors
+/// As [`assert_public`].
+pub(crate) async fn assert_public_resolving<F, Fut>(url: &str, resolve: F) -> Result<(), Refusal>
+where
+    F: FnOnce(String, u16) -> Fut,
+    Fut: std::future::Future<Output = Result<Vec<IpAddr>, Refusal>>,
+{
+    let split = urlsplit(url).map_err(Refusal::Unhandled)?;
+    let Some(host) = hostname(&split.netloc) else {
+        return Err(Refusal::BadRequest(
+            "A webhook URL must name a host.".to_owned(),
+        ));
+    };
+    let lowered = host.to_lowercase();
+    if lowered == "localhost"
+        || lowered == "metadata.google.internal"
+        || lowered.ends_with(".localhost")
+    {
+        return Err(Refusal::BadRequest(format!(
+            "webhook host {} is not a public address",
+            baskfy_providers::py::repr_str(&host)
+        )));
+    }
+    if let Some(literal) = ip_address(&host)
+        && is_blocked(&literal)
+    {
+        return Err(Refusal::BadRequest(format!(
+            "webhook URL targets a non-public address ({})",
+            literal.display()
+        )));
+    }
+    let given = port(&split.netloc).map_err(Refusal::Unhandled)?;
+    let port = match given {
+        Some(p) if p != 0 => p,
+        _ => {
+            if split.scheme == "https" {
+                443
+            } else {
+                80
+            }
+        }
+    };
+    for address in resolve(host, port).await? {
+        let ip = match address {
+            IpAddr::V4(v4) => Ip::V4(v4),
+            IpAddr::V6(v6) => Ip::V6(v6, None),
+        };
+        if is_blocked(&ip) {
+            return Err(Refusal::BadRequest(format!(
+                "webhook URL resolves to a non-public address ({})",
+                ip.display()
+            )));
+        }
+    }
+    Ok(())
+}
+
 /// `_check_url(url, settings)`: the scheme, the host, https in production, then
 /// [`assert_public`].
 ///

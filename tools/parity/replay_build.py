@@ -37,6 +37,11 @@ equity_fundamentals    each instrument's latest ``fundamental_daily`` row in the
 Fidelity to the real day is a nice-to-have; **identical inputs to both sides** is the requirement,
 and every bundle is deterministic: rebuilding from an unchanged bed gives the same hash.
 
+Variant ``session`` (wave 6, R8.3) is ``base`` plus an ``upstream/`` directory for the tasks that
+build their own Kite and NSE clients: real F&O raw files from the AWS-exit archive, a rebuilt NFO
+dump, synthesized session quotes, a synthetic read-only book (``replay_build_session.py`` says what
+each is and how faithful). ``replay_upstream.py`` serves it to both sides; ``base`` is unchanged.
+
 Variants: ``gate-refuse`` keeps the bars (Kite and bhavcopy) of two symbols in five, so the
 quality gate's bar count fails on a fresh day; ``provider-failure-midway`` refuses
 ``index_snapshots(on=<date>)`` with ``ProviderUnavailable``, failing step 6 after five steps have
@@ -70,7 +75,7 @@ CONTAINER = "baskfy-rs-pg"
 BED_DB = "baskfy"
 CORPORATE_ACTION_LOOKBACK_DAYS = 7
 SME_SERIES = ("SM", "ST")
-VARIANTS = ("base", "gate-refuse", "provider-failure-midway", "index-edges", "fundamentals-refused")
+VARIANTS = ("base", "gate-refuse", "provider-failure-midway", "index-edges", "fundamentals-refused", "session")
 
 
 def bed_rows(sql: str) -> list[dict[str, Any]]:
@@ -306,7 +311,7 @@ def variant_files(base: dict[str, Any], variant: str, day: dt.date) -> tuple[dic
                 "message": "replay refusal: NSE's quote endpoint timed out for this scenario",
             }
         )
-    elif variant != "base":
+    elif variant not in ("base", "session"):  # `session` adds `upstream/` after the calls
         raise SystemExit(f"unknown variant {variant!r}")
     return files, refuse
 
@@ -399,7 +404,15 @@ def main(argv: list[str] | None = None) -> int:
     variants = VARIANTS if args.variant == "all" else (args.variant,)
     for variant in variants:
         files, refuse = variant_files(base, variant, day)
-        digest = write_bundle(args.out / day.isoformat() / variant, day, variant, files, refuse)
+        out = args.out / day.isoformat() / variant
+        digest = write_bundle(out, day, variant, files, refuse)
+        if variant == "session":
+            # Wave 6 (R8.3): the base calls plus `upstream/` — recorded raw NSE files and Kite REST
+            # answers the tasks' own clients read (`replay_build_session.py`, `replay_upstream.py`).
+            from replay_build_session import write_upstream  # noqa: PLC0415
+
+            write_upstream(out, day, bed_rows)
+            digest = bundle_hash(out)
         print(f"{variant}: {args.out / day.isoformat() / variant} sha256={digest}")
     return 0
 

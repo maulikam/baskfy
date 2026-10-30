@@ -22,6 +22,15 @@ mod quality;
 #[cfg(test)]
 mod tests;
 
+/// The screener half of `publish`, for wave 6's lanes (added, never forked): the screener
+/// lane's out-of-band warm-up, `execute_screen` and `record_run` (`tasks/screener.rs`), and the
+/// backtest loader's screen run with its own row limit (lane backtest_engine).
+pub(crate) use publish::{
+    WARM_CACHE_SCREEN_LIMIT, WarmCacheResult, WarmFailure, current_data_version,
+    execute_screen_raising, execute_screen_with_limit, record_screen_run,
+    warm_screen_cache_with_limit,
+};
+
 use chrono::NaiveDate;
 use sqlx::PgConnection;
 

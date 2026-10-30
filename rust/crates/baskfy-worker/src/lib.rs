@@ -16,6 +16,7 @@
 //! | `settings.WorkerSettings` | [`settings`] | ported (foundation) |
 //! | `deps.PipelineDependencies`, `window.DateWindow` | [`deps`], [`window`] | ported (foundation) |
 //! | `catch_up.py` | [`catch_up`] | constants ported; the sweep is the gate lane's |
+//! | every Celery task (`tasks/celery_tasks.py`, `tasks/desk.py`) and `BEAT_SCHEDULE` | [`tasks`] | registry and Beat table held equal to Python; four tasks wired (wave-5 code), the rest declared stubs per wave-6 lane |
 //! | the step bodies (`tasks/*.py`) | [`steps::ingest`], [`steps::index`], [`steps::compute`], [`steps::gate`], [`steps::sleeves`] | **declared stubs**, one file per lane |
 //!
 //! **Law 2:** nothing in this crate places, modifies or cancels an order or a GTT, or calls a Kite
@@ -33,6 +34,7 @@ pub mod orchestrator;
 pub mod pyjson;
 pub mod settings;
 pub mod steps;
+pub mod tasks;
 pub mod window;
 
 pub use error::WorkerError;

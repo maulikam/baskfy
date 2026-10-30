@@ -92,3 +92,67 @@ pub async fn detect_twt(
         .await
         .map(|_| ())
 }
+
+/// Wave 6, lane `sleeve_backtests`: the loaders the three sleeves' backtests share with their
+/// detectors, re-exported so the backtests reuse them rather than fork them (added; nothing
+/// above changed).
+pub(crate) mod for_backtests {
+    pub(crate) use super::common::{
+        NSE_EXCHANGE_ID, UniverseRule, core_err, load_raw_bars, load_universe, lookback_start,
+        pl_err, value_err,
+    };
+    pub(crate) use super::swing::{config_row, swing_config};
+    pub(crate) use super::swing_market::{
+        BreadthRow, BreadthSnapshot, INDEX_HISTORY_SESSIONS, IndexReading, breadth_snapshot, ema,
+        is_liquid, market_gate,
+    };
+}
+
+/// Wave 6, lane `swing_eod`: the swing detector with Python's optional run id (the tasks
+/// `baskfy.swing.detect` and `baskfy.swing.weekend` pass `None`), and the readers the evening
+/// shares with it (`load_swing_config`, `lookback_start`, `sleeve_drawdown`, the bars' calendar),
+/// re-exported so the evening reuses them rather than forks them (added; nothing above changed).
+pub(crate) mod for_swing_eod {
+    pub(crate) use super::common::{NSE_EXCHANGE_ID, lookback_start};
+    pub(crate) use super::swing::{
+        config_row, run_detect_swing_for, sleeve_drawdown, swing_config,
+    };
+}
+
+/// Wave 6, lane `swing_live`: "Scan now"'s detector (the nightly's, widened by
+/// [`ScanExtras`](swing::ScanExtras) rather than forked) and the readers the morning and the
+/// scan share with it, re-exported so the lane reuses them (added; nothing above changed).
+pub(crate) mod for_swing_live {
+    pub(crate) use super::common::{
+        date_column, dates, day_number, floats, ints, lookback_start, pl_err, strings,
+    };
+    pub(crate) use super::swing::{
+        BAR_COLUMNS, ScanExtras, config_row, load_swing_bars, run_detect_swing_scan, swing_config,
+    };
+    pub(crate) use super::swing_market::{is_liquid, py_round};
+}
+
+/// Wave 6, lane `twt_jobs`: the TWT detector with Python's optional run id, LV8's provisional
+/// bar and flag (`baskfy.twt.detect`/`baskfy.twt.scan` reach it through `detect_session` and
+/// `live_scan.run_twt_live`), its config and universe readers, and the bar loader's helpers,
+/// re-exported so the tasks reuse them rather than fork them (added; nothing above changed).
+pub(crate) mod for_twt_jobs {
+    pub(crate) use super::common::{NSE_EXCHANGE_ID, core_err, date_column, day_number, pl_err};
+    pub(crate) use super::twt::{load_twt_config, load_twt_universe, run_detect_twt_for};
+}
+
+/// Wave 6, lane `vbt_jobs`: the VBT detector with Python's optional run id, LV8's provisional
+/// bar and flag (`baskfy.vbt.detect` and `baskfy.vbt.rescan` reach it), its config and universe
+/// readers, the bar loader the evening's held-name EMA reuses, and Qullamaggie's adapter pieces
+/// (the trailing mean, the trail choice), re-exported so the tasks reuse them rather than fork
+/// them (added; nothing above changed).
+pub(crate) mod for_vbt_jobs {
+    pub(crate) use super::common::{
+        NSE_EXCHANGE_ID, core_err, date_column, dates, day_number, floats, ints, load_raw_bars,
+        lookback_start, pl_err, value_err,
+    };
+    pub(crate) use super::qulla::{MA_TRAIL, OhlcBar, PARTIAL, mean, trail_for, trail_value};
+    pub(crate) use super::vbt::{
+        LOOKBACK_SESSIONS, load_vbt_config, load_vbt_universe, run_detect_vbt_for,
+    };
+}

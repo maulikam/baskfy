@@ -1,0 +1,497 @@
+{
+ "mode": "writes",
+ "lane": "api-routes-explore",
+ "note": "Wave 6 lane api_routes: explore's POST /watchlist and DELETE /watchlist/{slug} (R6.40's two unassigned routes). Sole tenant: user 1. Seeded: a PRIVATE basket the visibility predicate must hide.",
+ "env": {
+  "BASKFY_SOLE_USER_ID": "1"
+ },
+ "seed_sql": [
+  "INSERT INTO cb_manager (slug, name, kind, user_id, state, sebi_reg_type, strategies, created_at) VALUES ('rs-parity-mgr', 'Parity Mgr', 'EXTERNAL', 6, 'APPROVED', 'NONE', '{}', '2026-10-01T00:00:00Z')",
+  "INSERT INTO cb_basket (slug, name, manager_id, type, access, visibility, categories, rebalance_frequency, source) SELECT 'rs-parity-private', 'Parity private', id, 'STOCK', 'FREE', 'PRIVATE', '{custom}', 'NEED_BASIS', 'MANUAL' FROM cb_manager WHERE slug = 'rs-parity-mgr'"
+ ],
+ "db_mask": {
+  "cb_watchlist_item": [
+   "watched_at"
+  ]
+ },
+ "tables": [
+  "cb_watchlist_item"
+ ],
+ "cases": [
+  {
+   "name": "wl-add-anon",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "body": {
+    "basket_slug": "momentum-scan"
+   }
+  },
+  {
+   "name": "wl-add-plain",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "plain",
+   "body": {
+    "basket_slug": "momentum-scan"
+   }
+  },
+  {
+   "name": "wl-add-missing-basket",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "body": {
+    "basket_slug": "no-such-basket"
+   }
+  },
+  {
+   "name": "wl-add-private-basket",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "body": {
+    "basket_slug": "rs-parity-private"
+   }
+  },
+  {
+   "name": "wl-add-first",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "body": {
+    "basket_slug": "momentum-scan",
+    "nav_at_watch": "123.456"
+   },
+   "mask": [
+    "watched_at"
+   ]
+  },
+  {
+   "name": "wl-add-places",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "body": {
+    "basket_slug": "trend-stack",
+    "nav_at_watch": "12.345"
+   }
+  },
+  {
+   "name": "wl-add-first-ok",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "body": {
+    "basket_slug": "trend-stack",
+    "nav_at_watch": "1.000000000000000000000000000000000001"
+   },
+   "mask": [
+    "watched_at"
+   ]
+  },
+  {
+   "name": "wl-add-rewatch",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "body": {
+    "basket_slug": "trend-stack",
+    "nav_at_watch": "1E+2"
+   },
+   "mask": [
+    "watched_at"
+   ]
+  },
+  {
+   "name": "wl-add-rewatch-null",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "body": {
+    "basket_slug": "trend-stack",
+    "nav_at_watch": null
+   },
+   "mask": [
+    "watched_at"
+   ]
+  },
+  {
+   "name": "wl-add-int-nav",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "body": {
+    "basket_slug": "maulik",
+    "nav_at_watch": 12
+   },
+   "mask": [
+    "watched_at"
+   ]
+  },
+  {
+   "name": "wl-add-float-nav",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "raw_body": "{\"basket_slug\": \"liquid-momentum\", \"nav_at_watch\": 99.99}",
+   "headers": {
+    "Content-Type": "application/json"
+   },
+   "mask": [
+    "watched_at"
+   ]
+  },
+  {
+   "name": "wl-add-nav-0",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "body": {
+    "basket_slug": "broad-market-sharpe",
+    "nav_at_watch": "0"
+   },
+   "mask": [
+    "watched_at"
+   ]
+  },
+  {
+   "name": "wl-add-nav-1",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "body": {
+    "basket_slug": "broad-market-sharpe",
+    "nav_at_watch": "-1"
+   },
+   "mask": [
+    "watched_at"
+   ]
+  },
+  {
+   "name": "wl-add-nav-2",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "body": {
+    "basket_slug": "broad-market-sharpe",
+    "nav_at_watch": "1234567890123456789"
+   },
+   "mask": [
+    "watched_at"
+   ]
+  },
+  {
+   "name": "wl-add-nav-3",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "body": {
+    "basket_slug": "broad-market-sharpe",
+    "nav_at_watch": "123456789012345678"
+   },
+   "mask": [
+    "watched_at"
+   ]
+  },
+  {
+   "name": "wl-add-nav-4",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "body": {
+    "basket_slug": "broad-market-sharpe",
+    "nav_at_watch": "1E+20"
+   },
+   "mask": [
+    "watched_at"
+   ]
+  },
+  {
+   "name": "wl-add-nav-5",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "body": {
+    "basket_slug": "broad-market-sharpe",
+    "nav_at_watch": "0.001"
+   },
+   "mask": [
+    "watched_at"
+   ]
+  },
+  {
+   "name": "wl-add-nav-6",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "body": {
+    "basket_slug": "broad-market-sharpe",
+    "nav_at_watch": "-0.001"
+   },
+   "mask": [
+    "watched_at"
+   ]
+  },
+  {
+   "name": "wl-add-nav-7",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "body": {
+    "basket_slug": "broad-market-sharpe",
+    "nav_at_watch": "abc"
+   },
+   "mask": [
+    "watched_at"
+   ]
+  },
+  {
+   "name": "wl-add-nav-8",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "body": {
+    "basket_slug": "broad-market-sharpe",
+    "nav_at_watch": "NaN"
+   },
+   "mask": [
+    "watched_at"
+   ]
+  },
+  {
+   "name": "wl-add-nav-9",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "body": {
+    "basket_slug": "broad-market-sharpe",
+    "nav_at_watch": true
+   },
+   "mask": [
+    "watched_at"
+   ]
+  },
+  {
+   "name": "wl-add-nav-10",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "body": {
+    "basket_slug": "broad-market-sharpe",
+    "nav_at_watch": "  5  "
+   },
+   "mask": [
+    "watched_at"
+   ]
+  },
+  {
+   "name": "wl-add-nav-11",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "body": {
+    "basket_slug": "broad-market-sharpe",
+    "nav_at_watch": "5_0"
+   },
+   "mask": [
+    "watched_at"
+   ]
+  },
+  {
+   "name": "wl-add-nav-12",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "body": {
+    "basket_slug": "broad-market-sharpe",
+    "nav_at_watch": "12345678901234567.0"
+   },
+   "mask": [
+    "watched_at"
+   ]
+  },
+  {
+   "name": "wl-add-extra",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "body": {
+    "basket_slug": "momentum-scan",
+    "x": 1,
+    "nav_at_watch": "0"
+   }
+  },
+  {
+   "name": "wl-add-empty-slug",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "body": {
+    "basket_slug": "",
+    "nav_at_watch": "-1",
+    "y": 2
+   }
+  },
+  {
+   "name": "wl-add-long-slug",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "body": {
+    "basket_slug": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+   }
+  },
+  {
+   "name": "wl-add-no-slug",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "body": {
+    "nav_at_watch": "5"
+   }
+  },
+  {
+   "name": "wl-add-array",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "body": []
+  },
+  {
+   "name": "wl-add-null-body",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "raw_body": "null",
+   "headers": {
+    "Content-Type": "application/json"
+   }
+  },
+  {
+   "name": "wl-add-empty-body",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner"
+  },
+  {
+   "name": "wl-add-bad-json",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "raw_body": "{bad",
+   "headers": {
+    "Content-Type": "application/json"
+   }
+  },
+  {
+   "name": "wl-add-slug-int",
+   "method": "POST",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "body": {
+    "basket_slug": 5
+   }
+  },
+  {
+   "name": "wl-list-after",
+   "method": "GET",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "mask": [
+    "watched_at"
+   ]
+  },
+  {
+   "name": "wl-del-anon",
+   "method": "DELETE",
+   "path": "/api/v1/watchlist/trend-stack"
+  },
+  {
+   "name": "wl-del-plain",
+   "method": "DELETE",
+   "path": "/api/v1/watchlist/trend-stack",
+   "user": "plain"
+  },
+  {
+   "name": "wl-del-owner",
+   "method": "DELETE",
+   "path": "/api/v1/watchlist/trend-stack",
+   "user": "owner"
+  },
+  {
+   "name": "wl-del-again",
+   "method": "DELETE",
+   "path": "/api/v1/watchlist/trend-stack",
+   "user": "owner"
+  },
+  {
+   "name": "wl-del-unknown",
+   "method": "DELETE",
+   "path": "/api/v1/watchlist/no-such-basket",
+   "user": "owner"
+  },
+  {
+   "name": "wl-del-private",
+   "method": "DELETE",
+   "path": "/api/v1/watchlist/rs-parity-private",
+   "user": "owner"
+  },
+  {
+   "name": "wl-del-long",
+   "method": "DELETE",
+   "path": "/api/v1/watchlist/yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+   "user": "owner"
+  },
+  {
+   "name": "wl-del-instruments",
+   "method": "DELETE",
+   "path": "/api/v1/watchlist/instruments",
+   "user": "owner"
+  },
+  {
+   "name": "wl-del-discover",
+   "method": "DELETE",
+   "path": "/api/v1/watchlist/discover-preferences",
+   "user": "owner"
+  },
+  {
+   "name": "wl-del-encoded",
+   "method": "DELETE",
+   "path": "/api/v1/watchlist/momentum%2Dscan",
+   "user": "owner"
+  },
+  {
+   "name": "wl-del-trailing",
+   "method": "DELETE",
+   "path": "/api/v1/watchlist/momentum-scan/",
+   "user": "owner"
+  },
+  {
+   "name": "wl-put-path",
+   "method": "PUT",
+   "path": "/api/v1/watchlist/momentum-scan",
+   "user": "owner"
+  },
+  {
+   "name": "wl-post-path",
+   "method": "POST",
+   "path": "/api/v1/watchlist/momentum-scan",
+   "user": "owner"
+  },
+  {
+   "name": "wl-patch",
+   "method": "PATCH",
+   "path": "/api/v1/watchlist",
+   "user": "owner"
+  },
+  {
+   "name": "wl-list-end",
+   "method": "GET",
+   "path": "/api/v1/watchlist",
+   "user": "owner",
+   "mask": [
+    "watched_at"
+   ]
+  }
+ ]
+}

@@ -347,6 +347,36 @@ pub(super) async fn backfill_bars_from_bhavcopy(
     Ok(report)
 }
 
+/// What a caller outside the chain reads of a bhavcopy backfill (wave 6, lane api_routes:
+/// `resync._repair_bars` reads `bars_written`, `missing_days` and `failures`).
+#[derive(Debug, Clone, Default)]
+pub(crate) struct BackfillSummary {
+    /// `report.bars_written`.
+    pub(crate) bars_written: i64,
+    /// `report.missing_days`.
+    pub(crate) missing_days: Vec<NaiveDate>,
+    /// `report.failures`, insertion-ordered (`dict`).
+    pub(crate) failures: Vec<(String, OrderedJson)>,
+}
+
+/// [`backfill_bars_from_bhavcopy`] on `conn`, summarised for a task outside the chain (added at
+/// wave 6; the step's own function is unchanged).
+///
+/// # Errors
+/// As [`backfill_bars_from_bhavcopy`].
+pub(crate) async fn backfill_summary(
+    conn: &mut PgConnection,
+    provider: &CompositeProvider,
+    window: DateWindow,
+) -> Result<BackfillSummary, WorkerError> {
+    let report = backfill_bars_from_bhavcopy(conn, provider, window).await?;
+    Ok(BackfillSummary {
+        bars_written: report.bars_written,
+        missing_days: report.missing_days,
+        failures: report.failures,
+    })
+}
+
 /// `_fetch_from_bhavcopy`: the bhavcopy as lead, fallback or top-up; returns its bars written.
 async fn fetch_from_bhavcopy(
     conn: &mut PgConnection,

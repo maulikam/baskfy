@@ -173,6 +173,36 @@ sides. A lane's step is done when its `--step` runs are EQUAL in `fresh` and `re
 done when `--chain` is EQUAL in all five scenarios. Usage: `tools/parity/README.md`. Heavy runs take
 the machine-wide lock; never more than five databases besides `baskfy`.
 
+## Grading a task: `tools/parity/task_diff.py` (wave 6; R8.1–R8.3)
+
+Every Celery task of the worker is in `baskfy_worker::tasks::registry` (76, held equal to Python's
+`celery_app` by `tests/task_registry.rs`); Beat's 61 entries are data in `tasks::beat`. A task is
+ported when its lane's function in `rust/crates/baskfy-worker/src/tasks/<lane>.rs` replaces the
+declared stub, its name is in that file's `PORTED`, and every case for it is EQUAL:
+
+```bash
+python3 tools/parity/task_diff.py --cases tools/parity/task_cases/<lane>.json \
+    [--case NAME] [--sides py,rs] --report /tmp/<lane>-tasks.txt
+```
+
+* A **case** is a task, its message arguments (`args`: array or object) and an **IST moment**
+  (`now`) — the tasks read the clock, so the moment is an input. Both sides start there and advance
+  in whole seconds of real time; a Rust task reads time only through `TaskContext` (`now_ist`, `now_utc`, `clock()`),
+  never the system clock. Put the paths in: before and after a cutoff, a weekend, a disabled flag,
+  a bad argument (CPython's `TypeError` is reproduced by the binder), a provider refusal.
+* `"bundle": "session"` serves the tasks' own Kite and NSE clients from the replay upstream
+  (`replay_upstream.py`): recorded F&O raw files through the raw archive, Kite REST answers (quotes
+  at 09:35/13:15/15:29 — the recorded chain and index minutes, synthesized equities — index minute
+  candles, the bed's broker holdings, the NFO master) through `--replay-upstream`
+  (`TaskContext::kite_root()` → `KiteConnect::with_root`). `"kite": true` adds a test key and a token
+  issued at `now` (pass `TaskContext::clock()` to the token store). Nothing is ever fetched live.
+* Compared: the payload with key order, every touched table, sequences, Redis 1–7 with every
+  enqueued Celery message, mail, the upstream requests, the raw archive's new files. A write verb
+  at the upstream fails the case (law 2).
+* Lanes own their case file and their module; they never edit `tasks.rs`, the registry, the Beat
+  table, `lib.rs` or `main.rs`. A task moves to Rust at cutover through a Celery shim that execs
+  `baskfy-worker task` (R8.1) — only once its cases are EQUAL `py,rs`.
+
 ## Building — the only invocation
 
 ```bash

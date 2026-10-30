@@ -106,7 +106,10 @@ fn len_i64(n: usize) -> i64 {
 
 /// `load_twt_config`: the defaults with the user's two detector settings (`stop_pct`,
 /// `trail_pct`) as `Decimal(str(...))`.
-async fn load_twt_config(conn: &mut PgConnection, user_id: i64) -> Result<TwtConfig, WorkerError> {
+pub(crate) async fn load_twt_config(
+    conn: &mut PgConnection,
+    user_id: i64,
+) -> Result<TwtConfig, WorkerError> {
     let row = sqlx::query("SELECT stop_pct, trail_pct FROM tw_config WHERE user_id = $1")
         .bind(user_id)
         .fetch_optional(&mut *conn)
@@ -404,17 +407,20 @@ async fn upsert_states(
     rows: &[StateRow],
     user_id: i64,
     trade_date: NaiveDate,
-    pipeline_run_id: i64,
+    pipeline_run_id: Option<i64>,
+    provisional: bool,
 ) -> Result<i64, WorkerError> {
     let keep: Vec<i64> = rows.iter().map(|r| r.instrument_id).collect();
-    drop_provisional_stragglers(conn, "tw_state_daily", &keep, user_id, trade_date).await?;
+    if !provisional {
+        drop_provisional_stragglers(conn, "tw_state_daily", &keep, user_id, trade_date).await?;
+    }
     for r in rows {
         sqlx::query(
             "INSERT INTO tw_state_daily (user_id, date, instrument_id, provisional, open, high, \
              low, close, close_raw, adj_factor, week_close_0, week_close_1, week_close_2, \
              week_range_pct, month_low_3, month_low_ratio, vol_sma_50, volume, turnover_inr, \
              turnover_avg_20, sma_dma, sessions_in_state, bars_in_window, locked_upper_circuit, \
-             pipeline_run_id) VALUES ($1, $2, $3, false, $4, $5, $6, $7, $8, $9, $10, $11, $12, \
+             pipeline_run_id) VALUES ($1, $2, $3, $25, $4, $5, $6, $7, $8, $9, $10, $11, $12, \
              $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24) \
              ON CONFLICT (user_id, date, instrument_id) DO UPDATE SET \
              provisional = excluded.provisional, open = excluded.open, high = excluded.high, \
@@ -454,6 +460,7 @@ async fn upsert_states(
         .bind(small(r.bars_in_window)?)
         .bind(r.locked_upper_circuit)
         .bind(pipeline_run_id)
+        .bind(provisional)
         .execute(&mut *conn)
         .await?;
     }
@@ -475,15 +482,18 @@ async fn upsert_signals(
     rows: &[SignalRow],
     user_id: i64,
     trade_date: NaiveDate,
-    pipeline_run_id: i64,
+    pipeline_run_id: Option<i64>,
+    provisional: bool,
 ) -> Result<i64, WorkerError> {
     let keep: Vec<i64> = rows.iter().map(|r| r.instrument_id).collect();
-    drop_provisional_stragglers(conn, "tw_signal_daily", &keep, user_id, trade_date).await?;
+    if !provisional {
+        drop_provisional_stragglers(conn, "tw_signal_daily", &keep, user_id, trade_date).await?;
+    }
     for r in rows {
         sqlx::query(
             "INSERT INTO tw_signal_daily (user_id, date, instrument_id, provisional, state, \
              failed_filters, entry_reference_close, stop_preview, sessions_out_before, \
-             rank_key, turnover_avg_20, pipeline_run_id) VALUES ($1, $2, $3, false, $4, $5, \
+             rank_key, turnover_avg_20, pipeline_run_id) VALUES ($1, $2, $3, $12, $4, $5, \
              $6, $7, $8, $9, $10, $11) ON CONFLICT (user_id, date, instrument_id) DO UPDATE SET \
              provisional = excluded.provisional, state = excluded.state, \
              failed_filters = excluded.failed_filters, \
@@ -504,6 +514,7 @@ async fn upsert_signals(
         .bind(r.rank_key)
         .bind(r.turnover_avg_20)
         .bind(pipeline_run_id)
+        .bind(provisional)
         .execute(&mut *conn)
         .await?;
     }
@@ -520,7 +531,8 @@ async fn write_breadth_row(
     funnel: &TwtFunnel,
     thin_session: bool,
     config: &TwtConfig,
-    pipeline_run_id: i64,
+    pipeline_run_id: Option<i64>,
+    provisional: bool,
 ) -> Result<(), WorkerError> {
     let detail = OrderedJson::Object(funnel.as_detail())
         .to_python_json()
@@ -535,7 +547,7 @@ async fn write_breadth_row(
     sqlx::query(
         "INSERT INTO tw_breadth_daily (user_id, date, universe_count, measured_count, \
          above_count, pct_above_dma, gate, dma_bars, thin_session, provisional, detail, \
-         pipeline_run_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, false, \
+         pipeline_run_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $12, \
          CAST($10 AS JSONB), $11) ON CONFLICT (user_id, date) DO UPDATE SET \
          universe_count = excluded.universe_count, measured_count = excluded.measured_count, \
          above_count = excluded.above_count, pct_above_dma = excluded.pct_above_dma, \
@@ -554,6 +566,7 @@ async fn write_breadth_row(
     .bind(thin_session)
     .bind(detail)
     .bind(pipeline_run_id)
+    .bind(provisional)
     .execute(&mut *conn)
     .await?;
     Ok(())
@@ -787,8 +800,28 @@ pub(crate) async fn run_detect_twt(
     user_id: i64,
     pipeline_run_id: i64,
 ) -> Result<i64, WorkerError> {
-    let config = load_twt_config(conn, user_id).await?;
-    let universe = common::load_universe(
+    run_detect_twt_for(
+        conn,
+        outcome,
+        trade_date,
+        user_id,
+        Some(pipeline_run_id),
+        None,
+        false,
+    )
+    .await
+}
+
+/// `load_universe(session, config)` (TWT's rule: the register's `EQ`/`BE` names, a null series
+/// kept, less the ETFs).
+///
+/// # Errors
+/// The database's.
+pub(crate) async fn load_twt_universe(
+    conn: &mut PgConnection,
+    config: &TwtConfig,
+) -> Result<std::collections::BTreeSet<i64>, WorkerError> {
+    common::load_universe(
         conn,
         &UniverseRule {
             instrument_type: &config.data.instrument_type,
@@ -799,10 +832,40 @@ pub(crate) async fn run_detect_twt(
             etf_symbol_pattern: &config.data.etf_symbol_pattern,
         },
     )
-    .await?;
+    .await
+}
+
+/// `run_detect_twt(session, outcome, trade_date, user_id=, pipeline_run_id=, extra_bars=,
+/// provisional=)` in full (wave 6, lane `twt_jobs`): `pipeline_run_id` is `None` from the tasks
+/// (`detect_session`); `extra_bars` is LV8's provisional bar per name (in `BAR_SCHEMA`), appended
+/// to the published history; `provisional` stamps every row and skips the book's management.
+///
+/// # Errors
+/// Python's, as the task raises them.
+pub(crate) async fn run_detect_twt_for(
+    conn: &mut PgConnection,
+    outcome: &mut StepOutcome,
+    trade_date: NaiveDate,
+    user_id: i64,
+    pipeline_run_id: Option<i64>,
+    extra_bars: Option<&DataFrame>,
+    provisional: bool,
+) -> Result<i64, WorkerError> {
+    let config = load_twt_config(conn, user_id).await?;
+    let universe = load_twt_universe(conn, &config).await?;
     let lookback = TwtConfig::default().data.bars_required;
     let start = lookback_start(conn, trade_date, lookback).await?;
-    let bars = load_raw_bars(conn, start, trade_date, &universe, true).await?;
+    let mut bars = load_raw_bars(conn, start, trade_date, &universe, true).await?;
+    if let Some(extra) = extra_bars.filter(|e| e.height() > 0) {
+        let names: Vec<String> = bars
+            .get_column_names()
+            .iter()
+            .map(|n| n.to_string())
+            .collect();
+        let aligned = extra.select(names).map_err(|e| pl_err(&e))?;
+        bars.vstack_mut(&aligned).map_err(|e| pl_err(&e))?;
+        bars.align_chunks();
+    }
     let day = trade_date.format("%Y-%m-%d");
     if bars.height() == 0 {
         outcome.status = StepStatus::Skipped;
@@ -849,6 +912,7 @@ pub(crate) async fn run_detect_twt(
             true,
             &config,
             pipeline_run_id,
+            provisional,
         )
         .await?;
         outcome.status = StepStatus::Skipped;
@@ -872,9 +936,24 @@ pub(crate) async fn run_detect_twt(
     let reading = breadth_above_dma(&detected, Some(trade_date), &config).map_err(core_err)?;
     let states = state_rows(&detected, trade_date)?;
     let signals = signal_rows(&detected, trade_date, &config)?;
-    let states_written = upsert_states(conn, &states, user_id, trade_date, pipeline_run_id).await?;
-    let entries_written =
-        upsert_signals(conn, &signals, user_id, trade_date, pipeline_run_id).await?;
+    let states_written = upsert_states(
+        conn,
+        &states,
+        user_id,
+        trade_date,
+        pipeline_run_id,
+        provisional,
+    )
+    .await?;
+    let entries_written = upsert_signals(
+        conn,
+        &signals,
+        user_id,
+        trade_date,
+        pipeline_run_id,
+        provisional,
+    )
+    .await?;
     let full = len_i64(
         signals
             .iter()
@@ -901,10 +980,23 @@ pub(crate) async fn run_detect_twt(
         false,
         &config,
         pipeline_run_id,
+        provisional,
     )
     .await?;
     outcome.rows_in = bar_count;
     outcome.rows_out = states_written + entries_written;
+    if provisional {
+        // LV8: no ratchet on a bar that has not closed.
+        outcome.note("gate", pyjson::s(reading.gate.value()));
+        outcome.note("provisional", OrderedJson::Bool(true));
+        for (k, v) in funnel.as_detail() {
+            outcome.note(&k, v);
+        }
+        if states_written == 0 {
+            outcome.status = StepStatus::Skipped;
+        }
+        return Ok(full);
+    }
     if !config.exits.qulla_exits {
         // `run_twt_ratchet`: unreachable from the nightly — `qulla_exits` is a code default
         // (True) that no setting can change (`load_twt_config` reads only the two stops).

@@ -18,8 +18,12 @@ mod alerting;
 #[allow(dead_code)] // `fno_cli backfill` (lane clis) is its caller; no task is
 pub(crate) mod backfill;
 mod common;
+#[cfg(test)]
+mod db_tests;
 mod events;
 mod f3_scan;
+#[cfg(test)]
+mod fixtures;
 pub(crate) mod index_daily;
 pub(crate) mod ingest;
 mod ledger;

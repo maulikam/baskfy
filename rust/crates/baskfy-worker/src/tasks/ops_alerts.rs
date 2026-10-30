@@ -25,6 +25,8 @@
 
 mod alerting;
 mod checks;
+#[cfg(test)]
+mod db_tests;
 mod kite_session;
 mod login_nudge;
 mod webhooks;

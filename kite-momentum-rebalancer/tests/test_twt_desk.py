@@ -871,3 +871,89 @@ class TestTheSessionLock:
             other.close()
         assert row == (1,)
         assert store.conn.in_transaction is False
+
+
+def _pg_url() -> str | None:
+    import os  # noqa: PLC0415
+
+    url = os.environ.get("BASKFY_TEST_DATABASE_URL")
+    return None if not url else url.replace("postgresql+asyncpg://", "postgresql://")
+
+
+requires_db = pytest.mark.skipif(_pg_url() is None, reason="BASKFY_TEST_DATABASE_URL is not set")
+
+
+class _NeverGateway:
+    async def place(self, **_: object) -> dict:
+        raise AssertionError("a refused confirm reached the gateway")
+
+    async def place_gtt_stop(self, **_: object) -> dict:
+        raise AssertionError("a refused confirm reached the gateway")
+
+
+@requires_db
+class TestTheSessionLockOnPostgres:
+    """R8.TD1 on a bed clone: a held row is a 409 before the broker, nested blocks open one
+    transaction, and what the holder wrote is invisible until its outermost block commits."""
+
+    def test_a_second_confirm_of_a_held_session_is_busy_and_sends_nothing(self) -> None:
+        import asyncio  # noqa: PLC0415
+
+        from app.analytics.pg import Connection  # noqa: PLC0415
+
+        url = _pg_url()
+        assert url is not None
+        now = dt.datetime(2026, 10, 30, 10, 0, tzinfo=IST)
+        day = now.date()
+        setup = Connection(url)
+        tag = uuid.uuid4().hex[:8]
+        uid = int(setup.execute(
+            "INSERT INTO app_user (public_id, email) VALUES (?, ?) RETURNING id",
+            (f"twlock-{tag}", f"twlock-{tag}@x.test"),
+        ).fetchone()["id"])  # fmt: skip
+        conns = [Connection(url), Connection(url)]
+        try:
+            iid = int(setup.execute(
+                "SELECT id FROM instrument WHERE symbol ~ '^[A-Z]+$' ORDER BY id LIMIT 1"
+            ).fetchone()["id"])  # fmt: skip
+            plan_id = str(uuid.uuid4())
+            pk = int(setup.execute(
+                "INSERT INTO tw_plan (plan_id, user_id, session_date, source, built_at, "
+                "expires_at, plan_hash, gate, sleeve_equity_inr, total_new_exposure_inr) "
+                "VALUES (?, ?, ?, 'LIVE', ?, ?, 'h', 'OPEN', 1000000, 0) RETURNING id",
+                (plan_id, uid, day, now - dt.timedelta(minutes=1),
+                 now + dt.timedelta(minutes=29)),
+            ).fetchone()["id"])  # fmt: skip
+            line_id = int(setup.execute(
+                "INSERT INTO tw_plan_line (plan_id, user_id, instrument_id, kind, state, "
+                "quantity, stop_price, value_inr, client_id) "
+                "VALUES (?, ?, ?, 'BUY_AT_OPEN', 'PROPOSED', 10, 80, 1000, ?) RETURNING id",
+                (pk, uid, iid, f"{plan_id}:X"),
+            ).fetchone()["id"])  # fmt: skip
+            a, b = (W.PgTwtStore(c, user_id=uid, schema="public") for c in conns)
+            with a.lock_session_for_update(day):
+                with a.lock_session_for_update(day):
+                    a.bump_session(day, mode="DRY_RUN", confirms=1)
+                assert a.conn.execute("SELECT 1 AS one").fetchone()["one"] == 1
+                with pytest.raises(W.HTTPException) as refused, b.lock_session_for_update(day):
+                    pass
+                assert refused.value.status_code == 409
+                assert str(refused.value.detail).startswith("SESSION_BUSY")
+                with pytest.raises(W.HTTPException) as again:
+                    asyncio.run(
+                        X.execute_line(
+                            b, _NeverGateway(), plan_id=plan_id, line_id=line_id,
+                            confirm="true", now=now,
+                        )
+                    )
+                assert again.value.status_code == 409
+                assert b.line(line_id)["state"] == "PROPOSED"
+                assert (b.session(day) or {}).get("confirms", 0) == 0, "nested exit committed"
+            assert b.session(day)["confirms"] == 1
+            with b.lock_session_for_update(day):
+                pass
+        finally:
+            for c in conns:
+                c.close()
+            setup.execute("DELETE FROM app_user WHERE id = ?", (uid,))
+            setup.close()

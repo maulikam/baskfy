@@ -1,5 +1,46 @@
 {
   "lane": "clis",
-  "note": "Declared by the wave-6 foundation; the lane adds a case per path of each task it ports (README, Grading a task).",
-  "cases": []
+  "note": "Lane clis (RS7 W7). baskfy.desk.daily and baskfy.desk.autorun are refusal stubs since M19 (exit_code 2, nothing written). baskfy.desk.daily_check is not cased: it runs the desk's scripts.daily --check, which opens the desk's portfolio.db, and the harness must never touch it.",
+  "cases": [
+    {
+      "name": "desk-daily-default-source",
+      "task": "baskfy.desk.daily",
+      "args": {},
+      "now": "2026-10-29T18:30:00",
+      "note": "the retired Beat entry: argv carries the default source and exit_code is 2"
+    },
+    {
+      "name": "desk-daily-manual-source",
+      "task": "baskfy.desk.daily",
+      "args": ["manual"],
+      "now": "2026-10-29T18:30:00"
+    },
+    {
+      "name": "desk-daily-non-string-source",
+      "task": "baskfy.desk.daily",
+      "args": {"source": 7},
+      "now": "2026-10-29T18:30:00",
+      "note": "Celery passes the JSON value through untyped; Python puts it in argv as is"
+    },
+    {
+      "name": "desk-daily-unexpected-keyword",
+      "task": "baskfy.desk.daily",
+      "args": {"when": "now"},
+      "now": "2026-10-29T18:30:00",
+      "note": "TypeError from the binding, exit 1"
+    },
+    {
+      "name": "desk-autorun",
+      "task": "baskfy.desk.autorun",
+      "args": [],
+      "now": "2026-10-29T18:50:00"
+    },
+    {
+      "name": "desk-autorun-extra-positional",
+      "task": "baskfy.desk.autorun",
+      "args": ["x"],
+      "now": "2026-10-29T18:50:00",
+      "note": "takes 0 positional arguments: TypeError, exit 1"
+    }
+  ]
 }

@@ -3,7 +3,7 @@
 pub mod bhavcopy;
 pub mod breadth;
 pub mod cli;
-mod common;
+pub(crate) mod common;
 pub mod cursor;
 pub mod deep;
 pub mod eq_bars;

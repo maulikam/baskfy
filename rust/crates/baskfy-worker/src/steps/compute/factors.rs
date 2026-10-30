@@ -313,7 +313,7 @@ async fn load_index_levels(
 /// `_apply_true_ath`: the full-history ATH replaces the lookback one (`max_horizontal`), and
 /// `away_high_ath` is recomputed as `((close / high_ath - 1) * 100).round(2)` (polars, half to
 /// even), NULL where `high_ath` is NULL or 0.
-fn apply_true_ath(
+pub(crate) fn apply_true_ath(
     frame: DataFrame,
     all_time_highs: &BTreeMap<i64, f64>,
 ) -> Result<DataFrame, WorkerError> {
@@ -534,7 +534,7 @@ async fn risk_masks(
 
 /// How a `factor_daily` column stores a value.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Kind {
+pub(crate) enum Kind {
     Numeric(u32),
     Int,
     Text,
@@ -543,7 +543,7 @@ enum Kind {
 
 /// `_WRITABLE_COLUMNS`, from the table itself (the ORM model is the migration's), in column
 /// order, minus the three masks.
-async fn writable_columns(conn: &mut PgConnection) -> Result<Vec<(String, Kind)>, WorkerError> {
+pub(crate) async fn writable_columns(conn: &mut PgConnection) -> Result<Vec<(String, Kind)>, WorkerError> {
     let rows: Vec<(String, String)> = sqlx::query_as(
         "SELECT a.attname::text, format_type(a.atttypid, a.atttypmod) FROM pg_attribute a \
          WHERE a.attrelid = 'factor_daily'::regclass AND a.attnum > 0 AND NOT a.attisdropped \
@@ -584,14 +584,14 @@ async fn writable_columns(conn: &mut PgConnection) -> Result<Vec<(String, Kind)>
 }
 
 /// One bound column of the upsert.
-enum Bound {
+pub(crate) enum Bound {
     Numeric(Vec<Option<Decimal>>),
     Int(Vec<Option<i64>>),
     Text(Vec<Option<String>>),
 }
 
 /// A frame column bound as Python binds `_clean(value)` for `kind`.
-fn bind_column(df: &DataFrame, name: &str, kind: Kind) -> Result<Bound, WorkerError> {
+pub(crate) fn bind_column(df: &DataFrame, name: &str, kind: Kind) -> Result<Bound, WorkerError> {
     let dtype = df.column(name).map_err(|e| pl_err(&e))?.dtype().clone();
     let is_float = matches!(dtype, DataType::Float64 | DataType::Float32);
     let is_int = dtype.is_integer() || matches!(dtype, DataType::Boolean);

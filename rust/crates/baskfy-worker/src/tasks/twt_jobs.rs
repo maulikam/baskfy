@@ -28,8 +28,8 @@ pub(in crate::tasks) mod celery;
 mod clone_tests;
 #[cfg(test)]
 mod db_tests;
-mod detect;
-mod evening;
+pub(crate) mod detect;
+pub(crate) mod evening;
 mod live;
 pub(in crate::tasks) mod quotes;
 mod scan;

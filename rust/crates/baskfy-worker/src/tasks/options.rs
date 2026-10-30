@@ -25,12 +25,12 @@
 //! NFO dump, `quote()`, minute history; the plan tasks' margin *calculator* is never reached
 //! (their bodies are not ported). No auto-execute setting exists for the options sleeves.
 
-mod alerting;
+pub(crate) mod alerting;
 mod checks;
-mod collector;
-mod common;
-mod index_bars;
-mod master;
+pub(crate) mod collector;
+pub(crate) mod common;
+pub(crate) mod index_bars;
+pub(crate) mod master;
 mod model;
 mod weekly;
 

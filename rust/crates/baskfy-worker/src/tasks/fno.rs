@@ -17,7 +17,7 @@
 mod alerting;
 #[allow(dead_code)] // `fno_cli backfill` (lane clis) is its caller; no task is
 pub(crate) mod backfill;
-mod common;
+pub(crate) mod common;
 #[cfg(test)]
 mod db_tests;
 mod events;
@@ -28,10 +28,10 @@ pub(crate) mod index_daily;
 pub(crate) mod ingest;
 mod ledger;
 pub(crate) mod nightly;
-mod retest;
+pub(crate) mod retest;
 pub(crate) mod scan;
 mod spreads;
-mod underlying;
+pub(crate) mod underlying;
 mod weekly;
 
 use baskfy_db::OrderedJson;

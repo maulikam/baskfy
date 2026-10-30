@@ -1,0 +1,53 @@
+{
+  "note": "Lane exec_kite (app/kite_client.py, app/token_store.py). The lane has no routes of its own; these cases drive the paths that construct the desk's Kite and read through it (login_url, is_authed, the token store's key bootstrap) and, after the scenario, require the replay Kite's order/GTT calls to be EQUAL — none, since DRY_RUN never reaches the broker. place_gtt_stop/delete_gtt live paths are graded in tests/exec_kite.rs against a recording fake (and were cross-checked against Python's Kite with a fake kc); the weekly lane's /stops/arm is their route. /callback is the session lane's (not yet ported), so it is not graded here.",
+  "cases": [
+    {
+      "name": "login redirects to the replay Kite's login_url",
+      "method": "GET",
+      "path": "/login",
+      "clock": "pre_open"
+    },
+    {
+      "name": "status reads the session through the Kite wrapper",
+      "method": "GET",
+      "path": "/status",
+      "clock": "mid"
+    },
+    {
+      "name": "login again: one Kite per process, same redirect",
+      "method": "GET",
+      "path": "/login",
+      "clock": "after_close"
+    },
+    {
+      "name": "status before the open reads the same session",
+      "method": "GET",
+      "path": "/status",
+      "clock": "pre_open"
+    },
+    {
+      "name": "status after the close reads the same session",
+      "method": "GET",
+      "path": "/status",
+      "clock": "after_close"
+    },
+    {
+      "name": "login by POST is 405",
+      "method": "POST",
+      "path": "/login"
+    },
+    {
+      "name": "status by POST is 405",
+      "method": "POST",
+      "path": "/status"
+    },
+    {
+      "name": "status with an unknown query parameter is ignored",
+      "method": "GET",
+      "path": "/status",
+      "query": {
+        "foo": "1"
+      }
+    }
+  ]
+}

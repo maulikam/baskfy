@@ -1,0 +1,4381 @@
+{
+ "cases": {
+  "sample": {
+   "input": {
+    "variants": {
+     "A": {
+      "CAGR": 20.59,
+      "max_drawdown_pct": -70.45,
+      "sharpe": 0.962,
+      "label": "No regime overlay",
+      "status": "ok"
+     },
+     "B_raw": {
+      "CAGR": 23.71,
+      "max_drawdown_pct": -37.31,
+      "sharpe": 1.486,
+      "label": "Binary M50 50-DMA, raw",
+      "status": "ok"
+     },
+     "B_buf": {
+      "CAGR": 20.11,
+      "max_drawdown_pct": -48.44,
+      "sharpe": 1.224,
+      "label": "Binary M50 50-DMA, buffer",
+      "status": "ok"
+     },
+     "C_raw": {
+      "CAGR": 17.16,
+      "max_drawdown_pct": -40.82,
+      "sharpe": 1.005,
+      "label": "Binary M50 200-DMA, raw",
+      "status": "ok"
+     },
+     "C_buf": {
+      "CAGR": 16.95,
+      "max_drawdown_pct": -40.82,
+      "sharpe": 0.99,
+      "label": "Binary M50 200-DMA, buffer",
+      "status": "ok"
+     },
+     "E": {
+      "CAGR": 12.46,
+      "max_drawdown_pct": -45.98,
+      "sharpe": 0.982,
+      "label": "Three-index tiered",
+      "status": "ok"
+     },
+     "F": {
+      "CAGR": 15.83,
+      "max_drawdown_pct": -49.97,
+      "sharpe": 1.002,
+      "label": "Full tiered model",
+      "status": "ok"
+     },
+     "abl_breadth": {
+      "CAGR": 8.42,
+      "max_drawdown_pct": -50.0,
+      "sharpe": 0.8,
+      "label": "Ablation: breadth only",
+      "status": "ok"
+     }
+    },
+    "limitations": {
+     "breadth": "INSUFFICIENT for this window"
+    }
+   },
+   "build": {
+    "scatter": {
+     "width": 720,
+     "height": 380,
+     "pad_l": 62,
+     "pad_t": 18,
+     "pad_b": 46,
+     "pad_r": 22,
+     "plot_w": 636,
+     "plot_h": 316,
+     "x": {
+      "min": 0.0,
+      "max": 80,
+      "step": 20,
+      "ticks": [
+       0.0,
+       20.0,
+       40.0,
+       60.0,
+       80.0
+      ]
+     },
+     "y": {
+      "min": 0.0,
+      "max": 25,
+      "step": 5,
+      "ticks": [
+       0.0,
+       5.0,
+       10.0,
+       15.0,
+       20.0,
+       25.0
+      ]
+     },
+     "xticks": [
+      {
+       "v": 0.0,
+       "px": 62.0
+      },
+      {
+       "v": 20.0,
+       "px": 221.0
+      },
+      {
+       "v": 40.0,
+       "px": 380.0
+      },
+      {
+       "v": 60.0,
+       "px": 539.0
+      },
+      {
+       "v": 80.0,
+       "px": 698.0
+      }
+     ],
+     "yticks": [
+      {
+       "v": 0.0,
+       "px": 334.0
+      },
+      {
+       "v": 5.0,
+       "px": 270.8
+      },
+      {
+       "v": 10.0,
+       "px": 207.6
+      },
+      {
+       "v": 15.0,
+       "px": 144.4
+      },
+      {
+       "v": 20.0,
+       "px": 81.2
+      },
+      {
+       "v": 25.0,
+       "px": 18.0
+      }
+     ],
+     "zero_y": null,
+     "marks": [
+      {
+       "key": "B_raw",
+       "label": "Binary M50 50-DMA, raw",
+       "family": "binary",
+       "color": "#c97d1e",
+       "cagr": 23.71,
+       "dd": 37.31,
+       "x": 358.6,
+       "y": 34.3,
+       "best": true,
+       "proxy": false,
+       "ly": 38.3,
+       "anchor": "start",
+       "lx": 369.6,
+       "leader": false
+      },
+      {
+       "key": "C_raw",
+       "label": "Binary M50 200-DMA, raw",
+       "family": "binary",
+       "color": "#c97d1e",
+       "cagr": 17.16,
+       "dd": 40.82,
+       "x": 386.5,
+       "y": 117.1,
+       "best": false,
+       "proxy": false,
+       "ly": 121.1,
+       "anchor": "end",
+       "lx": 375.5,
+       "leader": false
+      },
+      {
+       "key": "C_buf",
+       "label": "Binary M50 200-DMA, buffer",
+       "family": "binary",
+       "color": "#c97d1e",
+       "cagr": 16.95,
+       "dd": 40.82,
+       "x": 386.5,
+       "y": 119.8,
+       "best": false,
+       "proxy": false,
+       "ly": 150.8,
+       "anchor": "end",
+       "lx": 375.5,
+       "leader": true
+      },
+      {
+       "key": "E",
+       "label": "Three-index tiered",
+       "family": "tiered",
+       "color": "#7b6ad0",
+       "cagr": 12.46,
+       "dd": 45.98,
+       "x": 427.5,
+       "y": 176.5,
+       "best": false,
+       "proxy": true,
+       "ly": 180.5,
+       "anchor": "start",
+       "lx": 438.5,
+       "leader": false
+      },
+      {
+       "key": "B_buf",
+       "label": "Binary M50 50-DMA, buffer",
+       "family": "binary",
+       "color": "#c97d1e",
+       "cagr": 20.11,
+       "dd": 48.44,
+       "x": 447.1,
+       "y": 79.8,
+       "best": false,
+       "proxy": false,
+       "ly": 83.8,
+       "anchor": "start",
+       "lx": 458.1,
+       "leader": false
+      },
+      {
+       "key": "F",
+       "label": "Full tiered model",
+       "family": "tiered",
+       "color": "#7b6ad0",
+       "cagr": 15.83,
+       "dd": 49.97,
+       "x": 459.3,
+       "y": 133.9,
+       "best": false,
+       "proxy": true,
+       "ly": 137.9,
+       "anchor": "start",
+       "lx": 470.3,
+       "leader": false
+      },
+      {
+       "key": "A",
+       "label": "No regime overlay",
+       "family": "none",
+       "color": "#2f9fb8",
+       "cagr": 20.59,
+       "dd": 70.45,
+       "x": 622.1,
+       "y": 73.7,
+       "best": false,
+       "proxy": false,
+       "ly": 50.7,
+       "anchor": "end",
+       "lx": 611.1,
+       "leader": true
+      }
+     ],
+     "families": [
+      {
+       "key": "none",
+       "label": "No overlay",
+       "color": "#2f9fb8"
+      },
+      {
+       "key": "binary",
+       "label": "Binary rule",
+       "color": "#c97d1e"
+      },
+      {
+       "key": "tiered",
+       "label": "Tiered",
+       "color": "#7b6ad0"
+      }
+     ]
+    },
+    "curves": null,
+    "robustness": null,
+    "timelines": null,
+    "subperiods": null,
+    "sharpe": {
+     "width": 720,
+     "height": 190,
+     "row_h": 26,
+     "pad_l": 148,
+     "zero": 148.0,
+     "bars": [
+      {
+       "key": "B_raw",
+       "label": "Binary M50 50-DMA, raw",
+       "value": 1.486,
+       "y": 0,
+       "x": 148.0,
+       "w": 510.0,
+       "color": "#c97d1e",
+       "family": "binary"
+      },
+      {
+       "key": "B_buf",
+       "label": "Binary M50 50-DMA, buffer",
+       "value": 1.224,
+       "y": 26,
+       "x": 148.0,
+       "w": 420.1,
+       "color": "#c97d1e",
+       "family": "binary"
+      },
+      {
+       "key": "C_raw",
+       "label": "Binary M50 200-DMA, raw",
+       "value": 1.005,
+       "y": 52,
+       "x": 148.0,
+       "w": 344.9,
+       "color": "#c97d1e",
+       "family": "binary"
+      },
+      {
+       "key": "F",
+       "label": "Full tiered model",
+       "value": 1.002,
+       "y": 78,
+       "x": 148.0,
+       "w": 343.9,
+       "color": "#7b6ad0",
+       "family": "tiered"
+      },
+      {
+       "key": "C_buf",
+       "label": "Binary M50 200-DMA, buffer",
+       "value": 0.99,
+       "y": 104,
+       "x": 148.0,
+       "w": 339.8,
+       "color": "#c97d1e",
+       "family": "binary"
+      },
+      {
+       "key": "E",
+       "label": "Three-index tiered",
+       "value": 0.982,
+       "y": 130,
+       "x": 148.0,
+       "w": 337.0,
+       "color": "#7b6ad0",
+       "family": "tiered"
+      },
+      {
+       "key": "A",
+       "label": "No regime overlay",
+       "value": 0.962,
+       "y": 156,
+       "x": 148.0,
+       "w": 330.2,
+       "color": "#2f9fb8",
+       "family": "none"
+      }
+     ],
+     "metric": "sharpe"
+    },
+    "ablation": {
+     "width": 720,
+     "height": 34,
+     "row_h": 26,
+     "pad_l": 196,
+     "zero": 196.0,
+     "bars": [
+      {
+       "key": "abl_breadth",
+       "label": "Ablation: breadth only",
+       "value": 8.42,
+       "y": 0,
+       "x": 196.0,
+       "w": 462.0,
+       "color": "#5b6b8c",
+       "family": "tiered"
+      }
+     ],
+     "metric": "CAGR"
+    },
+    "families": [
+     {
+      "key": "none",
+      "label": "No overlay",
+      "color": "#2f9fb8"
+     },
+     {
+      "key": "binary",
+      "label": "Binary rule",
+      "color": "#c97d1e"
+     },
+     {
+      "key": "tiered",
+      "label": "Tiered",
+      "color": "#7b6ad0"
+     }
+    ],
+    "breadth_caveat": "INSUFFICIENT for this window"
+   },
+   "curves": null,
+   "robustness": null,
+   "timelines": null,
+   "subperiods": null
+  },
+  "curves": {
+   "input": {
+    "curves": {
+     "dates": [
+      "2020-01-03",
+      "2020-01-10",
+      "2020-01-17",
+      "2020-01-24"
+     ],
+     "series": {
+      "A": {
+       "equity": [
+        100.0,
+        120.0,
+        60.0,
+        90.0
+       ],
+       "drawdown": [
+        0.0,
+        0.0,
+        -50.0,
+        -25.0
+       ]
+      },
+      "B_raw": {
+       "equity": [
+        100.0,
+        110.0,
+        95.0,
+        130.0
+       ],
+       "drawdown": [
+        0.0,
+        0.0,
+        -13.64,
+        0.0
+       ]
+      },
+      "F": {
+       "equity": [
+        100.0,
+        105.0,
+        98.0,
+        112.0
+       ],
+       "drawdown": [
+        0.0,
+        0.0,
+        -6.67,
+        0.0
+       ]
+      },
+      "abl_x": {
+       "equity": [
+        100.0,
+        100.0,
+        100.0,
+        100.0
+       ],
+       "drawdown": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+       ]
+      }
+     }
+    },
+    "variants": {
+     "A": {
+      "CAGR": 20.59,
+      "max_drawdown_pct": -70.45,
+      "sharpe": 0.962,
+      "label": "No regime overlay",
+      "status": "ok"
+     },
+     "B_raw": {
+      "CAGR": 23.71,
+      "max_drawdown_pct": -37.31,
+      "sharpe": 1.486,
+      "label": "Binary M50 50-DMA, raw",
+      "status": "ok"
+     },
+     "B_buf": {
+      "CAGR": 20.11,
+      "max_drawdown_pct": -48.44,
+      "sharpe": 1.224,
+      "label": "Binary M50 50-DMA, buffer",
+      "status": "ok"
+     },
+     "C_raw": {
+      "CAGR": 17.16,
+      "max_drawdown_pct": -40.82,
+      "sharpe": 1.005,
+      "label": "Binary M50 200-DMA, raw",
+      "status": "ok"
+     },
+     "C_buf": {
+      "CAGR": 16.95,
+      "max_drawdown_pct": -40.82,
+      "sharpe": 0.99,
+      "label": "Binary M50 200-DMA, buffer",
+      "status": "ok"
+     },
+     "E": {
+      "CAGR": 12.46,
+      "max_drawdown_pct": -45.98,
+      "sharpe": 0.982,
+      "label": "Three-index tiered",
+      "status": "ok"
+     },
+     "F": {
+      "CAGR": 15.83,
+      "max_drawdown_pct": -49.97,
+      "sharpe": 1.002,
+      "label": "Full tiered model",
+      "status": "ok"
+     },
+     "abl_breadth": {
+      "CAGR": 8.42,
+      "max_drawdown_pct": -50.0,
+      "sharpe": 0.8,
+      "label": "Ablation: breadth only",
+      "status": "ok"
+     }
+    }
+   },
+   "build": {
+    "scatter": {
+     "width": 720,
+     "height": 380,
+     "pad_l": 62,
+     "pad_t": 18,
+     "pad_b": 46,
+     "pad_r": 22,
+     "plot_w": 636,
+     "plot_h": 316,
+     "x": {
+      "min": 0.0,
+      "max": 80,
+      "step": 20,
+      "ticks": [
+       0.0,
+       20.0,
+       40.0,
+       60.0,
+       80.0
+      ]
+     },
+     "y": {
+      "min": 0.0,
+      "max": 25,
+      "step": 5,
+      "ticks": [
+       0.0,
+       5.0,
+       10.0,
+       15.0,
+       20.0,
+       25.0
+      ]
+     },
+     "xticks": [
+      {
+       "v": 0.0,
+       "px": 62.0
+      },
+      {
+       "v": 20.0,
+       "px": 221.0
+      },
+      {
+       "v": 40.0,
+       "px": 380.0
+      },
+      {
+       "v": 60.0,
+       "px": 539.0
+      },
+      {
+       "v": 80.0,
+       "px": 698.0
+      }
+     ],
+     "yticks": [
+      {
+       "v": 0.0,
+       "px": 334.0
+      },
+      {
+       "v": 5.0,
+       "px": 270.8
+      },
+      {
+       "v": 10.0,
+       "px": 207.6
+      },
+      {
+       "v": 15.0,
+       "px": 144.4
+      },
+      {
+       "v": 20.0,
+       "px": 81.2
+      },
+      {
+       "v": 25.0,
+       "px": 18.0
+      }
+     ],
+     "zero_y": null,
+     "marks": [
+      {
+       "key": "B_raw",
+       "label": "Binary M50 50-DMA, raw",
+       "family": "binary",
+       "color": "#c97d1e",
+       "cagr": 23.71,
+       "dd": 37.31,
+       "x": 358.6,
+       "y": 34.3,
+       "best": true,
+       "proxy": false,
+       "ly": 38.3,
+       "anchor": "start",
+       "lx": 369.6,
+       "leader": false
+      },
+      {
+       "key": "C_raw",
+       "label": "Binary M50 200-DMA, raw",
+       "family": "binary",
+       "color": "#c97d1e",
+       "cagr": 17.16,
+       "dd": 40.82,
+       "x": 386.5,
+       "y": 117.1,
+       "best": false,
+       "proxy": false,
+       "ly": 121.1,
+       "anchor": "end",
+       "lx": 375.5,
+       "leader": false
+      },
+      {
+       "key": "C_buf",
+       "label": "Binary M50 200-DMA, buffer",
+       "family": "binary",
+       "color": "#c97d1e",
+       "cagr": 16.95,
+       "dd": 40.82,
+       "x": 386.5,
+       "y": 119.8,
+       "best": false,
+       "proxy": false,
+       "ly": 150.8,
+       "anchor": "end",
+       "lx": 375.5,
+       "leader": true
+      },
+      {
+       "key": "E",
+       "label": "Three-index tiered",
+       "family": "tiered",
+       "color": "#7b6ad0",
+       "cagr": 12.46,
+       "dd": 45.98,
+       "x": 427.5,
+       "y": 176.5,
+       "best": false,
+       "proxy": true,
+       "ly": 180.5,
+       "anchor": "start",
+       "lx": 438.5,
+       "leader": false
+      },
+      {
+       "key": "B_buf",
+       "label": "Binary M50 50-DMA, buffer",
+       "family": "binary",
+       "color": "#c97d1e",
+       "cagr": 20.11,
+       "dd": 48.44,
+       "x": 447.1,
+       "y": 79.8,
+       "best": false,
+       "proxy": false,
+       "ly": 83.8,
+       "anchor": "start",
+       "lx": 458.1,
+       "leader": false
+      },
+      {
+       "key": "F",
+       "label": "Full tiered model",
+       "family": "tiered",
+       "color": "#7b6ad0",
+       "cagr": 15.83,
+       "dd": 49.97,
+       "x": 459.3,
+       "y": 133.9,
+       "best": false,
+       "proxy": true,
+       "ly": 137.9,
+       "anchor": "start",
+       "lx": 470.3,
+       "leader": false
+      },
+      {
+       "key": "A",
+       "label": "No regime overlay",
+       "family": "none",
+       "color": "#2f9fb8",
+       "cagr": 20.59,
+       "dd": 70.45,
+       "x": 622.1,
+       "y": 73.7,
+       "best": false,
+       "proxy": false,
+       "ly": 50.7,
+       "anchor": "end",
+       "lx": 611.1,
+       "leader": true
+      }
+     ],
+     "families": [
+      {
+       "key": "none",
+       "label": "No overlay",
+       "color": "#2f9fb8"
+      },
+      {
+       "key": "binary",
+       "label": "Binary rule",
+       "color": "#c97d1e"
+      },
+      {
+       "key": "tiered",
+       "label": "Tiered",
+       "color": "#7b6ad0"
+      }
+     ]
+    },
+    "curves": {
+     "width": 720,
+     "eq_h": 300,
+     "dd_h": 190,
+     "ex_h": 150,
+     "has_exposure": false,
+     "exposure_window": 52,
+     "ex_ticks": [
+      {
+       "v": 0,
+       "px": 124.0
+      },
+      {
+       "v": 50,
+       "px": 69.0
+      },
+      {
+       "v": 100,
+       "px": 14.0
+      }
+     ],
+     "pad_l": 58,
+     "pad_r": 74,
+     "pad_t": 14,
+     "eq_plot": 260,
+     "dd_plot": 150,
+     "lines": [
+      {
+       "key": "A",
+       "family": "none",
+       "color": "#2f9fb8",
+       "equity": "M58.0,102.2 L254.0,40.9 L450.0,274.0 L646.0,137.7",
+       "drawdown": "M58.0,14.0 L254.0,14.0 L450.0,164.0 L646.0,89.0",
+       "exposure": "",
+       "avg_exposure": null,
+       "callout": true,
+       "final": 90.0,
+       "label_y": 137.7
+      },
+      {
+       "key": "B_raw",
+       "family": "binary",
+       "color": "#c97d1e",
+       "equity": "M58.0,102.2 L254.0,70.2 L450.0,119.5 L646.0,14.0",
+       "drawdown": "M58.0,14.0 L254.0,14.0 L450.0,54.9 L646.0,14.0",
+       "exposure": "",
+       "avg_exposure": null,
+       "callout": true,
+       "final": 130.0,
+       "label_y": 20
+      },
+      {
+       "key": "F",
+       "family": "tiered",
+       "color": "#7b6ad0",
+       "equity": "M58.0,102.2 L254.0,85.8 L450.0,109.0 L646.0,64.1",
+       "drawdown": "M58.0,14.0 L254.0,14.0 L450.0,34.0 L646.0,14.0",
+       "exposure": "",
+       "avg_exposure": null,
+       "callout": true,
+       "final": 112.0,
+       "label_y": 64.1
+      }
+     ],
+     "eq_ticks": [
+      {
+       "v": 100,
+       "px": 102.2,
+       "label": "100"
+      }
+     ],
+     "dd_ticks": [
+      {
+       "v": 0.0,
+       "px": 14.0,
+       "label": "0%"
+      },
+      {
+       "v": -20.0,
+       "px": 74.0,
+       "label": "-20%"
+      },
+      {
+       "v": -40.0,
+       "px": 134.0,
+       "label": "-40%"
+      },
+      {
+       "v": -60.0,
+       "px": 194.0,
+       "label": "-60%"
+      }
+     ],
+     "xticks": [],
+     "start": "2020-01-03",
+     "end": "2020-01-24",
+     "worst": -50.0
+    },
+    "robustness": null,
+    "timelines": null,
+    "subperiods": null,
+    "sharpe": {
+     "width": 720,
+     "height": 190,
+     "row_h": 26,
+     "pad_l": 148,
+     "zero": 148.0,
+     "bars": [
+      {
+       "key": "B_raw",
+       "label": "Binary M50 50-DMA, raw",
+       "value": 1.486,
+       "y": 0,
+       "x": 148.0,
+       "w": 510.0,
+       "color": "#c97d1e",
+       "family": "binary"
+      },
+      {
+       "key": "B_buf",
+       "label": "Binary M50 50-DMA, buffer",
+       "value": 1.224,
+       "y": 26,
+       "x": 148.0,
+       "w": 420.1,
+       "color": "#c97d1e",
+       "family": "binary"
+      },
+      {
+       "key": "C_raw",
+       "label": "Binary M50 200-DMA, raw",
+       "value": 1.005,
+       "y": 52,
+       "x": 148.0,
+       "w": 344.9,
+       "color": "#c97d1e",
+       "family": "binary"
+      },
+      {
+       "key": "F",
+       "label": "Full tiered model",
+       "value": 1.002,
+       "y": 78,
+       "x": 148.0,
+       "w": 343.9,
+       "color": "#7b6ad0",
+       "family": "tiered"
+      },
+      {
+       "key": "C_buf",
+       "label": "Binary M50 200-DMA, buffer",
+       "value": 0.99,
+       "y": 104,
+       "x": 148.0,
+       "w": 339.8,
+       "color": "#c97d1e",
+       "family": "binary"
+      },
+      {
+       "key": "E",
+       "label": "Three-index tiered",
+       "value": 0.982,
+       "y": 130,
+       "x": 148.0,
+       "w": 337.0,
+       "color": "#7b6ad0",
+       "family": "tiered"
+      },
+      {
+       "key": "A",
+       "label": "No regime overlay",
+       "value": 0.962,
+       "y": 156,
+       "x": 148.0,
+       "w": 330.2,
+       "color": "#2f9fb8",
+       "family": "none"
+      }
+     ],
+     "metric": "sharpe"
+    },
+    "ablation": {
+     "width": 720,
+     "height": 34,
+     "row_h": 26,
+     "pad_l": 196,
+     "zero": 196.0,
+     "bars": [
+      {
+       "key": "abl_breadth",
+       "label": "Ablation: breadth only",
+       "value": 8.42,
+       "y": 0,
+       "x": 196.0,
+       "w": 462.0,
+       "color": "#5b6b8c",
+       "family": "tiered"
+      }
+     ],
+     "metric": "CAGR"
+    },
+    "families": [
+     {
+      "key": "none",
+      "label": "No overlay",
+      "color": "#2f9fb8"
+     },
+     {
+      "key": "binary",
+      "label": "Binary rule",
+      "color": "#c97d1e"
+     },
+     {
+      "key": "tiered",
+      "label": "Tiered",
+      "color": "#7b6ad0"
+     }
+    ],
+    "breadth_caveat": ""
+   },
+   "curves": {
+    "width": 720,
+    "eq_h": 300,
+    "dd_h": 190,
+    "ex_h": 150,
+    "has_exposure": false,
+    "exposure_window": 52,
+    "ex_ticks": [
+     {
+      "v": 0,
+      "px": 124.0
+     },
+     {
+      "v": 50,
+      "px": 69.0
+     },
+     {
+      "v": 100,
+      "px": 14.0
+     }
+    ],
+    "pad_l": 58,
+    "pad_r": 74,
+    "pad_t": 14,
+    "eq_plot": 260,
+    "dd_plot": 150,
+    "lines": [
+     {
+      "key": "A",
+      "family": "none",
+      "color": "#2f9fb8",
+      "equity": "M58.0,102.2 L254.0,40.9 L450.0,274.0 L646.0,137.7",
+      "drawdown": "M58.0,14.0 L254.0,14.0 L450.0,164.0 L646.0,89.0",
+      "exposure": "",
+      "avg_exposure": null,
+      "callout": true,
+      "final": 90.0,
+      "label_y": 137.7
+     },
+     {
+      "key": "B_raw",
+      "family": "binary",
+      "color": "#c97d1e",
+      "equity": "M58.0,102.2 L254.0,70.2 L450.0,119.5 L646.0,14.0",
+      "drawdown": "M58.0,14.0 L254.0,14.0 L450.0,54.9 L646.0,14.0",
+      "exposure": "",
+      "avg_exposure": null,
+      "callout": true,
+      "final": 130.0,
+      "label_y": 20
+     },
+     {
+      "key": "F",
+      "family": "tiered",
+      "color": "#7b6ad0",
+      "equity": "M58.0,102.2 L254.0,85.8 L450.0,109.0 L646.0,64.1",
+      "drawdown": "M58.0,14.0 L254.0,14.0 L450.0,34.0 L646.0,14.0",
+      "exposure": "",
+      "avg_exposure": null,
+      "callout": true,
+      "final": 112.0,
+      "label_y": 64.1
+     }
+    ],
+    "eq_ticks": [
+     {
+      "v": 100,
+      "px": 102.2,
+      "label": "100"
+     }
+    ],
+    "dd_ticks": [
+     {
+      "v": 0.0,
+      "px": 14.0,
+      "label": "0%"
+     },
+     {
+      "v": -20.0,
+      "px": 74.0,
+      "label": "-20%"
+     },
+     {
+      "v": -40.0,
+      "px": 134.0,
+      "label": "-40%"
+     },
+     {
+      "v": -60.0,
+      "px": 194.0,
+      "label": "-60%"
+     }
+    ],
+    "xticks": [],
+    "start": "2020-01-03",
+    "end": "2020-01-24",
+    "worst": -50.0
+   },
+   "robustness": null,
+   "timelines": null,
+   "subperiods": null
+  },
+  "exp": {
+   "input": {
+    "curves": {
+     "dates": [
+      "2020-01-01",
+      "2020-01-02",
+      "2020-01-03",
+      "2020-01-04",
+      "2020-01-05",
+      "2020-01-06",
+      "2020-01-07",
+      "2020-01-08",
+      "2020-01-09",
+      "2020-01-10"
+     ],
+     "series": {
+      "A": {
+       "equity": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0
+       ],
+       "drawdown": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       "exposure": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0
+       ]
+      },
+      "B_raw": {
+       "equity": [
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0,
+        100.0
+       ],
+       "drawdown": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       "exposure": [
+        0.0,
+        100.0,
+        0.0,
+        100.0,
+        0.0,
+        100.0,
+        0.0,
+        100.0,
+        0.0,
+        100.0
+       ]
+      }
+     }
+    }
+   },
+   "build": null,
+   "curves": {
+    "width": 720,
+    "eq_h": 300,
+    "dd_h": 190,
+    "ex_h": 150,
+    "has_exposure": true,
+    "exposure_window": 52,
+    "ex_ticks": [
+     {
+      "v": 0,
+      "px": 124.0
+     },
+     {
+      "v": 50,
+      "px": 69.0
+     },
+     {
+      "v": 100,
+      "px": 14.0
+     }
+    ],
+    "pad_l": 58,
+    "pad_r": 74,
+    "pad_t": 14,
+    "eq_plot": 260,
+    "dd_plot": 150,
+    "lines": [
+     {
+      "key": "A",
+      "family": "none",
+      "color": "#2f9fb8",
+      "equity": "M58.0,144.0 L123.3,144.0 L188.7,144.0 L254.0,144.0 L319.3,144.0 L384.7,144.0 L450.0,144.0 L515.3,144.0 L580.7,144.0 L646.0,144.0",
+      "drawdown": "M58.0,14.0 L123.3,14.0 L188.7,14.0 L254.0,14.0 L319.3,14.0 L384.7,14.0 L450.0,14.0 L515.3,14.0 L580.7,14.0 L646.0,14.0",
+      "exposure": "M58.0,14.0 L123.3,14.0 L188.7,14.0 L254.0,14.0 L319.3,14.0 L384.7,14.0 L450.0,14.0 L515.3,14.0 L580.7,14.0 L646.0,14.0",
+      "avg_exposure": 100.0,
+      "callout": true,
+      "final": 100.0,
+      "label_y": 144.0
+     },
+     {
+      "key": "B_raw",
+      "family": "binary",
+      "color": "#c97d1e",
+      "equity": "M58.0,144.0 L123.3,144.0 L188.7,144.0 L254.0,144.0 L319.3,144.0 L384.7,144.0 L450.0,144.0 L515.3,144.0 L580.7,144.0 L646.0,144.0",
+      "drawdown": "M58.0,14.0 L123.3,14.0 L188.7,14.0 L254.0,14.0 L319.3,14.0 L384.7,14.0 L450.0,14.0 L515.3,14.0 L580.7,14.0 L646.0,14.0",
+      "exposure": "M58.0,124.0 L123.3,69.0 L188.7,87.3 L254.0,69.0 L319.3,80.0 L384.7,69.0 L450.0,76.9 L515.3,69.0 L580.7,75.1 L646.0,69.0",
+      "avg_exposure": 50.0,
+      "callout": true,
+      "final": 100.0,
+      "label_y": 157.0
+     }
+    ],
+    "eq_ticks": [
+     {
+      "v": 50,
+      "px": 274.0,
+      "label": "50"
+     },
+     {
+      "v": 100,
+      "px": 144.0,
+      "label": "100"
+     },
+     {
+      "v": 200,
+      "px": 14.0,
+      "label": "200"
+     }
+    ],
+    "dd_ticks": [
+     {
+      "v": 0.0,
+      "px": 14,
+      "label": "0%"
+     }
+    ],
+    "xticks": [
+     {
+      "px": 58.0,
+      "label": "2020"
+     }
+    ],
+    "start": "2020-01-01",
+    "end": "2020-01-10",
+    "worst": 0.0
+   },
+   "robustness": null,
+   "timelines": null,
+   "subperiods": null
+  },
+  "full": {
+   "input": {
+    "variants": {
+     "A": {
+      "CAGR": 20.59,
+      "max_drawdown_pct": -70.45,
+      "sharpe": 0.962,
+      "label": "No regime overlay",
+      "status": "ok"
+     },
+     "B_raw": {
+      "CAGR": 23.71,
+      "max_drawdown_pct": -37.31,
+      "sharpe": 1.486,
+      "label": "Binary M50 50-DMA, raw",
+      "status": "ok"
+     },
+     "B_buf": {
+      "CAGR": 20.11,
+      "max_drawdown_pct": -48.44,
+      "sharpe": 1.224,
+      "label": "Binary M50 50-DMA, buffer",
+      "status": "ok"
+     },
+     "C_raw": {
+      "CAGR": 17.16,
+      "max_drawdown_pct": -40.82,
+      "sharpe": 1.005,
+      "label": "Binary M50 200-DMA, raw",
+      "status": "ok"
+     },
+     "C_buf": {
+      "CAGR": 16.95,
+      "max_drawdown_pct": -40.82,
+      "sharpe": 0.99,
+      "label": "Binary M50 200-DMA, buffer",
+      "status": "ok"
+     },
+     "E": {
+      "CAGR": 12.46,
+      "max_drawdown_pct": -45.98,
+      "sharpe": 0.982,
+      "label": "Three-index tiered",
+      "status": "ok"
+     },
+     "F": {
+      "CAGR": 15.83,
+      "max_drawdown_pct": -49.97,
+      "sharpe": 1.002,
+      "label": "Full tiered model",
+      "status": "ok"
+     },
+     "abl_breadth": {
+      "CAGR": 8.42,
+      "max_drawdown_pct": -50.0,
+      "sharpe": 0.8,
+      "label": "Ablation: breadth only",
+      "status": "ok"
+     }
+    },
+    "limitations": {
+     "breadth": "INSUFFICIENT for this window"
+    },
+    "curves": {
+     "dates": [
+      "2020-01-03",
+      "2020-01-10",
+      "2020-01-17",
+      "2020-01-24"
+     ],
+     "series": {
+      "A": {
+       "equity": [
+        100.0,
+        120.0,
+        60.0,
+        90.0
+       ],
+       "drawdown": [
+        0.0,
+        0.0,
+        -50.0,
+        -25.0
+       ],
+       "exposure": [
+        100.0,
+        40,
+        null,
+        70.0
+       ]
+      },
+      "B_raw": {
+       "equity": [
+        100.0,
+        110.0,
+        95.0,
+        130.0
+       ],
+       "drawdown": [
+        0.0,
+        0.0,
+        -13.64,
+        0.0
+       ]
+      },
+      "F": {
+       "equity": [
+        100.0,
+        105.0,
+        98.0,
+        112.0
+       ],
+       "drawdown": [
+        0.0,
+        0.0,
+        -6.67,
+        0.0
+       ]
+      },
+      "abl_x": {
+       "equity": [
+        100.0,
+        100.0,
+        100.0,
+        100.0
+       ],
+       "drawdown": [
+        0.0,
+        0.0,
+        0.0,
+        0.0
+       ]
+      }
+     }
+    },
+    "robustness": [
+     {
+      "buffer_bps": 100,
+      "confirm_days": 2,
+      "r4_exposure": 0.0,
+      "CAGR": 15.0,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 100,
+      "confirm_days": 2,
+      "r4_exposure": 10.0,
+      "CAGR": 15.3,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 100,
+      "confirm_days": 3,
+      "r4_exposure": 0.0,
+      "CAGR": 15.1,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 100,
+      "confirm_days": 3,
+      "r4_exposure": 10.0,
+      "CAGR": 15.4,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 100,
+      "confirm_days": 5,
+      "r4_exposure": 0.0,
+      "CAGR": 15.2,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 100,
+      "confirm_days": 5,
+      "r4_exposure": 10.0,
+      "CAGR": 15.5,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 150,
+      "confirm_days": 2,
+      "r4_exposure": 0.0,
+      "CAGR": 15.3,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 150,
+      "confirm_days": 2,
+      "r4_exposure": 10.0,
+      "CAGR": 15.600000000000001,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 150,
+      "confirm_days": 3,
+      "r4_exposure": 0.0,
+      "CAGR": 15.4,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 150,
+      "confirm_days": 3,
+      "r4_exposure": 10.0,
+      "CAGR": 15.700000000000001,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 150,
+      "confirm_days": 5,
+      "r4_exposure": 0.0,
+      "CAGR": 15.5,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 150,
+      "confirm_days": 5,
+      "r4_exposure": 10.0,
+      "CAGR": 15.8,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 200,
+      "confirm_days": 2,
+      "r4_exposure": 0.0,
+      "CAGR": 15.6,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 200,
+      "confirm_days": 2,
+      "r4_exposure": 10.0,
+      "CAGR": 15.9,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 200,
+      "confirm_days": 3,
+      "r4_exposure": 0.0,
+      "CAGR": 15.7,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 200,
+      "confirm_days": 3,
+      "r4_exposure": 10.0,
+      "CAGR": 16.0,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 200,
+      "confirm_days": 5,
+      "r4_exposure": 0.0,
+      "CAGR": 15.799999999999999,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 200,
+      "confirm_days": 5,
+      "r4_exposure": 10.0,
+      "CAGR": 16.099999999999998,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     }
+    ],
+    "timelines": [
+     {
+      "label": "Feb-Jun 2020",
+      "start": "2020-02-01",
+      "end": "2020-06-30",
+      "rows": [
+       {
+        "date": "2020-02-07",
+        "raw_tier": "R1",
+        "tier": "R1",
+        "exposure": 100.0,
+        "breadth": null
+       },
+       {
+        "date": "2020-02-14",
+        "raw_tier": "R3",
+        "tier": "R2",
+        "exposure": 70.0,
+        "breadth": null
+       },
+       {
+        "date": "2020-02-21",
+        "raw_tier": "R3",
+        "tier": "R3",
+        "exposure": 40.0,
+        "breadth": null
+       }
+      ]
+     },
+     {
+      "label": "Missing window",
+      "start": "1990-01-01",
+      "end": "1990-12-31",
+      "rows": [],
+      "unavailable": "index history does not reach this window"
+     }
+    ],
+    "subperiods": [
+     {
+      "label": "2007-2009 GFC",
+      "start": "2007-01-01",
+      "variants": {
+       "A": {
+        "CAGR": 16.5,
+        "max_drawdown_pct": -70.45
+       },
+       "F": {
+        "CAGR": 13.97,
+        "max_drawdown_pct": -49.97
+       }
+      }
+     },
+     {
+      "label": "too short",
+      "start": "2026-01-01",
+      "unavailable": "only 12 sessions"
+     }
+    ]
+   },
+   "build": {
+    "scatter": {
+     "width": 720,
+     "height": 380,
+     "pad_l": 62,
+     "pad_t": 18,
+     "pad_b": 46,
+     "pad_r": 22,
+     "plot_w": 636,
+     "plot_h": 316,
+     "x": {
+      "min": 0.0,
+      "max": 80,
+      "step": 20,
+      "ticks": [
+       0.0,
+       20.0,
+       40.0,
+       60.0,
+       80.0
+      ]
+     },
+     "y": {
+      "min": 0.0,
+      "max": 25,
+      "step": 5,
+      "ticks": [
+       0.0,
+       5.0,
+       10.0,
+       15.0,
+       20.0,
+       25.0
+      ]
+     },
+     "xticks": [
+      {
+       "v": 0.0,
+       "px": 62.0
+      },
+      {
+       "v": 20.0,
+       "px": 221.0
+      },
+      {
+       "v": 40.0,
+       "px": 380.0
+      },
+      {
+       "v": 60.0,
+       "px": 539.0
+      },
+      {
+       "v": 80.0,
+       "px": 698.0
+      }
+     ],
+     "yticks": [
+      {
+       "v": 0.0,
+       "px": 334.0
+      },
+      {
+       "v": 5.0,
+       "px": 270.8
+      },
+      {
+       "v": 10.0,
+       "px": 207.6
+      },
+      {
+       "v": 15.0,
+       "px": 144.4
+      },
+      {
+       "v": 20.0,
+       "px": 81.2
+      },
+      {
+       "v": 25.0,
+       "px": 18.0
+      }
+     ],
+     "zero_y": null,
+     "marks": [
+      {
+       "key": "B_raw",
+       "label": "Binary M50 50-DMA, raw",
+       "family": "binary",
+       "color": "#c97d1e",
+       "cagr": 23.71,
+       "dd": 37.31,
+       "x": 358.6,
+       "y": 34.3,
+       "best": true,
+       "proxy": false,
+       "ly": 38.3,
+       "anchor": "start",
+       "lx": 369.6,
+       "leader": false
+      },
+      {
+       "key": "C_raw",
+       "label": "Binary M50 200-DMA, raw",
+       "family": "binary",
+       "color": "#c97d1e",
+       "cagr": 17.16,
+       "dd": 40.82,
+       "x": 386.5,
+       "y": 117.1,
+       "best": false,
+       "proxy": false,
+       "ly": 121.1,
+       "anchor": "end",
+       "lx": 375.5,
+       "leader": false
+      },
+      {
+       "key": "C_buf",
+       "label": "Binary M50 200-DMA, buffer",
+       "family": "binary",
+       "color": "#c97d1e",
+       "cagr": 16.95,
+       "dd": 40.82,
+       "x": 386.5,
+       "y": 119.8,
+       "best": false,
+       "proxy": false,
+       "ly": 150.8,
+       "anchor": "end",
+       "lx": 375.5,
+       "leader": true
+      },
+      {
+       "key": "E",
+       "label": "Three-index tiered",
+       "family": "tiered",
+       "color": "#7b6ad0",
+       "cagr": 12.46,
+       "dd": 45.98,
+       "x": 427.5,
+       "y": 176.5,
+       "best": false,
+       "proxy": true,
+       "ly": 180.5,
+       "anchor": "start",
+       "lx": 438.5,
+       "leader": false
+      },
+      {
+       "key": "B_buf",
+       "label": "Binary M50 50-DMA, buffer",
+       "family": "binary",
+       "color": "#c97d1e",
+       "cagr": 20.11,
+       "dd": 48.44,
+       "x": 447.1,
+       "y": 79.8,
+       "best": false,
+       "proxy": false,
+       "ly": 83.8,
+       "anchor": "start",
+       "lx": 458.1,
+       "leader": false
+      },
+      {
+       "key": "F",
+       "label": "Full tiered model",
+       "family": "tiered",
+       "color": "#7b6ad0",
+       "cagr": 15.83,
+       "dd": 49.97,
+       "x": 459.3,
+       "y": 133.9,
+       "best": false,
+       "proxy": true,
+       "ly": 137.9,
+       "anchor": "start",
+       "lx": 470.3,
+       "leader": false
+      },
+      {
+       "key": "A",
+       "label": "No regime overlay",
+       "family": "none",
+       "color": "#2f9fb8",
+       "cagr": 20.59,
+       "dd": 70.45,
+       "x": 622.1,
+       "y": 73.7,
+       "best": false,
+       "proxy": false,
+       "ly": 50.7,
+       "anchor": "end",
+       "lx": 611.1,
+       "leader": true
+      }
+     ],
+     "families": [
+      {
+       "key": "none",
+       "label": "No overlay",
+       "color": "#2f9fb8"
+      },
+      {
+       "key": "binary",
+       "label": "Binary rule",
+       "color": "#c97d1e"
+      },
+      {
+       "key": "tiered",
+       "label": "Tiered",
+       "color": "#7b6ad0"
+      }
+     ]
+    },
+    "curves": {
+     "width": 720,
+     "eq_h": 300,
+     "dd_h": 190,
+     "ex_h": 150,
+     "has_exposure": true,
+     "exposure_window": 52,
+     "ex_ticks": [
+      {
+       "v": 0,
+       "px": 124.0
+      },
+      {
+       "v": 50,
+       "px": 69.0
+      },
+      {
+       "v": 100,
+       "px": 14.0
+      }
+     ],
+     "pad_l": 58,
+     "pad_r": 74,
+     "pad_t": 14,
+     "eq_plot": 260,
+     "dd_plot": 150,
+     "lines": [
+      {
+       "key": "A",
+       "family": "none",
+       "color": "#2f9fb8",
+       "equity": "M58.0,102.2 L254.0,40.9 L450.0,274.0 L646.0,137.7",
+       "drawdown": "M58.0,14.0 L254.0,14.0 L450.0,164.0 L646.0,89.0",
+       "exposure": "M58.0,14.0 L254.0,47.0 M646.0,47.0",
+       "avg_exposure": 70.0,
+       "callout": true,
+       "final": 90.0,
+       "label_y": 137.7
+      },
+      {
+       "key": "B_raw",
+       "family": "binary",
+       "color": "#c97d1e",
+       "equity": "M58.0,102.2 L254.0,70.2 L450.0,119.5 L646.0,14.0",
+       "drawdown": "M58.0,14.0 L254.0,14.0 L450.0,54.9 L646.0,14.0",
+       "exposure": "",
+       "avg_exposure": null,
+       "callout": true,
+       "final": 130.0,
+       "label_y": 20
+      },
+      {
+       "key": "F",
+       "family": "tiered",
+       "color": "#7b6ad0",
+       "equity": "M58.0,102.2 L254.0,85.8 L450.0,109.0 L646.0,64.1",
+       "drawdown": "M58.0,14.0 L254.0,14.0 L450.0,34.0 L646.0,14.0",
+       "exposure": "",
+       "avg_exposure": null,
+       "callout": true,
+       "final": 112.0,
+       "label_y": 64.1
+      }
+     ],
+     "eq_ticks": [
+      {
+       "v": 100,
+       "px": 102.2,
+       "label": "100"
+      }
+     ],
+     "dd_ticks": [
+      {
+       "v": 0.0,
+       "px": 14.0,
+       "label": "0%"
+      },
+      {
+       "v": -20.0,
+       "px": 74.0,
+       "label": "-20%"
+      },
+      {
+       "v": -40.0,
+       "px": 134.0,
+       "label": "-40%"
+      },
+      {
+       "v": -60.0,
+       "px": 194.0,
+       "label": "-60%"
+      }
+     ],
+     "xticks": [],
+     "start": "2020-01-03",
+     "end": "2020-01-24",
+     "worst": -50.0
+    },
+    "robustness": {
+     "grids": [
+      {
+       "r4": 0.0,
+       "cells": [
+        {
+         "buffer": 100,
+         "confirm": 2,
+         "value": 15.0,
+         "dd": -50.0,
+         "whip": 1.0,
+         "turnover": 200.0,
+         "color": "#8577d0"
+        },
+        {
+         "buffer": 100,
+         "confirm": 3,
+         "value": 15.1,
+         "dd": -50.0,
+         "whip": 1.0,
+         "turnover": 200.0,
+         "color": "#8577d0"
+        },
+        {
+         "buffer": 100,
+         "confirm": 5,
+         "value": 15.2,
+         "dd": -50.0,
+         "whip": 1.0,
+         "turnover": 200.0,
+         "color": "#9a8ce4"
+        },
+        {
+         "buffer": 150,
+         "confirm": 2,
+         "value": 15.3,
+         "dd": -50.0,
+         "whip": 1.0,
+         "turnover": 200.0,
+         "color": "#9a8ce4"
+        },
+        {
+         "buffer": 150,
+         "confirm": 3,
+         "value": 15.4,
+         "dd": -50.0,
+         "whip": 1.0,
+         "turnover": 200.0,
+         "color": "#9a8ce4"
+        },
+        {
+         "buffer": 150,
+         "confirm": 5,
+         "value": 15.5,
+         "dd": -50.0,
+         "whip": 1.0,
+         "turnover": 200.0,
+         "color": "#b0a4f2"
+        },
+        {
+         "buffer": 200,
+         "confirm": 2,
+         "value": 15.6,
+         "dd": -50.0,
+         "whip": 1.0,
+         "turnover": 200.0,
+         "color": "#b0a4f2"
+        },
+        {
+         "buffer": 200,
+         "confirm": 3,
+         "value": 15.7,
+         "dd": -50.0,
+         "whip": 1.0,
+         "turnover": 200.0,
+         "color": "#c5bcf8"
+        },
+        {
+         "buffer": 200,
+         "confirm": 5,
+         "value": 15.8,
+         "dd": -50.0,
+         "whip": 1.0,
+         "turnover": 200.0,
+         "color": "#c5bcf8"
+        }
+       ]
+      },
+      {
+       "r4": 10.0,
+       "cells": [
+        {
+         "buffer": 100,
+         "confirm": 2,
+         "value": 15.3,
+         "dd": -50.0,
+         "whip": 1.0,
+         "turnover": 200.0,
+         "color": "#9a8ce4"
+        },
+        {
+         "buffer": 100,
+         "confirm": 3,
+         "value": 15.4,
+         "dd": -50.0,
+         "whip": 1.0,
+         "turnover": 200.0,
+         "color": "#9a8ce4"
+        },
+        {
+         "buffer": 100,
+         "confirm": 5,
+         "value": 15.5,
+         "dd": -50.0,
+         "whip": 1.0,
+         "turnover": 200.0,
+         "color": "#b0a4f2"
+        },
+        {
+         "buffer": 150,
+         "confirm": 2,
+         "value": 15.6,
+         "dd": -50.0,
+         "whip": 1.0,
+         "turnover": 200.0,
+         "color": "#b0a4f2"
+        },
+        {
+         "buffer": 150,
+         "confirm": 3,
+         "value": 15.7,
+         "dd": -50.0,
+         "whip": 1.0,
+         "turnover": 200.0,
+         "color": "#c5bcf8"
+        },
+        {
+         "buffer": 150,
+         "confirm": 5,
+         "value": 15.8,
+         "dd": -50.0,
+         "whip": 1.0,
+         "turnover": 200.0,
+         "color": "#c5bcf8"
+        },
+        {
+         "buffer": 200,
+         "confirm": 2,
+         "value": 15.9,
+         "dd": -50.0,
+         "whip": 1.0,
+         "turnover": 200.0,
+         "color": "#c5bcf8"
+        },
+        {
+         "buffer": 200,
+         "confirm": 3,
+         "value": 16.0,
+         "dd": -50.0,
+         "whip": 1.0,
+         "turnover": 200.0,
+         "color": "#dad3fc"
+        },
+        {
+         "buffer": 200,
+         "confirm": 5,
+         "value": 16.1,
+         "dd": -50.0,
+         "whip": 1.0,
+         "turnover": 200.0,
+         "color": "#dad3fc"
+        }
+       ]
+      }
+     ],
+     "buffers": [
+      100,
+      150,
+      200
+     ],
+     "confirms": [
+      2,
+      3,
+      5
+     ],
+     "metric": "CAGR",
+     "min": 15.0,
+     "max": 16.1,
+     "spread": 1.1,
+     "ramp": [
+      "#8577d0",
+      "#9a8ce4",
+      "#b0a4f2",
+      "#c5bcf8",
+      "#dad3fc"
+     ],
+     "ink": "#0b1220",
+     "r4_inert": false,
+     "narrow": true
+    },
+    "timelines": [
+     {
+      "label": "Feb-Jun 2020",
+      "start": "2020-02-01",
+      "end": "2020-06-30",
+      "width": 720,
+      "height": 118,
+      "pad_l": 40,
+      "pad_t": 12,
+      "unavailable": null,
+      "path": "M40.0,12.0 L372.0,12.0 L372.0,36.6 L704.0,36.6 L704.0,61.2",
+      "area": "M40.0,12.0 L372.0,12.0 L372.0,36.6 L704.0,36.6 L704.0,61.2 L704.0,94.0 L40.0,94.0 Z",
+      "changes": [
+       {
+        "x": 372.0,
+        "tier": "R2",
+        "date": "2020-02-14",
+        "exposure": 70.0
+       },
+       {
+        "x": 704.0,
+        "tier": "R3",
+        "date": "2020-02-21",
+        "exposure": 40.0
+       }
+      ],
+      "ticks": [
+       {
+        "v": 0,
+        "px": 94.0
+       },
+       {
+        "v": 50,
+        "px": 53.0
+       },
+       {
+        "v": 100,
+        "px": 12.0
+       }
+      ],
+      "first": "2020-02-07",
+      "last": "2020-02-21",
+      "min_exposure": 40.0
+     },
+     {
+      "label": "Missing window",
+      "start": "1990-01-01",
+      "end": "1990-12-31",
+      "width": 720,
+      "height": 118,
+      "pad_l": 40,
+      "pad_t": 12,
+      "unavailable": "index history does not reach this window"
+     }
+    ],
+    "subperiods": {
+     "rows": [
+      {
+       "label": "2007-2009 GFC",
+       "start": "2007-01-01",
+       "bars": [
+        {
+         "key": "A",
+         "color": "#2f9fb8",
+         "cagr": 16.5,
+         "dd": -70.45,
+         "cagr_w": 190.0,
+         "dd_w": 190.0
+        },
+        {
+         "key": "F",
+         "color": "#7b6ad0",
+         "cagr": 13.97,
+         "dd": -49.97,
+         "cagr_w": 160.9,
+         "dd_w": 134.8
+        }
+       ]
+      }
+     ],
+     "keys": [
+      "A",
+      "F"
+     ],
+     "bar_w": 190,
+     "cagr_max": 16.5,
+     "dd_max": 70.5
+    },
+    "sharpe": {
+     "width": 720,
+     "height": 190,
+     "row_h": 26,
+     "pad_l": 148,
+     "zero": 148.0,
+     "bars": [
+      {
+       "key": "B_raw",
+       "label": "Binary M50 50-DMA, raw",
+       "value": 1.486,
+       "y": 0,
+       "x": 148.0,
+       "w": 510.0,
+       "color": "#c97d1e",
+       "family": "binary"
+      },
+      {
+       "key": "B_buf",
+       "label": "Binary M50 50-DMA, buffer",
+       "value": 1.224,
+       "y": 26,
+       "x": 148.0,
+       "w": 420.1,
+       "color": "#c97d1e",
+       "family": "binary"
+      },
+      {
+       "key": "C_raw",
+       "label": "Binary M50 200-DMA, raw",
+       "value": 1.005,
+       "y": 52,
+       "x": 148.0,
+       "w": 344.9,
+       "color": "#c97d1e",
+       "family": "binary"
+      },
+      {
+       "key": "F",
+       "label": "Full tiered model",
+       "value": 1.002,
+       "y": 78,
+       "x": 148.0,
+       "w": 343.9,
+       "color": "#7b6ad0",
+       "family": "tiered"
+      },
+      {
+       "key": "C_buf",
+       "label": "Binary M50 200-DMA, buffer",
+       "value": 0.99,
+       "y": 104,
+       "x": 148.0,
+       "w": 339.8,
+       "color": "#c97d1e",
+       "family": "binary"
+      },
+      {
+       "key": "E",
+       "label": "Three-index tiered",
+       "value": 0.982,
+       "y": 130,
+       "x": 148.0,
+       "w": 337.0,
+       "color": "#7b6ad0",
+       "family": "tiered"
+      },
+      {
+       "key": "A",
+       "label": "No regime overlay",
+       "value": 0.962,
+       "y": 156,
+       "x": 148.0,
+       "w": 330.2,
+       "color": "#2f9fb8",
+       "family": "none"
+      }
+     ],
+     "metric": "sharpe"
+    },
+    "ablation": {
+     "width": 720,
+     "height": 34,
+     "row_h": 26,
+     "pad_l": 196,
+     "zero": 196.0,
+     "bars": [
+      {
+       "key": "abl_breadth",
+       "label": "Ablation: breadth only",
+       "value": 8.42,
+       "y": 0,
+       "x": 196.0,
+       "w": 462.0,
+       "color": "#5b6b8c",
+       "family": "tiered"
+      }
+     ],
+     "metric": "CAGR"
+    },
+    "families": [
+     {
+      "key": "none",
+      "label": "No overlay",
+      "color": "#2f9fb8"
+     },
+     {
+      "key": "binary",
+      "label": "Binary rule",
+      "color": "#c97d1e"
+     },
+     {
+      "key": "tiered",
+      "label": "Tiered",
+      "color": "#7b6ad0"
+     }
+    ],
+    "breadth_caveat": "INSUFFICIENT for this window"
+   },
+   "curves": {
+    "width": 720,
+    "eq_h": 300,
+    "dd_h": 190,
+    "ex_h": 150,
+    "has_exposure": true,
+    "exposure_window": 52,
+    "ex_ticks": [
+     {
+      "v": 0,
+      "px": 124.0
+     },
+     {
+      "v": 50,
+      "px": 69.0
+     },
+     {
+      "v": 100,
+      "px": 14.0
+     }
+    ],
+    "pad_l": 58,
+    "pad_r": 74,
+    "pad_t": 14,
+    "eq_plot": 260,
+    "dd_plot": 150,
+    "lines": [
+     {
+      "key": "A",
+      "family": "none",
+      "color": "#2f9fb8",
+      "equity": "M58.0,102.2 L254.0,40.9 L450.0,274.0 L646.0,137.7",
+      "drawdown": "M58.0,14.0 L254.0,14.0 L450.0,164.0 L646.0,89.0",
+      "exposure": "M58.0,14.0 L254.0,47.0 M646.0,47.0",
+      "avg_exposure": 70.0,
+      "callout": true,
+      "final": 90.0,
+      "label_y": 137.7
+     },
+     {
+      "key": "B_raw",
+      "family": "binary",
+      "color": "#c97d1e",
+      "equity": "M58.0,102.2 L254.0,70.2 L450.0,119.5 L646.0,14.0",
+      "drawdown": "M58.0,14.0 L254.0,14.0 L450.0,54.9 L646.0,14.0",
+      "exposure": "",
+      "avg_exposure": null,
+      "callout": true,
+      "final": 130.0,
+      "label_y": 20
+     },
+     {
+      "key": "F",
+      "family": "tiered",
+      "color": "#7b6ad0",
+      "equity": "M58.0,102.2 L254.0,85.8 L450.0,109.0 L646.0,64.1",
+      "drawdown": "M58.0,14.0 L254.0,14.0 L450.0,34.0 L646.0,14.0",
+      "exposure": "",
+      "avg_exposure": null,
+      "callout": true,
+      "final": 112.0,
+      "label_y": 64.1
+     }
+    ],
+    "eq_ticks": [
+     {
+      "v": 100,
+      "px": 102.2,
+      "label": "100"
+     }
+    ],
+    "dd_ticks": [
+     {
+      "v": 0.0,
+      "px": 14.0,
+      "label": "0%"
+     },
+     {
+      "v": -20.0,
+      "px": 74.0,
+      "label": "-20%"
+     },
+     {
+      "v": -40.0,
+      "px": 134.0,
+      "label": "-40%"
+     },
+     {
+      "v": -60.0,
+      "px": 194.0,
+      "label": "-60%"
+     }
+    ],
+    "xticks": [],
+    "start": "2020-01-03",
+    "end": "2020-01-24",
+    "worst": -50.0
+   },
+   "robustness": {
+    "grids": [
+     {
+      "r4": 0.0,
+      "cells": [
+       {
+        "buffer": 100,
+        "confirm": 2,
+        "value": 15.0,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#8577d0"
+       },
+       {
+        "buffer": 100,
+        "confirm": 3,
+        "value": 15.1,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#8577d0"
+       },
+       {
+        "buffer": 100,
+        "confirm": 5,
+        "value": 15.2,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#9a8ce4"
+       },
+       {
+        "buffer": 150,
+        "confirm": 2,
+        "value": 15.3,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#9a8ce4"
+       },
+       {
+        "buffer": 150,
+        "confirm": 3,
+        "value": 15.4,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#9a8ce4"
+       },
+       {
+        "buffer": 150,
+        "confirm": 5,
+        "value": 15.5,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#b0a4f2"
+       },
+       {
+        "buffer": 200,
+        "confirm": 2,
+        "value": 15.6,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#b0a4f2"
+       },
+       {
+        "buffer": 200,
+        "confirm": 3,
+        "value": 15.7,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#c5bcf8"
+       },
+       {
+        "buffer": 200,
+        "confirm": 5,
+        "value": 15.8,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#c5bcf8"
+       }
+      ]
+     },
+     {
+      "r4": 10.0,
+      "cells": [
+       {
+        "buffer": 100,
+        "confirm": 2,
+        "value": 15.3,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#9a8ce4"
+       },
+       {
+        "buffer": 100,
+        "confirm": 3,
+        "value": 15.4,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#9a8ce4"
+       },
+       {
+        "buffer": 100,
+        "confirm": 5,
+        "value": 15.5,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#b0a4f2"
+       },
+       {
+        "buffer": 150,
+        "confirm": 2,
+        "value": 15.6,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#b0a4f2"
+       },
+       {
+        "buffer": 150,
+        "confirm": 3,
+        "value": 15.7,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#c5bcf8"
+       },
+       {
+        "buffer": 150,
+        "confirm": 5,
+        "value": 15.8,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#c5bcf8"
+       },
+       {
+        "buffer": 200,
+        "confirm": 2,
+        "value": 15.9,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#c5bcf8"
+       },
+       {
+        "buffer": 200,
+        "confirm": 3,
+        "value": 16.0,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#dad3fc"
+       },
+       {
+        "buffer": 200,
+        "confirm": 5,
+        "value": 16.1,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#dad3fc"
+       }
+      ]
+     }
+    ],
+    "buffers": [
+     100,
+     150,
+     200
+    ],
+    "confirms": [
+     2,
+     3,
+     5
+    ],
+    "metric": "CAGR",
+    "min": 15.0,
+    "max": 16.1,
+    "spread": 1.1,
+    "ramp": [
+     "#8577d0",
+     "#9a8ce4",
+     "#b0a4f2",
+     "#c5bcf8",
+     "#dad3fc"
+    ],
+    "ink": "#0b1220",
+    "r4_inert": false,
+    "narrow": true
+   },
+   "timelines": [
+    {
+     "label": "Feb-Jun 2020",
+     "start": "2020-02-01",
+     "end": "2020-06-30",
+     "width": 720,
+     "height": 118,
+     "pad_l": 40,
+     "pad_t": 12,
+     "unavailable": null,
+     "path": "M40.0,12.0 L372.0,12.0 L372.0,36.6 L704.0,36.6 L704.0,61.2",
+     "area": "M40.0,12.0 L372.0,12.0 L372.0,36.6 L704.0,36.6 L704.0,61.2 L704.0,94.0 L40.0,94.0 Z",
+     "changes": [
+      {
+       "x": 372.0,
+       "tier": "R2",
+       "date": "2020-02-14",
+       "exposure": 70.0
+      },
+      {
+       "x": 704.0,
+       "tier": "R3",
+       "date": "2020-02-21",
+       "exposure": 40.0
+      }
+     ],
+     "ticks": [
+      {
+       "v": 0,
+       "px": 94.0
+      },
+      {
+       "v": 50,
+       "px": 53.0
+      },
+      {
+       "v": 100,
+       "px": 12.0
+      }
+     ],
+     "first": "2020-02-07",
+     "last": "2020-02-21",
+     "min_exposure": 40.0
+    },
+    {
+     "label": "Missing window",
+     "start": "1990-01-01",
+     "end": "1990-12-31",
+     "width": 720,
+     "height": 118,
+     "pad_l": 40,
+     "pad_t": 12,
+     "unavailable": "index history does not reach this window"
+    }
+   ],
+   "subperiods": {
+    "rows": [
+     {
+      "label": "2007-2009 GFC",
+      "start": "2007-01-01",
+      "bars": [
+       {
+        "key": "A",
+        "color": "#2f9fb8",
+        "cagr": 16.5,
+        "dd": -70.45,
+        "cagr_w": 190.0,
+        "dd_w": 190.0
+       },
+       {
+        "key": "F",
+        "color": "#7b6ad0",
+        "cagr": 13.97,
+        "dd": -49.97,
+        "cagr_w": 160.9,
+        "dd_w": 134.8
+       }
+      ]
+     }
+    ],
+    "keys": [
+     "A",
+     "F"
+    ],
+    "bar_w": 190,
+    "cagr_max": 16.5,
+    "dd_max": 70.5
+   }
+  },
+  "grid": {
+   "input": {
+    "robustness": [
+     {
+      "buffer_bps": 100,
+      "confirm_days": 2,
+      "r4_exposure": 0.0,
+      "CAGR": 15.0,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 100,
+      "confirm_days": 2,
+      "r4_exposure": 10.0,
+      "CAGR": 15.0,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 100,
+      "confirm_days": 3,
+      "r4_exposure": 0.0,
+      "CAGR": 15.1,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 100,
+      "confirm_days": 3,
+      "r4_exposure": 10.0,
+      "CAGR": 15.1,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 100,
+      "confirm_days": 5,
+      "r4_exposure": 0.0,
+      "CAGR": 15.2,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 100,
+      "confirm_days": 5,
+      "r4_exposure": 10.0,
+      "CAGR": 15.2,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 150,
+      "confirm_days": 2,
+      "r4_exposure": 0.0,
+      "CAGR": 15.3,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 150,
+      "confirm_days": 2,
+      "r4_exposure": 10.0,
+      "CAGR": 15.3,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 150,
+      "confirm_days": 3,
+      "r4_exposure": 0.0,
+      "CAGR": 15.4,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 150,
+      "confirm_days": 3,
+      "r4_exposure": 10.0,
+      "CAGR": 15.4,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 150,
+      "confirm_days": 5,
+      "r4_exposure": 0.0,
+      "CAGR": 15.5,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 150,
+      "confirm_days": 5,
+      "r4_exposure": 10.0,
+      "CAGR": 15.5,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 200,
+      "confirm_days": 2,
+      "r4_exposure": 0.0,
+      "CAGR": 15.6,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 200,
+      "confirm_days": 2,
+      "r4_exposure": 10.0,
+      "CAGR": 15.6,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 200,
+      "confirm_days": 3,
+      "r4_exposure": 0.0,
+      "CAGR": 15.7,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 200,
+      "confirm_days": 3,
+      "r4_exposure": 10.0,
+      "CAGR": 15.7,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 200,
+      "confirm_days": 5,
+      "r4_exposure": 0.0,
+      "CAGR": 15.799999999999999,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 200,
+      "confirm_days": 5,
+      "r4_exposure": 10.0,
+      "CAGR": 15.799999999999999,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     }
+    ]
+   },
+   "build": null,
+   "curves": null,
+   "robustness": {
+    "grids": [
+     {
+      "r4": 0.0,
+      "cells": [
+       {
+        "buffer": 100,
+        "confirm": 2,
+        "value": 15.0,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#8577d0"
+       },
+       {
+        "buffer": 100,
+        "confirm": 3,
+        "value": 15.1,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#8577d0"
+       },
+       {
+        "buffer": 100,
+        "confirm": 5,
+        "value": 15.2,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#9a8ce4"
+       },
+       {
+        "buffer": 150,
+        "confirm": 2,
+        "value": 15.3,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#b0a4f2"
+       },
+       {
+        "buffer": 150,
+        "confirm": 3,
+        "value": 15.4,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#b0a4f2"
+       },
+       {
+        "buffer": 150,
+        "confirm": 5,
+        "value": 15.5,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#c5bcf8"
+       },
+       {
+        "buffer": 200,
+        "confirm": 2,
+        "value": 15.6,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#c5bcf8"
+       },
+       {
+        "buffer": 200,
+        "confirm": 3,
+        "value": 15.7,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#dad3fc"
+       },
+       {
+        "buffer": 200,
+        "confirm": 5,
+        "value": 15.8,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#dad3fc"
+       }
+      ]
+     },
+     {
+      "r4": 10.0,
+      "cells": [
+       {
+        "buffer": 100,
+        "confirm": 2,
+        "value": 15.0,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#8577d0"
+       },
+       {
+        "buffer": 100,
+        "confirm": 3,
+        "value": 15.1,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#8577d0"
+       },
+       {
+        "buffer": 100,
+        "confirm": 5,
+        "value": 15.2,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#9a8ce4"
+       },
+       {
+        "buffer": 150,
+        "confirm": 2,
+        "value": 15.3,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#b0a4f2"
+       },
+       {
+        "buffer": 150,
+        "confirm": 3,
+        "value": 15.4,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#b0a4f2"
+       },
+       {
+        "buffer": 150,
+        "confirm": 5,
+        "value": 15.5,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#c5bcf8"
+       },
+       {
+        "buffer": 200,
+        "confirm": 2,
+        "value": 15.6,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#c5bcf8"
+       },
+       {
+        "buffer": 200,
+        "confirm": 3,
+        "value": 15.7,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#dad3fc"
+       },
+       {
+        "buffer": 200,
+        "confirm": 5,
+        "value": 15.8,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#dad3fc"
+       }
+      ]
+     }
+    ],
+    "buffers": [
+     100,
+     150,
+     200
+    ],
+    "confirms": [
+     2,
+     3,
+     5
+    ],
+    "metric": "CAGR",
+    "min": 15.0,
+    "max": 15.8,
+    "spread": 0.8,
+    "ramp": [
+     "#8577d0",
+     "#9a8ce4",
+     "#b0a4f2",
+     "#c5bcf8",
+     "#dad3fc"
+    ],
+    "ink": "#0b1220",
+    "r4_inert": true,
+    "narrow": true
+   },
+   "timelines": null,
+   "subperiods": null
+  },
+  "grid_offset": {
+   "input": {
+    "robustness": [
+     {
+      "buffer_bps": 100,
+      "confirm_days": 2,
+      "r4_exposure": 0.0,
+      "CAGR": 15.0,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 100,
+      "confirm_days": 2,
+      "r4_exposure": 10.0,
+      "CAGR": 15.7,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 100,
+      "confirm_days": 3,
+      "r4_exposure": 0.0,
+      "CAGR": 15.1,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 100,
+      "confirm_days": 3,
+      "r4_exposure": 10.0,
+      "CAGR": 15.799999999999999,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 100,
+      "confirm_days": 5,
+      "r4_exposure": 0.0,
+      "CAGR": 15.2,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 100,
+      "confirm_days": 5,
+      "r4_exposure": 10.0,
+      "CAGR": 15.899999999999999,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 150,
+      "confirm_days": 2,
+      "r4_exposure": 0.0,
+      "CAGR": 15.3,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 150,
+      "confirm_days": 2,
+      "r4_exposure": 10.0,
+      "CAGR": 16.0,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 150,
+      "confirm_days": 3,
+      "r4_exposure": 0.0,
+      "CAGR": 15.4,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 150,
+      "confirm_days": 3,
+      "r4_exposure": 10.0,
+      "CAGR": 16.1,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 150,
+      "confirm_days": 5,
+      "r4_exposure": 0.0,
+      "CAGR": 15.5,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 150,
+      "confirm_days": 5,
+      "r4_exposure": 10.0,
+      "CAGR": 16.2,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 200,
+      "confirm_days": 2,
+      "r4_exposure": 0.0,
+      "CAGR": 15.6,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 200,
+      "confirm_days": 2,
+      "r4_exposure": 10.0,
+      "CAGR": 16.3,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 200,
+      "confirm_days": 3,
+      "r4_exposure": 0.0,
+      "CAGR": 15.7,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 200,
+      "confirm_days": 3,
+      "r4_exposure": 10.0,
+      "CAGR": 16.4,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 200,
+      "confirm_days": 5,
+      "r4_exposure": 0.0,
+      "CAGR": 15.799999999999999,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     },
+     {
+      "buffer_bps": 200,
+      "confirm_days": 5,
+      "r4_exposure": 10.0,
+      "CAGR": 16.5,
+      "max_drawdown_pct": -50.0,
+      "annual_turnover_pct": 200.0,
+      "whipsaws_per_year": 1.0
+     }
+    ]
+   },
+   "build": null,
+   "curves": null,
+   "robustness": {
+    "grids": [
+     {
+      "r4": 0.0,
+      "cells": [
+       {
+        "buffer": 100,
+        "confirm": 2,
+        "value": 15.0,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#8577d0"
+       },
+       {
+        "buffer": 100,
+        "confirm": 3,
+        "value": 15.1,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#8577d0"
+       },
+       {
+        "buffer": 100,
+        "confirm": 5,
+        "value": 15.2,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#9a8ce4"
+       },
+       {
+        "buffer": 150,
+        "confirm": 2,
+        "value": 15.3,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#9a8ce4"
+       },
+       {
+        "buffer": 150,
+        "confirm": 3,
+        "value": 15.4,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#9a8ce4"
+       },
+       {
+        "buffer": 150,
+        "confirm": 5,
+        "value": 15.5,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#9a8ce4"
+       },
+       {
+        "buffer": 200,
+        "confirm": 2,
+        "value": 15.6,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#b0a4f2"
+       },
+       {
+        "buffer": 200,
+        "confirm": 3,
+        "value": 15.7,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#b0a4f2"
+       },
+       {
+        "buffer": 200,
+        "confirm": 5,
+        "value": 15.8,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#b0a4f2"
+       }
+      ]
+     },
+     {
+      "r4": 10.0,
+      "cells": [
+       {
+        "buffer": 100,
+        "confirm": 2,
+        "value": 15.7,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#b0a4f2"
+       },
+       {
+        "buffer": 100,
+        "confirm": 3,
+        "value": 15.8,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#b0a4f2"
+       },
+       {
+        "buffer": 100,
+        "confirm": 5,
+        "value": 15.9,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#b0a4f2"
+       },
+       {
+        "buffer": 150,
+        "confirm": 2,
+        "value": 16.0,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#c5bcf8"
+       },
+       {
+        "buffer": 150,
+        "confirm": 3,
+        "value": 16.1,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#c5bcf8"
+       },
+       {
+        "buffer": 150,
+        "confirm": 5,
+        "value": 16.2,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#c5bcf8"
+       },
+       {
+        "buffer": 200,
+        "confirm": 2,
+        "value": 16.3,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#c5bcf8"
+       },
+       {
+        "buffer": 200,
+        "confirm": 3,
+        "value": 16.4,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#dad3fc"
+       },
+       {
+        "buffer": 200,
+        "confirm": 5,
+        "value": 16.5,
+        "dd": -50.0,
+        "whip": 1.0,
+        "turnover": 200.0,
+        "color": "#dad3fc"
+       }
+      ]
+     }
+    ],
+    "buffers": [
+     100,
+     150,
+     200
+    ],
+    "confirms": [
+     2,
+     3,
+     5
+    ],
+    "metric": "CAGR",
+    "min": 15.0,
+    "max": 16.5,
+    "spread": 1.5,
+    "ramp": [
+     "#8577d0",
+     "#9a8ce4",
+     "#b0a4f2",
+     "#c5bcf8",
+     "#dad3fc"
+    ],
+    "ink": "#0b1220",
+    "r4_inert": false,
+    "narrow": true
+   },
+   "timelines": null,
+   "subperiods": null
+  },
+  "tl": {
+   "input": {
+    "timelines": [
+     {
+      "label": "Feb-Jun 2020",
+      "start": "2020-02-01",
+      "end": "2020-06-30",
+      "rows": [
+       {
+        "date": "2020-02-07",
+        "raw_tier": "R1",
+        "tier": "R1",
+        "exposure": 100.0,
+        "breadth": null
+       },
+       {
+        "date": "2020-02-14",
+        "raw_tier": "R3",
+        "tier": "R2",
+        "exposure": 70.0,
+        "breadth": null
+       },
+       {
+        "date": "2020-02-21",
+        "raw_tier": "R3",
+        "tier": "R3",
+        "exposure": 40.0,
+        "breadth": null
+       }
+      ]
+     },
+     {
+      "label": "Missing window",
+      "start": "1990-01-01",
+      "end": "1990-12-31",
+      "rows": [],
+      "unavailable": "index history does not reach this window"
+     }
+    ]
+   },
+   "build": null,
+   "curves": null,
+   "robustness": null,
+   "timelines": [
+    {
+     "label": "Feb-Jun 2020",
+     "start": "2020-02-01",
+     "end": "2020-06-30",
+     "width": 720,
+     "height": 118,
+     "pad_l": 40,
+     "pad_t": 12,
+     "unavailable": null,
+     "path": "M40.0,12.0 L372.0,12.0 L372.0,36.6 L704.0,36.6 L704.0,61.2",
+     "area": "M40.0,12.0 L372.0,12.0 L372.0,36.6 L704.0,36.6 L704.0,61.2 L704.0,94.0 L40.0,94.0 Z",
+     "changes": [
+      {
+       "x": 372.0,
+       "tier": "R2",
+       "date": "2020-02-14",
+       "exposure": 70.0
+      },
+      {
+       "x": 704.0,
+       "tier": "R3",
+       "date": "2020-02-21",
+       "exposure": 40.0
+      }
+     ],
+     "ticks": [
+      {
+       "v": 0,
+       "px": 94.0
+      },
+      {
+       "v": 50,
+       "px": 53.0
+      },
+      {
+       "v": 100,
+       "px": 12.0
+      }
+     ],
+     "first": "2020-02-07",
+     "last": "2020-02-21",
+     "min_exposure": 40.0
+    },
+    {
+     "label": "Missing window",
+     "start": "1990-01-01",
+     "end": "1990-12-31",
+     "width": 720,
+     "height": 118,
+     "pad_l": 40,
+     "pad_t": 12,
+     "unavailable": "index history does not reach this window"
+    }
+   ],
+   "subperiods": null
+  },
+  "sp": {
+   "input": {
+    "subperiods": [
+     {
+      "label": "2007-2009 GFC",
+      "start": "2007-01-01",
+      "variants": {
+       "A": {
+        "CAGR": 16.5,
+        "max_drawdown_pct": -70.45
+       },
+       "F": {
+        "CAGR": 13.97,
+        "max_drawdown_pct": -49.97
+       }
+      }
+     },
+     {
+      "label": "too short",
+      "start": "2026-01-01",
+      "unavailable": "only 12 sessions"
+     }
+    ]
+   },
+   "build": null,
+   "curves": null,
+   "robustness": null,
+   "timelines": null,
+   "subperiods": {
+    "rows": [
+     {
+      "label": "2007-2009 GFC",
+      "start": "2007-01-01",
+      "bars": [
+       {
+        "key": "A",
+        "color": "#2f9fb8",
+        "cagr": 16.5,
+        "dd": -70.45,
+        "cagr_w": 190.0,
+        "dd_w": 190.0
+       },
+       {
+        "key": "F",
+        "color": "#7b6ad0",
+        "cagr": 13.97,
+        "dd": -49.97,
+        "cagr_w": 160.9,
+        "dd_w": 134.8
+       }
+      ]
+     }
+    ],
+    "keys": [
+     "A",
+     "F"
+    ],
+    "bar_w": 190,
+    "cagr_max": 16.5,
+    "dd_max": 70.5
+   }
+  },
+  "neg": {
+   "input": {
+    "variants": {
+     "A": {
+      "CAGR": -3.5,
+      "max_drawdown_pct": -12.0,
+      "sharpe": -0.2,
+      "label": "neg",
+      "status": "ok"
+     },
+     "B_raw": {
+      "CAGR": 4,
+      "max_drawdown_pct": -8,
+      "sharpe": 0.5,
+      "label": "b",
+      "status": "ok"
+     },
+     "E": {
+      "CAGR": 2.25,
+      "max_drawdown_pct": -30.0,
+      "sharpe": 0.1,
+      "label": "e",
+      "status": "ok"
+     },
+     "abl_x": {
+      "CAGR": 1.0,
+      "max_drawdown_pct": -5.0,
+      "sharpe": 0.0,
+      "label": "ax",
+      "status": "ok"
+     }
+    },
+    "limitations": {
+     "breadth": null
+    }
+   },
+   "build": {
+    "scatter": {
+     "width": 720,
+     "height": 380,
+     "pad_l": 62,
+     "pad_t": 18,
+     "pad_b": 46,
+     "pad_r": 22,
+     "plot_w": 636,
+     "plot_h": 316,
+     "x": {
+      "min": 0.0,
+      "max": 30,
+      "step": 10,
+      "ticks": [
+       0.0,
+       10.0,
+       20.0,
+       30.0
+      ]
+     },
+     "y": {
+      "min": -4,
+      "max": 4,
+      "step": 2,
+      "ticks": [
+       -4,
+       -2,
+       0,
+       2,
+       4
+      ]
+     },
+     "xticks": [
+      {
+       "v": 0.0,
+       "px": 62.0
+      },
+      {
+       "v": 10.0,
+       "px": 274.0
+      },
+      {
+       "v": 20.0,
+       "px": 486.0
+      },
+      {
+       "v": 30.0,
+       "px": 698.0
+      }
+     ],
+     "yticks": [
+      {
+       "v": -4,
+       "px": 334.0
+      },
+      {
+       "v": -2,
+       "px": 255.0
+      },
+      {
+       "v": 0,
+       "px": 176.0
+      },
+      {
+       "v": 2,
+       "px": 97.0
+      },
+      {
+       "v": 4,
+       "px": 18.0
+      }
+     ],
+     "zero_y": 176.0,
+     "marks": [
+      {
+       "key": "B_raw",
+       "label": "b",
+       "family": "binary",
+       "color": "#c97d1e",
+       "cagr": 4.0,
+       "dd": 8.0,
+       "x": 231.6,
+       "y": 18.0,
+       "best": true,
+       "proxy": false,
+       "ly": 49.0,
+       "anchor": "start",
+       "lx": 242.6,
+       "leader": true
+      },
+      {
+       "key": "A",
+       "label": "neg",
+       "family": "none",
+       "color": "#2f9fb8",
+       "cagr": -3.5,
+       "dd": 12.0,
+       "x": 316.4,
+       "y": 314.2,
+       "best": false,
+       "proxy": false,
+       "ly": 291.2,
+       "anchor": "start",
+       "lx": 327.4,
+       "leader": true
+      },
+      {
+       "key": "E",
+       "label": "e",
+       "family": "tiered",
+       "color": "#7b6ad0",
+       "cagr": 2.25,
+       "dd": 30.0,
+       "x": 698.0,
+       "y": 87.1,
+       "best": false,
+       "proxy": true,
+       "ly": 91.1,
+       "anchor": "end",
+       "lx": 687.0,
+       "leader": false
+      }
+     ],
+     "families": [
+      {
+       "key": "none",
+       "label": "No overlay",
+       "color": "#2f9fb8"
+      },
+      {
+       "key": "binary",
+       "label": "Binary rule",
+       "color": "#c97d1e"
+      },
+      {
+       "key": "tiered",
+       "label": "Tiered",
+       "color": "#7b6ad0"
+      }
+     ]
+    },
+    "curves": null,
+    "robustness": null,
+    "timelines": null,
+    "subperiods": null,
+    "sharpe": {
+     "width": 720,
+     "height": 86,
+     "row_h": 26,
+     "pad_l": 148,
+     "zero": 293.7,
+     "bars": [
+      {
+       "key": "B_raw",
+       "label": "b",
+       "value": 0.5,
+       "y": 0,
+       "x": 293.7,
+       "w": 364.3,
+       "color": "#c97d1e",
+       "family": "binary"
+      },
+      {
+       "key": "E",
+       "label": "e",
+       "value": 0.1,
+       "y": 26,
+       "x": 293.7,
+       "w": 72.9,
+       "color": "#7b6ad0",
+       "family": "tiered"
+      },
+      {
+       "key": "A",
+       "label": "neg",
+       "value": -0.2,
+       "y": 52,
+       "x": 148.0,
+       "w": 145.7,
+       "color": "#2f9fb8",
+       "family": "none"
+      }
+     ],
+     "metric": "sharpe"
+    },
+    "ablation": {
+     "width": 720,
+     "height": 34,
+     "row_h": 26,
+     "pad_l": 196,
+     "zero": 196.0,
+     "bars": [
+      {
+       "key": "abl_x",
+       "label": "ax",
+       "value": 1.0,
+       "y": 0,
+       "x": 196.0,
+       "w": 462.0,
+       "color": "#5b6b8c",
+       "family": "tiered"
+      }
+     ],
+     "metric": "CAGR"
+    },
+    "families": [
+     {
+      "key": "none",
+      "label": "No overlay",
+      "color": "#2f9fb8"
+     },
+     {
+      "key": "binary",
+      "label": "Binary rule",
+      "color": "#c97d1e"
+     },
+     {
+      "key": "tiered",
+      "label": "Tiered",
+      "color": "#7b6ad0"
+     }
+    ],
+    "breadth_caveat": "None"
+   },
+   "curves": null,
+   "robustness": null,
+   "timelines": null,
+   "subperiods": null
+  },
+  "coincident": {
+   "input": {
+    "variants": {
+     "A": {
+      "CAGR": 15.0,
+      "max_drawdown_pct": -40.0,
+      "sharpe": 1.0,
+      "label": "A",
+      "status": "ok"
+     },
+     "B_raw": {
+      "CAGR": 15.0,
+      "max_drawdown_pct": -40.0,
+      "sharpe": 1.0,
+      "label": "B_raw",
+      "status": "ok"
+     },
+     "B_buf": {
+      "CAGR": 15.0,
+      "max_drawdown_pct": -40.0,
+      "sharpe": 1.0,
+      "label": "B_buf",
+      "status": "ok"
+     },
+     "C_raw": {
+      "CAGR": 15.0,
+      "max_drawdown_pct": -40.0,
+      "sharpe": 1.0,
+      "label": "C_raw",
+      "status": "ok"
+     },
+     "C_buf": {
+      "CAGR": 15.0,
+      "max_drawdown_pct": -40.0,
+      "sharpe": 1.0,
+      "label": "C_buf",
+      "status": "ok"
+     },
+     "E": {
+      "CAGR": 15.0,
+      "max_drawdown_pct": -40.0,
+      "sharpe": 1.0,
+      "label": "E",
+      "status": "ok"
+     },
+     "F": {
+      "CAGR": 15.0,
+      "max_drawdown_pct": -40.0,
+      "sharpe": 1.0,
+      "label": "F",
+      "status": "ok"
+     }
+    }
+   },
+   "build": {
+    "scatter": {
+     "width": 720,
+     "height": 380,
+     "pad_l": 62,
+     "pad_t": 18,
+     "pad_b": 46,
+     "pad_r": 22,
+     "plot_w": 636,
+     "plot_h": 316,
+     "x": {
+      "min": 0.0,
+      "max": 40,
+      "step": 10,
+      "ticks": [
+       0.0,
+       10.0,
+       20.0,
+       30.0,
+       40.0
+      ]
+     },
+     "y": {
+      "min": 0.0,
+      "max": 15,
+      "step": 5,
+      "ticks": [
+       0.0,
+       5.0,
+       10.0,
+       15.0
+      ]
+     },
+     "xticks": [
+      {
+       "v": 0.0,
+       "px": 62.0
+      },
+      {
+       "v": 10.0,
+       "px": 221.0
+      },
+      {
+       "v": 20.0,
+       "px": 380.0
+      },
+      {
+       "v": 30.0,
+       "px": 539.0
+      },
+      {
+       "v": 40.0,
+       "px": 698.0
+      }
+     ],
+     "yticks": [
+      {
+       "v": 0.0,
+       "px": 334.0
+      },
+      {
+       "v": 5.0,
+       "px": 228.7
+      },
+      {
+       "v": 10.0,
+       "px": 123.3
+      },
+      {
+       "v": 15.0,
+       "px": 18.0
+      }
+     ],
+     "zero_y": null,
+     "marks": [
+      {
+       "key": "A",
+       "label": "A",
+       "family": "none",
+       "color": "#2f9fb8",
+       "cagr": 15.0,
+       "dd": 40.0,
+       "x": 698.0,
+       "y": 18.0,
+       "best": true,
+       "proxy": false,
+       "ly": 49.0,
+       "anchor": "end",
+       "lx": 687.0,
+       "leader": true
+      },
+      {
+       "key": "B_raw",
+       "label": "B_raw",
+       "family": "binary",
+       "color": "#c97d1e",
+       "cagr": 15.0,
+       "dd": 40.0,
+       "x": 698.0,
+       "y": 18.0,
+       "best": false,
+       "proxy": false,
+       "ly": 103.0,
+       "anchor": "end",
+       "lx": 687.0,
+       "leader": true
+      },
+      {
+       "key": "B_buf",
+       "label": "B_buf",
+       "family": "binary",
+       "color": "#c97d1e",
+       "cagr": 15.0,
+       "dd": 40.0,
+       "x": 698.0,
+       "y": 18.0,
+       "best": false,
+       "proxy": false,
+       "ly": 157.0,
+       "anchor": "end",
+       "lx": 687.0,
+       "leader": true
+      },
+      {
+       "key": "C_raw",
+       "label": "C_raw",
+       "family": "binary",
+       "color": "#c97d1e",
+       "cagr": 15.0,
+       "dd": 40.0,
+       "x": 698.0,
+       "y": 18.0,
+       "best": false,
+       "proxy": false,
+       "ly": -167.0,
+       "anchor": "start",
+       "lx": 709.0,
+       "leader": true
+      },
+      {
+       "key": "C_buf",
+       "label": "C_buf",
+       "family": "binary",
+       "color": "#c97d1e",
+       "cagr": 15.0,
+       "dd": 40.0,
+       "x": 698.0,
+       "y": 18.0,
+       "best": false,
+       "proxy": false,
+       "ly": -167.0,
+       "anchor": "start",
+       "lx": 709.0,
+       "leader": true
+      },
+      {
+       "key": "E",
+       "label": "E",
+       "family": "tiered",
+       "color": "#7b6ad0",
+       "cagr": 15.0,
+       "dd": 40.0,
+       "x": 698.0,
+       "y": 18.0,
+       "best": false,
+       "proxy": true,
+       "ly": -167.0,
+       "anchor": "start",
+       "lx": 709.0,
+       "leader": true
+      },
+      {
+       "key": "F",
+       "label": "F",
+       "family": "tiered",
+       "color": "#7b6ad0",
+       "cagr": 15.0,
+       "dd": 40.0,
+       "x": 698.0,
+       "y": 18.0,
+       "best": false,
+       "proxy": true,
+       "ly": -167.0,
+       "anchor": "start",
+       "lx": 709.0,
+       "leader": true
+      }
+     ],
+     "families": [
+      {
+       "key": "none",
+       "label": "No overlay",
+       "color": "#2f9fb8"
+      },
+      {
+       "key": "binary",
+       "label": "Binary rule",
+       "color": "#c97d1e"
+      },
+      {
+       "key": "tiered",
+       "label": "Tiered",
+       "color": "#7b6ad0"
+      }
+     ]
+    },
+    "curves": null,
+    "robustness": null,
+    "timelines": null,
+    "subperiods": null,
+    "sharpe": {
+     "width": 720,
+     "height": 190,
+     "row_h": 26,
+     "pad_l": 148,
+     "zero": 148.0,
+     "bars": [
+      {
+       "key": "A",
+       "label": "A",
+       "value": 1.0,
+       "y": 0,
+       "x": 148.0,
+       "w": 510.0,
+       "color": "#2f9fb8",
+       "family": "none"
+      },
+      {
+       "key": "B_raw",
+       "label": "B_raw",
+       "value": 1.0,
+       "y": 26,
+       "x": 148.0,
+       "w": 510.0,
+       "color": "#c97d1e",
+       "family": "binary"
+      },
+      {
+       "key": "B_buf",
+       "label": "B_buf",
+       "value": 1.0,
+       "y": 52,
+       "x": 148.0,
+       "w": 510.0,
+       "color": "#c97d1e",
+       "family": "binary"
+      },
+      {
+       "key": "C_raw",
+       "label": "C_raw",
+       "value": 1.0,
+       "y": 78,
+       "x": 148.0,
+       "w": 510.0,
+       "color": "#c97d1e",
+       "family": "binary"
+      },
+      {
+       "key": "C_buf",
+       "label": "C_buf",
+       "value": 1.0,
+       "y": 104,
+       "x": 148.0,
+       "w": 510.0,
+       "color": "#c97d1e",
+       "family": "binary"
+      },
+      {
+       "key": "E",
+       "label": "E",
+       "value": 1.0,
+       "y": 130,
+       "x": 148.0,
+       "w": 510.0,
+       "color": "#7b6ad0",
+       "family": "tiered"
+      },
+      {
+       "key": "F",
+       "label": "F",
+       "value": 1.0,
+       "y": 156,
+       "x": 148.0,
+       "w": 510.0,
+       "color": "#7b6ad0",
+       "family": "tiered"
+      }
+     ],
+     "metric": "sharpe"
+    },
+    "ablation": null,
+    "families": [
+     {
+      "key": "none",
+      "label": "No overlay",
+      "color": "#2f9fb8"
+     },
+     {
+      "key": "binary",
+      "label": "Binary rule",
+      "color": "#c97d1e"
+     },
+     {
+      "key": "tiered",
+      "label": "Tiered",
+      "color": "#7b6ad0"
+     }
+    ],
+    "breadth_caveat": ""
+   },
+   "curves": null,
+   "robustness": null,
+   "timelines": null,
+   "subperiods": null
+  },
+  "empty": {
+   "input": {},
+   "build": null,
+   "curves": null,
+   "robustness": null,
+   "timelines": null,
+   "subperiods": null
+  }
+ },
+ "axes": {
+  "0|70.45": {
+   "min": 0.0,
+   "max": 80,
+   "step": 20,
+   "ticks": [
+    0.0,
+    20.0,
+    40.0,
+    60.0,
+    80.0
+   ]
+  },
+  "0|3": {
+   "min": 0.0,
+   "max": 3.0,
+   "step": 1.0,
+   "ticks": [
+    0.0,
+    1.0,
+    2.0,
+    3.0
+   ]
+  },
+  "0|0.4": {
+   "min": 0.0,
+   "max": 0.4,
+   "step": 0.1,
+   "ticks": [
+    0.0,
+    0.1,
+    0.2,
+    0.3,
+    0.4
+   ]
+  },
+  "-5|25": {
+   "min": -10,
+   "max": 30,
+   "step": 10,
+   "ticks": [
+    -10,
+    0,
+    10,
+    20,
+    30
+   ]
+  },
+  "5|5": {
+   "min": 4.800000000000001,
+   "max": 6.2,
+   "step": 0.2,
+   "ticks": [
+    4.8,
+    5.0,
+    5.2,
+    5.4,
+    5.6,
+    5.8,
+    6.0,
+    6.2
+   ]
+  },
+  "-3.5|4.0": {
+   "min": -4,
+   "max": 4,
+   "step": 2,
+   "ticks": [
+    -4,
+    -2,
+    0,
+    2,
+    4
+   ]
+  },
+  "0|1234.5": {
+   "min": 0.0,
+   "max": 1250.0,
+   "step": 250.0,
+   "ticks": [
+    0.0,
+    250.0,
+    500.0,
+    750.0,
+    1000.0,
+    1250.0
+   ]
+  },
+  "-0.37|0.12": {
+   "min": -0.4,
+   "max": 0.2,
+   "step": 0.1,
+   "ticks": [
+    -0.4,
+    -0.3,
+    -0.2,
+    -0.1,
+    -0.0,
+    0.1,
+    0.2
+   ]
+  }
+ }
+}

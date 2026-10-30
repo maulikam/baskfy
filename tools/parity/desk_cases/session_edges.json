@@ -1,0 +1,269 @@
+{
+ "note": "Review of the session lane (30 Oct 2026): the edges session.json left out under the default fixture -- /static's method and path edges (Starlette's StaticFiles is a mount, not an @app.get), the other verbs on the GET-only routes, /status with an empty ip, /callback with extra parameters and outside the session.",
+ "cases": [
+  {
+   "name": "static asset",
+   "method": "GET",
+   "path": "/static/app.css"
+  },
+  {
+   "name": "static HEAD",
+   "method": "HEAD",
+   "path": "/static/logo.svg"
+  },
+  {
+   "name": "static POST is StaticFiles' 405",
+   "method": "POST",
+   "path": "/static/app.css",
+   "form": {
+    "x": "1"
+   }
+  },
+  {
+   "name": "static PUT is StaticFiles' 405",
+   "method": "PUT",
+   "path": "/static/app.css"
+  },
+  {
+   "name": "static missing file",
+   "method": "GET",
+   "path": "/static/nope.css"
+  },
+  {
+   "name": "static directory",
+   "method": "GET",
+   "path": "/static/fonts"
+  },
+  {
+   "name": "static escape",
+   "method": "GET",
+   "path": "/static/%2e%2e/main.py"
+  },
+  {
+   "name": "status with an empty ip",
+   "method": "GET",
+   "path": "/status",
+   "query": {
+    "ip": ""
+   }
+  },
+  {
+   "name": "status after the close",
+   "method": "GET",
+   "path": "/status",
+   "clock": "after_close"
+  },
+  {
+   "name": "status PUT",
+   "method": "PUT",
+   "path": "/status"
+  },
+  {
+   "name": "login HEAD",
+   "method": "HEAD",
+   "path": "/login"
+  },
+  {
+   "name": "login POST",
+   "method": "POST",
+   "path": "/login",
+   "form": {
+    "a": "b"
+   }
+  },
+  {
+   "name": "callback DELETE",
+   "method": "DELETE",
+   "path": "/callback"
+  },
+  {
+   "name": "callback with a blank token and other parameters",
+   "method": "GET",
+   "path": "/callback",
+   "query": {
+    "request_token": "",
+    "status": "success",
+    "action": "login"
+   }
+  },
+  {
+   "name": "options data POST",
+   "method": "POST",
+   "path": "/options/data"
+  },
+  {
+   "name": "options run with no form",
+   "method": "POST",
+   "path": "/options/run"
+  },
+  {
+   "name": "options run HEAD",
+   "method": "HEAD",
+   "path": "/options/run"
+  },
+  {
+   "name": "static dotdot that lands back inside",
+   "method": "GET",
+   "path": "/static/fonts/../logo.svg"
+  },
+  {
+   "name": "static double slash",
+   "method": "GET",
+   "path": "/static//logo.svg"
+  },
+  {
+   "name": "static without its slash",
+   "method": "GET",
+   "path": "/static"
+  },
+  {
+   "name": "static root",
+   "method": "GET",
+   "path": "/static/"
+  },
+  {
+   "name": "static font",
+   "method": "GET",
+   "path": "/static/fonts/inter-latin.woff2"
+  },
+  {
+   "name": "static icon",
+   "method": "GET",
+   "path": "/static/favicon.ico"
+  },
+  {
+   "name": "static If-Modified-Since far future is a 304",
+   "method": "GET",
+   "path": "/static/logo.svg",
+   "headers": {
+    "If-Modified-Since": "Fri, 01 Jan 2100 00:00:00 GMT"
+   }
+  },
+  {
+   "name": "static If-Modified-Since long past is a 200",
+   "method": "GET",
+   "path": "/static/logo.svg",
+   "headers": {
+    "If-Modified-Since": "Mon, 01 Jan 1990 00:00:00 GMT"
+   }
+  },
+  {
+   "name": "static If-None-Match that does not match",
+   "method": "GET",
+   "path": "/static/logo.svg",
+   "headers": {
+    "If-None-Match": "\"nope\""
+   }
+  },
+  {
+   "name": "static one range",
+   "method": "GET",
+   "path": "/static/logo.svg",
+   "headers": {
+    "Range": "bytes=0-9"
+   }
+  },
+  {
+   "name": "static suffix range",
+   "method": "GET",
+   "path": "/static/logo.svg",
+   "headers": {
+    "Range": "bytes=-7"
+   }
+  },
+  {
+   "name": "static overlapping ranges merge to one",
+   "method": "GET",
+   "path": "/static/logo.svg",
+   "headers": {
+    "Range": "bytes=0-9,5-19"
+   }
+  },
+  {
+   "name": "static range in other units",
+   "method": "GET",
+   "path": "/static/logo.svg",
+   "headers": {
+    "Range": "items=0-9"
+   }
+  },
+  {
+   "name": "static malformed range",
+   "method": "GET",
+   "path": "/static/logo.svg",
+   "headers": {
+    "Range": "bytes"
+   }
+  },
+  {
+   "name": "static backwards range",
+   "method": "GET",
+   "path": "/static/logo.svg",
+   "headers": {
+    "Range": "bytes=9-3"
+   }
+  },
+  {
+   "name": "static unsatisfiable range",
+   "method": "GET",
+   "path": "/static/logo.svg",
+   "headers": {
+    "Range": "bytes=999999-"
+   }
+  },
+  {
+   "name": "static range with a stale If-Range is the whole file",
+   "method": "GET",
+   "path": "/static/logo.svg",
+   "headers": {
+    "Range": "bytes=0-9",
+    "If-Range": "\"stale\""
+   }
+  },
+  {
+   "name": "static HEAD with a range",
+   "method": "HEAD",
+   "path": "/static/logo.svg",
+   "headers": {
+    "Range": "bytes=0-9"
+   }
+  },
+  {
+   "name": "static without its slash, with a query",
+   "method": "GET",
+   "path": "/static",
+   "query": {
+    "v": "1"
+   }
+  },
+  {
+   "name": "static without its slash, POST",
+   "method": "POST",
+   "path": "/static",
+   "form": {
+    "a": "b"
+   }
+  },
+  {
+   "name": "status with a trailing slash",
+   "method": "GET",
+   "path": "/status/"
+  },
+  {
+   "name": "callback with a trailing slash keeps the query",
+   "method": "GET",
+   "path": "/callback/",
+   "query": {
+    "request_token": ""
+   }
+  },
+  {
+   "name": "options run with a trailing slash",
+   "method": "POST",
+   "path": "/options/run/",
+   "form": {
+    "op": "x"
+   }
+  }
+ ]
+}

@@ -1,0 +1,91 @@
+{
+ "note": "Wave D session lane: /callback's refusals, the frozen options lab's three routes (404 for their method, 405 otherwise), /status and /login again beside them. The successful exchange is not a case: it writes a Fernet blob (random IV, timestamp) and starts the autorun subprocess, neither comparable byte for byte; the exchange itself is exec_kite's (tests/exec_kite.rs). /status?ip=1 is deliberately not a case: the Python desk's outbound-IP lookup is a live network call (the Rust desk reports null, R8.0).",
+ "cases": [
+  {
+   "name": "callback without a request_token",
+   "method": "GET",
+   "path": "/callback"
+  },
+  {
+   "name": "callback with an empty request_token",
+   "method": "GET",
+   "path": "/callback",
+   "query": {
+    "request_token": ""
+   }
+  },
+  {
+   "name": "callback is GET only",
+   "method": "POST",
+   "path": "/callback",
+   "form": {
+    "request_token": "x"
+   }
+  },
+  {
+   "name": "options lab page is frozen",
+   "method": "GET",
+   "path": "/options"
+  },
+  {
+   "name": "options lab page with banners is still frozen",
+   "method": "GET",
+   "path": "/options",
+   "query": {
+    "started": "x",
+    "error": "y"
+   }
+  },
+  {
+   "name": "options lab data is frozen",
+   "method": "GET",
+   "path": "/options/data"
+  },
+  {
+   "name": "options lab run is frozen before the form is read",
+   "method": "POST",
+   "path": "/options/run",
+   "form": {
+    "op": "strangle-scan"
+   }
+  },
+  {
+   "name": "options lab run is POST only",
+   "method": "GET",
+   "path": "/options/run"
+  },
+  {
+   "name": "options lab page is GET only",
+   "method": "POST",
+   "path": "/options",
+   "form": {
+    "op": "x"
+   }
+  },
+  {
+   "name": "status",
+   "method": "GET",
+   "path": "/status"
+  },
+  {
+   "name": "login redirects to the replay login url",
+   "method": "GET",
+   "path": "/login"
+  },
+  {
+   "name": "HEAD on a GET route is FastAPI's 405 (status)",
+   "method": "HEAD",
+   "path": "/status"
+  },
+  {
+   "name": "HEAD on a GET route is FastAPI's 405 (callback)",
+   "method": "HEAD",
+   "path": "/callback"
+  },
+  {
+   "name": "HEAD on the frozen lab is a 405 too",
+   "method": "HEAD",
+   "path": "/options/data"
+  }
+ ]
+}

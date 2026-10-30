@@ -1041,6 +1041,166 @@ instruments × columns = sessions with `null` for NaN; fno bundles several runs 
 `run_family`, `simulate_futures`, `futures_signals`, `debit_trades`, `liquid_base`,
 `liquid_symbols`.
 
+## Wave D integration (RS-D, 30 Oct 2026, worktree `rs-desk`) — the desk ported module by module, execution core included, DRY_RUN only
+
+Porting is **not** cutover (DECISIONS-RS R8.0, R8.24): the Rust desk has no live Kite client,
+no auto-execute path wired (the swing-monitor, twt-auto loop, fno-monitor, options-monitor and
+session-supervisor services refuse to start), and cuts over only after **two shadow Fridays in
+DRY_RUN with byte-equal plans and Maulik's explicit go**.
+
+**Gates (this worktree's `rust/`):** `cargo fmt --check` clean; `cargo clippy --workspace
+--all-targets -D warnings` clean; `cargo test --workspace` with `BASKFY_RS_TEST_DATABASE_URL` on
+the bed: **83 targets, 1,864 passed, 0 failed, 19 ignored** (every golden green).
+`baskfy-desk` alone: 17 targets, 851 passed, 5 ignored (lib 569; exec_gateway 36,
+exec_gateway_gtt 30, exec_gateway_exit_rules 3, exec_kite 38, non_negotiables 7,
+options_lane 22, options_confirm_db 14 — these run only with `BASKFY_RS_OPTIONS_TEST_PG`, else
+skip as Python's `requires_db` — twt_desk 21, vbt_desk 44, weekly_plan 23, weekly_engine 13,
+settings 7, storage 7, path_prefix 9, engines 5, fake_kite 3).
+
+**desk_diff (Python vs Rust, same replay Kite, same clock, same ids):** one run over **every** `desk_cases/*.json` (24 files, in
+file order on one Postgres bed clone) plus `--plans`: **485 of 491 cases EQUAL**, and **every side
+effect EQUAL** — the replay Kite's **order/GTT calls** (none on either side), every file under
+`data/` (journals, execution logs, retained scans), all 28 touched tables (`desk.*`,
+`public.risk_ledger`, `sw_*`, `tw_*`, `vb_*`; only server `now()` columns masked), Redis and
+mail. `--plans`: all 6 `uploads/*.csv` give byte-equal `/analyze` bodies (2 plans, 4 equal 500s).
+Variants: `session_variants/refused.json` on `desk_fixtures/session_refused` 4/4;
+`no_key.json` + `swing_desk.json` with `KITE_API_KEY=` 46/46, 0 differences. **The 6 DIFFs
+(all residuals, none on an order path):** `/regime/` and `/regime/backtest/` (Starlette's
+`redirect_slashes` 307 vs Rust 404 — app-wide fallback owed, R8.23); `/performance` and
+`/performance/data` (not ported, R8.22); two `generate_for` cases where a retained scan from an
+earlier file makes Python attempt the generated scan, which Rust answers 503 "not ported"
+(R8.12). **Plan kinds:** only the weekly `/analyze` has a builder; swing MORNING/LIVE, twt
+MORNING/EVENING/LIVE, vbt, fno and options plans have **no** `plans_*.json` builder case (the bed's
+own plans are exercised by the lanes' confirm cases instead). Integration fixes in this run:
+boot applies stored settings and installs the badge state (R8.8); the harness normalises each
+side's run directory in bodies (`<run>`, like the port) — the settings page printed
+`KITE_TOKEN_FILE` under `…/py` vs `…/rs` — and `DESK_DIFF_DUMP=<dir>` writes full differing
+bodies.
+
+| Module (Python → Rust) | State | Rust tests | desk_diff cases (lane run) |
+|---|---|---|---|
+| `baskfy_execution/gateway.py` + `app/core/gateway.py` → `exec_core/{order_gateway,journal,desk}.rs` | ported | 36 + 30 GTT | 12/12 EQUAL (sqlite and postgres) |
+| `app/exit_rules.py` → `exec_core/exit_rules.rs` | ported | 3 | — |
+| `guards.py`, `ratelimit.py`, `kite_limits.py`, `risk.py`/`risk_store.py`, `net.py`, `websec.py` → `exec_core/*` + `websec.rs` | ported | 93 | 27/27 |
+| `app/kite_client.py`, `app/token_store.py` → `exec_core/{kite_client,token_store}.rs` | ported (`place_cnc_order` deliberately not, R8.9) | 38 | 8/8 |
+| `app/lifecycle.py` | **not ported** (`/lifecycle*` 404) | 0 | — |
+| `main.py` `/analyze`, `/execute`, `plan_store.py`, `rebalance.py`/`scoring.py`, `strategies/*`, `breadth_source.py` → `weekly/*` | ported; generated scan answers 503 (R8.12) | 36 + 4 | 20/20 + `--plans` |
+| `holdings_view`, `tax_lots`, `tradebook`, `reconcile_view`, `reconcile`, `snapshot.collect` → `weekly/weekly_books/*` | ported, graded by 23 Python goldens | 92 | — (no own routes) |
+| `swing_desk.py`, `strategies/swing_breakout.py`, `breadth_source.py` → `swing/{desk,breakout,breadth}.rs` | ported | 30 + 13 + 3 | 42/42 (pg, sqlite, no-key) |
+| `swing_execute.py`, `swing_live_gate.py` → `swing/swing_exec/*` | ported | 61 | 14/14 |
+| `swing_monitor.py`, `swing_clock.py`, `swing_notify.py` → `swing/swing_monitor/*`, `notify.rs` | ported; **service not wired**, transports stubbed | 39 | 8/8 (absence only) |
+| `twt_desk.py` → `twt.rs`, `twt/{store,common}.rs` | ported | 21 | 55/55 |
+| `twt_execute.py`, `twt_auto.py` → `twt/{execute,auto}.rs` | ported; twt-auto loop script not ported | 35 + real-path 1 | 42/42 |
+| `vbt_desk.py`, `vbt_execute.py` → `vbt.rs`, `vbt/*` | ported | 44 | 27/27 (+ edges, refusals) |
+| `fno_gates`, `fno_clock`, `fno_ledger`, `fno_desk.py` → `fno/*` | ported | 16 | 23/23 |
+| `fno_execute.py`, `fno_monitor.py` (order half) → `fno/fno_exec/*` | ported; monitor's planning/watch/night half **not** | 12 + 4 safety | 18/18 |
+| `options_gates/lab/desk/execute/ledger/clock`, `intraday_skeleton` → `options/*` | ported; `strategies/nifty_options.py` **not** (R8.20 F5) | 22 + 14 DB | 28/28 |
+| `core/regime.py` (config), `regime_store` (reads), `breadth`, `index_cache` (reads), `regime_view` → `analytics/*` | ported; engine/`regime_run`/`regime_alloc`, `/indices*` **not** | 23 | 21/22 (trailing slash) |
+| `protection`, `corporate_actions`, `autorun` (equity half), `backtest_view` → `analytics/analytics_views/*` | ported | 91 | 6/9 (trailing slash, `/performance` ×2) |
+| `settings.py`, `ops.py`, `daily_runs.py` → `analytics/{desk_settings,ops,daily_runs}.rs` | ported (coarse run, kept) | in lib | views.json |
+| `metrics.py`, `benchmark.py`, `performance_view.py` | **not ported** (`/performance*` 404) | 0 | — |
+| `session_supervisor.py`, `telemetry.py`, `core/ticker.py`, `/callback`, `/status`, `/login`, static | ported; supervisor **refuses** without a reconciler | 34 | 54/54 + variants 4/4, 4/4 |
+
+**Python desk tests not yet ported** (of 2,315 test functions; counts from the lanes): exec_core —
+`test_fno_carry_gate` (13, guard half only), `test_fno_covered_overnight` (16, guard half only),
+`test_gtt_limit_fraction` (6), `test_fno_gtt_trail_modify` (6), route parts of
+`test_execute_gateway.py`, `test_kite_limits` source scans; weekly — `test_generated_scan.py`
+(15), two `test_plan_store` slippage tests, 10 of `test_reconcile.py`'s 21 (sleeve handlers);
+analytics — `test_metrics` (58), `test_benchmark` (20), `test_drawdown` (14), `test_xirr` (14),
+`test_twr_chaining` (13), `test_regime.py`/`test_regime_plan.py` engine tests, `test_index_board`
+(24), 13 of `test_autorun` (25); swing — 84 of `test_swing_desk.py` (114), ~60 of
+`test_swing_execute.py` (122), `test_swing_track_c.py` (22), ~82 of the 121 monitor/clock/notify
+tests, `test_swing_monitor_schedule` (10); twt — `test_twt_execute.py` entry/sweep/reconcile/TW7
+(~50 of 61), `TestTheLoop`; vbt — ~65 of 109 (store round-trips, HTML unit, route enumeration);
+fno — `test_fno_monitor` (19), `test_fno_monitor_loop` (8), `test_fno_f3` (17), DB halves of
+`test_fno_ledger`/`test_fno_desk`/`test_fno_safety`; options — `test_options_monitor` (24),
+`test_options_monitor_loop` (7); session — `test_lifecycle.py` (17), `test_token_sync.py` (11),
+two `test_telemetry` order-path tests; Python-only by design — `test_deploy_kit`,
+`test_requirements`, `test_frozen_boundary`.
+
+### Safety audit (RS-D integration, 30 Oct 2026)
+
+1. **Every call of the Kite order/GTT transport** (`KiteWrites::{place_order, modify_order,
+   cancel_order, place_gtt, modify_gtt, delete_gtt}`) in `baskfy-desk` non-test code — seven
+   sites, all inside `lanes/exec_core`:
+   - `exec_core/order_gateway.rs:505` `place_order`, `:815` `place_gtt`, `:974` `delete_gtt`,
+     `:1233` `modify_gtt`, `:1365` `cancel_order` — each only after tenant → untouchables →
+     overnight/FO cover → product gates → risk → idempotency → rate limit, and only when the
+     order is not DRY_RUN (the DRY_RUN branch journals `dry_run` and returns).
+   - `exec_core/kite_client.rs:727` `delete_gtt`, `:775` `place_gtt` — **the documented GTT
+     exception** (root CLAUDE.md non-negotiable 6's caveat): `DeskKite::place_gtt_stop` /
+     `delete_gtt` run `assert_tradeable` (and the overnight-option guard on place) and read DRY_RUN
+     from the shared settings **at each call**, before the broker.
+   The trait is named only in `kite.rs`, `fake_kite.rs`, `app.rs` (`StateParts`), `main.rs`
+   (`NoKite`, which refuses every write) and `exec_core.rs` (the crate-private `Broker` alias);
+   `tests/non_negotiables.rs` enforces it. Every other order/GTT call in the crate (`swing_exec`,
+   `twt`, `vbt`, `fno_exec`, `options`, weekly `/execute`) is a `Gateway` trait method on a
+   gateway derived from `DeskGateway`. The binary holds **no live Kite client**: without
+   `--harness` it is `NoKite`; `--harness` refuses to start with `DRY_RUN=false`.
+2. **Flags default false in code** (`src/settings.rs`, `Kind::BoolEqTrue`, default `"false"`):
+   `BASKFY_SWING_AUTO_EXECUTE`, `BASKFY_TWT_AUTO_EXECUTE`, `BASKFY_FNO_F3_AUTO_EXIT` (the only
+   three auto flags — a fourth fails `tests/settings.rs`), `BASKFY_SWING/TWT/VBT_EXECUTION_ENABLED`,
+   `BASKFY_FNO_F1/F2/F3_EXECUTION_ENABLED`, `BASKFY_OPTIONS_O1M/O1W/O2/O3_EXECUTION_ENABLED`,
+   `BASKFY_FNO_CARRY_ENABLED`, `INTRADAY_ENABLED`, `OPTIONS_ENABLED`, `BASKFY_FNO_MONITOR_ENABLED`,
+   `BASKFY_OPTIONS_MONITOR_ENABLED`. **`DRY_RUN` defaults true** (`Kind::BoolNeFalse`: off only for
+   the exact string `false`). No option has an auto flag; the weekly rebalancer and VBT have none.
+3. **No network outside the guarded client.** The crate depends on no HTTP client; the one socket
+   it opens is `lanes/session.rs` `redis_ping` (the shared limiter's Redis PING for `/status`). No
+   Kite, NSE or other endpoint was called by any run in this wave (one lane's `/status?ip=1` case
+   made the Python desk do an outbound-IP lookup once; the case was removed).
+4. **No secret in logs.** The replay log redacts the API key and access token; operator log lines
+   carry symbols, kinds, statuses and refusal words only; no `.env` from the live stack was read.
+5. **`frozen/strangle` untouched** (`git diff HEAD -- frozen` empty); the Python desk and
+   `decile-blueprint` trees are unchanged in the worktree.
+6. **`portfolio.db` never opened.** Every `portfolio.db` path in the crate, the harness and the
+   goldens scripts is a fresh file under a temporary run directory (`desk_diff.py`'s sqlite
+   backend) or the code default string; the main tree's file is unchanged (mtime 22 Aug 2026). A
+   SQLite `data/portfolio.db` created in the **worktree** by a lane's Python import (git-ignored)
+   is not the evidence file.
+7. **Databases:** no `rsd_*` database left (two orphaned clones from an earlier lane run and the two of a killed integrator run were dropped after checking only TimescaleDB's scheduler held them); `baskfy` unchanged (its only non-zero write counter is TimescaleDB's own `_timescaledb_internal.bgw_job_stat`). Template `baskfy` is never written (clones only).
+8. **Ports 18500–18799:** no listener left (`lsof` after the last run: 0); orphaned desks from a killed run were stopped.
+
+## Wave D foundation (30 Oct 2026, worktree `rs-desk`) — `baskfy-desk`, the replay Kite, `desk_diff.py`
+
+Wave D ports the desk (`kite-momentum-rebalancer/app`) in parallel with the worker, **execution
+core included** — porting is not cutover (DECISIONS-RS R8.0). The foundation is in; every lane
+is a declared stub.
+
+| Piece | State |
+|---|---|
+| `rust/crates/baskfy-desk` | lib + binary; settings (113 env vars + 6 function-level, held to the live Python's defaults and 18 probes each), storage (Postgres `desk` schema with psycopg's literal typing, SQLite), clock/ids seams, `KiteReads`/`KiteWrites` (law 2 in the types), `Gateway` trait + client ids/tenancy/gates/stop band, plans + the confirm gate, minijinja templates (Jinja2-exact on every probe), orjson wire, the axum skeleton (`DeskSecurity`, `PathPrefix`) — R8.1–R8.4 |
+| Replay Kite | `fake_kite.rs` + `tools/parity/desk_fake_kite.py`, one fixture (`desk_fixtures/default`, synthetic from the corpus), identical call logs — R8.3 |
+| `tools/parity/desk_diff.py` | both desks, both backends, all side effects; **Python-vs-Python 17/17 EQUAL + every side effect EQUAL on Postgres and on SQLite**; Python-vs-Rust: 5 foundation cases EQUAL, the weekly scenario waits for its lane — R8.6 |
+| Tests | `cargo test -p baskfy-desk`: 7 targets, 38 tests (settings 7, non-negotiables 7, storage 7, engines 5, path prefix 9, replay 3) |
+| Lanes | `exec_core` (`NotPortedGateway` refuses everything), `weekly`, `analytics`, `swing`, `twt`, `vbt`, `fno`, `options`, `session` — stubs in `src/lanes/` |
+
+**Porting checklist — the desk's Python tests by lane** (test functions before parametrisation;
+`kite-momentum-rebalancer/tests/` plus `decile-blueprint/packages/execution/tests/` for
+`exec_core`). Each lane ports its tests first (the non-negotiables before the code they guard),
+then its routes, graded by `desk_diff.py` with `desk_cases/<lane>.json`:
+
+| Lane | Routes | Services | Test files | Test functions | Files (functions) |
+|---|---|---|---|---|---|
+| `exec_core` | 0 | 0 | 22 | 314 | `test_execute_gateway.py` (40), `test_guards.py` (20), `test_seven_non_negotiables.py` (12), `test_ratelimit.py` (7), `test_kite_limits.py` (39), `test_risk_store.py` (3), `test_outbound_ip.py` (6), `execution/test_af_lane_e.py` (11), `execution/test_broker_adapters.py` (6), `execution/test_broker_ports.py` (2), `execution/test_client_id_journal.py` (21), `execution/test_derivative_product_gate.py` (10), `execution/test_fno_carry_gate.py` (13), `execution/test_fno_covered_overnight.py` (16), `execution/test_fno_gtt_trail_modify.py` (6), `execution/test_gtt_gateway.py` (43), `execution/test_gtt_limit_fraction.py` (6), `execution/test_gtt_modify_and_cancel.py` (18), `execution/test_non_negotiables.py` (17), `execution/test_risk_store.py` (9), `execution/test_stop_from_vol.py` (6), `execution/test_tenant_isolation.py` (3) |
+| `weekly` | 7 | 0 | 17 | 237 | `test_plan_store.py` (30), `test_stops_route.py` (21), `test_protection.py` (41), `test_rebalance_pricing.py` (12), `test_no_trade_band.py` (12), `test_generated_scan.py` (15), `test_breadth_and_shadow.py` (15), `test_costs.py` (14), `test_execution_report.py` (12), `test_holdings_same_day.py` (15), `test_reconcile.py` (21), `test_reconcile_view.py` (12), `test_desk_score_parity.py` (3), `test_desk_config_parity.py` (4), `test_scoring_moved_to_core.py` (2), `test_basket_moved_to_core.py` (4), `test_exposure_moved_to_core.py` (4) |
+| `analytics` | 24 | 0 | 24 | 818 | `test_metrics.py` (58), `test_benchmark.py` (20), `test_drawdown.py` (14), `test_xirr.py` (14), `test_twr_chaining.py` (13), `test_tradebook.py` (40), `test_corporate_actions.py` (23), `test_db_snapshots.py` (19), `test_daily_runs.py` (27), `test_desk_daily_loop.py` (20), `test_autorun.py` (25), `test_ops.py` (29), `test_settings.py` (40), `test_settings_boundary.py` (15), `test_regime.py` (97), `test_regime_data.py` (72), `test_regime_plan.py` (60), `test_regime_view_backtest.py` (96), `test_index_board.py` (24), `test_holdings_view.py` (14), `test_backtest_view.py` (63), `test_pages.py` (20), `test_backup.py` (9), `test_exit_codes.py` (6) |
+| `swing` | 7 | 1 | 9 | 386 | `test_swing_desk.py` (114), `test_swing_execute.py` (122), `test_swing_monitor.py` (84), `test_swing_monitor_schedule.py` (10), `test_swing_clock.py` (15), `test_swing_notify.py` (12), `test_swing_track_c.py` (22), `test_swing_budgets.py` (2), `test_swing_catalyst_desk.py` (5) |
+| `twt` | 9 | 1 | 4 | 153 | `test_twt_desk.py` (40), `test_twt_execute.py` (61), `test_twt_auto.py` (35), `test_twt_scan_desk.py` (17) |
+| `vbt` | 6 | 0 | 5 | 109 | `test_vbt_desk.py` (22), `test_vbt_execute.py` (33), `test_vbt_rescan_desk.py` (29), `test_vbt_safety.py` (13), `test_vbt_scan_safety.py` (12) |
+| `fno` | 3 | 1 | 8 | 97 | `test_fno_desk.py` (19), `test_fno_f3.py` (17), `test_fno_gates.py` (5), `test_fno_ledger.py` (19), `test_fno_monitor.py` (19), `test_fno_monitor_loop.py` (8), `test_fno_safety.py` (6), `test_fno_deploy.py` (4) |
+| `options` | 4 | 1 | 8 | 71 | `test_options_execute.py` (15), `test_options_gates.py` (4), `test_options_hardening.py` (4), `test_options_ledger.py` (5), `test_options_monitor.py` (24), `test_options_monitor_loop.py` (7), `test_options_safety.py` (11), `test_options_drill.py` (1) |
+| `session` | 7 | 1 | 8 | 103 | `test_session_supervisor.py` (18), `test_lifecycle.py` (17), `test_token_sync.py` (11), `test_telemetry.py` (12), `test_websec.py` (16), `test_path_prefix.py` (9), `test_broker_faces.py` (3), `test_pg_adapter.py` (17) |
+| *Python-only (not ported)* | — | — | 3 | 27 | `test_deploy_kit.py` (21), `test_requirements.py` (3), `test_frozen_boundary.py` (3) |
+| **all** | 67 (66 + `/static`) | 5 | 108 | 2315 | |
+
+
+**Not done (loud):** no route ported; no live Kite client (cutover item, R8.0); the static
+handler, startup (`_apply_stored_settings`, migrations at boot, secret-permission check) and
+`/status` are the session lane's; plan builders for swing/twt/vbt/fno have no case file yet;
+`time.monotonic` is not frozen in the Python harness (Kite *read* counts and the limiter's
+Redis clocks are reported, not graded). Cutover of anything desk-side needs two shadow Fridays
+and Maulik's explicit go.
+
 ## What comes next
 
 Wave 3 is done (above). The golden-covered pure core is complete; **128 `baskfy_core` modules

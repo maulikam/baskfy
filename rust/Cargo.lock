@@ -325,6 +325,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "baskfy-desk"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "base64 0.22.1",
+ "baskfy-core",
+ "baskfy-providers",
+ "chrono",
+ "futures-util",
+ "httpdate",
+ "md-5",
+ "minijinja",
+ "minijinja-contrib",
+ "rand 0.9.5",
+ "regex",
+ "rust_decimal",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "tempfile",
+ "thiserror",
+ "tokio",
+ "tower",
+]
+
+[[package]]
 name = "baskfy-providers"
 version = "0.1.0"
 dependencies = [
@@ -1793,6 +1821,7 @@ version = "0.30.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2e99fb7a497b1e3339bc746195567ed8d3e24945ecd636e3619d20b9de9e9149"
 dependencies = [
+ "cc",
  "pkg-config",
  "vcpkg",
 ]
@@ -1891,6 +1920,25 @@ name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
+
+[[package]]
+name = "minijinja"
+version = "3.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "00f5a04892e86ddb4fc254e9160835370b63a0d44042d3ab4725bc2dbcbab136"
+dependencies = [
+ "indexmap",
+ "serde",
+]
+
+[[package]]
+name = "minijinja-contrib"
+version = "3.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f804cfd81c146ff898cbf3455071c417e8745907c77f3d5058bd9691b9ace3b8"
+dependencies = [
+ "minijinja",
+]
 
 [[package]]
 name = "miniz_oxide"

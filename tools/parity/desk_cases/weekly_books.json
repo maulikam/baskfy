@@ -1,0 +1,4 @@
+{
+  "note": "Lane weekly_books (DECISIONS-RS R8.5): snapshot, holdings_view, tax_lots, tradebook, reconcile, reconcile_view. These modules register no route of their own: /performance and /tradebook* are lane analytics', /reconcile* needs analytics/protection.py (unported) beside reconcile_view, so no desk_diff.py scenario can grade them yet and this file holds no cases. Their parity gate is tools/parity/weekly_books_goldens.py -> rust/crates/baskfy-desk/fixtures/weekly_books/goldens.json (20 cases, Python's answers), reproduced byte for byte by `cargo test -p baskfy-desk weekly_books::parity`. Add the /reconcile and /reconcile/data cases here when the lane that owns protection.review registers those routes.",
+  "cases": []
+}

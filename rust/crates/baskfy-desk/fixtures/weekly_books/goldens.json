@@ -1,0 +1,2003 @@
+{
+ "note": "tools/parity/weekly_books_goldens.py \u2014 Python's answers; never edit by hand.",
+ "cases": [
+  {
+   "kind": "holdings",
+   "input": {
+    "holdings": [
+     {
+      "symbol": "AAA",
+      "quantity": 100,
+      "average_price": 90.0,
+      "last_price": 100.0,
+      "pledged_qty": 0,
+      "exchange": "NSE"
+     },
+     {
+      "symbol": "BBB",
+      "quantity": 37,
+      "average_price": 1234.567,
+      "last_price": 987.65,
+      "pledged_qty": 37,
+      "exchange": "NSE"
+     },
+     {
+      "symbol": "SGBDE31III",
+      "quantity": 392,
+      "average_price": 5000.0,
+      "last_price": 6123.45,
+      "pledged_qty": 0,
+      "exchange": "NSE"
+     },
+     {
+      "symbol": "CCC",
+      "quantity": 5,
+      "average_price": 0,
+      "last_price": 41.05,
+      "pledged_qty": 0,
+      "exchange": ""
+     },
+     {
+      "symbol": "DDD",
+      "quantity": 250,
+      "average_price": 210.0,
+      "last_price": 150.25,
+      "pledged_qty": 0,
+      "exchange": "NSE"
+     }
+    ],
+    "raw": [
+     {
+      "tradingsymbol": "AAA",
+      "day_change": -2.5,
+      "day_change_percentage": -2.4390243,
+      "t1_quantity": 10,
+      "isin": "INAAA"
+     },
+     {
+      "tradingsymbol": "BBB",
+      "day_change": 3.333,
+      "day_change_percentage": 0.3387,
+      "t1_quantity": 0,
+      "isin": "INBBB"
+     },
+     {
+      "tradingsymbol": "CCC",
+      "exchange": "BSE"
+     },
+     {
+      "tradingsymbol": "DDD",
+      "day_change": 0.0,
+      "day_change_percentage": 0.0
+     }
+    ],
+    "scan": {
+     "AAA": {
+      "marketcap": 150000.4,
+      "beta": 1.2,
+      "away_from_high_one_year": -12.5
+     },
+     "BBB": {
+      "marketcap": 25000,
+      "beta": 0.85
+     },
+     "DDD": {
+      "marketcap": 4999.5,
+      "beta": null
+     }
+    },
+    "fills": [
+     {
+      "symbol": "AAA",
+      "side": "BUY",
+      "when_ts": 1752226200.0
+     },
+     {
+      "symbol": "AAA",
+      "side": "buy",
+      "when_ts": 1785933000.0
+     },
+     {
+      "symbol": "BBB",
+      "side": "BUY",
+      "when_ts": 1755347399.0
+     },
+     {
+      "symbol": "BBB",
+      "side": "SELL",
+      "when_ts": 1743597000.0
+     }
+    ],
+    "protected": {
+     "AAA": "ok",
+     "BBB": "partial",
+     "DDD": "missing"
+    },
+    "cash": 0.0,
+    "now": "2026-08-15T18:00:00"
+   },
+   "output": {
+    "rows": [
+     {
+      "symbol": "SGBDE31III",
+      "isin": null,
+      "exchange": "NSE",
+      "quantity": 392,
+      "pledged_qty": 0,
+      "t1_quantity": 0,
+      "avg_price": 5000.0,
+      "last_price": 6123.45,
+      "invested": 1960000,
+      "value": 2400392,
+      "pnl": 440392,
+      "pnl_pct": 22.47,
+      "day_change_pct": null,
+      "day_pnl": null,
+      "marketcap_cr": null,
+      "cap_band": null,
+      "beta": null,
+      "from_high_pct": null,
+      "stop": "unknown",
+      "weight_pct": 96.61
+     },
+     {
+      "symbol": "DDD",
+      "isin": null,
+      "exchange": "NSE",
+      "quantity": 250,
+      "pledged_qty": 0,
+      "t1_quantity": 0,
+      "avg_price": 210.0,
+      "last_price": 150.25,
+      "invested": 52500,
+      "value": 37562,
+      "pnl": -14938,
+      "pnl_pct": -28.45,
+      "day_change_pct": 0.0,
+      "day_pnl": 0,
+      "marketcap_cr": 5000,
+      "cap_band": "smallcap",
+      "beta": null,
+      "from_high_pct": null,
+      "stop": "missing",
+      "weight_pct": 1.51
+     },
+     {
+      "symbol": "BBB",
+      "isin": "INBBB",
+      "exchange": "NSE",
+      "quantity": 37,
+      "pledged_qty": 37,
+      "t1_quantity": 0,
+      "avg_price": 1234.57,
+      "last_price": 987.65,
+      "invested": 45679,
+      "value": 36543,
+      "pnl": -9136,
+      "pnl_pct": -20.0,
+      "day_change_pct": 0.34,
+      "day_pnl": 123,
+      "marketcap_cr": 25000,
+      "cap_band": "midcap",
+      "beta": 0.85,
+      "from_high_pct": null,
+      "stop": "partial",
+      "first_bought": "2025-08-16",
+      "held_days": 364,
+      "term": "short",
+      "buy_fills": 1,
+      "weight_pct": 1.47
+     },
+     {
+      "symbol": "AAA",
+      "isin": "INAAA",
+      "exchange": "NSE",
+      "quantity": 100,
+      "pledged_qty": 0,
+      "t1_quantity": 10,
+      "avg_price": 90.0,
+      "last_price": 100.0,
+      "invested": 9000,
+      "value": 10000,
+      "pnl": 1000,
+      "pnl_pct": 11.11,
+      "day_change_pct": -2.44,
+      "day_pnl": -250,
+      "marketcap_cr": 150000,
+      "cap_band": "largecap",
+      "beta": 1.2,
+      "from_high_pct": -12.5,
+      "stop": "ok",
+      "first_bought": "2025-07-11",
+      "held_days": 400,
+      "term": "long",
+      "buy_fills": 2,
+      "weight_pct": 0.4
+     },
+     {
+      "symbol": "CCC",
+      "isin": null,
+      "exchange": "BSE",
+      "quantity": 5,
+      "pledged_qty": 0,
+      "t1_quantity": 0,
+      "avg_price": 0.0,
+      "last_price": 41.05,
+      "invested": 0,
+      "value": 205,
+      "pnl": 205,
+      "pnl_pct": null,
+      "day_change_pct": null,
+      "day_pnl": null,
+      "marketcap_cr": null,
+      "cap_band": null,
+      "beta": null,
+      "from_high_pct": null,
+      "stop": "unknown",
+      "weight_pct": 0.01
+     }
+    ],
+    "summary": {
+     "positions": 5,
+     "invested": 2067179,
+     "value": 2484702,
+     "pnl": 417523,
+     "pnl_pct": 20.2,
+     "day_pnl": -127,
+     "day_pnl_pct": -0.01,
+     "cash": 0,
+     "nav": 2484702,
+     "cash_pct": 0.0,
+     "top5_weight": 100.0,
+     "largest": "SGBDE31III",
+     "largest_weight": 96.61,
+     "weighted_beta": 0.92,
+     "pledged_positions": 1
+    },
+    "allocation": {
+     "rows": [
+      {
+       "band": "unclassified",
+       "value": 2400597,
+       "pct": 96.6
+      },
+      {
+       "band": "smallcap",
+       "value": 37562,
+       "pct": 1.5
+      },
+      {
+       "band": "midcap",
+       "value": 36543,
+       "pct": 1.5
+      },
+      {
+       "band": "largecap",
+       "value": 10000,
+       "pct": 0.4
+      }
+     ],
+     "total": 2484702
+    },
+    "warnings": [
+     {
+      "level": "bad",
+      "symbol": null,
+      "text": "2 position(s) without full stop cover: DDD, BBB"
+     },
+     {
+      "level": "warn",
+      "symbol": "DDD",
+      "text": "down -28.4% on cost"
+     },
+     {
+      "level": "warn",
+      "symbol": "BBB",
+      "text": "down -20.0% on cost"
+     },
+     {
+      "level": "warn",
+      "symbol": null,
+      "text": "top five holdings are 100% of the book"
+     }
+    ]
+   }
+  },
+  {
+   "kind": "holdings",
+   "input": {
+    "holdings": [
+     {
+      "symbol": "AAA",
+      "quantity": 100,
+      "average_price": 90.0,
+      "last_price": 100.0,
+      "pledged_qty": 0,
+      "exchange": "NSE"
+     },
+     {
+      "symbol": "BBB",
+      "quantity": 37,
+      "average_price": 1234.567,
+      "last_price": 987.65,
+      "pledged_qty": 37,
+      "exchange": "NSE"
+     },
+     {
+      "symbol": "SGBDE31III",
+      "quantity": 392,
+      "average_price": 5000.0,
+      "last_price": 6123.45,
+      "pledged_qty": 0,
+      "exchange": "NSE"
+     },
+     {
+      "symbol": "CCC",
+      "quantity": 5,
+      "average_price": 0,
+      "last_price": 41.05,
+      "pledged_qty": 0,
+      "exchange": ""
+     },
+     {
+      "symbol": "DDD",
+      "quantity": 250,
+      "average_price": 210.0,
+      "last_price": 150.25,
+      "pledged_qty": 0,
+      "exchange": "NSE"
+     }
+    ],
+    "raw": [
+     {
+      "tradingsymbol": "AAA",
+      "day_change": -2.5,
+      "day_change_percentage": -2.4390243,
+      "t1_quantity": 10,
+      "isin": "INAAA"
+     },
+     {
+      "tradingsymbol": "BBB",
+      "day_change": 3.333,
+      "day_change_percentage": 0.3387,
+      "t1_quantity": 0,
+      "isin": "INBBB"
+     },
+     {
+      "tradingsymbol": "CCC",
+      "exchange": "BSE"
+     },
+     {
+      "tradingsymbol": "DDD",
+      "day_change": 0.0,
+      "day_change_percentage": 0.0
+     }
+    ],
+    "scan": {
+     "AAA": {
+      "marketcap": 150000.4,
+      "beta": 1.2,
+      "away_from_high_one_year": -12.5
+     },
+     "BBB": {
+      "marketcap": 25000,
+      "beta": 0.85
+     },
+     "DDD": {
+      "marketcap": 4999.5,
+      "beta": null
+     }
+    },
+    "fills": [
+     {
+      "symbol": "AAA",
+      "side": "BUY",
+      "when_ts": 1752226200.0
+     },
+     {
+      "symbol": "AAA",
+      "side": "buy",
+      "when_ts": 1785933000.0
+     },
+     {
+      "symbol": "BBB",
+      "side": "BUY",
+      "when_ts": 1755347399.0
+     },
+     {
+      "symbol": "BBB",
+      "side": "SELL",
+      "when_ts": 1743597000.0
+     }
+    ],
+    "protected": {
+     "AAA": "ok",
+     "BBB": "partial",
+     "DDD": "missing"
+    },
+    "cash": 125000.75,
+    "now": "2026-08-15T18:00:00"
+   },
+   "output": {
+    "rows": [
+     {
+      "symbol": "SGBDE31III",
+      "isin": null,
+      "exchange": "NSE",
+      "quantity": 392,
+      "pledged_qty": 0,
+      "t1_quantity": 0,
+      "avg_price": 5000.0,
+      "last_price": 6123.45,
+      "invested": 1960000,
+      "value": 2400392,
+      "pnl": 440392,
+      "pnl_pct": 22.47,
+      "day_change_pct": null,
+      "day_pnl": null,
+      "marketcap_cr": null,
+      "cap_band": null,
+      "beta": null,
+      "from_high_pct": null,
+      "stop": "unknown",
+      "weight_pct": 96.61
+     },
+     {
+      "symbol": "DDD",
+      "isin": null,
+      "exchange": "NSE",
+      "quantity": 250,
+      "pledged_qty": 0,
+      "t1_quantity": 0,
+      "avg_price": 210.0,
+      "last_price": 150.25,
+      "invested": 52500,
+      "value": 37562,
+      "pnl": -14938,
+      "pnl_pct": -28.45,
+      "day_change_pct": 0.0,
+      "day_pnl": 0,
+      "marketcap_cr": 5000,
+      "cap_band": "smallcap",
+      "beta": null,
+      "from_high_pct": null,
+      "stop": "missing",
+      "weight_pct": 1.51
+     },
+     {
+      "symbol": "BBB",
+      "isin": "INBBB",
+      "exchange": "NSE",
+      "quantity": 37,
+      "pledged_qty": 37,
+      "t1_quantity": 0,
+      "avg_price": 1234.57,
+      "last_price": 987.65,
+      "invested": 45679,
+      "value": 36543,
+      "pnl": -9136,
+      "pnl_pct": -20.0,
+      "day_change_pct": 0.34,
+      "day_pnl": 123,
+      "marketcap_cr": 25000,
+      "cap_band": "midcap",
+      "beta": 0.85,
+      "from_high_pct": null,
+      "stop": "partial",
+      "first_bought": "2025-08-16",
+      "held_days": 364,
+      "term": "short",
+      "buy_fills": 1,
+      "weight_pct": 1.47
+     },
+     {
+      "symbol": "AAA",
+      "isin": "INAAA",
+      "exchange": "NSE",
+      "quantity": 100,
+      "pledged_qty": 0,
+      "t1_quantity": 10,
+      "avg_price": 90.0,
+      "last_price": 100.0,
+      "invested": 9000,
+      "value": 10000,
+      "pnl": 1000,
+      "pnl_pct": 11.11,
+      "day_change_pct": -2.44,
+      "day_pnl": -250,
+      "marketcap_cr": 150000,
+      "cap_band": "largecap",
+      "beta": 1.2,
+      "from_high_pct": -12.5,
+      "stop": "ok",
+      "first_bought": "2025-07-11",
+      "held_days": 400,
+      "term": "long",
+      "buy_fills": 2,
+      "weight_pct": 0.4
+     },
+     {
+      "symbol": "CCC",
+      "isin": null,
+      "exchange": "BSE",
+      "quantity": 5,
+      "pledged_qty": 0,
+      "t1_quantity": 0,
+      "avg_price": 0.0,
+      "last_price": 41.05,
+      "invested": 0,
+      "value": 205,
+      "pnl": 205,
+      "pnl_pct": null,
+      "day_change_pct": null,
+      "day_pnl": null,
+      "marketcap_cr": null,
+      "cap_band": null,
+      "beta": null,
+      "from_high_pct": null,
+      "stop": "unknown",
+      "weight_pct": 0.01
+     }
+    ],
+    "summary": {
+     "positions": 5,
+     "invested": 2067179,
+     "value": 2484702,
+     "pnl": 417523,
+     "pnl_pct": 20.2,
+     "day_pnl": -127,
+     "day_pnl_pct": -0.01,
+     "cash": 125001,
+     "nav": 2609703,
+     "cash_pct": 4.79,
+     "top5_weight": 100.0,
+     "largest": "SGBDE31III",
+     "largest_weight": 96.61,
+     "weighted_beta": 0.92,
+     "pledged_positions": 1
+    },
+    "allocation": {
+     "rows": [
+      {
+       "band": "unclassified",
+       "value": 2400597,
+       "pct": 92.0
+      },
+      {
+       "band": "smallcap",
+       "value": 37562,
+       "pct": 1.4
+      },
+      {
+       "band": "midcap",
+       "value": 36543,
+       "pct": 1.4
+      },
+      {
+       "band": "largecap",
+       "value": 10000,
+       "pct": 0.4
+      },
+      {
+       "band": "cash",
+       "value": 125001,
+       "pct": 4.8
+      }
+     ],
+     "total": 2609703
+    },
+    "warnings": [
+     {
+      "level": "bad",
+      "symbol": null,
+      "text": "2 position(s) without full stop cover: DDD, BBB"
+     },
+     {
+      "level": "warn",
+      "symbol": "DDD",
+      "text": "down -28.4% on cost"
+     },
+     {
+      "level": "warn",
+      "symbol": "BBB",
+      "text": "down -20.0% on cost"
+     },
+     {
+      "level": "warn",
+      "symbol": null,
+      "text": "top five holdings are 100% of the book"
+     }
+    ]
+   }
+  },
+  {
+   "kind": "holdings",
+   "input": {
+    "holdings": [],
+    "raw": [],
+    "scan": {},
+    "fills": [],
+    "protected": {},
+    "cash": 0.0,
+    "now": "2026-08-15T18:00:00"
+   },
+   "output": {
+    "rows": [],
+    "summary": {
+     "positions": 0,
+     "invested": 0,
+     "value": 0,
+     "pnl": 0,
+     "pnl_pct": null,
+     "day_pnl": null,
+     "day_pnl_pct": null,
+     "cash": 0,
+     "nav": 0,
+     "cash_pct": null,
+     "top5_weight": 0,
+     "largest": null,
+     "largest_weight": null,
+     "weighted_beta": null,
+     "pledged_positions": 0
+    },
+    "allocation": {
+     "rows": [],
+     "total": 1
+    },
+    "warnings": []
+   }
+  },
+  {
+   "kind": "holdings",
+   "input": {
+    "holdings": [],
+    "raw": [],
+    "scan": {},
+    "fills": [],
+    "protected": {},
+    "cash": 5000.5,
+    "now": "2026-08-15T18:00:00"
+   },
+   "output": {
+    "rows": [],
+    "summary": {
+     "positions": 0,
+     "invested": 0,
+     "value": 0,
+     "pnl": 0,
+     "pnl_pct": null,
+     "day_pnl": null,
+     "day_pnl_pct": null,
+     "cash": 5000,
+     "nav": 5000,
+     "cash_pct": 100.0,
+     "top5_weight": 0,
+     "largest": null,
+     "largest_weight": null,
+     "weighted_beta": null,
+     "pledged_positions": 0
+    },
+    "allocation": {
+     "rows": [
+      {
+       "band": "cash",
+       "value": 5000,
+       "pct": 100.0
+      }
+     ],
+     "total": 5000
+    },
+    "warnings": []
+   }
+  },
+  {
+   "kind": "tax",
+   "input": {
+    "qty": 150,
+    "price": 100.0,
+    "as_of": "2026-08-14",
+    "review_days": 45,
+    "lots": [
+     {
+      "quantity": 100,
+      "acquired_on": "2025-09-19",
+      "price": 50.0
+     },
+     {
+      "quantity": 100,
+      "acquired_on": "2024-01-05",
+      "price": 120.0
+     }
+    ]
+   },
+   "output": {
+    "review": {
+     "symbol": "X",
+     "requested_qty": 150,
+     "covered_qty": 150,
+     "flagged": true,
+     "flagged_qty": 50,
+     "data_unknown": false,
+     "estimated_gain": 500.0,
+     "codes": [
+      "TAX_LOT_LOSS",
+      "TAX_LOT_NEAR_LTCG"
+     ]
+    },
+    "items": [
+     {
+      "symbol": "X",
+      "requested_qty": 150,
+      "covered_qty": 150,
+      "flagged": true,
+      "flagged_qty": 50,
+      "data_unknown": false,
+      "estimated_gain": 500.0,
+      "codes": [
+       "TAX_LOT_LOSS",
+       "TAX_LOT_NEAR_LTCG"
+      ],
+      "detail": [
+       {
+        "quantity": 100,
+        "acquired_on": "2024-01-05",
+        "acquired_at": 120.0,
+        "corporate_action_adjusted": false,
+        "days_held": 952,
+        "days_to_ltcg": -587,
+        "gain": -2000.0,
+        "long_term": true,
+        "codes": [
+         "TAX_LOT_LOSS"
+        ]
+       },
+       {
+        "quantity": 50,
+        "acquired_on": "2025-09-19",
+        "acquired_at": 50.0,
+        "corporate_action_adjusted": false,
+        "days_held": 329,
+        "days_to_ltcg": 36,
+        "gain": 2500.0,
+        "long_term": false,
+        "codes": [
+         "TAX_LOT_NEAR_LTCG"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "kind": "tax",
+   "input": {
+    "qty": 30,
+    "price": 10.0,
+    "as_of": "2026-08-14",
+    "review_days": 45,
+    "lots": [
+     {
+      "quantity": 10,
+      "acquired_on": null,
+      "price": 1.0
+     },
+     {
+      "quantity": 10,
+      "acquired_on": "2026-01-01",
+      "price": null
+     }
+    ]
+   },
+   "output": {
+    "review": {
+     "symbol": "X",
+     "requested_qty": 30,
+     "covered_qty": 20,
+     "flagged": false,
+     "flagged_qty": 0,
+     "data_unknown": true,
+     "estimated_gain": null,
+     "codes": [
+      "TAX_DATA_UNKNOWN",
+      "TAX_LOTS_INCOMPLETE",
+      "TAX_MISSING_ACQUISITION_DATE",
+      "TAX_MISSING_ACQUISITION_PRICE"
+     ]
+    },
+    "items": [
+     {
+      "symbol": "X",
+      "requested_qty": 30,
+      "covered_qty": 20,
+      "flagged": false,
+      "flagged_qty": 0,
+      "data_unknown": true,
+      "estimated_gain": null,
+      "codes": [
+       "TAX_DATA_UNKNOWN",
+       "TAX_LOTS_INCOMPLETE",
+       "TAX_MISSING_ACQUISITION_DATE",
+       "TAX_MISSING_ACQUISITION_PRICE"
+      ],
+      "detail": [
+       {
+        "quantity": 10,
+        "acquired_on": null,
+        "acquired_at": 1.0,
+        "corporate_action_adjusted": false,
+        "days_held": null,
+        "days_to_ltcg": null,
+        "gain": 90.0,
+        "long_term": null,
+        "codes": [
+         "TAX_DATA_UNKNOWN",
+         "TAX_MISSING_ACQUISITION_DATE"
+        ]
+       },
+       {
+        "quantity": 10,
+        "acquired_on": "2026-01-01",
+        "acquired_at": null,
+        "corporate_action_adjusted": false,
+        "days_held": 225,
+        "days_to_ltcg": 140,
+        "gain": null,
+        "long_term": false,
+        "codes": [
+         "TAX_DATA_UNKNOWN",
+         "TAX_MISSING_ACQUISITION_PRICE"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "kind": "tax",
+   "input": {
+    "qty": 0,
+    "price": 10.0,
+    "as_of": "2026-08-14",
+    "review_days": 10,
+    "lots": []
+   },
+   "output": {
+    "review": {
+     "symbol": "X",
+     "requested_qty": 0,
+     "covered_qty": 0,
+     "flagged": false,
+     "flagged_qty": 0,
+     "data_unknown": false,
+     "estimated_gain": null,
+     "codes": []
+    },
+    "items": []
+   }
+  },
+  {
+   "kind": "tax",
+   "input": {
+    "qty": 5,
+    "price": 333.33,
+    "as_of": "2026-08-14",
+    "review_days": 400,
+    "lots": [
+     {
+      "quantity": 7,
+      "acquired_on": "2026-02-01",
+      "price": 111.11,
+      "corporate_action_adjusted": true
+     }
+    ]
+   },
+   "output": {
+    "review": {
+     "symbol": "X",
+     "requested_qty": 5,
+     "covered_qty": 5,
+     "flagged": true,
+     "flagged_qty": 5,
+     "data_unknown": false,
+     "estimated_gain": 1111.1,
+     "codes": [
+      "TAX_LOT_NEAR_LTCG"
+     ]
+    },
+    "items": [
+     {
+      "symbol": "X",
+      "requested_qty": 5,
+      "covered_qty": 5,
+      "flagged": true,
+      "flagged_qty": 5,
+      "data_unknown": false,
+      "estimated_gain": 1111.1,
+      "codes": [
+       "TAX_LOT_NEAR_LTCG"
+      ],
+      "detail": [
+       {
+        "quantity": 5,
+        "acquired_on": "2026-02-01",
+        "acquired_at": 111.11,
+        "corporate_action_adjusted": true,
+        "days_held": 194,
+        "days_to_ltcg": 171,
+        "gain": 1111.1,
+        "long_term": false,
+        "codes": [
+         "TAX_LOT_NEAR_LTCG"
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "kind": "parse",
+   "input": {
+    "csv": "symbol,isin,trade_date,exchange,segment,series,trade_type,auction,quantity,price,trade_id,order_id,order_execution_time\nrrkabel,INE1,2025-07-01,nse,EQ,EQ,Buy,false,100,1900.5,T1,O1,2025-07-01T09:30:00\nRRKABEL,INE1,15-01-2026,NSE,EQ,EQ,sold,false,40,2500,T2,O2,\nABC,INE2,01-Jul-2025,,EQ,EQ,b,false,\"1,500\",\"\u20b92,150.75\",,O3,01-07-2025T10:11:12\n,INE3,2025-07-01,NSE,EQ,EQ,buy,false,1,1,T4,O4,\nZERO,INE4,2025-07-01,NSE,EQ,EQ,buy,false,0,1,T5,O5,\n"
+   },
+   "output": {
+    "fills": [
+     [
+      "ABC",
+      "2025-07-01T10:11:12",
+      "BUY",
+      1500,
+      2150.75,
+      "NSE",
+      "",
+      0.0
+     ],
+     [
+      "RRKABEL",
+      "2025-07-01T09:30:00",
+      "BUY",
+      100,
+      1900.5,
+      "NSE",
+      "T1",
+      0.0
+     ],
+     [
+      "RRKABEL",
+      "2026-01-15T09:15:00",
+      "SELL",
+      40,
+      2500.0,
+      "NSE",
+      "T2",
+      0.0
+     ]
+    ]
+   }
+  },
+  {
+   "kind": "parse",
+   "input": {
+    "csv": "Symbol,Trade Date,Trade Type,Qty,Price,Charges\nX,2025-01-01,buy,10,5.5,1.25\nX,2025-03-01,sell,4,6,0.5\n"
+   },
+   "output": {
+    "fills": [
+     [
+      "X",
+      "2025-01-01T09:15:00",
+      "BUY",
+      10,
+      5.5,
+      "NSE",
+      "",
+      1.25
+     ],
+     [
+      "X",
+      "2025-03-01T09:15:00",
+      "SELL",
+      4,
+      6.0,
+      "NSE",
+      "",
+      0.5
+     ]
+    ]
+   }
+  },
+  {
+   "kind": "parse",
+   "input": {
+    "csv": "symbol,isin,trade_date,exchange,segment,series,trade_type,auction,quantity,price,trade_id,order_id,order_execution_time\nX,INE1,not-a-date,NSE,EQ,EQ,buy,false,10,100,T1,O1,\n"
+   },
+   "output": {
+    "error": "<path>: line 2 (X) has no parseable date. An acquisition date cannot be inferred, and a lot without one is never assumed tax-safe."
+   }
+  },
+  {
+   "kind": "parse",
+   "input": {
+    "csv": "symbol,isin,trade_date,exchange,segment,series,trade_type,auction,quantity,price,trade_id,order_id,order_execution_time\nX,INE1,2025-07-01,NSE,EQ,EQ,transfer,false,10,100,T1,O1,\n"
+   },
+   "output": {
+    "error": "<path>: line 2 has an unrecognised trade type 'transfer'; refusing to guess buy vs sell"
+   }
+  },
+  {
+   "kind": "parse",
+   "input": {
+    "csv": "symbol,trade_date\nX,2025-07-01\n"
+   },
+   "output": {
+    "error": "<path>: missing required columns ['trade_type', 'quantity', 'price']. Export console.zerodha.com -> Reports -> Tradebook. Found: ['symbol', 'trade_date']"
+   }
+  },
+  {
+   "kind": "parse",
+   "input": {
+    "csv": "symbol,isin,trade_date,exchange,segment,series,trade_type,auction,quantity,price,trade_id,order_id,order_execution_time\nX,INE1,2025-07-01,NSE,EQ,EQ,buy,false,1,500,2150.75,T1,O1,2025-07-01T09:30:00\n"
+   },
+   "output": {
+    "error": "<path>: line 2 has more fields than the header \u2014 an unquoted comma inside a number would silently mis-read quantities."
+   }
+  },
+  {
+   "kind": "parse",
+   "input": {
+    "csv": "symbol,isin,trade_date,exchange,segment,series,trade_type,auction,quantity,price,trade_id,order_id,order_execution_time\n"
+   },
+   "output": {
+    "error": "<path>: no usable trades found"
+   }
+  },
+  {
+   "kind": "parse",
+   "input": {
+    "csv": "symbol,isin,trade_date,exchange,segment,series,trade_type,auction,quantity,price,trade_id,order_id,order_execution_time\nP,INE1,2025-07-01,NSE,EQ,EQ,buy,false,1,10,T1,O1,2025-07-02 09:30\n\nQ,INE1,2025-07-01,NSE,EQ,EQ,buy,false,2,10,T2,O2,03/07/2025 10:11:12\nR,INE1,2025-07-01,NSE,EQ,EQ,buy,false,3,10,T3,O3,   \nS,INE1,2025-07-01,NSE,EQ,EQ,buy,false,4,10,T4,O4,2025-07-04\nT,INE1,2025-07-01,NSE,EQ,EQ,sell,false,-5,10,T5,O5,2025/07/05 11:00:00\n"
+   },
+   "output": {
+    "fills": [
+     [
+      "P",
+      "2025-02-07T09:30:00",
+      "BUY",
+      1,
+      10.0,
+      "NSE",
+      "T1",
+      0.0
+     ],
+     [
+      "Q",
+      "2025-07-03T10:11:12",
+      "BUY",
+      2,
+      10.0,
+      "NSE",
+      "T2",
+      0.0
+     ],
+     [
+      "R",
+      "2025-07-01T09:15:00",
+      "BUY",
+      3,
+      10.0,
+      "NSE",
+      "T3",
+      0.0
+     ],
+     [
+      "S",
+      "2025-04-07T00:00:00",
+      "BUY",
+      4,
+      10.0,
+      "NSE",
+      "T4",
+      0.0
+     ],
+     [
+      "T",
+      "2025-05-07T11:00:00",
+      "SELL",
+      5,
+      10.0,
+      "NSE",
+      "T5",
+      0.0
+     ]
+    ]
+   }
+  },
+  {
+   "kind": "fifo",
+   "input": {
+    "fills": [
+     [
+      "X",
+      "2025-01-01T09:15:00",
+      "BUY",
+      100,
+      50.0,
+      "NSE",
+      "",
+      10.0
+     ],
+     [
+      "X",
+      "2025-06-01T09:15:00",
+      "BUY",
+      100,
+      80.0,
+      "NSE",
+      "",
+      7.5
+     ],
+     [
+      "Y",
+      "2025-02-01T10:00:00",
+      "BUY",
+      3,
+      1.1,
+      "NSE",
+      "",
+      0.0
+     ],
+     [
+      "X",
+      "2026-01-01T11:00:00.250000",
+      "SELL",
+      150,
+      100.0,
+      "NSE",
+      "",
+      3.3
+     ],
+     [
+      "Y",
+      "2025-03-01T10:00:00",
+      "SELL",
+      5,
+      1.3,
+      "NSE",
+      "",
+      0.0
+     ]
+    ],
+    "actions": [
+     [
+      "X",
+      "bonus",
+      "2025-03-01",
+      1.0,
+      2.0
+     ],
+     [
+      "X",
+      "split",
+      "2025-09-01",
+      5.0,
+      1.0
+     ]
+    ]
+   },
+   "output": {
+    "closed": [
+     {
+      "symbol": "Y",
+      "entry_ts": 1738384200.0,
+      "exit_ts": 1740803400.0,
+      "qty": 3,
+      "entry_price": 1.1,
+      "exit_price": 1.3,
+      "pnl": 0.6,
+      "costs": 0.0
+     },
+     {
+      "symbol": "X",
+      "entry_ts": 1735703100.0,
+      "exit_ts": 1767245400.25,
+      "qty": 150,
+      "entry_price": 10.0,
+      "exit_price": 100.0,
+      "pnl": 13500.0,
+      "costs": 6.3
+     }
+    ],
+    "open": [
+     [
+      "X",
+      "2025-01-01T09:15:00",
+      350,
+      10.0,
+      7.0,
+      1735703100.0
+     ],
+     [
+      "X",
+      "2025-03-01T00:01:00",
+      250,
+      0.0,
+      0.0,
+      1740767460.0
+     ],
+     [
+      "X",
+      "2025-06-01T09:15:00",
+      500,
+      16.0,
+      7.5,
+      1748749500.0
+     ]
+    ],
+    "unmatched": [
+     {
+      "symbol": "Y",
+      "date": "2025-03-01",
+      "quantity": 2,
+      "price": 1.3
+     }
+    ],
+    "keys": [
+     "syn:45043fab7b8a31267af9",
+     "syn:4cbc404f9fa468908b44",
+     "syn:9197464fb8c1877bc0ed",
+     "syn:4852d52f147b9b91e02b",
+     "syn:7536978e8db12d326f9e"
+    ]
+   }
+  },
+  {
+   "kind": "tradebook_db",
+   "input": {
+    "csv": "symbol,isin,trade_date,exchange,segment,series,trade_type,auction,quantity,price,trade_id,order_id,order_execution_time\nX,INE1,2025-01-01,NSE,EQ,EQ,buy,false,100,50,T1,O1,\nX,INE1,2025-02-01,NSE,EQ,EQ,buy,false,50,60.5,T2,O2,\nY,INE2,2025-03-01,NSE,EQ,EQ,buy,false,10,7,T3,O3,\nY,INE2,2025-04-01,NSE,EQ,EQ,sell,false,15,9,T4,O4,\n",
+    "trades": [
+     {
+      "trade_id": "K1",
+      "tradingsymbol": "X",
+      "transaction_type": "SELL",
+      "quantity": 40,
+      "average_price": 90.0,
+      "product": "CNC",
+      "exchange": "NSE",
+      "fill_timestamp": "2026-08-15 10:00:00"
+     },
+     {
+      "trade_id": "K2",
+      "tradingsymbol": "Z",
+      "transaction_type": "BUY",
+      "quantity": 4,
+      "average_price": 12.5,
+      "product": "MIS",
+      "exchange": "NSE",
+      "fill_timestamp": "2026-08-15 10:00:00"
+     }
+    ],
+    "positions": [
+     {
+      "symbol": "X",
+      "quantity": 110,
+      "average_price": 55.123,
+      "value": 9000
+     },
+     {
+      "symbol": "Y",
+      "quantity": 0,
+      "average_price": 7,
+      "value": 0
+     },
+     {
+      "symbol": "W",
+      "quantity": 3,
+      "average_price": 1,
+      "value": 30
+     }
+    ],
+    "now": "2026-08-15T18:00:00"
+   },
+   "output": {
+    "import": {
+     "file": "<path>",
+     "fills": 4,
+     "symbols": 2,
+     "new_fills": 4,
+     "open_lots": 2,
+     "closed_trades": 1,
+     "unmatched_sells": [
+      {
+       "symbol": "Y",
+       "date": "2025-04-01",
+       "quantity": 5,
+       "price": 9.0
+      }
+     ],
+     "realised_pnl": 20.0,
+     "first_trade": "2025-01-01",
+     "last_trade": "2025-04-01"
+    },
+    "capture": {
+     "raw": 2,
+     "captured": 1,
+     "new": 1,
+     "symbols": [
+      "X"
+     ],
+     "open_lots": 2,
+     "closed_trades": 1,
+     "realised_pnl": 1600.0
+    },
+    "status": {
+     "has_lots": true,
+     "total_rows": 4,
+     "open_lots": 2,
+     "closed_trades": 2,
+     "realised_pnl": 1620.0,
+     "history_from": "2025-01-01",
+     "coverage": {
+      "holdings": 3,
+      "with_lots": 1,
+      "coverage_pct": 33.3,
+      "missing": [
+       "W",
+       "Y"
+      ]
+     },
+     "problems": [
+      {
+       "symbol": "W",
+       "holding_qty": 3,
+       "lot_qty": 0,
+       "difference": 3,
+       "likely_cause": "no tradebook history for this symbol"
+      }
+     ],
+     "detail": [
+      {
+       "symbol": "X",
+       "holding_qty": 110,
+       "lot_qty": 110,
+       "lots": 2,
+       "first_acquired": "2025-01-01",
+       "avg_cost": 54.77,
+       "broker_avg": 55.12,
+       "status": "ok",
+       "note": ""
+      },
+      {
+       "symbol": "W",
+       "holding_qty": 3,
+       "lot_qty": 0,
+       "lots": 0,
+       "first_acquired": null,
+       "avg_cost": null,
+       "broker_avg": 1.0,
+       "status": "missing",
+       "note": "no tradebook history for this symbol"
+      },
+      {
+       "symbol": "Y",
+       "holding_qty": 0,
+       "lot_qty": 0,
+       "lots": 0,
+       "first_acquired": null,
+       "avg_cost": null,
+       "broker_avg": 7.0,
+       "status": "missing",
+       "note": ""
+      }
+     ],
+     "fills": {
+      "total": 5,
+      "sources": [
+       {
+        "source": "console_csv",
+        "label": "Console export",
+        "count": 4,
+        "first": "2025-01-01",
+        "last": "2025-04-01",
+        "last_run": "2026-08-15T18:00:00"
+       },
+       {
+        "source": "kite_api",
+        "label": "Daily capture",
+        "count": 1,
+        "first": "2026-08-15",
+        "last": "2026-08-15",
+        "last_run": "2026-08-15T18:00:00"
+       }
+      ],
+      "latest_fill": "2026-08-15",
+      "captured_today": true,
+      "capture_ever_run": true
+     }
+    },
+    "trades": [
+     [
+      "Y",
+      1740800700.0,
+      1743479100.0,
+      10,
+      7.0,
+      9.0,
+      20.0,
+      0.0
+     ],
+     [
+      "X",
+      1735703100.0,
+      1786768200.0,
+      40,
+      50.0,
+      90.0,
+      1600.0,
+      0.0
+     ],
+     [
+      "X",
+      1735703100.0,
+      null,
+      60,
+      50.0,
+      null,
+      null,
+      0.0
+     ],
+     [
+      "X",
+      1738381500.0,
+      null,
+      50,
+      60.5,
+      null,
+      null,
+      0.0
+     ]
+    ],
+    "fills": [
+     [
+      "K1",
+      "X",
+      1786768200.0,
+      "SELL",
+      40,
+      90.0,
+      "NSE",
+      0.0,
+      "kite_api",
+      "2026-08-15T18:00:00"
+     ],
+     [
+      "T1",
+      "X",
+      1735703100.0,
+      "BUY",
+      100,
+      50.0,
+      "NSE",
+      0.0,
+      "console_csv",
+      "2026-08-15T18:00:00"
+     ],
+     [
+      "T2",
+      "X",
+      1738381500.0,
+      "BUY",
+      50,
+      60.5,
+      "NSE",
+      0.0,
+      "console_csv",
+      "2026-08-15T18:00:00"
+     ],
+     [
+      "T3",
+      "Y",
+      1740800700.0,
+      "BUY",
+      10,
+      7.0,
+      "NSE",
+      0.0,
+      "console_csv",
+      "2026-08-15T18:00:00"
+     ],
+     [
+      "T4",
+      "Y",
+      1743479100.0,
+      "SELL",
+      15,
+      9.0,
+      "NSE",
+      0.0,
+      "console_csv",
+      "2026-08-15T18:00:00"
+     ]
+    ]
+   }
+  },
+  {
+   "kind": "positions",
+   "input": {
+    "plan": {
+     "orders": [
+      {
+       "symbol": "AAA",
+       "qty_final": 10
+      },
+      {
+       "symbol": "BBB",
+       "qty_final": 5
+      },
+      {
+       "symbol": "CCC",
+       "qty_final": 0
+      },
+      {
+       "symbol": "DDD",
+       "qty_final": 7
+      }
+     ]
+    },
+    "holdings": [
+     {
+      "symbol": "AAA",
+      "quantity": 3
+     },
+     {
+      "symbol": "BBB",
+      "quantity": 5
+     },
+     {
+      "symbol": "SGB1",
+      "quantity": 392
+     },
+     {
+      "symbol": "DDD",
+      "quantity": 20
+     },
+     {
+      "symbol": "EEE",
+      "quantity": 1
+     }
+    ]
+   },
+   "output": {
+    "rows": [
+     {
+      "symbol": "SGB1",
+      "planned_final": null,
+      "held": 392,
+      "diff": 392,
+      "state": "drift",
+      "why": "held but not in this plan"
+     },
+     {
+      "symbol": "DDD",
+      "planned_final": 7,
+      "held": 20,
+      "diff": 13,
+      "state": "wrong",
+      "why": "more than planned"
+     },
+     {
+      "symbol": "AAA",
+      "planned_final": 10,
+      "held": 3,
+      "diff": -7,
+      "state": "wrong",
+      "why": "target not reached"
+     },
+     {
+      "symbol": "EEE",
+      "planned_final": null,
+      "held": 1,
+      "diff": 1,
+      "state": "drift",
+      "why": "held but not in this plan"
+     }
+    ],
+    "state": "wrong"
+   }
+  },
+  {
+   "kind": "positions",
+   "input": {
+    "plan": null,
+    "holdings": []
+   },
+   "output": {
+    "rows": [],
+    "state": "ok"
+   }
+  },
+  {
+   "kind": "reconcile",
+   "input": {
+    "orders": [
+     {
+      "order_id": "B1",
+      "status": "CANCELLED",
+      "filled_quantity": 40
+     },
+     {
+      "order_id": "B2",
+      "status": "COMPLETE",
+      "filled_quantity": 7
+     }
+    ],
+    "gtts": [
+     {
+      "id": 778,
+      "status": "ACTIVE",
+      "condition": {
+       "tradingsymbol": "BIGCO",
+       "trigger_values": [
+        80.05
+       ]
+      },
+      "orders": [
+       {
+        "transaction_type": "SELL",
+        "quantity": 150
+       }
+      ]
+     },
+     {
+      "id": 779,
+      "status": "active",
+      "condition": {
+       "tradingsymbol": "GONECO",
+       "trigger_values": [
+        1
+       ]
+      },
+      "orders": [
+       {
+        "transaction_type": "BUY",
+        "quantity": 1
+       },
+       {
+        "quantity": 100
+       }
+      ]
+     },
+     {
+      "id": 780,
+      "status": "triggered",
+      "condition": {
+       "tradingsymbol": "FIRECO"
+      },
+      "orders": [
+       {
+        "transaction_type": "SELL",
+        "quantity": 100
+       }
+      ]
+     },
+     {
+      "id": 781,
+      "status": "deleted",
+      "condition": {},
+      "orders": []
+     },
+     {
+      "id": 782,
+      "status": "active",
+      "condition": {
+       "tradingsymbol": "SMALLCO"
+      },
+      "orders": [
+       {
+        "transaction_type": "SELL",
+        "quantity": 10
+       }
+      ]
+     }
+    ],
+    "holdings": [
+     {
+      "symbol": "GONECO",
+      "quantity": 60
+     },
+     {
+      "symbol": "FIRECO",
+      "quantity": 100
+     }
+    ],
+    "sleeve_orders": [
+     {
+      "broker_order_id": "B1",
+      "symbol": "TWTCO",
+      "quantity": 100,
+      "filled_quantity": 0,
+      "reference_price": "100.05"
+     },
+     {
+      "broker_order_id": "B2",
+      "symbol": "TWTCO",
+      "quantity": 7,
+      "reference_price": null
+     },
+     {
+      "broker_order_id": "B9",
+      "symbol": "TWTCO",
+      "quantity": 1
+     },
+     {
+      "broker_order_id": "",
+      "symbol": "TWTCO",
+      "quantity": 1
+     }
+    ],
+    "positions": [
+     {
+      "id": 1,
+      "symbol": "NAKEDCO",
+      "quantity_open": 100,
+      "gtt_id": null,
+      "simulated": true
+     },
+     {
+      "id": 2,
+      "symbol": "MISSCO",
+      "quantity_open": 100,
+      "gtt_id": "777",
+      "simulated": true
+     },
+     {
+      "id": 3,
+      "symbol": "BIGCO",
+      "quantity_open": 100,
+      "gtt_id": "778",
+      "simulated": true
+     },
+     {
+      "id": 4,
+      "symbol": "GONECO",
+      "quantity_open": 100,
+      "gtt_id": 779,
+      "simulated": false
+     },
+     {
+      "id": 5,
+      "symbol": "FIRECO",
+      "quantity_open": 100,
+      "gtt_id": "780",
+      "simulated": false
+     },
+     {
+      "id": 6,
+      "symbol": "DELCO",
+      "quantity_open": 5,
+      "gtt_id": "781",
+      "simulated": true
+     },
+     {
+      "id": 7,
+      "symbol": "SMALLCO",
+      "quantity_open": 25,
+      "gtt_id": "782",
+      "simulated": true
+     },
+     {
+      "id": 8,
+      "symbol": "DRYCO",
+      "quantity_open": 25,
+      "gtt_id": "DRY-1",
+      "simulated": true
+     },
+     {
+      "id": 9,
+      "symbol": "SHUT",
+      "quantity_open": 0,
+      "gtt_id": null,
+      "simulated": true
+     },
+     {
+      "id": 10,
+      "instrument_id": 42,
+      "quantity_open": 3,
+      "gtt_id": null,
+      "simulated": false
+     }
+    ]
+   },
+   "output": {
+    "line": "reconcile 09:20:05: 2 order(s) seen, 1 applied, 1 dead, 1 released, 1 not in the book; issues: EXTERNAL_EXIT 2, GTT_MISSING 2, GTT_OVERSIZED 1, GTT_TRIGGERED_UNFILLED 1, GTT_UNDERSIZED 1, NAKED 2; 0 resolved",
+    "released": [
+     [
+      "TWTCO",
+      6003.0
+     ]
+    ],
+    "issues": [
+     [
+      "twt",
+      1,
+      "NAKEDCO",
+      "NAKED",
+      "100 share(s) held with no resting stop"
+     ],
+     [
+      "twt",
+      2,
+      "MISSCO",
+      "GTT_MISSING",
+      "GTT 777 is not in the broker's list; 100 share(s) unprotected"
+     ],
+     [
+      "twt",
+      3,
+      "BIGCO",
+      "GTT_OVERSIZED",
+      "GTT 778 sells 150 against 100 held \u2014 a residual stop would sell what is not there"
+     ],
+     [
+      "twt",
+      4,
+      "GONECO",
+      "EXTERNAL_EXIT",
+      "the broker holds 60 GONECO and the sleeves record 100 \u2014 40 share(s) left the book outside the desk"
+     ],
+     [
+      "twt",
+      5,
+      "FIRECO",
+      "GTT_TRIGGERED_UNFILLED",
+      "GTT 780 fired and the position is still open for 100; the broker still shows 100 \u2014 a trigger is not a fill; check the LIMIT order it placed"
+     ],
+     [
+      "twt",
+      6,
+      "DELCO",
+      "GTT_MISSING",
+      "GTT 781 is deleted; 5 share(s) unprotected"
+     ],
+     [
+      "twt",
+      7,
+      "SMALLCO",
+      "GTT_UNDERSIZED",
+      "GTT 782 sells 10 against 25 held \u2014 15 share(s) unprotected"
+     ],
+     [
+      "twt",
+      10,
+      "instrument:42",
+      "NAKED",
+      "3 share(s) held with no resting stop"
+     ],
+     [
+      "twt",
+      10,
+      "instrument:42",
+      "EXTERNAL_EXIT",
+      "the broker holds 0 instrument:42 and the sleeves record 3 \u2014 3 share(s) left the book outside the desk"
+     ]
+    ],
+    "gtts": {
+     "778": [
+      "778",
+      "active",
+      "BIGCO",
+      150,
+      "80.05"
+     ],
+     "779": [
+      "779",
+      "active",
+      "GONECO",
+      100,
+      "1"
+     ],
+     "780": [
+      "780",
+      "triggered",
+      "FIRECO",
+      100,
+      null
+     ],
+     "781": [
+      "781",
+      "deleted",
+      "",
+      null,
+      null
+     ],
+     "782": [
+      "782",
+      "active",
+      "SMALLCO",
+      10,
+      null
+     ]
+    }
+   }
+  },
+  {
+   "kind": "snapshot",
+   "input": {
+    "holdings": [
+     {
+      "symbol": "AAA",
+      "exchange": "NSE",
+      "quantity": 110,
+      "pledged_qty": 10,
+      "average_price": 90.123456,
+      "last_price": 100.05
+     },
+     {
+      "symbol": "SGBDE31III",
+      "exchange": "NSE",
+      "quantity": 5,
+      "pledged_qty": 0,
+      "average_price": 5000,
+      "last_price": 6123.4
+     },
+     {
+      "symbol": "B\u00c9TA",
+      "exchange": "BSE",
+      "quantity": 3,
+      "pledged_qty": 3,
+      "average_price": 1.0,
+      "last_price": 1e-07
+     }
+    ],
+    "include": false,
+    "today": "2026-08-15"
+   },
+   "output": {
+    "date": "2026-08-15",
+    "nav": 134462.29,
+    "invested": 11005.5,
+    "cash": 123456.79,
+    "holdings_json": "{\"as_of\":\"2026-08-15\",\"price_source\":\"holdings\",\"include_untouchable_in_nav\":false,\"excluded_value\":30617.0,\"backfilled\":false,\"positions\":[{\"symbol\":\"SGBDE31III\",\"exchange\":\"NSE\",\"quantity\":5,\"pledged_qty\":0,\"average_price\":5000.0,\"price\":6123.4,\"value\":30617.0,\"excluded\":true},{\"symbol\":\"AAA\",\"exchange\":\"NSE\",\"quantity\":110,\"pledged_qty\":10,\"average_price\":90.1235,\"price\":100.05,\"value\":11005.5,\"excluded\":false},{\"symbol\":\"B\\u00c9TA\",\"exchange\":\"BSE\",\"quantity\":3,\"pledged_qty\":3,\"average_price\":1.0,\"price\":0.0,\"value\":0.0,\"excluded\":false}]}"
+   }
+  },
+  {
+   "kind": "snapshot",
+   "input": {
+    "holdings": [
+     {
+      "symbol": "AAA",
+      "exchange": "NSE",
+      "quantity": 110,
+      "pledged_qty": 10,
+      "average_price": 90.123456,
+      "last_price": 100.05
+     },
+     {
+      "symbol": "SGBDE31III",
+      "exchange": "NSE",
+      "quantity": 5,
+      "pledged_qty": 0,
+      "average_price": 5000,
+      "last_price": 6123.4
+     },
+     {
+      "symbol": "B\u00c9TA",
+      "exchange": "BSE",
+      "quantity": 3,
+      "pledged_qty": 3,
+      "average_price": 1.0,
+      "last_price": 1e-07
+     }
+    ],
+    "include": true,
+    "today": "2026-08-15"
+   },
+   "output": {
+    "date": "2026-08-15",
+    "nav": 165079.29,
+    "invested": 41622.5,
+    "cash": 123456.79,
+    "holdings_json": "{\"as_of\":\"2026-08-15\",\"price_source\":\"holdings\",\"include_untouchable_in_nav\":true,\"excluded_value\":0.0,\"backfilled\":false,\"positions\":[{\"symbol\":\"SGBDE31III\",\"exchange\":\"NSE\",\"quantity\":5,\"pledged_qty\":0,\"average_price\":5000.0,\"price\":6123.4,\"value\":30617.0,\"excluded\":true},{\"symbol\":\"AAA\",\"exchange\":\"NSE\",\"quantity\":110,\"pledged_qty\":10,\"average_price\":90.1235,\"price\":100.05,\"value\":11005.5,\"excluded\":false},{\"symbol\":\"B\\u00c9TA\",\"exchange\":\"BSE\",\"quantity\":3,\"pledged_qty\":3,\"average_price\":1.0,\"price\":0.0,\"value\":0.0,\"excluded\":false}]}"
+   }
+  }
+ ]
+}

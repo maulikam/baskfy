@@ -1,0 +1,364 @@
+{
+  "note": "Wave D lane swing_desk (lanes/swing/desk.rs): the /swing page and its JSON on the bed's real sw_ rows at several clocks, the refusals of every order-shaped route (422/400/404/409), the reconcile and the 10:45 sweep with nothing SENT, and SW15's scan button (200, then 409 in flight, then 429 inside a minute). DRY_RUN=true throughout; the replay Kite must record no order or GTT call. The day's risk_ledger row is written by both desks when the swing gateway is first built (app.main.gateway() builds _risk); its updated_at is the server's now(), so it is masked. The HTML pages differ only in base.html's F&O nav badge until the fno lane registers fno_badge. Review (adversarial pass): the 4 Sep 09:30 cases run a real DRY_RUN confirm on the bed's own lines; sw_fill.created_at, sw_plan_line.updated_at and sw_position.created_at/updated_at are server now()/CURRENT_TIMESTAMP stamps (the injected clock cannot reach the database), masked as <null>/<set> like risk_ledger.updated_at.",
+  "db_mask": {
+    "public.risk_ledger": [
+      "updated_at"
+    ],
+    "public.sw_fill": [
+      "created_at"
+    ],
+    "public.sw_plan_line": [
+      "updated_at"
+    ],
+    "public.sw_position": [
+      "created_at",
+      "updated_at"
+    ]
+  },
+  "cases": [
+    {
+      "name": "swing data before the open (Fri)",
+      "method": "GET",
+      "path": "/swing/data",
+      "clock": "pre_open"
+    },
+    {
+      "name": "swing data at the open (Fri)",
+      "method": "GET",
+      "path": "/swing/data",
+      "clock": "open"
+    },
+    {
+      "name": "swing data after the close (Fri)",
+      "method": "GET",
+      "path": "/swing/data",
+      "clock": "after_close"
+    },
+    {
+      "name": "swing data mid-session on Thursday (signals and plans of the day)",
+      "method": "GET",
+      "path": "/swing/data",
+      "clock": "2026-10-29T10:00:00+05:30"
+    },
+    {
+      "name": "swing data Thursday 09:20 (plans unexpired?)",
+      "method": "GET",
+      "path": "/swing/data",
+      "clock": "2026-10-29T09:20:00+05:30"
+    },
+    {
+      "name": "swing data Saturday",
+      "method": "GET",
+      "path": "/swing/data",
+      "clock": "2026-10-31T11:00:00+05:30"
+    },
+    {
+      "name": "swing page mid-session Thursday",
+      "method": "GET",
+      "path": "/swing",
+      "clock": "2026-10-29T10:00:00+05:30"
+    },
+    {
+      "name": "swing page Thursday 09:20",
+      "method": "GET",
+      "path": "/swing",
+      "clock": "2026-10-29T09:20:00+05:30"
+    },
+    {
+      "name": "swing page after the close (Fri)",
+      "method": "GET",
+      "path": "/swing",
+      "clock": "after_close"
+    },
+    {
+      "name": "swing page before the open (Fri)",
+      "method": "GET",
+      "path": "/swing",
+      "clock": "pre_open"
+    },
+    {
+      "name": "execute without fields is FastAPI's 422",
+      "method": "POST",
+      "path": "/swing/execute",
+      "form": {},
+      "clock": "mid"
+    },
+    {
+      "name": "execute with a non-integer line_id is 422",
+      "method": "POST",
+      "path": "/swing/execute",
+      "form": {
+        "plan_id": "x",
+        "line_id": "abc",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "execute without confirm is 400",
+      "method": "POST",
+      "path": "/swing/execute",
+      "form": {
+        "plan_id": "00000000-0000-4000-8000-000000000000",
+        "line_id": "1",
+        "confirm": "false"
+      }
+    },
+    {
+      "name": "execute of an unknown plan is 404",
+      "method": "POST",
+      "path": "/swing/execute",
+      "form": {
+        "plan_id": "00000000-0000-4000-8000-000000000000",
+        "line_id": "1",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "execute of a malformed plan id is 404",
+      "method": "POST",
+      "path": "/swing/execute",
+      "form": {
+        "plan_id": "not-a-uuid",
+        "line_id": "999999",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "rearm without confirm is 400",
+      "method": "POST",
+      "path": "/swing/rearm",
+      "form": {
+        "position_id": "1",
+        "confirm": "no"
+      }
+    },
+    {
+      "name": "rearm of an unknown position is 404",
+      "method": "POST",
+      "path": "/swing/rearm",
+      "form": {
+        "position_id": "987654",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "rearm missing position_id is 422",
+      "method": "POST",
+      "path": "/swing/rearm",
+      "form": {
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "reconcile without confirm is 400",
+      "method": "POST",
+      "path": "/swing/reconcile",
+      "form": {
+        "confirm": "yes"
+      }
+    },
+    {
+      "name": "reconcile with nothing SENT",
+      "method": "POST",
+      "path": "/swing/reconcile",
+      "form": {
+        "confirm": "true"
+      },
+      "clock": "mid"
+    },
+    {
+      "name": "cutoff without confirm is 400",
+      "method": "POST",
+      "path": "/swing/cutoff",
+      "form": {
+        "confirm": "false"
+      }
+    },
+    {
+      "name": "cutoff at 10:45 Friday frees today's slots",
+      "method": "POST",
+      "path": "/swing/cutoff",
+      "form": {
+        "confirm": "true"
+      },
+      "clock": "2026-10-30T10:45:00+05:30"
+    },
+    {
+      "name": "scan now queues a run",
+      "method": "POST",
+      "path": "/swing/scan",
+      "clock": "mid"
+    },
+    {
+      "name": "a second press while it is queued is 409",
+      "method": "POST",
+      "path": "/swing/scan"
+    },
+    {
+      "name": "the page shows the queued run",
+      "method": "GET",
+      "path": "/swing/data"
+    },
+    {
+      "name": "the page html shows the queued run",
+      "method": "GET",
+      "path": "/swing"
+    },
+    {
+      "name": "review: execute without the confirm field is 422",
+      "method": "POST",
+      "path": "/swing/execute",
+      "form": {
+        "plan_id": "051a6ac8-c80a-44e4-ae4f-84ee90d8885e",
+        "line_id": "1"
+      }
+    },
+    {
+      "name": "review: execute of a real line on its expired plan is refused (Thu)",
+      "method": "POST",
+      "path": "/swing/execute",
+      "clock": "2026-10-29T10:00:00+05:30",
+      "form": {
+        "plan_id": "051a6ac8-c80a-44e4-ae4f-84ee90d8885e",
+        "line_id": "1",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "review: execute of a line under another plan's id",
+      "method": "POST",
+      "path": "/swing/execute",
+      "clock": "2026-09-04T09:30:00+05:30",
+      "form": {
+        "plan_id": "b35d593b-b0d4-4b52-8e69-2ffc4027079e",
+        "line_id": "1",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "review: execute of an unknown line under a real plan",
+      "method": "POST",
+      "path": "/swing/execute",
+      "clock": "2026-09-04T09:30:00+05:30",
+      "form": {
+        "plan_id": "051a6ac8-c80a-44e4-ae4f-84ee90d8885e",
+        "line_id": "999999",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "review: swing data 4 Sep 09:30 (the MORNING line is live)",
+      "method": "GET",
+      "path": "/swing/data",
+      "clock": "2026-09-04T09:30:00+05:30"
+    },
+    {
+      "name": "review: the live line without confirm=true is 400",
+      "method": "POST",
+      "path": "/swing/execute",
+      "clock": "2026-09-04T09:30:00+05:30",
+      "form": {
+        "plan_id": "051a6ac8-c80a-44e4-ae4f-84ee90d8885e",
+        "line_id": "1",
+        "confirm": "TRUE"
+      }
+    },
+    {
+      "name": "review: confirm the MORNING line once a later plan of the day exists (refused)",
+      "method": "POST",
+      "path": "/swing/execute",
+      "clock": "2026-09-04T09:30:00+05:30",
+      "form": {
+        "plan_id": "051a6ac8-c80a-44e4-ae4f-84ee90d8885e",
+        "line_id": "1",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "review: the same line again cannot double-send",
+      "method": "POST",
+      "path": "/swing/execute",
+      "clock": "2026-09-04T09:30:00+05:30",
+      "form": {
+        "plan_id": "051a6ac8-c80a-44e4-ae4f-84ee90d8885e",
+        "line_id": "1",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "review: confirm the EOD_PREVIEW line (DRY_RUN end to end, GTT armed)",
+      "method": "POST",
+      "path": "/swing/execute",
+      "clock": "2026-09-04T09:30:00+05:30",
+      "form": {
+        "plan_id": "b35d593b-b0d4-4b52-8e69-2ffc4027079e",
+        "line_id": "2",
+        "confirm": "true"
+      },
+      "capture": {
+        "position_id": "json:/position_id"
+      }
+    },
+    {
+      "name": "review: the EOD_PREVIEW line again cannot double-send",
+      "method": "POST",
+      "path": "/swing/execute",
+      "clock": "2026-09-04T09:30:30+05:30",
+      "form": {
+        "plan_id": "b35d593b-b0d4-4b52-8e69-2ffc4027079e",
+        "line_id": "2",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "review: rearm a position whose GTT is armed",
+      "method": "POST",
+      "path": "/swing/rearm",
+      "clock": "2026-09-04T09:31:30+05:30",
+      "form": {
+        "position_id": "${position_id}",
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "review: swing data after the confirm",
+      "method": "GET",
+      "path": "/swing/data",
+      "clock": "2026-09-04T09:31:00+05:30"
+    },
+    {
+      "name": "review: rearm the confirmed position without confirm",
+      "method": "POST",
+      "path": "/swing/rearm",
+      "clock": "2026-09-04T09:32:00+05:30",
+      "form": {
+        "position_id": "${position_id}",
+        "confirm": "false"
+      }
+    },
+    {
+      "name": "review: reconcile that morning",
+      "method": "POST",
+      "path": "/swing/reconcile",
+      "clock": "2026-09-04T09:33:00+05:30",
+      "form": {
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "review: the 10:45 sweep that morning",
+      "method": "POST",
+      "path": "/swing/cutoff",
+      "clock": "2026-09-04T10:45:00+05:30",
+      "form": {
+        "confirm": "true"
+      }
+    },
+    {
+      "name": "review: the page that morning after it all",
+      "method": "GET",
+      "path": "/swing",
+      "clock": "2026-09-04T10:46:00+05:30"
+    }
+  ]
+}

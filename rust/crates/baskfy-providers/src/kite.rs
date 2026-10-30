@@ -1292,7 +1292,7 @@ impl KiteClient for KiteConnect {
 }
 
 /// `_parse_instruments`: the CSV dump as dicts, with the SDK's typed columns.
-fn parse_instruments(bytes: &[u8]) -> Result<KiteValue, ProviderError> {
+pub fn parse_instruments(bytes: &[u8]) -> Result<KiteValue, ProviderError> {
     let text = std::str::from_utf8(bytes).map_err(|e| {
         ProviderError::foreign(
             "UnicodeDecodeError",
@@ -1415,7 +1415,7 @@ enum Cell {
 }
 
 /// `_format_historical`: `[[stamp, o, h, l, c, v(, oi)], ...]` as dicts.
-fn format_historical(data: &KiteValue) -> Result<KiteValue, ProviderError> {
+pub fn format_historical(data: &KiteValue) -> Result<KiteValue, ProviderError> {
     let KiteValue::Map(map) = data else {
         return Err(ProviderError::foreign(
             "TypeError",
@@ -1470,7 +1470,7 @@ fn format_historical(data: &KiteValue) -> Result<KiteValue, ProviderError> {
 }
 
 /// `_format_response`: the SDK's 19-character timestamp fields become datetimes.
-fn format_response(data: &KiteValue) -> Result<KiteValue, ProviderError> {
+pub fn format_response(data: &KiteValue) -> Result<KiteValue, ProviderError> {
     const FIELDS: [&str; 7] = [
         "order_timestamp",
         "exchange_timestamp",

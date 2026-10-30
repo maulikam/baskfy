@@ -13,16 +13,22 @@
 //! `plan_id` of its own); no route reaches this function — the evaluation is a CLI and the
 //! `/regime` page only reads.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
+
+use chrono::NaiveDate;
 
 use super::alloc::{
-    Allocation, AllocationError, Candidate, OrderLine, Position, RegimePlan, build_orders,
+    Allocation, Candidate, OrderLine, Position, RegimePlan, SurvivorParams, build_orders,
     projected_equity_pct, select_survivors, solve_allocation,
 };
-use super::engine::{ExecutionStatus, NewBuyMode, RegimeMode, RegimeState, RegimeTier, py_sum};
+use super::engine::{
+    EvaluateArgs, ExecutionStatus, ExposureError, ExposureSnapshot, NewBuyMode, RegimeMode,
+    RegimeState, RegimeTier, core_breadth, evaluate, py_sum, resolve_book_weights,
+};
 use crate::gateway::{Gateway, GatewayError, PlaceOrder};
-use crate::lanes::analytics::regime_store;
+use crate::lanes::analytics::{breadth, index_cache, regime_store};
 use crate::lanes::weekly::pandas::py_round;
+use crate::lanes::weekly::weekly_books::snapshot_db;
 use crate::lanes::weekly::weekly_books::tax_lots::{self, TaxReview};
 use crate::pyfmt::{PyArg, format_value};
 use crate::storage::{Conn, StorageError};
@@ -121,8 +127,8 @@ fn head<T: Clone>(v: &[T], n: i64) -> Vec<T> {
 /// ...)`: **one** final target book for the committed policy tier, then the netted orders.
 ///
 /// # Errors
-/// A target quantity Python's `int(round(...))` cannot make (never an infeasible allocation:
-/// that becomes a manual-review plan).
+/// What the core raises other than `AllocationError` (an infeasible allocation becomes a
+/// manual-review plan).
 #[allow(clippy::too_many_lines, clippy::too_many_arguments)]
 pub fn plan_regime_rebalance(
     state: &RegimeState,
@@ -133,7 +139,7 @@ pub fn plan_regime_rebalance(
     mode: RegimeMode,
     dry_run: bool,
     knobs: &PlanKnobs,
-) -> Result<RegimePlan, AllocationError> {
+) -> Result<RegimePlan, ExposureError> {
     let mut min_w = knobs.min_sleeve_w;
     let mut max_w = knobs.max_sleeve_w;
     let (lo, hi) = knobs.target_positions;
@@ -147,9 +153,7 @@ pub fn plan_regime_rebalance(
     if !guard_exits.is_empty() {
         codes.push(PLAN_GUARD_EXITS_PRESERVED);
     }
-    let flagged: BTreeSet<String> = tax_lots::flagged_symbols(tax_reviews)
-        .into_iter()
-        .collect();
+    let flagged: BTreeSet<String> = tax_lots::flagged_symbols(tax_reviews).into_iter().collect();
     let mut sleeve = state.target_equity_cap_pct;
 
     let mut residual = None;
@@ -164,12 +168,14 @@ pub fn plan_regime_rebalance(
     let (survivors, _dropped) = select_survivors(
         candidates,
         positions,
-        hi,
-        state.new_buys,
-        residual,
-        &knobs.residual_ordering,
-        knobs.nearby_band,
-        &flagged,
+        &SurvivorParams {
+            max_positions: hi,
+            new_buys: state.new_buys,
+            residual_max_names: residual,
+            residual_ordering: knobs.residual_ordering.clone(),
+            nearby_band: knobs.nearby_band,
+            tax_flagged: flagged.clone(),
+        },
     );
     let mut survivors: Vec<Candidate> = survivors
         .into_iter()
@@ -178,10 +184,25 @@ pub fn plan_regime_rebalance(
 
     if sleeve <= 0.0 || survivors.is_empty() {
         let alloc = Allocation::empty(sleeve);
-        let orders = build_orders(&alloc, positions, candidates, capital, &flagged, &guard_exits)?;
+        let orders = build_orders(
+            &alloc,
+            positions,
+            candidates,
+            capital,
+            &flagged,
+            &guard_exits,
+        );
         let proj = projected_equity_pct(&orders, capital);
         return Ok(finalise(
-            state, alloc, orders, proj, mode, dry_run, codes, tax_reviews, None,
+            state,
+            alloc,
+            orders,
+            proj,
+            mode,
+            dry_run,
+            codes,
+            tax_reviews,
+            None,
         ));
     }
 
@@ -214,7 +235,7 @@ pub fn plan_regime_rebalance(
         knobs.half_factor,
     ) {
         Ok(a) => a,
-        Err(exc) => {
+        Err(exc @ ExposureError::Allocation(_)) => {
             // Retry once at the low end of the target range before giving up.
             let trimmed = head(&survivors, lo);
             let trimmed_names: BTreeSet<String> =
@@ -235,7 +256,7 @@ pub fn plan_regime_rebalance(
                     let _ = &survivors;
                     a
                 }
-                Err(_) => {
+                Err(ExposureError::Allocation(_)) => {
                     codes.push(PLAN_INFEASIBLE);
                     return Ok(finalise(
                         state,
@@ -246,14 +267,23 @@ pub fn plan_regime_rebalance(
                         dry_run,
                         codes,
                         tax_reviews,
-                        Some(exc.0),
+                        Some(exc.to_string()),
                     ));
                 }
+                Err(other) => return Err(other),
             }
         }
+        Err(other) => return Err(other),
     };
 
-    let orders = build_orders(&alloc, positions, candidates, capital, &flagged, &guard_exits)?;
+    let orders = build_orders(
+        &alloc,
+        positions,
+        candidates,
+        capital,
+        &flagged,
+        &guard_exits,
+    );
     let proj = projected_equity_pct(&orders, capital);
     if !flagged.is_empty() && orders.iter().any(|o| o.tax_review) {
         // Tax is advisory: the sale still happens, surfaced for review rather than leaving the
@@ -265,7 +295,15 @@ pub fn plan_regime_rebalance(
         });
     }
     Ok(finalise(
-        state, alloc, orders, proj, mode, dry_run, codes, tax_reviews, None,
+        state,
+        alloc,
+        orders,
+        proj,
+        mode,
+        dry_run,
+        codes,
+        tax_reviews,
+        None,
     ))
 }
 
@@ -288,9 +326,8 @@ fn finalise(
         codes.push(PLAN_CAP_UNREACHABLE);
         manual = true;
     }
-    let executable = mode == RegimeMode::Enforce
-        && !dry_run
-        && infeasible.as_deref().is_none_or(str::is_empty);
+    let executable =
+        mode == RegimeMode::Enforce && !dry_run && infeasible.as_deref().is_none_or(str::is_empty);
     match mode {
         RegimeMode::Observe => codes.push(PLAN_NOT_EXECUTABLE_OBSERVE),
         RegimeMode::Propose => codes.push(PLAN_NEEDS_APPROVAL),
@@ -299,10 +336,10 @@ fn finalise(
     if dry_run {
         codes.push(PLAN_DRY_RUN);
     }
-    let mut deduped: Vec<&'static str> = Vec::new();
+    let mut deduped: Vec<String> = Vec::new();
     for c in codes {
-        if !deduped.contains(&c) {
-            deduped.push(c);
+        if !deduped.iter().any(|d| d == c) {
+            deduped.push(c.to_owned());
         }
     }
     let mut tax_flagged: Vec<String> = reviews
@@ -393,7 +430,7 @@ pub async fn execute_regime_plan(
     if mode != RegimeMode::Enforce {
         return Err(RunError::PlanNotExecutable(format!(
             "mode={}: only enforce mode may execute a regime plan",
-            mode.value()
+            mode.as_str()
         )));
     }
     if !approved {
@@ -435,7 +472,7 @@ pub async fn execute_regime_plan(
                 ..PlaceOrder::default()
             })
             .await?;
-        res.insert("regime_action", PyValue::Str(o.action.to_owned()));
+        res.insert("regime_action", PyValue::Str(o.action.as_str().to_owned()));
         if matches!(status_of(&res).as_str(), "PLACED" | "DRY_RUN") {
             submitted.push(res);
         } else {
@@ -453,7 +490,7 @@ pub async fn execute_regime_plan(
         skipped,
         status,
         dry_run,
-        mode: mode.value().to_owned(),
+        mode: mode.as_str().to_owned(),
     })
 }
 
@@ -490,7 +527,7 @@ pub async fn reconcile(
     let pct = |x: f64| base.map_or(0.0, |b| py_round(x / b * 100.0, 6));
     let note = format!(
         "tier={} projected={}%",
-        state.policy_tier.value(),
+        state.policy_tier.as_str(),
         format_value(&PyArg::Float(plan.projected_equity_pct), ".2f").unwrap_or_default()
     );
     regime_store::record_exposure_status(
@@ -524,19 +561,19 @@ fn strs<S: AsRef<str>>(v: &[S]) -> PyValue {
 pub fn summarise(plan: &RegimePlan) -> PyDict {
     let mut largest: (PyValue, f64) = (PyValue::None, 0.0);
     let mut first = true;
-    for (s, w) in &plan.allocation.weights_sleeve {
+    for (s, w) in plan.allocation.weights_sleeve.iter() {
         if first || *w > largest.1 {
-            largest = (PyValue::Str(s.clone()), *w);
+            largest = (PyValue::Str(s.to_owned()), *w);
             first = false;
         }
     }
     let mut clusters = PyDict::new();
-    for (k, v) in &plan.allocation.cluster_weights {
-        clusters.insert(k.clone(), PyValue::Float(*v));
+    for (k, v) in plan.allocation.cluster_weights.iter() {
+        clusters.insert(k.to_owned(), PyValue::Float(*v));
     }
     let half: Vec<&String> = plan.allocation.half_sized.iter().collect();
     dict([
-        ("tier", PyValue::Str(plan.tier.value().to_owned())),
+        ("tier", PyValue::Str(plan.tier.as_str().to_owned())),
         ("sleeve_pct", PyValue::Float(plan.sleeve_pct)),
         (
             "positions",
@@ -590,7 +627,7 @@ pub fn summarise(plan: &RegimePlan) -> PyDict {
 pub fn order_dict(o: &OrderLine) -> PyDict {
     dict([
         ("symbol", PyValue::Str(o.symbol.clone())),
-        ("action", PyValue::Str(o.action.to_owned())),
+        ("action", PyValue::Str(o.action.as_str().to_owned())),
         ("qty_now", PyValue::Int(o.qty_now)),
         ("delta", PyValue::Int(o.delta)),
         ("qty_final", PyValue::Int(o.qty_final)),
@@ -638,4 +675,138 @@ pub fn evaluation_snapshot(
         );
     }
     snap
+}
+
+/// Why the daily regime preview failed.
+#[derive(Debug, thiserror::Error)]
+pub enum PreviewError {
+    /// `RuntimeError` / `KeyError`: an input the evaluation cannot run without.
+    #[error("{0}")]
+    Runtime(String),
+    /// The core's.
+    #[error(transparent)]
+    Engine(#[from] ExposureError),
+    /// The configuration's.
+    #[error(transparent)]
+    Config(#[from] super::ConfigError),
+    /// The store's refusal.
+    #[error(transparent)]
+    Store(#[from] regime_store::StoreError),
+    /// The index cache's.
+    #[error(transparent)]
+    Cache(#[from] index_cache::CacheError),
+    /// The driver's.
+    #[error(transparent)]
+    Storage(#[from] StorageError),
+}
+
+/// What [`regime_preview`] stored.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PreviewOutcome {
+    /// The evaluated state.
+    pub state: RegimeState,
+    /// The preview's `run_id`.
+    pub run_id: String,
+    /// The actual equity share, percent of NAV.
+    pub actual_equity_pct: f64,
+    /// The step's one-line summary.
+    pub summary: String,
+}
+
+/// `scripts/daily.py`'s "regime preview" step: an evaluation from the cached index history, the
+/// latest breadth and the last snapshot, stored as a **preview** (never committed) with its
+/// exposure observation. Reads and writes the desk's tables only; it has no path to an order.
+///
+/// # Errors
+/// [`PreviewError`] where the Python step raises.
+pub async fn regime_preview(
+    conn: &mut Conn,
+    cfg: &super::RegimeConfig,
+    dry_run: bool,
+    today: NaiveDate,
+    now: &str,
+    preview_hex: &str,
+) -> Result<PreviewOutcome, PreviewError> {
+    let core = cfg.to_core()?;
+    let names = index_cache::required_index_names(cfg);
+    let Some(session) = index_cache::signal_session_for_week(conn, &names, today, 7).await? else {
+        return Err(PreviewError::Runtime(
+            "no session where every required index has a final candle".to_owned(),
+        ));
+    };
+    let mut sigs: BTreeMap<String, _> = index_cache::build_all_signals(conn, cfg, session, None)
+        .await?
+        .into_iter()
+        .collect();
+    let sentinel = sigs
+        .remove(&cfg.momentum_sentinel)
+        .ok_or_else(|| PreviewError::Runtime(format!("KeyError: '{}'", cfg.momentum_sentinel)))?;
+    let reading = breadth::latest_reading(conn, "scan", Some(session))
+        .await?
+        .map(|r| core_breadth(&r));
+    let rows = snapshot_db::snapshot_series(conn).await?;
+    let last = rows.last();
+    let col = |k: &str| {
+        last.and_then(|r| r.get(k))
+            .and_then(crate::storage::DbValue::as_f64)
+            .unwrap_or(0.0)
+    };
+    let (nav, invested) = (col("nav"), col("invested"));
+    let actual = if nav == 0.0 {
+        0.0
+    } else {
+        py_round(invested / nav * 100.0, 2)
+    };
+    let last_r1 = regime_store::last_r1_book_weights(conn).await?;
+    let book = resolve_book_weights(&core, None, last_r1.as_ref())?;
+    let previous = regime_store::previous_regime(conn, None).await?;
+    let exposure = ExposureSnapshot::new(actual);
+    let state = evaluate(&EvaluateArgs {
+        as_of_date: session,
+        scheduled_week_end: session,
+        signal_session_date: session,
+        index_signals: &sigs,
+        sentinel: Some(&sentinel),
+        breadth: reading.as_ref(),
+        book: &book,
+        exposure: &exposure,
+        cfg: &core,
+        previous: previous.as_ref(),
+    })?;
+    let run_id = regime_store::save_preview(
+        conn,
+        &state,
+        core.mode,
+        dry_run,
+        None,
+        None,
+        preview_hex,
+        now,
+    )
+    .await?;
+    regime_store::record_exposure(
+        conn,
+        &state.evaluation_id,
+        actual,
+        state.target_equity_cap_pct,
+        0.0,
+        0.0,
+        ExecutionStatus::NotPlanned.as_str(),
+        now,
+        None,
+    )
+    .await?;
+    let summary = format!(
+        "{} cap {}% actual {}% buys={}",
+        state.policy_tier.as_str(),
+        format_value(&PyArg::Float(state.target_equity_cap_pct), ".0f").unwrap_or_default(),
+        format_value(&PyArg::Float(actual), ".1f").unwrap_or_default(),
+        state.new_buys.as_str()
+    );
+    Ok(PreviewOutcome {
+        state,
+        run_id,
+        actual_equity_pct: actual,
+        summary,
+    })
 }

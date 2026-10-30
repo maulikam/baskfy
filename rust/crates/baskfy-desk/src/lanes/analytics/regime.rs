@@ -1,12 +1,6 @@
-//! `app/core/regime.py` (a re-export of `baskfy_core.exposure.regime`) — the parts the desk's
-//! read-only regime pages need: the tiers, the reason codes and their display text, and
-//! `config.regime_config()`'s [`RegimeConfig`] with its `canonical()`/`config_hash()`.
-//!
-//! **Not ported (loud):** the regime *engine* (`evaluate`, the MA signals, the classifier, the
-//! transition rules) and `core/regime_alloc.py` (`baskfy_core.exposure.allocation`). Both are
-//! reached only from `analytics/regime_run.py` — the weekly/daily evaluation CLI that writes
-//! `regime_evaluations` — which stays on Python (DECISIONS-RS, lane analytics_regime, label R-ar.1). The pages read the rows it
-//! wrote; they never recompute a signal.
+//! `app/core/regime.py` and `config.regime_config()`: the desk's settings-built [`RegimeConfig`],
+//! carried onto `baskfy_core::exposure` by [`RegimeConfig::to_core`]; [`engine`] and [`alloc`] are
+//! the core's engine and solver, [`run`] is `regime_run.py`.
 
 use crate::settings::Settings;
 
@@ -622,6 +616,71 @@ impl RegimeConfig {
             ("algorithm_version", s(&self.algorithm_version)),
         ];
         obj(pairs.into_iter().map(|(k, v)| (k.to_owned(), v)).collect())
+    }
+
+    /// The same configuration as the core engine's `RegimeConfig`.
+    ///
+    /// # Errors
+    /// [`ConfigError`] for a value the core's enums or lengths cannot hold.
+    pub fn to_core(&self) -> Result<engine::CoreConfig, ConfigError> {
+        let bootstrap =
+            engine::BootstrapPolicy::parse(&self.bootstrap_policy).ok_or_else(|| {
+                ConfigError(vec![format!(
+                    "'{}' is not a valid BootstrapPolicy",
+                    self.bootstrap_policy
+                )])
+            })?;
+        let mode = engine::RegimeMode::parse(&self.mode).ok_or_else(|| {
+            ConfigError(vec![format!("'{}' is not a valid RegimeMode", self.mode)])
+        })?;
+        let ma_lengths = self
+            .ma_lengths
+            .iter()
+            .map(|n| usize::try_from(*n))
+            .collect::<Result<Vec<usize>, _>>()
+            .map_err(|_| {
+                ConfigError(vec![format!(
+                    "ma_lengths must be positive: {:?}",
+                    self.ma_lengths
+                )])
+            })?;
+        Ok(engine::CoreConfig {
+            structural_indices: self.structural_indices.iter().cloned().collect(),
+            index_aliases: self.index_aliases.iter().cloned().collect(),
+            momentum_sentinel: self.momentum_sentinel.clone(),
+            exchange: self.exchange.clone(),
+            segment: self.segment.clone(),
+            ma_lengths,
+            buffer_bps: self.buffer_bps,
+            confirm_days: self.confirm_days,
+            default_book_weights: self.default_book_weights.iter().cloned().collect(),
+            min_classification_coverage_pct: self.min_classification_coverage_pct,
+            r4_bearish_stack_min: self.r4_bearish_stack_min,
+            r4_breadth_max: self.r4_breadth_max,
+            r4_h200_max: self.r4_h200_max,
+            r3_h200_max: self.r3_h200_max,
+            r3_breadth_max: self.r3_breadth_max,
+            r1_h50_min: self.r1_h50_min,
+            r1_h200_min: self.r1_h200_min,
+            r1_breadth_min: self.r1_breadth_min,
+            recovery_breadth_min: self.recovery_breadth_min,
+            recovery_h20_min: self.recovery_h20_min,
+            recovery_confirm_evaluations: self.recovery_confirm_evaluations,
+            min_breadth_coverage_pct: self.min_breadth_coverage_pct,
+            breadth_required: self.breadth_required,
+            breadth_stale_days: self.breadth_stale_days,
+            index_stale_days: self.index_stale_days,
+            tier_exposure_pct: TIERS
+                .iter()
+                .zip(self.tier_exposure_pct)
+                .map(|(k, v)| (*k, v))
+                .collect(),
+            exposure_tolerance_pct: self.exposure_tolerance_pct,
+            weekly_evaluation_weekday: self.weekly_evaluation_weekday,
+            bootstrap_policy: bootstrap,
+            mode,
+            algorithm_version: self.algorithm_version.clone(),
+        })
     }
 
     /// `config_hash()`: the first 16 hex digits of the canonical JSON's SHA-256.

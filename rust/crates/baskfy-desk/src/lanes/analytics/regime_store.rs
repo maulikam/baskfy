@@ -15,8 +15,8 @@
 use chrono::NaiveDate;
 
 use super::regime::engine::{
-    BookWeights, ExecutionStatus, PreviousRegime, RegimeMode, RegimeState, RegimeTier,
-    WeightSource, weights_map,
+    BookWeights, ExecutionStatus, PreviousRegime, RegimeMode, RegimeState, RegimeTier, StrMap,
+    WeightSource, to_py, weights_map,
 };
 use crate::storage::{Conn, DbValue, Param, StorageError};
 use crate::wire::{PyDict, PyValue};
@@ -429,10 +429,7 @@ async fn insert(
             snapshot.insert(k, v);
         }
     };
-    setdefault(
-        "index_diagnostics",
-        PyValue::Map(state.index_diagnostics.clone()),
-    );
+    setdefault("index_diagnostics", to_py(&state.index_diagnostics));
     let mut health = PyDict::new();
     for (k, v) in &state.health {
         health.insert(k.to_string(), PyValue::Float(*v));
@@ -448,7 +445,9 @@ async fn insert(
     );
     setdefault(
         "breadth_coverage_pct",
-        state.breadth_coverage_pct.map_or(PyValue::None, PyValue::Float),
+        state
+            .breadth_coverage_pct
+            .map_or(PyValue::None, PyValue::Float),
     );
     let strs = |v: &[String]| PyValue::List(v.iter().cloned().map(PyValue::Str).collect());
     let args: Vec<Param> = vec![
@@ -456,23 +455,23 @@ async fn insert(
         run_id.into(),
         Param::from(i64::from(committed)),
         Param::from(i64::from(dry_run)),
-        mode.value().into(),
+        mode.as_str().into(),
         iso(state.scheduled_week_end).into(),
         iso(state.signal_session_date).into(),
         iso(state.as_of_date).into(),
-        state.raw_candidate_tier.value().into(),
-        Param::from(state.previous_policy_tier.map(|t| t.value().to_owned())),
-        state.policy_tier.value().into(),
+        state.raw_candidate_tier.as_str().into(),
+        Param::from(state.previous_policy_tier.map(|t| t.as_str().to_owned())),
+        state.policy_tier.as_str().into(),
         Param::from(i64::from(state.transition_limited)),
-        state.new_buys.value().into(),
-        state.forced_action.value().into(),
+        state.new_buys.as_str().into(),
+        state.forced_action.as_str().into(),
         Param::from(i64::from(state.override_active)),
         Param::from(i64::from(state.data_stale)),
         Param::from(i64::from(state.manual_action_required)),
         opt_f(state.breadth_pct),
         opt_f(state.breadth_coverage_pct),
         dumps_sorted(&PyValue::Map(weights_map(&state.book_category_weights))).into(),
-        state.book_weight_source.value().into(),
+        state.book_weight_source.as_str().into(),
         dumps_sorted(&PyValue::Map(snapshot)).into(),
         dumps_sorted(&strs(&state.reason_codes)).into(),
         dumps_sorted(&strs(&state.reasons)).into(),
@@ -561,14 +560,14 @@ pub async fn commit_evaluation(
         return Err(StoreError::DryRunCommit(format!(
             "DRY_RUN is active: refusing to commit policy tier {} for {}. Use save_preview() \
              instead.",
-            state.policy_tier.value(),
+            state.policy_tier.as_str(),
             iso(state.scheduled_week_end)
         )));
     }
     if !matches!(mode, RegimeMode::Enforce | RegimeMode::Propose) {
         return Err(StoreError::DryRunCommit(format!(
             "mode={} does not commit policy tiers; use save_preview()",
-            mode.value()
+            mode.as_str()
         )));
     }
     let st = state.clone();
@@ -634,8 +633,9 @@ fn weights_from_json(text: &str) -> Result<Vec<(String, f64)>, StorageError> {
 }
 
 fn parse_date(text: &str) -> Result<NaiveDate, StorageError> {
-    super::ops::parse_iso_date(text)
-        .ok_or_else(|| StorageError::Other(format!("ValueError: Invalid isoformat string: '{text}'")))
+    super::ops::parse_iso_date(text).ok_or_else(|| {
+        StorageError::Other(format!("ValueError: Invalid isoformat string: '{text}'"))
+    })
 }
 
 /// `previous_regime(conn, recovery_confirmations=None)`: the engine's `previous`, from the last
@@ -662,7 +662,9 @@ pub async fn previous_regime(
         .unwrap_or(0.0);
     let tier_text = row_text(&row, "policy_tier").unwrap_or_default();
     let tier = RegimeTier::parse(&tier_text).ok_or_else(|| {
-        StorageError::Other(format!("ValueError: '{tier_text}' is not a valid RegimeTier"))
+        StorageError::Other(format!(
+            "ValueError: '{tier_text}' is not a valid RegimeTier"
+        ))
     })?;
     let week = parse_date(&row_text(&row, "scheduled_week_end").unwrap_or_default())?;
     let last = match row_text(&row, "last_transition_date").filter(|s| !s.is_empty()) {
@@ -679,7 +681,7 @@ pub async fn previous_regime(
         last_transition_date: last,
         recovery_confirmations: confirmations,
         book_weights: Some(BookWeights {
-            weights,
+            weights: StrMap(weights),
             source,
             coverage_pct: coverage,
             reason_codes: Vec::new(),
@@ -703,9 +705,9 @@ pub async fn save_book_snapshot(
     let args: Vec<Param> = vec![
         evaluation_id.into(),
         iso(scheduled_week_end).into(),
-        policy_tier.value().into(),
+        policy_tier.as_str().into(),
         dumps_sorted(&PyValue::Map(weights_map(&weights.weights))).into(),
-        weights.source.value().into(),
+        weights.source.as_str().into(),
         Param::from(weights.coverage_pct),
         now.into(),
     ];
@@ -743,7 +745,7 @@ pub async fn last_r1_book_weights(conn: &mut Conn) -> Result<Option<BookWeights>
         ))
     })?;
     Ok(Some(BookWeights {
-        weights,
+        weights: StrMap(weights),
         source,
         coverage_pct: row_f64(&row, "coverage_pct").unwrap_or(f64::NAN),
         reason_codes: Vec::new(),
@@ -773,7 +775,7 @@ pub async fn record_exposure_status(
         target_equity_cap_pct,
         pending_buy_pct,
         pending_sell_pct,
-        execution_status.value(),
+        execution_status.as_str(),
         observed_at,
         note,
     )

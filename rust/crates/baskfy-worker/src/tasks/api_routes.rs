@@ -20,13 +20,15 @@ mod purge;
 mod purge_db_tests;
 mod resync;
 
-use super::{BoundArgs, Lane, TaskContext, TaskResult, not_ported};
+use super::{BoundArgs, TaskContext, TaskResult};
 use crate::steps::StepOutcome;
 
 /// The tasks this lane has ported (the `tasks` listing and the cutover read it).
-pub const PORTED: &[&str] = &["baskfy.accounts.purge", "baskfy.ops.resync"];
-
-const LANE: Lane = Lane::ApiRoutes;
+pub const PORTED: &[&str] = &[
+    "baskfy.accounts.purge",
+    "baskfy.ops.resync",
+    "baskfy.overlap.catalyst_scan",
+];
 
 /// Ports `baskfy_worker.tasks.celery_tasks.resync_task` — `baskfy.ops.resync(actor_user_id, days)`:
 /// [`resync::run_resync`] (inspect, repair, re-inspect, record). Not auto-retried, as in Python.
@@ -42,20 +44,12 @@ pub async fn resync_task(ctx: &TaskContext, args: BoundArgs) -> TaskResult {
 
 /// Ports `baskfy_worker.tasks.celery_tasks.overlap_catalyst_scan_task` — `baskfy.overlap.catalyst_scan(user_id, scope="actionable")`.
 ///
-/// The body is [`catalyst_scan::run`]: the API's own overlap view, the status document, the wake
-/// key and the lock — but the feed's loop is the `swing_eod` lane's and is not reachable with an
-/// explicit symbol set yet (R8.ar4), so the task is **not** in [`PORTED`] and answers `NotPorted`
-/// before touching Redis or the database.
 ///
 /// # Errors
-/// [`WorkerError::TaskNotPorted`](crate::WorkerError::TaskNotPorted) until the feed's loop is
-/// reachable; then Redis's and the scan's own.
+/// Redis's and the scan's own.
 pub async fn overlap_catalyst_scan_task(ctx: &TaskContext, args: BoundArgs) -> TaskResult {
     let user_id = args.int("user_id")?;
     let scope = args.str("scope")?;
-    if !PORTED.contains(&"baskfy.overlap.catalyst_scan") {
-        return not_ported("baskfy.overlap.catalyst_scan", LANE);
-    }
     catalyst_scan::run(ctx, user_id, &scope).await
 }
 

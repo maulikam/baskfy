@@ -238,8 +238,112 @@ pub(super) fn parse_config(stored: &OrderedJson) -> Result<BacktestConfig, Stop>
     Ok(config)
 }
 
-fn screen_error(e: &ScreenError) -> Stop {
-    Stop::from(WorkerError::python(e.python_type(), e.to_string()))
+fn screen_error(e: &ScreenError, input: &OrderedJson) -> Stop {
+    let message = match e {
+        ScreenError::Validation(v) => pydantic_text("ScreenDefinition", &v.errors, input),
+        other => other.to_string(),
+    };
+    Stop::from(WorkerError::python(e.python_type(), message))
+}
+
+/// The pydantic minor version whose error URLs Python prints.
+const PYDANTIC_DOCS_VERSION: &str = "2.13";
+
+/// `repr()` of a JSON value as Python holds it.
+fn py_repr(value: &OrderedJson) -> String {
+    match value {
+        OrderedJson::Null => "None".to_owned(),
+        OrderedJson::Bool(true) => "True".to_owned(),
+        OrderedJson::Bool(false) => "False".to_owned(),
+        OrderedJson::Int(i) => i.to_string(),
+        OrderedJson::UInt(u) => u.to_string(),
+        OrderedJson::BigInt(b) => b.to_string(),
+        OrderedJson::Float(f) => baskfy_providers::py::repr_float(*f),
+        OrderedJson::Str(s) => repr(s),
+        OrderedJson::Array(items) => {
+            format!(
+                "[{}]",
+                items.iter().map(py_repr).collect::<Vec<_>>().join(", ")
+            )
+        }
+        OrderedJson::Object(pairs) => format!(
+            "{{{}}}",
+            pairs
+                .iter()
+                .map(|(k, v)| format!("{}: {}", repr(k), py_repr(v)))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    }
+}
+
+fn py_type(value: &OrderedJson) -> &'static str {
+    match value {
+        OrderedJson::Null => "NoneType",
+        OrderedJson::Bool(_) => "bool",
+        OrderedJson::Int(_) | OrderedJson::UInt(_) | OrderedJson::BigInt(_) => "int",
+        OrderedJson::Float(_) => "float",
+        OrderedJson::Str(_) => "str",
+        OrderedJson::Array(_) => "list",
+        OrderedJson::Object(_) => "dict",
+    }
+}
+
+/// pydantic-core's `input_value` truncation: past 50 bytes, 25 + `...` + 24 (on char boundaries).
+fn truncated(text: &str) -> String {
+    if text.len() <= 50 {
+        return text.to_owned();
+    }
+    let mut head = 25;
+    while !text.is_char_boundary(head) {
+        head -= 1;
+    }
+    let mut tail = text.len() - 24;
+    while !text.is_char_boundary(tail) {
+        tail += 1;
+    }
+    format!("{}...{}", &text[..head], &text[tail..])
+}
+
+fn at_loc<'a>(input: &'a OrderedJson, loc: &[String]) -> Option<&'a OrderedJson> {
+    loc.iter().try_fold(input, |value, part| match value {
+        OrderedJson::Object(_) => value.get(part),
+        OrderedJson::Array(items) => part.parse::<usize>().ok().and_then(|i| items.get(i)),
+        _ => None,
+    })
+}
+
+/// `str(ValidationError)`: pydantic's text, each error with its input's repr and type.
+pub(super) fn pydantic_text(
+    model: &str,
+    errors: &[baskfy_core::screener::ErrorDetail],
+    input: &OrderedJson,
+) -> String {
+    let plural = if errors.len() == 1 { "" } else { "s" };
+    let mut out = format!("{} validation error{plural} for {model}", errors.len());
+    for e in errors {
+        let path = if e.kind == "missing" {
+            &e.loc[..e.loc.len().saturating_sub(1)]
+        } else {
+            &e.loc[..]
+        };
+        let value = at_loc(input, path).unwrap_or(&OrderedJson::Null);
+        out.push('\n');
+        if !e.loc.is_empty() {
+            out.push_str(&e.loc.join("."));
+            out.push('\n');
+        }
+        out.push_str(&format!(
+            "  {} [type={}, input_value={}, input_type={}]\n    For further information visit \
+             https://errors.pydantic.dev/{PYDANTIC_DOCS_VERSION}/v/{}",
+            e.msg,
+            e.kind,
+            truncated(&py_repr(value)),
+            py_type(value),
+            e.kind
+        ));
+    }
+    out
 }
 
 /// `_definition(session, row, config)`: the saved screen if it still exists, else the inline
@@ -248,6 +352,7 @@ async fn definition(
     conn: &mut PgConnection,
     screen_id: Option<i64>,
     config: &BacktestConfig,
+    stored: &OrderedJson,
 ) -> Result<ScreenDefinition, Stop> {
     if let Some(id) = screen_id {
         let row = sqlx::query("SELECT screen.definition FROM screen WHERE screen.id = $1")
@@ -257,16 +362,17 @@ async fn definition(
         if let Some(row) = row {
             let stored = baskfy_db::row::jsonb(&row, "definition").map_err(WorkerError::from)?;
             let payload = baskfy_api::routes::screens::payload_of(&stored);
-            return ScreenDefinition::model_validate(&payload).map_err(|e| screen_error(&e));
+            return ScreenDefinition::model_validate(&payload)
+                .map_err(|e| screen_error(&e, &stored));
         }
     }
-    if let Some(inline) = &config.screen_definition {
-        let json = serde_json::to_string(inline)
-            .ok()
-            .and_then(|t| OrderedJson::parse(&t).ok())
-            .ok_or_else(|| Stop::caught("ValueError", "the inline definition is not JSON"))?;
+    if config.screen_definition.is_some() {
+        let json = stored
+            .get("screen_definition")
+            .cloned()
+            .unwrap_or(OrderedJson::Null);
         let payload = baskfy_api::routes::screens::payload_of(&json);
-        return ScreenDefinition::model_validate(&payload).map_err(|e| screen_error(&e));
+        return ScreenDefinition::model_validate(&payload).map_err(|e| screen_error(&e, &json));
     }
     Err(Stop::caught(
         "BacktestError",
@@ -293,8 +399,9 @@ async fn simulate(
     publisher: &mut Publisher,
     fragility: bool,
 ) -> Result<Done, Stop> {
-    let config = parse_config(&migrated(&claimed.config))?;
-    let definition = definition(conn, claimed.screen_id, &config).await?;
+    let stored = migrated(&claimed.config);
+    let config = parse_config(&stored)?;
+    let definition = definition(conn, claimed.screen_id, &config, &stored).await?;
     let mut emit = |event: &BacktestProgress| {
         let frame = progress_frame(
             public_id,
@@ -453,6 +560,63 @@ mod tests {
     #![allow(clippy::unwrap_used, clippy::panic)]
 
     use super::*;
+
+    fn refusal(definition: &str) -> String {
+        let input = OrderedJson::parse(definition).unwrap();
+        let payload = baskfy_api::routes::screens::payload_of(&input);
+        match ScreenDefinition::model_validate(&payload) {
+            Err(e) => match screen_error(&e, &input) {
+                Stop::Caught { class, message } => format!("{class}: {message}"),
+                Stop::Raised(e) => panic!("raised {e}"),
+            },
+            Ok(_) => panic!("accepted"),
+        }
+    }
+
+    #[test]
+    fn an_invalid_inline_definition_fails_with_pydantics_text() {
+        let got = refusal(
+            r#"{"index": "nifty-500", "top_n": 5, "sort_by": "nonsense", "circuits": {"m1": 1.5}, "custom_filters": [{"op": "~", "left": "ma_50", "right": "ma_200", "enabled": true}]}"#,
+        );
+        let url = "\n    For further information visit https://errors.pydantic.dev/2.13/v/";
+        let want = format!(
+            "ValidationError: 4 validation errors for ScreenDefinition\nsort_by\n  Value error, \
+             sort_by: 'nonsense' is not one of the 109 factor-registry keys (docs/01 \u{a7}3; see \
+             GET /meta/factors) [type=value_error, input_value='nonsense', input_type=str]{url}\
+             value_error\ncircuits.m1\n  Input should be a valid integer, got a number with a \
+             fractional part [type=int_from_float, input_value=1.5, input_type=float]{url}\
+             int_from_float\ncustom_filters.0.op\n  Input should be '>=', '<=' or '=' \
+             [type=literal_error, input_value='~', input_type=str]{url}literal_error\ntop_n\n  \
+             Extra inputs are not permitted [type=extra_forbidden, input_value=5, \
+             input_type=int]{url}extra_forbidden"
+        );
+        assert_eq!(got, want);
+    }
+
+    #[test]
+    fn a_missing_field_shows_its_parent_truncated_as_pydantic_does() {
+        let got = refusal(
+            r#"{"sort_by": "ret_12m", "custom_filters": [{"op": ">=", "left": "ma_50", "right": "ma_200", "enabled": true}, {"op": ">=", "left": "ma_50", "right": "ma_200", "enabled": true}]}"#,
+        );
+        assert_eq!(
+            got,
+            "ValidationError: 1 validation error for ScreenDefinition\nindex\n  Field required \
+             [type=missing, input_value={'sort_by': 'ret_12m', 'c...200', 'enabled': True}]}, \
+             input_type=dict]\n    For further information visit \
+             https://errors.pydantic.dev/2.13/v/missing"
+        );
+    }
+
+    #[test]
+    fn truncation_keeps_char_boundaries() {
+        let long = format!("'{}'", "\u{e9}".repeat(40));
+        let cut = truncated(&long);
+        assert_eq!(
+            cut,
+            format!("'{}...{}'", "\u{e9}".repeat(12), "\u{e9}".repeat(11))
+        );
+        assert_eq!(truncated("'short'"), "'short'");
+    }
 
     #[test]
     fn a_pre_m39_reinvest_config_reads_as_ignore_and_nothing_else_moves() {

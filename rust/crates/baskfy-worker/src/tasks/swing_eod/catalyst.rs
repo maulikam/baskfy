@@ -10,6 +10,7 @@
 use std::collections::BTreeMap;
 
 use baskfy_db::OrderedJson;
+use baskfy_providers::errors::ProviderError;
 use baskfy_providers::factory::{RedisSource, build_nse_provider};
 use baskfy_providers::nse::{
     CATALYST_SOURCE_ANNOUNCEMENT, CATALYST_SOURCE_EVENT_CALENDAR, NseProvider,
@@ -27,7 +28,7 @@ use crate::steps::{StepOutcome, log_warning};
 
 /// `CatalystReport`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct CatalystReport {
+pub(crate) struct CatalystReport {
     session_date: NaiveDate,
     symbols: i64,
     announcements: i64,
@@ -57,7 +58,7 @@ impl CatalystReport {
     }
 
     /// `as_detail()`.
-    pub(super) fn as_detail(&self) -> OrderedJson {
+    pub(crate) fn as_detail(&self) -> OrderedJson {
         object([
             (
                 "session_date",
@@ -76,6 +77,40 @@ impl CatalystReport {
     }
 }
 
+/// `CatalystSource`: where the filings come from. Production: [`NseProvider`]; tests: a fake.
+pub(crate) trait CatalystSource: Sync {
+    /// `announcements(symbols, on=)`.
+    fn announcements(
+        &self,
+        symbols: &[String],
+        on: NaiveDate,
+    ) -> impl Future<Output = Result<Vec<CatalystRecord>, ProviderError>> + Send;
+    /// `results_calendar(symbols, on=)`.
+    fn results_calendar(
+        &self,
+        symbols: &[String],
+        on: NaiveDate,
+    ) -> impl Future<Output = Result<Vec<EarningsDateRecord>, ProviderError>> + Send;
+}
+
+impl CatalystSource for NseProvider {
+    fn announcements(
+        &self,
+        symbols: &[String],
+        on: NaiveDate,
+    ) -> impl Future<Output = Result<Vec<CatalystRecord>, ProviderError>> + Send {
+        NseProvider::announcements(self, symbols, on)
+    }
+
+    fn results_calendar(
+        &self,
+        symbols: &[String],
+        on: NaiveDate,
+    ) -> impl Future<Output = Result<Vec<EarningsDateRecord>, ProviderError>> + Send {
+        NseProvider::results_calendar(self, symbols, on)
+    }
+}
+
 fn count(n: usize) -> i64 {
     i64::try_from(n).unwrap_or(i64::MAX)
 }
@@ -85,7 +120,7 @@ fn count(n: usize) -> i64 {
 ///
 /// # Errors
 /// The settings' and the provider's construction.
-pub(super) async fn build_provider() -> Result<NseProvider, WorkerError> {
+pub(crate) async fn build_provider() -> Result<NseProvider, WorkerError> {
     let settings =
         ProviderSettings::from_env().map_err(|e| WorkerError::Settings(e.to_string()))?;
     let source = RedisSource::from_settings(&settings);
@@ -306,16 +341,28 @@ async fn fill_watch(
     ))
 }
 
-/// `run_swing_catalyst`: the 09:10 job. Never raises a provider error.
-pub(super) async fn run_swing_catalyst(
+/// `on_symbol(done, total)`, called after each name.
+pub(crate) type OnSymbol<'a> = &'a mut (dyn FnMut(i64, i64) + Send);
+
+/// `run_swing_catalyst`: the 09:10 job. Never raises a provider error. `symbols` replaces the
+/// feed's own selection (in the caller's order), as the overlap scan passes it.
+pub(crate) async fn run_swing_catalyst<P: CatalystSource>(
     conn: &mut PgConnection,
     outcome: &mut StepOutcome,
     session_date: NaiveDate,
     user_id: i64,
-    provider: Option<&NseProvider>,
+    provider: Option<&P>,
+    symbols: Option<&[(String, i64)]>,
+    mut on_symbol: Option<OnSymbol<'_>>,
 ) -> Result<CatalystReport, WorkerError> {
     let mut report = CatalystReport::new(session_date);
-    let symbols = feed_symbols(conn, user_id, session_date).await?;
+    let symbols: Vec<(String, i64)> = match symbols {
+        Some(given) => given.to_vec(),
+        None => feed_symbols(conn, user_id, session_date)
+            .await?
+            .into_iter()
+            .collect(),
+    };
     report.symbols = count(symbols.len());
     let note_all = |outcome: &mut StepOutcome, report: &CatalystReport| {
         if let OrderedJson::Object(entries) = report.as_detail() {
@@ -338,12 +385,18 @@ pub(super) async fn run_swing_catalyst(
         note_all(outcome, &report);
         return Ok(report);
     };
-    for (symbol, instrument_id) in &symbols {
+    let total = report.symbols;
+    for (done, (symbol, instrument_id)) in (1_i64..).zip(&symbols) {
+        if done > 1
+            && let Some(progress) = on_symbol.as_mut()
+        {
+            progress(done - 1, total);
+        }
         let one = [symbol.clone()];
         let read = async {
             let announcements = provider.announcements(&one, session_date).await?;
             let meetings = provider.results_calendar(&one, session_date).await?;
-            Ok::<_, baskfy_providers::errors::ProviderError>((announcements, meetings))
+            Ok::<_, ProviderError>((announcements, meetings))
         };
         let (announcements, meetings) = match read.await {
             Ok(answer) => answer,
@@ -363,6 +416,9 @@ pub(super) async fn run_swing_catalyst(
             fill_watch(conn, user_id, *instrument_id, announcements.first(), result).await?;
         report.catalysts_filled += filled;
         report.earnings_flagged += flagged;
+    }
+    if let Some(progress) = on_symbol.as_mut() {
+        progress(total, total);
     }
     outcome.rows_in = report.symbols;
     outcome.rows_out = report.rows_written;

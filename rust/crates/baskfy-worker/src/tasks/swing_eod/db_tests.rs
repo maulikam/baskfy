@@ -42,7 +42,7 @@ fn as_of() -> NaiveDate {
 }
 
 /// A connection inside a transaction that the test never commits.
-async fn clone() -> PgConnection {
+pub(super) async fn clone() -> PgConnection {
     let url = std::env::var("BASKFY_RS_SWING_EOD_DB_URL").unwrap_or_else(|_| panic!("{IGNORE}"));
     let database = url
         .rsplit('/')
@@ -60,13 +60,13 @@ async fn clone() -> PgConnection {
     conn
 }
 
-async fn exec(conn: &mut PgConnection, sql: &str) {
+pub(super) async fn exec(conn: &mut PgConnection, sql: &str) {
     sqlx::query(sql).execute(&mut *conn).await.unwrap();
 }
 
 /// `_user(capital=)`: an `app_user` and its `sw_config` (the model's defaults: the countdown at
 /// 5, rung 0).
-async fn user(conn: &mut PgConnection, capital: &str) -> i64 {
+pub(super) async fn user(conn: &mut PgConnection, capital: &str) -> i64 {
     let (id,): (i64,) = sqlx::query_as(
         "INSERT INTO app_user (public_id, email) VALUES ('sw5-user', 'sw5@example.com') RETURNING id",
     )
@@ -85,7 +85,7 @@ async fn user(conn: &mut PgConnection, capital: &str) -> i64 {
 }
 
 /// `helpers.make_instrument(symbol)`.
-async fn instrument(conn: &mut PgConnection, symbol: &str) -> i64 {
+pub(super) async fn instrument(conn: &mut PgConnection, symbol: &str) -> i64 {
     let (id,): (i64,) = sqlx::query_as(
         "INSERT INTO instrument (exchange_id, symbol, name, instrument_type, series, is_active) \
          VALUES (1, $1, $1, 'EQ', 'EQ', true) RETURNING id",
@@ -600,7 +600,7 @@ async fn one_row_per_session_whether_or_not_anything_happened() {
     let (_, second) = eod(&mut conn, user_id, false).await;
     assert!(first.contains("\"sessions_logged\": 1"), "{first}");
     assert!(second.contains("\"sessions_logged\": 1"), "{second}");
-    let (mode, plans): (String, i64) = sqlx::query_as(
+    let (mode, plans): (String, i32) = sqlx::query_as(
         "SELECT mode, jsonb_array_length(plan_ids->'plans') FROM sw_session WHERE user_id = $1",
     )
     .bind(user_id)
@@ -635,7 +635,7 @@ async fn a_live_session_decrements_once_and_a_dry_run_one_never() {
     assert!(live.contains("\"sessions_left\": 4"), "{live}");
     assert!(live.contains("\"risk_multiplier\": \"0.5\""), "{live}");
     assert!(
-        live.contains("first live sessions: 4 left · risk 0.250%"),
+        live.contains("first live sessions: 4 left \\u00b7 risk 0.250%"),
         "{live}"
     );
     let (_, again) = eod(&mut conn, user_id, true).await;
@@ -750,9 +750,17 @@ async fn nothing_watched_is_a_noted_no_op_and_no_provider_is_a_noted_skip() {
     let mut conn = clone().await;
     let user_id = user(&mut conn, "1000000").await;
     let mut outcome = StepOutcome::default();
-    let report = run_swing_catalyst(&mut conn, &mut outcome, as_of(), user_id, None)
-        .await
-        .unwrap();
+    let report = run_swing_catalyst::<baskfy_providers::nse::NseProvider>(
+        &mut conn,
+        &mut outcome,
+        as_of(),
+        user_id,
+        None,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
     let text = crate::pyjson::dumps(&report.as_detail()).unwrap();
     assert!(text.contains("\"symbols\": 0"), "{text}");
     assert!(text.contains("nothing watched"), "{text}");
@@ -766,9 +774,17 @@ async fn nothing_watched_is_a_noted_no_op_and_no_provider_is_a_noted_skip() {
     )
     .await;
     let mut outcome = StepOutcome::default();
-    let report = run_swing_catalyst(&mut conn, &mut outcome, as_of(), user_id, None)
-        .await
-        .unwrap();
+    let report = run_swing_catalyst::<baskfy_providers::nse::NseProvider>(
+        &mut conn,
+        &mut outcome,
+        as_of(),
+        user_id,
+        None,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
     let text = crate::pyjson::dumps(&report.as_detail()).unwrap();
     assert!(text.contains("\"symbols\": 1"), "{text}");
     assert!(text.contains("no catalyst provider configured"), "{text}");

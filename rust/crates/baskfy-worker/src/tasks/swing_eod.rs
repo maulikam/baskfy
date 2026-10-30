@@ -25,8 +25,12 @@
 
 mod catalyst;
 #[cfg(test)]
+mod catalyst_db_tests;
+#[cfg(test)]
 mod db_tests;
 mod eod;
+#[cfg(test)]
+mod ladder_db_tests;
 mod mail;
 mod plan;
 mod watch;
@@ -221,8 +225,16 @@ pub async fn swing_catalyst_task(ctx: &TaskContext, args: BoundArgs) -> TaskResu
     let provider = catalyst::build_provider().await?;
     let mut tx = ctx.db.begin().await?;
     let mut outcome = StepOutcome::default();
-    let report =
-        catalyst::run_swing_catalyst(&mut tx, &mut outcome, day, user_id, Some(&provider)).await?;
+    let report = catalyst::run_swing_catalyst(
+        &mut tx,
+        &mut outcome,
+        day,
+        user_id,
+        Some(&provider),
+        None,
+        None,
+    )
+    .await?;
     tx.commit().await?;
     let mut payload = vec![("date".to_owned(), s(iso(day)))];
     if let OrderedJson::Object(detail) = report.as_detail() {
@@ -339,4 +351,9 @@ pub(crate) mod for_swing_live {
     };
     pub(crate) use super::plan::{assemble, store_plan};
     pub(crate) use super::watch::{auto_watch, refresh_focus};
+}
+
+/// The catalyst feed's per-name loop, for `baskfy.overlap.catalyst_scan` (lane `api_routes`).
+pub(crate) mod for_catalyst_scan {
+    pub(crate) use super::catalyst::{OnSymbol, build_provider, run_swing_catalyst};
 }

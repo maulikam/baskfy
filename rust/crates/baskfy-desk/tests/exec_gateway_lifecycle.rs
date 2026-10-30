@@ -371,6 +371,9 @@ impl AdoptBook for MemoryBook {
         Ok(match symbol {
             "HELDCO" => Some(42),
             "NEWCO" => Some(43),
+            "TCS" => Some(44),
+            "ITC" => Some(45),
+            "INFY" => Some(46),
             _ => None,
         })
     }
@@ -636,4 +639,147 @@ fn test_no_order_verb_in_the_module() {
     ] {
         assert!(!code.contains(verb), "{verb}");
     }
+}
+
+// --- desk_cases/exec_gateway_variants/lifecycle_gtts.json, as a Rust test -------------------
+
+/// The fixture's broker GTT list (`desk_fixtures/lifecycle_gtts/kite.json`, route `gtt`).
+fn fixture_gtts() -> GttIndex {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../tools/parity/desk_fixtures/lifecycle_gtts/kite.json");
+    let raw: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    let data = serde_json::to_vec(&raw["routes"]["gtt"]["data"]).unwrap();
+    let PyValue::List(rows) = PyValue::from_json(&data).unwrap() else {
+        panic!("the fixture's gtt route is not a list")
+    };
+    gtt_index(&rows)
+}
+
+#[test]
+fn lifecycle_gtts_the_page_judges_every_twt_stop_against_the_brokers_list() {
+    let index = fixture_gtts();
+    let book = vec![
+        position(
+            "twt",
+            1,
+            "CHENNPETRO",
+            87,
+            "880",
+            "812.35",
+            Some("337963432"),
+        ),
+        position("twt", 2, "CUPID", 300, "110", "101.2", Some("337780639")),
+        position("twt", 3, "ETERNAL", 377, "315", "290", Some("337780641")),
+        position(
+            "twt",
+            4,
+            "LALPATHLAB",
+            64,
+            "2850",
+            "2600",
+            Some("337767114"),
+        ),
+        position("twt", 5, "NAUKRI", 80, "1320", "1210.5", Some("337767116")),
+        position("twt", 6, "ABSENT", 10, "100", "92", Some("337000000")),
+    ];
+    let rows = build_rows(&[("twt", book)], Some(&index), &[], now());
+    let state = |sym: &str| {
+        let r = rows.iter().find(|r| r.symbol == sym).unwrap();
+        (r.stop_state, r.stop_qty)
+    };
+    assert_eq!(state("CHENNPETRO"), (ARMED, Some(87)));
+    assert_eq!(state("CUPID"), (GTT_OVERSIZED, Some(400)));
+    assert_eq!(state("ETERNAL"), (TRIGGERED_UNFILLED, Some(377)));
+    assert_eq!(state("LALPATHLAB"), (GTT_MISSING, None));
+    assert_eq!(state("NAUKRI"), (GTT_UNDERSIZED, Some(50)));
+    assert_eq!(state("ABSENT"), (GTT_MISSING, None));
+    assert!(
+        rows.iter().take(5).all(|r| !r.resolved()),
+        "unresolved rows come first"
+    );
+    assert!(rows.last().unwrap().resolved());
+}
+
+fn fixture_adoption(
+    sleeve: &str,
+    symbol: &str,
+    qty: i64,
+    avg: &str,
+    gtt: Option<&str>,
+) -> Adoption {
+    Adoption {
+        sleeve: sleeve.to_owned(),
+        symbol: symbol.to_owned(),
+        quantity: qty,
+        avg_cost: d(avg),
+        gtt_id: gtt.map(str::to_owned),
+        setup: (sleeve == "swing").then(|| "FLAG".to_owned()),
+        note: None,
+    }
+}
+
+#[tokio::test]
+async fn lifecycle_gtts_adoptions_link_the_hand_armed_gtt_and_its_trigger_becomes_the_stop() {
+    let index = fixture_gtts();
+    let gw = RecordingGateway::default();
+
+    let mut vbt = MemoryBook::default();
+    let out = run(
+        &mut vbt,
+        &gw,
+        &fixture_adoption("vbt", "TCS", 7, "3333.33", Some("5150")),
+        "true",
+        Some(&index),
+    )
+    .await
+    .unwrap();
+    let tcs = vbt.position(out.int("position_id"));
+    assert_eq!(tcs.opt_str("gtt_id").as_deref(), Some("5150"));
+    assert_eq!(tcs.dec("stop_price"), Some(d("3100")));
+    assert_eq!(judge_stop(tcs, Some(&index)), (ARMED, Some(7)));
+
+    let mut twt = MemoryBook::default();
+    let itc = fixture_adoption("twt", "ITC", 250, "401.15", Some("5151"));
+    let e = run(&mut twt, &gw, &itc, "on", Some(&index))
+        .await
+        .unwrap_err();
+    assert_eq!(status_of(&e).0, 400, "confirm=on is not true");
+    assert!(twt.positions.is_empty());
+    let out = run(&mut twt, &gw, &itc, "true", Some(&index))
+        .await
+        .unwrap();
+    let pos = twt.position(out.int("position_id"));
+    assert_eq!(pos.opt_str("gtt_id").as_deref(), Some("5151"));
+    assert_eq!(pos.dec("stop_price"), Some(d("380.25")));
+    assert_eq!(judge_stop(pos, Some(&index)), (ARMED, Some(250)));
+    assert!(
+        gw.armed.lock().unwrap().is_empty(),
+        "a linked GTT arms nothing"
+    );
+
+    let mut swing = MemoryBook::default();
+    let out = run(
+        &mut swing,
+        &gw,
+        &fixture_adoption("swing", "INFY", 5, "1500", None),
+        "true",
+        Some(&index),
+    )
+    .await
+    .unwrap();
+    let infy = swing.position(out.int("position_id"));
+    assert!(stop_of(infy).unwrap() < d("1500"));
+    let armed = gw.armed.lock().unwrap();
+    assert_eq!(armed.len(), 1);
+    assert_eq!((armed[0].symbol.as_str(), armed[0].qty), ("INFY", 5));
+    assert_eq!(
+        swing.adoptions,
+        vec![(
+            "swing".to_owned(),
+            "INFY".to_owned(),
+            5,
+            Some("777".to_owned()),
+            None
+        )]
+    );
 }

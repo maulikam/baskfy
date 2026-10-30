@@ -551,6 +551,11 @@ impl DeskKite {
         let _ = self.limits().await.slot(family).await;
     }
 
+    /// Take one `family` slot from this client's limiter (the lanes' raw reads share it).
+    pub async fn take_read_slot(&self, family: &'static str) {
+        self.slot(family).await;
+    }
+
     /// Every read-limiter family this client has taken a slot from, in order (SW20's "no read
     /// leaves without a slot", observable in tests).
     #[must_use]

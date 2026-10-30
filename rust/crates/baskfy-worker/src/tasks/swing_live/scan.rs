@@ -172,7 +172,7 @@ pub(super) fn float_of(d: Decimal) -> f64 {
 
 /// `LiquidName`.
 #[derive(Debug, Clone, PartialEq)]
-pub(super) struct LiquidName {
+pub(crate) struct LiquidName {
     pub instrument_id: i64,
     pub symbol: String,
     pub avg_daily_volume: Decimal,
@@ -182,7 +182,7 @@ pub(super) struct LiquidName {
 }
 
 /// `load_swing_config(session, user_id)`.
-pub(super) async fn load_swing_config(
+pub(crate) async fn load_swing_config(
     conn: &mut PgConnection,
     user_id: i64,
 ) -> Result<SwingConfig, WorkerError> {
@@ -192,7 +192,7 @@ pub(super) async fn load_swing_config(
 
 /// `swing_premarket.liquid_universe`: the names `04` §1 admits as of the last close, sorted by
 /// symbol — the same predicate the detectors apply over the same bars.
-pub(super) async fn liquid_universe(
+pub(crate) async fn liquid_universe(
     conn: &mut PgConnection,
     as_of: NaiveDate,
     config: &SwingConfig,

@@ -12,8 +12,8 @@
 //! an upsert keyed by `(…, date)`. Nothing here reaches an order, a GTT or a Kite write (law 2):
 //! the provider calls are the composite's read ports.
 
-mod fundamentals;
-mod membership;
+pub(crate) mod fundamentals;
+pub(crate) mod membership;
 pub(crate) mod snapshots;
 pub(crate) mod universes;
 
@@ -84,7 +84,7 @@ pub async fn refresh_index_snapshots(
 }
 
 /// `run_refresh_index_snapshots(session, provider, outcome, on)`.
-async fn run_refresh_index_snapshots(
+pub(crate) async fn run_refresh_index_snapshots(
     conn: &mut PgConnection,
     deps: &PipelineDependencies,
     outcome: &mut StepOutcome,

@@ -27,7 +27,7 @@
 mod book;
 #[cfg(test)]
 mod db_tests;
-mod evening;
+pub(crate) mod evening;
 mod live;
 mod ops;
 mod rescan;
@@ -124,7 +124,7 @@ fn run_id_arg(args: &BoundArgs) -> Result<i64, WorkerError> {
 
 /// `published_signal_count`: how many rows this session already has — what the 21:10 retry asks
 /// before it works.
-async fn published_signal_count(
+pub(crate) async fn published_signal_count(
     conn: &mut PgConnection,
     user_id: i64,
     on: NaiveDate,

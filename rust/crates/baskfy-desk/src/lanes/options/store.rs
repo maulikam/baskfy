@@ -222,7 +222,7 @@ impl<'c> PgOptionsStore<'c> {
             plan_id: text(col(&row, "plan_id")),
             session_id: int(col(&row, "session_id")),
             sleeve: sleeve_col(col(&row, "sleeve"))?,
-            structure: Structure::parse(&structure_text).ok_or_else(|| {
+            structure: super::core::structure_of(&structure_text).ok_or_else(|| {
                 data(format!(
                     "ValueError: '{structure_text}' is not a valid Structure"
                 ))
@@ -801,8 +801,11 @@ impl<'c> PgOptionsStore<'c> {
         until: DateTime<FixedOffset>,
     ) -> Result<Vec<baskfy_core::options::bars::Bar>, StoreError> {
         let s = self.schema.clone();
-        let start = py::ist_at(day, NaiveTime::from_hms_opt(9, 15, 0).unwrap_or(NaiveTime::MIN))
-            .ok_or_else(|| data("ValueError: 09:15 IST"))?;
+        let start = py::ist_at(
+            day,
+            NaiveTime::from_hms_opt(9, 15, 0).unwrap_or(NaiveTime::MIN),
+        )
+        .ok_or_else(|| data("ValueError: 09:15 IST"))?;
         let sql = format!(
             "SELECT m.ts, m.open, m.high, m.low, m.close \
              FROM {} m JOIN {} i \
@@ -823,14 +826,15 @@ impl<'c> PgOptionsStore<'c> {
             .await?;
         let mut out = Vec::with_capacity(rows.len());
         for r in &rows {
-            let ts = py::aware(col(r, "ts")).ok_or_else(|| data("TypeError: ts is not a datetime"))?;
+            let ts =
+                py::aware(col(r, "ts")).ok_or_else(|| data("TypeError: ts is not a datetime"))?;
             let num = |name: &str| {
                 py::dec(col(r, name)).ok_or_else(|| {
                     data(format!("decimal.InvalidOperation: {name} is not a number"))
                 })
             };
             out.push(baskfy_core::options::bars::Bar {
-                ts: baskfy_core::options::bars::ist(&ts),
+                ts,
                 open: num("open")?,
                 high: num("high")?,
                 low: num("low")?,
@@ -931,7 +935,7 @@ pub fn position_from_rows(head: &Row, legs: &[Row]) -> Result<Tracked, StoreErro
         Some(v) if v.truthy() => {
             let s = v.py_str();
             Some(
-                super::core::Direction::parse(&s)
+                super::core::direction_of(&s)
                     .ok_or_else(|| data(format!("ValueError: '{s}' is not a valid Direction")))?,
             )
         }
@@ -969,7 +973,7 @@ pub fn position_from_rows(head: &Row, legs: &[Row]) -> Result<Tracked, StoreErro
     Ok(Tracked {
         session_id: int(col(head, "session_id")),
         sleeve,
-        structure: Structure::parse(&structure_text).ok_or_else(|| {
+        structure: super::core::structure_of(&structure_text).ok_or_else(|| {
             data(format!(
                 "ValueError: '{structure_text}' is not a valid Structure"
             ))

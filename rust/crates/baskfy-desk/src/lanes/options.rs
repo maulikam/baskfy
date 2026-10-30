@@ -208,8 +208,7 @@ pub async fn options_monitor_main(
     let conn = state.db.connect().await.map_err(|e| e.to_string())?;
     let store = monitor::PgPositionStore { conn, user_id };
     // No gateway at all: the monitor decides exits, the executor sends them.
-    let Some(mut strategy) =
-        monitor::build_monitor(settings.options_monitor_enabled, store, day)
+    let Some(mut strategy) = monitor::build_monitor(settings.options_monitor_enabled, store, day)
     else {
         return Ok(0);
     };

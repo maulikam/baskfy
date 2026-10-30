@@ -13,15 +13,16 @@
 use std::str::FromStr;
 
 use async_trait::async_trait;
-use baskfy_core::options::bars::Bar;
+use baskfy_core::options::bars::{Bar, ist};
 use baskfy_core::options::exits::{ExitVerdict, OpenLeg, OpenPosition};
-use baskfy_core::options::structures::{Direction, Structure};
 use chrono::{Duration, NaiveDate, NaiveDateTime};
 use rust_decimal::Decimal;
 use serde_json::Value;
 
 use super::core::{role_of, sleeve_of};
-use super::monitor::{NIFTY_50_TOKEN, NiftyOptionsMonitor, PositionStore, Raised, TrackedPosition};
+use super::monitor::{
+    NIFTY_50_TOKEN, NiftyOptionsMonitor, PositionStore, Raised, TrackedPosition, aware_ist,
+};
 use crate::wire::{PyDict, PyValue, dict};
 use baskfy_providers::records::PyDateTime;
 
@@ -74,7 +75,8 @@ pub fn position_of(raw: &Value) -> Result<TrackedPosition, String> {
     {
         let role = text(lg, "role")?;
         legs.push(OpenLeg {
-            role: role_of(role).ok_or_else(|| format!("ValueError: '{role}' is not a valid LegRole"))?,
+            role: role_of(role)
+                .ok_or_else(|| format!("ValueError: '{role}' is not a valid LegRole"))?,
             strike: dec(text(lg, "strike")?)?,
             quantity: int_of(lg.get("quantity").ok_or("KeyError: 'quantity'")?)?,
             fill_price: dec(text(lg, "fill_price")?)?,
@@ -88,7 +90,8 @@ pub fn position_of(raw: &Value) -> Result<TrackedPosition, String> {
     let structure = text(raw, "structure")?;
     let direction = match raw.get("direction").and_then(Value::as_str) {
         Some(d) if !d.is_empty() => Some(
-            Direction::parse(d).ok_or_else(|| format!("ValueError: '{d}' is not a valid Direction"))?,
+            super::core::direction_of(d)
+                .ok_or_else(|| format!("ValueError: '{d}' is not a valid Direction"))?,
         ),
         _ => None,
     };
@@ -97,11 +100,11 @@ pub fn position_of(raw: &Value) -> Result<TrackedPosition, String> {
         position: OpenPosition {
             sleeve: sleeve_of(sleeve)
                 .ok_or_else(|| format!("ValueError: '{sleeve}' is not a valid Sleeve"))?,
-            structure: Structure::parse(structure)
+            structure: super::core::structure_of(structure)
                 .ok_or_else(|| format!("ValueError: '{structure}' is not a valid Structure"))?,
             legs,
             entry_points: dec(text(raw, "entry_points")?)?,
-            opened_at: iso(text(raw, "opened_at")?)?,
+            opened_at: aware_ist(iso(text(raw, "opened_at")?)?),
             risk_budget_inr: dec(text(raw, "risk_budget_inr")?)?,
             direction,
             range_high: opt_dec(raw, "range_high")?,
@@ -135,7 +138,7 @@ pub fn bars_of(fixture: &Value) -> Result<Vec<Bar>, String> {
         .iter()
         .map(|r| {
             Ok(Bar {
-                ts: iso(cell(r, 0)?)?,
+                ts: aware_ist(iso(cell(r, 0)?)?),
                 open: dec(cell(r, 1)?)?,
                 high: dec(cell(r, 2)?)?,
                 low: dec(cell(r, 3)?)?,
@@ -273,7 +276,7 @@ impl PositionStore for ListStore {
         Ok(self
             .minutes
             .iter()
-            .filter(|b| b.ts + Duration::minutes(1) <= until)
+            .filter(|b| ist(&b.ts) + Duration::minutes(1) <= until)
             .cloned()
             .collect())
     }
@@ -298,7 +301,7 @@ pub async fn replay(fixture: &Value) -> Result<NiftyOptionsMonitor<ListStore>, S
     };
     let stored: Vec<Bar> = bars_of(fixture)?
         .into_iter()
-        .filter(|b| start.is_some_and(|s| b.ts < s))
+        .filter(|b| start.is_some_and(|s| ist(&b.ts) < s))
         .collect();
     let position = position_of(fixture.get("position").ok_or("KeyError: 'position'")?)?;
     let store = ListStore::new(vec![position], stored);
@@ -358,7 +361,10 @@ pub async fn main(argv: &[String]) -> Result<(i32, Vec<String>), String> {
     let mut args = argv.iter();
     while let Some(a) = args.next() {
         if a == "--expect" {
-            expect = Some(args.next().ok_or("argument --expect: expected one argument")?);
+            expect = Some(
+                args.next()
+                    .ok_or("argument --expect: expected one argument")?,
+            );
         } else {
             fixture_path = Some(a);
         }
@@ -379,8 +385,6 @@ pub async fn main(argv: &[String]) -> Result<(i32, Vec<String>), String> {
         lines.push("OK: the exits match the expectation".to_owned());
         return Ok((0, lines));
     }
-    lines.push(format!(
-        "MISMATCH\n  expected: {want}\n  got:      {got}"
-    ));
+    lines.push(format!("MISMATCH\n  expected: {want}\n  got:      {got}"));
     Ok((1, lines))
 }

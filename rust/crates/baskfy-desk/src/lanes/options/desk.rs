@@ -89,10 +89,7 @@ pub async fn build_view(
         plans.push(PyValue::Map(dict([
             ("plan_id", PyValue::Str(plan.plan_id.clone())),
             ("sleeve", PyValue::Str(sleeve.to_owned())),
-            (
-                "structure",
-                PyValue::Str(plan.structure.as_str().to_owned()),
-            ),
+            ("structure", PyValue::Str(plan.structure.value().to_owned())),
             ("status", PyValue::Str(plan.status.clone())),
             ("session_state", PyValue::Str(plan.session_state.clone())),
             ("expires_at", PyValue::Str(py::iso_aware(&plan.expires_at))),

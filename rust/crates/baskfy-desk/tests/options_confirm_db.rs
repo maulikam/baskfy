@@ -25,7 +25,6 @@ use baskfy_desk::clock::{Clock, FixedClock, ist};
 use baskfy_desk::fake_kite::ReplayKite;
 use baskfy_desk::gateway::{GatesFn, Gateway};
 use baskfy_desk::ids::HarnessIds;
-use baskfy_desk::kite::KiteWrites;
 use baskfy_desk::lanes::exec_core::desk::ShimGateway;
 use baskfy_desk::lanes::exec_core::order_gateway::{GatewayOptions, OrderGateway};
 use baskfy_desk::lanes::exec_core::risk::{RiskBacking, RiskConfig, RiskLayer, RiskManager};
@@ -146,11 +145,10 @@ impl Bed {
                 .await
                 .unwrap(),
         );
-        let kite: Arc<dyn KiteWrites> = self.kite.clone();
         let gate_settings = settings.clone();
         let gates: GatesFn = Arc::new(move || gates::product_gates(&gate_settings, sleeve));
         let core = OrderGateway::new(
-            kite,
+            self.kite.clone(),
             risk,
             GatewayOptions {
                 gates,
@@ -539,16 +537,7 @@ async fn live_is_refused_before_any_order() {
     let gw = bed.gateway(paper_defaults(), Sleeve::O2).await;
     let mut store = PgOptionsStore::new(&mut conn, uid);
     let live = |_s: Sleeve| Mode::Live;
-    let r = execute_entry(
-        &mut store,
-        gw,
-        &Quotes(deep()),
-        &plan_id,
-        true,
-        &live,
-        &now,
-    )
-    .await;
+    let r = execute_entry(&mut store, gw, &Quotes(deep()), &plan_id, true, &live, &now).await;
     assert_eq!(refused(r).1, "LIVE_NOT_BUILT");
     assert!(orders(&mut conn, &plan_id).await.is_empty());
     assert_eq!(bed.broker_calls(), 0);
@@ -1303,7 +1292,10 @@ async fn the_position_store_raises_one_exit_and_marks() {
         &[Param::Int(sid)],
     )
     .await;
-    assert_eq!(py::dec(py::col(&mark[0], "last_mark_points")), Some(d("81.50")));
+    assert_eq!(
+        py::dec(py::col(&mark[0], "last_mark_points")),
+        Some(d("81.50"))
+    );
     drop_user(&mut conn, uid).await;
 }
 
@@ -1321,12 +1313,30 @@ async fn all_four_flags_on_is_refused_before_any_order() {
     s.dry_run = false;
     assert_eq!(gates::mode_of(&s, Sleeve::O2), Mode::Live);
     let uid = new_user(&mut conn).await;
-    let plan_id = seed(&mut conn, uid, "O2", "LONG_OPTION", &SPREAD[..1], None, None).await;
+    let plan_id = seed(
+        &mut conn,
+        uid,
+        "O2",
+        "LONG_OPTION",
+        &SPREAD[..1],
+        None,
+        None,
+    )
+    .await;
     let bed = Bed::new();
     let gw = bed.gateway(s.clone(), Sleeve::O2).await;
     let modes = |sl: Sleeve| gates::mode_of(&s, sl);
     let mut store = PgOptionsStore::new(&mut conn, uid);
-    let r = execute_entry(&mut store, gw, &Quotes(deep()), &plan_id, true, &modes, &now).await;
+    let r = execute_entry(
+        &mut store,
+        gw,
+        &Quotes(deep()),
+        &plan_id,
+        true,
+        &modes,
+        &now,
+    )
+    .await;
     assert_eq!(refused(r).1, "LIVE_NOT_BUILT");
     assert!(orders(&mut conn, &plan_id).await.is_empty());
     assert_eq!(bed.broker_calls(), 0);
@@ -1376,7 +1386,11 @@ async fn a_second_entry_plan_in_a_confirmed_session_is_refused() {
         &[Param::Int(session)],
     )
     .await;
-    assert_eq!(py::int(py::col(&n[0], "n")), 2, "the first entry's two legs, nothing more");
+    assert_eq!(
+        py::int(py::col(&n[0], "n")),
+        2,
+        "the first entry's two legs, nothing more"
+    );
     drop_user(&mut conn, uid).await;
 }
 
@@ -1386,7 +1400,16 @@ async fn a_second_session_for_the_sleeve_and_day_cannot_exist() {
         return;
     };
     let uid = new_user(&mut conn).await;
-    seed(&mut conn, uid, "O2", "LONG_OPTION", &SPREAD[..1], None, None).await;
+    seed(
+        &mut conn,
+        uid,
+        "O2",
+        "LONG_OPTION",
+        &SPREAD[..1],
+        None,
+        None,
+    )
+    .await;
     let err = conn
         .execute(
             "INSERT INTO op_session (user_id, sleeve, trade_date, mode, state) \
@@ -1395,7 +1418,10 @@ async fn a_second_session_for_the_sleeve_and_day_cannot_exist() {
         )
         .await
         .unwrap_err();
-    assert!(err.to_string().contains("uq_op_session_user_sleeve_date"), "{err}");
+    assert!(
+        err.to_string().contains("uq_op_session_user_sleeve_date"),
+        "{err}"
+    );
     drop_user(&mut conn, uid).await;
 }
 
@@ -1456,7 +1482,8 @@ async fn the_page_shows_the_plan_the_button_and_the_sentence() {
     let plan_id = seed(&mut conn, uid, "O3A", "DEBIT_SPREAD", SPREAD, None, None).await;
     let dir = tempfile::tempdir().unwrap();
     std::os::unix::fs::symlink(
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../kite-momentum-rebalancer/app"),
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../kite-momentum-rebalancer/app"),
         dir.path().join("app"),
     )
     .unwrap();

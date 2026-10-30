@@ -95,8 +95,9 @@ impl Offline {
     #[must_use]
     pub fn production() -> Self {
         Self {
-            prefix: "NSE is not reachable from the Rust desk: no live NSE client (DECISIONS-RS R8.AR6)"
-                .to_owned(),
+            prefix:
+                "NSE is not reachable from the Rust desk: no live NSE client (DECISIONS-RS R8.AR6)"
+                    .to_owned(),
         }
     }
 
@@ -1180,7 +1181,9 @@ impl Nse {
             );
         }
         let failed_age = self.now() - epoch(&hit, "failed_at_epoch");
-        if !truthy_key(&hit, "rows") && truthy_key(&hit, "failed_at_epoch") && failed_age < FAILURE_TTL
+        if !truthy_key(&hit, "rows")
+            && truthy_key(&hit, "failed_at_epoch")
+            && failed_age < FAILURE_TTL
         {
             let err = get(&hit, "error");
             return dict([

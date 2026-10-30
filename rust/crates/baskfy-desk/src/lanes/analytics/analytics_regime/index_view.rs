@@ -10,8 +10,8 @@ use std::sync::{Mutex, OnceLock};
 use std::time::SystemTime;
 
 use super::nse_indices::{Nse, slug};
-use crate::lanes::weekly::score::{ScoringConfig, load_scan, score};
 use crate::lanes::weekly::pandas::py_round;
+use crate::lanes::weekly::score::{ScoringConfig, load_scan, score};
 use crate::wire::{PyDict, PyValue, dict};
 
 /// `SCAN_GLOB`'s directory and pattern: `data/uploads/scan_*.csv`.
@@ -266,7 +266,10 @@ fn score_file(path: &Path, cfg: &ScoringConfig) -> Result<Scores, String> {
             ("away_ath", n("away_from_high_all_time")),
             ("vol_1y", n("volatility_one_year")),
             ("beta", n("beta")),
-            ("trend", opt_f(scored.parts[0].get(i).copied().unwrap_or(f64::NAN))),
+            (
+                "trend",
+                opt_f(scored.parts[0].get(i).copied().unwrap_or(f64::NAN)),
+            ),
             (
                 "momentum",
                 opt_f(scored.parts[1].get(i).copied().unwrap_or(f64::NAN)),
@@ -306,7 +309,10 @@ pub fn scan_scores(root: &Path, cfg: &ScoringConfig) -> ScanScores {
         Err(e) => {
             #[allow(clippy::print_stderr)]
             {
-                eprintln!("WARNING:index_view:scan scoring failed for {}: {e}", path.display());
+                eprintln!(
+                    "WARNING:index_view:scan scoring failed for {}: {e}",
+                    path.display()
+                );
             }
             (Vec::new(), None)
         }
@@ -347,7 +353,10 @@ fn pos(lo: Option<f64>, hi: Option<f64>, last: Option<f64>) -> PyValue {
     if hi <= lo {
         return PyValue::None;
     }
-    PyValue::Float(py_round(((last - lo) / (hi - lo)).clamp(0.0, 1.0) * 100.0, 1))
+    PyValue::Float(py_round(
+        ((last - lo) / (hi - lo)).clamp(0.0, 1.0) * 100.0,
+        1,
+    ))
 }
 
 /// `_range_pos(r)`: where the close sits inside the day's range, 0–100.
@@ -381,7 +390,10 @@ pub fn pick(rows: &[PyDict], selected: &str) -> PyValue {
             return PyValue::Map(r.clone());
         }
     }
-    if let Some(r) = rows.iter().find(|r| name_of(r).to_uppercase() == "NIFTY 50") {
+    if let Some(r) = rows
+        .iter()
+        .find(|r| name_of(r).to_uppercase() == "NIFTY 50")
+    {
         return PyValue::Map(r.clone());
     }
     PyValue::Map(rows[0].clone())
@@ -392,7 +404,12 @@ fn get(m: &PyDict, k: &str) -> PyValue {
 }
 
 /// `build(selected)`: everything `/indices` needs for its first paint.
-pub async fn build(nse: &Nse, scan: &ScanScores, today: chrono::NaiveDate, selected: &str) -> PyDict {
+pub async fn build(
+    nse: &Nse,
+    scan: &ScanScores,
+    today: chrono::NaiveDate,
+    selected: &str,
+) -> PyDict {
     let b = nse.full_board(today).await;
     build_from_board(&b, scan, selected)
 }
@@ -549,10 +566,7 @@ pub fn breadth(scored: &[PyDict]) -> PyDict {
             "near_ath",
             pct(&|r| f(r, "away_ath").is_some_and(|a| a > -10.0)),
         ),
-        (
-            "positive_1y",
-            pct(&|r| f(r, "ret_1y").unwrap_or(0.0) > 0.0),
-        ),
+        ("positive_1y", pct(&|r| f(r, "ret_1y").unwrap_or(0.0) > 0.0)),
     ])
 }
 

@@ -282,7 +282,12 @@ pub fn reading_from_audit_dict(
         PyValue::Int(i) => *i as f64,
         PyValue::Str(s) => crate::settings::py_float(s)
             .ok_or_else(|| format!("ValueError: could not convert string to float: '{s}'"))?,
-        other => return Err(format!("TypeError: float() argument: {}", other.type_name())),
+        other => {
+            return Err(format!(
+                "TypeError: float() argument: {}",
+                other.type_name()
+            ));
+        }
     };
     let as_of = match as_of {
         Some(d) => d,

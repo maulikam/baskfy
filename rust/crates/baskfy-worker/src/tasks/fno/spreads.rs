@@ -897,4 +897,213 @@ mod tests {
             (Some(dec("10.05")), Some(dec("10.00")), None)
         );
     }
+    fn contract(symbol: &str, expiry: NaiveDate, strike: &str, kind: &str) -> SampleContract {
+        SampleContract {
+            symbol: symbol.to_owned(),
+            tradingsymbol: format!("{symbol}{}{strike}{kind}", expiry.format("%y%b%d"))
+                .to_uppercase(),
+            expiry,
+            strike: dec(strike),
+            option_type: kind.to_owned(),
+        }
+    }
+
+    /// `TestTheNames`.
+    #[test]
+    fn ranked_by_median_turnover_not_one_big_day() {
+        let mut t = BTreeMap::new();
+        t.insert("SPIKE".to_owned(), vec![dec("1"), dec("1"), dec("900")]);
+        t.insert("STEADY".to_owned(), vec![dec("50"), dec("50"), dec("50")]);
+        t.insert("SMALL".to_owned(), vec![dec("10")]);
+        assert_eq!(rank_by_turnover(&t, 2).unwrap(), vec!["STEADY", "SMALL"]);
+    }
+
+    #[test]
+    fn ties_break_by_symbol_and_the_cut_is_top() {
+        let t: BTreeMap<String, Vec<Decimal>> = (0..40)
+            .map(|i| (format!("S{i:02}"), vec![dec("5")]))
+            .collect();
+        let ranked = rank_by_turnover(&t, TOP_STOCKS).unwrap();
+        assert_eq!(ranked.len(), TOP_STOCKS);
+        assert_eq!(ranked[..2], ["S00", "S01"]);
+    }
+
+    #[test]
+    fn the_key_budget_fits_one_quote_call() {
+        let keys = (TOP_STOCKS + INDEX_UNDERLYINGS.len()) * (2 * STRIKES_EACH_SIDE + 1) * 2;
+        assert_eq!(keys, 448);
+        assert_eq!(quote_calls(keys), 1);
+        for (keys, calls) in [(0, 0), (1, 1), (500, 1), (501, 2), (1001, 3)] {
+            assert_eq!(quote_calls(keys), calls);
+        }
+    }
+
+    /// `TestTheExpiry`.
+    #[test]
+    fn monthly_is_the_last_listed_expiry_and_weeklies_are_skipped() {
+        let (nov, dec_) = (d(2027, 11, 25), d(2027, 12, 30));
+        let weekly = d(2027, 11, 9);
+        let listed = [weekly, d(2027, 11, 16), nov, d(2027, 12, 7), dec_];
+        assert_eq!(monthly_expiries(listed.into_iter()), vec![nov, dec_]);
+        assert_eq!(
+            near_monthly([weekly, nov, dec_].into_iter(), d(2027, 11, 4)),
+            Some(nov)
+        );
+        assert_eq!(near_monthly([nov, dec_].into_iter(), nov), Some(dec_));
+        assert_eq!(
+            near_monthly([d(2027, 10, 28)].into_iter(), d(2027, 11, 4)),
+            None
+        );
+        let futures = vec![(nov, Some(dec("810.10"))), (dec_, Some(dec("815.00")))];
+        assert_eq!(reference_level(&futures, nov), Some(dec("810.10")));
+        assert_eq!(reference_level(&futures[1..], nov), Some(dec("815.00")));
+    }
+
+    /// `TestTheStrikes`.
+    #[test]
+    fn three_listed_strikes_each_side_clipped_at_an_edge() {
+        let ladder: Vec<Decimal> = (700..=920).step_by(20).map(Decimal::from).collect();
+        let want = |ks: &[i64]| ks.iter().copied().map(Decimal::from).collect::<Vec<_>>();
+        assert_eq!(
+            atm_window(&ladder, dec("808"), 3),
+            want(&[740, 760, 780, 800, 820, 840, 860])
+        );
+        assert_eq!(atm_window(&ladder, dec("810"), 3)[3], dec("800"));
+        assert_eq!(
+            atm_window(&ladder, dec("690"), 3),
+            want(&[700, 720, 740, 760])
+        );
+        let irregular: Vec<Decimal> = ["90", "95", "100", "102.5", "105", "110", "120", "140"]
+            .map(dec)
+            .to_vec();
+        assert_eq!(
+            atm_window(&irregular, dec("103"), 3),
+            ["90", "95", "100", "102.5", "105", "110", "120"]
+                .map(dec)
+                .to_vec()
+        );
+    }
+
+    #[test]
+    fn pick_is_the_near_monthly_both_types() {
+        let (nov, dec_) = (d(2027, 11, 25), d(2027, 12, 30));
+        let mut contracts = Vec::new();
+        for expiry in [nov, dec_] {
+            for k in (700..=920).step_by(20) {
+                for kind in ["CE", "PE"] {
+                    contracts.push(contract("SBIN", expiry, &k.to_string(), kind));
+                }
+            }
+        }
+        let picked = pick_sample(&contracts, dec("808"), d(2027, 11, 4), STRIKES_EACH_SIDE);
+        assert_eq!(picked.len(), 14);
+        assert!(picked.iter().all(|c| c.expiry == nov));
+        let kinds: BTreeSet<&str> = picked.iter().map(|c| c.option_type.as_str()).collect();
+        assert_eq!(kinds, BTreeSet::from(["CE", "PE"]));
+    }
+
+    fn quote(key: &str, bid: Option<&str>, ask: Option<&str>) -> OptionQuoteRecord {
+        use baskfy_providers::records::{DepthLevelFields, DepthLevelRecord, OptionQuoteFields};
+        let level = |p: &str| {
+            vec![
+                DepthLevelRecord::new(DepthLevelFields {
+                    price: dec(p),
+                    quantity: 50,
+                    orders: 1,
+                })
+                .unwrap(),
+            ]
+        };
+        OptionQuoteRecord::new(OptionQuoteFields {
+            symbol: key.trim_start_matches("NFO:").to_owned(),
+            exchange: "NFO".to_owned(),
+            instrument_token: None,
+            last_price: None,
+            volume: 0,
+            oi: Some(1200),
+            oi_day_high: None,
+            oi_day_low: None,
+            bids: bid.map(level).unwrap_or_default(),
+            asks: ask.map(level).unwrap_or_default(),
+            as_of: None,
+            last_trade_time: None,
+        })
+        .unwrap()
+    }
+
+    /// `TestTheRows`: half-up mid; a one-sided or empty book keeps its nulls.
+    #[test]
+    fn a_one_sided_or_empty_book_is_stored_with_nulls() {
+        let nov = d(2027, 11, 25);
+        let (two, bid_only, empty) = (
+            contract("SBIN", nov, "780", "CE"),
+            contract("SBIN", nov, "800", "CE"),
+            contract("SBIN", nov, "820", "CE"),
+        );
+        let mut quotes = BTreeMap::new();
+        quotes.insert(two.key(), quote(&two.key(), Some("10.05"), Some("10.10")));
+        quotes.insert(bid_only.key(), quote(&bid_only.key(), Some("3.00"), None));
+        quotes.insert(empty.key(), quote(&empty.key(), None, None));
+        let rows = sample_rows(&[two, bid_only, empty], &quotes);
+        assert_eq!(
+            rows[0].mid,
+            Some(dec("10.08")),
+            "10.075 half-up (house rule 8)"
+        );
+        assert_eq!(rows[0].oi, Some(1200));
+        assert_eq!(
+            (rows[1].bid, rows[1].ask, rows[1].mid),
+            (Some(dec("3.00")), None, None)
+        );
+        assert_eq!((rows[2].bid, rows[2].ask, rows[2].mid), (None, None, None));
+        assert!(sample_rows(&[contract("SBIN", nov, "800", "CE")], &BTreeMap::new()).is_empty());
+    }
+
+    /// `test_the_twenty_session_rule`: nineteen sessions are not a measurement, twenty are.
+    #[test]
+    fn the_twenty_session_rule() {
+        let days: Vec<NaiveDate> = (0..20)
+            .map(|i| d(2027, 10, 1) + chrono::Duration::days(i))
+            .collect();
+        let run = |n: usize| {
+            half_spread_stats(
+                days[..n]
+                    .iter()
+                    .map(|&day| obs(day, "9", Some("11"), "800", 30))
+                    .collect(),
+                MIN_SPREAD_SESSIONS,
+            )
+            .unwrap()["SBIN"]
+                .sessions
+        };
+        assert!(run(19) < MIN_SPREAD_SESSIONS);
+        assert!(run(20) >= MIN_SPREAD_SESSIONS);
+        assert!(half_spread_stats(vec![], 0).is_err());
+    }
+
+    /// `TestTheResultsCalendar::test_forward_only`.
+    #[test]
+    fn the_results_calendar_is_forward_only() {
+        use baskfy_providers::records::EarningsDateFields;
+        let meeting = |day: NaiveDate| {
+            EarningsDateRecord::new(EarningsDateFields {
+                symbol: "sbin".to_owned(),
+                event_date: day,
+                purpose: "Financial Results".to_owned(),
+                url: "https://example.test/".to_owned(),
+            })
+            .unwrap()
+        };
+        let today = d(2027, 11, 4);
+        let out = upcoming_results(
+            &[
+                meeting(d(2027, 10, 20)),
+                meeting(today),
+                meeting(d(2027, 12, 30)),
+                meeting(today),
+            ],
+            today,
+        );
+        assert_eq!(out["SBIN"], vec![today, d(2027, 12, 30)]);
+    }
 }

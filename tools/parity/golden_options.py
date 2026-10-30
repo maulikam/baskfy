@@ -406,6 +406,146 @@ def call_decide_o3(inputs: dict[str, Any]) -> Any:
     return {"decision": _decision_json(decision), "outcome": _outcome_json(outcome)}
 
 
+# --- the backtest, its suite, the replay day and the executor (RS7 C2) ---------------------------
+
+
+def _outcome(raw: dict[str, Any]) -> Any:
+    from baskfy_core.options.backtest import DayOutcome
+
+    t = raw["trigger_time"]
+    return DayOutcome(
+        trade_date=dt.date.fromisoformat(raw["trade_date"]), traded=bool(raw["traded"]),
+        skip_reason=raw["skip_reason"], net_pnl_inr=_d(raw["net_pnl_inr"]),
+        r_multiple=_d(raw["r_multiple"]), closed_reason=raw["closed_reason"],
+        trigger_time=None if t is None else dt.time.fromisoformat(t),
+        mfe_points=_d(raw["mfe_points"]), mae_points=_d(raw["mae_points"]),
+    )  # fmt: skip
+
+
+def call_backtest_run(inputs: dict[str, Any]) -> Any:
+    from baskfy_core.options.backtest import Tier, run
+    from baskfy_core.options.config import Sleeve
+
+    days = [_outcome(o) for o in inputs["outcomes"]]
+    return run(Sleeve(inputs["sleeve"]), Tier(inputs["tier"]), days, lambda o: o,
+               min_sessions=int(inputs["min_sessions"]))  # fmt: skip
+
+
+def call_tier2_quote(inputs: dict[str, Any]) -> Any:
+    from baskfy_core.options.backtest import tier2_quote
+    from baskfy_core.options.config import OptionType
+
+    return tier2_quote(
+        Decimal(inputs["spot"]), Decimal(inputs["strike"]), years=float(inputs["years"]),
+        vix_close=Decimal(inputs["vix_close"]), kind=OptionType(inputs["kind"]),
+        rate=float(inputs["rate"]), rates=_rates(inputs["rates"]),
+    )  # fmt: skip
+
+
+class _ScriptVenue:
+    """A venue over stored books: each send fills ``min(next scripted, asked)`` (all once the
+    script runs out) at the attempt's own price."""
+
+    def __init__(self, books: dict[str, Any], script: list[int]) -> None:
+        self.books = books
+        self.script = list(script)
+
+    def quote(self, role: Any) -> Any:
+        from baskfy_core.options.executor import Book
+
+        b = self.books[role.value]
+        return Book(Decimal(b["bid"]), Decimal(b["ask"]))
+
+    def send(self, role: Any, attempt: Any, quantity: int, closing: bool) -> Any:
+        from baskfy_core.options.executor import Fill
+
+        del role, closing
+        filled = min(self.script.pop(0), quantity) if self.script else quantity
+        return Fill(filled, attempt.price if filled else None)
+
+
+def _exec_args(inputs: dict[str, Any]) -> dict[str, Any]:
+    from baskfy_core.options.config import ExecutionConfig, Sleeve
+
+    return {"sleeve": Sleeve(inputs["sleeve"]), "tick": Decimal(inputs["tick"]),
+            "config": _config(ExecutionConfig, inputs["config"])}  # fmt: skip
+
+
+def call_run_entry(inputs: dict[str, Any]) -> Any:
+    from baskfy_core.options.execution import LegRole
+    from baskfy_core.options.executor import Outcome, run_entry, run_exit
+
+    venue = _ScriptVenue(inputs["books"], inputs["script"])
+    args = _exec_args(inputs)
+    entry = run_entry(venue, [LegRole(r) for r in inputs["roles"]], int(inputs["quantity"]),
+                      **args)  # fmt: skip
+    exit_ = run_exit(venue, dict(entry.position), **args) if entry.outcome is Outcome.OPEN else None
+    return {"entry": entry, "exit": exit_}
+
+
+def call_run_exit(inputs: dict[str, Any]) -> Any:
+    from baskfy_core.options.execution import LegRole
+    from baskfy_core.options.executor import run_exit
+
+    venue = _ScriptVenue(inputs["books"], inputs["script"])
+    position = {LegRole(k): int(v) for k, v in inputs["position"].items()}
+    return run_exit(venue, position, **_exec_args(inputs))
+
+
+def _source(raw: dict[str, Any], market: Any, options: Any) -> Any:
+    from baskfy_core.options.replay_day import ModelChain, StoredChain
+
+    if raw["kind"] == "model":
+        return ModelChain(market, options)
+    return StoredChain({dt.datetime.fromisoformat(e["minute"]): _snapshot(e["snapshot"])
+                        for e in raw["minutes"]})  # fmt: skip
+
+
+def call_tier1_day(inputs: dict[str, Any]) -> Any:
+    from baskfy_core.options.config import Sleeve
+    from baskfy_core.options.replay_day import tier1_day
+
+    options, _ceilings = _rules(inputs)
+    market, context = _market(inputs["market"]), _context(inputs["context"])
+    return {s: tier1_day(Sleeve(s), market, context, options) for s in inputs["sleeves"]}
+
+
+def call_priced_day(inputs: dict[str, Any]) -> Any:
+    from baskfy_core.options.config import Sleeve
+    from baskfy_core.options.replay_day import priced_day
+
+    options, ceilings = _rules(inputs)
+    market = _market(inputs["market"])
+    return priced_day(Sleeve(inputs["sleeve"]), market, _context(inputs["context"]),
+                      _source(inputs["source"], market, options), options=options,
+                      ceilings=ceilings)  # fmt: skip
+
+
+def call_run_tier(inputs: dict[str, Any]) -> Any:
+    from baskfy_core.options.backtest import Tier
+    from baskfy_core.options.backtest_suite import run_tier
+    from baskfy_core.options.config import Sleeve
+
+    options, ceilings = _rules(inputs)
+    days = [_market(m) for m in inputs["days"]]
+    raw = inputs["source"]
+    source_for = None if raw is None else (lambda m: _source(raw, m, options))
+    return [run_tier(Sleeve(s), Tier(inputs["tier"]), days, context=_context(inputs["context"]),
+                     options=options, ceilings=ceilings, source_for=source_for)
+            for s in inputs["sleeves"]]  # fmt: skip
+
+
+def call_tier1_sensitivity(inputs: dict[str, Any]) -> Any:
+    from baskfy_core.options.backtest_suite import tier1_sensitivity
+    from baskfy_core.options.config import Sleeve
+
+    options, _ceilings = _rules(inputs)
+    days = [_market(m) for m in inputs["days"]]
+    return {s: tier1_sensitivity(Sleeve(s), days, context=_context(inputs["context"]),
+                                 options=options)
+            for s in inputs["sleeves"]}  # fmt: skip
+
+
 CALLS: dict[str, Callable[[dict[str, Any]], Any]] = {
     "baskfy_core.options.gating.options_gates": call_options_gates,
     "baskfy_core.options.costs.charges": call_charges,
@@ -417,6 +557,14 @@ CALLS: dict[str, Callable[[dict[str, Any]], Any]] = {
     "baskfy_core.options.plan.decide_o1": call_decide_o1,
     "baskfy_core.options.plan_o2.decide_o2": call_decide_o2,
     "baskfy_core.options.plan_o3.decide_o3": call_decide_o3,
+    "baskfy_core.options.backtest.run": lambda i: _prep(call_backtest_run(i)),
+    "baskfy_core.options.backtest.tier2_quote": lambda i: _prep(call_tier2_quote(i)),
+    "baskfy_core.options.executor.run_entry": lambda i: _prep(call_run_entry(i)),
+    "baskfy_core.options.executor.run_exit": lambda i: _prep(call_run_exit(i)),
+    "baskfy_core.options.replay_day.tier1_day": lambda i: _prep(call_tier1_day(i)),
+    "baskfy_core.options.replay_day.priced_day": lambda i: _prep(call_priced_day(i)),
+    "baskfy_core.options.backtest_suite.run_tier": lambda i: _prep(call_run_tier(i)),
+    "baskfy_core.options.backtest_suite.tier1_sensitivity": lambda i: _prep(call_tier1_sensitivity(i)),
 }
 
 
@@ -528,6 +676,7 @@ def cases() -> list[tuple[str, str, dict[str, Any]]]:
                   "closed_at": at(13, 19), "peak_points": None, "trough_points": "-17.30",
                   "rates": rates})  # fmt: skip
     _scan_plan_cases(add)
+    _backtest_cases(add)
     return out
 
 
@@ -746,6 +895,182 @@ def _scan_plan_cases(add: Callable[[str, dict[str, Any]], None]) -> None:  # noq
                  "market": _market_json(m, now, list(loaded.values())),
                  "context": _context_json(context), "snapshots": _book_json(loaded),
                  "now": now.isoformat(), **rules, **b})  # fmt: skip
+
+
+# --- the backtest, its suite, the replay day and the executor: the cases ------------------------
+
+
+def _day_json(market: Any, *, expiries: int) -> dict[str, Any]:
+    """A whole day: every bar; the master's rows of the day's ``expiries`` nearest expiries plus
+    the 25,000 strike of every expiry (the calendar reads only expiries)."""
+    near = sorted({c.expiry for c in market.contracts if c.expiry >= market.trade_date})[:expiries]
+    return _jsonable(dataclasses.replace(
+        market,
+        contracts=tuple(c for c in market.contracts
+                        if c.strike == _CALENDAR_STRIKE or c.expiry in near),
+    ))  # fmt: skip
+
+
+def _backtest_cases(add: Callable[[str, dict[str, Any]], None]) -> None:  # noqa: PLR0915 - one list of cases
+    import random
+
+    from baskfy_core.options.bars import closed
+    from baskfy_core.options.chain import Level
+    from baskfy_core.options.config import OptionsCeilings, OptionsConfig, Sleeve
+    from baskfy_core.options.scan import DayContext
+
+    fx = _fixtures()
+    options, ceilings = OptionsConfig(), OptionsCeilings()
+    rules = {"options": _jsonable(options), "ceilings": _jsonable(ceilings)}
+    no_ctx = _context_json(DayContext())
+
+    # backtest.run
+    run_fn = "baskfy_core.options.backtest.run"
+    day = lambda d, **kw: {"trade_date": d, "traded": False, "skip_reason": None,  # noqa: E731
+                           "net_pnl_inr": None, "r_multiple": None, "closed_reason": None,
+                           "trigger_time": None, "mfe_points": None, "mae_points": None, **kw}  # fmt: skip
+    priced = [
+        day("2026-01-20", traded=True, net_pnl_inr="1500", r_multiple="1.5",
+            closed_reason="TARGET"),
+        day("2025-12-30", traded=True, net_pnl_inr="500", r_multiple="0.5"),
+        day("2026-01-06", skip_reason="ER_TOO_HIGH"),
+        day("2026-01-13", traded=True, net_pnl_inr="-1000", r_multiple="-1"),
+        day("2026-01-27", skip_reason="ER_TOO_HIGH"),
+        day("2026-02-03", skip_reason=""),
+        day("2026-02-10", skip_reason="GAP_TOO_LARGE"),
+        day("2026-02-17", traded=True, net_pnl_inr="0.00", r_multiple="0.00"),
+        day("2026-02-24", traded=True, net_pnl_inr="-412.35", r_multiple="-0.41"),
+    ]  # fmt: skip
+    signals = [
+        day("2026-10-20", traded=True, trigger_time="10:19:00", mfe_points="80.5",
+            mae_points="-12.25"),
+        day("2026-10-13", traded=True, trigger_time="09:45:00", mfe_points="0", mae_points="0"),
+        day("2026-10-27", skip_reason="NOT_CONTAINED"),
+        day("2025-10-28", skip_reason="EVENT_DAY"),
+    ]  # fmt: skip
+    for sleeve, tier, outcomes, n in (
+        ("O1W", "2", priced, 20), ("O2", "2", priced, 60), ("O1M", "3", priced, 12),
+        ("O3A", "3", priced[:3], 3), ("O2", "1", signals, 60), ("O3B", "1", [], 20),
+        ("O1M", "3", [], 12), ("O3A", "2", [priced[2], priced[4]], 20),
+        ("O1W", "3", [priced[7], priced[7]], 20),
+    ):  # fmt: skip
+        add(run_fn, {"sleeve": sleeve, "tier": tier, "outcomes": outcomes, "min_sessions": n})
+
+    # backtest.tier2_quote
+    quote_fn = "baskfy_core.options.backtest.tier2_quote"
+    rates = _default_rates()
+    for spot, strike, years, vix, kind in (
+        ("25000", "25100", 7 / 365, "14", "CE"), ("25000", "27000", 1 / 365, "10", "CE"),
+        ("25012.35", "24800", 0.0123, "13.45", "PE"), ("25000", "25000", 1e-6, "14", "PE"),
+        ("24950.5", "25000", 0.25, "22.8", "CE"), ("25000", "23000", 2 / 365, "15", "PE"),
+    ):  # fmt: skip
+        add(quote_fn, {"spot": spot, "strike": strike, "years": years, "vix_close": vix,
+                       "kind": kind, "rate": 0.065, "rates": rates})  # fmt: skip
+
+    # executor.run_entry / run_exit over scripted fills
+    execution = _default_execution()
+    books = {"LONG_CALL": {"bid": "10.00", "ask": "10.20"}, "LONG_PUT": {"bid": "8.40", "ask": "8.55"},
+             "SHORT_CALL": {"bid": "20.05", "ask": "20.30"},
+             "SHORT_PUT": {"bid": "18.90", "ask": "19.10"}}  # fmt: skip
+    condor = ["SHORT_CALL", "SHORT_PUT", "LONG_CALL", "LONG_PUT"]
+    spread, long_ = ["LONG_CALL", "SHORT_CALL"], ["LONG_CALL"]
+    entry_fn = "baskfy_core.options.executor.run_entry"
+    base = {"quantity": 65, "tick": "0.05", "config": execution, "books": books}
+    for roles, sleeve, script in (
+        (condor, "O1M", []), (spread, "O3A", []), (long_, "O2", []),
+        (condor, "O1M", [65, 0, 0]), (spread, "O3A", [25, 25]), (spread, "O3A", [65, 40, 25]),
+        (long_, "O2", [0, 65, 0, 0, 30]), (condor, "O1W", [65, 65, 65, 65, 0, 0, 65, 10, 55]),
+    ):  # fmt: skip
+        add(entry_fn, {**base, "roles": roles, "sleeve": sleeve, "script": script})
+    for roles, sleeve in ((condor, "O1M"), (spread, "O3A"), (long_, "O2")):
+        for seed in range(4):
+            rng = random.Random(seed)
+            script = [rng.choice([0, 65, rng.randint(0, 65)]) for _ in range(24)]
+            add(entry_fn, {**base, "roles": roles, "sleeve": sleeve, "script": script})
+    exit_fn = "baskfy_core.options.executor.run_exit"
+    for position, sleeve, script in (
+        ({"LONG_CALL": 65, "SHORT_CALL": 65}, "O3A", [0, 0]),
+        ({"LONG_CALL": 65, "SHORT_CALL": 65}, "O3A", [65, 0, 0]),
+        ({"LONG_CALL": 65}, "O2", [0, 0]),
+        ({"LONG_CALL": 65, "LONG_PUT": 65, "SHORT_CALL": 65, "SHORT_PUT": 65}, "O1M", [30, 35]),
+        ({"LONG_CALL": 50, "LONG_PUT": 0, "SHORT_CALL": 0}, "O1W", []),
+        ({}, "O1M", []),
+    ):  # fmt: skip
+        add(exit_fn, {**base, "position": position, "sleeve": sleeve, "script": script})
+
+    # the fixture days
+    quiet = fx.market(fx.QUIET_MONTHLY, fx.quiet_monthly_bars())
+    trend = fx.market(fx.TREND_WEEKLY, fx.trend_weekly_bars())
+    gap = fx.market(fx.GAP_HOLD, fx.gap_hold_bars())
+    up = fx.market(fx.O2_UP_BREAK, fx.o2_up_break_bars())
+    counter = fx.market(fx.O2_COUNTER, fx.o2_counter_bars())
+    sleeves = [s.value for s in Sleeve]
+
+    # replay_day.tier1_day: every sleeve on each day
+    tier1_fn = "baskfy_core.options.replay_day.tier1_day"
+    for m, context in (
+        (quiet, DayContext()), (trend, DayContext()), (gap, DayContext()), (up, DayContext()),
+        (counter, DayContext()), (gap, DayContext(event_days=frozenset({fx.GAP_HOLD}))),
+        (dataclasses.replace(trend, daily_closes=()), DayContext()),
+        (dataclasses.replace(up, daily_closes=fx.falling_closes()), DayContext()),
+        (dataclasses.replace(up, trading_day=False), DayContext()),
+    ):  # fmt: skip
+        add(tier1_fn, {"sleeves": sleeves, "market": _day_json(m, expiries=0),
+                       "context": _context_json(context), **rules})  # fmt: skip
+
+    # replay_day.priced_day: Tier 2 on the model chain, Tier 3 on the planted minutes
+    priced_fn = "baskfy_core.options.replay_day.priced_day"
+    model = {"kind": "model"}
+    for sleeve, m in ((Sleeve.O3A, trend), (Sleeve.O2, up), (Sleeve.O1M, quiet),
+                      (Sleeve.O1W, trend), (Sleeve.O3B, gap), (Sleeve.O2, counter),
+                      (Sleeve.O1W, quiet), (Sleeve.O3A, up)):  # fmt: skip
+        add(priced_fn, {"sleeve": sleeve.value, "market": _day_json(m, expiries=2),
+                        "context": no_ctx, "source": model, **rules})  # fmt: skip
+
+    def chain(bars: Any, minute: dt.datetime) -> Any:
+        spot = closed(bars, minute)[-1].close
+        exps = sorted({c.expiry for c in fx.MASTER if c.expiry >= minute.date()})[:2]
+        fwd = {e: fx.carry_forward(spot, minute, e) for e in exps}
+        return fx.snapshot(minute, spot, exps, fx.flat(0.14), forwards=fwd)
+
+    def planted(exit_minute: int, long_bid: str, short_ask: str) -> dict[str, Any]:
+        decision, entry, exit_ = (fx.at(fx.TREND_WEEKLY, 10, m) for m in (20, 21, exit_minute))
+        at_exit = chain(trend.bars, exit_)
+        plant = {Decimal(25200): (Decimal(long_bid), Decimal(long_bid) + Decimal("0.20")),
+                 Decimal(25300): (Decimal(short_ask) - Decimal("0.20"), Decimal(short_ask))}  # fmt: skip
+
+        def setq(q: Any) -> Any:
+            bid, ask = plant[q.strike]
+            return dataclasses.replace(q, bid=bid, ask=ask, bids=(Level(bid, 1300),) * 3,
+                                       asks=(Level(ask, 1300),) * 3)  # fmt: skip
+
+        weekly = lambda q: q.expiry == fx.TREND_WEEKLY and q.option_type.value == "CE"  # noqa: E731
+        quotes = tuple(setq(q) if weekly(q) and q.strike in plant else q for q in at_exit.quotes)
+        minutes = {decision: chain(trend.bars, decision), entry: chain(trend.bars, entry),
+                   exit_: dataclasses.replace(at_exit, quotes=quotes)}  # fmt: skip
+        return {"kind": "stored",
+                "minutes": [{"minute": k.isoformat(), "snapshot": _jsonable(v)}
+                            for k, v in sorted(minutes.items())]}  # fmt: skip
+
+    target = planted(30, "95.00", "10.00")
+    for source in (target, planted(35, "40.00", "30.00"), {"kind": "stored", "minutes": []}):
+        add(priced_fn, {"sleeve": "O3A", "market": _day_json(trend, expiries=2),
+                        "context": no_ctx, "source": source, **rules})  # fmt: skip
+
+    # backtest_suite.run_tier and tier1_sensitivity
+    tier_fn = "baskfy_core.options.backtest_suite.run_tier"
+    four = [_day_json(m, expiries=0) for m in (quiet, trend, gap, up)]
+    add(tier_fn, {"sleeves": sleeves, "tier": "1", "days": four, "context": no_ctx,
+                  "source": None, **rules})  # fmt: skip
+    add(tier_fn, {"sleeves": ["O2"], "tier": "2", "days": [_day_json(up, expiries=2)],
+                  "context": no_ctx, "source": model, **rules})  # fmt: skip
+    add(tier_fn, {"sleeves": ["O3A", "O3B"], "tier": "2",
+                  "days": [_day_json(trend, expiries=2), _day_json(gap, expiries=2)],
+                  "context": no_ctx, "source": model, **rules})  # fmt: skip
+    add(tier_fn, {"sleeves": ["O3A"], "tier": "3", "days": [_day_json(trend, expiries=2)],
+                  "context": no_ctx, "source": target, **rules})  # fmt: skip
+    add("baskfy_core.options.backtest_suite.tier1_sensitivity",
+        {"sleeves": sleeves, "days": four, "context": no_ctx, **rules})
 
 
 def render_case(fn: str, inputs: dict[str, Any]) -> str:

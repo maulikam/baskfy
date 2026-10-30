@@ -1082,17 +1082,17 @@ bodies.
 | `baskfy_execution/gateway.py` + `app/core/gateway.py` → `exec_core/{order_gateway,journal,desk}.rs` | ported | 36 + 30 GTT | 12/12 EQUAL (sqlite and postgres) |
 | `app/exit_rules.py` → `exec_core/exit_rules.rs` | ported | 3 | — |
 | `guards.py`, `ratelimit.py`, `kite_limits.py`, `risk.py`/`risk_store.py`, `net.py`, `websec.py` → `exec_core/*` + `websec.rs` | ported | 93 | 27/27 |
-| `app/kite_client.py`, `app/token_store.py` → `exec_core/{kite_client,token_store}.rs` | ported (`place_cnc_order` deliberately not, R8.9) | 38 | 8/8 |
-| `app/lifecycle.py` | **not ported** (`/lifecycle*` 404) | 0 | — |
+| `app/kite_client.py`, `app/token_store.py` → `exec_core/{kite_client,token_store}.rs` | ported (`place_cnc_order` deliberately not, R8.9); D2: `kite()` refusal on every method, Python's exceptions on malformed replies (175 goldens), `.env` key, `/status` helper `exec_kite::status_session` awaiting the session lane's wiring (R8.11.1) | 50 + 175 goldens + 1 | 8/8 |
+| `app/lifecycle.py` → `exec_core/lifecycle.rs` | ported (D2, R8.9.1) | 18 | `exec_gateway_lifecycle.json` + 2 variants |
 | `main.py` `/analyze`, `/execute`, `plan_store.py`, `rebalance.py`/`scoring.py`, `strategies/*`, `breadth_source.py` → `weekly/*` | ported; generated scan answers 503 (R8.12) | 36 + 4 | 20/20 + `--plans` |
 | `holdings_view`, `tax_lots`, `tradebook`, `reconcile_view`, `reconcile`, `snapshot.collect` → `weekly/weekly_books/*` | ported, graded by 23 Python goldens | 92 | — (no own routes) |
 | `swing_desk.py`, `strategies/swing_breakout.py`, `breadth_source.py` → `swing/{desk,breakout,breadth}.rs` | ported | 30 + 13 + 3 | 42/42 (pg, sqlite, no-key) |
 | `swing_execute.py`, `swing_live_gate.py` → `swing/swing_exec/*` | ported | 61 | 14/14 |
-| `swing_monitor.py`, `swing_clock.py`, `swing_notify.py` → `swing/swing_monitor/*`, `notify.rs` | ported; **service not wired**, transports stubbed | 39 | 8/8 (absence only) |
+| `swing_monitor.py`, `swing_clock.py`, `swing_notify.py` → `swing/swing_monitor/*`, `notify.rs` | ported; service wired (R8.SM1), SMTP/Telegram sent (R8.SM3), Python `run_chore` fixed (R8.SM2) | 141 + 4 | 8/8 + 7 SIGNAL plans |
 | `twt_desk.py` → `twt.rs`, `twt/{store,common}.rs` | ported | 21 | 55/55 |
 | `twt_execute.py`, `twt_auto.py` → `twt/{execute,auto}.rs` | ported; twt-auto loop script not ported | 35 + real-path 1 | 42/42 |
 | `vbt_desk.py`, `vbt_execute.py` → `vbt.rs`, `vbt/*` | ported | 44 | 27/27 (+ edges, refusals) |
-| `fno_gates`, `fno_clock`, `fno_ledger`, `fno_desk.py` → `fno/*` | ported | 16 | 23/23 |
+| `fno_gates`, `fno_clock`, `fno_ledger`, `fno_desk.py` → `fno/*` | ported; D2: the DB halves of `test_fno_desk`/`test_fno_ledger` (+ F3's route halves) in `tests/fno_desk_db.rs` against the rows Python's own monitor/executor/ledger wrote (`fixtures/fno/goldens.json`), quotes raise as Python's, `fno-monitor` off is Ok (R8.19.1) | 18 + 40 DB | 23/23 + `fno_world.json` (needs `--fixture desk_fixtures/fno_world`) + `plans_fno.json` |
 | `fno_execute.py`, `fno_monitor.py` (order half) → `fno/fno_exec/*` | ported; monitor's planning/watch/night half **not** | 12 + 4 safety | 18/18 |
 | `options_gates/lab/desk/execute/ledger/clock`, `intraday_skeleton` → `options/*` | ported; `strategies/nifty_options.py` **not** (R8.20 F5) | 22 + 14 DB | 28/28 |
 | `core/regime.py` (config), `regime_store` (reads), `breadth`, `index_cache` (reads), `regime_view` → `analytics/*` | ported; engine/`regime_run`/`regime_alloc`, `/indices*` **not** | 23 | 21/22 (trailing slash) |
@@ -1102,9 +1102,8 @@ bodies.
 | `session_supervisor.py`, `telemetry.py`, `core/ticker.py`, `/callback`, `/status`, `/login`, static | ported; supervisor **refuses** without a reconciler | 34 | 54/54 + variants 4/4, 4/4 |
 
 **Python desk tests not yet ported** (of 2,315 test functions; counts from the lanes): exec_core —
-`test_fno_carry_gate` (13, guard half only), `test_fno_covered_overnight` (16, guard half only),
-`test_gtt_limit_fraction` (6), `test_fno_gtt_trail_modify` (6), route parts of
-`test_execute_gateway.py`, `test_kite_limits` source scans; weekly — `test_generated_scan.py`
+none of the execution package's files (D2, R8.9.1); route parts of `test_execute_gateway.py`
+and `test_kite_limits` source scans are the exec_guards lane's; weekly — `test_generated_scan.py`
 (15), two `test_plan_store` slippage tests, 10 of `test_reconcile.py`'s 21 (sleeve handlers);
 analytics — `test_metrics` (58), `test_benchmark` (20), `test_drawdown` (14), `test_xirr` (14),
 `test_twr_chaining` (13), `test_regime.py`/`test_regime_plan.py` engine tests, `test_index_board`
@@ -1113,8 +1112,8 @@ analytics — `test_metrics` (58), `test_benchmark` (20), `test_drawdown` (14), 
 tests, `test_swing_monitor_schedule` (10); twt — `test_twt_execute.py` entry/sweep/reconcile/TW7
 (~50 of 61), `TestTheLoop`; vbt — ~65 of 109 (store round-trips, HTML unit, route enumeration);
 fno — `test_fno_monitor` (19), `test_fno_monitor_loop` (8), `test_fno_f3` (17), DB halves of
-`test_fno_ledger`/`test_fno_desk`/`test_fno_safety`; options — `test_options_monitor` (24),
-`test_options_monitor_loop` (7); session — `test_lifecycle.py` (17), `test_token_sync.py` (11),
+`test_fno_safety` (those of `test_fno_ledger`/`test_fno_desk` are D2's, R8.19.1); options — `test_options_monitor` (24),
+`test_options_monitor_loop` (7); session — `test_token_sync.py` (11),
 two `test_telemetry` order-path tests; Python-only by design — `test_deploy_kit`,
 `test_requirements`, `test_frozen_boundary`.
 

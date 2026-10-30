@@ -35,6 +35,7 @@ pub fn routes() -> Router<AppState> {
         .route("/fno", get(desk::page))
         .route("/fno/data", get(desk::data))
         .route("/fno/execute", post(desk::execute))
+        .merge(fno_exec::monitor::harness::routes())
 }
 
 /// Hand the desk's state to the `fno_badge()` global (idempotent; every fno handler calls it,
@@ -54,10 +55,17 @@ pub fn register_templates(templates: &mut crate::templates::Templates) {
 }
 
 /// Run one of the lane's background services by name; `None` if the name is not this lane's.
+///
+/// `fno-monitor` is `python -m app.fno_monitor`'s `main()`: with `BASKFY_FNO_MONITOR_ENABLED`
+/// off (its default) it returns at once and touches nothing (Python's `return 0`); with it on it
+/// runs the whole monitor's day — plans raised, never confirmed; exits and rolls sent through
+/// the paper-pinned FO gateway (DECISIONS-RS R8.FX1). `fno-monitor-loop` is
+/// `scripts.fno_monitor_loop`: it starts `fno-monitor` at 09:14 on weekdays and decides nothing.
 pub async fn run_service(name: &str, state: &AppState) -> Option<Result<(), String>> {
-    let _ = state;
     match name {
-        "fno-monitor" => Some(Err(format!("service {name} is not ported yet (lane fno)"))),
+        // Boxed: the day's future is deep.
+        "fno-monitor" => Some(Box::pin(fno_exec::monitor::run(state)).await),
+        "fno-monitor-loop" => Some(Box::pin(fno_exec::monitor::service::run_loop()).await),
         _ => None,
     }
 }

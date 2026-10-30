@@ -178,6 +178,8 @@ async fn main() -> ExitCode {
         },
         None => std::collections::BTreeMap::new(),
     };
+    // `load_dotenv()` also feeds the token store's function-level key read (R8.11).
+    baskfy_desk::lanes::exec_core::token_store::install_dotenv(&dotenv);
     let lookup = |k: &str| std::env::var(k).ok().or_else(|| dotenv.get(k).cloned());
     let settings = match Settings::from_lookup(&lookup) {
         Ok(s) => s,

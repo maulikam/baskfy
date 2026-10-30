@@ -776,3 +776,98 @@ class TestTheDeskModuleNamesNoBroker:
         for verb in ("kc.place_order", "kc.place_gtt", "kc.delete_gtt", "kc.cancel_order"):
             assert verb not in text, f"{verb} is named in app/twt_desk.py"
         assert "get_gtts" in text  # the one read, named on purpose
+
+
+# =========================================================================================
+# R8.TD1 — the session lock is one transaction per confirm, and never waits
+# =========================================================================================
+class _LockBusy(Exception):
+    """What psycopg raises for ``FOR UPDATE NOWAIT`` on a held row (``lock_not_available``)."""
+
+    sqlstate = "55P03"
+
+
+class _RecordingConn:
+    """A Postgres-shaped connection that records every statement and can refuse the lock."""
+
+    def __init__(self, *, busy: bool = False) -> None:
+        self.sql: list[str] = []
+        self.busy = busy
+
+    def execute(self, sql: str, params: object = ()) -> _RecordingConn:  # noqa: ARG002
+        self.sql.append(" ".join(sql.split()))
+        if self.busy and "NOWAIT" in sql:
+            raise _LockBusy("could not obtain lock on row in relation \"tw_session\"")
+        return self
+
+
+def _verbs(conn: _RecordingConn) -> list[str]:
+    return [s.split()[0] if not s.startswith("SELECT") else s for s in conn.sql]
+
+
+class TestTheSessionLock:
+    """``lock_session_for_update`` used to hold its ``FOR UPDATE`` for one autocommit statement,
+    which serialised nothing (R8.17). These pin R8.TD1: one ``BEGIN`` … ``COMMIT`` around the
+    whole confirm, ``NOWAIT`` so a held row is a 409 and not a hung event loop, and a ``COMMIT``
+    on an exception too, so a row written after the broker answered is kept as autocommit kept
+    it."""
+
+    def test_postgres_opens_locks_nowait_and_commits(self) -> None:
+        conn = _RecordingConn()
+        store = W.PgTwtStore(conn, user_id=1, schema="public")
+        with store.lock_session_for_update(SESSION):
+            conn.execute("UPDATE public.tw_plan_line SET state = 'SENT'")
+        assert _verbs(conn) == [
+            "INSERT",
+            "BEGIN",
+            (
+                "SELECT 1 FROM public.tw_session WHERE user_id = ? AND session_date = ? "
+                "FOR UPDATE NOWAIT"
+            ),
+            "UPDATE",
+            "COMMIT",
+        ]
+
+    def test_a_nested_lock_opens_one_transaction(self) -> None:
+        conn = _RecordingConn()
+        store = W.PgTwtStore(conn, user_id=1, schema="public")
+        with store.lock_session_for_update(SESSION), store.lock_session_for_update(SESSION):
+            pass
+        verbs = _verbs(conn)
+        assert verbs.count("BEGIN") == 1 and verbs.count("COMMIT") == 1
+        assert verbs[-1] == "COMMIT"
+
+    def test_a_held_row_is_a_409_rolled_back_before_anything_runs(self) -> None:
+        conn = _RecordingConn(busy=True)
+        store = W.PgTwtStore(conn, user_id=1, schema="public")
+        ran = []
+        with pytest.raises(W.HTTPException) as refused, store.lock_session_for_update(SESSION):
+            ran.append(True)
+        assert refused.value.status_code == 409
+        assert str(refused.value.detail).startswith("SESSION_BUSY")
+        assert ran == []
+        assert _verbs(conn)[-1] == "ROLLBACK"
+        assert "COMMIT" not in _verbs(conn)
+        assert store._lock_depth == 0  # noqa: SLF001 - the lock's own bookkeeping
+
+    def test_an_exception_inside_still_commits_what_was_written(self) -> None:
+        conn = _RecordingConn()
+        store = W.PgTwtStore(conn, user_id=1, schema="public")
+        with pytest.raises(RuntimeError), store.lock_session_for_update(SESSION):
+            conn.execute("INSERT INTO public.tw_order (state) VALUES ('SENT')")
+            raise RuntimeError("after the broker answered")
+        assert _verbs(conn)[-2:] == ["INSERT", "COMMIT"]
+
+    def test_sqlite_commits_on_the_way_out(self, store, tmp_path) -> None:  # noqa: ANN001
+        with store.lock_session_for_update(SESSION):
+            store.bump_session(SESSION, mode="DRY_RUN", confirms=1)
+        other = sqlite3.connect(tmp_path / "twt.db")
+        try:
+            row = other.execute(
+                "SELECT confirms FROM tw_session WHERE user_id = 1 AND session_date = ?",
+                (SESSION.isoformat(),),
+            ).fetchone()
+        finally:
+            other.close()
+        assert row == (1,)
+        assert store.conn.in_transaction is False

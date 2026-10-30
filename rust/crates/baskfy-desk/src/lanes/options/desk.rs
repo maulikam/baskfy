@@ -229,13 +229,18 @@ pub async fn execute(
         Ok(None) => Sleeve::O2,
         Err(e) => return web::internal_error(&e.py_text()),
     };
-    let gateway = execute::options_gateway_ready(&state, sleeve).await;
+    // `gateway_for(sleeve)` is evaluated before `execute_entry` runs: no gateway is Python's
+    // unhandled exception (500), before the plan is validated (R8.20.1).
+    let Some(gateway) = execute::options_gateway_ready(&state, sleeve).await else {
+        return answer(Err(execute::no_gateway()));
+    };
     let quotes = KiteQuotes {
         kite: Arc::clone(&state.kite),
     };
     let modes = |s: Sleeve| gates::mode_of(&settings, s);
-    let now = state.clock.now_ist();
-    answer(execute::execute_entry(&mut store, gateway, &quotes, &plan_id, true, &modes, now).await)
+    let clock = Arc::clone(&state.clock);
+    let now = move || clock.now_ist();
+    answer(execute::execute_entry(&mut store, gateway, &quotes, &plan_id, true, &modes, &now).await)
 }
 
 /// `POST /nifty-options/close` (form `session_id`, `confirm`): **Close now** (MANUAL).
@@ -277,7 +282,9 @@ pub async fn close(
                     .await?
             }
         };
-        let gateway = execute::options_gateway_ready(&state, plan.sleeve).await;
+        let gateway = execute::options_gateway_ready(&state, plan.sleeve)
+            .await
+            .ok_or_else(execute::no_gateway)?;
         let quotes = KiteQuotes {
             kite: Arc::clone(&state.kite),
         };
@@ -290,7 +297,7 @@ pub async fn close(
             exit_id.as_deref(),
             "MANUAL",
             mode,
-            now,
+            &|| state.clock.now_ist(),
         )
         .await?;
         Ok(web::json(200, &outcome_json(&outcome)))

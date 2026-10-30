@@ -1,10 +1,21 @@
 {
-  "note": "Lane swing_exec ports app/swing_execute.py and app/swing_live_gate.py. Neither mounts a route: POST /swing/execute and /swing/rearm are app/swing_desk.py's (the swing desk lane) and call execute_line / rearm_gtt. The confirm path is graded by the 58 Rust tests in src/lanes/swing/swing_exec/tests.rs (ported from tests/test_swing_execute.py); these cases pin the refusals that reach the execute module before any broker read, and that no order or GTT call reaches the replay Kite. Postgres backend: 5 of 5 EQUAL with equal order/GTT call logs (30 Oct 2026); risk_ledger.updated_at is the server's now(), masked as R8.6 documents. Review (30 Oct 2026) added nine cases on the bed's real expired sw_plan lines: 410 with the EXPIRED side effect and its re-post, 404 across plans, 400 on 'True', 422s, and the clock edges. public.sw_plan_line.updated_at is set by both stores' SQL `updated_at = CURRENT_TIMESTAMP` (the server's clock, which the injected clock cannot reach), masked as <null>/<set> exactly like risk_ledger.updated_at (R8.6); every other column, including state EXPIRED, is graded.",
+  "note": "Lane swing_exec ports app/swing_execute.py and app/swing_live_gate.py. Neither mounts a route: POST /swing/execute and /swing/rearm are app/swing_desk.py's (the swing desk lane) and call execute_line / rearm_gtt. The confirm path is graded by the Rust tests in src/lanes/swing/swing_exec/tests.rs and tests/{py,track_c}.rs (every test of tests/test_swing_execute.py and tests/test_swing_track_c.py, by name); these cases pin the refusals that reach the execute module before any broker read, the success paths below, and that no order or GTT call reaches the replay Kite. Postgres backend: 5 of 5 EQUAL with equal order/GTT call logs (30 Oct 2026); risk_ledger.updated_at is the server's now(), masked as R8.6 documents. Review (30 Oct 2026) added nine cases on the bed's real expired sw_plan lines: 410 with the EXPIRED side effect and its re-post, 404 across plans, 400 on 'True', 422s, and the clock edges. public.sw_plan_line.updated_at is set by both stores' SQL `updated_at = CURRENT_TIMESTAMP` (the server's clock, which the injected clock cannot reach), masked as <null>/<set> exactly like risk_ledger.updated_at (R8.6); every other column, including state EXPIRED, is graded. Wave D2 (30 Oct 2026): desk_diff's \"sql\" key seeds a MORNING plan, three positions and a SENT live BUY on both clones, then drives every success path through the routes: a DRY_RUN BUY with its GTT, a 409 re-post, a PENDING_RANGE 400, a partial SELL (the integer GTT cancelled through the gateway, the remainder re-armed), a RAISE, a close-out SELL with r_multiple and pnl, /swing/reconcile, the 10:45 /swing/cutoff (the remainder cancelled through the gateway in DRY_RUN, the slot freed), and /swing/rearm on a naked, a covered and a closed position. The swing book builds no plan in the desk (the worker and the monitor do), so this lane adds no plans_*.json builder.",
   "db_mask": {
     "public.risk_ledger": [
       "updated_at"
     ],
     "public.sw_plan_line": [
+      "updated_at"
+    ],
+    "public.sw_position": [
+      "created_at",
+      "updated_at"
+    ],
+    "public.sw_fill": [
+      "created_at"
+    ],
+    "public.sw_session": [
+      "created_at",
       "updated_at"
     ]
   },
@@ -156,6 +167,146 @@
         "confirm": "yes"
       },
       "clock": "pre_open"
+    },
+    {
+      "name": "seeded morning (wave D2): the BUY confirm is a DRY_RUN fill with its GTT armed in the same call",
+      "method": "POST",
+      "path": "/swing/execute",
+      "form": {
+        "plan_id": "00000000-0000-4000-8000-00000000d201",
+        "line_id": "9201",
+        "confirm": "true"
+      },
+      "clock": "open",
+      "sql": [
+        "UPDATE public.sw_market_daily SET gate = 'GREEN', exposure_level = 3, max_open_positions = 10, max_exposure_pct = 100.00, new_entries_allowed = true WHERE user_id = 1 AND date = '2026-10-29'",
+        "INSERT INTO public.sw_setup_daily (user_id, date, instrument_id, setup, status, score, adr_pct, turnover_avg, created_at) VALUES (1, '2026-10-29', 78, 'FLAG', 'BREAKOUT_TODAY', 80.00, 5.00, 1000000000, '2026-10-30 09:00:00+05:30')",
+        "INSERT INTO public.sw_plan (id, plan_id, user_id, as_of, source, built_at, expires_at, plan_hash, gate, exposure_level, created_at) OVERRIDING SYSTEM VALUE VALUES (9001, '00000000-0000-4000-8000-00000000d201', 1, '2026-10-30', 'MORNING', '2026-10-30 09:10:00+05:30', '2026-10-30 09:40:00+05:30', 'rs-d2-seed', 'GREEN', 3, '2026-10-30 09:00:00+05:30')",
+        "INSERT INTO public.sw_position (id, user_id, broker_account_id, instrument_id, setup, entry_date, entry_avg, quantity_entered, initial_stop, stop, gtt_id, gtt_trigger, gtt_armed_at, trail, quantity_open, state, simulated, created_at, updated_at) OVERRIDING SYSTEM VALUE VALUES (9101, 1, 1, 242, 'FLAG', '2026-10-20', 1500.00, 300, 1440.00, 1440.00, '4242', 1440.00, '2026-10-20 09:20:00+05:30', 'MA20', 300, 'OPEN', true, '2026-10-30 09:00:00+05:30', '2026-10-30 09:00:00+05:30'), (9102, 1, 1, 251, 'FLAG', '2026-10-21', 1700.00, 100, 1650.00, 1650.00, NULL, NULL, NULL, 'MA20', 100, 'OPEN', true, '2026-10-30 09:00:00+05:30', '2026-10-30 09:00:00+05:30'), (9103, 1, 1, 524, 'EP', '2026-10-22', 600.00, 50, 580.00, 590.00, 'DRY-seed:ASIANPAINT:GTT', 590.00, '2026-10-22 09:20:00+05:30', 'MA10', 50, 'OPEN', true, '2026-10-30 09:00:00+05:30', '2026-10-30 09:00:00+05:30')",
+        "INSERT INTO public.sw_plan_line (id, plan_id, user_id, kind, instrument_id, setup, quantity, trigger, stop, risk_inr, position_value, trail, note, state, client_id, journal_ref, position_id, created_at, updated_at) OVERRIDING SYSTEM VALUE VALUES (9201, 9001, 1, 'BUY_ON_TRIGGER', 78, 'FLAG', 100, 357.00, 345.00, 1200.00, 35700.00, 'MA20', '', 'PROPOSED', '00000000-0000-4000-8000-00000000d201:ABB:BUY_ON_TRIGGER', NULL, NULL, '2026-10-30 09:00:00+05:30', '2026-10-30 09:00:00+05:30'), (9202, 9001, 1, 'SELL_AT_OPEN', 242, 'FLAG', 100, NULL, NULL, 0, 0, 'MA20', 'PARTIAL_INTO_STRENGTH', 'PROPOSED', '00000000-0000-4000-8000-00000000d201:ASTRAL:SELL_AT_OPEN', NULL, 9101, '2026-10-30 09:00:00+05:30', '2026-10-30 09:00:00+05:30'), (9203, 9001, 1, 'RAISE_GTT_STOP', 242, 'FLAG', 0, NULL, 1500.00, 0, 0, 'MA20', 'BREAKEVEN_AFTER_PARTIAL', 'PROPOSED', '00000000-0000-4000-8000-00000000d201:ASTRAL:RAISE_GTT_STOP', NULL, 9101, '2026-10-30 09:00:00+05:30', '2026-10-30 09:00:00+05:30'), (9204, 9001, 1, 'SELL_AT_OPEN', 524, 'EP', 50, NULL, NULL, 0, 0, 'MA10', 'CLOSE_BELOW_TRAIL_MA', 'PROPOSED', '00000000-0000-4000-8000-00000000d201:ASIANPAINT:SELL_AT_OPEN', NULL, 9103, '2026-10-30 09:00:00+05:30', '2026-10-30 09:00:00+05:30'), (9205, 9001, 1, 'PENDING_RANGE', 881, 'EP', 0, 750.00, NULL, 0, 0, NULL, 'EP score 46.20; live gap; slot reserved', 'PROPOSED', '00000000-0000-4000-8000-00000000d201:DEEPINDS:PENDING_RANGE', NULL, NULL, '2026-10-30 09:00:00+05:30', '2026-10-30 09:00:00+05:30'), (9206, 9001, 1, 'BUY_ON_TRIGGER', 135, 'FLAG', 40, 1080.00, 1050.00, 1200.00, 43200.00, 'MA20', '', 'SENT', '00000000-0000-4000-8000-00000000d201:AUBANK:BUY_ON_TRIGGER', 'REPLAY000077', NULL, '2026-10-30 09:00:00+05:30', '2026-10-30 09:00:00+05:30')"
+      ],
+      "note": "Seed: a MORNING plan built 09:10 today (expires 09:40), three positions (ASTRAL on integer GTT 4242, AXISBANK naked, ASIANPAINT on a DRY- GTT), a BUY, two SELLs, a RAISE, a PENDING_RANGE and a SENT live BUY; the 29 Oct market row turned GREEN rung 3 and an ABB detection row. Same rows on both clones; every write the desks then make is graded."
+    },
+    {
+      "name": "re-posting the filled BUY is 409 and sends nothing",
+      "method": "POST",
+      "path": "/swing/execute",
+      "form": {
+        "plan_id": "00000000-0000-4000-8000-00000000d201",
+        "line_id": "9201",
+        "confirm": "true"
+      },
+      "clock": "open"
+    },
+    {
+      "name": "the PENDING_RANGE line is refused 400 by the route before the execute module",
+      "method": "POST",
+      "path": "/swing/execute",
+      "form": {
+        "plan_id": "00000000-0000-4000-8000-00000000d201",
+        "line_id": "9205",
+        "confirm": "true"
+      },
+      "clock": "open"
+    },
+    {
+      "name": "the partial SELL is a DRY_RUN fill; the integer GTT 4242 is cancelled through the gateway and the remainder re-armed",
+      "method": "POST",
+      "path": "/swing/execute",
+      "form": {
+        "plan_id": "00000000-0000-4000-8000-00000000d201",
+        "line_id": "9202",
+        "confirm": "true"
+      },
+      "clock": "open"
+    },
+    {
+      "name": "the RAISE cancels the simulated GTT locally and arms the new stop for the open 200",
+      "method": "POST",
+      "path": "/swing/execute",
+      "form": {
+        "plan_id": "00000000-0000-4000-8000-00000000d201",
+        "line_id": "9203",
+        "confirm": "true"
+      },
+      "clock": "open"
+    },
+    {
+      "name": "the close-out SELL books exit_avg, r_multiple, pnl and CLOSE_BELOW_TRAIL_MA",
+      "method": "POST",
+      "path": "/swing/execute",
+      "form": {
+        "plan_id": "00000000-0000-4000-8000-00000000d201",
+        "line_id": "9204",
+        "confirm": "true"
+      },
+      "clock": "open"
+    },
+    {
+      "name": "reconcile at 10:00 asks the order book about the SENT live BUY (no session: OPEN, nothing filled)",
+      "method": "POST",
+      "path": "/swing/reconcile",
+      "form": {
+        "confirm": "true"
+      },
+      "clock": "2026-10-30T10:00:00+05:30"
+    },
+    {
+      "name": "the 10:45 cutoff cancels the SENT remainder through the gateway (dry) and frees the PENDING_RANGE slot",
+      "method": "POST",
+      "path": "/swing/cutoff",
+      "form": {
+        "confirm": "true"
+      },
+      "clock": "2026-10-30T10:45:00+05:30"
+    },
+    {
+      "name": "a second cutoff finds nothing left to cancel or free",
+      "method": "POST",
+      "path": "/swing/cutoff",
+      "form": {
+        "confirm": "true"
+      },
+      "clock": "2026-10-30T10:46:00+05:30"
+    },
+    {
+      "name": "the cutoff without confirm is 400",
+      "method": "POST",
+      "path": "/swing/cutoff",
+      "form": {
+        "confirm": "false"
+      },
+      "clock": "2026-10-30T10:46:00+05:30"
+    },
+    {
+      "name": "re-arming the naked AXISBANK position arms a DRY_RUN GTT for its 100",
+      "method": "POST",
+      "path": "/swing/rearm",
+      "form": {
+        "position_id": "9102",
+        "confirm": "true"
+      },
+      "clock": "mid"
+    },
+    {
+      "name": "re-arming it again is BLOCKED: a GTT is already resting",
+      "method": "POST",
+      "path": "/swing/rearm",
+      "form": {
+        "position_id": "9102",
+        "confirm": "true"
+      },
+      "clock": "mid"
+    },
+    {
+      "name": "re-arming the closed ASIANPAINT position is BLOCKED: nothing is open",
+      "method": "POST",
+      "path": "/swing/rearm",
+      "form": {
+        "position_id": "9103",
+        "confirm": "true"
+      },
+      "clock": "mid"
     }
   ]
 }

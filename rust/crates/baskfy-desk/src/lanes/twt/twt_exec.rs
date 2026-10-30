@@ -25,8 +25,22 @@
 pub use super::auto;
 pub use super::execute;
 
+pub mod auto_loop;
+
+#[cfg(test)]
+mod memory;
+
+#[cfg(test)]
+mod rig;
+
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod execute_tests;
+
+#[cfg(test)]
+mod auto_tests;
 
 #[cfg(test)]
 mod real_path_tests;

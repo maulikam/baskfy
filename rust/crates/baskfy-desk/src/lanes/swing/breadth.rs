@@ -67,11 +67,303 @@ fn class_of(e: &sqlx::Error) -> PipelineError {
     PipelineError(name.to_owned())
 }
 
-/// `psycopg.connect(...)` failing: psycopg raises `OperationalError` for every connection it
-/// cannot make, including one the server refused (a bad password, a missing database), so a
-/// connect error is never classed by its SQLSTATE.
+/// `psycopg.connect(...)` failing to connect: psycopg raises `OperationalError` for every
+/// connection it cannot make, including one the server refused (a bad password, a missing
+/// database) and an option value libpq rejects at connect time (`port=notaport`,
+/// `sslmode=bogus`), so a connect error is never classed by its SQLSTATE.
 fn connect_class(_e: &sqlx::Error) -> PipelineError {
     PipelineError("OperationalError".to_owned())
+}
+
+/// libpq's keywords (`PQconndefaults()` of the libpq psycopg ships, 18.0): a key/value pair or a
+/// URI query parameter naming anything else fails `PQconninfoParse`.
+pub const LIBPQ_KEYWORDS: [&str; 50] = [
+    "application_name",
+    "channel_binding",
+    "client_encoding",
+    "connect_timeout",
+    "dbname",
+    "fallback_application_name",
+    "gssdelegation",
+    "gssencmode",
+    "gsslib",
+    "host",
+    "hostaddr",
+    "keepalives",
+    "keepalives_count",
+    "keepalives_idle",
+    "keepalives_interval",
+    "krbsrvname",
+    "load_balance_hosts",
+    "max_protocol_version",
+    "min_protocol_version",
+    "oauth_client_id",
+    "oauth_client_secret",
+    "oauth_issuer",
+    "oauth_scope",
+    "options",
+    "passfile",
+    "password",
+    "port",
+    "replication",
+    "require_auth",
+    "requirepeer",
+    "scram_client_key",
+    "scram_server_key",
+    "service",
+    "ssl_max_protocol_version",
+    "ssl_min_protocol_version",
+    "sslcert",
+    "sslcertmode",
+    "sslcompression",
+    "sslcrl",
+    "sslcrldir",
+    "sslkey",
+    "sslkeylogfile",
+    "sslmode",
+    "sslnegotiation",
+    "sslpassword",
+    "sslrootcert",
+    "sslsni",
+    "target_session_attrs",
+    "tcp_user_timeout",
+    "user",
+];
+
+/// `PQconninfoParse` refused the string (psycopg's `ProgrammingError`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConninfoError;
+
+/// libpq's URI percent-decoding (`conninfo_uri_decode`): `%` must be followed by two hex digits,
+/// and `%00` is forbidden.
+fn uri_decode(text: &str) -> Result<String, ConninfoError> {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' {
+            let hex = |b: u8| char::from(b).to_digit(16);
+            let (Some(hi), Some(lo)) = (
+                bytes.get(i + 1).copied().and_then(hex),
+                bytes.get(i + 2).copied().and_then(hex),
+            ) else {
+                return Err(ConninfoError);
+            };
+            let byte = u8::try_from(hi * 16 + lo).map_err(|_| ConninfoError)?;
+            if byte == 0 {
+                return Err(ConninfoError);
+            }
+            out.push(byte);
+            i += 3;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8(out).map_err(|_| ConninfoError)
+}
+
+/// The connection parameters libpq parsed out of a conninfo string (keyword → value).
+pub type Conninfo = Vec<(String, String)>;
+
+/// `PQconninfoParse(dsn)`: the parameters, or `Err` where libpq refuses the string — which
+/// psycopg raises as `ProgrammingError` before any connection is tried (`missing "=" after …`,
+/// `invalid percent-encoded token`, `invalid URI query parameter`, `unterminated quoted string`,
+/// `invalid connection option`, an unclosed IPv6 bracket). Values are not validated here: libpq
+/// rejects a non-numeric port or an unknown sslmode only when it connects, which psycopg raises
+/// as `OperationalError`.
+///
+/// # Errors
+/// The string is not a conninfo libpq can parse.
+pub fn libpq_parse(dsn: &str) -> Result<Conninfo, ConninfoError> {
+    for prefix in ["postgresql://", "postgres://"] {
+        if let Some(rest) = dsn.strip_prefix(prefix) {
+            return libpq_parse_uri(rest);
+        }
+    }
+    libpq_parse_kv(dsn)
+}
+
+fn libpq_parse_uri(rest: &str) -> Result<Conninfo, ConninfoError> {
+    let mut out: Conninfo = Vec::new();
+    let (before_query, query) = match rest.split_once('?') {
+        Some((a, q)) => (a, Some(q)),
+        None => (rest, None),
+    };
+    let (authority, path) = match before_query.split_once('/') {
+        Some((a, p)) => (a, Some(p)),
+        None => (before_query, None),
+    };
+    let hosts = match authority.rsplit_once('@') {
+        Some((userinfo, hosts)) => {
+            let (user, password) = match userinfo.split_once(':') {
+                Some((u, p)) => (u, Some(p)),
+                None => (userinfo, None),
+            };
+            if !user.is_empty() {
+                out.push(("user".to_owned(), uri_decode(user)?));
+            }
+            if let Some(p) = password.filter(|p| !p.is_empty()) {
+                out.push(("password".to_owned(), uri_decode(p)?));
+            }
+            hosts
+        }
+        None => authority,
+    };
+    let mut host_list = Vec::new();
+    let mut port_list = Vec::new();
+    for spec in hosts.split(',') {
+        let (host, port) = if let Some(v6) = spec.strip_prefix('[') {
+            let (h, after) = v6.split_once(']').ok_or(ConninfoError)?;
+            (h, after.strip_prefix(':'))
+        } else {
+            match spec.split_once(':') {
+                Some((h, p)) => (h, Some(p)),
+                None => (spec, None),
+            }
+        };
+        host_list.push(uri_decode(host)?);
+        port_list.push(port.map(uri_decode).transpose()?.unwrap_or_default());
+    }
+    if host_list.iter().any(|h| !h.is_empty()) {
+        out.push(("host".to_owned(), host_list.join(",")));
+    }
+    if port_list.iter().any(|p| !p.is_empty()) {
+        out.push(("port".to_owned(), port_list.join(",")));
+    }
+    if let Some(db) = path.filter(|p| !p.is_empty()) {
+        out.push(("dbname".to_owned(), uri_decode(db)?));
+    }
+    if let Some(q) = query {
+        for param in q.split('&') {
+            let (key, value) = param.split_once('=').ok_or(ConninfoError)?;
+            if value.contains('=') {
+                return Err(ConninfoError);
+            }
+            let (key, value) = (uri_decode(key)?, uri_decode(value)?);
+            // libpq's one alias: `ssl=true` is `sslmode=require`.
+            let (key, value) = if key == "ssl" && value == "true" {
+                ("sslmode".to_owned(), "require".to_owned())
+            } else {
+                (key, value)
+            };
+            if !LIBPQ_KEYWORDS.contains(&key.as_str()) {
+                return Err(ConninfoError);
+            }
+            out.push((key, value));
+        }
+    }
+    Ok(out)
+}
+
+fn libpq_parse_kv(dsn: &str) -> Result<Conninfo, ConninfoError> {
+    let mut out: Conninfo = Vec::new();
+    let mut chars = dsn.chars().peekable();
+    loop {
+        while chars.peek().is_some_and(|c| c.is_whitespace()) {
+            chars.next();
+        }
+        if chars.peek().is_none() {
+            return Ok(out);
+        }
+        let mut key = String::new();
+        while let Some(&c) = chars.peek() {
+            if c == '=' || c.is_whitespace() {
+                break;
+            }
+            key.push(c);
+            chars.next();
+        }
+        while chars.peek().is_some_and(|c| c.is_whitespace()) {
+            chars.next();
+        }
+        if chars.next() != Some('=') {
+            return Err(ConninfoError);
+        }
+        while chars.peek().is_some_and(|c| c.is_whitespace()) {
+            chars.next();
+        }
+        let mut value = String::new();
+        if chars.peek() == Some(&'\'') {
+            chars.next();
+            loop {
+                match chars.next() {
+                    None => return Err(ConninfoError),
+                    Some('\\') => value.push(chars.next().ok_or(ConninfoError)?),
+                    Some('\'') => break,
+                    Some(c) => value.push(c),
+                }
+            }
+        } else {
+            while let Some(&c) = chars.peek() {
+                if c.is_whitespace() {
+                    break;
+                }
+                chars.next();
+                if c == '\\' {
+                    if let Some(n) = chars.next() {
+                        value.push(n);
+                    }
+                } else {
+                    value.push(c);
+                }
+            }
+        }
+        if !LIBPQ_KEYWORDS.contains(&key.as_str()) {
+            return Err(ConninfoError);
+        }
+        out.push((key, value));
+    }
+}
+
+/// The connect options for a conninfo libpq accepted. A URI goes to sqlx as written; a key/value
+/// string (which sqlx cannot read) is mapped keyword by keyword onto the options sqlx has. A
+/// value sqlx refuses is a connect-time failure, as libpq's own value checks are.
+fn connect_options(
+    dsn: &str,
+    parsed: &Conninfo,
+) -> Result<sqlx::postgres::PgConnectOptions, sqlx::Error> {
+    use std::str::FromStr as _;
+    if dsn.starts_with("postgresql://") || dsn.starts_with("postgres://") {
+        return sqlx::postgres::PgConnectOptions::from_str(dsn);
+    }
+    let mut o = sqlx::postgres::PgConnectOptions::new();
+    for (key, value) in parsed {
+        o = match key.as_str() {
+            "host" | "hostaddr" => o.host(value),
+            "port" => o.port(
+                value
+                    .parse::<u16>()
+                    .map_err(|e| sqlx::Error::Configuration(Box::new(e)))?,
+            ),
+            "dbname" => o.database(value),
+            "user" => o.username(value),
+            "password" => o.password(value),
+            "application_name" => o.application_name(value),
+            "options" => o.options([("options", value.as_str())]),
+            "sslmode" => o.ssl_mode(
+                sqlx::postgres::PgSslMode::from_str(value)
+                    .map_err(|e| sqlx::Error::Configuration(Box::new(e)))?,
+            ),
+            "sslrootcert" => o.ssl_root_cert(value.as_str()),
+            _ => o,
+        };
+    }
+    Ok(o)
+}
+
+/// `exc.__class__.__name__` for `psycopg.connect(dsn)` failing before a statement runs: a string
+/// libpq cannot parse is `ProgrammingError`; anything else that stops the connection is
+/// `OperationalError`.
+///
+/// # Errors
+/// The class name of the failure.
+pub async fn connect_like_psycopg(dsn: &str) -> Result<sqlx::PgConnection, PipelineError> {
+    use sqlx::ConnectOptions as _;
+    let parsed =
+        libpq_parse(dsn).map_err(|ConninfoError| PipelineError("ProgrammingError".to_owned()))?;
+    let options = connect_options(dsn, &parsed).map_err(|e| connect_class(&e))?;
+    options.connect().await.map_err(|e| connect_class(&e))
 }
 
 #[async_trait]
@@ -81,11 +373,8 @@ impl PipelineBreadth for PgPipeline {
         on: NaiveDate,
         slug: &str,
     ) -> Result<(Option<f64>, BTreeSet<String>), PipelineError> {
-        use sqlx::Connection;
         use sqlx::Row;
-        let mut conn = sqlx::PgConnection::connect(&self.dsn)
-            .await
-            .map_err(|e| connect_class(&e))?;
+        let mut conn = connect_like_psycopg(&self.dsn).await?;
         let row = sqlx::query(BREADTH_SQL)
             .bind(slug)
             .bind(on)
@@ -173,3 +462,6 @@ pub async fn breadth_for_plan(
     out.insert("reason", PyValue::Str(reason));
     out
 }
+
+#[cfg(test)]
+mod tests;

@@ -11,11 +11,17 @@
 //! tables, and the SQLite binder refuses the execute path's `Decimal`s (R8.2). Not copying a
 //! transaction nobody commits is the safer half.)
 //!
-//! **The lock locks nothing on Postgres either — in Python or here.** The desk's psycopg
-//! connection is `autocommit=True` (`analytics/pg.py`), so `SELECT … FOR UPDATE` releases its
-//! row lock when the statement ends; two tabs confirming together are not serialised, and the
-//! session cap (`04` §5.3/§9.4) is a read-then-write race in both desks. Reproduced here for
-//! parity; the fix belongs in Python first (wrap `execute_line` in `db.transaction`).
+//! **The lock is one transaction per confirm (R8.VB1, Python first).** The desk's connections
+//! are autocommit, so a bare `SELECT … FOR UPDATE` released its row lock when the statement
+//! ended and two tabs confirming together passed the session cap (`04` §5.3/§9.4) between them.
+//! Now the outermost `lock_session_for_update` opens `BEGIN`, takes the sleeve's per-user
+//! transaction lock (`pg_try_advisory_xact_lock(hashtext('vb_session:<user>'))` — the cap counts
+//! the IST day the orders were sent, while a confirm locks its *plan's* session row, so a MORNING
+//! and a LIVE line would otherwise lock different rows) and the row `FOR UPDATE NOWAIT`; a held
+//! lock is a 409 `SESSION_BUSY` before anything is read or sent; [`VbtStore::unlock_session`]
+//! commits on the way out, on an error too. On SQLite the lock is `BEGIN IMMEDIATE` … `COMMIT`,
+//! as Python's now is (the earlier deliberate difference — Python began a transaction nobody
+//! committed — is gone with the fix).
 
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, FixedOffset, NaiveDate, TimeZone, Utc};
@@ -74,7 +80,21 @@ pub enum StoreError {
     /// A row the code cannot read (Python's `KeyError`/`ValueError`/`TypeError`).
     #[error("{0}")]
     Bad(String),
+    /// `HTTPException(409, SESSION_BUSY)`: the session lock is held by another confirm
+    /// (`NOWAIT`, R8.VB1).
+    #[error("{SESSION_BUSY}")]
+    SessionBusy,
 }
+
+/// Postgres's SQLSTATE for `FOR UPDATE NOWAIT` finding the row held (`LOCK_NOT_AVAILABLE`).
+pub const LOCK_NOT_AVAILABLE: &str = "55P03";
+
+/// `SESSION_LOCK_KEY`: the text hashed into the sleeve's per-user transaction lock.
+pub const SESSION_LOCK_KEY: &str = "vb_session";
+
+/// `SESSION_BUSY`: what a confirm that finds the session lock held answers (409, R8.VB1).
+pub const SESSION_BUSY: &str = "SESSION_BUSY: another confirm of this session is in flight; \
+     nothing was sent \u{2014} confirm again";
 
 /// What the store calls return.
 pub type StoreResult<T> = Result<T, StoreError>;
@@ -170,8 +190,28 @@ pub trait VbtStore: Send {
     async fn line_by_client_id(&mut self, client_id: &str) -> StoreResult<Option<Rec>>;
     /// `bump_session(day, mode=..., confirms=..., fills=..., exits=...)`.
     async fn bump_session(&mut self, day: NaiveDate, bump: SessionBump) -> StoreResult<()>;
-    /// `lock_session_for_update(day)` (the context manager's entry; it has no exit action).
+    /// `lock_session_for_update(day)`: the context manager's entry. Its exit is
+    /// [`VbtStore::unlock_session`], which the confirm functions call once their body is done.
     async fn lock_session_for_update(&mut self, day: NaiveDate) -> StoreResult<()>;
+    /// The exit of the outermost `with store.lock_session_for_update(day):` block: `COMMIT` of
+    /// the transaction the lock opened, on success and on an error alike (R8.VB1). A store with
+    /// no transaction to close does nothing.
+    async fn unlock_session(&mut self) -> StoreResult<()> {
+        Ok(())
+    }
+    /// `order_for_signal(instrument_id, signal_date)`: the `vb_order` already written for this
+    /// name on this signal, in any state (`uq_vb_order_one_per_signal`, R8.VB2). A store that
+    /// does not implement it **refuses** (fail closed): an entry is never sent unasked.
+    async fn order_for_signal(
+        &mut self,
+        instrument_id: i64,
+        signal_date: NaiveDate,
+    ) -> StoreResult<Option<i64>> {
+        let _ = (instrument_id, signal_date);
+        Err(StoreError::Bad(
+            "order_for_signal is not implemented by this store".to_owned(),
+        ))
+    }
     /// `entries_taken(day)`: orders sent on the IST day (LV10.2).
     async fn entries_taken(&mut self, day: NaiveDate) -> StoreResult<i64>;
 }
@@ -481,6 +521,8 @@ pub struct PgVbtStore {
     pub schema: String,
     /// `broker_account_id`.
     pub broker_account_id: Option<i64>,
+    /// `_lock_depth > 0` with a transaction this store opened (R8.VB1).
+    lock_opened: bool,
 }
 
 impl std::fmt::Debug for PgVbtStore {
@@ -501,6 +543,38 @@ impl PgVbtStore {
             user_id,
             schema: schema.to_owned(),
             broker_account_id,
+            lock_opened: false,
+        }
+    }
+
+    /// Whether a `lock_session_for_update` transaction is open on this store.
+    #[must_use]
+    pub const fn session_locked(&self) -> bool {
+        self.lock_opened
+    }
+
+    /// The Postgres half of `lock_session_for_update` inside the transaction: the sleeve's
+    /// per-user lock, then the day's row, both without waiting.
+    async fn take_locks(&mut self, params: &[Param]) -> StoreResult<()> {
+        let key = [Param::Text(format!("{SESSION_LOCK_KEY}:{}", self.user_id))];
+        let got = self
+            .one("SELECT pg_try_advisory_xact_lock(hashtext(?)) AS got", &key)
+            .await?;
+        if !got.as_ref().is_some_and(|r| db_bool(col(r, "got"))) {
+            return Err(StoreError::SessionBusy);
+        }
+        let sql = format!(
+            "SELECT 1 FROM {} WHERE user_id = ? AND session_date = ? FOR UPDATE NOWAIT",
+            self.t("vb_session")
+        );
+        match self.conn.execute(&sql, params).await {
+            Ok(_) => Ok(()),
+            Err(StorageError::Driver(sqlx::Error::Database(db)))
+                if db.code().as_deref() == Some(LOCK_NOT_AVAILABLE) =>
+            {
+                Err(StoreError::SessionBusy)
+            }
+            Err(e) => Err(e.into()),
         }
     }
 
@@ -1185,13 +1259,70 @@ impl VbtStore for PgVbtStore {
         let params = [Param::Int(self.user_id), Param::Date(day)];
         self.conn.execute(&sql, &params).await?;
         if !self.schema.is_empty() {
-            let sql = format!(
-                "SELECT 1 FROM {} WHERE user_id = ? AND session_date = ? FOR UPDATE",
-                self.t("vb_session")
-            );
-            self.conn.execute(&sql, &params).await?;
+            // R8.VB1: the outermost block opens the transaction the locks are held by, and a
+            // held lock is refused (409) rather than waited on.
+            let opened = !self.lock_opened;
+            if opened {
+                self.conn.execute("BEGIN", &[]).await?;
+            }
+            match self.take_locks(&params).await {
+                Ok(()) => {
+                    if opened {
+                        self.lock_opened = true;
+                    }
+                }
+                Err(e) => {
+                    if opened {
+                        self.conn.execute("ROLLBACK", &[]).await?;
+                    }
+                    return Err(e);
+                }
+            }
+        } else {
+            // `elif _in_transaction(self.conn) is False: BEGIN IMMEDIATE`. sqlite refuses a
+            // second BEGIN on a connection that already holds one (a nested block, or a
+            // transaction the caller opened), and Python skips the statement in exactly that
+            // case — so that one refusal is the skip, nothing else is. Only the block that
+            // opened the transaction closes it (R8.VB1).
+            match self.conn.execute("BEGIN IMMEDIATE", &[]).await {
+                Ok(_) => self.lock_opened = true,
+                Err(StorageError::Driver(sqlx::Error::Database(db)))
+                    if db.message().contains("within a transaction") => {}
+                Err(e) => return Err(e.into()),
+            }
         }
         Ok(())
+    }
+
+    async fn unlock_session(&mut self) -> StoreResult<()> {
+        if self.lock_opened {
+            self.lock_opened = false;
+            self.conn.execute("COMMIT", &[]).await?;
+        }
+        Ok(())
+    }
+
+    async fn order_for_signal(
+        &mut self,
+        instrument_id: i64,
+        signal_date: NaiveDate,
+    ) -> StoreResult<Option<i64>> {
+        let sql = format!(
+            "SELECT id FROM {} WHERE user_id = ? AND signal_date = ? \
+             AND instrument_id = ? ORDER BY id LIMIT 1",
+            self.t("vb_order")
+        );
+        let row = self
+            .one(
+                &sql,
+                &[
+                    Param::Int(self.user_id),
+                    Param::Date(signal_date),
+                    Param::Int(instrument_id),
+                ],
+            )
+            .await?;
+        Ok(row.map(|r| db_int(col(&r, "id"))))
     }
 
     async fn entries_taken(&mut self, day: NaiveDate) -> StoreResult<i64> {

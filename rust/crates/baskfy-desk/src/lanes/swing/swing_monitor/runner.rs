@@ -5,12 +5,18 @@
 //! notice to the daily focus, SW25's auto-execute queue ([`drain_auto_execute`]: drained every
 //! pass, **sent only when all three flags say so**), the quote fallback's cap
 //! ([`QuoteFallback`]), the late-login wait ([`wait_for_session`]), the chores at their own
-//! hours inside the watch ([`Chores`]) and the `monitor_ran` mark.
+//! hours inside the watch ([`Chores`]), the gated heartbeat ([`GatedHeartbeat`]) and the
+//! `monitor_ran` mark.
 //!
 //! **No order path lives here.** The store records lines; the strategy raises signals; the
 //! only thing that can confirm a line is [`drain_auto_execute`] handing it to an
 //! [`AutoConfirm`] — which the desk wires to the same `execute_line` a click reaches, gateway
-//! and guards included — and only when `auto_execute_enabled()` is true.
+//! and guards included (`service.rs`) — and only when `auto_execute_enabled()` is true.
+//!
+//! Ticks are Python's dicts ([`PyDict`]) up to the strategy's door, read there by [`tick_of`]
+//! exactly as `SwingBreakout.on_tick` reads them (`int(token or 0)`, `Decimal(str(price))`,
+//! `_tick_time`), so a polled quote and a pushed tick cannot be told apart and a malformed one
+//! fails where Python's fails.
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -33,14 +39,14 @@ use crate::lanes::swing::context::{
 use crate::lanes::swing::live_gate::LiveLevel;
 use crate::lanes::swing::notify::{Notifier, SignalNotice, notice_json};
 use crate::lanes::swing::rules::{
-    PLAN_TTL_MINUTES, SwingPlan, assemble, dec_of_float, gate_str, kind_str, py_dec, skip_str,
+    PLAN_TTL_MINUTES, SwingPlan, assemble, dec, dec_of_float, gate_str, kind_str, py_dec, skip_str,
     trail_str,
 };
 use crate::lanes::swing::store::SCHEMA;
 use crate::lanes::swing::values::{col, int, raw_dec, text};
 use crate::settings::Settings;
 use crate::storage::{Conn, DbValue, Param, StorageError};
-use crate::wire::PyValue;
+use crate::wire::{PyDict, PyValue};
 use baskfy_providers::records::PyDateTime;
 
 /// `SESSION_WAIT_UNTIL` (LV4): a login after 15:20 is tomorrow's.
@@ -52,72 +58,99 @@ pub fn session_wait_until() -> NaiveTime {
 /// `SESSION_POLL_SECONDS`.
 pub const SESSION_POLL_SECONDS: f64 = 30.0;
 
+/// `TypeError: 'NoneType' object is not subscriptable` — what Python raises when a
+/// `RETURNING id` row is missing and the code indexes it.
+const NONE_SUBSCRIPT: &str = "TypeError: 'NoneType' object is not subscriptable";
+
+fn table(schema: &str, name: &str) -> String {
+    if schema.is_empty() {
+        name.to_owned()
+    } else {
+        format!("{schema}.{name}")
+    }
+}
+
+/// `float(row[col])` for the driver's value. A string Python cannot read is its `ValueError`.
+fn float_col(r: &crate::storage::Row, name: &str) -> Result<f64, String> {
+    match col(r, name) {
+        Some(DbValue::Float(x)) => Ok(*x),
+        #[allow(clippy::cast_precision_loss)]
+        Some(DbValue::Int(i)) => Ok(*i as f64),
+        Some(DbValue::Bool(b)) => Ok(if *b { 1.0 } else { 0.0 }),
+        Some(DbValue::Text(s)) => crate::settings::py_float(s)
+            .ok_or_else(|| format!("ValueError: could not convert string to float: '{s}'")),
+        Some(DbValue::Null) | None => Err(
+            "TypeError: float() argument must be a string or a real number, not 'NoneType'"
+                .to_owned(),
+        ),
+        Some(other) => Err(format!("TypeError: float() argument: {other:?}")),
+    }
+}
+
 /// `load_config`: `SwingConfig::default()` with the person's three liquidity floors and three
 /// sizing knobs.
 ///
 /// # Errors
-/// The driver's.
+/// The driver's, or a column Python's `float()`/`int()` refuses.
 pub async fn load_config(
     conn: &mut Conn,
     user_id: i64,
     schema: &str,
-) -> Result<SwingConfig, StorageError> {
-    let table = if schema.is_empty() {
-        "sw_config".to_owned()
-    } else {
-        format!("{schema}.sw_config")
-    };
+) -> Result<SwingConfig, String> {
     let row = conn
         .execute(
             &format!(
                 "SELECT adr_min_pct, turnover_min_inr, price_min, risk_per_trade_pct, \
-                 max_position_pct, max_open_positions FROM {table} WHERE user_id = ?"
+                 max_position_pct, max_open_positions FROM {} WHERE user_id = ?",
+                table(schema, "sw_config")
             ),
             &[Param::Int(user_id)],
         )
-        .await?
+        .await
+        .map_err(|e| e.to_string())?
         .rows
         .into_iter()
         .next();
     let mut config = SwingConfig::default();
     let Some(r) = row else { return Ok(config) };
-    let f = |name: &str| match col(&r, name) {
-        Some(DbValue::Float(x)) => *x,
-        #[allow(clippy::cast_precision_loss)]
-        Some(DbValue::Int(i)) => *i as f64,
-        Some(DbValue::Text(s)) => s.trim().parse().unwrap_or(0.0),
-        _ => 0.0,
-    };
     config.liquidity = baskfy_core::swing::setups::LiquidityConfig::default();
-    config.liquidity.adr_min_pct = f("adr_min_pct");
-    config.liquidity.turnover_min_inr = f("turnover_min_inr");
-    config.liquidity.price_min = f("price_min");
+    config.liquidity.adr_min_pct = float_col(&r, "adr_min_pct")?;
+    config.liquidity.turnover_min_inr = float_col(&r, "turnover_min_inr")?;
+    config.liquidity.price_min = float_col(&r, "price_min")?;
     config.sizing = baskfy_core::swing::sizing::SizingConfig::default();
-    config.sizing.risk_per_trade_pct = f("risk_per_trade_pct");
-    config.sizing.max_position_pct = f("max_position_pct");
+    config.sizing.risk_per_trade_pct = float_col(&r, "risk_per_trade_pct")?;
+    config.sizing.max_position_pct = float_col(&r, "max_position_pct")?;
     config.sizing.max_open_positions = int(col(&r, "max_open_positions"));
     Ok(config)
 }
 
-fn setup_of(value: &str) -> Option<Setup> {
+/// `Setup(value)`: Python's enum lookup, which raises for anything it does not name.
+///
+/// # Errors
+/// `ValueError: '<x>' is not a valid Setup`.
+pub fn setup_of(value: &str) -> Result<Setup, String> {
     match value {
-        "FLAG" => Some(Setup::Flag),
-        "EP" => Some(Setup::Ep),
-        "PARABOLIC_SHORT" => Some(Setup::ParabolicShort),
-        _ => None,
+        "FLAG" => Ok(Setup::Flag),
+        "EP" => Ok(Setup::Ep),
+        "PARABOLIC_SHORT" => Ok(Setup::ParabolicShort),
+        other => Err(format!(
+            "ValueError: {} is not a valid Setup",
+            baskfy_providers::py::repr_str(other)
+        )),
     }
 }
 
 /// `load_watchlist`: every `WATCHING` row with a Kite token. A FLAG's pivot is its trigger; an
-/// EP's is the gap itself. A name with no token is skipped with a warning.
+/// EP's is the gap itself. A name with no token is skipped with a warning; a setup that is not
+/// FLAG or EP is skipped silently; a setup Python's enum does not know raises, as Python's does.
 ///
 /// # Errors
-/// The driver's.
+/// The driver's, or an unknown setup.
 pub async fn load_watchlist(
     conn: &mut Conn,
     user_id: i64,
     circuits: &BTreeMap<String, Decimal>,
-) -> Result<Vec<WatchedName>, StorageError> {
+) -> Result<Vec<WatchedName>, String> {
     let rows = conn
         .execute(
             &format!(
@@ -127,7 +160,8 @@ pub async fn load_watchlist(
             ),
             &[Param::Int(user_id)],
         )
-        .await?
+        .await
+        .map_err(|e| e.to_string())?
         .rows;
     let mut names = Vec::new();
     for r in rows {
@@ -138,9 +172,7 @@ pub async fn load_watchlist(
             );
             continue;
         };
-        let Some(setup) = setup_of(&text(col(&r, "setup"))) else {
-            continue;
-        };
+        let setup = setup_of(&text(col(&r, "setup")))?;
         if setup != Setup::Flag && setup != Setup::Ep {
             continue;
         }
@@ -204,7 +236,9 @@ pub struct PgSignalStore {
     pub now: Arc<dyn Fn() -> DateTime<FixedOffset> + Send + Sync>,
 }
 
-fn uuid_text(bytes: [u8; 16]) -> String {
+/// `str(uuid.UUID(bytes=...))`.
+#[must_use]
+pub fn uuid_text(bytes: [u8; 16]) -> String {
     let h: String = bytes.iter().map(|b| format!("{b:02x}")).collect();
     format!(
         "{}-{}-{}-{}-{}",
@@ -214,6 +248,39 @@ fn uuid_text(bytes: [u8; 16]) -> String {
         &h[16..20],
         &h[20..32]
     )
+}
+
+/// `log_gate_change` (SW30): one line when the session's gate moves, naming the averages that
+/// moved it.
+#[must_use]
+pub fn gate_change_line(
+    before: baskfy_core::swing::market::MarketGate,
+    c: &SignalContext,
+) -> String {
+    match &c.live {
+        None => format!(
+            "INFO swing_monitor gate {} -> {} (the last close's)",
+            gate_str(before),
+            gate_str(c.gate)
+        ),
+        Some(live) => format!(
+            "INFO swing_monitor gate {} -> {} on the live {}: {}, 10-day {} {} 20-day {}; rung {}, \
+             entries {}",
+            gate_str(before),
+            gate_str(c.gate),
+            live.index_slug,
+            baskfy_providers::py::fixed(live.reading.close, 2),
+            baskfy_providers::py::fixed(live.reading.ma_fast, 2),
+            if live.reading.long_bias() { ">" } else { "<=" },
+            baskfy_providers::py::fixed(live.reading.ma_slow, 2),
+            c.tier.level,
+            if c.tier.new_entries_allowed {
+                "allowed"
+            } else {
+                "refused"
+            }
+        ),
+    }
 }
 
 impl PgSignalStore {
@@ -246,12 +313,7 @@ impl PgSignalStore {
         if let Some(b) = before
             && b != context.gate
         {
-            log_line!(
-                "INFO swing_monitor gate {} -> {} · {}",
-                gate_str(b),
-                gate_str(context.gate),
-                gate_line(&context)
-            );
+            log_line!("{}", gate_change_line(b, &context));
         }
         self.context = Some(context.clone());
         Ok(context)
@@ -292,6 +354,7 @@ impl PgSignalStore {
         Ok(i64::try_from(rows.len()).unwrap_or(0))
     }
 
+    #[allow(clippy::too_many_lines)]
     async fn plan_for(
         &mut self,
         signal: &Signal,
@@ -358,7 +421,12 @@ impl PgSignalStore {
             )
             .await
             .map_err(|e| e.to_string())?;
-        let plan_pk = plan_row.rows.first().map_or(0, |r| int(col(r, "id")));
+        // `int(plan_row["id"])`: a missing row is Python's TypeError, never a plan pk of 0.
+        let plan_pk = plan_row
+            .rows
+            .first()
+            .map(|r| int(col(r, "id")))
+            .ok_or_else(|| NONE_SUBSCRIPT.to_owned())?;
         for skip in &plan.skipped {
             self.conn
                 .execute(
@@ -413,7 +481,34 @@ impl PgSignalStore {
                 )
                 .await
                 .map_err(|e| e.to_string())?;
-            line_id = row.rows.first().map(|r| int(col(r, "id")));
+            line_id = Some(
+                row.rows
+                    .first()
+                    .map(|r| int(col(r, "id")))
+                    .ok_or_else(|| NONE_SUBSCRIPT.to_owned())?,
+            );
+        }
+        if let Some(first) = plan.lines.first() {
+            log_line!(
+                "INFO swing_monitor SIGNAL plan {plan_id}: BUY {} x{} @ {} stop {} (expires {})",
+                signal.watch.symbol,
+                first.quantity,
+                first.trigger.map_or_else(|| "None".to_owned(), py_dec),
+                first.stop.map_or_else(|| "None".to_owned(), py_dec),
+                expires_at.format("%H:%M:%S")
+            );
+        } else {
+            log_line!(
+                "INFO swing_monitor SIGNAL plan {plan_id}: {} triggered but skipped — {}",
+                signal.watch.symbol,
+                plan.skipped
+                    .iter()
+                    .map(|s| format!("{} {}", skip_str(s.reason), s.detail)
+                        .trim()
+                        .to_owned())
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            );
         }
         Ok(Planned {
             line_id,
@@ -423,7 +518,12 @@ impl PgSignalStore {
         })
     }
 
-    fn notify(&mut self, signal: &Signal, raised_at: DateTime<FixedOffset>, planned: &Planned) {
+    async fn notify(
+        &mut self,
+        signal: &Signal,
+        raised_at: DateTime<FixedOffset>,
+        planned: &Planned,
+    ) {
         if !signal.watch.focus {
             return;
         }
@@ -467,7 +567,7 @@ impl PgSignalStore {
         self.notices.push(notice.clone());
         log_line!("INFO swing_monitor swing notice {}", notice_json(&notice));
         if let Some(n) = &mut self.notifier {
-            n.notify(&notice);
+            n.notify(&notice).await;
         }
     }
 }
@@ -514,6 +614,10 @@ impl SignalStore for PgSignalStore {
             .await
             .map_err(|e| e.to_string())?;
         let signal_id = row.rows.first().map(|r| int(col(r, "id")));
+        crate::lanes::session::telemetry::count(
+            "swing_signals",
+            &[("state", trigger_state_str(verdict.state))],
+        );
         if verdict.state != TriggerState::Triggered
             || verdict.entry.is_none()
             || verdict.stop.is_none()
@@ -535,22 +639,31 @@ impl SignalStore for PgSignalStore {
             self.pending_confirms
                 .push((signal.clone(), planned.clone()));
         }
-        self.notify(signal, raised, &planned);
+        self.notify(signal, raised, &planned).await;
         Ok(())
     }
+}
+
+/// What a confirm answered: `ExecOutcome.status` and its `reason`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Confirmed {
+    /// `outcome.status`.
+    pub status: String,
+    /// `outcome.reason` (empty for none).
+    pub reason: String,
 }
 
 /// What confirms a line for auto-execute: the desk wires this to `execute_line` with the swing
 /// gateway, the price the tick carried and `confirm="true"` — exactly what a click reaches.
 #[async_trait]
 pub trait AutoConfirm: Send + Sync {
-    /// Confirm one line; the outcome's status, or the error's words.
+    /// Confirm one line; the outcome, or the error as `"<PythonType>: <words>"`.
     async fn confirm(
         &self,
         plan_id: &str,
         line_id: i64,
         last_price: Decimal,
-    ) -> Result<String, String>;
+    ) -> Result<Confirmed, String>;
 }
 
 /// `drain_auto_execute` (SW25): confirm every line the store just wrote **only when all three
@@ -572,11 +685,27 @@ pub async fn drain_auto_execute(
             continue;
         };
         match executor.confirm(plan_id, line_id, signal.last_price).await {
-            Ok(status) => {
-                log_line!("WARNING swing_monitor AUTO-EXECUTE {symbol}: {status}");
-                done.push((symbol, status));
+            Ok(outcome) => {
+                crate::lanes::session::telemetry::count(
+                    "swing_auto_execute",
+                    &[("outcome", &outcome.status)],
+                );
+                log_line!(
+                    "WARNING swing_monitor AUTO-EXECUTE {symbol}: {}{}",
+                    outcome.status,
+                    if outcome.reason.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" — {}", outcome.reason)
+                    }
+                );
+                done.push((symbol, outcome.status));
             }
             Err(e) => {
+                crate::lanes::session::telemetry::count(
+                    "swing_auto_execute",
+                    &[("outcome", "error")],
+                );
                 log_line!(
                     "ERROR swing_monitor AUTO-EXECUTE {symbol}: {e} — the line is written and can \
                      be confirmed by hand"
@@ -588,7 +717,8 @@ pub async fn drain_auto_execute(
     done
 }
 
-/// `build_monitor`: the strategy, or `None` with the flag off — nothing constructed.
+/// `build_monitor`: the strategy, or `None` with the flag off — nothing constructed. It takes
+/// no gateway at all: a process that holds no gateway cannot be talked into using one.
 ///
 /// # Errors
 /// An unknown window.
@@ -600,10 +730,124 @@ pub fn build_monitor(
     window_minutes: Option<i64>,
 ) -> Result<Option<SwingBreakout>, crate::lanes::swing::rules::RuleError> {
     if !enabled {
+        log_line!(
+            "INFO swing_monitor BASKFY_SWING_MONITOR_ENABLED is false; the opening-range monitor \
+             is not built"
+        );
         return Ok(None);
     }
     SwingBreakout::new(watchlist, day, window_minutes, config).map(Some)
 }
+
+// =============================================================================================
+// Python's readings of a tick dict
+// =============================================================================================
+
+/// `int(value)` for a Python value: an int as is, a float truncated, a bool as 0/1, a string as
+/// Python parses it. Anything else is Python's `ValueError`/`TypeError`.
+///
+/// # Errors
+/// What Python's `int()` raises.
+pub fn py_int_value(value: &PyValue) -> Result<i64, String> {
+    match value {
+        PyValue::Int(i) => Ok(*i),
+        PyValue::Bool(b) => Ok(i64::from(*b)),
+        PyValue::Float(f) if f.is_finite() =>
+        {
+            #[allow(clippy::cast_possible_truncation)]
+            Ok(f.trunc() as i64)
+        }
+        PyValue::Float(f) if f.is_nan() => {
+            Err("ValueError: cannot convert float NaN to integer".to_owned())
+        }
+        PyValue::Float(_) => {
+            Err("OverflowError: cannot convert float infinity to integer".to_owned())
+        }
+        PyValue::Str(s) => crate::settings::py_int(s).ok_or_else(|| {
+            format!(
+                "ValueError: invalid literal for int() with base 10: {}",
+                baskfy_providers::py::repr_str(s)
+            )
+        }),
+        other => Err(format!(
+            "TypeError: int() argument must be a string, a bytes-like object or a real number, \
+             not '{}'",
+            other.type_name()
+        )),
+    }
+}
+
+/// `_decimal(value)`: `Decimal(str(value))`, `None` for `None` or what `Decimal` refuses.
+/// (A NaN or an infinity, which `Decimal` accepts and the strategy's comparisons would then
+/// raise on, is `None` here — DECISIONS-RS R8.SM4.)
+#[must_use]
+pub fn py_decimal_value(value: Option<&PyValue>) -> Option<Decimal> {
+    match value? {
+        PyValue::None | PyValue::Bool(_) => None,
+        PyValue::Int(i) => Some(Decimal::from(*i)),
+        PyValue::Float(f) if f.is_finite() => Some(dec_of_float(*f)),
+        PyValue::Str(s) => dec(s.trim()),
+        _ => None,
+    }
+}
+
+/// `datetime.fromisoformat(text)` as the strategy reads a string stamp, with the zone dropped
+/// (`.replace(tzinfo=None)`).
+#[must_use]
+pub fn fromisoformat_naive(text: &str) -> Option<NaiveDateTime> {
+    crate::lanes::twt::common::py_fromisoformat_naive(text)
+}
+
+/// `_tick_time(tick, day)`: the first of `exchange_timestamp`, `last_trade_time`, `timestamp`
+/// that is a datetime (its zone dropped) or an ISO string; else `wall` (Python's
+/// `datetime.combine(day, datetime.now().time())` — the caller hands today's wall clock).
+#[must_use]
+pub fn tick_time(tick: &PyDict, wall: NaiveDateTime) -> NaiveDateTime {
+    for key in ["exchange_timestamp", "last_trade_time", "timestamp"] {
+        match tick.get(key) {
+            Some(PyValue::DateTime(PyDateTime::Naive(t))) => return *t,
+            Some(PyValue::DateTime(PyDateTime::Aware(t))) => return t.naive_local(),
+            Some(PyValue::Str(s)) => {
+                if let Some(t) = fromisoformat_naive(s) {
+                    return t;
+                }
+            }
+            _ => {}
+        }
+    }
+    wall
+}
+
+/// The tick dict as `SwingBreakout.on_tick` reads it: `int(tick.get("instrument_token") or 0)`,
+/// `_decimal(last_price)`, `_decimal((ohlc or {}).get("low"))`, `_tick_time`.
+///
+/// # Errors
+/// A token Python's `int()` refuses.
+pub fn tick_of(tick: &PyDict, wall: NaiveDateTime) -> Result<Tick, String> {
+    let none = PyValue::None;
+    let zero = PyValue::Int(0);
+    let token = py_int_value(tick.get("instrument_token").unwrap_or(&none).or(&zero))?;
+    let low = match tick.get("ohlc").unwrap_or(&none) {
+        PyValue::Map(o) => py_decimal_value(o.get("low")),
+        other if other.truthy() => {
+            return Err(format!(
+                "AttributeError: '{}' object has no attribute 'get'",
+                other.type_name()
+            ));
+        }
+        _ => None,
+    };
+    Ok(Tick {
+        instrument_token: token,
+        last_price: py_decimal_value(tick.get("last_price")),
+        day_low: low,
+        at: tick_time(tick, wall),
+    })
+}
+
+// =============================================================================================
+// B10: the quote fallback
+// =============================================================================================
 
 /// The Kite read `QuoteFallback` makes (`Kite.quote_raw`).
 #[async_trait]
@@ -615,8 +859,8 @@ pub trait QuoteReader: Send + Sync {
 /// `QuoteFallback` (B10): Kite `/quote` for the watchlist, at most once every `min_interval`
 /// seconds — the cap is the object's, not the loop's.
 pub struct QuoteFallback {
-    /// token → symbol.
-    pub symbols_by_token: BTreeMap<i64, String>,
+    /// token → symbol, in insertion order (`dict`).
+    pub symbols_by_token: Vec<(i64, String)>,
     /// The cap, seconds.
     pub min_interval: f64,
     last_call: Option<f64>,
@@ -624,43 +868,45 @@ pub struct QuoteFallback {
     pub calls: i64,
 }
 
-fn num(v: Option<&PyValue>) -> Option<Decimal> {
-    match v {
-        Some(PyValue::Float(f)) => Some(dec_of_float(*f)),
-        Some(PyValue::Int(i)) => Some(Decimal::from(*i)),
-        _ => None,
-    }
-}
-
-/// `_tick_time`'s reading of a polled stamp: a datetime as naive exchange-local, an ISO string
-/// parsed, else `None` (the caller falls through).
-fn stamp_of(v: Option<&PyValue>) -> Option<NaiveDateTime> {
-    match v {
-        Some(PyValue::DateTime(PyDateTime::Naive(t))) => Some(*t),
-        Some(PyValue::DateTime(PyDateTime::Aware(t))) => Some(t.naive_local()),
-        Some(PyValue::Str(s)) => NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S")
-            .or_else(|_| NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S"))
-            .ok()
-            .or_else(|| {
-                DateTime::parse_from_rfc3339(s)
-                    .ok()
-                    .map(|t| t.naive_local())
-            }),
-        _ => None,
-    }
-}
-
 impl QuoteFallback {
     /// Over the watched names, capped at `min_interval` (default `quote_poll_min_seconds`).
     #[must_use]
     pub fn new(symbols_by_token: BTreeMap<i64, String>, min_interval: Option<f64>) -> Self {
+        Self::ordered(symbols_by_token.into_iter().collect(), min_interval)
+    }
+
+    /// As [`QuoteFallback::new`] with the dict's insertion order given.
+    #[must_use]
+    pub fn ordered(symbols_by_token: Vec<(i64, String)>, min_interval: Option<f64>) -> Self {
+        let mut deduped: Vec<(i64, String)> = Vec::new();
+        for (t, s) in symbols_by_token {
+            if let Some(slot) = deduped.iter_mut().find(|(k, _)| *k == t) {
+                slot.1 = s;
+            } else {
+                deduped.push((t, s));
+            }
+        }
         Self {
-            symbols_by_token,
+            symbols_by_token: deduped,
             min_interval: min_interval
                 .unwrap_or(SwingConfig::default().opening_range.quote_poll_min_seconds),
             last_call: None,
             calls: 0,
         }
+    }
+
+    /// `symbols_by_token[token] = symbol`.
+    pub fn insert(&mut self, token: i64, symbol: String) {
+        if let Some(slot) = self.symbols_by_token.iter_mut().find(|(t, _)| *t == token) {
+            slot.1 = symbol;
+        } else {
+            self.symbols_by_token.push((token, symbol));
+        }
+    }
+
+    /// `symbols_by_token.pop(token, None)`.
+    pub fn remove(&mut self, token: i64) {
+        self.symbols_by_token.retain(|(t, _)| *t != token);
     }
 
     /// `due()`.
@@ -670,70 +916,86 @@ impl QuoteFallback {
             .is_none_or(|last| monotonic - last >= self.min_interval)
     }
 
-    /// `poll(now)`: the watchlist's quotes as ticks the strategy cannot tell from pushed ones,
-    /// or `None` when a call is not yet allowed. A failed chunk is a missed poll, not a halt.
+    /// `poll(now)`: the watchlist's quotes as ticks in the ticker's own shape
+    /// (`instrument_token`, `last_price`, `ohlc`, `exchange_timestamp`), or `None` when a call is
+    /// not yet allowed. A failed chunk is a missed poll, not a halt.
+    ///
+    /// # Errors
+    /// A row whose `instrument_token` Python's `int()` refuses (it raises out of `poll`).
     pub async fn poll(
         &mut self,
         reader: &dyn QuoteReader,
         now: NaiveDateTime,
         monotonic: f64,
-    ) -> Option<Vec<Tick>> {
+    ) -> Result<Option<Vec<PyDict>>, String> {
         if !self.due(monotonic) || self.symbols_by_token.is_empty() {
-            return None;
+            return Ok(None);
         }
         self.last_call = Some(monotonic);
         self.calls += 1;
         let mut ticks = Vec::new();
-        let tokens: Vec<i64> = self.symbols_by_token.keys().copied().collect();
-        for chunk in tokens.chunks(500) {
-            let keys: Vec<String> = chunk
-                .iter()
-                .filter_map(|t| self.symbols_by_token.get(t))
-                .map(|s| format!("NSE:{s}"))
-                .collect();
-            let data = match reader.quote_raw(&keys).await {
-                Ok(PyValue::Map(data)) => data,
-                Ok(_) => continue,
+        let keys: Vec<String> = self
+            .symbols_by_token
+            .iter()
+            .map(|(_, s)| format!("NSE:{s}"))
+            .collect();
+        for chunk in keys.chunks(500) {
+            let data = match reader.quote_raw(chunk).await {
+                Ok(data) => data,
                 Err(e) => {
                     log_line!("WARNING swing_monitor quote fallback failed: {e}");
+                    crate::lanes::session::telemetry::count(
+                        "swing_quote_polls",
+                        &[("outcome", "failed")],
+                    );
                     continue;
                 }
             };
+            crate::lanes::session::telemetry::count("swing_quote_polls", &[("outcome", "ok")]);
+            let PyValue::Map(data) = data else {
+                // `data.values()` on anything but a dict is Python's AttributeError.
+                return Err(format!(
+                    "AttributeError: '{}' object has no attribute 'values'",
+                    data.type_name()
+                ));
+            };
+            let none = PyValue::None;
             for (_, row) in data.iter() {
                 let PyValue::Map(row) = row else {
+                    return Err(format!(
+                        "AttributeError: '{}' object has no attribute 'get'",
+                        row.type_name()
+                    ));
+                };
+                let token = row.get("instrument_token").unwrap_or(&none);
+                let price = row.get("last_price").unwrap_or(&none);
+                if matches!(token, PyValue::None) || matches!(price, PyValue::None) {
                     continue;
-                };
-                let Some(token) = (match row.get("instrument_token") {
-                    Some(PyValue::Int(t)) => Some(*t),
-                    _ => None,
-                }) else {
-                    continue;
-                };
-                let Some(price) = num(row.get("last_price")) else {
-                    continue;
-                };
-                let low = match row.get("ohlc") {
-                    Some(PyValue::Map(o)) => num(o.get("low")),
-                    _ => None,
-                };
-                let at = stamp_of(row.get("timestamp"))
-                    .or_else(|| stamp_of(row.get("last_trade_time")))
-                    .unwrap_or(now);
-                ticks.push(Tick {
-                    instrument_token: token,
-                    last_price: Some(price),
-                    day_low: low,
-                    at,
-                });
+                }
+                let token = py_int_value(token)?;
+                let empty = PyValue::Map(PyDict::default());
+                let now_value = PyValue::DateTime(PyDateTime::Naive(now));
+                let stamp = row
+                    .get("timestamp")
+                    .unwrap_or(&none)
+                    .or(row.get("last_trade_time").unwrap_or(&none))
+                    .or(&now_value)
+                    .clone();
+                let mut tick = PyDict::default();
+                tick.insert("instrument_token", PyValue::Int(token));
+                tick.insert("last_price", price.clone());
+                tick.insert("ohlc", row.get("ohlc").unwrap_or(&none).or(&empty).clone());
+                tick.insert("exchange_timestamp", stamp);
+                ticks.push(tick);
             }
         }
-        Some(ticks)
+        Ok(Some(ticks))
     }
 }
 
 /// `wait_for_session` (LV4): poll for a Kite session until `until` (IST); true the moment one
-/// exists.
-pub async fn wait_for_session<A, N, S, F>(
+/// exists. A check that fails is "not yet".
+pub async fn wait_for_session<A, FA, N, S, F>(
     mut authed: A,
     mut now: N,
     mut sleep: S,
@@ -741,19 +1003,26 @@ pub async fn wait_for_session<A, N, S, F>(
     poll_seconds: f64,
 ) -> bool
 where
-    A: FnMut() -> Result<bool, String>,
+    A: FnMut() -> FA,
+    FA: std::future::Future<Output = Result<bool, String>>,
     N: FnMut() -> DateTime<FixedOffset>,
     S: FnMut(f64) -> F,
     F: std::future::Future<Output = ()>,
 {
     loop {
-        if matches!(authed(), Ok(true)) {
-            return true;
+        match authed().await {
+            Ok(true) => return true,
+            Ok(false) => {}
+            Err(e) => log_line!("WARNING swing_monitor Kite session check failed: {e}"),
         }
         let moment = now().with_timezone(&ist());
         if moment.time() >= until {
             return false;
         }
+        log_line!(
+            "INFO swing_monitor no Kite session yet; the monitor waits (until {} IST)",
+            until.format("%H:%M:%S")
+        );
         sleep(poll_seconds).await;
     }
 }
@@ -851,17 +1120,29 @@ pub async fn write_heartbeat(
     Ok(())
 }
 
-/// `monitor_metrics_port`: `DESK_MONITOR_METRICS_PORT`, else `METRICS_PORT + 1`, else none.
-#[must_use]
-pub fn monitor_metrics_port(own: Option<&str>, metrics_port: i64) -> Option<i64> {
+/// `monitor_metrics_port`: `DESK_MONITOR_METRICS_PORT` (stripped), else `METRICS_PORT + 1`,
+/// else none (metrics off).
+///
+/// # Errors
+/// Python's `ValueError` for a value `int()` refuses — `main` dies before anything else runs.
+pub fn monitor_metrics_port(own: Option<&str>, metrics_port: &str) -> Result<Option<i64>, String> {
+    let invalid = |v: &str| {
+        format!(
+            "ValueError: invalid literal for int() with base 10: {}",
+            baskfy_providers::py::repr_str(v)
+        )
+    };
     if let Some(v) = own.map(str::trim).filter(|v| !v.is_empty()) {
-        return v.parse().ok();
+        return crate::settings::py_int(v)
+            .map(Some)
+            .ok_or_else(|| invalid(v));
     }
-    if metrics_port != 0 {
-        Some(metrics_port + 1)
-    } else {
-        None
+    if metrics_port.is_empty() {
+        return Ok(None);
     }
+    crate::settings::py_int(metrics_port)
+        .map(|p| Some(p + 1))
+        .ok_or_else(|| invalid(metrics_port))
 }
 
 /// `Decimal(str(x))` for a polled price.
@@ -870,27 +1151,54 @@ pub fn tick_price(x: f64) -> Decimal {
     dec_of_float(x)
 }
 
-/// The store as the loop sees it: a [`SignalStore`] that may hold SW25's queue. A store with
-/// no queue (the replay harness's) answers empty, and the monitor still watches the tape.
+/// The store as the loop sees it: a [`SignalStore`] that may hold SW25's queue and SW30's
+/// gate. A store with neither (the replay harness's) answers empty, and the monitor still
+/// watches the tape.
+#[async_trait]
 pub trait MonitorStore: SignalStore {
     /// Take every `(signal, planned)` the store recorded for auto-execute since the last pass.
     fn take_pending(&mut self) -> Vec<(Signal, Planned)> {
         Vec::new()
     }
+
+    /// `store.read_context()` — SW30's gate re-read for the heartbeat.
+    ///
+    /// # Errors
+    /// The store's.
+    async fn reread_gate(&mut self) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// `gate_line(store.context)`, when the store holds a context.
+    fn gate_clause(&self) -> Option<String> {
+        None
+    }
 }
 
+#[async_trait]
 impl MonitorStore for PgSignalStore {
     fn take_pending(&mut self) -> Vec<(Signal, Planned)> {
         std::mem::take(&mut self.pending_confirms)
     }
+
+    async fn reread_gate(&mut self) -> Result<(), String> {
+        self.read_context()
+            .await
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+
+    fn gate_clause(&self) -> Option<String> {
+        self.context.as_ref().map(gate_line)
+    }
 }
 
-/// The ticker's bus as the loop reads it: one queue per subscribed token.
+/// The ticker's bus as the loop reads it: one queue per subscribed token, Python's dicts.
 pub trait TickBus: Send {
     /// `bus.subscribe(token)`.
     fn subscribe(&mut self, token: i64);
     /// Everything queued for `token` now (`while not q.empty(): q.get_nowait()`).
-    fn drain(&mut self, token: i64) -> Vec<Tick>;
+    fn drain(&mut self, token: i64) -> Vec<PyDict>;
 }
 
 /// The loop's seams (`run_until_close`'s keyword collaborators): the clocks, the sleep, the
@@ -932,9 +1240,13 @@ pub trait WatchHooks: Send {
     fn has_heartbeat(&self) -> bool {
         false
     }
-    /// `heartbeat(detail)`.
-    async fn heartbeat(&mut self, detail: &str) -> Result<(), String> {
-        let _ = detail;
+    /// `heartbeat(detail)`; the store is handed in so SW30's gated beat can re-read its gate.
+    async fn heartbeat(
+        &mut self,
+        store: &mut dyn MonitorStore,
+        detail: &str,
+    ) -> Result<(), String> {
+        let _ = (store, detail);
         Ok(())
     }
 }
@@ -975,6 +1287,10 @@ pub struct Quotes<'a> {
 /// the chores at their hours ([`Chores`]); the heartbeat; the reload when due; then, if
 /// nothing arrived and the ticker has been quiet for `quote_poll_min_seconds`, the B10 fallback
 /// (itself capped), and the sleep.
+///
+/// # Errors
+/// What Python's loop lets escape: a tick whose token `int()` refuses (pushed or polled), or a
+/// quote answer that is not a dict of dicts.
 #[allow(clippy::too_many_arguments)]
 pub async fn run_until_close(
     strategy: &mut SwingBreakout,
@@ -986,12 +1302,45 @@ pub async fn run_until_close(
     settings: &Settings,
     executor: &dyn AutoConfirm,
     timings: LoopTimings,
-) -> usize {
+) -> Result<usize, String> {
     let mut chores = Chores::default();
     let mut queues: Vec<i64> = strategy.tokens();
     for token in &queues {
         bus.subscribe(*token);
     }
+    crate::lanes::session::telemetry::gauge("swing_monitor_up", 1.0, &[]);
+    let result = watch(
+        strategy,
+        store,
+        candles,
+        bus,
+        hooks,
+        &mut quotes,
+        settings,
+        executor,
+        timings,
+        &mut chores,
+        &mut queues,
+    )
+    .await;
+    crate::lanes::session::telemetry::gauge("swing_monitor_up", 0.0, &[]);
+    result
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn watch(
+    strategy: &mut SwingBreakout,
+    store: &mut dyn MonitorStore,
+    candles: &dyn CandleSource,
+    bus: &mut dyn TickBus,
+    hooks: &mut dyn WatchHooks,
+    quotes: &mut Option<Quotes<'_>>,
+    settings: &Settings,
+    executor: &dyn AutoConfirm,
+    timings: LoopTimings,
+    chores: &mut Chores,
+    queues: &mut Vec<i64>,
+) -> Result<usize, String> {
     let quiet_for = SwingConfig::default().opening_range.quote_poll_min_seconds;
     let mut last_tick_at = hooks.monotonic();
     let mut last_reload_at = hooks.monotonic();
@@ -1009,7 +1358,16 @@ pub async fn run_until_close(
         let mut drained = false;
         for token in queues.clone() {
             for tick in bus.drain(token) {
-                handle(strategy, store, candles, hooks, &tick, &mut first_tick_seen).await;
+                handle(
+                    strategy,
+                    store,
+                    candles,
+                    hooks,
+                    &tick,
+                    moment,
+                    &mut first_tick_seen,
+                )
+                .await?;
                 drained = true;
             }
         }
@@ -1033,14 +1391,14 @@ pub async fn run_until_close(
                 strategy.signals.len(),
                 moment.format("%H:%M:%S")
             );
-            if let Err(e) = hooks.heartbeat(&detail).await {
+            if let Err(e) = hooks.heartbeat(store, &detail).await {
                 log_line!("ERROR swing_monitor could not write the monitor heartbeat: {e}");
             }
         }
         if hooks.has_reload() && hooks.monotonic() - last_reload_at >= timings.reload_every_seconds
         {
             last_reload_at = hooks.monotonic();
-            reload_watchlist(strategy, bus, hooks, &mut queues, quotes.as_mut()).await;
+            reload_watchlist(strategy, bus, hooks, queues, quotes.as_mut()).await;
         }
         if drained {
             last_tick_at = hooks.monotonic();
@@ -1050,16 +1408,25 @@ pub async fn run_until_close(
             && hooks.monotonic() - last_tick_at >= quiet_for
         {
             let mono = hooks.monotonic();
-            let polled = q.fallback.poll(q.reader, moment, mono).await;
+            let polled = q.fallback.poll(q.reader, moment, mono).await?;
             for tick in polled.unwrap_or_default() {
-                handle(strategy, store, candles, hooks, &tick, &mut first_tick_seen).await;
+                handle(
+                    strategy,
+                    store,
+                    candles,
+                    hooks,
+                    &tick,
+                    moment,
+                    &mut first_tick_seen,
+                )
+                .await?;
             }
             let mut pending = store.take_pending();
             drain_auto_execute(&mut pending, settings, executor).await;
         }
         hooks.sleep(timings.poll_seconds).await;
     }
-    strategy.signals.len()
+    Ok(strategy.signals.len())
 }
 
 async fn handle(
@@ -1067,16 +1434,19 @@ async fn handle(
     store: &mut dyn MonitorStore,
     candles: &dyn CandleSource,
     hooks: &mut dyn WatchHooks,
-    tick: &Tick,
+    tick: &PyDict,
+    wall: NaiveDateTime,
     first_tick_seen: &mut bool,
-) {
-    strategy.on_tick(tick, store, candles).await;
+) -> Result<(), String> {
+    let read = tick_of(tick, wall)?;
+    strategy.on_tick(&read, store, candles).await;
     if !*first_tick_seen {
         *first_tick_seen = true;
         if let Err(e) = hooks.on_first_tick().await {
             log_line!("ERROR swing_monitor could not record the monitor's start: {e}");
         }
     }
+    Ok(())
 }
 
 /// `_reload_watchlist` (LV4): diff the list against what is watched; add, subscribe, drop,
@@ -1111,10 +1481,10 @@ async fn reload_watchlist(
         .filter(|(t, _)| !strategy.watchlist.contains_key(t))
         .map(|(_, w)| w.clone())
         .collect();
+    // `list(strategy.watchlist)`: the dict's insertion order, which `tokens()` keeps.
     let gone: Vec<i64> = strategy
-        .watchlist
-        .keys()
-        .copied()
+        .tokens()
+        .into_iter()
         .filter(|t| !by_token.iter().any(|(f, _)| f == t))
         .collect();
     for w in &added {
@@ -1124,9 +1494,7 @@ async fn reload_watchlist(
                 queues.push(w.token);
             }
             if let Some(q) = quotes.as_deref_mut() {
-                q.fallback
-                    .symbols_by_token
-                    .insert(w.token, w.symbol.clone());
+                q.fallback.insert(w.token, w.symbol.clone());
             }
         }
     }
@@ -1134,7 +1502,7 @@ async fn reload_watchlist(
         if strategy.drop_watch(*token) {
             queues.retain(|t| t != token);
             if let Some(q) = quotes.as_deref_mut() {
-                q.fallback.symbols_by_token.remove(token);
+                q.fallback.remove(*token);
             }
         }
     }
@@ -1194,25 +1562,27 @@ impl GatedHeartbeat {
         }
     }
 
-    /// The beat's text; re-reads the store's context first when due.
+    /// The beat's text, `"{detail} · {gate_line(store.context)}"`; re-reads the store's
+    /// context first when due.
     ///
     /// # Errors
-    /// The store's re-read.
+    /// The store's re-read (Python's `wrapped` raises it into `_beat`, which logs it and writes
+    /// no beat).
     pub async fn line(
         &mut self,
-        store: &mut PgSignalStore,
+        store: &mut dyn MonitorStore,
         detail: &str,
         monotonic: f64,
-    ) -> Result<String, StorageError> {
+    ) -> Result<String, String> {
         if self
             .last
             .is_none_or(|at| monotonic - at >= self.every_seconds)
         {
             self.last = Some(monotonic);
-            store.read_context().await?;
+            store.reread_gate().await?;
         }
-        Ok(match &store.context {
-            Some(c) => format!("{detail} · {}", gate_line(c)),
+        Ok(match store.gate_clause() {
+            Some(clause) => format!("{detail} · {clause}"),
             None => detail.to_owned(),
         })
     }

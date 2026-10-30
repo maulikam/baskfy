@@ -1,4 +1,72 @@
 {
-  "note": "Lane weekly_books (DECISIONS-RS R8.5): snapshot, holdings_view, tax_lots, tradebook, reconcile, reconcile_view. These modules register no route of their own: /performance and /tradebook* are lane analytics', /reconcile* needs analytics/protection.py (unported) beside reconcile_view, so no desk_diff.py scenario can grade them yet and this file holds no cases. Their parity gate is tools/parity/weekly_books_goldens.py -> rust/crates/baskfy-desk/fixtures/weekly_books/goldens.json (20 cases, Python's answers), reproduced byte for byte by `cargo test -p baskfy-desk weekly_books::parity`. Add the /reconcile and /reconcile/data cases here when the lane that owns protection.review registers those routes.",
-  "cases": []
+ "note": "Lane weekly_books (DECISIONS-RS R8.5, R8.13, R8.WB1-WB3): snapshot, holdings_view, tax_lots, tradebook, reconcile, reconcile_view. The modules' own parity gate stays tools/parity/weekly_books_goldens.py -> rust/crates/baskfy-desk/fixtures/weekly_books/goldens.json (41 cases: Python's answers, byte for byte, `cargo test -p baskfy-desk weekly_books::parity`), plus tests/weekly_books_reconcile.rs (test_reconcile.py whole, over the sleeves' real handlers and gateways). These cases grade the routes that render the lane's books over the replay Kite's default fixture: /reconcile and /reconcile/data (main.py:796/823 — reconcile_view.build over the broker's orders, GTTs and holdings, before and after a plan exists) and /performance (main.py:1124, whose `h` block is holdings_view over Kite.holdings). The routes are registered by the lanes that own them (wave D2: lane session ports /reconcile*, lane analytics_views /performance*); until they land these cases are DIFF (404 in Rust), recorded, not masked.",
+ "cases": [
+  {
+   "name": "reconcile page before any plan exists",
+   "method": "GET",
+   "path": "/reconcile",
+   "clock": "mid"
+  },
+  {
+   "name": "reconcile data before any plan exists",
+   "method": "GET",
+   "path": "/reconcile/data",
+   "clock": "mid"
+  },
+  {
+   "name": "analyze the sample scan so a plan exists",
+   "method": "POST",
+   "path": "/analyze",
+   "clock": "mid",
+   "files": {
+    "scan": {
+     "path": "/Volumes/T7-Work/Dev/projects/baskfy/kite-momentum-rebalancer/data/uploads/sample_scan.csv",
+     "filename": "sample_scan.csv"
+    }
+   },
+   "plan": true,
+   "capture": {
+    "plan_id": "json:/plan_id"
+   }
+  },
+  {
+   "name": "reconcile data against the latest plan",
+   "method": "GET",
+   "path": "/reconcile/data",
+   "clock": "mid"
+  },
+  {
+   "name": "reconcile data for that plan by id",
+   "method": "GET",
+   "path": "/reconcile/data",
+   "query": {
+    "plan_id": "${plan_id}"
+   },
+   "clock": "mid"
+  },
+  {
+   "name": "reconcile page for that plan by id",
+   "method": "GET",
+   "path": "/reconcile",
+   "query": {
+    "plan_id": "${plan_id}"
+   },
+   "clock": "mid"
+  },
+  {
+   "name": "reconcile data for a plan id the store has never seen",
+   "method": "GET",
+   "path": "/reconcile/data",
+   "query": {
+    "plan_id": "no-such-plan"
+   },
+   "clock": "mid"
+  },
+  {
+   "name": "performance page: the holdings block over Kite.holdings",
+   "method": "GET",
+   "path": "/performance",
+   "clock": "after_close"
+  }
+ ]
 }

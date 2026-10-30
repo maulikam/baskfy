@@ -6,7 +6,9 @@
 //!
 //! Pure (law 1): no I/O, no clock. Kept beside the desk lane rather than in `baskfy-core`
 //! because this wave's lanes may not edit another crate's modules (DECISIONS-RS R8.5); moving
-//! them under `baskfy_core::options` is a mechanical follow-up (R8.F1).
+//! them under `baskfy_core::options` is a mechanical follow-up (R8.F1). What the monitor needs
+//! (`structures`, `bars`, `exits` and the exit halves of `directional`/`expiry_setups`) was
+//! ported into `baskfy_core::options` in wave D2 (R8.20.2).
 
 use std::collections::BTreeMap;
 
@@ -132,60 +134,9 @@ pub const fn mode_str(mode: Mode) -> &'static str {
     }
 }
 
-/// `baskfy_core.options.structures.Structure`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Structure {
-    /// `IRON_CONDOR`.
-    IronCondor,
-    /// `LONG_OPTION`.
-    LongOption,
-    /// `DEBIT_SPREAD`.
-    DebitSpread,
-}
-
-impl Structure {
-    /// `Structure(text)`.
-    #[must_use]
-    pub fn parse(text: &str) -> Option<Self> {
-        match text {
-            "IRON_CONDOR" => Some(Self::IronCondor),
-            "LONG_OPTION" => Some(Self::LongOption),
-            "DEBIT_SPREAD" => Some(Self::DebitSpread),
-            _ => None,
-        }
-    }
-
-    /// `.value`.
-    #[must_use]
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::IronCondor => "IRON_CONDOR",
-            Self::LongOption => "LONG_OPTION",
-            Self::DebitSpread => "DEBIT_SPREAD",
-        }
-    }
-}
-
-/// `baskfy_core.options.structures.Direction`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Direction {
-    /// `UP`.
-    Up,
-    /// `DOWN`.
-    Down,
-}
-
-impl Direction {
-    /// `Direction(text)`.
-    #[must_use]
-    pub fn parse(text: &str) -> Option<Self> {
-        match text {
-            "UP" => Some(Self::Up),
-            "DOWN" => Some(Self::Down),
-            _ => None,
-        }
-    }
-}
+/// `baskfy_core.options.structures.Structure` and `Direction` — now ported in `baskfy-core`
+/// (wave D2), re-exported here so the lane's paths stay.
+pub use baskfy_core::options::structures::{Direction, Structure};
 
 /// `OptionsConfig().hard_exit_time(sleeve)`: O1 14:30, O2 15:00, O3 14:45 (`04` §3.2, §4.5,
 /// §5.3).

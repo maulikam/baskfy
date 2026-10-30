@@ -1,5 +1,5 @@
 {
- "note": "Adversarial review of lane vbt, scenario 2 of 2: the LIVE plan 63's three BUY_AT_MARKET lines (Fri 16 Oct 19:45 IST, before its 19:46:42 expiry) each a dry-run MARKET buy valued at the plan's preview (the route reads no last price for a buy), a simulated fill, a position and its GTT stop; then the session cap (a fourth entry the same IST day from EVENING plan 64 is SESSION_CAP, checked before ALREADY_HELD); 409 on a repeat; the page and data with the book. Plans 63 and 65 share signal_date 2026-10-16, so the two next-day re-entries hit vb_order's one-per-signal unique index after gateway.place returned: both desks 500 with the line left PROPOSED (reported as a Python-first defect, not fixed here).",
+ "note": "Adversarial review of lane vbt, scenario 2 of 2: the LIVE plan 63's three BUY_AT_MARKET lines (Fri 16 Oct 19:45 IST, before its 19:46:42 expiry) each a dry-run MARKET buy valued at the plan's preview (the route reads no last price for a buy), a simulated fill, a position and its GTT stop; then the session cap (a fourth entry the same IST day from EVENING plan 64 is SESSION_CAP, checked before ALREADY_HELD); 409 on a repeat; the page and data with the book. Plans 63 and 65 share signal_date 2026-10-16, so the two next-day re-entries are the same signal in the same names: since R8.VB2 (Python first, then Rust) both desks refuse them ALREADY_SENT before the gateway (the line REJECTED, no order, no GTT). Before it, gateway.place ran and then uq_vb_order_one_per_signal 500'd the request with an order at the broker and no vb_order row.",
  "db_mask": {
   "public.risk_ledger": [
    "updated_at"
@@ -82,7 +82,7 @@
    }
   },
   {
-   "name": "next IST day, OAL again (pyramiding allows a 2nd entry): Python 500s on uq_vb_order_one_per_signal AFTER the gateway accepted the order (pre-existing Python defect, reproduced)",
+   "name": "next IST day, OAL again on plan 65 (same 16 Oct signal as plan 63's entry): ALREADY_SENT before the gateway (R8.VB2)",
    "method": "POST",
    "path": "/vbt/execute",
    "form": {
@@ -93,7 +93,7 @@
    "clock": "2026-10-19T09:20:00+05:30"
   },
   {
-   "name": "next IST day, TECHM again: the same 500 after the send",
+   "name": "next IST day, TECHM again: the same ALREADY_SENT, nothing sent",
    "method": "POST",
    "path": "/vbt/execute",
    "form": {

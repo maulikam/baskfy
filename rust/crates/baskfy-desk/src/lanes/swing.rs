@@ -54,9 +54,13 @@ use axum::Router;
 
 use crate::app::AppState;
 
-/// The lane's routes: the swing desk's seven (`app.swing_desk.router`, lane swing_desk).
+/// The lane's routes: the swing desk's seven (`app.swing_desk.router`, lane swing_desk), and
+/// lane swing_monitor's harness-only `/__harness/swing-signal` (Starlette's 404 without
+/// `--harness`).
 pub fn routes() -> Router<AppState> {
-    Router::new().merge(desk::routes())
+    Router::new()
+        .merge(desk::routes())
+        .merge(swing_monitor::harness::routes())
 }
 
 /// The lane's template globals and filters (e.g. the fno lane's `fno_badge`).
@@ -66,11 +70,11 @@ pub fn register_templates(templates: &mut crate::templates::Templates) {
 
 /// Run one of the lane's background services by name; `None` if the name is not this lane's.
 pub async fn run_service(name: &str, state: &AppState) -> Option<Result<(), String>> {
-    let _ = state;
     match name {
-        "swing-monitor" => Some(Err(format!(
-            "service {name} is not ported yet (lane swing)"
-        ))),
+        // `python -m app.swing_monitor` (lane swing_monitor): exits 0 with the flag off; SW25's
+        // auto-execute sends only with all three flags on (each defaults false).
+        // Boxed: the watch's future is deep, and the binary's `main` lays out every service's.
+        "swing-monitor" => Some(Box::pin(swing_monitor::service::run(state)).await),
         _ => None,
     }
 }

@@ -1,17 +1,13 @@
-//! `tests/test_twt_auto.py::TestTheRealPathStillRefuses`, the part SQLite can carry: the runner's
-//! switch on, the sleeve's gates **dry**, the real `execute_line` over the real store (SQLite,
-//! the same SQL the desk runs on Postgres with the schema prefix `""`) and the real
-//! `OrderGateway` over a replay Kite that answers nothing. Python forces `auto_execute_enabled`
-//! true by monkeypatch while `twt_gates().dry_run` stays true; here the runner's settings say all
-//! three flags and the confirm is handed the dry settings (`execute` is the seam Python's
-//! `execute=` is), and the gateway's own gates are fixed dry.
+//! `tests/test_twt_auto.py::TestTheRealPathStillRefuses` a second time, over the **real SQL
+//! store** (`PgTwtStore` on SQLite, the same SQL the desk runs on Postgres with the schema prefix
+//! `""`) where Python's runs over `AutoStore`: the runner's switch on, the sleeve's gates **dry**,
+//! the real `execute_line` and the real `OrderGateway` over a replay Kite that answers nothing.
+//! The in-memory twin is `auto_tests.rs`; this one proves the same four promises survive the SQL
+//! (the cap counted by `created_at`, the line states, the GTT columns, the client ids).
 //!
-//! **Why only the halt.** The other four (the three-entries cap refusing the fourth, a re-run
-//! sending nothing, every buy's stop in the same request, `client_id = plan_id:symbol`) write
-//! `Decimal`s, which the Rust SQLite binder refuses by design (R8.2) — Python's own test runs them
-//! on an in-memory store. They are graded instead on Postgres by `tools/parity/desk_cases/
-//! twt_exec.json` (the SESSION_CAP cases on plans 22 and 25, the 409 re-confirm, the positions'
-//! `DRY-` GTT ids and the journal's client ids, all EQUAL to Python).
+//! Python's own SQLite tests register `sqlite3.register_adapter(Decimal, str)`; here that is
+//! `storage::register_sqlite_decimal_adapter` (R8.TD3) — test-only, process-wide, one-way. The
+//! desk itself keeps sqlite3's refusal (R8.2).
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -138,6 +134,7 @@ impl Rig {
 
 /// `_four_buys()`: ₹25 lakh, one MORNING plan built today, four `BUY_AT_OPEN` lines.
 async fn four_buys() -> Rig {
+    crate::storage::register_sqlite_decimal_adapter();
     let dir = tempfile::tempdir().unwrap();
     let mut conn = Db::connect_sqlite_path(&dir.path().join("twt.db"))
         .await
@@ -300,4 +297,71 @@ async fn a_halted_sleeve_sends_nothing() {
     assert!(report.reason.contains(&rig.plan_id), "{report:?}");
     assert_eq!(rig.scalar("SELECT COUNT(*) AS n FROM tw_order").await, 0);
     assert!(rig.kite.write_calls().is_empty());
+}
+
+#[tokio::test]
+async fn the_per_session_cap_still_refuses_a_fourth_entry() {
+    let rig = four_buys().await;
+    let report = run(&rig).await;
+    let statuses: Vec<&str> = report
+        .attempts
+        .iter()
+        .map(|(_, _, s)| s.as_str())
+        .collect();
+    assert_eq!(statuses, ["SIMULATED", "SIMULATED", "SIMULATED", "BLOCKED"], "{report:?}");
+    let mut store = rig.store().await;
+    assert!(store.line(4).await.unwrap().unwrap().s("note").starts_with("SESSION_CAP"));
+    // LV10.2: counted by the day the orders were sent — this morning, not the signal's date
+    assert_eq!(store.entries_taken(open().date_naive()).await.unwrap(), 3);
+    assert!(rig.kite.write_calls().is_empty());
+}
+
+#[tokio::test]
+async fn re_running_does_not_double_send() {
+    let rig = four_buys().await;
+    run(&rig).await;
+    let orders = rig.scalar("SELECT COUNT(*) AS n FROM tw_order").await;
+    let fills = rig.scalar("SELECT COUNT(*) AS n FROM tw_fill").await;
+    let again = run(&rig).await;
+    assert!(again.attempts.is_empty(), "{again:?}");
+    assert_eq!(rig.scalar("SELECT COUNT(*) AS n FROM tw_order").await, orders);
+    assert_eq!(rig.scalar("SELECT COUNT(*) AS n FROM tw_fill").await, fills);
+    assert_eq!((orders, fills), (3, 3));
+    assert!(rig.kite.write_calls().is_empty());
+}
+
+#[tokio::test]
+async fn every_buy_gets_its_stop_in_the_same_request() {
+    let rig = four_buys().await;
+    run(&rig).await;
+    let mut store = rig.store().await;
+    let positions = store.open_positions().await.unwrap();
+    assert_eq!(positions.len(), 3);
+    assert!(
+        positions.iter().all(|p| !p.is_none("gtt_id")),
+        "a buy was left without a stop"
+    );
+    assert!(positions.iter().all(|p| p.s("gtt_id").starts_with(x::SIMULATED_GTT_PREFIX)));
+}
+
+#[tokio::test]
+async fn every_order_carries_plan_id_colon_symbol() {
+    let rig = four_buys().await;
+    run(&rig).await;
+    let mut store = rig.store().await;
+    let cur = store
+        .conn
+        .execute("SELECT client_id FROM tw_order ORDER BY id", &[])
+        .await
+        .unwrap();
+    let ids: Vec<String> = cur
+        .rows
+        .iter()
+        .map(|r| crate::lanes::twt::common::db_text(r.get("client_id").unwrap()))
+        .collect();
+    let want: Vec<String> = ["AAA", "BBB", "CCC"]
+        .iter()
+        .map(|s| format!("{}:{s}", rig.plan_id))
+        .collect();
+    assert_eq!(ids, want);
 }

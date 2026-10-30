@@ -3,14 +3,16 @@
 //! plan-against-broker view and the LV2 reconciler.
 //!
 //! **Python it ports** (`kite-momentum-rebalancer/app/`):
-//! * `analytics/snapshot.py` → [`snapshot`] (the collection; persisting needs `analytics/db.py`'s
-//!   `save_snapshot`/`rechain_index`, which lane `analytics` owns and has not ported — loud)
+//! * `analytics/snapshot.py` → [`snapshot`] (collection, `run`, the CLI) over [`snapshot_db`]
+//!   (`db.py`'s snapshot and cashflow half, kept here until lane `analytics` ports `db.py`,
+//!   DECISIONS-RS R8.WB3)
 //! * `analytics/holdings_view.py` → [`holdings_view`]
 //! * `analytics/tax_lots.py` → [`tax_lots`]
 //! * `analytics/tradebook.py` → [`tradebook`] (with the two `corporate_actions` reads it calls:
 //!   `load` and `apply_to_book`, kept private here until lane `analytics` ports that module)
-//! * `reconcile.py` → [`reconcile`] (the pass, the issue stores and the guard; the three sleeves'
-//!   hook builders are the sleeve lanes', which own `on_order_update`)
+//! * `reconcile.py` → [`reconcile`] (the pass, the issue stores and the guard) and
+//!   [`reconcile_hooks`] (`twt_hooks`, `vbt_hooks`, `swing_hooks` over each sleeve lane's own
+//!   `on_order_update`, `run_pass_from_desk`, and the supervisor's `ReconcilePass`)
 //! * `analytics/reconcile_view.py` → [`reconcile_view`] (the stops section takes the protection
 //!   review as an input: `analytics/protection.py` is lane `analytics`'s)
 //!
@@ -19,20 +21,29 @@
 //! every function here receives already summed and never re-derives. Pledged shares are an
 //! **info flag only** (`pledged_qty`, `pledged_positions`): nothing here gates, sizes or refuses on
 //! them. Untouchable instruments (SGB/G-sec) are classified by the one guard rule
-//! ([`super::basket::tradeable`]). Nothing here places an order or a GTT, or names `KiteWrites`.
+//! ([`super::basket::tradeable`]). Nothing here places an order or a GTT, or names `KiteWrites`:
+//! the reconcile hooks hand a broker report to the sleeve's own `on_order_update`, whose every
+//! GTT re-size, arm or cancel goes through that sleeve's gateway (law 2).
 //!
 //! **Routes.** None: the pages that render these books (`/performance`, `/tradebook*`,
-//! `/reconcile*`) are registered by the lanes that own their other inputs (`analytics` for
-//! performance/tradebook/protection, the weekly plan store for `/reconcile`).
+//! `/reconcile*`) are registered by the lanes that own their other inputs (wave D2: `session`
+//! for `/reconcile*` and `/tradebook*`, `analytics_views` for `/performance*`); the lane's
+//! `desk_cases/weekly_books.json` grades them.
 //!
 //! **Local time.** Python's naive `datetime.fromtimestamp` / `.timestamp()` use the process zone;
 //! the desk runs with `TZ=Asia/Kolkata` (the container and `desk_diff.py`), so naive local time is
 //! IST here ([`local_from_ts`], [`local_ts`]).
+//!
+//! **Python's exceptions** where a module lets them escape are reproduced by [`pyconv`] (`int()`,
+//! `Decimal(str())`, `d[key]`), with Python's text (DECISIONS-RS R8.WB1).
 
 pub mod holdings_view;
+pub mod pyconv;
 pub mod reconcile;
+pub mod reconcile_hooks;
 pub mod reconcile_view;
 pub mod snapshot;
+pub mod snapshot_db;
 pub mod tax_lots;
 pub mod tradebook;
 

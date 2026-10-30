@@ -358,3 +358,278 @@ fn the_limits_derive_from_nav_and_never_contradict_the_strategy() {
     };
     assert_eq!(risk_coherence(&tight, nav).len(), 3);
 }
+
+// --- wave D2: `_load` is strict where `_state_from` is tolerant (Python's own messages) -------
+
+/// A same-day state file with `body` after the day, loaded the way Python's `_load` does.
+async fn load_file(
+    text: &str,
+) -> (
+    Result<RiskManager, crate::lanes::exec_core::risk::RiskError>,
+    String,
+) {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("risk.json");
+    std::fs::write(&path, text).unwrap();
+    let m = RiskManager::new(
+        RiskConfig::default(),
+        clock(),
+        RiskBacking::File(path.clone()),
+    )
+    .await;
+    let after = std::fs::read_to_string(&path).unwrap();
+    (m, after)
+}
+
+async fn state_of(text: &str) -> crate::lanes::exec_core::risk::RiskState {
+    load_file(text).await.0.unwrap().state().await
+}
+
+async fn refusal_of(text: &str) -> (String, String) {
+    let e = load_file(text).await.0.unwrap_err();
+    (e.python_type, e.message)
+}
+
+#[tokio::test]
+async fn a_same_day_file_converts_as_python_float_and_int_do() {
+    // Expected values printed by Python 3.12 over `baskfy_execution.risk.RiskManager(state_path=)`.
+    let s = state_of(
+        r#"{"day":"2026-09-28","day_pnl":" -1_250.5 ","orders_today":"1_2","killed":1,"reasons":"ab","position_value":{"A":"1e3","B":true}}"#,
+    )
+    .await;
+    assert_eq!(s.day_pnl, -1250.5);
+    assert_eq!(s.orders_today, 12);
+    assert!(s.killed);
+    assert_eq!(
+        s.reasons,
+        ["a", "b"],
+        "a string of reasons iterates its characters"
+    );
+    assert_eq!(
+        s.position_value,
+        [("A".to_owned(), 1000.0), ("B".to_owned(), 1.0)]
+    );
+    let s = state_of(r#"{"day":"2026-09-28","orders_today":7.9}"#).await;
+    assert_eq!(s.orders_today, 7);
+    let s = state_of(r#"{"day":"2026-09-28","reasons":{"k1":1,"k2":2}}"#).await;
+    assert_eq!(s.reasons, ["k1", "k2"]);
+    let s =
+        state_of(r#"{"day":"2026-09-28","reasons":[1, 2.5, null, true, "x", [1,"a"], {"a":1}]}"#)
+            .await;
+    assert_eq!(
+        s.reasons,
+        ["1", "2.5", "None", "True", "x", "[1, 'a']", "{'a': 1}"]
+    );
+    let s = state_of(r#"{"day":"2026-09-28","position_value":0}"#).await;
+    assert!(
+        s.position_value.is_empty(),
+        "a falsy position_value is {{}}"
+    );
+}
+
+#[tokio::test]
+async fn a_same_day_file_python_refuses_is_refused_with_its_message() {
+    let float_none = (
+        "TypeError".to_owned(),
+        "float() argument must be a string or a real number, not 'NoneType'".to_owned(),
+    );
+    for (text, want) in [
+        (r#"{"day":"2026-09-28","day_pnl":null}"#, float_none.clone()),
+        (
+            r#"{"day":"2026-09-28","day_pnl":[1]}"#,
+            (
+                "TypeError".to_owned(),
+                "float() argument must be a string or a real number, not 'list'".to_owned(),
+            ),
+        ),
+        (
+            r#"{"day":"2026-09-28","orders_today":null}"#,
+            (
+                "TypeError".to_owned(),
+                "int() argument must be a string, a bytes-like object or a real number, not \
+                 'NoneType'"
+                    .to_owned(),
+            ),
+        ),
+        (
+            r#"{"day":"2026-09-28","orders_today":"7.9"}"#,
+            (
+                "ValueError".to_owned(),
+                "invalid literal for int() with base 10: '7.9'".to_owned(),
+            ),
+        ),
+        (
+            r#"{"day":"2026-09-28","orders_today":NaN}"#,
+            (
+                "ValueError".to_owned(),
+                "cannot convert float NaN to integer".to_owned(),
+            ),
+        ),
+        (
+            r#"{"day":"2026-09-28","orders_today":Infinity}"#,
+            (
+                "OverflowError".to_owned(),
+                "cannot convert float infinity to integer".to_owned(),
+            ),
+        ),
+        (
+            r#"{"day":"2026-09-28","reasons":5}"#,
+            (
+                "TypeError".to_owned(),
+                "'int' object is not iterable".to_owned(),
+            ),
+        ),
+        (
+            r#"{"day":"2026-09-28","position_value":{"A":"x"}}"#,
+            (
+                "ValueError".to_owned(),
+                "could not convert string to float: 'x'".to_owned(),
+            ),
+        ),
+        (
+            r#"{"day":"2026-09-28","position_value":{"A":null}}"#,
+            float_none.clone(),
+        ),
+        // `day_pnl` is converted first.
+        (
+            r#"{"day":"2026-09-28","day_pnl":null,"orders_today":null}"#,
+            float_none,
+        ),
+    ] {
+        assert_eq!(refusal_of(text).await, want, "{text}");
+    }
+    let (kind, message) = refusal_of(r#"{"day":"2026-09-28","position_value":[1]}"#).await;
+    assert_eq!(kind, "ValueError");
+    assert!(
+        message.starts_with("risk state position_value at ")
+            && message.ends_with(" is not an object"),
+        "{message}"
+    );
+}
+
+#[tokio::test]
+async fn non_finite_values_round_trip_as_json_dump_writes_them() {
+    // `json.dump` writes NaN/-Infinity (allow_nan=True) and `json.load` reads them back.
+    let s =
+        state_of(r#"{"day":"2026-09-28","day_pnl":NaN,"position_value":{"X":-Infinity}}"#).await;
+    assert!(s.day_pnl.is_nan());
+    assert_eq!(s.position_value, [("X".to_owned(), f64::NEG_INFINITY)]);
+    // A string that merely says NaN stays a string (only bare tokens are numbers).
+    let s = state_of(r#"{"day":"2026-09-28","reasons":["NaN", "x Infinity"]}"#).await;
+    assert_eq!(s.reasons, ["NaN", "x Infinity"]);
+    // And the writer: a non-finite P&L is persisted, not refused.
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("risk.json");
+    let m = RiskManager::new(
+        RiskConfig::default(),
+        clock(),
+        RiskBacking::File(path.clone()),
+    )
+    .await
+    .unwrap();
+    m.on_pnl(f64::NAN).await.unwrap();
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(text.contains("\"day_pnl\": NaN"), "{text}");
+}
+
+#[tokio::test]
+async fn a_day_that_is_not_todays_string_starts_a_fresh_day_and_rewrites_the_file() {
+    let (m, after) = load_file(r#"{"day":20260928,"orders_today":3}"#).await;
+    assert_eq!(m.unwrap().state().await.orders_today, 0);
+    // Byte for byte what Python's `_persist` wrote for the same file.
+    assert_eq!(
+        after,
+        r#"{"day": "2026-09-28", "day_pnl": 0.0, "orders_today": 0, "killed": false, "reasons": [], "position_value": {}}"#
+    );
+}
+
+#[test]
+fn the_shared_rows_reading_stays_tolerant_but_int_still_raises_on_nan() {
+    use crate::lanes::exec_core::risk::state_from;
+    use crate::wire::PyValue;
+    let raw = dict([("orders_today", PyValue::Float(f64::NAN))]);
+    let e = state_from(&raw, "2026-09-28").unwrap_err();
+    assert_eq!(
+        (e.python_type.as_str(), e.message.as_str()),
+        ("ValueError", "cannot convert float NaN to integer")
+    );
+    let raw = dict([
+        ("orders_today", PyValue::Float(2.9)),
+        ("day_pnl", PyValue::Str("5".to_owned())),
+        ("reasons", PyValue::Str("ab".to_owned())),
+        ("killed", PyValue::Str("x".to_owned())),
+        ("day", PyValue::Int(0)),
+    ]);
+    let (day, s) = state_from(&raw, "2026-09-28").unwrap();
+    assert_eq!(day, "2026-09-28");
+    assert_eq!((s.day_pnl, s.orders_today, s.killed), (0.0, 2, true));
+    assert!(s.reasons.is_empty());
+}
+
+#[test]
+fn a_limit_override_is_read_as_python_float_reads_it() {
+    let mut s = crate::settings::Settings::defaults().unwrap();
+    s.risk_max_position_value = "1_500_000".to_owned();
+    s.risk_max_gross_exposure = " 2e7 ".to_owned();
+    let cfg = risk_config(0.0, &s).unwrap();
+    assert_eq!(cfg.max_position_value, 1_500_000.0);
+    assert_eq!(cfg.max_gross_exposure, 20_000_000.0);
+    s.risk_max_position_value = " ".to_owned();
+    let e = risk_config(0.0, &s).unwrap_err();
+    assert_eq!(
+        (e.python_type.as_str(), e.message.as_str()),
+        ("ValueError", "could not convert string to float: ' '")
+    );
+    s.risk_max_position_value = "1__0".to_owned();
+    assert!(risk_config(0.0, &s).is_err());
+}
+
+// --- test_risk_store.py::test_the_gateway_wires_the_row_only_on_postgres -----------------------
+
+#[tokio::test]
+async fn test_the_gateway_wires_the_row_only_on_postgres() {
+    use crate::lanes::exec_core::desk::SharedRisk;
+    let dir = tempfile::tempdir().unwrap();
+    let settings = || {
+        Arc::new(std::sync::RwLock::new(
+            crate::settings::Settings::defaults().unwrap(),
+        ))
+    };
+    // SQLite: the in-memory state it always had.
+    let sqlite = Db::open(DbConfig {
+        backend: "sqlite".to_owned(),
+        schema: String::new(),
+        database_url: String::new(),
+        db_path: dir.path().join("desk.db"),
+    })
+    .await
+    .unwrap();
+    let risk = SharedRisk::new(settings(), clock(), sqlite);
+    assert_eq!(risk.get().await.unwrap().backing_kind(), "memory");
+    // Postgres: the shared `risk_ledger` row. The "server" is a loopback socket that answers
+    // every connection with bytes that are not the Postgres protocol, so the store's lock is what
+    // fails — proof that the row was wired (an in-memory manager would have been built). No
+    // database is touched.
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move {
+        use tokio::io::AsyncWriteExt as _;
+        while let Ok((mut socket, _)) = listener.accept().await {
+            let _ = socket.write_all(b"not postgres\n").await;
+        }
+    });
+    let pg = Db::open(DbConfig {
+        backend: "postgres".to_owned(),
+        schema: "desk".to_owned(),
+        database_url: format!("postgresql://nobody:nothing@127.0.0.1:{port}/none"),
+        db_path: dir.path().join("unused.db"),
+    })
+    .await
+    .unwrap();
+    let risk = SharedRisk::new(settings(), clock(), pg);
+    let built = tokio::time::timeout(std::time::Duration::from_secs(60), risk.get())
+        .await
+        .expect("the store's connect did not give up");
+    let e = built.unwrap_err();
+    assert_eq!(e.python_type, "StorageError", "{e}");
+}

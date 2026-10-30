@@ -2520,6 +2520,15 @@ path around the gateway. `exit_rules` ported (three sentences pinned to the live
 
 **How to reverse.** `place_cnc_order` is cheap to add back — but it would need its own law-2 review.
 
+### R8.9.1 — Lane exec_gateway, wave D2: lifecycle, F&O gateway tests, live-transport goldens (30 Oct 2026) ⚠ UNREVIEWED
+
+- `app/lifecycle.py` → `exec_core/lifecycle.rs` (`/lifecycle`, `/lifecycle/data`, `/lifecycle/adopt`); the GTT is armed through the sleeve's own gateway, never a Kite verb. The sleeves' private `_arm` helpers are restated (same client ids, limit fractions); desk_diff grades their journals.
+- Python quirks reproduced (none on an order path): stop `quantize(Decimal("0.05"))` rounds to the paisa, not a 5-paisa grid (the gateway tick-snaps before sending); `_arm_vbt` passes no client_id; no-key adoption is a 500 after the risk row is written.
+- Tests: `test_lifecycle.py` → `tests/exec_gateway_lifecycle.rs` (18); carry-gate/covered-overnight gateway halves, trail-modify, limit-fraction, rest of `test_gtt_gateway.py` → `tests/exec_gateway_fo.rs` (55).
+- Live transport (desk_diff is DRY_RUN): `tools/parity/exec_gateway_live_goldens.py` runs Python's gateway `dry_run=False` over the replay Kite (nothing sent), 9 scenarios / 69 ops; `tests/exec_gateway_live.rs` requires equal results, journal lines (`ts` aside) and broker call log.
+- desk_diff: `exec_gateway_lifecycle.json`; variants `exec_gateway_variants/lifecycle_gtts.json` (`--fixture` with the **absolute** path of `desk_fixtures/lifecycle_gtts`: the desks run from their own run directories) and `lifecycle_no_key.json` (`--env KITE_API_KEY=`). No plan kinds.
+- Reverse: drop `lifecycle.rs` and its `merge`.
+
 ## R8.10 — Lane exec_guards: code stays at `exec_core::{guards,risk,ratelimit,kite_limits,net}`; header bytes read as Latin-1; stricter where Python crashes (wave D, 30 Oct 2026) [lane label: exec_guards 1] ⚠ UNREVIEWED
 
 **Choice.** The modules stay where the gateway imports them; `exec_guards.rs` re-exports them
@@ -2532,6 +2541,15 @@ mutex no longer fails open; infinite waits no longer panic; `i64::MIN` quantity 
 overflowed. **Left on purpose:** a malformed Lua reply backs off locally (Python raises);
 `hmac.compare_digest` on a non-ASCII password is 401 in Rust, 500 in Python; a NaN rate is
 refused; the JSON-file risk store's strict-parse quirks are not reproduced (unreachable).
+
+### R8.10.1 — Lane exec_guards, wave D2: R8.10's three divergences now reproduce Python; all lane tests ported (30 Oct 2026) ⚠ UNREVIEWED
+
+- None of the three is on an order path and all fail closed in Python, so all reproduced.
+- `websec`: non-ASCII password/credential → Starlette's plain 500 (`compare_digest` TypeError); non-ASCII in the base64 part → 401. Middleware decision is pure `websec::refusal`; password cases graded by `desk_cases/exec_guards_variants/password.json` (`--env DESK_PASSWORD=hunter2`; `desk_diff.py` authenticates its harness calls).
+- `kite_limits`: malformed Lua reply raises `_claim`'s ValueError out of `take`/`slot`/`slot_for_call`, no back-off. Addition: local spacer still taken before the error (the client discards `slot()`'s result).
+- `risk`: file `_load` strict as Python (`state_from_file`); `int(nan)` raises in `_state_from`; NaN/Infinity read and written as `json`; limit overrides parsed with Python `float()`. `RiskManager::backing_kind()` for the wiring test.
+- For the lead: `AppState.kite` reads (session, twt, swing, options, weekly) bypass `DeskKite`'s limiter; harmless on replay, unspaced at cutover.
+- Reverse: `basic_ok` → bool, `SharedSpacer::take` → Option with back-off, `load_file` → `state_from`.
 
 ## R8.11 — Lane exec_kite: `DeskKite` and the token store; the encryption key from `.env` only is a residual (wave D, 30 Oct 2026) ⚠ UNREVIEWED
 
@@ -2546,6 +2564,15 @@ token store (Rust feeds `--env-file` to `Settings` only), so the Rust desk would
 token as logged-out — fail-safe for orders, but a parity gap. `DeskKite::ensure_configured()`
 (Python's missing-`KITE_API_KEY` RuntimeError) is not called by every route yet.
 
+### R8.11.1 — Lane exec_kite, wave D2 (30 Oct 2026) ⚠ UNREVIEWED
+
+- Every `DeskKite` method runs `ready()` first: no `KITE_API_KEY` → Python's `RuntimeError`, GTT writes included, before guards or broker. Unconfigured boot loads/writes nothing; `FORCE_IPV4` still pins in the constructor.
+- Malformed broker replies raise Python's exception and message; 175 cases from live `Kite` (`tools/parity/exec_kite_goldens.py` → `fixtures/exec_kite/goldens.json`).
+- `.env`-only `KITE_TOKEN_ENCRYPTION_KEY`: `main.rs` → `token_store::install_dotenv`; process env (even empty) wins.
+- `/status` session half: `exec_kite::status_session` (wrapper, `is_authed` twice). **Open:** session lane must call it from `session.rs`.
+- LTP cache ages on monotonic time, not the harness clock.
+- Reverse: drop `ready()` calls, the `install_dotenv` line, the goldens.
+
 ## R8.12 — Lane weekly_plan: `/analyze` and `/execute`; the generated-scan path answers 503 (wave D, 30 Oct 2026) ⚠ UNREVIEWED
 
 **Choice.** `/analyze` (uploaded scans; breadth from the screener DB read-only) and `/execute`
@@ -2556,7 +2583,7 @@ answers 503 and sends nothing. `/execute` reads urlencoded **and multipart** bod
 own page posts `FormData`; a review caught that Rust would have 422'd every real click). A stored
 `STOP_MAX`/`STOP_MIN`/`STOP_VOL_MULT` override now reaches `stop_from_vol` (non-negotiable 4).
 **Not ported:** the generated-scan path (`generate_for=…`, `SCAN_SOURCE_DEFAULT=generated`)
-answers 503 after Python's date and column refusals — it needs a `baskfy_core.momentum_scan` port.
+answers 503 after Python's date and column refusals — it needs a `baskfy_core.momentum_scan` port. **Superseded by R8.WP1 (wave D2): ported.**
 
 ## R8.13 — Lane weekly_books: parity by golden, not by route (wave D, 30 Oct 2026) ⚠ UNREVIEWED
 
@@ -2577,6 +2604,12 @@ truthy object (minijinja treated the foundation's `PyDate` as falsy). Without `K
 `/swing/execute`, `/rearm` and `/cutoff` answer 500 and reconcile skips lines, as Python's
 `Kite()` raise does. Python's `dict` last-wins and `max()` first-wins semantics are reproduced.
 
+### R8.14.1 — Lane swing_desk, wave D2 (30 Oct 2026) ⚠ UNREVIEWED
+
+- Breadth: libpq's conninfo parse runs first, so a malformed `SCREENER_DATABASE_URL` is `ProgrammingError` as psycopg says; key/value DSNs now connect. Pinned by 25 recorded DSNs; `tools/parity/breadth_diff.py` grades both readers on throwaway bed DBs.
+- Tests: all 114 of `test_swing_desk.py` ported by name (`desk/{scenario,tests_store,tests_routes}.rs`), 5 breadth tests, 3 missing strategy tests. Python's monkeypatched `client`/`real_client` are one Rust fixture: real DRY_RUN path over the replay Kite, asserted to record no order/GTT call.
+- No Python defect found. The lane builds no plan (MORNING is the worker's, SIGNAL the monitor's): nothing for `desk_diff --plans`.
+
 ## R8.15 — Lane swing_exec: `execute_line`, the live gate; an invalid tenant refuses before the gateway (wave D, 30 Oct 2026) ⚠ UNREVIEWED
 
 **Choice.** Drafts kept and moved under `swing_exec/`. Review fixes: `sole_tenant()` returns an
@@ -2585,6 +2618,27 @@ error, never a trigger at 0; text levels are parsed. The module names no broker 
 scan). The success paths (a DRY_RUN BUY with its GTT, SELL, RAISE, the 10:45 cutoff) are graded
 by unit tests against a fake gateway and by swing_desk's bed cases — there is no swing plan
 builder case yet.
+
+### R8.15.1 — Lane swing_exec, wave D2 (30 Oct 2026) ⚠ UNREVIEWED
+
+* All 121 tests of `test_swing_execute.py` and 22 of `test_swing_track_c.py` ported by name
+  (`swing_exec/tests/{py,track_c}.rs`); a coverage test fails on any unported `def test_`. `gw`
+  is the real `OrderGateway` + desk shim over a replay Kite that errors on every write.
+  Means differ, not claims: Track B runs via `execute_line` (SQLite refuses Decimal, R8.2) and
+  through the routes in desk_diff; the sole-user DB test needs `BASKFY_RS_SWING_TEST_PG`;
+  property loops use SplitMix64 seeded with Python's `SEED`; the strategy scan admits
+  `breakout.rs`'s field `order` (swing_monitor lane asked to rename it).
+* `execute.rs`: a plan with no `expires_at` is a 500 (Python's AttributeError), not a 410;
+  telemetry ported as the `ConfirmTelemetry` seam (`execute_line_observed`); lock-entry/commit
+  failures take the REJECTED branch as Python's `except Exception`.
+* `live_gate.rs`: `DeskLevel` reads through `DeskKite::ltp` (cache, limiter, token refresh).
+  For swing_desk lane to wire in `open_store`; also theirs: `swing_gateway()` should return
+  `None` (500) on an inverted stop band instead of `unwrap_or_default()`. `order_source()`
+  already matches Python (None only without `KITE_API_KEY`).
+* desk_diff: case key `"sql"` seeds both clones (Postgres). `swing_exec.json` adds 13 seeded
+  success-path cases (BUY+GTT, SELL partial/close-out, RAISE, reconcile, cutoff, rearm); 27/27
+  EQUAL with order/GTT calls, journal, tables, Redis EQUAL. No `--plans` builder: the desk builds
+  no swing plan.
 
 ## R8.16 — Lane swing_monitor: the watch is ported, the service is not wired (wave D, 30 Oct 2026) ⚠ UNREVIEWED
 
@@ -2697,3 +2751,149 @@ swing-monitor, twt-auto loop, fno-monitor and options-monitor services wired (R8
 R8.20); the generated scan (R8.12); `/performance`, `/tradebook*`, `/reconcile*`, `/indices*`,
 `/lifecycle*` and `/` (home) routes; the token-key `.env` gap (R8.11); app-wide
 `redirect_slashes` (R8.23); plan-builder cases for swing/twt/vbt/fno/options plan kinds.
+
+## R8.WP1 — Lane weekly_plan (wave D2): the generated scan is ported; `generate_for` and `SCAN_SOURCE_DEFAULT=generated` build the scan in Rust (wave D2, 30 Oct 2026) [lane label; the integrator numbers it] ⚠ UNREVIEWED
+
+**Context.** R8.12 left `_generated_scan` answering 503 after its date and carried-column refusals,
+because `baskfy_core.momentum_scan` had no Rust port; desk_diff's two `generate_for` cases went red
+whenever a scan had been retained earlier in the scenario.
+
+**Choice.** `app/scan_source.py` and the pure `baskfy_core.momentum_scan` are ported together into
+`lanes/weekly/scan_source.rs` (the desk is their only caller): `_fetch` reads the screener's
+`ohlcv_daily ⋈ instrument` read-only (numbers as text, parsed — `float(Decimal)` and
+`str::parse::<f64>` are both the correctly rounded double), the factors come from
+`baskfy_core::factors::compute_factors` (golden-graded since RS3), then the export renames, the
+carried columns win, the inner join on symbol, `required(cfg)` and the `unadjusted_symbols` warning,
+exactly as Python. The frame crosses into the scorer typed as `pd.DataFrame(frame.to_dicts())`
+types it — the two non-obvious rules, both measured: an all-NULL factor column is an **object column
+of `None`**, and a missing carried string is the **string `"NaN"`** (pandas' `to_dict` hands polars a
+float `nan`). pandas raises `TypeError` comparing a float series to an object-`None` series (the
+right-hand side only) and on `float(None)`; `score.rs` (`num_rhs`) and `basket.rs` (`float_cell`)
+now raise the same, so a short-history scan (no 200-day average yet) is Python's 500, not a plan of
+NaNs. `read_csv` never builds such a column, so uploaded scans are unaffected (every weekly golden
+unchanged). `MomentumScan::to_csv` reproduces polars' `write_csv` (NULL empty, NaN `NaN`, an integer
+column with a NULL still printed as integers). `baskfy-desk` gains `polars = { workspace = true }`
+(the existing exact pin, IO-free features; no new dependency).
+
+**Psycopg's `str(exc)`** is reproduced for connection-refused (libpq's text, byte for byte — the
+harness's unreachable screener); other failures print the server's message (psycopg adds a
+`LINE 1:` excerpt Rust does not). Reached only on a broken screener; recorded, not chased.
+
+**Graded.** `tests/weekly_generated.rs` (39): the nine fixture cases of
+`tools/parity/desk_generated_goldens.py` (both Python fixtures, a short history, no bars, a
+non-trading day, a missing split, a step across a hole, partial carried columns, no overlap) cell
+for cell — frame, dtypes, `to_csv` bytes, provenance, audit, score — and every test of
+`test_generated_scan.py`, `test_desk_score_parity.py` (the desk half; `score_day` is the worker's),
+`test_desk_config_parity.py`, `test_scoring_moved_to_core.py` (the corpus digest, `%.10g` CSV, equal)
+and ten of `test_breadth_and_shadow.py` (the five on `scripts/shadow_mode.py`, a Python CLI, stay
+with it; `test_todays_settings_short_circuit…` asserts the operator's `.env` and fails in Python
+under a clean environment — ported as the property with `FULLY_INVESTED` on). Route-to-route:
+`desk_cases/weekly_plan.json` (generated plans over the bed's bars, the warnings, the refusals) and
+`desk_cases/weekly_plan_variants/` (`--env SCAN_SOURCE_DEFAULT=generated`, postgres and sqlite).
+
+**Not exercised route-to-route:** a flag-on, no-file analyze *after* an upload — it generates the
+whole 3.9M-bar history in both desks at once on a 16 GB machine shared with the live stack.
+
+**Reverse.** Restore R8.12's 503 in `analyze.rs::generated_scan`; drop the polars line.
+
+## R8.WP2 — Lane weekly_plan (wave D2): `/execute` reads every plan line before it sends one (wave D2, 30 Oct 2026) [lane label] ⚠ UNREVIEWED
+
+**Context (review finding).** `/execute` built its lines with `PlanLine::from_row` and silently
+dropped a row whose `delta` was not an int or whose keys were mistyped. Python evaluates `o["delta"]`
+on every row and `delta * ref_price` on every non-zero row before its loop (a `KeyError`/`TypeError`
+500 with nothing sent), sends a float `delta` as a float quantity, and raises mid-batch — after
+earlier orders went out — on a missing `symbol`/`action`.
+
+**Choice.** `analyze::plan_lines` reads every row first: a missing or non-numeric `delta`/`ref_price`
+is the 500 Python gives (nothing sent; equal); a whole-number float `delta` is sent as that integer;
+a fractional `delta`, or a non-zero row missing `symbol`/`action`, is a 500 **before anything is
+sent** (stricter than Python's partial batch — a safety tie-break, fail closed). Unreachable today:
+`build_plan` emits only `int` deltas and every key (all plans byte-equal), so Python is not changed.
+
+**Reverse.** Return to `filter_map(PlanLine::from_row)`.
+
+## R8.WB1 — Lane weekly_books (wave D2): reconcile fails where Python raises; sleeve hooks + `run_pass_from_desk` ported [lane label] ⚠ UNREVIEWED
+
+- `reconcile_once` → `Result`: fails (no run) where Python raises (issue store, missing `id`, unreadable remainder/reference, `release`); reads Python wraps stay recorded misses. Off the order path, Python unchanged.
+- `reconcile_hooks.rs`: twt/vbt/swing hooks over each sleeve's own `on_order_update` + gateway (law 2; no writer, test-scanned), `KiteBook`, `run_pass_from_desk`, `DeskReconcilePass` (session's `ReconcilePass`).
+- `tests/weekly_books_reconcile.rs`: `test_reconcile.py` whole (21) over real dry-run gateways behind a DRY_RUN-only spy; replay Kite records no write.
+- Left to lane session: wire `DeskReconcilePass` into `run_service("session-supervisor")`.
+- Reverse: return `ReconcileRun`, push errors; delete `reconcile_hooks.rs`.
+
+## R8.WB2 — Lane weekly_books (wave D2): tradebook pandas fallback widened; zone suffix keeps the fill aware [lane label] ⚠ UNREVIEWED
+
+- `parse_when_tz` reads what pandas 3.0.5 reads for Console-shaped input: year-day-month first, month names, 2-digit years, `YYYYMMDD[ HHMMSS]`, bare time (stamped today, IST), AM/PM, `Z`/`UTC`/`±HH[:MM]`.
+- A zone sets `Fill::tz`: true-instant `ts`, offset in `fill_key`; naive+aware in one sort → Python's `TypeError` (`ImportError::Uncaught`, 500).
+- Residual: dateutil-only forms (`9:5`, `9 PM`) fall to trade date 09:15, as when pandas raises.
+- Reverse: drop `tz` fields and the widened grammar.
+
+## R8.WB3 — Lane weekly_books (wave D2): `snapshot.run()` + CLI; db.py's snapshot half kept in the sub-lane [lane label] ⚠ UNREVIEWED
+
+- `snapshot_db.rs`: db.py's cashflow/snapshot/rechain/hint functions verbatim, until lane analytics ports db.py (then re-export).
+- `snapshot::run`, `snapshot::cli` (exit code + printed lines), `SnapshotKite for DeskKite`; goldens for quote/historical sources and a 10-run CLI scenario.
+- Not done (main.rs not the lane's): a `baskfy-desk snapshot` subcommand.
+- Reverse: delete `snapshot_db.rs`, `run`, `cli`; goldens 23–40.
+
+## R8.TD1 — Lane twt_desk (wave D2): the TWT session lock is one transaction, `NOWAIT`, commit on exit; Python fixed first (30 Oct 2026) ⚠ UNREVIEWED — **for Maulik**
+
+- Defect (R8.17): autocommit made `FOR UPDATE` hold for one statement; the 3-entry cap was not serialised (click vs twt-auto).
+- Fix (`app/twt_desk.py`, then Rust): outermost block `BEGIN` + `FOR UPDATE NOWAIT`; `COMMIT` on exit, exception included (an order row written after the broker answered is kept); nested blocks open nothing.
+- Held row → 409 `SESSION_BUSY` before any broker read/send; twt-auto logs `REFUSED_409`, line stays PROPOSED. `NOWAIT` because a waiting lock under `async def` + sync driver would hang the event loop.
+- Rust: `TwtStore::unlock_session`; `execute_line`/`on_order_update` always call it after the body.
+- Tests: Python `TestTheSessionLock` (5); Rust SQLite + bed test (`--ignored`, rsd_* only).
+- For Maulik: swing's SW10.4 lock is a *waiting* `FOR UPDATE` under async — same hang risk; not changed (other lane).
+- Reverse: restore the one-statement lock; drop `unlock_session` + wrappers.
+
+## R8.TD2 — Lane twt_desk (wave D2): harness monotonic follows the case clock in Python too ⚠ UNREVIEWED
+
+- `desk_harness.py`: `CLOCK.monotonic` with `FixedClock`'s rule, seen only by `app.kite_client` (LTP cache); asyncio/rate limiter keep real time. Closes the `ltp NSE:CUPID` twice-vs-once read.
+
+## R8.TD3 — Lane twt_desk (wave D2): `storage::register_sqlite_decimal_adapter` ⚠ UNREVIEWED
+
+- Test-only twin of `sqlite3.register_adapter(Decimal, str)`; never called by the desk. Unblocked 24 route tests and 14 scan tests.
+
+## R8.VB1 — Lane vbt (wave D2): the VBT session cap is one transaction, a per-user lock, `NOWAIT`; Python fixed first (30 Oct 2026) ⚠ UNREVIEWED — **for Maulik**
+
+- Defect (R8.18 / the vbt reviewer): autocommit made `lock_session_for_update`'s `FOR UPDATE` hold for one statement, so the three-entries-a-session cap (`04` §5.3/§9.4, non-negotiable) was a read-then-write race. **Second hole, found here:** a confirm locks its *plan's* `vb_session` row while the cap counts orders by the IST day they were *sent* (LV10.2), so a MORNING line (yesterday's row) and a LIVE line (today's) never contended even inside a transaction.
+- Fix, `app/vbt_desk.py` first, then `lanes/vbt/store.rs` + `execute.rs` identically: outermost block `BEGIN`; `SELECT pg_try_advisory_xact_lock(hashtext('vb_session:<user>'))` (per user, any day) then the row `FOR UPDATE NOWAIT`; either held → `ROLLBACK`, 409 `SESSION_BUSY`, nothing read or sent, line stays `PROPOSED`; `COMMIT` on exit, exception included; nested blocks open nothing. SQLite: `BEGIN IMMEDIATE` … `COMMIT` (R8.18's vbt.4 difference — Python began a transaction nobody committed — is gone). Rust: `VbtStore::unlock_session` (default no-op), called by `execute_line`/`on_order_update` wrappers after the body.
+- Same shape as R8.TD1 (twt) on purpose; the per-user advisory lock is VBT's addition because its LIVE and EVENING/MORNING plans lock different days. Stricter security boundary; nothing in force loosens.
+- Proof: Python `TestTheSessionLock` (6) + `TestTwoConfirmsCannotPassTheCap` on a bed clone (`BASKFY_TEST_DATABASE_URL`, rsd_* only) — run against HEAD's code it sends four entries; with the fix one sends and one is 409, `entries_taken == 3`. Rust: SQLite lock tests, a 409 mapping test, and `tests/vbt_pg_lock.rs` (`--ignored`, `BASKFY_RS_TEST_DATABASE_URL`).
+- The reconciler (`on_order_update`) meeting a held lock gets the same 409 and retries on its next pass.
+- **The live desk carries this only after an image rebuild** (NEEDS-MAULIK §36).
+- Reverse: restore the one-statement lock; drop the advisory lock, `unlock_session` and the wrappers.
+
+## R8.VB2 — Lane vbt (wave D2): one entry per name per signal is refused before the gateway; Python fixed first (30 Oct 2026) ⚠ UNREVIEWED — **for Maulik**
+
+- Defect (R8.18): `uq_vb_order_one_per_signal (user_id, signal_date, instrument_id)` is checked by the INSERT *after* `gateway.place` — a pyramided entry on a plan sharing `signal_date` with an earlier LIVE plan's entry reached the broker, then 500'd with no `vb_order`, no GTT, line `PROPOSED`.
+- Fix: `VbtStore.order_for_signal(instrument_id, signal_date)` (any state) asked after the cap/held/working/protection refusals and **before** the gateway; a hit is `BLOCKED` `ALREADY_SENT: order N already took this name on the <date> signal; one entry per name per signal`, line `REJECTED`. The same signal is one entry; a fresh signal is a fresh date, so LV10 pyramiding is unchanged.
+- Rust's trait default for `order_for_signal` **refuses** (fail closed): a store that cannot answer never sends an entry.
+- desk_diff: `vbt_edges.json`'s two next-day re-entries are now `ALREADY_SENT` on both desks (no gateway call); `vbt_lines.json` adds one after a cancelled order.
+- Reverse: drop `_signal_refusal`/`signal_refusal` and the store method.
+
+## R8.VB3 — Lane vbt (wave D2): the page's clock is CPython's — microseconds, half-even (30 Oct 2026) ⚠ UNREVIEWED
+
+- `datetime.fromtimestamp(t)` rounds the float's fraction half-even to microseconds; the foundation's `Clock::now_ist` rounds to nanoseconds, so at `now == expires_at` Rust read 410 where Python read the plan as live (404). The lane's `now_ist` is now `vbt::py_fromtimestamp_ist(clock.time())` (CPython's `_PyTime_DoubleToDenominator`), used by every vbt comparison and stamp. `vbt_refusals.json` gets the exact-expiry case back (09:30:00.355993 → 404) and a +1 µs case (410).
+- For the integrator: the same fix belongs in `clock.rs` for every lane (not this lane's file).
+- Reverse: return to `state.clock.now_ist()`.
+
+## R8.VB4 — Lane vbt (wave D2): every lane test file covered; the four uncovered line kinds in desk_diff (30 Oct 2026) ⚠ UNREVIEWED
+
+- Ported: `test_vbt_desk.py` (store round trips, the view, the law), `test_vbt_rescan_desk.py` (rows, refusals, worker agreement, page, the contract routes over HTTP incl. the origin check), `test_vbt_scan_safety.py` (route surface, live-flag landmine, handler scans), `test_vbt_safety.py` (every kind with both DRY_RUN values, the auto-execute source scan over the Python, TS **and Rust** trees, beat entries, sells larger than held). New Rust files: `tests/vbt_store.rs`, `tests/vbt_routes.rs`, `tests/vbt_pg_lock.rs`; `tests/vbt_desk.rs` extended.
+- `desk_cases/vbt_lines.json`: RAISE_GTT_STOP (raised, never-falls, would-fire), SELL_AT_OPEN (over-held, full, PARTIAL), ARM_GTT, CANCEL_LIMIT (working, none) on a seeded plan 9001 (explicit ids, `OVERRIDING SYSTEM VALUE`) over the book `vbt_edges.json` built.
+- VBT builds no plans on the desk (the worker's `vbt_evening`/`vbt_morning` do; `/vbt/scan` only queues a detection), so there is no vbt plan kind for `desk_diff --plans`.
+
+## R8.19.1 — Lane fno_desk (wave D2): the DB-backed suites ported against Python's own rows; the quotes raise as Python's; `fno-monitor` off is Ok (30 Oct 2026) ⚠ UNREVIEWED
+
+- **Goldens from the real Python world, not hand-written seeds.** `tools/parity/fno_desk_goldens.py` drives FO7's replay world (`tests/test_fno_monitor.World`, `test_fno_f3.F3World`: the real monitor, executor, gateway and ledger) on a bed clone and records each scenario's `fo_` rows as `to_jsonb(row)::text` into `rust/crates/baskfy-desk/fixtures/fno/goldens.json` (18 scenarios: the 09:20 F1/F2/F3 plans, their confirms, the eight closes of `test_fno_ledger.py`, the abandoned entry, F3's held exit before/after the click, F3's add before/after). The monitor's raising and watch are the sibling's and not ported, so the Rust tests **seed what Python's monitor wrote** and then compare **what Rust writes with what Python wrote**, table by table (ids, foreign keys, server timestamps and the `PAPER-<pid>` handle's id aside).
+- **`tests/fno_desk_db.rs`** (40 tests, `BASKFY_RS_FNO_TEST_PG`, a bed clone `rsd_*`; skipped without it, as Python's `requires_db`): all of `test_fno_desk.py`'s DB tests through the lane's real routes over a real `AppState` (replay Kite, settable clock): the F1 confirm (four simulated fills longs first, client ids `plan_id:symbol`), F2 (paper GTT handle), every flag false with `DRY_RUN=false` still simulated, 410 at `expires_at` exactly, 400 before any read (the desk's database unreachable), 404, the second post 409 with nothing sent twice, a killed risk manager shown by name (`RISK_BLOCKED`/`KILL SWITCH`), LIVE refused `LIVE_NOT_BUILT`, the page (card, sentence, `Confirm (paper)`, modes, countdown, 33.57 % amber drift, sequence, margin, the expired card without a button, the F2 red flag, the nav badge `1 open · exit 2026-11-23`, `Unavailable:`); all of `test_fno_ledger.py`: a journal row at every close (Rust's `write_journal` row equals Python's, plus `assert_in_rupees_and_r`), the abandoned entry end to end and through `journal_abandoned` + `after_close`, the −0.6R/−6R/₹75,000 pauses at their exact thresholds with their audit rows, idempotence, never pooled, the hand-set pause binding both, the night's pause list; and F3's entry, click on the held exit and add through the route (`test_fno_f3.py`'s route-level halves). Where a Python test also ticks the monitor (REJECTED_PAUSED, the open structure running to HARD_EXIT, the night's marks), the monitor's **input from this lane** is asserted (`entry_block`'s reasons, the untouched position, `nightly_pauses`) and the test says so — the tick itself is the sibling's.
+- **`KiteSources::quotes` raises where Python's `kite_quotes` raises** (the wave-D finding): a non-dict quote or depth is `AttributeError: '<type>' object has no attribute 'get'`, a bad price `InvalidOperation: [<class 'decimal.ConversionSyntax'>]`, a NaN price `InvalidOperation: [<class 'decimal.InvalidOperation'>]` (the `> 0` compare), a bad quantity/oi `int()`'s `ValueError`/`TypeError` — so the page's `live_note` names the same failure. Uses `weekly_books::pyconv` (read-only reuse). The index level (`spot`) reads `Decimal(str(found))` the same way; a raise is still the page's dash. **One stated residual:** an infinite price or last price, which Python would carry into the book, is refused by name (`rust_decimal` has no infinity); no exchange quote is one.
+- **`run_service("fno-monitor")`** is `fno_exec::monitor::run`: `Ok` with `BASKFY_FNO_MONITOR_ENABLED` off (Python's `main()` returns 0), a refusal with it on (the Rust monitor is not whole; Python keeps the job). The flag still defaults false; no auto-execute input was added.
+- **desk_diff.** `desk_cases/fno_world.json` (21 cases) seeds the same Python rows for the sole user (explicit ids from 910000, `OVERRIDING SYSTEM VALUE`; contracts and plan ids renamed per scenario so the static books never meet) and grades the ISSUED path on both desks: F2 confirm + GTT handle, F1 confirm, the second post, a thin twin abandoned and journalled, `expires_at` exactly, F3 entry, F3 add, the held F3 exit's page, the click (CLOSED short first, the CREDIT_SPREAD journal, and the paper book's pauses — `write_column` for F2 and the book, `record_f1`'s audit — recorded at the close), the second click. It must run with `--fixture tools/parity/desk_fixtures/fno_world` (the default fixture plus these NFO books, built by the same script); under the default fixture every confirm refuses `NO_QUOTE` on both sides. `desk_cases/plans_fno.json` is the `fno exits` plan kind for `--plans`: the exit the Python monitor raised, as both desks show it, by sha256. The desk builds no plan of its own (the monitor raises; the desk shows and confirms).
+- Rejected: hand-written seed rows (they would test the Rust desk against an author's guess of the monitor's output); editing `desk_fixtures/default` (generated by the shared `desk_fixture_build.py`); waiting for the monitor port to run Python's tests verbatim.
+- Reverse: delete `tests/fno_desk_db.rs`, `fixtures/fno/`, `fno_desk_goldens.py`, `fno_world.json`, `plans_fno.json`, `desk_fixtures/fno_world`; restore `levels`'s lenient parse; restore the `not ported` arm.
+
+## R8.VB5 — Lane vbt (wave D2): RAISE_GTT_STOP on a DRY_RUN position 500s in both desks — reproduced, not fixed (30 Oct 2026) ⚠ UNREVIEWED — **for Maulik**
+
+- Found by `vbt_lines.json`: `_arm_stop` stores a dry-run GTT as `gtt_id = str(result.get("gtt_id") or "")` = `''`, and `_raise_gtt_stop` treats any `gtt_id` not starting `DRY-` as a broker id → `int('')` → `ValueError` → 500, before any write. A rehearsal can therefore never raise a stop (Qullamaggie's breakeven move); a LIVE position (numeric id) is unaffected (the case with a numeric id raises cleanly).
+- Charter: fails closed (nothing sent, the stop stays), not an order-path safety defect → reproduced exactly; the fix (store `DRY-<n>` or treat `''` as simulated) belongs in Python first.
+- Reverse: n/a (nothing changed).

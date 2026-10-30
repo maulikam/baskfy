@@ -16,7 +16,7 @@ use chrono::{NaiveDate, NaiveDateTime};
 use super::holdings_view::{self as hv, Context, FillRef};
 use super::reconcile::{self as rc, HookError, MemoryIssueStore, OrderBook, SleeveHooks};
 use super::tradebook::{self as tb, Action, Fill};
-use super::{local_ts, pyf, pyi, pys, reconcile_view as rv, snapshot as sn, tax_lots as tl};
+use super::{pyf, pyi, pys, reconcile_view as rv, snapshot as sn, tax_lots as tl};
 use crate::wire::{PyDict, PyValue, dict, py_json_dumps};
 
 const GOLDENS: &str = include_str!("../../../../fixtures/weekly_books/goldens.json");
@@ -121,7 +121,7 @@ fn tax_case(input: &PyDict) -> PyValue {
 fn fill_row(f: &Fill) -> PyValue {
     PyValue::List(vec![
         PyValue::Str(f.symbol.clone()),
-        PyValue::Str(super::iso_naive(f.when)),
+        PyValue::Str(tb::stamp_iso(f.when, f.tz)),
         PyValue::Str(f.side.clone()),
         PyValue::Int(f.quantity),
         PyValue::Float(f.price),
@@ -135,14 +135,51 @@ fn parse_case(input: &PyDict, dir: &std::path::Path, n: usize) -> PyValue {
     let path = dir.join(format!("tb{n}.csv"));
     std::fs::write(&path, pys(input.get("csv"))).unwrap();
     match tb::parse_tradebook(&path) {
+        Err(tb::ImportError::Uncaught(e)) => PyValue::Map(dict([("raised", PyValue::Str(e))])),
         Ok(fills) => PyValue::Map(dict([(
             "fills",
             PyValue::List(fills.iter().map(fill_row).collect()),
         )])),
         Err(e) => PyValue::Map(dict([(
             "error",
-            PyValue::Str(e.0.replace(&path.display().to_string(), "<path>")),
+            PyValue::Str(e.to_string().replace(&path.display().to_string(), "<path>")),
         )])),
+    }
+}
+
+/// `datetime.fromisoformat` for the goldens' stamps: naive, or with a `±HH:MM` offset.
+fn stamp(text: &str) -> (NaiveDateTime, Option<chrono::FixedOffset>) {
+    match chrono::DateTime::parse_from_str(text, "%Y-%m-%dT%H:%M:%S%.f%:z") {
+        Ok(t) => (t.naive_local(), Some(*t.offset())),
+        Err(_) => (naive(text), None),
+    }
+}
+
+fn parse_fallback_case(input: &PyDict, dir: &std::path::Path, n: usize) -> PyValue {
+    let path = dir.join(format!("fb{n}.csv"));
+    std::fs::write(&path, pys(input.get("csv"))).unwrap();
+    match tb::parse_tradebook(&path) {
+        Err(tb::ImportError::Uncaught(e)) => PyValue::Map(dict([("raised", PyValue::Str(e))])),
+        Err(e) => PyValue::Map(dict([(
+            "error",
+            PyValue::Str(e.to_string().replace(&path.display().to_string(), "<path>")),
+        )])),
+        Ok(fills) => PyValue::Map(dict([
+            ("fills", PyValue::List(fills.iter().map(fill_row).collect())),
+            (
+                "keys",
+                PyValue::List(
+                    fills
+                        .iter()
+                        .map(|f| PyValue::Str(tb::fill_key(f)))
+                        .collect(),
+                ),
+            ),
+            (
+                "ts",
+                PyValue::List(fills.iter().map(|f| PyValue::Float(f.ts())).collect()),
+            ),
+        ])),
     }
 }
 
@@ -150,9 +187,11 @@ fn fills_of(v: &PyValue) -> Vec<Fill> {
     l(v).iter()
         .map(|row| {
             let r = l(row);
+            let (when, tz) = stamp(&r[1].py_str());
             Fill {
                 symbol: r[0].py_str(),
-                when: naive(&r[1].py_str()),
+                when,
+                tz,
                 side: r[2].py_str(),
                 quantity: pyi(Some(&r[3])),
                 price: pyf(Some(&r[4])),
@@ -203,11 +242,11 @@ fn fifo_case(input: &PyDict) -> PyValue {
         .map(|o| {
             PyValue::List(vec![
                 PyValue::Str(o.symbol.clone()),
-                PyValue::Str(super::iso_naive(o.when)),
+                PyValue::Str(tb::stamp_iso(o.when, o.tz)),
                 PyValue::Int(o.quantity),
                 PyValue::Float(o.price),
                 PyValue::Float(o.charges),
-                PyValue::Float(local_ts(o.when)),
+                PyValue::Float(tb::stamp_ts(o.when, o.tz)),
             ])
         })
         .collect();
@@ -334,11 +373,12 @@ impl SleeveHooks for Sleeve {
     fn has_risk(&self) -> bool {
         true
     }
-    fn release(&self, symbol: &str, value: f64) {
+    async fn release(&self, symbol: &str, value: f64) -> Result<(), HookError> {
         self.1.lock().unwrap().push(PyValue::List(vec![
             PyValue::Str(symbol.to_owned()),
             PyValue::Float(value),
         ]));
+        Ok(())
     }
 }
 
@@ -346,7 +386,12 @@ async fn reconcile_case(input: &PyDict) -> PyValue {
     let at = chrono::DateTime::parse_from_rfc3339("2026-09-28T09:20:05+05:30").unwrap();
     let book = Book(input.clone());
     let sleeve = Sleeve(input.clone(), std::sync::Mutex::new(Vec::new()));
-    let run = rc::reconcile_once(&book, &[&sleeve], at, &mut MemoryIssueStore::default()).await;
+    let run =
+        match rc::reconcile_once(&book, &[&sleeve], at, &mut MemoryIssueStore::default()).await {
+            Ok(run) => run,
+            // The pass raised: Python's case records `type(exc).__name__: exc` and nothing else.
+            Err(e) => return PyValue::Map(dict([("raised", PyValue::Str(e))])),
+        };
     let issues = run
         .issues
         .iter()
@@ -360,8 +405,10 @@ async fn reconcile_case(input: &PyDict) -> PyValue {
             ])
         })
         .collect();
-    let mut idx: Vec<(String, rc::GttRow)> =
-        rc::gtt_index(l(g(input, "gtts"))).into_iter().collect();
+    let mut idx: Vec<(String, rc::GttRow)> = rc::gtt_index(l(g(input, "gtts")))
+        .unwrap()
+        .into_iter()
+        .collect();
     idx.sort_by(|a, b| a.0.cmp(&b.0));
     let gtts = dict(idx.into_iter().map(|(k, v)| {
         (
@@ -382,6 +429,225 @@ async fn reconcile_case(input: &PyDict) -> PyValue {
         ("released", PyValue::List(released)),
         ("issues", PyValue::List(issues)),
         ("gtts", PyValue::Map(gtts)),
+    ]))
+}
+
+async fn reconcile_raise_case(input: &PyDict) -> PyValue {
+    let at = chrono::DateTime::parse_from_rfc3339("2026-09-28T09:20:05+05:30").unwrap();
+    let book = Book(input.clone());
+    let sleeve = Sleeve(input.clone(), std::sync::Mutex::new(Vec::new()));
+    match rc::reconcile_once(&book, &[&sleeve], at, &mut MemoryIssueStore::default()).await {
+        Err(e) => PyValue::Map(dict([("raised", PyValue::Str(e))])),
+        Ok(run) => PyValue::Map(dict([
+            ("line", PyValue::Str(run.line())),
+            ("released", PyValue::List(sleeve.1.lock().unwrap().clone())),
+            (
+                "issues",
+                PyValue::List(
+                    run.issues
+                        .iter()
+                        .map(|i| {
+                            PyValue::List(vec![
+                                PyValue::Str(i.sleeve.clone()),
+                                PyValue::Int(i.position_id),
+                                PyValue::Str(i.symbol.clone()),
+                                PyValue::Str(i.kind.clone()),
+                                PyValue::Str(i.detail.clone()),
+                            ])
+                        })
+                        .collect(),
+                ),
+            ),
+        ])),
+    }
+}
+
+/// `_SourceKite`: holdings, quotes, the instrument dump and candles, every read recorded.
+struct SourceKite {
+    holdings: Vec<PyDict>,
+    quotes: PyDict,
+    instruments: Vec<PyValue>,
+    candles: PyDict,
+    calls: std::sync::Mutex<Vec<PyValue>>,
+}
+
+#[async_trait::async_trait]
+impl sn::SnapshotKite for SourceKite {
+    async fn is_authed(&self) -> bool {
+        true
+    }
+    async fn holdings(&self) -> Result<Vec<PyDict>, String> {
+        Ok(self.holdings.clone())
+    }
+    async fn available_cash(&self) -> Result<f64, String> {
+        Ok(123_456.789)
+    }
+    async fn quote_raw(&self, keys: &[String]) -> Result<PyDict, String> {
+        self.calls.lock().unwrap().push(PyValue::List(vec![
+            PyValue::Str("quote_raw".into()),
+            PyValue::List(keys.iter().map(|k| PyValue::Str(k.clone())).collect()),
+        ]));
+        Ok(dict(keys.iter().filter_map(|k| {
+            self.quotes.get(k).map(|v| (k.clone(), v.clone()))
+        })))
+    }
+    async fn instruments(&self, exchange: &str) -> Result<Vec<PyValue>, String> {
+        self.calls.lock().unwrap().push(PyValue::List(vec![
+            PyValue::Str("instruments".into()),
+            PyValue::Str(exchange.to_owned()),
+        ]));
+        Ok(self.instruments.clone())
+    }
+    async fn historical(&self, token: i64, day: NaiveDate) -> Result<Vec<PyValue>, String> {
+        let d = PyValue::Str(day.format("%Y-%m-%d").to_string());
+        self.calls.lock().unwrap().push(PyValue::List(vec![
+            PyValue::Str("historical".into()),
+            PyValue::Int(token),
+            d.clone(),
+            d,
+            PyValue::Str("day".into()),
+        ]));
+        Ok(match self.candles.get(&token.to_string()) {
+            Some(PyValue::List(c)) => c.clone(),
+            _ => Vec::new(),
+        })
+    }
+}
+
+async fn snapshot_source_case(input: &PyDict, dir: &std::path::Path) -> PyValue {
+    let kite = SourceKite {
+        holdings: dicts(g(input, "holdings")),
+        quotes: m(g(input, "quotes")).clone(),
+        instruments: l(g(input, "instruments")).to_vec(),
+        candles: m(g(input, "candles")).clone(),
+        calls: std::sync::Mutex::new(Vec::new()),
+    };
+    let on_date = match g(input, "on_date") {
+        PyValue::Str(s) => Some(s.clone()),
+        _ => None,
+    };
+    let source = pys(input.get("source"));
+    let opts = sn::CollectOptions {
+        on_date: on_date.as_deref(),
+        price_source: &source,
+        cash: match g(input, "cash") {
+            PyValue::None => None,
+            v => Some(pyf(Some(v))),
+        },
+        allow_stale_cash: false,
+        today: date(&pys(input.get("today"))),
+        include_untouchable_in_nav: false,
+        root: dir,
+    };
+    let snapshot = match sn::collect(&kite, &opts).await {
+        Ok(s) => PyValue::Map(dict([
+            ("date", PyValue::Str(s.date)),
+            ("nav", PyValue::Float(s.nav)),
+            ("invested", PyValue::Float(s.invested)),
+            ("cash", PyValue::Float(s.cash)),
+            ("holdings_json", PyValue::Str(s.holdings_json)),
+        ])),
+        Err(sn::SnapshotError::Value(e)) => {
+            PyValue::Map(dict([("raised", PyValue::Str(format!("ValueError: {e}")))]))
+        }
+        Err(e) => PyValue::Map(dict([(
+            "raised",
+            PyValue::Str(format!("RuntimeError: {e}")),
+        )])),
+    };
+    let cache = std::fs::read(dir.join("data/.instruments_NSE.json"))
+        .ok()
+        .map_or(PyValue::None, |b| PyValue::from_json(&b).unwrap());
+    let calls = kite.calls.lock().unwrap().clone();
+    PyValue::Map(dict([
+        ("snapshot", snapshot),
+        ("calls", PyValue::List(calls)),
+        ("cache", cache),
+    ]))
+}
+
+async fn snapshot_cli_case(input: &PyDict, dir: &std::path::Path) -> PyValue {
+    let kite = SnapKite(dicts(g(input, "holdings")));
+    let ledger = dir.join("ledger.csv");
+    std::fs::write(&ledger, pys(input.get("ledger"))).unwrap();
+    let mut conn = crate::storage::Db::connect_sqlite_path(&dir.join("cli.db"))
+        .await
+        .unwrap();
+    let mut runs = Vec::new();
+    for argv in l(g(input, "runs")) {
+        let argv: Vec<String> = l(argv)
+            .iter()
+            .map(|a| {
+                let a = a.py_str();
+                if a == "<ledger>" {
+                    ledger.display().to_string()
+                } else {
+                    a
+                }
+            })
+            .collect();
+        let base = sn::CollectOptions {
+            on_date: None,
+            price_source: "holdings",
+            cash: None,
+            allow_stale_cash: false,
+            today: date(&pys(input.get("today"))),
+            include_untouchable_in_nav: false,
+            root: dir,
+        };
+        let o = sn::cli(&argv, &kite, &mut conn, base, g(input, "dry_run").truthy()).await;
+        runs.push(PyValue::Map(dict([
+            ("code", PyValue::Int(i64::from(o.code))),
+            (
+                "stdout",
+                PyValue::List(o.stdout.into_iter().map(PyValue::Str).collect()),
+            ),
+            (
+                "message",
+                if o.code == 1 {
+                    PyValue::Str(o.stderr.join("\n"))
+                } else {
+                    PyValue::None
+                },
+            ),
+        ])));
+    }
+    let rows = |sql: &str, cols: &[&str]| {
+        let sql = sql.to_owned();
+        let cols: Vec<String> = cols.iter().map(|c| (*c).to_owned()).collect();
+        (sql, cols)
+    };
+    let mut tables = Vec::new();
+    for (sql, cols) in [
+        rows(
+            "SELECT date, nav, invested, cash, index_value FROM snapshots ORDER BY date",
+            &["date", "nav", "invested", "cash", "index_value"],
+        ),
+        rows(
+            "SELECT date, amount, type FROM cashflows ORDER BY id",
+            &["date", "amount", "type"],
+        ),
+    ] {
+        let cur = conn.execute(&sql, &[]).await.unwrap();
+        tables.push(PyValue::List(
+            cur.rows
+                .iter()
+                .map(|r| {
+                    PyValue::List(
+                        cols.iter()
+                            .map(|c| r.get(c).map_or(PyValue::None, super::db_to_py))
+                            .collect(),
+                    )
+                })
+                .collect(),
+        ));
+    }
+    let cashflows = tables.pop().unwrap();
+    let snapshots = tables.pop().unwrap();
+    PyValue::Map(dict([
+        ("runs", PyValue::List(runs)),
+        ("snapshots", snapshots),
+        ("cashflows", cashflows),
     ]))
 }
 
@@ -434,7 +700,7 @@ async fn snapshot_case(input: &PyDict, dir: &std::path::Path) -> PyValue {
 async fn every_golden_case_is_reproduced_byte_for_byte() {
     let root = PyValue::from_json(GOLDENS.as_bytes()).unwrap();
     let cases = l(g(m(&root), "cases"));
-    assert_eq!(cases.len(), 23, "the golden set changed size");
+    assert_eq!(cases.len(), 41, "the golden set changed size");
     let dir = tempfile::tempdir().unwrap();
     let mut failures = Vec::new();
     for (n, case) in cases.iter().enumerate() {
@@ -452,6 +718,10 @@ async fn every_golden_case_is_reproduced_byte_for_byte() {
             "positions" => positions_case(input),
             "reconcile" => reconcile_case(input).await,
             "snapshot" => snapshot_case(input, &sub).await,
+            "snapshot_source" => snapshot_source_case(input, &sub).await,
+            "parse_fallback" => parse_fallback_case(input, &sub, n),
+            "reconcile_raise" => reconcile_raise_case(input).await,
+            "snapshot_cli" => snapshot_cli_case(input, &sub).await,
             other => panic!("unknown kind {other}"),
         };
         let want = text(g(case, "output"));

@@ -14,6 +14,9 @@ path = "src/main.rs"
 [dependencies]
 baskfy-core = { workspace = true }
 baskfy-providers = { workspace = true }
+# The generated scan (lanes/weekly/scan_source.rs) builds the bar frame `baskfy_core::factors`
+# takes; computation only, the workspace's IO-free features (DECISIONS-RS R8.WP1).
+polars = { workspace = true }
 axum = { workspace = true }
 tower = { workspace = true }
 tokio = { workspace = true }
@@ -35,6 +38,11 @@ minijinja-contrib = { workspace = true }
 md-5 = { workspace = true }
 httpdate = { workspace = true }
 futures-util = { workspace = true }
+# The swing notifier's transports (DECISIONS-RS R8.SM3): Telegram's sendMessage over reqwest, the
+# relay's STARTTLS over tokio-rustls with the webpki roots.
+reqwest = { workspace = true }
+tokio-rustls = { workspace = true }
+webpki-roots = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

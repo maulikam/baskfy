@@ -679,6 +679,19 @@ fn pg_rows(rows: &[sqlx::postgres::PgRow]) -> Result<Vec<Row>, StorageError> {
         .collect()
 }
 
+/// `sqlite3.register_adapter(Decimal, str)`, once set (process-wide, as Python's registry is).
+static SQLITE_DECIMAL_ADAPTER: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// `sqlite3.register_adapter(Decimal, str)`: what the Python desk's **tests** register before
+/// they drive a store over a SQLite file (`tests/test_twt_desk.py`, `test_vbt_desk.py`, …).
+/// sqlite3 has no `Decimal`, the desk's Postgres driver does; with this set a `Decimal` binds as
+/// the string of its exact value, as that adapter writes it. Never called outside tests: the
+/// desk itself keeps sqlite3's refusal (R8.2). Process-wide and one-way, like Python's.
+pub fn register_sqlite_decimal_adapter() {
+    SQLITE_DECIMAL_ADAPTER.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
 fn sqlite_bind<'q>(
     mut query: sqlx::query::Query<'q, Sqlite, sqlx::sqlite::SqliteArguments<'q>>,
     params: &'q [Param],
@@ -695,6 +708,11 @@ fn sqlite_bind<'q>(
             Param::Date(d) => query.bind(d.format("%Y-%m-%d").to_string()),
             Param::Naive(t) => query.bind(t.format("%Y-%m-%d %H:%M:%S%.f").to_string()),
             Param::Aware(t) => query.bind(t.format("%Y-%m-%d %H:%M:%S%.f%:z").to_string()),
+            Param::Decimal(d)
+                if SQLITE_DECIMAL_ADAPTER.load(std::sync::atomic::Ordering::SeqCst) =>
+            {
+                query.bind(d.to_string())
+            }
             Param::Decimal(_) => {
                 return Err(StorageError::BadParameter(format!(
                     "Error binding parameter {}: type 'decimal.Decimal' is not supported",

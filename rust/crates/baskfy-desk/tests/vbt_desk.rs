@@ -79,6 +79,8 @@ struct MemoryStore {
     sessions: Vec<(NaiveDate, Rec)>,
     issues: Vec<Rec>,
     locked: Vec<NaiveDate>,
+    unlocked: usize,
+    busy: bool,
     next: i64,
 }
 
@@ -301,8 +303,29 @@ impl VbtStore for MemoryStore {
         Ok(())
     }
     async fn lock_session_for_update(&mut self, day: NaiveDate) -> StoreResult<()> {
+        if self.busy {
+            return Err(StoreError::SessionBusy);
+        }
         self.locked.push(day);
         Ok(())
+    }
+    async fn unlock_session(&mut self) -> StoreResult<()> {
+        self.unlocked += 1;
+        Ok(())
+    }
+    async fn order_for_signal(
+        &mut self,
+        instrument_id: i64,
+        signal_date: NaiveDate,
+    ) -> StoreResult<Option<i64>> {
+        Ok(self
+            .orders
+            .iter()
+            .find(|(_, r)| {
+                r.int("instrument_id") == instrument_id
+                    && r.date("signal_date") == Some(signal_date)
+            })
+            .map(|(id, _)| *id))
     }
     async fn entries_taken(&mut self, _day: NaiveDate) -> StoreResult<i64> {
         #[allow(clippy::cast_possible_wrap)]
@@ -363,6 +386,11 @@ struct Bed {
 
 impl Bed {
     async fn new() -> Self {
+        Self::with(settings()).await
+    }
+
+    /// The bed over the given settings (`monkeypatch.setattr(C, "DRY_RUN", ...)`).
+    async fn with(base: Settings) -> Self {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(dir.path().join("kite.json"), FIXTURE).unwrap();
         std::fs::create_dir(dir.path().join("instruments")).unwrap();
@@ -373,7 +401,7 @@ impl Bed {
         .unwrap();
         let kite = Arc::new(ReplayKite::load(dir.path(), None, "test-api-key").unwrap());
         let clock: Arc<dyn Clock> = Arc::new(FixedClock::new(now()));
-        let shared = Arc::new(RwLock::new(settings()));
+        let shared = Arc::new(RwLock::new(base.clone()));
         let db = Db::open(DbConfig {
             backend: "sqlite".to_owned(),
             schema: String::new(),
@@ -398,7 +426,7 @@ impl Bed {
         );
         let cell = Arc::new(SharedRisk::of(risk, shared.clone(), clock, db));
         let desk = DeskGateway::build_with_risk(parts, cell).unwrap();
-        let s = settings();
+        let s = base.clone();
         let gw = desk
             .derive_sleeve(SleeveGatewaySpec {
                 derived: DerivedGateway {
@@ -406,7 +434,7 @@ impl Bed {
                     journal_path: dir.path().join(x::VBT_JOURNAL_NAME),
                     fo_coverage: false,
                 },
-                stop_band: x::vbt_stop_band(&settings()).unwrap(),
+                stop_band: x::vbt_stop_band(&base).unwrap(),
             })
             .expect("the desk gateway derives a sleeve");
         Self {
@@ -1433,4 +1461,462 @@ fn a_line_id_past_i64_is_python_int_text_and_garbage_is_not() {
     for bad in ["1.5", "abc", "", "1__0", "_1", "1_", "1e3", "--1"] {
         assert_eq!(v::unbounded_int_text(bad), None, "{bad:?}");
     }
+}
+
+// =============================================================================================
+// R8.VB2 — one entry per name per signal, refused before the gateway (`TestOneEntryPerSignal`)
+// =============================================================================================
+
+/// A gateway that counts every call and answers as the dry-run branch would.
+#[derive(Default)]
+struct Counting {
+    calls: std::sync::Mutex<Vec<String>>,
+}
+
+impl Counting {
+    fn calls(&self) -> Vec<String> {
+        self.calls.lock().unwrap().clone()
+    }
+}
+
+#[async_trait]
+impl Gateway for Counting {
+    async fn place(&self, _order: PlaceOrder) -> Result<PyDict, GatewayError> {
+        self.calls.lock().unwrap().push("place".into());
+        Ok(baskfy_desk::wire::dict([
+            ("status", PyValue::Str("DRY_RUN".into())),
+            ("order_id", PyValue::Str("dry".into())),
+        ]))
+    }
+    async fn place_gtt_stop(&self, _stop: GttStop) -> Result<PyDict, GatewayError> {
+        self.calls.lock().unwrap().push("place_gtt_stop".into());
+        Ok(baskfy_desk::wire::dict([
+            ("status", PyValue::Str("DRY_RUN_GTT".into())),
+            ("trigger_id", PyValue::Str("g".into())),
+        ]))
+    }
+    async fn delete_gtt(&self, _req: DeleteGtt) -> Result<PyDict, GatewayError> {
+        self.calls.lock().unwrap().push("delete_gtt".into());
+        Ok(PyDict::default())
+    }
+    async fn modify_gtt_quantity(&self, _req: ModifyGtt) -> Result<PyDict, GatewayError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push("modify_gtt_quantity".into());
+        Ok(PyDict::default())
+    }
+    async fn cancel_order(&self, _req: CancelOrder) -> Result<PyDict, GatewayError> {
+        self.calls.lock().unwrap().push("cancel_order".into());
+        Ok(PyDict::default())
+    }
+}
+
+fn taken_on(store: &mut MemoryStore, state: &str, signal: NaiveDate) {
+    store.insert_order(
+        900,
+        Rec::of([
+            ("instrument_id", Val::Int(42)),
+            ("signal_date", Val::Date(signal)),
+            ("state", Val::from(state)),
+        ]),
+    );
+}
+
+#[tokio::test]
+async fn a_second_order_on_the_same_signal_is_refused_before_the_gateway() {
+    for kind in ["PLACE_LIMIT", "BUY_AT_MARKET"] {
+        for state in ["FILLED", "CANCELLED", "EXPIRED", "REJECTED"] {
+            let (mut store, plan_id, line_id) = a_store(kind, &[]);
+            taken_on(&mut store, state, session());
+            let gw = Counting::default();
+            let outcome = x::execute_line(
+                &mut store,
+                &gw,
+                &settings(),
+                &plan_id,
+                line_id,
+                "true",
+                now(),
+                Some(d("97.50")),
+            )
+            .await
+            .unwrap();
+            assert_eq!(outcome.status, "BLOCKED", "{kind} {state}");
+            assert!(
+                outcome.reason.starts_with("ALREADY_SENT") && outcome.reason.contains("order 900"),
+                "{}",
+                outcome.reason
+            );
+            assert_eq!(
+                outcome.reason,
+                "ALREADY_SENT: order 900 already took this name on the 2026-09-09 signal; \
+                 one entry per name per signal"
+            );
+            assert!(gw.calls().is_empty(), "nothing may reach the gateway");
+            assert_eq!(store.line_state(line_id), "REJECTED");
+            assert_eq!(store.orders.len(), 1);
+        }
+    }
+}
+
+#[tokio::test]
+async fn a_fresh_signal_in_the_same_name_is_a_fresh_entry() {
+    let bed = Bed::new().await;
+    for kind in ["PLACE_LIMIT", "BUY_AT_MARKET"] {
+        let (mut store, plan_id, line_id) = a_store(kind, &[]);
+        taken_on(&mut store, "CANCELLED", session() - Duration::days(1));
+        let outcome = confirm_with(
+            &bed,
+            &mut store,
+            &plan_id,
+            line_id,
+            "true",
+            now(),
+            Some(d("97.50")),
+        )
+        .await
+        .unwrap();
+        assert_eq!(outcome.status, "SIMULATED", "{}", outcome.reason);
+    }
+}
+
+#[tokio::test]
+async fn a_store_that_cannot_answer_the_signal_question_refuses_the_entry() {
+    // The protocol's default fails closed: an entry is never sent unasked.
+    struct Silent(MemoryStore);
+    #[async_trait]
+    impl VbtStore for Silent {
+        async fn plan(&mut self, p: &str) -> StoreResult<Option<Rec>> {
+            self.0.plan(p).await
+        }
+        async fn line(&mut self, l: i64) -> StoreResult<Option<Rec>> {
+            self.0.line(l).await
+        }
+        async fn set_line(&mut self, l: i64, s: &str, e: LineUpdate) -> StoreResult<()> {
+            self.0.set_line(l, s, e).await
+        }
+        async fn open_position_for(&mut self, i: i64) -> StoreResult<Option<Rec>> {
+            self.0.open_position_for(i).await
+        }
+        async fn position(&mut self, p: i64) -> StoreResult<Option<Rec>> {
+            VbtStore::position(&mut self.0, p).await
+        }
+        async fn create_position(&mut self, f: Rec) -> StoreResult<i64> {
+            self.0.create_position(f).await
+        }
+        async fn update_position(&mut self, p: i64, f: Rec) -> StoreResult<()> {
+            self.0.update_position(p, f).await
+        }
+        async fn add_fill(&mut self, f: Rec) -> StoreResult<i64> {
+            self.0.add_fill(f).await
+        }
+        async fn order(&mut self, o: i64) -> StoreResult<Option<Rec>> {
+            self.0.order(o).await
+        }
+        async fn create_order(&mut self, f: Rec) -> StoreResult<i64> {
+            self.0.create_order(f).await
+        }
+        async fn update_order(&mut self, o: i64, f: Rec) -> StoreResult<()> {
+            self.0.update_order(o, f).await
+        }
+        async fn working_order_for(&mut self, i: i64) -> StoreResult<Option<Rec>> {
+            self.0.working_order_for(i).await
+        }
+        async fn order_by_broker_id(&mut self, b: &str) -> StoreResult<Option<Rec>> {
+            self.0.order_by_broker_id(b).await
+        }
+        async fn open_orders(&mut self) -> StoreResult<Vec<Rec>> {
+            self.0.open_orders().await
+        }
+        async fn open_positions(&mut self) -> StoreResult<Vec<Rec>> {
+            self.0.open_positions().await
+        }
+        async fn open_protection_issues(&mut self) -> StoreResult<Vec<Rec>> {
+            self.0.open_protection_issues().await
+        }
+        async fn create_exit_order(&mut self, f: Rec) -> StoreResult<i64> {
+            self.0.create_exit_order(f).await
+        }
+        async fn exit_order_by_broker_id(&mut self, b: &str) -> StoreResult<Option<Rec>> {
+            self.0.exit_order_by_broker_id(b).await
+        }
+        async fn update_exit_order(&mut self, e: i64, f: Rec) -> StoreResult<()> {
+            self.0.update_exit_order(e, f).await
+        }
+        async fn line_by_client_id(&mut self, c: &str) -> StoreResult<Option<Rec>> {
+            self.0.line_by_client_id(c).await
+        }
+        async fn bump_session(&mut self, d: NaiveDate, b: SessionBump) -> StoreResult<()> {
+            self.0.bump_session(d, b).await
+        }
+        async fn lock_session_for_update(&mut self, d: NaiveDate) -> StoreResult<()> {
+            self.0.lock_session_for_update(d).await
+        }
+        async fn entries_taken(&mut self, d: NaiveDate) -> StoreResult<i64> {
+            self.0.entries_taken(d).await
+        }
+    }
+    let (inner, plan_id, line_id) = a_store("PLACE_LIMIT", &[]);
+    let mut store = Silent(inner);
+    let gw = Counting::default();
+    let out = x::execute_line(
+        &mut store,
+        &gw,
+        &settings(),
+        &plan_id,
+        line_id,
+        "true",
+        now(),
+        None,
+    )
+    .await;
+    assert!(out.is_err(), "{out:?}");
+    assert!(gw.calls().is_empty());
+}
+
+// =============================================================================================
+// R8.VB1 — the lock's exit, and a held lock is a 409 before anything is read or sent
+// =============================================================================================
+
+#[tokio::test]
+async fn every_confirm_leaves_the_lock_on_the_way_out_even_a_refused_one() {
+    let bed = Bed::new().await;
+    let (mut store, plan_id, line_id) = a_store("PLACE_LIMIT", &[]);
+    confirm(&bed, &mut store, &plan_id, line_id).await;
+    assert_eq!(store.unlocked, 1);
+    // A refusal inside the block (the line is no longer PROPOSED) is a 409 before the lock,
+    // and the exit still runs exactly once per call.
+    let _ = confirm_with(&bed, &mut store, &plan_id, line_id, "true", now(), None).await;
+    assert_eq!(store.unlocked, 2);
+}
+
+#[tokio::test]
+async fn a_held_session_lock_is_a_409_and_nothing_is_sent_or_written() {
+    let (mut store, plan_id, line_id) = a_store("PLACE_LIMIT", &[]);
+    store.busy = true;
+    let gw = Counting::default();
+    let e = x::execute_line(
+        &mut store,
+        &gw,
+        &settings(),
+        &plan_id,
+        line_id,
+        "true",
+        now(),
+        None,
+    )
+    .await
+    .unwrap_err();
+    let (status, detail) = status_of(e);
+    assert_eq!(status, 409);
+    assert_eq!(detail, baskfy_desk::lanes::vbt::store::SESSION_BUSY);
+    assert!(detail.starts_with("SESSION_BUSY"));
+    assert!(gw.calls().is_empty());
+    assert_eq!(
+        store.line_state(line_id),
+        "PROPOSED",
+        "it can be confirmed again"
+    );
+    assert!(store.orders.is_empty());
+}
+
+#[tokio::test]
+async fn a_broker_report_meeting_a_held_lock_is_a_409_too() {
+    let (mut store, _plan_id, _line_id) = a_store("PLACE_LIMIT", &[]);
+    store.insert_order(
+        900,
+        Rec::of([
+            ("instrument_id", Val::Int(42)),
+            ("state", Val::from("SENT")),
+            ("broker_order_id", Val::from("B1")),
+            ("quantity", Val::Int(10)),
+        ]),
+    );
+    store.busy = true;
+    let gw = Counting::default();
+    let payload = baskfy_desk::wire::dict([
+        ("order_id", PyValue::Str("B1".into())),
+        ("status", PyValue::Str("COMPLETE".into())),
+        ("filled_quantity", PyValue::Int(10)),
+        ("average_price", PyValue::Float(96.0)),
+    ]);
+    let e = x::on_order_update(&mut store, &gw, &settings(), &payload, now())
+        .await
+        .unwrap_err();
+    assert_eq!(status_of(e).0, 409);
+    assert_eq!(store.unlocked, 1);
+    assert!(gw.calls().is_empty());
+}
+
+// =============================================================================================
+// The exact-expiry instant: Python's clock is microseconds, half-even
+// =============================================================================================
+
+#[test]
+fn the_desk_clock_rounds_to_microseconds_half_even_as_cpython_does() {
+    // 2026-10-21 09:30:00.355993 IST, the case that went red at nanosecond precision.
+    let expires = ist()
+        .with_ymd_and_hms(2026, 10, 21, 9, 30, 0)
+        .unwrap()
+        .checked_add_signed(Duration::microseconds(355_993))
+        .unwrap();
+    let t = baskfy_desk::clock::epoch_seconds(&expires);
+    let now = v::py_fromtimestamp_ist(t);
+    assert_eq!(
+        now, expires,
+        "at the stored microsecond the plan is still live"
+    );
+    assert_eq!(now.timestamp_subsec_nanos() % 1_000, 0);
+    // CPython's own answers (`datetime.fromtimestamp(t, timezone.utc).microsecond`), which
+    // round the float's fraction half-even: 2.5e-6 → 2 and 1.25e-5 → 12, never up.
+    let at = |s: f64| v::py_fromtimestamp_ist(s).timestamp_subsec_micros();
+    assert_eq!(at(1.000_000_5), 1);
+    assert_eq!(at(1.000_001_5), 1);
+    assert_eq!(at(2.5e-6), 2);
+    assert_eq!(at(1.25e-5), 12);
+    assert_eq!(at(1.999_999_9), 0, "carries into the next second");
+    assert_eq!(v::py_fromtimestamp_ist(1.999_999_9).timestamp(), 2);
+    assert_eq!(
+        v::py_fromtimestamp_ist(-0.25).timestamp_subsec_micros(),
+        750_000
+    );
+    assert_eq!(v::py_fromtimestamp_ist(-0.25).timestamp(), -1);
+}
+
+// =============================================================================================
+// test_vbt_safety.py — TestNothingReachesABroker, TestTheTwoWaysThisLosesMoneyQuietly
+// =============================================================================================
+
+/// `_confirm_every_kind(spy)`: one line of every executable kind through the real gateway.
+async fn confirm_every_kind(bed: &Bed, s: &Settings) -> Vec<String> {
+    let mut kinds = x::EXECUTABLE_KINDS.to_vec();
+    kinds.sort_unstable();
+    let mut outcomes = Vec::new();
+    for kind in kinds {
+        let (mut store, plan_id, line_id) = a_store(kind, &[]);
+        if kind == "SELL_AT_OPEN" || kind == "ARM_GTT" {
+            let mut p = holding(1_000);
+            p.set("gtt_id", Val::None);
+            store.insert_position(1, p);
+            find(&mut store.lines, line_id)
+                .unwrap()
+                .set("position_id", Val::Int(1));
+        }
+        if kind == "CANCEL_LIMIT" {
+            store.insert_order(
+                1,
+                Rec::of([
+                    ("instrument_id", Val::Int(42)),
+                    ("symbol", Val::from("VBTCO")),
+                    ("state", Val::from("SENT")),
+                    ("quantity", Val::Int(1_000)),
+                    ("filled_quantity", Val::Int(0)),
+                    ("broker_order_id", Val::None),
+                    ("limit_price", Val::Dec(d("96.00"))),
+                ]),
+            );
+            find(&mut store.lines, line_id)
+                .unwrap()
+                .set("order_id", Val::Int(1));
+        }
+        let outcome = x::execute_line(
+            &mut store,
+            bed.gateway.as_ref(),
+            s,
+            &plan_id,
+            line_id,
+            "true",
+            now(),
+            Some(d("96.00")),
+        )
+        .await
+        .unwrap();
+        outcomes.push(format!("{kind}:{}", outcome.status));
+    }
+    outcomes
+}
+
+#[tokio::test]
+async fn no_line_kind_reaches_the_adapter_with_the_flag_false() {
+    // `02` Track B: the execution flag decides, not DRY_RUN — so both values are driven.
+    for dry_run in [true, false] {
+        let mut s = settings();
+        s.dry_run = dry_run;
+        s.vbt_execution_enabled = false;
+        let bed = Bed::with(s.clone()).await;
+        let outcomes = confirm_every_kind(&bed, &s).await;
+        assert_eq!(
+            outcomes.len(),
+            6,
+            "no executable kinds were driven, so this would prove nothing"
+        );
+        assert!(
+            bed.kite.write_calls().is_empty(),
+            "DRY_RUN={dry_run}: the adapter was called: {:?} ({outcomes:?})",
+            bed.kite.write_calls()
+        );
+    }
+}
+
+#[test]
+fn the_flag_defaults_to_false_in_the_desk_and_the_simulated_marker_is_on() {
+    let s = settings();
+    assert!(
+        !s.vbt_execution_enabled,
+        "a safety flag whose default is on is not one"
+    );
+    assert!(x::is_simulated(&s));
+}
+
+#[tokio::test]
+async fn a_sell_larger_than_the_position_is_blocked_with_both_numbers() {
+    let bed = Bed::new().await;
+    for (held, asked) in [(1_000, 1_001), (1_000, 5_000), (1, 2), (100, 101)] {
+        let (mut store, plan_id, line_id) =
+            a_store("SELL_AT_OPEN", &[("quantity", Val::Int(asked))]);
+        let mut p = holding(held);
+        p.set("gtt_id", Val::from("SIM-1"));
+        store.insert_position(1, p);
+        find(&mut store.lines, line_id)
+            .unwrap()
+            .set("position_id", Val::Int(1));
+        let outcome = confirm_with(
+            &bed,
+            &mut store,
+            &plan_id,
+            line_id,
+            "true",
+            now(),
+            Some(d("96.00")),
+        )
+        .await
+        .unwrap();
+        assert_eq!(outcome.status, "BLOCKED", "{held}/{asked}");
+        assert!(
+            outcome.reason.contains(&held.to_string())
+                && outcome.reason.contains(&asked.to_string()),
+            "{}",
+            outcome.reason
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_sell_for_a_name_the_sleeve_does_not_hold_is_blocked_whatever_the_price() {
+    let bed = Bed::new().await;
+    let (mut store, plan_id, line_id) = a_store("SELL_AT_OPEN", &[]);
+    let outcome = confirm_with(
+        &bed,
+        &mut store,
+        &plan_id,
+        line_id,
+        "true",
+        now(),
+        Some(d("96.00")),
+    )
+    .await
+    .unwrap();
+    assert_eq!(outcome.status, "BLOCKED");
+    assert!(outcome.reason.to_lowercase().contains("did not buy"));
 }

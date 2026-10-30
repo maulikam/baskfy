@@ -1,0 +1,108 @@
+{
+ "note": "Lane exec_gateway variant: run with --fixture <absolute path>/tools/parity/desk_fixtures/lifecycle_gtts (absolute: the desks run from their own run directories) (the broker lists GTTs for the bed's TWT book: ARMED, OVERSIZED, TRIGGERED, cancelled, UNDERSIZED, one absent) so every stop state is graded, and adoptions LINK a hand-armed GTT whose trigger becomes the stop.",
+ "db_mask": {
+  "public.risk_ledger": [
+   "updated_at"
+  ],
+  "public.tw_position": [
+   "created_at",
+   "updated_at"
+  ],
+  "public.tw_fill": [
+   "created_at"
+  ],
+  "public.vb_position": [
+   "created_at",
+   "updated_at"
+  ],
+  "public.vb_fill": [
+   "created_at"
+  ],
+  "public.sw_position": [
+   "created_at",
+   "updated_at"
+  ],
+  "public.sw_fill": [
+   "created_at"
+  ],
+  "public.lv_adoption": [
+   "created_at"
+  ]
+ },
+ "cases": [
+  {
+   "name": "lifecycle/gtts: the page judges every TWT stop against the broker's list",
+   "method": "GET",
+   "path": "/lifecycle",
+   "clock": "mid"
+  },
+  {
+   "name": "lifecycle/gtts: the data view",
+   "method": "GET",
+   "path": "/lifecycle/data"
+  },
+  {
+   "name": "lifecycle/gtts: vbt TCS links GTT 5150; its trigger 3100 becomes the stop",
+   "method": "POST",
+   "path": "/lifecycle/adopt",
+   "form": {
+    "sleeve": "vbt",
+    "symbol": "TCS",
+    "quantity": "7",
+    "avg_cost": "3333.33",
+    "gtt_id": "5150",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "lifecycle/gtts: twt ITC links GTT 5151 resting for 250",
+   "method": "POST",
+   "path": "/lifecycle/adopt",
+   "form": {
+    "sleeve": "twt",
+    "symbol": "ITC",
+    "quantity": "250",
+    "avg_cost": "401.15",
+    "gtt_id": "5151",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "lifecycle/gtts: confirm=on is not true (400)",
+   "method": "POST",
+   "path": "/lifecycle/adopt",
+   "form": {
+    "sleeve": "twt",
+    "symbol": "ITC",
+    "quantity": "250",
+    "avg_cost": "401.15",
+    "gtt_id": "5151",
+    "confirm": "on"
+   }
+  },
+  {
+   "name": "lifecycle/gtts: swing INFY with no GTT arms one",
+   "method": "POST",
+   "path": "/lifecycle/adopt",
+   "form": {
+    "sleeve": "swing",
+    "symbol": "INFY",
+    "quantity": "5",
+    "avg_cost": "1500",
+    "setup": "FLAG",
+    "confirm": "true"
+   }
+  },
+  {
+   "name": "lifecycle/gtts: the data view after (TCS and ITC armed by link, INFY simulated)",
+   "method": "GET",
+   "path": "/lifecycle/data",
+   "advance": 2400
+  },
+  {
+   "name": "lifecycle/gtts: the page after",
+   "method": "GET",
+   "path": "/lifecycle"
+  }
+ ]
+}

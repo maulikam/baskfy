@@ -1536,6 +1536,37 @@ pub async fn execute_line(
     now: DateTime<FixedOffset>,
     last_price: Option<Decimal>,
 ) -> ExecResult<ExecOutcome> {
+    let out = execute_line_locked(
+        store, gateway, settings, plan_id, line_id, confirm, now, last_price,
+    )
+    .await;
+    leave_session_lock(store, out).await
+}
+
+/// The exit of `with store.lock_session_for_update(day):` (R8.TD1): the lock's transaction is
+/// committed whether the body returned or raised — what was written stays written, as the
+/// autocommit connection kept it — and a held row is Python's `HTTPException(409)`.
+async fn leave_session_lock<T>(store: &mut dyn TwtStore, out: ExecResult<T>) -> ExecResult<T> {
+    store.unlock_session().await?;
+    match out {
+        Err(ExecError::Store(StoreError::SessionBusy)) => {
+            Err(http(409, super::store::SESSION_BUSY))
+        }
+        other => other,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn execute_line_locked(
+    store: &mut dyn TwtStore,
+    gateway: &dyn Gateway,
+    settings: &Settings,
+    plan_id: &str,
+    line_id: i64,
+    confirm: &str,
+    now: DateTime<FixedOffset>,
+    last_price: Option<Decimal>,
+) -> ExecResult<ExecOutcome> {
     let gates = twt_gates(settings);
     let (line, _) = validate(store, plan_id, line_id, confirm, &now).await?;
     let plan = store
@@ -1908,6 +1939,17 @@ pub struct OrderReport {
 /// # Errors
 /// The gateway's raise, or the store.
 pub async fn on_order_update(
+    store: &mut dyn TwtStore,
+    gateway: &dyn Gateway,
+    settings: &Settings,
+    payload: &OrderReport,
+    now: DateTime<FixedOffset>,
+) -> ExecResult<Option<ExecOutcome>> {
+    let out = on_order_update_locked(store, gateway, settings, payload, now).await;
+    leave_session_lock(store, out).await
+}
+
+async fn on_order_update_locked(
     store: &mut dyn TwtStore,
     gateway: &dyn Gateway,
     settings: &Settings,

@@ -12,16 +12,22 @@
 //! handler and the gateway (law 2); this module holds no Kite writer, only the three reads of
 //! [`OrderBook`].
 //!
-//! **Not here (loud):** `twt_hooks`, `vbt_hooks`, `swing_hooks` and `run_pass_from_desk` wire the
-//! sleeves' stores and gateways; each sleeve lane implements [`SleeveHooks`] over its own
-//! `on_order_update`, and lane `session` (the supervisor) runs the pass.
+//! The three sleeves' hooks (`twt_hooks`, `vbt_hooks`, `swing_hooks`) and `run_pass_from_desk`
+//! are [`super::reconcile_hooks`]; lane `session`'s supervisor runs the pass through
+//! [`super::reconcile_hooks::DeskReconcilePass`].
+//!
+//! **Where it fails.** Like Python's, a pass records an unreadable broker read, a sleeve store
+//! that will not list, and a handler that raises, and carries on; it **fails** (no run) where
+//! Python's raises — the issue store, a position without a readable `id`, a dead order's
+//! remainder that cannot be valued, the risk ledger (DECISIONS-RS R8.WB1).
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use chrono::{DateTime, FixedOffset};
 use rust_decimal::Decimal;
 
-use super::{pyi, pys};
+use super::pyconv::{self, PyDecimal};
+use super::pys;
 use crate::clock::ist;
 use crate::storage::{Conn, DbValue, Param, StorageError};
 use crate::wire::{PyDict, PyValue};
@@ -157,8 +163,8 @@ pub trait SleeveHooks: Send + Sync {
     async fn open_positions(&self) -> Result<Vec<PyDict>, HookError>;
     /// Whether the sleeve has a risk manager (`risk is not None`).
     fn has_risk(&self) -> bool;
-    /// `risk.release(symbol, value)`.
-    fn release(&self, symbol: &str, value: f64);
+    /// `risk.release(symbol, value)` (its raise escapes the pass, as Python's does).
+    async fn release(&self, symbol: &str, value: f64) -> Result<(), HookError>;
 }
 
 /// One Kite GTT, as the reconciler reads it.
@@ -257,51 +263,89 @@ impl ReconcileRun {
     }
 }
 
-/// `str(Decimal(str(x)))` for a trigger value.
-fn decimal_of(v: &PyValue) -> Option<Decimal> {
-    let text = match v {
-        PyValue::Float(f) => baskfy_providers::py::repr_float(*f),
-        other => other.py_str(),
-    };
-    text.parse::<Decimal>()
-        .ok()
-        .or_else(|| Decimal::from_scientific(&text).ok())
+/// `x or {}` / `x or []` read as a dict: falsy → empty, a dict as itself, anything else is what
+/// Python's next `.get` raises on.
+fn as_dict<'a>(v: Option<&'a PyValue>, empty: &'a PyDict) -> Result<&'a PyDict, HookError> {
+    match v {
+        Some(PyValue::Map(m)) => Ok(m),
+        Some(x) if x.truthy() => Err(pyconv::no_get(x)),
+        _ => Ok(empty),
+    }
+}
+
+/// `x or []` iterated: a list's items, a string's characters, a dict's keys.
+fn as_items(v: Option<&PyValue>) -> Result<Vec<PyValue>, HookError> {
+    match v {
+        Some(PyValue::List(l)) => Ok(l.clone()),
+        Some(PyValue::Str(s)) => Ok(s.chars().map(|c| PyValue::Str(c.to_string())).collect()),
+        Some(PyValue::Map(m)) => Ok(m.iter().map(|(k, _)| PyValue::Str(k.to_owned())).collect()),
+        Some(x) if x.truthy() => Err(format!(
+            "TypeError: '{}' object is not iterable",
+            pyconv::type_name(x)
+        )),
+        _ => Ok(Vec::new()),
+    }
+}
+
+/// `values[0] if values else None` on `condition.get("trigger_values") or []`.
+fn first_value(v: Option<&PyValue>) -> Result<Option<PyValue>, HookError> {
+    match v {
+        Some(PyValue::List(l)) => Ok(l.first().cloned()),
+        Some(PyValue::Str(s)) => Ok(s.chars().next().map(|c| PyValue::Str(c.to_string()))),
+        Some(PyValue::Map(m)) if !m.is_empty() => Err("KeyError: 0".to_owned()),
+        Some(x) if x.truthy() => Err(format!(
+            "TypeError: '{}' object is not subscriptable",
+            pyconv::type_name(x)
+        )),
+        _ => Ok(None),
+    }
+}
+
+/// `Decimal(str(values[0]))` for a trigger (the reconciler only carries it).
+fn trigger_of(v: &PyValue) -> Result<Option<Decimal>, HookError> {
+    Ok(match pyconv::decimal(v)? {
+        PyDecimal::Finite(d) => Some(d),
+        // `Decimal('NaN')`/`'Infinity'` are values to Python; no judgement reads the trigger.
+        PyDecimal::NaN | PyDecimal::SNaN | PyDecimal::Inf(_) => None,
+    })
 }
 
 /// `gtt_index(raw)`: Kite's GTT rows by id.
-#[must_use]
-pub fn gtt_index(raw: &[PyValue]) -> HashMap<String, GttRow> {
+///
+/// # Errors
+/// What Python's would raise on a malformed row (`AttributeError`, `ValueError`,
+/// `InvalidOperation`, …) — the pass records it as the GTT read's failure.
+pub fn gtt_index(raw: &[PyValue]) -> Result<HashMap<String, GttRow>, HookError> {
     let empty = PyDict::new();
     let mut out = HashMap::new();
     for t in raw {
-        let PyValue::Map(trigger) = t else { continue };
+        let PyValue::Map(trigger) = t else {
+            return Err(pyconv::no_get(t));
+        };
         let Some(id) = trigger.get("id").filter(|v| !matches!(v, PyValue::None)) else {
             continue;
         };
-        let condition = match trigger.get("condition") {
-            Some(PyValue::Map(m)) => m,
-            _ => &empty,
-        };
-        let values = match condition.get("trigger_values") {
-            Some(PyValue::List(l)) => l.clone(),
-            _ => Vec::new(),
-        };
-        let legs = match trigger.get("orders") {
-            Some(PyValue::List(l)) => l.clone(),
-            _ => Vec::new(),
-        };
+        let condition = as_dict(trigger.get("condition"), &empty)?;
+        let values = first_value(condition.get("trigger_values"))?;
+        let legs = as_items(trigger.get("orders"))?;
         let mut quantity = None;
         for leg in &legs {
-            let PyValue::Map(leg) = leg else { continue };
+            let PyValue::Map(leg) = leg else {
+                return Err(pyconv::no_get(leg));
+            };
             let tt = match leg.get("transaction_type") {
                 Some(v) if v.truthy() => v.py_str(),
                 _ => "SELL".to_owned(),
             };
             if tt.to_uppercase() == "SELL" {
-                quantity = Some(pyi(leg.get("quantity")));
+                quantity = Some(pyconv::int_or_zero(leg.get("quantity"))?);
                 break;
             }
         }
+        let trigger_value = match &values {
+            Some(v) => trigger_of(v)?,
+            None => None,
+        };
         let gtt_id = id.py_str();
         out.insert(
             gtt_id.clone(),
@@ -310,55 +354,77 @@ pub fn gtt_index(raw: &[PyValue]) -> HashMap<String, GttRow> {
                 status: pys(trigger.get("status")).to_lowercase(),
                 symbol: pys(condition.get("tradingsymbol")),
                 quantity,
-                trigger: values.first().and_then(decimal_of),
+                trigger: trigger_value,
             },
         );
     }
-    out
+    Ok(out)
 }
 
 /// `holdings_index(raw)`: the desk's holdings rows (`quantity` already the total) by symbol.
-#[must_use]
-pub fn holdings_index(raw: &[PyDict]) -> HashMap<String, i64> {
-    raw.iter()
-        .filter(|r| r.get("symbol").is_some_and(PyValue::truthy))
-        .map(|r| (pys(r.get("symbol")), pyi(r.get("quantity"))))
-        .collect()
+///
+/// # Errors
+/// `int(quantity)`'s raise.
+pub fn holdings_index(raw: &[PyDict]) -> Result<HashMap<String, i64>, HookError> {
+    let mut out = HashMap::new();
+    for r in raw {
+        if r.get("symbol").is_some_and(PyValue::truthy) {
+            out.insert(
+                pys(r.get("symbol")),
+                pyconv::int_or_zero(r.get("quantity"))?,
+            );
+        }
+    }
+    Ok(out)
 }
 
 /// `reconcile_once(book, sleeves, now=, issues=)`: one pass over every sleeve. Never fails for a
 /// broker that will not answer: each read is tried once, a failure is recorded on the run.
+///
+/// # Errors
+/// Exactly where Python's pass raises (R8.WB1): the issue store's `record`/`resolve_except`, a
+/// position row without a readable `id`, a dead order's remainder that cannot be valued
+/// (`int(quantity)`, `Decimal(reference_price)`, `row["symbol"]`) and the risk ledger's
+/// `release`. The supervisor then beats `error` with that text and no run.
 pub async fn reconcile_once(
     book: &dyn OrderBook,
     sleeves: &[&dyn SleeveHooks],
     now: DateTime<FixedOffset>,
     issues: &mut dyn IssueStore,
-) -> ReconcileRun {
+) -> Result<ReconcileRun, HookError> {
     let mut run = ReconcileRun::new(now);
-    reconcile_orders(book, sleeves, &mut run).await;
-    judge_protection(book, sleeves, &mut run, now, issues).await;
-    run
+    reconcile_orders(book, sleeves, &mut run).await?;
+    judge_protection(book, sleeves, &mut run, now, issues).await?;
+    Ok(run)
+}
+
+/// `{str(row.get("order_id")): row for row in book.orders() if row.get("order_id")}`.
+fn orders_by_id(rows: Vec<PyValue>) -> Result<HashMap<String, PyDict>, HookError> {
+    let mut by_id = HashMap::new();
+    for r in rows {
+        match r {
+            PyValue::Map(m) => {
+                if m.get("order_id").is_some_and(PyValue::truthy) {
+                    let id = m.get("order_id").map_or_else(String::new, PyValue::py_str);
+                    by_id.insert(id, m);
+                }
+            }
+            other => return Err(pyconv::no_get(&other)),
+        }
+    }
+    Ok(by_id)
 }
 
 async fn reconcile_orders(
     book: &dyn OrderBook,
     sleeves: &[&dyn SleeveHooks],
     run: &mut ReconcileRun,
-) {
-    let by_id: HashMap<String, PyDict> = match book.orders().await {
-        Ok(rows) => rows
-            .into_iter()
-            .filter_map(|r| match r {
-                PyValue::Map(m) if m.get("order_id").is_some_and(PyValue::truthy) => Some((
-                    m.get("order_id").map_or_else(String::new, PyValue::py_str),
-                    m,
-                )),
-                _ => None,
-            })
-            .collect(),
+) -> Result<(), HookError> {
+    let by_id = match book.orders().await.and_then(orders_by_id) {
+        Ok(by_id) => by_id,
         Err(e) => {
             run.errors.push(format!("orders: {e}"));
-            return;
+            return Ok(());
         }
     };
     for sleeve in sleeves {
@@ -392,39 +458,63 @@ async fn reconcile_orders(
             let status = pys(payload.get("status")).to_uppercase();
             if ORDER_DEAD_STATUSES.contains(&status.as_str()) {
                 run.dead += 1;
-                if release_remainder(*sleeve, &row, payload) {
+                if release_remainder(*sleeve, &row, payload).await? {
                     run.released += 1;
                 }
             }
         }
     }
+    Ok(())
 }
 
 /// `_release_remainder`: give the unfilled part of a dead order back to the risk ledger.
-fn release_remainder(sleeve: &dyn SleeveHooks, row: &PyDict, payload: &PyDict) -> bool {
+/// `Ok(true)` when something was. Its raises escape the pass, as Python's do.
+async fn release_remainder(
+    sleeve: &dyn SleeveHooks,
+    row: &PyDict,
+    payload: &PyDict,
+) -> Result<bool, HookError> {
     if !sleeve.has_risk() {
-        return false;
+        return Ok(false);
     }
-    let remainder = pyi(row.get("quantity")) - pyi(payload.get("filled_quantity"));
+    let remainder = pyconv::int_or_zero(row.get("quantity"))?
+        - pyconv::int_or_zero(payload.get("filled_quantity"))?;
     let reference = match row.get("reference_price") {
-        None | Some(PyValue::None) => return false,
+        None | Some(PyValue::None) => return Ok(false),
         Some(v) => v,
     };
     if remainder <= 0 {
-        return false;
+        return Ok(false);
     }
-    let Some(reference) = decimal_of(reference) else {
-        return false;
+    // `float(Decimal(str(reference)) * remainder)`.
+    let value: f64 = match pyconv::decimal(reference)? {
+        PyDecimal::Finite(d) => d
+            .checked_mul(Decimal::from(remainder))
+            .ok_or_else(|| {
+                "OverflowError: the remainder's value is outside the desk's range".to_owned()
+            })?
+            .to_string()
+            .parse()
+            .map_err(|_| "ValueError: the remainder's value is not a float".to_owned())?,
+        PyDecimal::NaN => f64::NAN,
+        PyDecimal::Inf(positive) => {
+            if positive {
+                f64::INFINITY
+            } else {
+                f64::NEG_INFINITY
+            }
+        }
+        PyDecimal::SNaN => {
+            return Err("InvalidOperation: [<class 'decimal.InvalidOperation'>]".to_owned());
+        }
     };
-    let value: f64 = (reference * Decimal::from(remainder))
-        .to_string()
-        .parse()
-        .unwrap_or(0.0);
+    // `if value <= 0: return False` — NaN is not `<= 0`, so it is released, as in Python.
     if value <= 0.0 {
-        return false;
+        return Ok(false);
     }
-    sleeve.release(&pys(row.get("symbol")), value);
-    true
+    let symbol = pyconv::index(row, "symbol")?.py_str();
+    sleeve.release(&symbol, value).await?;
+    Ok(true)
 }
 
 fn position_symbol(p: &PyDict) -> String {
@@ -439,22 +529,33 @@ fn position_symbol(p: &PyDict) -> String {
     }
 }
 
+/// `[p for p in rows if int(p.get("quantity_open") or 0) > 0]`.
+fn open_only(rows: Vec<PyDict>) -> Result<Vec<PyDict>, HookError> {
+    let mut out = Vec::new();
+    for p in rows {
+        if pyconv::int_or_zero(p.get("quantity_open"))? > 0 {
+            out.push(p);
+        }
+    }
+    Ok(out)
+}
+
 async fn judge_protection(
     book: &dyn OrderBook,
     sleeves: &[&dyn SleeveHooks],
     run: &mut ReconcileRun,
     now: DateTime<FixedOffset>,
     issues: &mut dyn IssueStore,
-) {
-    let gtts = match book.get_gtts().await {
-        Ok(raw) => Some(gtt_index(&raw)),
+) -> Result<(), HookError> {
+    let gtts = match book.get_gtts().await.and_then(|raw| gtt_index(&raw)) {
+        Ok(index) => Some(index),
         Err(e) => {
             run.errors.push(format!("gtts: {e}"));
             None
         }
     };
-    let held = match book.holdings().await {
-        Ok(raw) => Some(holdings_index(&raw)),
+    let held = match book.holdings().await.and_then(|raw| holdings_index(&raw)) {
+        Ok(index) => Some(index),
         Err(e) => {
             run.errors.push(format!("holdings: {e}"));
             None
@@ -462,13 +563,12 @@ async fn judge_protection(
     };
     let mut positions: Vec<(String, Vec<PyDict>)> = Vec::new();
     for sleeve in sleeves {
-        match sleeve.open_positions().await {
-            Ok(rows) => positions.push((
-                sleeve.name().to_owned(),
-                rows.into_iter()
-                    .filter(|p| pyi(p.get("quantity_open")) > 0)
-                    .collect(),
-            )),
+        match sleeve.open_positions().await.and_then(open_only) {
+            Ok(rows) => {
+                // A dict keyed by name: a second sleeve of the same name replaces the first.
+                positions.retain(|(n, _)| n != sleeve.name());
+                positions.push((sleeve.name().to_owned(), rows));
+            }
             Err(e) => run
                 .errors
                 .push(format!("{} open_positions: {e}", sleeve.name())),
@@ -479,7 +579,9 @@ async fn judge_protection(
     for (_, rows) in &positions {
         for p in rows {
             if !p.get("simulated").is_some_and(PyValue::truthy) {
-                *recorded.entry(position_symbol(p)).or_insert(0) += pyi(p.get("quantity_open"));
+                // `int(p["quantity_open"])`: present and int-able, `open_only` read it.
+                *recorded.entry(position_symbol(p)).or_insert(0) +=
+                    pyconv::int_or_zero(p.get("quantity_open"))?;
             }
         }
     }
@@ -487,10 +589,16 @@ async fn judge_protection(
         let Some((_, rows)) = positions.iter().find(|(n, _)| n == sleeve.name()) else {
             continue;
         };
-        let found: Vec<Issue> = rows
-            .iter()
-            .flat_map(|p| judge_position(sleeve.name(), p, gtts.as_ref(), held.as_ref(), &recorded))
-            .collect();
+        let mut found: Vec<Issue> = Vec::new();
+        for p in rows {
+            found.extend(judge_position(
+                sleeve.name(),
+                p,
+                gtts.as_ref(),
+                held.as_ref(),
+                &recorded,
+            )?);
+        }
         let mut observable: BTreeSet<String> =
             ISSUE_KINDS.iter().map(|k| (*k).to_owned()).collect();
         if gtts.is_none() {
@@ -503,24 +611,21 @@ async fn judge_protection(
                 observable.remove(*k);
             }
         }
+        // Python lets the store's raise escape the pass (R8.WB1): no run, the heartbeat says
+        // `error` with the exception, and nothing after the failing write happens.
         for issue in &found {
-            if let Err(e) = issues.record(issue, now).await {
-                run.errors.push(format!("{} record: {e}", sleeve.name()));
-            }
+            issues.record(issue, now).await?;
         }
         let keep: HashSet<(i64, String)> = found
             .iter()
             .map(|i| (i.position_id, i.kind.clone()))
             .collect();
-        match issues
+        run.resolved += issues
             .resolve_except(sleeve.name(), &observable, &keep, now)
-            .await
-        {
-            Ok(n) => run.resolved += n,
-            Err(e) => run.errors.push(format!("{} resolve: {e}", sleeve.name())),
-        }
+            .await?;
         run.issues.extend(found);
     }
+    Ok(())
 }
 
 fn judge_position(
@@ -529,10 +634,10 @@ fn judge_position(
     gtts: Option<&HashMap<String, GttRow>>,
     held: Option<&HashMap<String, i64>>,
     recorded: &HashMap<String, i64>,
-) -> Vec<Issue> {
+) -> Result<Vec<Issue>, HookError> {
     let symbol = position_symbol(position);
-    let position_id = pyi(position.get("id"));
-    let open_qty = pyi(position.get("quantity_open"));
+    let position_id = pyconv::int(pyconv::index(position, "id")?)?;
+    let open_qty = pyconv::int(pyconv::index(position, "quantity_open")?)?;
     let gtt_id = position
         .get("gtt_id")
         .filter(|v| !matches!(v, PyValue::None));
@@ -615,7 +720,7 @@ fn judge_position(
             );
         }
     }
-    found
+    Ok(found)
 }
 
 /// `protection_unresolved(store, naked=)`: why a sleeve may not buy right now — its naked
@@ -963,11 +1068,12 @@ mod tests {
         fn has_risk(&self) -> bool {
             self.risk
         }
-        fn release(&self, symbol: &str, value: f64) {
+        async fn release(&self, symbol: &str, value: f64) -> Result<(), HookError> {
             self.released
                 .lock()
                 .unwrap()
                 .push((symbol.to_owned(), value));
+            Ok(())
         }
     }
 
@@ -1002,7 +1108,9 @@ mod tests {
             orders: vec![sent("B1", 100)],
             ..FakeSleeve::default()
         };
-        let run = reconcile_once(&book, &[&sleeve], now(), &mut MemoryIssueStore::default()).await;
+        let run = reconcile_once(&book, &[&sleeve], now(), &mut MemoryIssueStore::default())
+            .await
+            .unwrap();
         assert_eq!((run.seen, run.applied), (1, 1));
         assert_eq!(*sleeve.updates.lock().unwrap(), ["OPEN"]);
     }
@@ -1016,7 +1124,9 @@ mod tests {
             risk: true,
             ..FakeSleeve::default()
         };
-        let run = reconcile_once(&book, &[&sleeve], now(), &mut MemoryIssueStore::default()).await;
+        let run = reconcile_once(&book, &[&sleeve], now(), &mut MemoryIssueStore::default())
+            .await
+            .unwrap();
         assert_eq!((run.dead, run.released), (1, 1));
         // 60 shares never filled, valued at the order's reference: 60 x 100 = 6,000.
         assert_eq!(
@@ -1037,7 +1147,8 @@ mod tests {
             now(),
             &mut MemoryIssueStore::default(),
         )
-        .await;
+        .await
+        .unwrap();
         assert_eq!((run.unseen, run.applied), (1, 0));
     }
 
@@ -1060,7 +1171,9 @@ mod tests {
             ..FakeSleeve::default()
         };
         let mut issues = MemoryIssueStore::default();
-        let run = reconcile_once(&book, &[&sleeve], now(), &mut issues).await;
+        let run = reconcile_once(&book, &[&sleeve], now(), &mut issues)
+            .await
+            .unwrap();
         let kinds: HashSet<(i64, String)> = run
             .issues
             .iter()
@@ -1089,7 +1202,9 @@ mod tests {
             positions: vec![position(7, "FIRECO", Some("780"), 100, false)],
             ..FakeSleeve::default()
         };
-        let run = reconcile_once(&book, &[&sleeve], now(), &mut MemoryIssueStore::default()).await;
+        let run = reconcile_once(&book, &[&sleeve], now(), &mut MemoryIssueStore::default())
+            .await
+            .unwrap();
         let kinds: Vec<(i64, String)> = run
             .issues
             .iter()
@@ -1108,7 +1223,9 @@ mod tests {
             ..FakeSleeve::default()
         };
         let mut issues = MemoryIssueStore::default();
-        reconcile_once(&book, &[&sleeve], now(), &mut issues).await;
+        reconcile_once(&book, &[&sleeve], now(), &mut issues)
+            .await
+            .unwrap();
         let open: Vec<String> = issues
             .open_issues(Some("twt"))
             .await
@@ -1118,12 +1235,16 @@ mod tests {
             .collect();
         assert_eq!(open, [GTT_MISSING]);
         book.fail.push("gtts");
-        let failed = reconcile_once(&book, &[&sleeve], later(), &mut issues).await;
+        let failed = reconcile_once(&book, &[&sleeve], later(), &mut issues)
+            .await
+            .unwrap();
         assert!(!failed.errors.is_empty());
         assert_eq!(issues.open_issues(Some("twt")).await.unwrap().len(), 1);
         book.fail.clear();
         book.gtt("777", "MISSCO", 1000, "active");
-        let run = reconcile_once(&book, &[&sleeve], later(), &mut issues).await;
+        let run = reconcile_once(&book, &[&sleeve], later(), &mut issues)
+            .await
+            .unwrap();
         assert_eq!(run.resolved, 1);
         assert!(issues.open_issues(Some("twt")).await.unwrap().is_empty());
     }
@@ -1136,7 +1257,9 @@ mod tests {
             orders: vec![sent("B1", 100)],
             ..FakeSleeve::default()
         };
-        let run = reconcile_once(&book, &[&sleeve], now(), &mut MemoryIssueStore::default()).await;
+        let run = reconcile_once(&book, &[&sleeve], now(), &mut MemoryIssueStore::default())
+            .await
+            .unwrap();
         assert!(!run.ok());
         assert!(
             run.line()
@@ -1230,7 +1353,7 @@ mod tests {
     fn gtt_index_reads_the_sell_leg_and_the_trigger() {
         let mut book = FakeBook::default();
         book.gtt("5", "ABC", 7, "ACTIVE");
-        let idx = gtt_index(&book.gtts);
+        let idx = gtt_index(&book.gtts).unwrap();
         let row = &idx["5"];
         assert_eq!(
             (row.status.as_str(), row.symbol.as_str(), row.quantity),

@@ -30,7 +30,8 @@ reported, not graded, unless ``--strict-reads``.
 
 Case file: ``{"cases": [{"name", "method", "path", "query", "form", "files": {"field":
 {"path", "filename"}}, "json", "headers", "clock", "advance", "mask", "plan", "capture",
-"note"}]}``;
+"sql", "note"}]}``; ``"sql"`` is a list of statements run on each side's clone before the case
+(Postgres only: seed rows both desks then read);
 ``"clock"`` is RFC 3339 or a preset (``pre_open`` 08:55, ``open`` 09:16, ``mid`` 11:00, ``close``
 15:29, ``after_close`` 16:05 — all on Friday 30 Oct 2026). ``--plans`` adds one ``POST
 /analyze`` per ``data/uploads/*.csv`` of the regression corpus (read only) and every
@@ -43,6 +44,7 @@ must be EQUAL before a Rust difference means anything).
 from __future__ import annotations
 
 import argparse
+import base64
 import contextlib
 import fcntl
 import glob
@@ -212,10 +214,20 @@ def start(side: Side, args: argparse.Namespace, python: bool) -> None:
         if side.proc.poll() is not None:
             raise SystemExit(f"{side.name} desk exited during start; see {side.run / 'server.log'}")
         with contextlib.suppress(OSError):
-            if request(side, "GET", "/__harness/kite-calls")["status"] == 200:
+            if request(side, "GET", "/__harness/kite-calls", headers=harness_auth(side))["status"] == 200:
                 return
         time.sleep(0.3)
     raise SystemExit(f"{side.name} desk did not come up in {args.start_timeout}s")
+
+
+def harness_auth(side: Side) -> dict[str, str] | None:
+    """The harness's own calls under ``--env DESK_PASSWORD=...`` (exec_guards' password variant):
+    every path but ``/status`` is behind HTTP Basic, the harness routes included. Case requests
+    never get it — they say for themselves what they send."""
+    password = (side.env or {}).get("DESK_PASSWORD")
+    if not password:
+        return None
+    return {"Authorization": "Basic " + base64.b64encode(f"harness:{password}".encode()).decode()}
 
 
 def stop(side: Side) -> None:
@@ -422,6 +434,8 @@ def load_cases(patterns: list[str], plans: bool) -> list[dict[str, Any]]:
 
 
 def run(args: argparse.Namespace) -> int:  # noqa: C901, PLR0912, PLR0915
+    # Both desks start with cwd set to their run directory, so a relative fixture would resolve there.
+    args.fixture = str(Path(args.fixture).resolve())
     for p in (args.py_port, args.rs_port, args.smtp_port):
         if p not in PORTS or port_open(p):
             raise SystemExit(f"port {p} is outside 18500-18799 or already listening")
@@ -483,10 +497,18 @@ def run(args: argparse.Namespace) -> int:  # noqa: C901, PLR0912, PLR0915
             per_side = []
             for side in (py, rs):
                 sub = lambda v, side=side: substitute(v, captured[side.name])  # noqa: E731
+                # ``"sql": [...]``: statements run on this side's own database before the case
+                # (Postgres backend only) — a lane's seed rows, identical on both clones, so they
+                # show up as the same added/changed rows on both sides and are graded like any
+                # other (lane swing_exec, wave D2). Never on the template, never on ``baskfy``.
+                for stmt in case.get("sql") or []:
+                    if args.backend == "postgres" and side.db_name:
+                        aw.psql(side.db_name, stmt)
                 for move in ({"iso": clock_iso(case["clock"])} if case.get("clock") else None,
                              {"advance": case["advance"]} if case.get("advance") else None):
                     if move is not None:
-                        moved = request(side, "POST", "/__harness/clock", body_json=move)
+                        moved = request(side, "POST", "/__harness/clock", body_json=move,
+                                        headers=harness_auth(side))
                         if moved["status"] != 200:
                             raise SystemExit(f"{side.name}: the clock refused {move}: {moved['status']} {moved['body'][:300]!r}")
                 mark = sink.mark()

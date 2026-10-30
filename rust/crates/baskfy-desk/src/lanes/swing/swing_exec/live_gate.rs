@@ -119,6 +119,57 @@ impl LiveLevel for KiteLevel {
     }
 }
 
+/// `desk_level()`: a [`LiveLevel`] over the desk server's own Kite wrapper
+/// (`app.kite_client.Kite.ltp`: the LTP cache and the read limiter first, and
+/// `refresh_token_if_changed` before the read), resolved at read time — where [`KiteLevel`]
+/// reads the SDK directly. `None` at every read when `Kite()` cannot be constructed (no
+/// `KITE_API_KEY`) or the desk carries no wrapper: Python's `except Exception: return None`.
+/// The index is the setting's `SWING_INDEX_SLUG` as it stands at the read (`kite_level(kite)`
+/// with no slug).
+pub struct DeskLevel {
+    kite: Option<Arc<crate::lanes::exec_core::kite_client::DeskKite>>,
+    settings: crate::settings::SharedSettings,
+}
+
+impl DeskLevel {
+    /// Over the desk's wrapper (`None` when the desk has none) and its live settings.
+    #[must_use]
+    pub const fn new(
+        kite: Option<Arc<crate::lanes::exec_core::kite_client::DeskKite>>,
+        settings: crate::settings::SharedSettings,
+    ) -> Self {
+        Self { kite, settings }
+    }
+}
+
+#[async_trait::async_trait]
+impl LiveLevel for DeskLevel {
+    async fn level(&self) -> Option<f64> {
+        let (key_set, slug) = match self.settings.read() {
+            Ok(s) => (!s.kite_api_key.is_empty(), s.swing_index_slug.clone()),
+            Err(poisoned) => {
+                let s = poisoned.into_inner();
+                (!s.kite_api_key.is_empty(), s.swing_index_slug.clone())
+            }
+        };
+        if !key_set {
+            return None;
+        }
+        let kite = self.kite.as_ref()?;
+        let symbol = quote_symbol(&slug)?;
+        // `kite.ltp([symbol]).get(symbol)`, any failure `None` — the close's gate stands.
+        let prices = kite.ltp(&[symbol.to_owned()], "NSE").await.ok()?;
+        let level = match prices.get(symbol)? {
+            crate::wire::PyValue::Float(f) => *f,
+            #[allow(clippy::cast_precision_loss)]
+            crate::wire::PyValue::Int(i) => *i as f64,
+            _ => return None,
+        };
+        // `float(value) if value else None`.
+        if level == 0.0 { None } else { Some(level) }
+    }
+}
+
 /// `published_levels`: the last `count` published levels of `slug` strictly before `before`,
 /// oldest first.
 ///

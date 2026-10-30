@@ -4,11 +4,13 @@
 //! `db.migrate` and `schema_version` do on connect, as in Python). Fields with no data are
 //! `None`, never `0`. The derivation lives here; the template renders.
 //!
-//! **Not ported (loud):** `enrich_orders`/`tax_detail` for a decision that carries
-//! **proposed orders** (they join the FIFO tax-lot review and the plan's order states). Every
-//! stored evaluation so far is an observe-mode preview with none, so the page is exact on today's
-//! data; a decision with proposed orders makes [`build`] refuse with [`BuildError::Unported`] (a
-//! 500) rather than render a sale as tax-clear that was never assessed (DECISIONS-RS, lane analytics_regime, label R-ar.1).
+//! A decision that carries **proposed orders** is joined to what is known about each position
+//! ([`enrich_orders`]: the weight it moves from and to, its P&L, the FIFO tax-lot review, the
+//! liquidity check and the order's state once submitted) and every proposed sale gets its lot
+//! breakdown ([`tax_detail`]). A tax review that fails leaves `tax_flagged` **unknown** (`None`),
+//! never `False`: a silent failure must not invite an unassessed sale. `dt.date.today()` in
+//! Python is the injected clock's IST date here (the harness's `FakeDate.today` is the same
+//! clock; DECISIONS-RS lane analytics_regime R8.AR5).
 
 use std::collections::BTreeMap;
 
@@ -39,9 +41,6 @@ pub enum BuildError {
     /// A stored value Python would raise on (a tier that is not a tier, a bad date).
     #[error("ValueError: {0}")]
     Value(String),
-    /// A path of `build` this port has not taken yet (see the module docs).
-    #[error("not ported: {0}")]
-    Unported(String),
 }
 
 /// `TIMELINE_MIN_WEEKS`.
@@ -362,6 +361,8 @@ pub struct DeskConstants {
     pub min_position_weight: f64,
     /// `HALF_SIZE_WEIGHT`.
     pub half_size_weight: f64,
+    /// `MAX_POS_VS_DAY_VALUE`.
+    pub max_pos_vs_day_value: f64,
     /// A stored override holds `REGIME_WEEKLY_EVAL_WEEKDAY`. The settings page types that key
     /// as a `choice`, so `apply_to_config` leaves `C.REGIME_WEEKLY_EVAL_WEEKDAY` a **str**
     /// ("2"), and `regime_config()`'s `validate` then raises `TypeError` on `0 <= "2" <= 6`:
@@ -395,6 +396,7 @@ impl DeskConstants {
             cluster_cap,
             min_position_weight: f("MIN_POSITION_WEIGHT", 6.0),
             half_size_weight: f("HALF_SIZE_WEIGHT", 3.0),
+            max_pos_vs_day_value: f("MAX_POS_VS_DAY_VALUE", 0.01),
             weekday_override_is_text: matches!(
                 overrides.get("REGIME_WEEKLY_EVAL_WEEKDAY"),
                 Some(SVal::Str(_))
@@ -1618,6 +1620,333 @@ async fn plan_link(conn: &mut Conn, evaluation_id: &V) -> V {
 }
 
 // ---------------------------------------------------------------------------------------------
+// enriched action rows and per-lot tax review
+// ---------------------------------------------------------------------------------------------
+
+/// `int(x)` for `o.get(k) or 0`: falsy is 0; a float truncates; a string parses; else raises.
+fn py_int_or0(v: &V) -> Result<i64, BuildError> {
+    if !truthy(v) {
+        return Ok(0);
+    }
+    match v {
+        V::Int(i) => Ok(*i),
+        V::Bool(b) => Ok(i64::from(*b)),
+        V::Float(f) if f.is_finite() => {
+            #[allow(clippy::cast_possible_truncation)]
+            Ok(f.trunc() as i64)
+        }
+        V::Float(f) => Err(BuildError::Value(format!(
+            "cannot convert float {} to integer",
+            baskfy_core::py::float_repr(*f)
+        ))),
+        V::Str(x) => crate::settings::py_int(x).ok_or_else(|| {
+            BuildError::Value(format!("invalid literal for int() with base 10: '{x}'"))
+        }),
+        other => Err(BuildError::Value(format!(
+            "int() argument must be a string, a bytes-like object or a real number, not '{}'",
+            other.type_name()
+        ))),
+    }
+}
+
+/// `float(x)` for `o.get(k) or 0.0`.
+fn py_float_or0(v: &V) -> Result<f64, BuildError> {
+    if !truthy(v) {
+        return Ok(0.0);
+    }
+    match v {
+        V::Float(f) => Ok(*f),
+        #[allow(clippy::cast_precision_loss)]
+        V::Int(i) => Ok(*i as f64),
+        V::Bool(b) => Ok(f64::from(u8::from(*b))),
+        V::Str(x) => crate::settings::py_float(x).ok_or_else(|| {
+            BuildError::Value(format!("could not convert string to float: '{x}'"))
+        }),
+        other => Err(BuildError::Value(format!(
+            "float() argument must be a string or a real number, not '{}'",
+            other.type_name()
+        ))),
+    }
+}
+
+/// `(o.get("delta") or 0) < 0` (and `> 0`): numbers compare, a string raises.
+fn delta_sign(o: &PyDict) -> Result<f64, BuildError> {
+    let d = get(o, "delta");
+    if !truthy(&d) {
+        return Ok(0.0);
+    }
+    num(&d).ok_or_else(|| {
+        BuildError::Value(format!(
+            "'<' not supported between instances of '{}' and 'int'",
+            d.type_name()
+        ))
+    })
+}
+
+fn symbol_of(o: &PyDict) -> Result<String, BuildError> {
+    match o.get("symbol") {
+        Some(V::Str(x)) => Ok(x.clone()),
+        Some(other) => Ok(other.py_str()),
+        None => Err(BuildError::Value("KeyError: 'symbol'".to_owned())),
+    }
+}
+
+/// `PS.orders_frame(conn, plan_id).to_dict("records")` for the two columns the page reads:
+/// pandas' dtype inference included — an integer column with a missing value becomes `float64`
+/// (`5.0`, `NaN`), an all-missing one stays `None`.
+async fn order_states(conn: &mut Conn, plan_id: &str) -> Vec<(String, PyDict)> {
+    let Ok(rows) = plan_store::orders_rows(conn, Some(plan_id)).await else {
+        return Vec::new();
+    };
+    let column = |k: &str| -> Vec<V> { rows.iter().map(|r| get(r, k)).collect() };
+    let pandas = |vals: Vec<V>| -> Vec<V> {
+        let any_none = vals.iter().any(|v| matches!(v, V::None));
+        let all_num = vals
+            .iter()
+            .all(|v| matches!(v, V::None | V::Int(_) | V::Float(_)));
+        let any_num = vals.iter().any(|v| matches!(v, V::Int(_) | V::Float(_)));
+        let any_float = vals.iter().any(|v| matches!(v, V::Float(_)));
+        if all_num && any_num && (any_none || any_float) {
+            vals.into_iter()
+                .map(|v| match v {
+                    #[allow(clippy::cast_precision_loss)]
+                    V::Int(i) => V::Float(i as f64),
+                    V::None => V::Float(f64::NAN),
+                    other => other,
+                })
+                .collect()
+        } else {
+            vals
+        }
+    };
+    let statuses = pandas(column("status"));
+    let filled = pandas(column("filled_qty"));
+    let mut out: Vec<(String, PyDict)> = Vec::new();
+    for ((r, st), fq) in rows.iter().zip(statuses).zip(filled) {
+        let sym = get(r, "symbol").py_str();
+        let rec = dict([("status", st), ("filled_qty", fq)]);
+        if let Some(slot) = out.iter_mut().find(|(k, _)| *k == sym) {
+            slot.1 = rec;
+        } else {
+            out.push((sym, rec));
+        }
+    }
+    out
+}
+
+/// `enrich_orders(conn, orders, portfolio, cfg, plan_id=None)`: each proposed order joined to the
+/// position it touches. Every source is optional — a missing one leaves its fields `None` rather
+/// than removing the row, because an order you cannot fully assess still has to be visible.
+///
+/// # Errors
+/// [`BuildError::Value`] where Python raises on a malformed stored order.
+#[allow(clippy::too_many_arguments)]
+pub async fn enrich_orders(
+    conn: &mut Conn,
+    orders: &[PyDict],
+    portfolio: &PyDict,
+    max_pos_vs_day_value: f64,
+    review_days: i64,
+    today: NaiveDate,
+    plan_id: Option<&str>,
+) -> Result<Vec<PyDict>, BuildError> {
+    use crate::lanes::weekly::weekly_books::tax_lots;
+    let tradeable = list_of_maps(&get(portfolio, "tradeable"));
+    let mut held: Vec<(String, PyDict)> = Vec::new();
+    for p in tradeable {
+        let sym = symbol_of(&p)?;
+        if let Some(slot) = held.iter_mut().find(|(k, _)| *k == sym) {
+            slot.1 = p;
+        } else {
+            held.push((sym, p));
+        }
+    }
+    let mut sells: Vec<(String, (i64, f64))> = Vec::new();
+    for o in orders {
+        if delta_sign(o)? < 0.0 {
+            let sym = symbol_of(o)?;
+            let leg = (
+                py_int_or0(&get(o, "delta"))?.abs(),
+                py_float_or0(&get(o, "ref_price"))?,
+            );
+            if let Some(slot) = sells.iter_mut().find(|(k, _)| *k == sym) {
+                slot.1 = leg;
+            } else {
+                sells.push((sym, leg));
+            }
+        }
+    }
+    let mut reviews: Vec<(String, tax_lots::TaxReview)> = Vec::new();
+    if !sells.is_empty() {
+        // Deliberately not a bare except: a review that fails leaves every sale `None`, never
+        // tax-clear.
+        match tax_lots::review_sales(conn, &sells, today, review_days).await {
+            Ok(r) => reviews = r,
+            Err(e) => {
+                let mut names: Vec<&String> = sells.iter().map(|(k, _)| k).collect();
+                names.sort();
+                #[allow(clippy::print_stderr)]
+                {
+                    eprintln!("WARNING:root:tax review failed for {names:?}: {e}");
+                }
+            }
+        }
+    }
+    let states = match plan_id.filter(|p| !p.is_empty()) {
+        Some(p) => order_states(conn, p).await,
+        None => Vec::new(),
+    };
+    let mut out = Vec::with_capacity(orders.len());
+    for o in orders {
+        let sym = symbol_of(o)?;
+        let p = held
+            .iter()
+            .find(|(k, _)| *k == sym)
+            .map(|(_, v)| v.clone())
+            .unwrap_or_default();
+        let rv = reviews.iter().find(|(k, _)| *k == sym).map(|(_, r)| r);
+        let st = states
+            .iter()
+            .find(|(k, _)| *k == sym)
+            .map(|(_, v)| v.clone())
+            .unwrap_or_default();
+        let soonest = rv.and_then(|r| {
+            r.consumptions
+                .iter()
+                .filter_map(|c| c.days_to_ltcg)
+                .filter(|d| *d > 0)
+                .min()
+        });
+        let value = py_float_or0(&get(o, "delta"))?.abs() * py_float_or0(&get(o, "ref_price"))?;
+        let day_value = py_float_or0(&get(&p, "median_day_value"))?;
+        let mut row = o.clone();
+        row.insert("weight_now", get(&p, "weight_pct"));
+        row.insert("weight_target", get(o, "weight_nav"));
+        row.insert("pnl_pct", get(&p, "pnl_pct"));
+        row.insert("pnl_value", get(&p, "pnl_value"));
+        row.insert("days_to_ltcg", soonest.map_or(V::None, V::Int));
+        row.insert(
+            "tax_flagged",
+            rv.map_or(V::None, |r| V::Bool(r.manual_review())),
+        );
+        row.insert(
+            "tax_codes",
+            V::List(
+                rv.map(|r| {
+                    r.codes
+                        .iter()
+                        .map(|c| V::Str((*c).to_owned()))
+                        .collect()
+                })
+                .unwrap_or_default(),
+            ),
+        );
+        row.insert(
+            "tax_gain",
+            rv.and_then(|r| r.estimated_gain).map_or(V::None, V::Float),
+        );
+        row.insert(
+            "liquidity_warning",
+            V::Bool(!super::regime::engine::feq(day_value, 0.0) && value > day_value * max_pos_vs_day_value),
+        );
+        row.insert("order_status", get(&st, "status"));
+        row.insert("filled_qty", get(&st, "filled_qty"));
+        out.push(row);
+    }
+    Ok(out)
+}
+
+/// `tax_detail(conn, orders)`: the FIFO lots each proposed sale would consume, with what each
+/// realises — for every sale, not only the flagged ones. A sale whose lots cannot be read is
+/// skipped (logged), as in Python.
+///
+/// # Errors
+/// [`BuildError::Value`] where Python raises on a malformed stored order.
+pub async fn tax_detail(
+    conn: &mut Conn,
+    orders: &[PyDict],
+    review_days: i64,
+    today: NaiveDate,
+) -> Result<Vec<PyDict>, BuildError> {
+    use crate::lanes::weekly::weekly_books::tax_lots;
+    let mut out = Vec::new();
+    for o in orders {
+        let qty = -py_int_or0(&get(o, "delta"))?;
+        if qty <= 0 {
+            continue;
+        }
+        let sym = symbol_of(o)?;
+        let px = py_float_or0(&get(o, "ref_price"))?;
+        let lots = match tax_lots::open_lots(conn, &sym).await {
+            Ok(l) => l,
+            Err(e) => {
+                #[allow(clippy::print_stderr)]
+                {
+                    eprintln!("WARNING:root:lot detail failed for {sym}: {e}");
+                }
+                continue;
+            }
+        };
+        let rv = tax_lots::review_sale(&sym, qty, px, &lots, today, review_days);
+        let lot_rows: Vec<PyDict> = rv
+            .consumptions
+            .iter()
+            .map(|c| {
+                dict([
+                    ("quantity", V::Int(c.quantity)),
+                    (
+                        "acquired_on",
+                        c.lot.acquired_on.map_or(V::None, |d| V::Str(iso(d))),
+                    ),
+                    ("acquired_at", c.lot.price.map_or(V::None, V::Float)),
+                    ("days_held", c.days_held.map_or(V::None, V::Int)),
+                    ("days_to_ltcg", c.days_to_ltcg.map_or(V::None, V::Int)),
+                    ("gain", c.gain.map_or(V::None, V::Float)),
+                    ("long_term", c.long_term.map_or(V::None, V::Bool)),
+                    (
+                        "codes",
+                        V::List(c.codes.iter().map(|x| V::Str((*x).to_owned())).collect()),
+                    ),
+                ])
+            })
+            .collect();
+        let short_term: i64 = rv
+            .consumptions
+            .iter()
+            .filter(|c| c.long_term == Some(false))
+            .map(|c| c.quantity)
+            .sum();
+        let long_term: i64 = rv
+            .consumptions
+            .iter()
+            .filter(|c| c.long_term == Some(true))
+            .map(|c| c.quantity)
+            .sum();
+        out.push(dict([
+            ("symbol", V::Str(sym.clone())),
+            ("requested_qty", V::Int(rv.requested_qty)),
+            ("covered_qty", V::Int(rv.covered_qty)),
+            (
+                "uncovered_qty",
+                V::Int((rv.requested_qty - rv.covered_qty).max(0)),
+            ),
+            ("estimated_gain", rv.estimated_gain.map_or(V::None, V::Float)),
+            ("flagged", V::Bool(rv.flagged)),
+            ("data_unknown", V::Bool(rv.data_unknown)),
+            (
+                "codes",
+                V::List(rv.codes.iter().map(|x| V::Str((*x).to_owned())).collect()),
+            ),
+            ("manual_review", V::Bool(rv.manual_review())),
+            ("lots", V::List(lot_rows.into_iter().map(V::Map).collect())),
+            ("short_term_qty", V::Int(short_term)),
+            ("long_term_qty", V::Int(long_term)),
+        ]));
+    }
+    Ok(out)
+}
+
+// ---------------------------------------------------------------------------------------------
 // build
 // ---------------------------------------------------------------------------------------------
 
@@ -1677,11 +2006,6 @@ pub async fn build(
         V::List(Vec::new()),
     ));
     let no_plan_reason = get(&snapshot, "no_plan_reason");
-    if !proposed.is_empty() {
-        return Err(BuildError::Unported(
-            "enrich_orders/tax_detail for a decision with proposed orders".to_owned(),
-        ));
-    }
 
     let as_of = date_of(&get(&ev, "data_as_of"))?;
     let evaluation_id = get(&ev, "evaluation_id");
@@ -2149,11 +2473,44 @@ pub async fn build(
         "headline_reason",
         V::Str(headline_reason(&reason_pairs_now, &narrative_lines)),
     );
-    // enrich_orders / tax_detail over no proposed orders (see the module docs).
-    v.insert("proposed_orders", V::List(Vec::new()));
-    v.insert("tax_detail", V::List(Vec::new()));
-    v.insert("proposed_sells", V::List(Vec::new()));
-    v.insert("proposed_buys", V::List(Vec::new()));
+    // Enriched here because it needs the portfolio and the plan link, both resolved above.
+    let plan_id = match get(&v, "rebalance_plan") {
+        V::Map(m) => get(&m, "plan_id"),
+        _ => V::None,
+    };
+    let plan_id = if truthy(&plan_id) {
+        Some(plan_id.py_str())
+    } else {
+        None
+    };
+    let enriched = enrich_orders(
+        conn,
+        &proposed,
+        &portfolio,
+        k.max_pos_vs_day_value,
+        settings.regime_ltcg_review_days,
+        today,
+        plan_id.as_deref(),
+    )
+    .await?;
+    let detail = tax_detail(conn, &enriched, settings.regime_ltcg_review_days, today).await?;
+    let mut sells = Vec::new();
+    let mut buys = Vec::new();
+    for o in &enriched {
+        let d = delta_sign(o)?;
+        if d < 0.0 {
+            sells.push(V::Map(o.clone()));
+        } else if d > 0.0 {
+            buys.push(V::Map(o.clone()));
+        }
+    }
+    v.insert(
+        "proposed_orders",
+        V::List(enriched.into_iter().map(V::Map).collect()),
+    );
+    v.insert("tax_detail", V::List(detail.into_iter().map(V::Map).collect()));
+    v.insert("proposed_sells", V::List(sells));
+    v.insert("proposed_buys", V::List(buys));
     match regime_store::count_recovery_confirmations(conn).await {
         Ok(n) => {
             v.insert("recovery_confirmations", V::Int(n));
@@ -2520,6 +2877,7 @@ mod tests {
             cluster_cap: V::Float(25.0),
             min_position_weight: 6.0,
             half_size_weight: 3.0,
+            max_pos_vs_day_value: 0.01,
             weekday_override_is_text: false,
         };
         let p = |sym: &str, w: f64, value: f64| {

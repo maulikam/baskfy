@@ -6,7 +6,9 @@
 //! 2. **Unsafe methods** must carry an `Origin` (or, without one, a `Referer`) naming this app
 //!    on an allowed host, plain or with `:DESK_PORT` (CSRF) — else 403.
 //! 3. **Optional password** (`DESK_PASSWORD`): HTTP Basic, constant-time compared, every path
-//!    but `/status` — else 401 with `WWW-Authenticate: Basic realm="Momentum Desk"`.
+//!    but `/status` — else 401 with `WWW-Authenticate: Basic realm="Momentum Desk"`; a
+//!    non-ASCII password or credential is Python's `compare_digest` `TypeError`, a plain 500
+//!    (R8.10.1).
 //!
 //! The secret-file permission check at startup (`check_secret_permissions`) is the session
 //! lane's (it touches `.env` and the token file).
@@ -128,22 +130,43 @@ fn py_b64decode(encoded: &str) -> Option<Vec<u8>> {
     (quad_pos == 0).then_some(out)
 }
 
+/// `hmac.compare_digest(given, password)` raised `TypeError` ("comparing strings with non-ASCII
+/// characters is not supported"): Python's middleware lets it escape, so Starlette answers its
+/// plain 500. Reproduced, not fixed (DECISIONS-RS R8.10.1): it refuses either way, it is not on an
+/// order path, and only a non-ASCII password or credential reaches it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CompareDigestTypeError;
+
 /// `_basic_ok`: constant-time comparison of the Basic password.
-#[must_use]
-pub fn basic_ok(header: Option<&str>, password: &str) -> bool {
-    let Some(header) = header else { return false };
+///
+/// # Errors
+/// [`CompareDigestTypeError`] where Python's `hmac.compare_digest` raises: either side, as a
+/// `str`, holds a non-ASCII character (a `U+FFFD` left by `decode("utf-8", "replace")` counts).
+pub fn basic_ok(header: Option<&str>, password: &str) -> Result<bool, CompareDigestTypeError> {
+    let Some(header) = header else {
+        return Ok(false);
+    };
     if !header.to_lowercase().starts_with("basic ") {
-        return false;
+        return Ok(false);
     }
     let Some((_, encoded)) = header.split_once(' ') else {
-        return false;
+        return Ok(false);
     };
+    // `base64.b64decode(str)` first encodes the text as ASCII; a non-ASCII character raises
+    // (`ValueError`), which `_basic_ok`'s `except Exception` turns into a refusal. Skipping it
+    // as a non-alphabet byte would decode credentials Python refuses.
+    if !encoded.is_ascii() {
+        return Ok(false);
+    }
     let Some(decoded) = py_b64decode(encoded) else {
-        return false;
+        return Ok(false);
     };
     let decoded = String::from_utf8_lossy(&decoded);
     let given = decoded.split_once(':').map_or("", |(_, p)| p);
-    constant_time_eq(given.as_bytes(), password.as_bytes())
+    if !given.is_ascii() || !password.is_ascii() {
+        return Err(CompareDigestTypeError);
+    }
+    Ok(constant_time_eq(given.as_bytes(), password.as_bytes()))
 }
 
 /// `hmac.compare_digest`: a length mismatch is unequal; equal lengths compare in constant time.
@@ -154,12 +177,97 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
+/// Starlette's `ServerErrorMiddleware` answer to an exception that escaped the app.
+fn server_error() -> Response<Body> {
+    let mut r = Response::new(Body::from("Internal Server Error"));
+    *r.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+    r.headers_mut().insert(
+        axum::http::header::CONTENT_TYPE,
+        HeaderValue::from_static("text/plain; charset=utf-8"),
+    );
+    r
+}
+
 fn python_repr_list(items: &BTreeSet<String>) -> String {
     let parts: Vec<String> = items
         .iter()
         .map(|s| baskfy_providers::py::repr_str(s))
         .collect();
     format!("[{}]", parts.join(", "))
+}
+
+/// `DeskSecurity.dispatch` before `call_next`: the refusal to answer instead of the route, or
+/// `None` to let the request through. Pure over the settings it reads and the request's method,
+/// path and headers, so the HTTP-level cases of `tests/test_websec.py` run without an app.
+#[must_use]
+pub fn refusal(
+    allowed: &str,
+    port: i64,
+    password: &str,
+    method: &Method,
+    path: &str,
+    headers: &axum::http::HeaderMap,
+) -> Option<Response<Body>> {
+    let host = headers
+        .get(axum::http::header::HOST)
+        .map(latin1)
+        .unwrap_or_default()
+        .split(':')
+        .next()
+        .unwrap_or("")
+        .to_lowercase();
+    let known = hosts(allowed);
+    if !host.is_empty() && !known.contains(&host) {
+        return Some(json_response(
+            StatusCode::MISDIRECTED_REQUEST,
+            &format!(
+                "This desk answers to {}, not {}. A request arriving under another name is how a \
+                 browser is tricked into treating this app as the attacker's own site.",
+                python_repr_list(&known),
+                baskfy_providers::py::repr_str(&host)
+            ),
+        ));
+    }
+    let safe = matches!(*method, Method::GET | Method::HEAD | Method::OPTIONS);
+    if !safe {
+        let header = |name| headers.get(name).map(latin1);
+        let allowed_origins = origins(allowed, port);
+        let ok = match header(axum::http::header::ORIGIN).filter(|o| !o.is_empty()) {
+            Some(origin) => allowed_origins.contains(&origin),
+            None => {
+                let referer = header(axum::http::header::REFERER).unwrap_or_default();
+                let referer = referer.as_str();
+                allowed_origins
+                    .iter()
+                    .any(|o| referer.starts_with(&format!("{o}/")) || referer == o)
+            }
+        };
+        if !ok {
+            return Some(json_response(
+                StatusCode::FORBIDDEN,
+                "Refused: this request did not come from the desk. A form on another site can \
+                 POST here without asking, so a state-changing request has to declare an origin \
+                 this app recognises.",
+            ));
+        }
+    }
+    if !password.is_empty() && !NO_AUTH.iter().any(|p| path.starts_with(p)) {
+        let auth = headers.get(axum::http::header::AUTHORIZATION).map(latin1);
+        match basic_ok(auth.as_deref(), password) {
+            Ok(true) => {}
+            Ok(false) => {
+                let mut r = Response::new(Body::from("Authentication required."));
+                *r.status_mut() = StatusCode::UNAUTHORIZED;
+                r.headers_mut().insert(
+                    axum::http::header::WWW_AUTHENTICATE,
+                    HeaderValue::from_static("Basic realm=\"Momentum Desk\""),
+                );
+                return Some(r);
+            }
+            Err(CompareDigestTypeError) => return Some(server_error()),
+        }
+    }
+    None
 }
 
 /// The middleware (`BaseHTTPMiddleware.dispatch`).
@@ -172,67 +280,15 @@ pub async fn layer(State(state): State<AppState>, request: Request, next: Next) 
             s.desk_password.clone(),
         )
     };
-    let host = request
-        .headers()
-        .get(axum::http::header::HOST)
-        .map(latin1)
-        .unwrap_or_default()
-        .split(':')
-        .next()
-        .unwrap_or("")
-        .to_lowercase();
-    let known = hosts(&allowed);
-    if !host.is_empty() && !known.contains(&host) {
-        return json_response(
-            StatusCode::MISDIRECTED_REQUEST,
-            &format!(
-                "This desk answers to {}, not {}. A request arriving under another name is how a \
-                 browser is tricked into treating this app as the attacker's own site.",
-                python_repr_list(&known),
-                baskfy_providers::py::repr_str(&host)
-            ),
-        );
-    }
-    let safe = matches!(
-        *request.method(),
-        Method::GET | Method::HEAD | Method::OPTIONS
-    );
-    if !safe {
-        let header = |name| request.headers().get(name).map(latin1);
-        let allowed_origins = origins(&allowed, port);
-        let ok = match header(axum::http::header::ORIGIN).filter(|o| !o.is_empty()) {
-            Some(origin) => allowed_origins.contains(&origin),
-            None => {
-                let referer = header(axum::http::header::REFERER).unwrap_or_default();
-                let referer = referer.as_str();
-                allowed_origins
-                    .iter()
-                    .any(|o| referer.starts_with(&format!("{o}/")) || referer == o)
-            }
-        };
-        if !ok {
-            return json_response(
-                StatusCode::FORBIDDEN,
-                "Refused: this request did not come from the desk. A form on another site can \
-                 POST here without asking, so a state-changing request has to declare an origin \
-                 this app recognises.",
-            );
-        }
-    }
-    if !password.is_empty() && !NO_AUTH.iter().any(|p| request.uri().path().starts_with(p)) {
-        let auth = request
-            .headers()
-            .get(axum::http::header::AUTHORIZATION)
-            .map(latin1);
-        if !basic_ok(auth.as_deref(), &password) {
-            let mut r = Response::new(Body::from("Authentication required."));
-            *r.status_mut() = StatusCode::UNAUTHORIZED;
-            r.headers_mut().insert(
-                axum::http::header::WWW_AUTHENTICATE,
-                HeaderValue::from_static("Basic realm=\"Momentum Desk\""),
-            );
-            return r;
-        }
+    if let Some(refused) = refusal(
+        &allowed,
+        port,
+        &password,
+        request.method(),
+        request.uri().path(),
+        request.headers(),
+    ) {
+        return refused;
     }
     next.run(request).await
 }

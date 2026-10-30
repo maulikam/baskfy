@@ -1,17 +1,18 @@
 //! Lane **backfills**: the 18:15 bhavcopy ingest, the 15:45 equity-bars session job and the six backfill CLIs.
 
-mod bhavcopy;
-mod breadth;
+pub mod bhavcopy;
+pub mod breadth;
 pub mod cli;
 mod common;
-mod cursor;
-mod deep;
+pub mod cursor;
+pub mod deep;
 pub mod eq_bars;
-mod index_backfill;
-mod index_repair;
+pub mod index_backfill;
+pub mod index_repair;
 
 use baskfy_db::OrderedJson;
-use baskfy_providers::factory::{RedisSource, build_nse_provider};
+use baskfy_providers::composite::CompositeProvider;
+use baskfy_providers::factory::{RedisSource, build_nse_provider, register_nse};
 use chrono::{Duration, NaiveDate};
 use sqlx::PgConnection;
 
@@ -21,7 +22,7 @@ use crate::catch_up::SESSION_DATA_READY_IST;
 use crate::error::WorkerError;
 use crate::pyjson::{self, object, s};
 use crate::window::DateWindow;
-use bhavcopy::{EQUITY_SERIES, Source};
+use bhavcopy::EQUITY_SERIES;
 use common::{
     count, iso, kite_bars, kite_session_usable, now_ist, provider_settings, trade_date_arg,
 };
@@ -64,12 +65,12 @@ pub async fn bhavcopy_ingest(ctx: &TaskContext, args: BoundArgs) -> TaskResult {
         None,
     )
     .await?;
-    let series: Vec<String> = EQUITY_SERIES.iter().map(|s| (*s).to_owned()).collect();
+    let provider = CompositeProvider::with_defaults(vec![register_nse(nse)])?;
     let report = bhavcopy::backfill_bars_from_bhavcopy(
         &ctx.db,
-        &Source::Nse(&nse),
+        &provider,
         DateWindow::single(day),
-        &series,
+        &EQUITY_SERIES,
         0,
     )
     .await?;

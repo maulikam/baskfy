@@ -10,30 +10,44 @@ use sqlx::PgConnection;
 use super::common::{date_at, decimal_at, decimal4, described, float_of, int_at, thousands};
 use crate::error::WorkerError;
 
-pub(super) fn kite_epoch() -> NaiveDate {
+/// `kite_epoch`.
+pub fn kite_epoch() -> NaiveDate {
     NaiveDate::from_ymd_opt(2000, 1, 3).unwrap_or(NaiveDate::MIN)
 }
-pub(super) fn default_start() -> NaiveDate {
+/// `default_start`.
+pub fn default_start() -> NaiveDate {
     NaiveDate::from_ymd_opt(2011, 1, 1).unwrap_or(NaiveDate::MIN)
 }
-const MAX_SPAN_DAYS: i64 = 2000;
+/// `MAX_SPAN_DAYS`.
+pub const MAX_SPAN_DAYS: i64 = 2000;
 const UPSERT_CHUNK: usize = 1500;
 const SPLICE_EPSILON: f64 = 1e-9;
 
 #[derive(Debug, Default)]
-pub(super) struct Report {
-    pub(super) instruments: usize,
-    pub(super) fetched: usize,
-    pub(super) written: usize,
-    pub(super) skipped_no_overlap: usize,
-    pub(super) skipped_no_deep_history: usize,
-    pub(super) skipped_compressed: usize,
-    pub(super) spliced: usize,
-    pub(super) compressed_ranges: BTreeSet<String>,
-    pub(super) errors: Vec<String>,
+/// `Report`.
+pub struct Report {
+    /// `instruments`.
+    pub instruments: usize,
+    /// `fetched`.
+    pub fetched: usize,
+    /// `written`.
+    pub written: usize,
+    /// `skipped_no_overlap`.
+    pub skipped_no_overlap: usize,
+    /// `skipped_no_deep_history`.
+    pub skipped_no_deep_history: usize,
+    /// `skipped_compressed`.
+    pub skipped_compressed: usize,
+    /// `spliced`.
+    pub spliced: usize,
+    /// `compressed_ranges`.
+    pub compressed_ranges: BTreeSet<String>,
+    /// `errors`.
+    pub errors: Vec<String>,
 }
 
-pub(super) fn chunk_windows(start: NaiveDate, end: NaiveDate) -> Vec<(NaiveDate, NaiveDate)> {
+/// `chunk_windows`.
+pub fn chunk_windows(start: NaiveDate, end: NaiveDate) -> Vec<(NaiveDate, NaiveDate)> {
     let mut out = Vec::new();
     let mut cursor = start.max(kite_epoch());
     while cursor <= end {
@@ -44,14 +58,19 @@ pub(super) fn chunk_windows(start: NaiveDate, end: NaiveDate) -> Vec<(NaiveDate,
     out
 }
 
-fn splice_factor(kite: &BTreeMap<NaiveDate, f64>, ours: &BTreeMap<NaiveDate, f64>) -> Option<f64> {
+/// `splice_factor`.
+pub fn splice_factor(
+    kite: &BTreeMap<NaiveDate, f64>,
+    ours: &BTreeMap<NaiveDate, f64>,
+) -> (Option<f64>, Option<NaiveDate>) {
     kite.iter()
-        .filter_map(|(d, k)| ours.get(d).map(|o| (*k, *o)))
-        .find(|(k, o)| *k != 0.0 && *o != 0.0)
-        .map(|(k, o)| o / k)
+        .filter_map(|(d, k)| ours.get(d).map(|o| (*d, *k, *o)))
+        .find(|(_, k, o)| *k != 0.0 && *o != 0.0)
+        .map_or((None, None), |(d, k, o)| (Some(o / k), Some(d)))
 }
 
-type Candle = [f64; 5];
+/// `Candle`.
+pub type Candle = [f64; 5];
 
 async fn existing(
     conn: &mut PgConnection,
@@ -70,7 +89,8 @@ async fn existing(
         .collect())
 }
 
-async fn compressed_ranges_covering(
+/// `compressed_ranges_covering`.
+pub async fn compressed_ranges_covering(
     conn: &mut PgConnection,
     days: &[NaiveDate],
 ) -> Result<Vec<String>, WorkerError> {
@@ -90,7 +110,8 @@ async fn compressed_ranges_covering(
     Ok(rows.into_iter().map(|(r,)| r).collect())
 }
 
-async fn duplicate_pairs(conn: &mut PgConnection) -> Result<i64, WorkerError> {
+/// `duplicate_pairs`.
+pub async fn duplicate_pairs(conn: &mut PgConnection) -> Result<i64, WorkerError> {
     Ok(sqlx::query_scalar(
         "SELECT count(*) FROM (SELECT instrument_id, date FROM ohlcv_daily \
          GROUP BY instrument_id, date HAVING count(*) > 1) t",
@@ -99,7 +120,8 @@ async fn duplicate_pairs(conn: &mut PgConnection) -> Result<i64, WorkerError> {
     .await?)
 }
 
-async fn write(
+/// `write`.
+pub async fn write(
     conn: &mut PgConnection,
     instrument_id: i64,
     bars: &[(NaiveDate, Candle)],
@@ -174,7 +196,8 @@ async fn fetch_candles(
     Ok(out)
 }
 
-pub(super) async fn run(
+/// `run`.
+pub async fn run(
     db: &WriteDb,
     provider: &CompositeProvider,
     write_bars: bool,
@@ -237,7 +260,7 @@ pub(super) async fn run(
             continue;
         }
         let closes: BTreeMap<NaiveDate, f64> = frames.iter().map(|(d, c)| (*d, c[3])).collect();
-        let factor = splice_factor(&closes, &ours);
+        let (factor, _joined) = splice_factor(&closes, &ours);
         if !ours.is_empty() && factor.is_none() {
             report.skipped_no_overlap += 1;
             continue;
@@ -292,7 +315,8 @@ fn as_i64(n: usize) -> i64 {
     i64::try_from(n).unwrap_or(i64::MAX)
 }
 
-pub(super) fn render(report: &Report, write_bars: bool) -> String {
+/// `render`.
+pub fn render(report: &Report, write_bars: bool) -> String {
     let mut lines = vec![
         format!(
             "deep history from Kite{}",

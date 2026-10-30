@@ -15,17 +15,25 @@ use crate::steps::StepOutcome;
 use crate::steps::compute::{compute_factors, compute_market_health};
 
 const DERIVED: &str = "derived";
-pub(super) const DEFAULT_EVERY: usize = 5;
+/// `DEFAULT_EVERY`.
+pub const DEFAULT_EVERY: usize = 5;
 const UPSERT_CHUNK: usize = 2000;
 
 #[derive(Debug, Default)]
-pub(super) struct Report {
-    pub(super) dates: usize,
-    pub(super) factors_computed: i64,
-    pub(super) membership_rows: i64,
-    pub(super) breadth_rows: i64,
-    pub(super) skipped_have_factors: usize,
-    pub(super) errors: Vec<String>,
+/// `Report`.
+pub struct Report {
+    /// `dates`.
+    pub dates: usize,
+    /// `factors_computed`.
+    pub factors_computed: i64,
+    /// `membership_rows`.
+    pub membership_rows: i64,
+    /// `breadth_rows`.
+    pub breadth_rows: i64,
+    /// `skipped_have_factors`.
+    pub skipped_have_factors: usize,
+    /// `errors`.
+    pub errors: Vec<String>,
 }
 
 async fn target_dates(
@@ -119,7 +127,8 @@ async fn one_day(
     Ok(())
 }
 
-pub(super) async fn run(
+/// `run`.
+pub async fn run(
     db: &WriteDb,
     write: bool,
     start: NaiveDate,
@@ -157,7 +166,8 @@ pub(super) async fn run(
     Ok(report)
 }
 
-pub(super) fn render(report: &Report, write: bool) -> String {
+/// `render`.
+pub fn render(report: &Report, write: bool) -> String {
     let mut lines = vec![
         format!(
             "breadth history{}",

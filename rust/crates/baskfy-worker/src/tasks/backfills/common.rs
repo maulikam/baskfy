@@ -1,22 +1,13 @@
 //! What the backfills share: dates, frames, the provider seams and the Kite session check.
 
-use std::collections::HashMap;
-use std::future::Future;
-use std::pin::Pin;
 use std::sync::Arc;
 
 use baskfy_db::OrderedJson;
-use baskfy_providers::ProviderError;
-use baskfy_providers::composite::{CompositeProvider, Registered};
 use baskfy_providers::factory::{KiteFamily, KiteLane, RedisSource, build_kite_family_limiter};
 use baskfy_providers::kite::{
     ClientFactory, DEFAULT_ROOT_URI, KiteClient, KiteConnect, KiteProvider, KiteRuntime,
 };
-use baskfy_providers::ports::{
-    Capability, CapabilitySet, HealthReporting, ProviderHealth, ReferenceProvider,
-};
 use baskfy_providers::ratelimit::RateLimiter;
-use baskfy_providers::records::{CorporateAction, EquityFundamental, IndexSnapshot, ListingRecord};
 use baskfy_providers::secret::Secret;
 use baskfy_providers::settings::ProviderSettings;
 use baskfy_providers::tokens::{AccessTokenStore, ist};
@@ -91,22 +82,6 @@ fn cell<'a>(frame: &'a DataFrame, name: &str, row: usize) -> Result<AnyValue<'a>
         .map_err(|e| WorkerError::python("ColumnNotFoundError", format!("{name}: {e}")))?;
     col.get(row)
         .map_err(|e| WorkerError::python("OutOfBoundsError", e.to_string()))
-}
-
-pub(super) fn text_at(
-    frame: &DataFrame,
-    name: &str,
-    row: usize,
-) -> Result<Option<String>, WorkerError> {
-    match cell(frame, name, row)? {
-        AnyValue::Null => Ok(None),
-        AnyValue::String(s) => Ok(Some(s.to_owned())),
-        AnyValue::StringOwned(s) => Ok(Some(s.to_string())),
-        other => Err(WorkerError::python(
-            "TypeError",
-            format!("{name}: expected a string, got {other:?}"),
-        )),
-    }
 }
 
 pub(super) fn date_at(
@@ -189,130 +164,6 @@ pub(super) fn cent(d: Decimal) -> Decimal {
     let mut v = d.round_dp_with_strategy(2, rust_decimal::RoundingStrategy::MidpointAwayFromZero);
     v.rescale(2);
     v
-}
-
-pub(super) fn slugify_index(name: &str) -> String {
-    let is_space = |c: char| c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c);
-    let lowered = name.trim_matches(is_space).to_lowercase();
-    let mut out = String::with_capacity(lowered.len());
-    let mut in_run = false;
-    for c in lowered.chars() {
-        if c.is_ascii_lowercase() || c.is_ascii_digit() {
-            out.push(c);
-            in_run = false;
-        } else if !in_run {
-            out.push('-');
-            in_run = true;
-        }
-    }
-    out.trim_matches('-').to_owned()
-}
-
-type Fut<'a, T> = Pin<Box<dyn Future<Output = Result<T, ProviderError>> + Send + 'a>>;
-
-pub(super) struct Canned {
-    pub(super) bhavcopy: Option<DataFrame>,
-    pub(super) snapshots: Vec<IndexSnapshot>,
-}
-
-const CANNED: &str = "canned";
-
-fn unserved(what: &str) -> ProviderError {
-    ProviderError::provider_unavailable(format!("{CANNED} serves no {what}"))
-}
-
-impl HealthReporting for Canned {
-    fn name(&self) -> &str {
-        CANNED
-    }
-
-    fn capabilities(&self) -> CapabilitySet {
-        [Capability::IndexSnapshots, Capability::Bhavcopy].into()
-    }
-
-    fn check(&self) -> ProviderHealth {
-        ProviderHealth {
-            name: CANNED.to_owned(),
-            available: true,
-            capabilities: self.capabilities(),
-            detail: "pre-fetched".to_owned(),
-        }
-    }
-}
-
-impl ReferenceProvider for Canned {
-    fn index_constituents<'life0, 'life1, 'async_trait>(
-        &'life0 self,
-        _index_slug: &'life1 str,
-        _on: NaiveDate,
-    ) -> Fut<'async_trait, Vec<String>>
-    where
-        'life0: 'async_trait,
-        'life1: 'async_trait,
-        Self: 'async_trait,
-    {
-        Box::pin(async { Err(unserved("index_constituents")) })
-    }
-
-    fn index_snapshots<'life0, 'async_trait>(
-        &'life0 self,
-        _on: NaiveDate,
-    ) -> Fut<'async_trait, Vec<IndexSnapshot>>
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        Box::pin(async move { Ok(self.snapshots.clone()) })
-    }
-
-    fn corporate_actions<'life0, 'async_trait>(
-        &'life0 self,
-        _since: NaiveDate,
-    ) -> Fut<'async_trait, Vec<CorporateAction>>
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        Box::pin(async { Err(unserved("corporate_actions")) })
-    }
-
-    fn listings<'life0, 'async_trait>(&'life0 self) -> Fut<'async_trait, Vec<ListingRecord>>
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        Box::pin(async { Err(unserved("listings")) })
-    }
-
-    fn bhavcopy<'life0, 'async_trait>(&'life0 self, _on: NaiveDate) -> Fut<'async_trait, DataFrame>
-    where
-        'life0: 'async_trait,
-        Self: 'async_trait,
-    {
-        Box::pin(async move { self.bhavcopy.clone().ok_or_else(|| unserved("bhavcopy")) })
-    }
-
-    fn equity_fundamentals<'life0, 'life1, 'life2, 'async_trait>(
-        &'life0 self,
-        _on: NaiveDate,
-        _symbols: &'life1 [String],
-        _series_by_symbol: Option<&'life2 HashMap<String, String>>,
-    ) -> Fut<'async_trait, Vec<EquityFundamental>>
-    where
-        'life0: 'async_trait,
-        'life1: 'async_trait,
-        'life2: 'async_trait,
-        Self: 'async_trait,
-    {
-        Box::pin(async { Err(unserved("equity_fundamentals")) })
-    }
-}
-
-pub(super) fn canned(canned: Canned) -> Result<CompositeProvider, WorkerError> {
-    let shared = Arc::new(canned);
-    Ok(CompositeProvider::with_defaults(vec![
-        Registered::new(shared.clone()).with_reference(shared),
-    ])?)
 }
 
 pub(super) fn now_ist(ctx: &TaskContext) -> DateTime<FixedOffset> {

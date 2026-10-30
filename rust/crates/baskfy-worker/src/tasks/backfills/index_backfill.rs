@@ -13,13 +13,15 @@ use super::common::{date_at, decimal_at, decimal4, described, float_of, thousand
 use super::deep::chunk_windows;
 use crate::error::WorkerError;
 
-pub(super) fn default_start() -> NaiveDate {
+/// `default_start`.
+pub fn default_start() -> NaiveDate {
     NaiveDate::from_ymd_opt(2017, 1, 1).unwrap_or(NaiveDate::MIN)
 }
 const REPORTED_UNMATCHED: usize = 25;
 const UPSERT_CHUNK: usize = 1500;
 
-const ABBREVIATIONS: [(&str, &str); 14] = [
+/// `ABBREVIATIONS`.
+pub const ABBREVIATIONS: [(&str, &str); 14] = [
     ("SMLCAP", "SMALLCAP"),
     ("MIDSML", "MIDSMALL"),
     ("INFRA", "INFRASTRUCTURE"),
@@ -36,14 +38,16 @@ const ABBREVIATIONS: [(&str, &str); 14] = [
     ("HEALTHCARE", "HEALTHCAREINDEX"),
 ];
 
-fn normalise(name: &str) -> String {
+/// `normalise`.
+pub fn normalise(name: &str) -> String {
     name.to_uppercase()
         .chars()
         .filter(char::is_ascii_alphanumeric)
         .collect()
 }
 
-fn keys(name: &str) -> Vec<String> {
+/// `keys`.
+pub fn keys(name: &str) -> Vec<String> {
     let flat = normalise(name);
     let mut expanded = flat.clone();
     for (short, long) in ABBREVIATIONS {
@@ -57,13 +61,20 @@ fn keys(name: &str) -> Vec<String> {
 }
 
 #[derive(Debug, Default)]
-pub(super) struct Report {
-    pub(super) kite_indices: usize,
-    pub(super) matched: usize,
-    pub(super) unmatched_ours: Vec<String>,
-    pub(super) unmatched_kite: Vec<String>,
-    pub(super) written: usize,
-    pub(super) errors: Vec<String>,
+/// `Report`.
+pub struct Report {
+    /// `kite_indices`.
+    pub kite_indices: usize,
+    /// `matched`.
+    pub matched: usize,
+    /// `unmatched_ours`.
+    pub unmatched_ours: Vec<String>,
+    /// `unmatched_kite`.
+    pub unmatched_kite: Vec<String>,
+    /// `written`.
+    pub written: usize,
+    /// `errors`.
+    pub errors: Vec<String>,
 }
 
 struct Row {
@@ -150,7 +161,8 @@ async fn candles(
     Ok(out)
 }
 
-pub(super) async fn run(
+/// `run`.
+pub async fn run(
     db: &WriteDb,
     provider: &CompositeProvider,
     kite_indices: &[(String, i64)],
@@ -217,9 +229,8 @@ pub(super) async fn run(
     Ok(report)
 }
 
-pub(super) fn kite_indices(
-    records: &[baskfy_providers::records::InstrumentRecord],
-) -> Vec<(String, i64)> {
+/// `kite_indices`.
+pub fn kite_indices(records: &[baskfy_providers::records::InstrumentRecord]) -> Vec<(String, i64)> {
     records
         .iter()
         .filter(|r| r.instrument_type == InstrumentType::Index)
@@ -227,7 +238,8 @@ pub(super) fn kite_indices(
         .collect()
 }
 
-pub(super) fn render(report: &Report, write_rows: bool) -> String {
+/// `render`.
+pub fn render(report: &Report, write_rows: bool) -> String {
     let mut lines = vec![
         format!(
             "index and sector history from Kite{}",

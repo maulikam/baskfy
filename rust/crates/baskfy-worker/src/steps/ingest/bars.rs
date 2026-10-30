@@ -34,7 +34,7 @@ const BHAVCOPY_UPSERT_CHUNK: usize = 1000;
 /// `bhavcopy_backfill.BAR_SOURCE`.
 const BAR_SOURCE: &str = "nse";
 /// `bhavcopy_backfill.EQUITY_SERIES`: main board and Emerge; never G-secs, T-bills or debt.
-pub(super) const EQUITY_SERIES: [&str; 6] = ["EQ", "BE", "BZ", "SM", "ST", "SZ"];
+pub(crate) const EQUITY_SERIES: [&str; 6] = ["EQ", "BE", "BZ", "SM", "ST", "SZ"];
 
 fn to_i64(n: usize) -> i64 {
     i64::try_from(n).unwrap_or(i64::MAX)
@@ -46,19 +46,19 @@ fn iso(d: NaiveDate) -> String {
 
 /// One `ohlcv_daily` row as the ingest writes it (raw in, raw out).
 #[derive(Debug, Clone, PartialEq)]
-pub(super) struct BarRow {
-    pub(super) instrument_id: i64,
-    pub(super) date: Option<NaiveDate>,
-    pub(super) open: Option<Decimal>,
-    pub(super) high: Option<Decimal>,
-    pub(super) low: Option<Decimal>,
-    pub(super) close: Option<Decimal>,
-    pub(super) volume: Option<i64>,
-    pub(super) source: Option<String>,
+pub(crate) struct BarRow {
+    pub(crate) instrument_id: i64,
+    pub(crate) date: Option<NaiveDate>,
+    pub(crate) open: Option<Decimal>,
+    pub(crate) high: Option<Decimal>,
+    pub(crate) low: Option<Decimal>,
+    pub(crate) close: Option<Decimal>,
+    pub(crate) volume: Option<i64>,
+    pub(crate) source: Option<String>,
     /// Bhavcopy only (`None` and not written for a Kite row).
-    pub(super) turnover: Option<Decimal>,
-    pub(super) upper_circuit: Option<Decimal>,
-    pub(super) lower_circuit: Option<Decimal>,
+    pub(crate) turnover: Option<Decimal>,
+    pub(crate) upper_circuit: Option<Decimal>,
+    pub(crate) lower_circuit: Option<Decimal>,
 }
 
 /// The rows' columns, for `UNNEST`.
@@ -106,7 +106,10 @@ const KEEP_OHL: &str = "open = CASE WHEN (ohlcv_daily.adj_factor != 1) THEN ohlc
 /// `tasks.bars.upsert_bars` for many instruments at once (each row's conflict target is its own
 /// `(instrument_id, date)`; `close`, `volume` and `adj_factor` are step 4's and never
 /// overwritten). Returns the rows offered, as Python counts them.
-async fn upsert_kite_rows(conn: &mut PgConnection, rows: &[BarRow]) -> Result<i64, WorkerError> {
+pub(crate) async fn upsert_kite_rows(
+    conn: &mut PgConnection,
+    rows: &[BarRow],
+) -> Result<i64, WorkerError> {
     let mut written = 0;
     for chunk in rows.chunks(KITE_UPSERT_CHUNK) {
         let c = columns(chunk);
@@ -179,14 +182,14 @@ async fn upsert_day(conn: &mut PgConnection, rows: &[BarRow]) -> Result<i64, Wor
 
 /// `BhavcopyBackfillReport`.
 #[derive(Debug, Default)]
-pub(super) struct BhavcopyReport {
-    pub(super) trading_days: usize,
-    pub(super) days_written: i64,
-    pub(super) bars_written: i64,
-    pub(super) unmatched_symbols: BTreeSet<String>,
-    pub(super) missing_days: Vec<NaiveDate>,
+pub(crate) struct BhavcopyReport {
+    pub(crate) trading_days: usize,
+    pub(crate) days_written: i64,
+    pub(crate) bars_written: i64,
+    pub(crate) unmatched_symbols: BTreeSet<String>,
+    pub(crate) missing_days: Vec<NaiveDate>,
     /// Insertion-ordered (`dict`).
-    pub(super) failures: Vec<(String, OrderedJson)>,
+    pub(crate) failures: Vec<(String, OrderedJson)>,
 }
 
 /// `trading_days_in(session, window)`.
@@ -289,10 +292,11 @@ pub(super) fn rows_for_day(
 
 /// `backfill_bars_from_bhavcopy(provider, window, progress_every=0, session=session)`: on the
 /// chain's own transaction (never a second connection — the M84 wait-for cycle).
-pub(super) async fn backfill_bars_from_bhavcopy(
+pub(crate) async fn backfill_bars_from_bhavcopy(
     conn: &mut PgConnection,
     provider: &CompositeProvider,
     window: DateWindow,
+    series: &[&str],
 ) -> Result<BhavcopyReport, WorkerError> {
     let mut report = BhavcopyReport::default();
     let days = trading_days_in(conn, window).await?;
@@ -327,7 +331,7 @@ pub(super) async fn backfill_bars_from_bhavcopy(
             }
         };
         let attempt: Result<(), WorkerError> = async {
-            let (values, unmatched) = rows_for_day(&bhav, &ids, &EQUITY_SERIES)?;
+            let (values, unmatched) = rows_for_day(&bhav, &ids, series)?;
             report.unmatched_symbols.extend(unmatched);
             if !values.is_empty() {
                 report.bars_written += upsert_day(conn, &values).await?;
@@ -369,7 +373,7 @@ pub(crate) async fn backfill_summary(
     provider: &CompositeProvider,
     window: DateWindow,
 ) -> Result<BackfillSummary, WorkerError> {
-    let report = backfill_bars_from_bhavcopy(conn, provider, window).await?;
+    let report = backfill_bars_from_bhavcopy(conn, provider, window, &EQUITY_SERIES).await?;
     Ok(BackfillSummary {
         bars_written: report.bars_written,
         missing_days: report.missing_days,
@@ -387,7 +391,7 @@ async fn fetch_from_bhavcopy(
     top_up: Option<i64>,
 ) -> Result<i64, WorkerError> {
     // `callable(getattr(provider, "bhavcopy", None))` is always true of the composite.
-    let report = backfill_bars_from_bhavcopy(conn, provider, window).await?;
+    let report = backfill_bars_from_bhavcopy(conn, provider, window, &EQUITY_SERIES).await?;
     match top_up {
         None => outcome.rows_out = report.bars_written,
         Some(kite_rows) => {
@@ -510,7 +514,7 @@ fn credentials_are_missing(failures: &[(String, OrderedJson)]) -> bool {
 }
 
 /// Frame rows of one Kite `daily_bars` answer, for `instrument_id`.
-fn kite_rows(
+pub(crate) fn kite_rows(
     instrument_id: i64,
     bars: &polars::prelude::DataFrame,
 ) -> Result<Vec<BarRow>, WorkerError> {

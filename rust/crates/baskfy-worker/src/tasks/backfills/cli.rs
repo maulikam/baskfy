@@ -10,7 +10,7 @@ use baskfy_providers::factory::{KiteLane, RedisSource, build_kite_provider, buil
 use baskfy_providers::secret::Secret;
 use chrono::{NaiveDate, Utc};
 
-use super::bhavcopy::{self, EQUITY_SERIES, Source};
+use super::bhavcopy::{self, EQUITY_SERIES};
 use super::common::{iso, provider_settings};
 use super::{breadth, cursor, deep, index_backfill, index_repair};
 use crate::error::WorkerError;
@@ -290,23 +290,11 @@ async fn run_bhavcopy(args: &[String]) -> Outcome {
         Some(s) => split_list(s),
         None => EQUITY_SERIES.iter().map(|s| (*s).to_owned()).collect(),
     };
-    if let Some(other) = series.iter().find(|s| !EQUITY_SERIES.contains(&s.as_str())) {
-        return Err(Failure::Usage(format!(
-            "--series {other}: only the equity series {} are written",
-            EQUITY_SERIES.join(",")
-        )));
-    }
+    let series: Vec<&str> = series.iter().map(String::as_str).collect();
     let window = window(start, end)?;
     let db = connect(&flags)?;
     let provider = composite().await?;
-    let report = bhavcopy::backfill_bars_from_bhavcopy(
-        &db,
-        &Source::Composite(&provider),
-        window,
-        &series,
-        25,
-    )
-    .await;
+    let report = bhavcopy::backfill_bars_from_bhavcopy(&db, &provider, window, &series, 25).await;
     db.close().await;
     let report = report?;
     say(&format!(

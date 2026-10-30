@@ -9,6 +9,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use baskfy_core::decimal::WideDecimal;
 use baskfy_core::fno::config::py;
 use baskfy_db::OrderedJson;
 use baskfy_providers::errors::ProviderError;
@@ -54,6 +55,24 @@ pub(crate) fn decimal_median(values: &[Decimal]) -> Result<Option<Decimal>, Work
     }
     let sum = py::add(data[n / 2 - 1], data[n / 2]).map_err(fno_err)?;
     py::div(sum, Decimal::from(2)).map(Some).map_err(fno_err)
+}
+
+/// `statistics.median` over unbounded-scale decimals (a ratio below 0.1 needs scale 29+).
+pub(crate) fn wide_median(values: &[WideDecimal]) -> Result<Option<WideDecimal>, WorkerError> {
+    let mut data = values.to_vec();
+    data.sort();
+    let n = data.len();
+    if n == 0 {
+        return Ok(None);
+    }
+    if n % 2 == 1 {
+        return Ok(Some(data[n / 2].clone()));
+    }
+    data[n / 2 - 1]
+        .add(&data[n / 2])
+        .div(&WideDecimal::from(Decimal::from(2)))
+        .map(Some)
+        .map_err(|e| WorkerError::python("InvalidOperation", e.to_string()))
 }
 
 /// `rank_by_turnover`: the `top` symbols by median per-session futures turnover; ties by symbol.
@@ -242,7 +261,7 @@ pub(crate) struct SpreadObservation {
 /// `SpreadStat`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SpreadStat {
-    pub(crate) median_half_spread_pct_of_mid: Decimal,
+    pub(crate) median_half_spread_pct_of_mid: WideDecimal,
     pub(crate) sessions: usize,
 }
 
@@ -251,14 +270,16 @@ pub(crate) struct SpreadStat {
 pub(crate) fn half_spread_ratio(
     bid: Option<Decimal>,
     ask: Option<Decimal>,
-) -> Result<Option<Decimal>, WorkerError> {
+) -> Result<Option<WideDecimal>, WorkerError> {
     let (Some(bid), Some(ask)) = (bid, ask) else {
         return Ok(None);
     };
     if bid <= Decimal::ZERO || ask < bid {
         return Ok(None);
     }
-    py::div(ask - bid, ask + bid).map(Some).map_err(fno_err)
+    py::div_wide(ask - bid, ask + bid)
+        .map(Some)
+        .map_err(fno_err)
 }
 
 /// `half_spread_stats`: per underlying, the median half-spread ÷ mid over its last `sessions`
@@ -296,7 +317,7 @@ pub(crate) fn half_spread_stats(
             }
         }
     }
-    let mut by_symbol: BTreeMap<String, BTreeMap<NaiveDate, Vec<Decimal>>> = BTreeMap::new();
+    let mut by_symbol: BTreeMap<String, BTreeMap<NaiveDate, Vec<WideDecimal>>> = BTreeMap::new();
     for (_, o) in &latest {
         if let Some(ratio) = half_spread_ratio(o.bid, o.ask)? {
             by_symbol
@@ -311,11 +332,11 @@ pub(crate) fn half_spread_stats(
     for (symbol, days) in by_symbol {
         let window: Vec<NaiveDate> = days.keys().copied().collect();
         let window = &window[window.len().saturating_sub(sessions)..];
-        let ratios: Vec<Decimal> = window
+        let ratios: Vec<WideDecimal> = window
             .iter()
             .flat_map(|d| days.get(d).cloned().unwrap_or_default())
             .collect();
-        if let Some(median) = decimal_median(&ratios)? {
+        if let Some(median) = wide_median(&ratios)? {
             out.insert(
                 symbol,
                 SpreadStat {
@@ -755,7 +776,7 @@ mod tests {
     fn half_spreads_skip_one_sided_and_crossed_books() {
         assert_eq!(
             half_spread_ratio(Some(dec("9")), Some(dec("11"))).unwrap(),
-            Some(dec("0.1"))
+            Some(WideDecimal::from(dec("0.1")))
         );
         assert_eq!(half_spread_ratio(None, Some(dec("11"))).unwrap(), None);
         assert_eq!(
@@ -825,7 +846,10 @@ mod tests {
         )
         .unwrap();
         let stat = &stats["SBIN"];
-        assert_eq!(stat.median_half_spread_pct_of_mid, dec("0.05"));
+        assert_eq!(
+            stat.median_half_spread_pct_of_mid,
+            WideDecimal::from(dec("0.05"))
+        );
         assert_eq!(stat.sessions, 2);
         let rerun = half_spread_stats(
             vec![
@@ -835,7 +859,10 @@ mod tests {
             MIN_SPREAD_SESSIONS,
         )
         .unwrap();
-        assert_eq!(rerun["SBIN"].median_half_spread_pct_of_mid, dec("0.01"));
+        assert_eq!(
+            rerun["SBIN"].median_half_spread_pct_of_mid,
+            WideDecimal::from(dec("0.01"))
+        );
         let last = half_spread_stats(
             vec![
                 obs(s1, "9", Some("11"), "800", 30),
@@ -845,7 +872,10 @@ mod tests {
         )
         .unwrap();
         assert_eq!(last["SBIN"].sessions, 1);
-        assert_eq!(last["SBIN"].median_half_spread_pct_of_mid, dec("0.01"));
+        assert_eq!(
+            last["SBIN"].median_half_spread_pct_of_mid,
+            WideDecimal::from(dec("0.01"))
+        );
     }
 
     /// `TestTheRows`: a two-sided book rounds its mid half up; a crossed book keeps both prices

@@ -1368,6 +1368,9 @@ pub async fn execute(
     if confirm != "true" {
         return web::refusal(400, "CONFIRM_REQUIRED", "confirm must be true");
     }
+    if plan_id.contains('\0') {
+        return web::refusal(404, "UNKNOWN_PLAN", "no such plan");
+    }
     let settings = state.settings_snapshot();
     let plan = async {
         let mut conn = state.db.connect().await?;

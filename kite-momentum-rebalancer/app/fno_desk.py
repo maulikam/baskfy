@@ -669,6 +669,8 @@ async def fno_execute(plan_id: str = Form(""), confirm: str = Form("")) -> JSONR
     A missing `confirm` is the same refusal as a false one, by name, before any read."""
     if confirm != "true":
         return JSONResponse({"code": "CONFIRM_REQUIRED", "detail": "confirm must be true"}, 400)
+    if "\x00" in plan_id:
+        return JSONResponse({"code": "UNKNOWN_PLAN", "detail": "no such plan"}, 404)
     try:
         with open_store() as store:
             plan = store.plan(plan_id)

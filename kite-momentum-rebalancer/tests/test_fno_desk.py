@@ -225,6 +225,10 @@ class TestRefusals:
         r = desk.post("F1N-19990101-NOPE-u0")
         assert r.status_code == 404 and r.json()["code"] == "UNKNOWN_PLAN"
 
+    def test_a_plan_id_with_a_nul_is_unknown_not_a_server_error(self, desk: Desk) -> None:
+        r = desk.post("F1N-19990101-NOPE-u0\x00")
+        assert r.status_code == 404 and r.json()["code"] == "UNKNOWN_PLAN"
+
     def test_a_second_post_of_the_same_plan_sends_nothing(self, desk: Desk) -> None:
         plan_id = raise_f1(desk)
         assert desk.post(plan_id).json()["outcome"] == "OPEN"

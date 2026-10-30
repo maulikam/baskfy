@@ -25,13 +25,11 @@
 //! Grade with `tools/parity/task_diff.py --cases tools/parity/task_cases/vbt_jobs.json`.
 
 mod book;
-mod celery;
 #[cfg(test)]
 mod db_tests;
 mod evening;
 mod live;
 mod ops;
-mod quotes;
 mod rescan;
 mod sleeve;
 
@@ -40,6 +38,7 @@ use chrono::NaiveDate;
 use sqlx::PgConnection;
 
 use super::args::fromisoformat_date;
+use super::twt_jobs::celery;
 use super::{BoundArgs, TaskContext, TaskResult};
 use crate::error::WorkerError;
 use crate::pyjson::{int, object, s};

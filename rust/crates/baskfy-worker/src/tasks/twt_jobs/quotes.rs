@@ -1,11 +1,10 @@
-//! The quote source **Scan now** reads during a session: Python's `build_kite_provider(
-//! get_provider_settings(), provider_retry_hooks(), lane=KiteLane.INTERACTIVE)`, built only on
-//! the provisional path (`twt_scan_task.quote_source`), so a scan outside market hours never
-//! touches Kite.
+//! The quote source **Scan now** and **Re-detect** read during a session: Python's
+//! `build_kite_provider(get_provider_settings(), provider_retry_hooks(),
+//! lane=KiteLane.INTERACTIVE)`, built only on the provisional path (`twt_scan_task.quote_source`,
+//! `vbt_rescan_task.quote_source`), so a scan outside market hours never touches Kite.
 //!
 //! Two seams the harness needs (DECISIONS-RS R8.3): the REST root is
-//! [`TaskContext::kite_root`] and the token store reads the task's clock. (The `swing_live` lane
-//! builds the same source in its own private module; a lane does not reach into another's.)
+//! [`TaskContext::kite_root`] and the token store reads the task's clock.
 //!
 //! **Law 2.** [`KiteProvider`] carries reads only; nothing here can reach an order or GTT verb.
 

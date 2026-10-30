@@ -894,6 +894,11 @@
         "BASKFY_OPTIONS_MONITOR_ENABLED": "true"
       },
       "seed_sql": "DELETE FROM op_session WHERE trade_date = '2026-10-29' AND sleeve = 'O2';",
+      "mask": {
+        "op_session": {
+          "created_at": "stamp"
+        }
+      },
       "payload_mask": [
         "/alerts/0/raised_at"
       ],

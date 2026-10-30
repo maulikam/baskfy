@@ -287,10 +287,10 @@ async fn live_frame(
 
 /// `PlanBuild`.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-struct PlanBuild {
-    plan_id: Option<String>,
-    entries: i64,
-    kept: bool,
+pub(crate) struct PlanBuild {
+    pub(crate) plan_id: Option<String>,
+    pub(crate) entries: i64,
+    pub(crate) kept: bool,
 }
 
 /// `_in_flight_live_plan`: today's `LIVE` plan's id when any of its lines is in flight.
@@ -316,7 +316,7 @@ async fn in_flight_live_plan(
 /// `build_live_plan_vbt`: the evening's parts without its sweep, exit queue or settle; every
 /// entry re-kinded `BUY_AT_MARKET` (same size, same stop). A plan with a line at the broker is
 /// kept; a name with a working order is already `build_entries`' refusal.
-async fn build_live_plan_vbt(
+pub(crate) async fn build_live_plan_vbt(
     conn: &mut PgConnection,
     user_id: i64,
     trade_date: NaiveDate,

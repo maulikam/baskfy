@@ -151,15 +151,15 @@ pub(crate) async fn unpublished_runs(
 }
 
 /// The claimed row's user and what it already says (a failure leaves those as they were).
-struct Claimed {
-    user_id: i64,
+pub(crate) struct Claimed {
+    pub(crate) user_id: i64,
     provisional: bool,
     session_date: Option<NaiveDate>,
     detail: Option<OrderedJson>,
 }
 
 /// `claim_run`: `RUNNING` and `started_at`, or `None` for a row that is not `QUEUED`.
-async fn claim_run(
+pub(crate) async fn claim_run(
     conn: &mut PgConnection,
     run_id: i64,
     started_at: DateTime<Utc>,
@@ -308,7 +308,7 @@ async fn rescan_body(
     };
     if decision.provisional {
         // `quote_source()` is built here and only here: outside a session nothing calls Kite.
-        let quotes = super::quotes::interactive_kite(ctx).await?;
+        let quotes = crate::tasks::twt_jobs::quotes::interactive_kite(ctx).await?;
         let report =
             run_vbt_live(conn, user_id, &decision, &quotes, stamp, execution_enabled).await?;
         let mut detail = match report {

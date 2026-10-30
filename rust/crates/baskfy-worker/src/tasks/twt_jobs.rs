@@ -22,14 +22,16 @@
 //!
 //! Grade with `tools/parity/task_diff.py --cases tools/parity/task_cases/twt_jobs.json`.
 
-mod alerting;
-mod celery;
+pub(in crate::tasks) mod alerting;
+pub(in crate::tasks) mod celery;
+#[cfg(test)]
+mod clone_tests;
 #[cfg(test)]
 mod db_tests;
 mod detect;
 mod evening;
 mod live;
-mod quotes;
+pub(in crate::tasks) mod quotes;
 mod scan;
 mod sleeve;
 
@@ -398,6 +400,59 @@ mod tests {
             );
             assert!(!e.name.contains("sweep") && !e.task.contains("sweep"));
         }
+    }
+
+    const LANE_SOURCES: [(&str, &str); 8] = [
+        ("twt_jobs.rs", include_str!("twt_jobs.rs")),
+        ("alerting.rs", include_str!("twt_jobs/alerting.rs")),
+        ("celery.rs", include_str!("twt_jobs/celery.rs")),
+        ("detect.rs", include_str!("twt_jobs/detect.rs")),
+        ("evening.rs", include_str!("twt_jobs/evening.rs")),
+        ("live.rs", include_str!("twt_jobs/live.rs")),
+        ("scan.rs", include_str!("twt_jobs/scan.rs")),
+        ("sleeve.rs", include_str!("twt_jobs/sleeve.rs")),
+    ];
+
+    fn code(source: &str) -> String {
+        let body = source.split("#[cfg(test)]\nmod tests").next().unwrap_or("");
+        body.lines()
+            .map(|line| line.split("//").next().unwrap_or(""))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn nothing_in_the_lane_names_a_broker_verb_or_writes_an_order() {
+        let verbs = [
+            "place_order",
+            "place_gtt",
+            "modify_gtt",
+            "cancel_order",
+            "OrderGateway",
+            "baskfy_execution",
+            "execute_line",
+            "rearm_gtt",
+            "KiteConnect",
+        ];
+        let writes = [
+            "INTO tw_order",
+            "UPDATE tw_order",
+            "INTO tw_position",
+            "UPDATE tw_position",
+            "INTO tw_fill",
+            "UPDATE tw_config",
+            "AUTO_EXECUTE",
+        ];
+        for (file, source) in LANE_SOURCES {
+            let code = code(source);
+            for forbidden in verbs.iter().chain(writes.iter()) {
+                assert!(!code.contains(forbidden), "{file} names {forbidden}");
+            }
+        }
+        let scan = code(include_str!("twt_jobs/scan.rs"));
+        assert!(scan.contains("detect_session("));
+        assert!(!scan.contains("sleeve_capital_inr"));
+        assert!(!scan.contains("fn detect_session"));
     }
 
     #[test]

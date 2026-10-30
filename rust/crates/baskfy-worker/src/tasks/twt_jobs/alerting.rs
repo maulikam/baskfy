@@ -1,12 +1,6 @@
-//! The two alerts this lane raises — `TWT_EVENING` (the evening digest, a warning) and
-//! `TWT_ADJUSTMENT_RESET` (a position re-adjusted under the hold, critical) — through the same
-//! sinks [`crate::alerts::dispatch`] serves: the log line always, the email when
-//! `BASKFY_OPS_ALERT_EMAIL` is set.
-//!
-//! [`crate::alerts::AlertName`] is the nightly's closed set; this lane does not widen it (another
-//! lane's file), so the two names are spelled here with `alerts.py`'s values and `ops.RUNBOOKS`'
-//! runbook, and the payload and mail are built exactly as `alerts.dispatch`/`_send_email` build
-//! them (`json.dumps(payload, indent=2, default=str)`, `html.escape`). Never fails.
+//! The sleeve alerts the `twt_jobs` and `vbt_jobs` lanes raise (`TWT_EVENING`,
+//! `TWT_ADJUSTMENT_RESET`, the four `VBT_*` checks), dispatched as `alerts.dispatch`/`_send_email`
+//! do: the log line always, the email when `BASKFY_OPS_ALERT_EMAIL` is set. Never fails.
 
 use baskfy_api::Settings;
 use baskfy_api::mailer::{Mailer, Message};
@@ -18,21 +12,23 @@ use crate::pyjson::{self, object, s};
 use crate::steps::{log_error, log_warning};
 
 /// `ops.RUNBOOKS[AlertName.TWT_*]`: one runbook for all four `TWT_*` names.
-pub(crate) const RUNBOOK: &str = "docs/runbooks/09-twt-morning.md";
+pub(crate) const TWT_RUNBOOK: &str = "docs/runbooks/09-twt-morning.md";
+
+pub(crate) const VBT_RUNBOOK: &str = "docs/runbooks/08-vbt-evening.md";
 
 /// One alert, by its `AlertName` value.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct TwtAlert {
-    /// `AlertName.TWT_EVENING` / `AlertName.TWT_ADJUSTMENT_RESET`.
+pub(crate) struct SleeveAlert {
     pub(crate) name: &'static str,
     /// `critical` / `warning`.
     pub(crate) severity: &'static str,
     pub(crate) summary: String,
     pub(crate) labels: Vec<(String, String)>,
     pub(crate) detail: OrderedJson,
+    pub(crate) runbook: &'static str,
 }
 
-impl TwtAlert {
+impl SleeveAlert {
     /// `Alert.as_dict()`.
     fn as_dict(&self, raised_at: DateTime<Utc>) -> OrderedJson {
         object([
@@ -44,7 +40,7 @@ impl TwtAlert {
                 object(self.labels.iter().map(|(k, v)| (k.clone(), s(v.clone())))),
             ),
             ("detail", self.detail.clone()),
-            ("runbook", s(RUNBOOK)),
+            ("runbook", s(self.runbook)),
             ("raised_at", s(py_isoformat(raised_at))),
         ])
     }
@@ -68,7 +64,7 @@ fn html_escape(text: &str) -> String {
 
 /// `dispatch(alert, settings)`: the payload plus `delivered_to`. Never fails.
 pub(crate) async fn dispatch(
-    alert: &TwtAlert,
+    alert: &SleeveAlert,
     settings: &Settings,
     raised_at: DateTime<Utc>,
 ) -> OrderedJson {
@@ -79,10 +75,11 @@ pub(crate) async fn dispatch(
         .map(|(k, v)| format!("alert_{k}={v}"))
         .collect();
     log_error(&format!(
-        "alert alert={} severity={} summary={:?} runbook={RUNBOOK} {}",
+        "alert alert={} severity={} summary={:?} runbook={} {}",
         alert.name,
         alert.severity,
         alert.summary,
+        alert.runbook,
         labels.join(" ")
     ));
     let mut delivered = vec!["log"];
@@ -106,7 +103,7 @@ pub(crate) async fn dispatch(
 }
 
 /// `_send_email`: the whole payload verbatim.
-async fn send_email(alert: &TwtAlert, payload: &OrderedJson, settings: &Settings) -> bool {
+async fn send_email(alert: &SleeveAlert, payload: &OrderedJson, settings: &Settings) -> bool {
     let body = match pyjson::dumps_indent2(payload) {
         Ok(body) => body,
         Err(e) => {
@@ -123,11 +120,14 @@ async fn send_email(alert: &TwtAlert, payload: &OrderedJson, settings: &Settings
             "[decile/{}] {}: {}",
             settings.environment, alert.severity, alert.summary
         ),
-        text: format!("{}\n\nRunbook: {RUNBOOK}\n\n{body}\n", alert.summary),
+        text: format!(
+            "{}\n\nRunbook: {}\n\n{body}\n",
+            alert.summary, alert.runbook
+        ),
         html: format!(
             "<p><strong>{}</strong></p><p>Runbook: {}</p><pre>{}</pre>",
             html_escape(&alert.summary),
-            html_escape(RUNBOOK),
+            html_escape(alert.runbook),
             html_escape(&body)
         ),
         reply_to: None,
@@ -150,12 +150,13 @@ mod tests {
 
     #[test]
     fn the_payload_keeps_alerts_py_key_order() {
-        let alert = TwtAlert {
+        let alert = SleeveAlert {
             name: "TWT_EVENING",
             severity: "warning",
             summary: "x".to_owned(),
             labels: vec![("trade_date".to_owned(), "2026-10-29".to_owned())],
             detail: object([("a", pyjson::int(1))]),
+            runbook: TWT_RUNBOOK,
         };
         let OrderedJson::Object(entries) = alert.as_dict(DateTime::<Utc>::default()) else {
             panic!("an object");

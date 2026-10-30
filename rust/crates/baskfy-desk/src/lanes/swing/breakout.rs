@@ -107,7 +107,7 @@ struct NameState {
 pub struct SwingBreakout {
     /// token → name.
     pub watchlist: BTreeMap<i64, WatchedName>,
-    order: Vec<i64>,
+    sequence: Vec<i64>,
     day: NaiveDate,
     config: SwingConfig,
     /// The window in force.
@@ -171,15 +171,18 @@ impl SwingBreakout {
                 py_int_list(&config.opening_range.windows_minutes)
             )));
         }
-        let order: Vec<i64> = watchlist.iter().map(|w| w.token).collect();
-        let state = order.iter().map(|t| (*t, NameState::default())).collect();
+        let sequence: Vec<i64> = watchlist.iter().map(|w| w.token).collect();
+        let state = sequence
+            .iter()
+            .map(|t| (*t, NameState::default()))
+            .collect();
         let open = session_open(day, &config.opening_range);
         let window_end = open + chrono::Duration::minutes(window);
         let reconcile_at = window_end
             + chrono::Duration::minutes(config.opening_range.range_reconcile_delay_minutes);
         Ok(Self {
             watchlist: watchlist.into_iter().map(|w| (w.token, w)).collect(),
-            order,
+            sequence,
             day,
             config,
             window_minutes: window,
@@ -193,10 +196,10 @@ impl SwingBreakout {
         })
     }
 
-    /// `tokens`: the watched tokens, in the order they were added.
+    /// `tokens`: the watched tokens, as they were added.
     #[must_use]
     pub fn tokens(&self) -> Vec<i64> {
-        self.order.clone()
+        self.sequence.clone()
     }
 
     /// `add_watch` (LV4): false when already watched.
@@ -204,7 +207,7 @@ impl SwingBreakout {
         if self.watchlist.contains_key(&watched.token) {
             return false;
         }
-        self.order.push(watched.token);
+        self.sequence.push(watched.token);
         self.state.insert(watched.token, NameState::default());
         self.watchlist.insert(watched.token, watched);
         true
@@ -215,7 +218,7 @@ impl SwingBreakout {
         if self.watchlist.remove(&token).is_none() {
             return false;
         }
-        self.order.retain(|t| *t != token);
+        self.sequence.retain(|t| *t != token);
         self.state.remove(&token);
         true
     }

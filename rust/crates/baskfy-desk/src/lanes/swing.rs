@@ -42,6 +42,7 @@ pub mod breakout;
 pub mod context;
 pub mod desk;
 pub mod execute;
+pub mod gateway;
 pub mod live_gate;
 pub mod notify;
 pub mod rules;

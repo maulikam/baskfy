@@ -1,0 +1,448 @@
+{
+ "fn": "baskfy_core.exposure.regime.evaluate",
+ "inputs": {
+  "as_of_date": "2026-06-05",
+  "book": {
+   "coverage_pct": 57.67,
+   "reason_codes": [
+    "BOOK_CLASSIFICATION_COVERAGE_LOW"
+   ],
+   "source": "last_r1_snapshot",
+   "weights": {
+    "largecap": 0.844,
+    "midcap": 0.64,
+    "smallcap": 0.466
+   }
+  },
+  "breadth": {
+   "as_of_date": "2026-05-30",
+   "audit_run_id": "run1",
+   "calculation_version": "v1",
+   "coverage_pct": 91.68,
+   "eligible_count": 500,
+   "observed_count": 500,
+   "pct_above_20dma": 29.26,
+   "universe_hash": "hash1",
+   "universe_id": "nifty500"
+  },
+  "cfg": {
+   "algorithm_version": "regime/1.0.0",
+   "bootstrap_policy": "observe_only",
+   "breadth_required": true,
+   "breadth_stale_days": 10,
+   "buffer_bps": 150,
+   "confirm_days": 3,
+   "default_book_weights": {
+    "largecap": 0.2,
+    "midcap": 0.3,
+    "smallcap": 0.5
+   },
+   "exchange": "NSE",
+   "exposure_tolerance_pct": 1.0,
+   "index_aliases": {
+    "NIFTY 500 MOMENTUM 50": [
+     "NIFTY500MOMENTM50"
+    ],
+    "NIFTY SMLCAP 250": [
+     "NIFTY SMALLCAP 250"
+    ]
+   },
+   "index_stale_days": 5,
+   "ma_lengths": [
+    20,
+    50,
+    200
+   ],
+   "min_breadth_coverage_pct": 90.0,
+   "min_classification_coverage_pct": 80.0,
+   "mode": "observe",
+   "momentum_sentinel": "NIFTY 500 MOMENTUM 50",
+   "r1_breadth_min": 55.0,
+   "r1_h200_min": 0.8,
+   "r1_h50_min": 0.8,
+   "r3_breadth_max": 40.0,
+   "r3_h200_max": 0.5,
+   "r4_bearish_stack_min": 0.6,
+   "r4_breadth_max": 30.0,
+   "r4_h200_max": 0.3,
+   "recovery_breadth_min": 55.0,
+   "recovery_confirm_evaluations": 2,
+   "recovery_h20_min": 0.5,
+   "segment": "INDICES",
+   "structural_indices": {
+    "largecap": "NIFTY 50",
+    "midcap": "NIFTY MIDCAP 150",
+    "smallcap": "NIFTY SMLCAP 250"
+   },
+   "tier_exposure_pct": {
+    "R1": 100.0,
+    "R2": 70.0,
+    "R3": 40.0,
+    "R4": 10.0
+   },
+   "weekly_evaluation_weekday": 4
+  },
+  "exposure": {
+   "actual_equity_pct": 11.063,
+   "execution_status": "failed",
+   "pending_buy_pct": 1.31,
+   "pending_sell_pct": 2.18
+  },
+  "index_signals": {
+   "NIFTY 50": {
+    "as_of_date": "2026-06-01",
+    "bearish_stack": true,
+    "close": 62.96,
+    "has_data": true,
+    "index_name": "NIFTY 50",
+    "instrument_token": null,
+    "is_stale": false,
+    "signals": {
+     "20": {
+      "close": 62.96,
+      "confirming_closes": 3,
+      "distance_pct": -1.9620056057302993,
+      "ma": 64.22,
+      "ma_length": 20,
+      "state": "below"
+     },
+     "200": {
+      "close": 62.96,
+      "confirming_closes": 3,
+      "distance_pct": -9.096159399364723,
+      "ma": 69.26,
+      "ma_length": 200,
+      "state": "above"
+     },
+     "50": {
+      "close": 62.96,
+      "confirming_closes": 3,
+      "distance_pct": -4.764785962789286,
+      "ma": 66.11,
+      "ma_length": 50,
+      "state": "unknown"
+     }
+    }
+   },
+   "NIFTY MIDCAP 150": {
+    "as_of_date": "2026-06-01",
+    "bearish_stack": false,
+    "close": 118.57,
+    "has_data": true,
+    "index_name": "NIFTY MIDCAP 150",
+    "instrument_token": null,
+    "is_stale": false,
+    "signals": {
+     "20": {
+      "close": 118.57,
+      "confirming_closes": 3,
+      "distance_pct": 5.264559659090895,
+      "ma": 112.64,
+      "ma_length": 20,
+      "state": "unknown"
+     },
+     "200": {
+      "close": 118.57,
+      "confirming_closes": 3,
+      "distance_pct": -4.76305220883535,
+      "ma": 124.5,
+      "ma_length": 200,
+      "state": "unknown"
+     },
+     "50": {
+      "close": 118.57,
+      "confirming_closes": 3,
+      "distance_pct": 0.0,
+      "ma": 118.57,
+      "ma_length": 50,
+      "state": "below"
+     }
+    }
+   },
+   "NIFTY SMLCAP 250": {
+    "as_of_date": "2026-06-01",
+    "bearish_stack": false,
+    "close": 105.05,
+    "has_data": true,
+    "index_name": "NIFTY SMLCAP 250",
+    "instrument_token": null,
+    "is_stale": false,
+    "signals": {
+     "20": {
+      "close": 105.05,
+      "confirming_closes": 3,
+      "distance_pct": 40.30987044209964,
+      "ma": 74.87,
+      "ma_length": 20,
+      "state": "above"
+     },
+     "200": {
+      "close": 105.05,
+      "confirming_closes": 3,
+      "distance_pct": -24.080364240803643,
+      "ma": 138.37,
+      "ma_length": 200,
+      "state": "unknown"
+     },
+     "50": {
+      "close": 105.05,
+      "confirming_closes": 3,
+      "distance_pct": -10.656574247320972,
+      "ma": 117.58,
+      "ma_length": 50,
+      "state": "above"
+     }
+    }
+   }
+  },
+  "previous": null,
+  "scheduled_week_end": "2026-06-05",
+  "sentinel": {
+   "as_of_date": "2026-06-01",
+   "bearish_stack": false,
+   "close": 100.0,
+   "has_data": true,
+   "index_name": "NIFTY 500 MOMENTUM 50",
+   "instrument_token": null,
+   "is_stale": false,
+   "signals": {
+    "20": {
+     "close": 100.0,
+     "confirming_closes": 3,
+     "distance_pct": 0.0,
+     "ma": 100.0,
+     "ma_length": 20,
+     "state": "unknown"
+    },
+    "200": {
+     "close": 100.0,
+     "confirming_closes": 3,
+     "distance_pct": 0.0,
+     "ma": 100.0,
+     "ma_length": 200,
+     "state": "below"
+    },
+    "50": {
+     "close": 100.0,
+     "confirming_closes": 3,
+     "distance_pct": 0.0,
+     "ma": 100.0,
+     "ma_length": 50,
+     "state": "below"
+    }
+   }
+  },
+  "signal_session_date": "2026-06-05"
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "seeded sweep 70. Inputs are JSON; each function is called from them after a JSON round trip. Dates are ISO days, enums their values, IndexSignals/BookWeights/RegimeState their as_dict(), Allocation and Position/Candidate/OrderLine dataclasses.asdict, tuples lists. A raise is {raises: {type, message}}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_exposure.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "actual_equity_pct": 11.063,
+  "algorithm_version": "regime/1.0.0",
+  "as_of_date": "2026-06-05",
+  "bearish_stack_weight": 0.844,
+  "book_category_weights": {
+   "largecap": 0.844,
+   "midcap": 0.64,
+   "smallcap": 0.466
+  },
+  "book_weight_source": "last_r1_snapshot",
+  "breadth_coverage_pct": 91.68,
+  "breadth_pct": 29.26,
+  "config_hash": "571bfb93ce64019f",
+  "data_stale": false,
+  "evaluation_id": "12e54ad9f858316b185a0cd9",
+  "execution_status": "failed",
+  "exposure_gap_pct": 1.063,
+  "forced_action": "none",
+  "health": {
+   "20": 0.466,
+   "200": 0.844,
+   "50": 0.466
+  },
+  "index_diagnostics": {
+   "NIFTY 50": {
+    "as_of_date": "2026-06-01",
+    "bearish_stack": true,
+    "close": 62.96,
+    "has_data": true,
+    "index_name": "NIFTY 50",
+    "instrument_token": null,
+    "is_stale": false,
+    "signals": {
+     "20": {
+      "close": 62.96,
+      "confirming_closes": 3,
+      "distance_pct": -1.9620056057302993,
+      "ma": 64.22,
+      "ma_length": 20,
+      "state": "below"
+     },
+     "200": {
+      "close": 62.96,
+      "confirming_closes": 3,
+      "distance_pct": -9.096159399364723,
+      "ma": 69.26,
+      "ma_length": 200,
+      "state": "above"
+     },
+     "50": {
+      "close": 62.96,
+      "confirming_closes": 3,
+      "distance_pct": -4.764785962789286,
+      "ma": 66.11,
+      "ma_length": 50,
+      "state": "unknown"
+     }
+    }
+   },
+   "NIFTY 500 MOMENTUM 50": {
+    "as_of_date": "2026-06-01",
+    "bearish_stack": false,
+    "close": 100.0,
+    "has_data": true,
+    "index_name": "NIFTY 500 MOMENTUM 50",
+    "instrument_token": null,
+    "is_stale": false,
+    "signals": {
+     "20": {
+      "close": 100.0,
+      "confirming_closes": 3,
+      "distance_pct": 0.0,
+      "ma": 100.0,
+      "ma_length": 20,
+      "state": "unknown"
+     },
+     "200": {
+      "close": 100.0,
+      "confirming_closes": 3,
+      "distance_pct": 0.0,
+      "ma": 100.0,
+      "ma_length": 200,
+      "state": "below"
+     },
+     "50": {
+      "close": 100.0,
+      "confirming_closes": 3,
+      "distance_pct": 0.0,
+      "ma": 100.0,
+      "ma_length": 50,
+      "state": "below"
+     }
+    }
+   },
+   "NIFTY MIDCAP 150": {
+    "as_of_date": "2026-06-01",
+    "bearish_stack": false,
+    "close": 118.57,
+    "has_data": true,
+    "index_name": "NIFTY MIDCAP 150",
+    "instrument_token": null,
+    "is_stale": false,
+    "signals": {
+     "20": {
+      "close": 118.57,
+      "confirming_closes": 3,
+      "distance_pct": 5.264559659090895,
+      "ma": 112.64,
+      "ma_length": 20,
+      "state": "unknown"
+     },
+     "200": {
+      "close": 118.57,
+      "confirming_closes": 3,
+      "distance_pct": -4.76305220883535,
+      "ma": 124.5,
+      "ma_length": 200,
+      "state": "unknown"
+     },
+     "50": {
+      "close": 118.57,
+      "confirming_closes": 3,
+      "distance_pct": 0.0,
+      "ma": 118.57,
+      "ma_length": 50,
+      "state": "below"
+     }
+    }
+   },
+   "NIFTY SMLCAP 250": {
+    "as_of_date": "2026-06-01",
+    "bearish_stack": false,
+    "close": 105.05,
+    "has_data": true,
+    "index_name": "NIFTY SMLCAP 250",
+    "instrument_token": null,
+    "is_stale": false,
+    "signals": {
+     "20": {
+      "close": 105.05,
+      "confirming_closes": 3,
+      "distance_pct": 40.30987044209964,
+      "ma": 74.87,
+      "ma_length": 20,
+      "state": "above"
+     },
+     "200": {
+      "close": 105.05,
+      "confirming_closes": 3,
+      "distance_pct": -24.080364240803643,
+      "ma": 138.37,
+      "ma_length": 200,
+      "state": "unknown"
+     },
+     "50": {
+      "close": 105.05,
+      "confirming_closes": 3,
+      "distance_pct": -10.656574247320972,
+      "ma": 117.58,
+      "ma_length": 50,
+      "state": "above"
+     }
+    }
+   }
+  },
+  "last_transition_date": null,
+  "manual_action_required": true,
+  "new_buys": "blocked",
+  "next_evaluation_date": "2026-06-12",
+  "override_active": false,
+  "pending_buy_pct": 1.31,
+  "pending_sell_pct": 2.18,
+  "policy_tier": "R4",
+  "previous_policy_tier": null,
+  "raw_candidate_tier": "R4",
+  "reason_codes": [
+   "SIGNAL_UNKNOWN",
+   "BOOK_CLASSIFICATION_COVERAGE_LOW",
+   "R4_BEARISH_STACK_AND_WEAK_BREADTH",
+   "SENTINEL_BELOW_50DMA_VETO",
+   "BOOTSTRAP_NO_PRIOR_STATE",
+   "BOOTSTRAP_OBSERVE_ONLY",
+   "EXPOSURE_RECONCILE_RETRY",
+   "NEW_BUYS_BLOCKED_DATA",
+   "FORCED_SELL_SUPPRESSED_BOOTSTRAP"
+  ],
+  "reasons": [
+   "One or more index/MA pairs have not yet confirmed a side.",
+   "Market-cap classification coverage below the configured minimum.",
+   "Bearish MA stack across most of the book with very weak breadth.",
+   "Momentum sentinel below its 50-DMA — new entries vetoed.",
+   "First evaluation — no prior policy tier exists.",
+   "Bootstrap policy is observe-only: no forced selling from absent history.",
+   "Previous plan did not complete — reconciling without a new tier transition.",
+   "New entries blocked by unusable or stale data.",
+   "Forced selling suppressed: no prior state to justify it."
+  ],
+  "scheduled_week_end": "2026-06-05",
+  "signal_session_date": "2026-06-05",
+  "target_equity_cap_pct": 10.0,
+  "transition_limited": false
+ }
+}

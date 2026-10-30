@@ -1,0 +1,139 @@
+{
+ "fn": "baskfy_core.exposure.allocation.solve_allocation",
+ "inputs": {
+  "candidates": [
+   {
+    "cluster": "c0",
+    "liquidity": 100000000.0,
+    "price": 100.0,
+    "rank": 1,
+    "score": 50.0,
+    "symbol": "S00"
+   },
+   {
+    "cluster": "c1",
+    "liquidity": 99999999.0,
+    "price": 100.0,
+    "rank": 2,
+    "score": 49.0,
+    "symbol": "S01"
+   },
+   {
+    "cluster": "c2",
+    "liquidity": 99999998.0,
+    "price": 100.0,
+    "rank": 3,
+    "score": 48.0,
+    "symbol": "S02"
+   },
+   {
+    "cluster": "c3",
+    "liquidity": 99999997.0,
+    "price": 100.0,
+    "rank": 4,
+    "score": 47.0,
+    "symbol": "S03"
+   },
+   {
+    "cluster": "c0",
+    "liquidity": 99999996.0,
+    "price": 100.0,
+    "rank": 5,
+    "score": 46.0,
+    "symbol": "S04"
+   },
+   {
+    "cluster": "c1",
+    "liquidity": 99999995.0,
+    "price": 100.0,
+    "rank": 6,
+    "score": 45.0,
+    "symbol": "S05"
+   },
+   {
+    "cluster": "c2",
+    "liquidity": 99999994.0,
+    "price": 100.0,
+    "rank": 7,
+    "score": 44.0,
+    "symbol": "S06"
+   },
+   {
+    "cluster": "c3",
+    "liquidity": 99999993.0,
+    "price": 100.0,
+    "rank": 8,
+    "score": 43.0,
+    "symbol": "S07"
+   },
+   {
+    "cluster": "c0",
+    "liquidity": 99999992.0,
+    "price": 100.0,
+    "rank": 9,
+    "score": 42.0,
+    "symbol": "S08"
+   },
+   {
+    "cluster": "c1",
+    "liquidity": 99999991.0,
+    "price": 100.0,
+    "rank": 10,
+    "score": 41.0,
+    "symbol": "S09"
+   }
+  ],
+  "cluster_cap": 25.0,
+  "half_factor": 0.5,
+  "half_sized": [],
+  "max_sleeve_w": 15.0,
+  "min_sleeve_w": 6.0,
+  "sleeve_pct": 40.0
+ },
+ "meta": {
+  "known_bug": null,
+  "notes": "dataclasses.asdict(Allocation). Inputs are JSON; each function is called from them after a JSON round trip. Dates are ISO days, enums their values, IndexSignals/BookWeights/RegimeState their as_dict(), Allocation and Position/Candidate/OrderLine dataclasses.asdict, tuples lists. A raise is {raises: {type, message}}. Regenerate with `PYTHONPATH=..:packages/core/src .venv/bin/python ../tools/parity/golden_exposure.py` from decile-blueprint.",
+  "stable": true,
+  "tolerance": {
+   "float": 1e-09
+  }
+ },
+ "output": {
+  "cluster_weights": {
+   "c0": 25.0,
+   "c1": 25.0,
+   "c2": 25.0,
+   "c3": 25.0
+  },
+  "half_sized": [],
+  "notes": [
+   "cluster cap applied: c0, c1",
+   "cluster cap applied: c2"
+  ],
+  "sleeve_pct": 40.0,
+  "weights_nav": {
+   "S00": 3.623188,
+   "S01": 3.62963,
+   "S02": 5.217391,
+   "S03": 5.222222,
+   "S04": 3.333333,
+   "S05": 3.333333,
+   "S06": 4.782609,
+   "S07": 4.777778,
+   "S08": 3.043478,
+   "S09": 3.037037
+  },
+  "weights_sleeve": {
+   "S00": 9.057971,
+   "S01": 9.074074,
+   "S02": 13.043478,
+   "S03": 13.055556,
+   "S04": 8.333333,
+   "S05": 8.333333,
+   "S06": 11.956522,
+   "S07": 11.944444,
+   "S08": 7.608696,
+   "S09": 7.592593
+  }
+ }
+}

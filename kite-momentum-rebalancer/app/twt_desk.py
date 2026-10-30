@@ -678,10 +678,13 @@ class PgTwtStore:
         finish its broker call, and the desk would hang. A confirm that finds the row held is
         refused 409 before anything is read or sent, and can be confirmed again.
         """
+        # NOT EXISTS first: a bare ON CONFLICT waits on a row another confirm's open
+        # transaction has updated, which would block the event loop (R8.TD1/R8.VB1).
         self.conn.execute(
-            f"INSERT INTO {self.t('tw_session')} (user_id, session_date) VALUES (?, ?) "
-            "ON CONFLICT (user_id, session_date) DO NOTHING",
-            (self.user_id, day),
+            f"INSERT INTO {self.t('tw_session')} (user_id, session_date) SELECT ?, ? "
+            f"WHERE NOT EXISTS (SELECT 1 FROM {self.t('tw_session')} WHERE user_id = ? "
+            "AND session_date = ?) ON CONFLICT (user_id, session_date) DO NOTHING",
+            (self.user_id, day, self.user_id, day),
         )
         opened = False
         if self.schema:

@@ -558,8 +558,10 @@ async fn a_nested_lock_on_sqlite_opens_one_transaction() {
     store.lock_session_for_update(session()).await.unwrap();
     store.lock_session_for_update(session()).await.unwrap();
     store.unlock_session().await.unwrap();
+    assert!(store.session_locked(), "only the outermost exit commits");
+    store.unlock_session().await.unwrap();
     assert!(!store.session_locked());
-    // A second exit has nothing to close.
+    // A third exit has nothing to close.
     store.unlock_session().await.unwrap();
 }
 

@@ -303,14 +303,22 @@ async fn a_halted_sleeve_sends_nothing() {
 async fn the_per_session_cap_still_refuses_a_fourth_entry() {
     let rig = four_buys().await;
     let report = run(&rig).await;
-    let statuses: Vec<&str> = report
-        .attempts
-        .iter()
-        .map(|(_, _, s)| s.as_str())
-        .collect();
-    assert_eq!(statuses, ["SIMULATED", "SIMULATED", "SIMULATED", "BLOCKED"], "{report:?}");
+    let statuses: Vec<&str> = report.attempts.iter().map(|(_, _, s)| s.as_str()).collect();
+    assert_eq!(
+        statuses,
+        ["SIMULATED", "SIMULATED", "SIMULATED", "BLOCKED"],
+        "{report:?}"
+    );
     let mut store = rig.store().await;
-    assert!(store.line(4).await.unwrap().unwrap().s("note").starts_with("SESSION_CAP"));
+    assert!(
+        store
+            .line(4)
+            .await
+            .unwrap()
+            .unwrap()
+            .s("note")
+            .starts_with("SESSION_CAP")
+    );
     // LV10.2: counted by the day the orders were sent — this morning, not the signal's date
     assert_eq!(store.entries_taken(open().date_naive()).await.unwrap(), 3);
     assert!(rig.kite.write_calls().is_empty());
@@ -324,7 +332,10 @@ async fn re_running_does_not_double_send() {
     let fills = rig.scalar("SELECT COUNT(*) AS n FROM tw_fill").await;
     let again = run(&rig).await;
     assert!(again.attempts.is_empty(), "{again:?}");
-    assert_eq!(rig.scalar("SELECT COUNT(*) AS n FROM tw_order").await, orders);
+    assert_eq!(
+        rig.scalar("SELECT COUNT(*) AS n FROM tw_order").await,
+        orders
+    );
     assert_eq!(rig.scalar("SELECT COUNT(*) AS n FROM tw_fill").await, fills);
     assert_eq!((orders, fills), (3, 3));
     assert!(rig.kite.write_calls().is_empty());
@@ -341,7 +352,11 @@ async fn every_buy_gets_its_stop_in_the_same_request() {
         positions.iter().all(|p| !p.is_none("gtt_id")),
         "a buy was left without a stop"
     );
-    assert!(positions.iter().all(|p| p.s("gtt_id").starts_with(x::SIMULATED_GTT_PREFIX)));
+    assert!(
+        positions
+            .iter()
+            .all(|p| p.s("gtt_id").starts_with(x::SIMULATED_GTT_PREFIX))
+    );
 }
 
 #[tokio::test]
@@ -364,4 +379,100 @@ async fn every_order_carries_plan_id_colon_symbol() {
         .map(|s| format!("{}:{s}", rig.plan_id))
         .collect();
     assert_eq!(ids, want);
+}
+
+#[tokio::test]
+async fn a_naked_position_refuses_every_buy_before_the_gateway() {
+    let rig = four_buys().await;
+    {
+        let mut store = rig.store().await;
+        store
+            .conn
+            .execute(
+                "INSERT INTO instrument (id, symbol) VALUES (2001, 'NAKED')",
+                &[],
+            )
+            .await
+            .unwrap();
+        store
+            .conn
+            .execute(
+                "INSERT INTO tw_position (user_id, broker_account_id, instrument_id, \
+                 signal_date, entry_date, entry_avg, quantity_entered, quantity_open, \
+                 initial_stop, stop_price, state, simulated) \
+                 VALUES (1, 1, 2001, '2026-09-01', '2026-09-02', '100.00', 10, 10, '80.00', \
+                 '80.00', 'OPEN', 1)",
+                &[],
+            )
+            .await
+            .unwrap();
+    }
+    let report = run(&rig).await;
+    assert_eq!(report.attempts.len(), 4, "{report:?}");
+    assert!(
+        report.attempts.iter().all(|(_, _, s)| s == "BLOCKED"),
+        "{report:?}"
+    );
+    let mut store = rig.store().await;
+    for id in 1..=4 {
+        let line = store.line(id).await.unwrap().unwrap();
+        assert_eq!(line.s("state"), "REJECTED");
+        assert!(
+            line.s("note").starts_with("PROTECTION_UNRESOLVED"),
+            "{line:?}"
+        );
+    }
+    assert_eq!(rig.scalar("SELECT COUNT(*) AS n FROM tw_order").await, 0);
+    assert!(rig.kite.write_calls().is_empty());
+}
+
+#[tokio::test]
+async fn an_untouchable_instrument_is_refused_by_the_guards_and_the_rest_go() {
+    let rig = four_buys().await;
+    {
+        let mut store = rig.store().await;
+        store
+            .conn
+            .execute(
+                "UPDATE instrument SET symbol = 'SGBMAR29' WHERE id = 1001",
+                &[],
+            )
+            .await
+            .unwrap();
+    }
+    {
+        let mut store = rig.store().await;
+        store
+            .conn
+            .execute("DELETE FROM tw_plan_line WHERE id = 4", &[])
+            .await
+            .unwrap();
+    }
+    let report = run(&rig).await;
+    let got: Vec<(&str, &str)> = report
+        .attempts
+        .iter()
+        .map(|(sym, _, s)| (sym.as_str(), s.as_str()))
+        .collect();
+    assert_eq!(
+        got[..2],
+        [("BBB", "SIMULATED"), ("CCC", "SIMULATED")],
+        "{report:?}"
+    );
+    assert_eq!(got[2].0, "SGBMAR29", "{report:?}");
+    assert_ne!(got[2].1, "SIMULATED", "{report:?}");
+    let mut store = rig.store().await;
+    let note = store.line(1).await.unwrap().unwrap().s("note");
+    assert!(
+        !note.starts_with("SESSION_CAP"),
+        "the guard refused it, not the cap: {note}"
+    );
+    assert_eq!(
+        rig.scalar(
+            "SELECT COUNT(*) AS n FROM tw_order WHERE instrument_id = 1001 AND state <> 'REJECTED'"
+        )
+        .await,
+        0
+    );
+    assert!(rig.kite.write_calls().is_empty());
 }

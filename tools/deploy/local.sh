@@ -74,6 +74,12 @@ DESK_PATH_PREFIX=/desk
 EOF
     } > "$HOME_DIR/$f.tmp" && mv "$HOME_DIR/$f.tmp" "$HOME_DIR/$f" && chmod 600 "$HOME_DIR/$f"
   done
+  # The API reads the JWT secret from .env.staging (env_file); the web signs with the one compose
+  # interpolates from .env.staging.compose. The box shipped them different, which refuses every
+  # local sign-in (30 Oct 2026). Compared by hash, never printed.
+  jwt_hash() { grep '^BASKFY_JWT_SECRET=' "$HOME_DIR/$1" | tail -1 | cut -d= -f2- | tr -d '\n' | shasum -a 256; }
+  [ "$(jwt_hash .env.staging)" = "$(jwt_hash .env.staging.compose)" ] || \
+    die "BASKFY_JWT_SECRET differs between .env.staging and .env.staging.compose; make them equal"
   cat > "$HOME_DIR/compose.local.yml" <<EOF
 services:
   # One address (Maulik, 29 Oct 2026): the desk is /desk on the app's port; its own vhost is not published.

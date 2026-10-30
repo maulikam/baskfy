@@ -19,10 +19,10 @@
 //! analytics tables only.
 
 pub(crate) mod desk;
-mod factors;
-mod market_health;
+pub(crate) mod factors;
+pub(crate) mod market_health;
 mod numeric;
-mod ranking;
+pub(crate) mod ranking;
 pub(crate) mod score;
 
 use baskfy_core::error::CoreError;
@@ -35,7 +35,7 @@ use crate::error::WorkerError;
 use crate::steps::StepOutcome;
 
 /// A core error as the Python exception it ports (`ValueError`, the core's class).
-fn core_err(e: CoreError) -> WorkerError {
+pub(crate) fn core_err(e: CoreError) -> WorkerError {
     match e {
         CoreError::Polars(p) => pl_err(&p),
         CoreError::Arithmetic(m) => WorkerError::python("InvalidOperation", m),
@@ -46,7 +46,7 @@ fn core_err(e: CoreError) -> WorkerError {
 }
 
 /// A polars error (Python's polars raises its own classes; the message is polars').
-fn pl_err(e: &PolarsError) -> WorkerError {
+pub(crate) fn pl_err(e: &PolarsError) -> WorkerError {
     WorkerError::python("ComputeError", e.to_string())
 }
 

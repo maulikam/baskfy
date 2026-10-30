@@ -29,7 +29,7 @@ pub(crate) mod bars;
 mod calendar;
 mod corporate_actions;
 mod frame;
-mod instruments;
+pub(crate) mod instruments;
 
 use std::collections::BTreeSet;
 

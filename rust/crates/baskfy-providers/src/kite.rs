@@ -878,7 +878,7 @@ pub fn sdk_http_client(timeout: Option<f64>) -> Result<(GuardedClient, f64), Pro
         .cookie_store(true)
         .connect_timeout(wait)
         .read_timeout(wait);
-    Ok((GuardedClient::from_builder(builder)?, timeout))
+    Ok((GuardedClient::from_builder(crate::net::with_kite_proxy(builder)?)?, timeout))
 }
 
 /// The SDK's headers on `request`, with `Authorization: token key:token` (sensitive) when both

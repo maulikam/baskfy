@@ -189,6 +189,25 @@ pub fn client_builder() -> reqwest::ClientBuilder {
         .redirect(policy)
 }
 
+/// Routes a Kite client through the static-IP egress proxy in `BASKFY_KITE_PROXY_URL`, if set.
+///
+/// # Errors
+/// `ValueError` when the URL does not parse as a proxy.
+pub fn with_kite_proxy(
+    builder: reqwest::ClientBuilder,
+) -> Result<reqwest::ClientBuilder, ProviderError> {
+    let url = std::env::var("BASKFY_KITE_PROXY_URL").unwrap_or_default();
+    let url = url.trim();
+    if url.is_empty() {
+        return Ok(builder);
+    }
+    // Never echo the URL: it carries the proxy password.
+    let proxy = reqwest::Proxy::all(url).map_err(|_| {
+        ProviderError::value_error("BASKFY_KITE_PROXY_URL is not a valid proxy URL")
+    })?;
+    Ok(builder.proxy(proxy))
+}
+
 /// An HTTP client whose every request is checked against the block before it is built.
 #[derive(Debug, Clone)]
 pub struct GuardedClient {

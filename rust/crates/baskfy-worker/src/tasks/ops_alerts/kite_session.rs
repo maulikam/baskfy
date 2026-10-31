@@ -248,7 +248,10 @@ pub(crate) async fn verify_session(
         ))
     };
     let client = baskfy_providers::net::GuardedClient::from_builder(
-        baskfy_providers::net::client_builder().timeout(std::time::Duration::from_secs(15)),
+        baskfy_providers::net::with_kite_proxy(
+            baskfy_providers::net::client_builder().timeout(std::time::Duration::from_secs(15)),
+        )
+        .map_err(|_| unreachable("ConnectError"))?,
     )
     .map_err(|_| unreachable("ConnectError"))?;
     let request = client.get(url).map_err(|e| unreachable(e.python_type()))?;

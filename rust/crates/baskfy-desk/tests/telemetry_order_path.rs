@@ -5,7 +5,7 @@
 use std::path::Path;
 
 /// The ports of `main.py`'s `/analyze`, `/execute` and `/stops/arm`.
-const ORDER_PATH: [&str; 1] = ["src/lanes/weekly/analyze.rs"];
+const ORDER_PATH: [&str; 2] = ["src/lanes/weekly/analyze.rs", "src/lanes/weekly/stops.rs"];
 
 fn source() -> String {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -17,7 +17,6 @@ fn source() -> String {
 }
 
 #[test]
-#[ignore = "blocked: weekly/analyze.rs calls no telemetry and /stops/arm is unported (lane weekly)"]
 fn each_stage_is_covered() {
     let src = source();
     for (marker, stage) in [
@@ -32,7 +31,6 @@ fn each_stage_is_covered() {
 }
 
 #[test]
-#[ignore = "blocked: weekly/analyze.rs calls no telemetry and /stops/arm is unported (lane weekly)"]
 fn no_price_quantity_or_token_is_ever_an_attribute() {
     let src = source();
     let instrumented: Vec<&str> = src

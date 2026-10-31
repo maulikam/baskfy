@@ -51,6 +51,7 @@ pub mod pandas;
 pub mod plan_store;
 pub mod scan_source;
 pub mod score;
+pub mod stops;
 pub mod strategy;
 pub mod weekly_books;
 
@@ -58,10 +59,11 @@ use axum::Router;
 
 use crate::app::AppState;
 
-/// The lane's routes: `POST /analyze` and `POST /execute` (lane weekly_plan, `analyze.rs`).
+/// The lane's routes: `POST /analyze`, `POST /execute`, `GET /stops`, `POST /stops/arm`.
 pub fn routes() -> Router<AppState> {
     Router::new()
         .merge(analyze::routes())
+        .merge(stops::routes())
         .merge(weekly_books::routes())
 }
 

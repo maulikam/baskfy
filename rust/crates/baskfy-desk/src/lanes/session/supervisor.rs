@@ -697,7 +697,10 @@ impl Deps for DeskDeps {
     async fn drain_twt(&self, now: DateTime<FixedOffset>) -> Result<DrainOutcome, DepError> {
         let report = crate::lanes::twt::auto::drain_now(&self.state, Some(now))
             .await
-            .map_err(|e| drain_error(&e))?;
+            .map_err(|e| DepError {
+                kind: e.python_type,
+                message: e.message,
+            })?;
         Ok(DrainOutcome {
             ran: report.ran,
             reason: report.reason,

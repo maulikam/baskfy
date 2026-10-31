@@ -12,8 +12,7 @@
 //! sized from fills at `/stops`, which is the stops lane's).
 //!
 //! The generated-scan path (`generate_for=…`, or `SCAN_SOURCE_DEFAULT=generated`) builds the
-//! scan from the screener's bars through [`super::scan_source`] (DECISIONS-RS R8.WP1). Telemetry (`_tel`) is a no-op in the
-//! harness and is not reproduced.
+//! scan from the screener's bars through [`super::scan_source`] (DECISIONS-RS R8.WP1).
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -37,6 +36,7 @@ use crate::lanes::analytics::desk_settings::{SVal, config_value, stored_override
 use crate::lanes::analytics::web::{self, MultiDict, detail, internal_error};
 use crate::lanes::exec_core::desk::{DeskGateway, latest_nav};
 use crate::lanes::exec_core::kite_client::DeskKite;
+use crate::lanes::session::telemetry;
 use crate::plan::{Plan, PlanLine, check_execute};
 use crate::settings::Settings;
 use crate::wire::{PyDict, PyValue, dict};
@@ -902,10 +902,19 @@ async fn plan_from_scan(
         clusters,
         plan_id,
     };
-    let mut plan = match build_plan(&scored, &inputs, cfg) {
+    let source = provenance
+        .get("source")
+        .map_or_else(|| "?".to_owned(), super::plan_store::py_str);
+    let nrows = df.nrows.to_string();
+    let attrs = [("scan_source", source.as_str()), ("rows", nrows.as_str())];
+    let built = telemetry::span("desk.plan.build", &attrs, |_| {
+        build_plan(&scored, &inputs, cfg)
+    });
+    let mut plan = match built {
         Ok(p) => p,
         Err(e) => return internal_error(&e.0),
     };
+    telemetry::count("plans", &[("source", &source)]);
     plan.insert("audit", PyValue::Map(scan_audit));
     plan.insert("breadth", PyValue::Map(breadth));
     let screen_run_id = super::plan_store::py_str(get(&provenance, "screen_run_id"));
@@ -1066,6 +1075,7 @@ async fn execute(State(state): State<AppState>, headers: HeaderMap, body: Bytes)
         }
     };
     let mut results: Vec<PyDict> = Vec::new();
+    let execute_started = state.clock.time();
     let mut recent_errors: Vec<String> = Vec::new();
     let mut aborted_for = String::new();
     for (idx, o) in lines.iter().enumerate() {
@@ -1091,6 +1101,14 @@ async fn execute(State(state): State<AppState>, headers: HeaderMap, body: Bytes)
             Err(e) => return internal_error(&e.to_string()),
         };
         res.insert("action", PyValue::Str(o.action.clone()));
+        let outcome = match res.get("status") {
+            Some(v) if v.truthy() => super::plan_store::py_str(v),
+            _ => "UNKNOWN".to_owned(),
+        };
+        telemetry::count("orders", &[("action", o.side()), ("outcome", &outcome)]);
+        if outcome == "BLOCKED" {
+            telemetry::count("refusals", &[("guard", "untouchable_instrument")]);
+        }
         let status = super::plan_store::py_str(get(&res, "status"));
         let err = if FAILED_STATUSES.contains(&status.as_str()) {
             let e = get(&res, "error");
@@ -1145,15 +1163,36 @@ async fn execute(State(state): State<AppState>, headers: HeaderMap, body: Bytes)
         return internal_error("could not write the execution log");
     }
 
-    let mut recon = PyDict::new();
-    if let Ok(mut conn) = state.db.connect().await
-        && conn.migrate().await.is_ok()
-        && plan_store::record_execution(&mut conn, &plan_id, &results)
+    let recorded: Result<PyDict, String> = async {
+        let mut conn = state.db.connect().await.map_err(|e| e.to_string())?;
+        conn.migrate().await.map_err(|e| e.to_string())?;
+        plan_store::record_execution(&mut conn, &plan_id, &results)
             .await
-            .is_ok()
-        && let Ok(r) = plan_store::reconciliation(&mut conn, &plan_id).await
-    {
-        recon = r;
+            .map_err(|e| e.to_string())?;
+        plan_store::reconciliation(&mut conn, &plan_id)
+            .await
+            .map_err(|e| e.to_string())
+    }
+    .await;
+    let recon = recorded.unwrap_or_else(|e| {
+        let n = results.len().to_string();
+        telemetry::capture(
+            &e,
+            &[
+                ("plan_id", &plan_id),
+                ("stage", "record_execution"),
+                ("orders", &n),
+            ],
+        );
+        PyDict::new()
+    });
+
+    #[allow(clippy::cast_precision_loss)]
+    let batch = lines.len() as f64;
+    telemetry::observe("execute_seconds", state.clock.time() - execute_started);
+    telemetry::observe("batch_size", batch);
+    if !aborted_for.is_empty() {
+        telemetry::count("refusals", &[("guard", "circuit_breaker")]);
     }
 
     let settings = state.settings_snapshot();
@@ -1238,7 +1277,7 @@ pub fn plan_lines(orders: &[PyDict]) -> Result<Vec<PlanLine>, String> {
 /// parameters: an `application/x-www-form-urlencoded` body, or the non-file parts of a
 /// `multipart/form-data` one — which is what the desk's own page sends (`new FormData()` in
 /// `index.html`'s `execute()`).
-fn form_fields(headers: &HeaderMap, body: &[u8]) -> MultiDict {
+pub(crate) fn form_fields(headers: &HeaderMap, body: &[u8]) -> MultiDict {
     let content_type = headers
         .get(header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
@@ -1267,7 +1306,7 @@ fn form_fields(headers: &HeaderMap, body: &[u8]) -> MultiDict {
 
 /// FastAPI's 422 when required `Form(...)` fields are absent: one `missing` item per field,
 /// in the signature's order.
-fn missing_fields(location: &str, names: &[&str]) -> Response<Body> {
+pub(crate) fn missing_fields(location: &str, names: &[&str]) -> Response<Body> {
     let items: Vec<PyValue> = names
         .iter()
         .map(|name| {

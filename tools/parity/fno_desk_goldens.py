@@ -86,7 +86,8 @@ def remap_uid(text: str, old: int, new: int) -> str:
     return re.sub(rf"-u{old}(?![0-9])", f"-u{new}", text)
 
 
-def seed_sql(scn: dict[str, Any], base: int, renames: list[tuple[str, str]]) -> list[str]:
+def seed_sql(scn: dict[str, Any], base: int, renames: list[tuple[str, str]],
+             scans: dict[tuple[Any, ...], int] | None = None) -> list[str]:
     """One scenario's rows as INSERTs for the sole user, ids explicit from ``base`` (far above
     any the bed's sequences reach), foreign keys and ``detail.scan_id`` following, and
     ``renames`` (text, replacement) applied so two scenarios' plan ids and contracts never meet."""
@@ -100,6 +101,12 @@ def seed_sql(scn: dict[str, Any], base: int, renames: list[tuple[str, str]]) -> 
                 text = text.replace(a, b)
             row = json.loads(text)
             row["user_id"] = SOLE_UID
+            key = (row.get("sleeve"), row.get("trade_date"), row.get("symbol"))
+            if table == "fo_scan" and scans is not None and key in scans:
+                ids[(table, row["id"])] = scans[key]
+                continue
+            if table == "fo_scan" and scans is not None:
+                scans[key] = nxt
             if table in ID_TABLES:
                 ids[(table, row["id"])] = nxt
                 row["id"] = nxt
@@ -173,12 +180,13 @@ def emit_cases(goldens: Path) -> None:  # noqa: PLR0915 - one scenario script, i
         return c
 
     cases: list[dict[str, Any]] = []
+    scans: dict[tuple[Any, ...], int] = {}
     # 2 Nov: F2's 09:20 plan, confirmed at 09:22 with its paper GTT.
     add_books("f2_raised", [])
     f2 = raised("f2_raised", [])
     cases += [
         get("/fno/data shows F2's 09:20 plan, live", "/fno/data", "2026-11-02T09:21:00+05:30",
-            sql=seed_sql(sc["f2_raised"], 910_000, [])),
+            sql=seed_sql(sc["f2_raised"], 910_000, [], scans)),
         get("/fno shows its card, sentence and button", "/fno"),
         post("F2 confirmed: the future fills and its GTT rests under a paper handle", f2,
              "2026-11-02T09:22:00+05:30"),
@@ -193,8 +201,8 @@ def emit_cases(goldens: Path) -> None:  # noqa: PLR0915 - one scenario script, i
     f1 = raised("f1_raised", [])
     cases += [
         get("/fno at 09:25: three F1 cards with their countdowns", "/fno", "2026-11-03T09:25:00+05:30",
-            sql=seed_sql(sc["f1_raised"], 920_000, []) + seed_sql(sc["f1_raised"], 921_000, x)
-            + seed_sql(sc["f1_raised"], 922_000, w)),
+            sql=seed_sql(sc["f1_raised"], 920_000, [], scans) + seed_sql(sc["f1_raised"], 921_000, x, scans)
+            + seed_sql(sc["f1_raised"], 922_000, w, scans)),
         post("F1 confirmed: four simulated fills, longs first, OPEN", f1),
         post("F1 posted again: NOT_ISSUED, nothing sent twice", f1),
         post("a thin long call: ABANDONED_PARTIAL, journalled (FO10.4)",
@@ -210,7 +218,7 @@ def emit_cases(goldens: Path) -> None:  # noqa: PLR0915 - one scenario script, i
     add_books("f3_raised", f)
     cases += [
         post("F3 confirmed: the wing, then the short, OPEN with its level", raised("f3_raised", f),
-             "2026-11-06T09:25:00+05:30", sql=seed_sql(sc["f3_raised"], 930_000, f)),
+             "2026-11-06T09:25:00+05:30", sql=seed_sql(sc["f3_raised"], 930_000, f, scans)),
         get("/fno/data: the open spread", "/fno/data"),
     ]  # fmt: skip
     # 9 Nov: an F3 add the monitor raised, confirmed by the click.
@@ -219,7 +227,7 @@ def emit_cases(goldens: Path) -> None:  # noqa: PLR0915 - one scenario script, i
     add_at = sc["f3_add_issued"]["at"]
     cases += [
         get("/fno shows the add awaiting its click", "/fno", add_at,
-            sql=seed_sql(sc["f3_add_issued"], 940_000, a)),
+            sql=seed_sql(sc["f3_add_issued"], 940_000, a, scans)),
         post("the add confirmed: two lots, one position", raised("f3_add_issued", a)),
     ]  # fmt: skip
     # 17 Nov: an F3 exit held for the click (M.5, the flag off); clicked; journalled; the
@@ -237,7 +245,7 @@ def emit_cases(goldens: Path) -> None:  # noqa: PLR0915 - one scenario script, i
     exit_at = sc["f3_exit_issued"]["at"]
     cases += [
         get("/fno at 11:02: the exit held for the click, its sentence", "/fno",
-            "2026-11-17T11:02:00+05:30", sql=seed_sql(sc["f3_exit_issued"], 950_000, e) + closes),
+            "2026-11-17T11:02:00+05:30", sql=seed_sql(sc["f3_exit_issued"], 950_000, e, scans) + closes),
         post("the click on the held exit: CLOSED short first; journal and the paper pauses", exit_id,
              exit_at),
         post("the exit clicked again: NOT_ISSUED", exit_id),

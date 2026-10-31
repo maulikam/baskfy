@@ -137,6 +137,27 @@ class HarnessIds:
         return _uuid_mod.UUID(bytes=digest[:16], version=4)
 
 
+def _warm_polars_temporal() -> None:
+    # Polars resolves the datetime classes on first conversion; it must see the real ones.
+    with contextlib.suppress(ImportError):
+        import polars as pl  # noqa: PLC0415
+
+        day, moment = _REAL_D(2000, 1, 3), _REAL_DT(2000, 1, 3, 9, 15)
+        frame = pl.DataFrame({"d": [day], "t": [moment]}).sort("d")
+        frame.to_dicts()
+        frame["d"].to_list()
+        frame["t"].to_list()
+        pl.DataFrame({"x": [1]}).with_columns(pl.lit(day).alias("d"), pl.lit(moment).alias("t")).rows()
+
+
+def install_clock_seams(clock: str) -> None:
+    _warm_polars_temporal()
+    CLOCK.t = _REAL_DT.fromisoformat(clock).timestamp()
+    setattr(_time_mod, "time", CLOCK.time)
+    setattr(_dt_mod, "datetime", FakeDateTime)
+    setattr(_dt_mod, "date", FakeDate)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="127.0.0.1")
@@ -166,10 +187,7 @@ def main() -> int:
             importlib.import_module(name)
 
     setattr(dotenv, "load_dotenv", lambda *a, **k: False)
-    CLOCK.t = _REAL_DT.fromisoformat(args.clock).timestamp()
-    setattr(_time_mod, "time", CLOCK.time)
-    setattr(_dt_mod, "datetime", FakeDateTime)
-    setattr(_dt_mod, "date", FakeDate)
+    install_clock_seams(args.clock)
     ids = HarnessIds(args.seed)
     setattr(_uuid_mod, "uuid4", ids.uuid4)
 

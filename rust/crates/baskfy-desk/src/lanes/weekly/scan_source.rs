@@ -708,7 +708,7 @@ pub fn psycopg_str(dsn: &str, e: &sqlx::Error) -> String {
         sqlx::Error::Io(io) if io.kind() == std::io::ErrorKind::ConnectionRefused => {
             let (host, port) = host_port(dsn);
             format!(
-                "connection failed: connection to server at \"{host}\", port {port} failed: Connection refused\n\tIs the server running on that host and accepting TCP/IP connections?"
+                "connection failed: connection to server at \"{host}\", port {port} failed: could not receive data from server: Connection refused"
             )
         }
         sqlx::Error::Database(d) => d.message().to_owned(),
@@ -819,7 +819,7 @@ mod tests {
         let e = sqlx::Error::Io(std::io::Error::from(std::io::ErrorKind::ConnectionRefused));
         assert_eq!(
             psycopg_str("postgresql://nobody@127.0.0.1:1/none", &e),
-            "connection failed: connection to server at \"127.0.0.1\", port 1 failed: Connection refused\n\tIs the server running on that host and accepting TCP/IP connections?"
+            "connection failed: connection to server at \"127.0.0.1\", port 1 failed: could not receive data from server: Connection refused"
         );
     }
 }

@@ -37,7 +37,7 @@ use axum::http::{HeaderValue, Response, StatusCode, Uri, header};
 use axum::routing::{MethodRouter, get};
 
 use crate::app::AppState;
-use crate::wire::{PyValue, dict};
+use crate::wire::{PyValue, dict, orjson_dumps};
 
 use super::web::{internal_error, render};
 
@@ -78,13 +78,13 @@ async fn performance_page(State(state): State<AppState>, uri: Uri) -> Response<B
     )
 }
 
-/// `GET /performance/data`: the view model as Starlette's `JSONResponse` (NaN refused).
+/// `GET /performance/data`: the view model as the desk's `ORJSONResponse` (NaN as `null`).
 async fn performance_data(State(state): State<AppState>) -> Response<Body> {
     let view = match performance_view(&state).await {
         Ok(v) => v,
         Err(e) => return internal_error(&e),
     };
-    match performance_view::starlette_json(&PyValue::Map(view)) {
+    match orjson_dumps(&PyValue::Map(view)) {
         Ok(text) => {
             let mut r = Response::new(Body::from(text));
             r.headers_mut().insert(
@@ -93,7 +93,7 @@ async fn performance_data(State(state): State<AppState>) -> Response<Body> {
             );
             r
         }
-        Err(e) => internal_error(&e),
+        Err(e) => internal_error(&e.to_string()),
     }
 }
 

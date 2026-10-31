@@ -893,14 +893,13 @@ async fn plan_from_scan(
         .filter_map(|(s, v)| f64_of(v).map(|p| (s.to_owned(), p)))
         .collect();
     let clusters = load_clusters(state);
-    let plan_id: String = state.ids.uuid4_hex().chars().take(12).collect();
     let inputs = PlanInputs {
         holdings,
         cash,
         live_prices,
         breadth_override: f64_of(get(&breadth, "value")),
         clusters,
-        plan_id,
+        plan_id: String::new(),
     };
     let source = provenance
         .get("source")
@@ -914,6 +913,9 @@ async fn plan_from_scan(
         Ok(p) => p,
         Err(e) => return internal_error(&e.0),
     };
+    // Python draws the id last in build_plan, so a failed build consumes none.
+    let plan_id: String = state.ids.uuid4_hex().chars().take(12).collect();
+    plan.insert("plan_id", PyValue::Str(plan_id));
     telemetry::count("plans", &[("source", &source)]);
     plan.insert("audit", PyValue::Map(scan_audit));
     plan.insert("breadth", PyValue::Map(breadth));

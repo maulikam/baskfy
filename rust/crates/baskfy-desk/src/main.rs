@@ -221,6 +221,10 @@ async fn main() -> ExitCode {
         harness,
     });
 
+    if args.get(1).is_some_and(|a| a == "service") && args.get(2).is_some_and(|a| a == "snapshot") {
+        return snapshot(&state, &snapshot_args(&args[3..])).await;
+    }
+
     if args.get(1).is_some_and(|a| a == "service") {
         let Some(name) = args.get(2) else {
             return fail("usage: baskfy-desk service <name>");

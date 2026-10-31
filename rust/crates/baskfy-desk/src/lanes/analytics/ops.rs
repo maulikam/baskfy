@@ -2,9 +2,8 @@
 //! hardcoded argv template, runnable one at a time from the operations page. Nothing here
 //! places an order; nothing is interpolated into a shell.
 //!
-//! The commands are the Python desk's scripts (`python -m scripts.daily`, …): the Rust desk
-//! launches the same argv with the interpreter named by `BASKFY_DESK_PYTHON` (default
-//! `python3`) where Python uses `sys.executable` (DECISIONS-RS R8.7). The options lab's five
+//! Each command keeps Python's argv (`-m scripts.daily …`, shown and stored as Python does) and
+//! runs as this binary's `service <name>` with the same arguments. The options lab's five
 //! strangle controls are not offered (the lab is frozen and off by default; R8.7).
 
 use std::collections::HashSet;
@@ -876,10 +875,33 @@ pub enum StartError {
     Storage(#[from] StorageError),
 }
 
-/// The interpreter the desk's scripts run under.
+/// The `baskfy-desk service` each allowlisted Python module runs as.
 #[must_use]
-pub fn python() -> String {
-    std::env::var("BASKFY_DESK_PYTHON").unwrap_or_else(|_| "python3".to_owned())
+pub fn service_for(module: &str) -> Option<&'static str> {
+    Some(match module {
+        "scripts.daily" => "daily",
+        "scripts.autorun" => "autorun",
+        "scripts.backtest_regime" => "backtest-regime",
+        "app.analytics.snapshot" => "snapshot",
+        "app.analytics.benchmark" => "benchmark",
+        "app.analytics.tradebook" => "tradebook",
+        "app.analytics.protection" => "protection",
+        "app.analytics.db" => "db",
+        "app.scoring" => "scoring",
+        "pytest" => "tests",
+        _ => return None,
+    })
+}
+
+/// The child's argv for `op.argv(values)[1:]`: this binary, `service <name>`, the same arguments.
+#[must_use]
+pub fn exec_argv(args: &[String]) -> Vec<String> {
+    let (name, rest) = match args {
+        [m, module, rest @ ..] if m == "-m" => (service_for(module).unwrap_or("unknown"), rest),
+        _ => ("unknown", args),
+    };
+    let rest: Vec<&str> = rest.iter().map(String::as_str).collect();
+    crate::lanes::service_loop::child_argv(&crate::lanes::service_loop::program(), name, &rest)
 }
 
 /// `start(conn, name, values)`: validate, record and launch; refuses while another runs.
@@ -1018,8 +1040,10 @@ fn run_with_timeout(
 ) -> Result<std::process::Output, RunError> {
     use std::io::Read as _;
     use std::process::{Command, Stdio};
-    let mut child = Command::new(python())
-        .args(args)
+    let argv = exec_argv(args);
+    let (program, rest) = argv.split_first().ok_or_else(|| RunError::Start("empty argv".to_owned()))?;
+    let mut child = Command::new(program)
+        .args(rest)
         .current_dir(root)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -1200,6 +1224,25 @@ mod tests {
             .args(&[("scan".into(), "nested/s.csv".into())], root.path())
             .unwrap();
         assert!(ok.last().unwrap().ends_with("data/uploads/s.csv"));
+    }
+
+    #[test]
+    fn every_operation_runs_as_a_desk_service() {
+        let root = Path::new("/nonexistent");
+        for o in OPERATIONS {
+            let args = o.args(&[], root).unwrap_or_else(|_| o.build_args(&Vec::new()));
+            let argv = exec_argv(&args);
+            let at = argv.iter().position(|a| a == "service").unwrap();
+            assert_ne!(argv[at + 1], "unknown", "{}", o.name);
+            assert_eq!(&argv[at + 2..], &args[2..], "{}", o.name);
+        }
+        let args = by_name("index_update").unwrap().args(&[], root).unwrap();
+        let argv = exec_argv(&args);
+        assert_eq!(
+            &argv[argv.len() - 4..],
+            ["service", "daily", "--only", "index history"]
+        );
+        assert_eq!(service_for("app.analytics.snapshot"), Some("snapshot"));
     }
 
     #[test]

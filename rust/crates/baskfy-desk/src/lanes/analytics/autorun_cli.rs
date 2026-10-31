@@ -75,46 +75,70 @@ pub fn is_trading_day(holidays: &BTreeSet<NaiveDate>, day: NaiveDate) -> bool {
     weekday_num(day) < 5 && !holidays.contains(&day)
 }
 
-/// `SC.load(config)["session"].get("extra_holidays") or ()`, for the file's flat list forms.
+/// `SC.load(config)["session"].get("extra_holidays") or ()`, each through `date.fromisoformat(str(d))`.
 ///
 /// # Errors
-/// The file cannot be read, or a listed date does not parse.
+/// Python's exception text: a missing file, no `session`, or a date that does not parse.
 pub fn extra_holidays(path: &Path) -> Result<Vec<NaiveDate>, String> {
-    let text = std::fs::read_to_string(path)
-        .map_err(|e| format!("[Errno 2] {e}: '{}'", path.display()))?;
-    let parse = |s: &str| {
-        let s = s.trim().trim_matches(|c| c == '"' || c == '\'');
-        NaiveDate::parse_from_str(s, "%Y-%m-%d")
-            .map_err(|_| format!("Invalid isoformat string: '{s}'"))
+    let text = std::fs::read_to_string(path).map_err(|_| {
+        format!("[Errno 2] No such file or directory: '{}'", path.display())
+    })?;
+    let strip = |l: &str| -> String {
+        let mut quote: Option<char> = None;
+        let mut out = String::new();
+        for (i, c) in l.char_indices() {
+            match quote {
+                Some(q) if c == q => quote = None,
+                Some(_) => {}
+                None if c == '\'' || c == '"' => quote = Some(c),
+                None if c == '#' && (i == 0 || l[..i].ends_with([' ', '\t'])) => break,
+                None => {}
+            }
+            out.push(c);
+        }
+        out.trim_end().to_owned()
     };
-    let lines: Vec<&str> = text.lines().collect();
-    for (i, line) in lines.iter().enumerate() {
-        let body = line.split('#').next().unwrap_or("");
-        let Some(rest) = body.trim_start().strip_prefix("extra_holidays:") else {
+    let lines: Vec<(usize, String)> = text
+        .lines()
+        .map(strip)
+        .filter(|l| !l.trim().is_empty() && l.trim() != "---")
+        .map(|l| (l.len() - l.trim_start().len(), l.trim_start().to_owned()))
+        .collect();
+    let Some(at) = lines.iter().position(|(ind, l)| *ind == 0 && l.starts_with("session:")) else {
+        return Err("'session'".to_owned());
+    };
+    let block: Vec<&(usize, String)> = lines[at + 1..].iter().take_while(|(ind, _)| *ind > 0).collect();
+    let Some(child) = block.first().map(|(ind, _)| *ind) else {
+        return Err("'NoneType' object has no attribute 'get'".to_owned());
+    };
+    let parse = |raw: &str| -> Result<NaiveDate, String> {
+        let s = raw.trim().trim_matches(|c| c == '"' || c == '\'');
+        crate::lanes::analytics::ops::parse_iso_date(s)
+            .ok_or_else(|| format!("Invalid isoformat string: '{s}'"))
+    };
+    for (i, (ind, line)) in block.iter().enumerate() {
+        if *ind != child {
+            continue;
+        }
+        let Some(rest) = line.strip_prefix("extra_holidays:") else {
             continue;
         };
         let rest = rest.trim();
         if let Some(inner) = rest.strip_prefix('[') {
-            let inner = inner.trim_end_matches(']');
             return inner
+                .trim_end_matches(']')
                 .split(',')
                 .filter(|s| !s.trim().is_empty())
                 .map(parse)
                 .collect();
         }
         if rest.is_empty() || rest == "null" || rest == "~" {
-            let mut out = Vec::new();
-            for next in &lines[i + 1..] {
-                let t = next.split('#').next().unwrap_or("").trim();
-                if t.is_empty() {
-                    continue;
-                }
-                let Some(item) = t.strip_prefix("- ") else {
-                    break;
-                };
-                out.push(parse(item)?);
-            }
-            return Ok(out);
+            return block[i + 1..]
+                .iter()
+                .take_while(|(n, l)| *n > child || (*n == child && l.starts_with("- ")))
+                .filter_map(|(_, l)| l.strip_prefix("- "))
+                .map(parse)
+                .collect();
         }
         return Ok(vec![parse(rest)?]);
     }
@@ -412,6 +436,10 @@ mod tests {
         std::fs::write(&p, "session:\n  extra_holidays:\n    - 2026-11-09\n    - '2026-11-10'\ntiming:\n").unwrap();
         assert_eq!(extra_holidays(&p).unwrap(), vec![d(11, 9), d(11, 10)]);
         assert!(extra_holidays(&dir.join("missing.yaml")).is_err());
+        std::fs::write(&p, "other:\n  extra_holidays: [2026-01-01]\nsession:\n  open: 1\n  extra_holidays: [2026-11-09, '2026-11-10']  # x\n").unwrap();
+        assert_eq!(extra_holidays(&p).unwrap(), vec![d(11, 9), d(11, 10)]);
+        std::fs::write(&p, "meta:\n  a: 1\n").unwrap();
+        assert_eq!(extra_holidays(&p).unwrap_err(), "'session'");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

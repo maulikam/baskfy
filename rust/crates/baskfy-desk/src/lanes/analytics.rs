@@ -22,6 +22,7 @@
 pub mod analytics_regime;
 pub mod analytics_views;
 pub mod autorun_cli;
+pub mod backtest_cli;
 pub mod breadth;
 pub mod daily_cli;
 pub mod daily_runs;
@@ -29,6 +30,7 @@ pub mod desk_daily;
 pub mod desk_settings;
 pub mod index_cache;
 pub mod ops;
+pub mod ops_cli;
 pub mod regime;
 pub mod regime_store;
 pub mod regime_view;
@@ -85,6 +87,25 @@ pub async fn run_service(name: &str, state: &AppState) -> Option<Result<(), Stri
         "autorun" => Some(sl::exit_with(
             Box::pin(autorun_cli::main(state, &sl::service_args())).await,
         )),
+        "benchmark" => Some(sl::exit_with(
+            Box::pin(ops_cli::benchmark(state, &sl::service_args())).await,
+        )),
+        "tradebook" => Some(sl::exit_with(
+            Box::pin(ops_cli::tradebook(state, &sl::service_args())).await,
+        )),
+        "protection" => Some(sl::exit_with(
+            Box::pin(ops_cli::protection_check(state, &sl::service_args())).await,
+        )),
+        "db" => Some(sl::exit_with(
+            Box::pin(ops_cli::db_cli(state, &sl::service_args())).await,
+        )),
+        "scoring" => Some(sl::exit_with(
+            Box::pin(ops_cli::scoring(state, &sl::service_args())).await,
+        )),
+        "backtest-regime" => Some(sl::exit_with(
+            Box::pin(backtest_cli::main(state, &sl::service_args())).await,
+        )),
+        "tests" => Some(sl::exit_with(ops_cli::tests_cli())),
         _ => None,
     }
 }

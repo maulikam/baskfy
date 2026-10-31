@@ -48,6 +48,8 @@ pub struct Args {
     pub only: Vec<String>,
     /// `--source`.
     pub source: String,
+    /// `--db`.
+    pub db: Option<String>,
 }
 
 const USAGE: &str = "usage: daily.py [-h] [--scan SCAN] [--db DB] [--check] [--quiet] [--force-snapshot] [--only STEP] [--source {schedule,cli,page}]";
@@ -76,12 +78,7 @@ pub fn parse_args(argv: &[String]) -> Result<Args, String> {
         };
         match flag.as_str() {
             "--scan" => a.scan = Some(value("--scan")?),
-            "--db" => {
-                let _ = value("--db")?;
-                return Err(err(
-                    "argument --db: the Rust desk reads DESK_DATABASE_URL only".to_owned(),
-                ));
-            }
+            "--db" => a.db = Some(value("--db")?),
             "--check" => a.check = true,
             "--quiet" => a.quiet = true,
             "--force-snapshot" => a.force_snapshot = true,
@@ -285,6 +282,14 @@ pub async fn main(state: &AppState, argv: &[String]) -> i32 {
             return 2;
         }
     };
+    let owned = match super::ops_cli::with_db(state, a.db.as_deref()).await {
+        Ok(s) => s,
+        Err(e) => {
+            say(&e);
+            return 1;
+        }
+    };
+    let state = &owned;
     let settings = state.settings_snapshot();
     let now_naive = || state.clock.now_ist().naive_local();
     let today = now_naive().date();
@@ -702,6 +707,10 @@ mod tests {
         assert_eq!(
             parse_args(&s(&["--only", "index history"])).unwrap().only,
             ["index history"]
+        );
+        assert_eq!(
+            parse_args(&s(&["--db", "x.db", "--check"])).unwrap().db.as_deref(),
+            Some("x.db")
         );
     }
 

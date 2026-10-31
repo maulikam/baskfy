@@ -27,6 +27,7 @@ pub mod exposure;
 pub mod factor_registry;
 pub mod factors;
 pub mod fno;
+pub mod opportunities;
 pub mod options;
 pub mod pl;
 pub mod py;

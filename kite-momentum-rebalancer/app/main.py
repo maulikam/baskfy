@@ -1319,7 +1319,7 @@ def status(ip: str = ""):
            "read_limiter": kite_limits.shared_mode()}
     if ip:
         from .core.net import outbound_ip
-        out["outbound_ip"] = outbound_ip()
+        out["outbound_ip"] = outbound_ip(proxy_url=C.KITE_PROXY_URL)
     try:
         k = kite()
         out |= {"authed": k.is_authed(),

@@ -86,6 +86,7 @@ from baskfy_api.routers import (
     managers,
     market_data,
     meta,
+    opportunities,
     options,
     overlap,
     portfolio_overview,
@@ -631,6 +632,7 @@ def _mount_routers(versioned: APIRouter) -> None:
     # `test_twt_readonly.py` asserts both over the source and the OpenAPI document.
     versioned.include_router(twt.router)
     versioned.include_router(options.router)
+    versioned.include_router(opportunities.router)
     # FO5: the FO run's read surface and its settings PATCH. No execute route, ever
     # (`docs/fno/02` Track C §4); `test_fno_readonly.py` asserts it over source and OpenAPI.
     versioned.include_router(fno.router)

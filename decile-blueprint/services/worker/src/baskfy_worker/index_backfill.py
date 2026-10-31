@@ -248,11 +248,14 @@ def _kite_indices() -> list[tuple[str, int]]:
     """
     from kiteconnect import KiteConnect  # noqa: PLC0415
 
+    from baskfy_providers.kite import kite_proxies  # noqa: PLC0415
     from baskfy_providers.settings import get_provider_settings  # noqa: PLC0415
     from baskfy_providers.tokens import AccessTokenStore  # noqa: PLC0415
 
     settings = get_provider_settings()
-    client = KiteConnect(api_key=settings.kite_api_key)
+    client = KiteConnect(
+        api_key=settings.kite_api_key, proxies=kite_proxies(settings.kite_proxy_url)
+    )
     client.set_access_token(
         AccessTokenStore(settings.kite_token_path, settings.kite_token_encryption_key).load().value
     )

@@ -52,6 +52,7 @@ from baskfy_api.broker_oauth import (
 from baskfy_core.models import Instrument
 from baskfy_providers.errors import CredentialsMissing, ProviderError
 from baskfy_providers.factory import build_kite_provider
+from baskfy_providers.kite import KiteProvider
 from baskfy_providers.settings import get_provider_settings
 
 #: Long enough that a page render is not a broker call, short enough to still be "live". Kite's own
@@ -233,6 +234,20 @@ def live_prices_by_symbol(broker_id: str = "zerodha") -> dict[str, Decimal]:
     return prices
 
 
+def kite_read_provider() -> KiteProvider | None:
+    api_key = os.environ.get("BASKFY_KITE_API_KEY", "").strip()
+    if not api_key:
+        return None
+    settings = get_provider_settings().model_copy(
+        update={
+            "kite_api_key": api_key,
+            "kite_token_path": str(token_store_path()),
+            "kite_token_encryption_key": token_encryption_key(),
+        }
+    )
+    return build_kite_provider(settings)
+
+
 def _quote_details(symbols: Sequence[str]) -> dict[str, LiveQuote]:
     """Read-only Kite quotes with the previous close. Empty on any failure — the close stays.
 
@@ -242,18 +257,11 @@ def _quote_details(symbols: Sequence[str]) -> dict[str, LiveQuote]:
     wanted = [symbol for symbol in symbols if symbol]
     if not wanted:
         return {}
-    api_key = os.environ.get("BASKFY_KITE_API_KEY", "").strip()
-    if not api_key:
+    provider = kite_read_provider()
+    if provider is None:
         return {}
-    settings = get_provider_settings().model_copy(
-        update={
-            "kite_api_key": api_key,
-            "kite_token_path": str(token_store_path()),
-            "kite_token_encryption_key": token_encryption_key(),
-        }
-    )
     try:
-        records = build_kite_provider(settings).quotes(wanted)
+        records = provider.quotes(wanted)
     except (ProviderError, OSError):
         return {}
     return {

@@ -12813,6 +12813,81 @@
         "title": "OptionsGateOut",
         "type": "object"
       },
+      "OptionsIn": {
+        "additionalProperties": false,
+        "properties": {
+          "direction": {
+            "enum": [
+              "BULLISH",
+              "BEARISH"
+            ],
+            "title": "Direction",
+            "type": "string"
+          },
+          "max_dte": {
+            "default": 60,
+            "maximum": 365.0,
+            "minimum": 0.0,
+            "title": "Max Dte",
+            "type": "integer"
+          },
+          "max_loss_inr": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100000000.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Loss Inr"
+          },
+          "min_dte": {
+            "default": 1,
+            "maximum": 365.0,
+            "minimum": 0.0,
+            "title": "Min Dte",
+            "type": "integer"
+          },
+          "quote_rules": {
+            "$ref": "#/components/schemas/QuoteRulesIn"
+          },
+          "strategies": {
+            "items": {
+              "enum": [
+                "LONG_CALL",
+                "LONG_PUT",
+                "BULL_CALL_SPREAD",
+                "BEAR_PUT_SPREAD"
+              ],
+              "type": "string"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Strategies",
+            "type": "array"
+          },
+          "symbol": {
+            "maxLength": 32,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9&-]+$",
+            "title": "Symbol",
+            "type": "string"
+          }
+        },
+        "required": [
+          "symbol",
+          "direction"
+        ],
+        "title": "OptionsIn",
+        "type": "object"
+      },
       "OptionsIndexOut": {
         "properties": {
           "at": {
@@ -16305,6 +16380,47 @@
           "visibility"
         ],
         "title": "PublishOut",
+        "type": "object"
+      },
+      "QuoteRulesIn": {
+        "additionalProperties": false,
+        "properties": {
+          "max_quote_age_s": {
+            "default": 120,
+            "maximum": 86400.0,
+            "minimum": 1.0,
+            "title": "Max Quote Age S",
+            "type": "integer"
+          },
+          "max_spread_pct": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 100.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              }
+            ],
+            "default": "10",
+            "title": "Max Spread Pct"
+          },
+          "min_oi": {
+            "default": 500,
+            "minimum": 0.0,
+            "title": "Min Oi",
+            "type": "integer"
+          },
+          "min_volume": {
+            "default": 1,
+            "minimum": 0.0,
+            "title": "Min Volume",
+            "type": "integer"
+          }
+        },
+        "title": "QuoteRulesIn",
         "type": "object"
       },
       "RangeFilter-Input": {
@@ -22642,6 +22758,102 @@
         "title": "SwingPositionsOut",
         "type": "object"
       },
+      "SwingScanIn": {
+        "additionalProperties": false,
+        "properties": {
+          "atr_pct_max": {
+            "default": 8.0,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Atr Pct Max",
+            "type": "number"
+          },
+          "atr_pct_min": {
+            "default": 1.0,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Atr Pct Min",
+            "type": "number"
+          },
+          "horizon_max": {
+            "default": 20,
+            "maximum": 120.0,
+            "minimum": 1.0,
+            "title": "Horizon Max",
+            "type": "integer"
+          },
+          "horizon_min": {
+            "default": 5,
+            "maximum": 120.0,
+            "minimum": 1.0,
+            "title": "Horizon Min",
+            "type": "integer"
+          },
+          "limit": {
+            "default": 50,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "min_price": {
+            "default": 50.0,
+            "maximum": 1000000.0,
+            "minimum": 0.0,
+            "title": "Min Price",
+            "type": "number"
+          },
+          "min_rr": {
+            "default": 1.5,
+            "maximum": 20.0,
+            "minimum": 0.0,
+            "title": "Min Rr",
+            "type": "number"
+          },
+          "min_turnover_cr": {
+            "default": 5.0,
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Min Turnover Cr",
+            "type": "number"
+          },
+          "sectors": {
+            "items": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[a-z0-9-]+$",
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Sectors",
+            "type": "array"
+          },
+          "setups": {
+            "items": {
+              "enum": [
+                "BREAKOUT",
+                "PULLBACK",
+                "RELATIVE_STRENGTH"
+              ],
+              "type": "string"
+            },
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Setups",
+            "type": "array"
+          },
+          "universe": {
+            "default": "nifty-500",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z0-9-]+$",
+            "title": "Universe",
+            "type": "string"
+          }
+        },
+        "title": "SwingScanIn",
+        "type": "object"
+      },
       "SwingScanQueuedOut": {
         "description": "What `POST /swing/scan` answers, with a 202: the run to poll.",
         "properties": {
@@ -25641,6 +25853,59 @@
           "source"
         ],
         "title": "UpdatePostOut",
+        "type": "object"
+      },
+      "ValidateIn": {
+        "additionalProperties": false,
+        "properties": {
+          "end": {
+            "format": "date",
+            "title": "End",
+            "type": "string"
+          },
+          "horizon_max": {
+            "default": 20,
+            "maximum": 120.0,
+            "minimum": 1.0,
+            "title": "Horizon Max",
+            "type": "integer"
+          },
+          "setup": {
+            "enum": [
+              "BREAKOUT",
+              "PULLBACK",
+              "RELATIVE_STRENGTH"
+            ],
+            "title": "Setup",
+            "type": "string"
+          },
+          "slippage_bps": {
+            "default": 10.0,
+            "maximum": 500.0,
+            "minimum": 0.0,
+            "title": "Slippage Bps",
+            "type": "number"
+          },
+          "start": {
+            "format": "date",
+            "title": "Start",
+            "type": "string"
+          },
+          "universe": {
+            "default": "nifty-500",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[a-z0-9-]+$",
+            "title": "Universe",
+            "type": "string"
+          }
+        },
+        "required": [
+          "setup",
+          "start",
+          "end"
+        ],
+        "title": "ValidateIn",
         "type": "object"
       },
       "ValidationStatus": {
@@ -44318,6 +44583,700 @@
         "summary": "The selectable universes",
         "tags": [
           "meta"
+        ]
+      }
+    },
+    "/api/v1/opportunities/agui": {
+      "post": {
+        "operationId": "postAgui",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "AG-UI run: conversational, read-only scanning",
+        "tags": [
+          "opportunities"
+        ]
+      }
+    },
+    "/api/v1/opportunities/meta": {
+      "get": {
+        "operationId": "getMeta",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Opportunity scanner parameters and provider state",
+        "tags": [
+          "opportunities"
+        ]
+      }
+    },
+    "/api/v1/opportunities/options/analyze": {
+      "post": {
+        "operationId": "postOptionsAnalyze",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OptionsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Compare listed option structures for an underlying",
+        "tags": [
+          "opportunities"
+        ]
+      }
+    },
+    "/api/v1/opportunities/swing/scan": {
+      "post": {
+        "operationId": "postSwingScan",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SwingScanIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Scan for swing setups on completed daily bars",
+        "tags": [
+          "opportunities"
+        ]
+      }
+    },
+    "/api/v1/opportunities/swing/scan/stream": {
+      "post": {
+        "operationId": "postSwingScanStream",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SwingScanIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Scan with streamed progress (server-sent events)",
+        "tags": [
+          "opportunities"
+        ]
+      }
+    },
+    "/api/v1/opportunities/swing/validate": {
+      "post": {
+        "operationId": "postSwingValidate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Authentication required"
+          },
+          "402": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Your plan does not include this feature"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "A scan is already in flight"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Setting exceeds the server's ceiling"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Too many requests"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemOut"
+                }
+              }
+            },
+            "description": "Data pipeline is degraded"
+          }
+        },
+        "summary": "Point-in-time historical test of a setup's signals",
+        "tags": [
+          "opportunities"
         ]
       }
     },

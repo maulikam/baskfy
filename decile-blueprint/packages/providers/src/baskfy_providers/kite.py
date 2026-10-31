@@ -148,11 +148,20 @@ class BasketMarginClient(Protocol):
     ) -> dict[str, object]: ...
 
 
-def _default_client_factory(api_key: str, *, timeout: float = 30.0) -> KiteClientLike:
+def kite_proxies(proxy_url: str) -> dict[str, str] | None:
+    url = proxy_url.strip()
+    return {"http": url, "https": url} if url else None
+
+
+def _default_client_factory(
+    api_key: str, *, timeout: float = 30.0, proxy_url: str = ""
+) -> KiteClientLike:
     # kiteconnect ships no type information, so the constructor is untyped to mypy. The explicit
     # annotation is where we take responsibility for it satisfying the Protocol.
     # AF 3.11: pass timeout explicitly — the SDK's 7 s default is not a product decision.
-    client: KiteClientLike = KiteConnect(api_key=api_key, timeout=timeout)
+    client: KiteClientLike = KiteConnect(
+        api_key=api_key, timeout=timeout, proxies=kite_proxies(proxy_url)
+    )
     return client
 
 
@@ -192,9 +201,10 @@ class KiteProvider:
         self._client_factory: Callable[[str], KiteClientLike]
         if wiring.client_factory is _default_client_factory:
             timeout = settings.kite_request_timeout_seconds
+            proxy_url = settings.kite_proxy_url
 
             def factory(api_key: str) -> KiteClientLike:
-                return _default_client_factory(api_key, timeout=timeout)
+                return _default_client_factory(api_key, timeout=timeout, proxy_url=proxy_url)
 
             self._client_factory = factory
         else:

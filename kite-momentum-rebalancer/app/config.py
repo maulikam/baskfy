@@ -20,6 +20,8 @@ SOLE_BROKER_ACCOUNT_ID = int(os.getenv("BASKFY_SOLE_BROKER_ACCOUNT_ID", "1"))
 # allowlisted (a rotating residential v6 prefix) while the v4 address sat in the console.
 # Default ON: the failure it prevents is every order in a batch being rejected.
 FORCE_IPV4 = os.getenv("FORCE_IPV4", "true").lower() != "false"
+# Static-IP egress proxy for every Kite call (SEBI allowlist), e.g. https://user:pass@host:443.
+KITE_PROXY_URL = os.getenv("BASKFY_KITE_PROXY_URL", "").strip()
 
 # --- browser-facing security ----------------------------------------------------------
 # The interface places real orders. On a cloud host it is reached through an SSH tunnel,

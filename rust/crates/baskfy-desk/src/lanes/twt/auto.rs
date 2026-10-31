@@ -26,11 +26,12 @@ use rust_decimal::Decimal;
 
 use super::common::{Rec, py_isoformat, to_ist};
 use super::execute::{self, ExecError, ExecOutcome, ExecResult};
-use super::store::{StoreResult, TwtStore};
+use super::store::{StoreError, StoreResult, TwtStore};
 use crate::app::AppState;
 use crate::gateway::Gateway;
 use crate::lanes::session::telemetry::count;
 use crate::settings::Settings;
+use crate::storage::StorageError;
 
 /// `log.warning(...)` / `log.error(...)` under the `twt.auto` logger: stderr, the desk process's
 /// log. Every line is composed here from a plan id, symbols, kinds, statuses and refusal words —
@@ -38,6 +39,111 @@ use crate::settings::Settings;
 #[allow(clippy::print_stderr)]
 fn emit(line: &str) {
     eprintln!("twt.auto {line}");
+}
+
+/// What `run_once`/`drain_now` raised: `type(exc).__name__` and `str(exc)`.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("{python_type}: {message}")]
+pub struct DrainError {
+    /// The Python exception class.
+    pub python_type: String,
+    /// Its message.
+    pub message: String,
+}
+
+fn class_prefix(text: &str) -> Option<(&str, &str)> {
+    text.split_once(": ").filter(|(kind, _)| {
+        !kind.is_empty()
+            && kind.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+            && (kind.ends_with("Error") || kind.ends_with("Exception") || kind.ends_with("Refused"))
+    })
+}
+
+impl DrainError {
+    /// `kind(message)`.
+    #[must_use]
+    pub fn new(python_type: &str, message: impl Into<String>) -> Self {
+        Self {
+            python_type: python_type.to_owned(),
+            message: message.into(),
+        }
+    }
+
+    /// A seam's `"<Class>: message"` text; `default` when it names no class.
+    #[must_use]
+    pub fn from_text(text: &str, default: &str) -> Self {
+        class_prefix(text).map_or_else(
+            || Self::new(default, text),
+            |(kind, message)| Self::new(kind, message),
+        )
+    }
+
+    /// The DB-API class the driver's error would have been.
+    #[must_use]
+    pub fn from_storage(e: &StorageError) -> Self {
+        let text = e.to_string();
+        match e {
+            StorageError::Untranslatable(m) => Self::new("ValueError", m.clone()),
+            StorageError::BadParameter(m) if m.contains("NUL") => Self::new("DataError", m.clone()),
+            StorageError::BadParameter(m) => Self::new("ProgrammingError", m.clone()),
+            StorageError::NoLastRowId => Self::new("NotImplementedError", text),
+            StorageError::Driver(sqlx::Error::Database(db)) => {
+                use sqlx::error::ErrorKind;
+                let kind = match db.kind() {
+                    ErrorKind::UniqueViolation
+                    | ErrorKind::ForeignKeyViolation
+                    | ErrorKind::NotNullViolation
+                    | ErrorKind::CheckViolation => "IntegrityError",
+                    _ => {
+                        let code = db.code().map(|c| c.into_owned()).unwrap_or_default();
+                        if code.len() == 5 {
+                            match &code[..2] {
+                                "08" | "40" | "53" | "55" | "57" | "58" => "OperationalError",
+                                "22" => "DataError",
+                                "42" => "ProgrammingError",
+                                "0A" => "NotSupportedError",
+                                "XX" => "InternalError",
+                                _ => "DatabaseError",
+                            }
+                        } else {
+                            "OperationalError"
+                        }
+                    }
+                };
+                Self::new(kind, db.message().to_owned())
+            }
+            StorageError::Driver(
+                sqlx::Error::Io(_)
+                | sqlx::Error::Tls(_)
+                | sqlx::Error::PoolTimedOut
+                | sqlx::Error::PoolClosed
+                | sqlx::Error::Protocol(_)
+                | sqlx::Error::WorkerCrashed,
+            ) => Self::new("OperationalError", text),
+            StorageError::Driver(sqlx::Error::Configuration(_)) => {
+                Self::new("ProgrammingError", text)
+            }
+            StorageError::Driver(_) => Self::new("DatabaseError", text),
+            StorageError::Other(m) => Self::from_text(m, "RuntimeError"),
+        }
+    }
+
+    /// The class a store call raised.
+    #[must_use]
+    pub fn from_store(e: &StoreError) -> Self {
+        match e {
+            StoreError::Storage(s) => Self::from_storage(s),
+            StoreError::Scan(r) => Self::new("ScanRefused", r.reason.clone()),
+            StoreError::Bad(m) => Self::from_text(m, "ValueError"),
+            StoreError::SessionBusy => Self::new("HTTPException", e.to_string()),
+        }
+    }
+}
+
+impl From<StoreError> for DrainError {
+    fn from(e: StoreError) -> Self {
+        Self::from_store(&e)
+    }
 }
 
 /// `MARKET_OPEN`: 09:15 IST.
@@ -353,7 +459,7 @@ pub async fn run_once(
     c: &dyn Collaborators,
     wait_seconds: f64,
     poll_seconds: f64,
-) -> Result<RunReport, String> {
+) -> Result<RunReport, DrainError> {
     let mut report = RunReport::default();
     let refuse = |mut r: RunReport, reason: String, outcome: &str| {
         count("twt_auto_runs", &[("outcome", outcome)]);
@@ -398,7 +504,10 @@ pub async fn run_once(
             "no_session",
         );
     }
-    let mut store = c.open_store().await?;
+    let mut store = c
+        .open_store()
+        .await
+        .map_err(|e| DrainError::from_text(&e, "RuntimeError"))?;
     if session_closed(store.as_mut(), stamp.date_naive()).await {
         return refuse(
             report,
@@ -409,18 +518,14 @@ pub async fn run_once(
             "not_a_session",
         );
     }
-    let (plan, why) = morning_plan(store.as_mut(), c.now())
-        .await
-        .map_err(|e| e.to_string())?;
+    let (plan, why) = morning_plan(store.as_mut(), c.now()).await?;
     let Some(plan) = plan else {
         emit(&format!("TWT AUTO: {why}"));
         return refuse(report, why, "no_plan");
     };
     report.plan_id = Some(plan.s("plan_id"));
     let gateway = c.gateway().await;
-    report.attempts = drain_plan(c, store.as_mut(), gateway.as_ref(), &plan)
-        .await
-        .map_err(|e| e.to_string())?;
+    report.attempts = drain_plan(c, store.as_mut(), gateway.as_ref(), &plan).await?;
     report.ran = true;
     count("twt_auto_runs", &[("outcome", "ran")]);
     Ok(report)
@@ -463,7 +568,7 @@ impl Collaborators for DeskCollaborators {
         super::open_store(&self.state)
             .await
             .map(|s| Box::new(s) as Box<dyn TwtStore>)
-            .map_err(|e| e.to_string())
+            .map_err(|e| DrainError::from_storage(&e).to_string())
     }
 
     async fn gateway(&self) -> Arc<dyn Gateway> {
@@ -507,7 +612,7 @@ impl Collaborators for DeskCollaborators {
 pub async fn drain_now(
     state: &AppState,
     now: Option<DateTime<FixedOffset>>,
-) -> Result<RunReport, String> {
+) -> Result<RunReport, DrainError> {
     let c = DeskCollaborators::new(state.clone(), now);
     run_once(&c, 0.0, 0.0).await
 }
@@ -521,7 +626,9 @@ pub async fn main(state: &AppState) -> Result<(), String> {
         return Ok(());
     }
     let c = DeskCollaborators::new(state.clone(), None);
-    let report = run_once(&c, SESSION_WAIT_SECONDS, SESSION_POLL_SECONDS).await?;
+    let report = run_once(&c, SESSION_WAIT_SECONDS, SESSION_POLL_SECONDS)
+        .await
+        .map_err(|e| e.to_string())?;
     emit(&report.line());
     Ok(())
 }

@@ -487,3 +487,53 @@ fn test_compose_runs_it_from_the_desk_block_with_the_flag_named_false() {
             .any(|l| !l.trim_start().starts_with('#') && l.contains("BASKFY_TWT_AUTO_EXECUTE"))
     );
 }
+
+// =============================================================================================
+// the drain's typed error
+// =============================================================================================
+
+#[test]
+fn a_drain_error_carries_the_class_python_would_raise() {
+    use crate::lanes::twt::store::{ScanRefused, StoreError};
+    use crate::storage::StorageError;
+    let of = |e: StoreError| a::DrainError::from(e).python_type;
+    assert_eq!(
+        of(StoreError::Storage(StorageError::Untranslatable(
+            "x".into()
+        ))),
+        "ValueError"
+    );
+    assert_eq!(
+        of(StoreError::Storage(StorageError::NoLastRowId)),
+        "NotImplementedError"
+    );
+    assert_eq!(
+        of(StoreError::Storage(sqlx::Error::PoolTimedOut.into())),
+        "OperationalError"
+    );
+    assert_eq!(of(StoreError::Bad("KeyError: 7".into())), "KeyError");
+    assert_eq!(of(StoreError::Bad("entry_avg".into())), "ValueError");
+    assert_eq!(of(StoreError::SessionBusy), "HTTPException");
+    let refused = ScanRefused {
+        status: 409,
+        reason: "busy".into(),
+        run_id: 1,
+        retry_after: None,
+    };
+    let e = a::DrainError::from(StoreError::Scan(refused));
+    assert_eq!(
+        (e.python_type.as_str(), e.message.as_str()),
+        ("ScanRefused", "busy")
+    );
+}
+
+#[test]
+fn a_seams_text_keeps_its_class_and_an_unnamed_one_gets_the_default() {
+    let e = a::DrainError::from_text("OperationalError: connection refused", "RuntimeError");
+    assert_eq!(e.to_string(), "OperationalError: connection refused");
+    let e = a::DrainError::from_text("the store went away", "RuntimeError");
+    assert_eq!(
+        (e.python_type.as_str(), e.message.as_str()),
+        ("RuntimeError", "the store went away")
+    );
+}

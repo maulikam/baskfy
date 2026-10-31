@@ -3,42 +3,39 @@
 //! weekly report, the health checks and the index-bar backfill.
 //!
 //! Python: `baskfy_worker/options/*` (`master`, `collector`, `index_bars`, `partitions`, `reads`,
-//! `checks`, `weekly`, and the free gates of `scan`, `plan`, `plan_o2`, `plan_o3`) and the task
+//! `checks`, `weekly`, `scan`, `plan`, `plan_o2`, `plan_o3`) and the task
 //! bodies in `tasks/celery_tasks.py`. Chain quotes, the index minutes and the NFO instrument dump
 //! come from the replay upstream under the harness. Everything is off by default (the collect,
 //! scan and monitor flags all default false).
 //!
 //! **Ported** (in [`PORTED`]; graded by `tools/parity/task_diff.py --cases
 //! tools/parity/task_cases/options.json`): `refresh_master`, `collect_chain`, `index_bars`,
-//! `index_bars_eod`, `backfill_index_bars`, `checks`, `weekly`.
-//!
-//! **Gated, not ported** (DECISIONS-RS R8.op2): `scan`, `plan_o1`, `plan_o2`, `plan_o3` answer
-//! every refusal Python answers before its first scan or plan computation — the flags, the
-//! window, the tenant, the NSE calendar — and past them return `NotPorted`: the scan and the
-//! plan builders drive ~4,000 lines of `baskfy_core.options` (`scan`, `bars`, `structures`,
-//! `risk`, `session`, `plan*`, `directional`, `expiry_setups`, `sizing`, `costs`) with no Rust
-//! port and no goldens. With the shipped defaults (every flag false) the gate is all Beat ever
-//! reaches. `options/probe.py` (a CLI) and `options/backtest_run.py` (lane `sleeve_backtests`'
-//! task) have no task in this lane.
+//! `index_bars_eod`, `backfill_index_bars`, `checks`, `weekly`, `scan`, `plan_o1`, `plan_o2`,
+//! `plan_o3` (the last four on `baskfy_core::options`). `options/probe.py` (a CLI) and
+//! `options/backtest_run.py` (lane `sleeve_backtests`' task) have no task in this lane.
 //!
 //! **Law 2.** Nothing here places, modifies or cancels an order or a GTT: the Kite reads are the
-//! NFO dump, `quote()`, minute history; the plan tasks' margin *calculator* is never reached
-//! (their bodies are not ported). No auto-execute setting exists for the options sleeves.
+//! NFO dump, `quote()`, minute history and the plan tasks' margin *calculator*
+//! (`consider_positions=False`). No auto-execute setting exists for the options sleeves.
 
-mod alerting;
+pub(crate) mod alerting;
 mod checks;
-mod collector;
-mod common;
-mod index_bars;
-mod master;
+pub(crate) mod collector;
+pub(crate) mod common;
+pub(crate) mod index_bars;
+pub(crate) mod master;
 mod model;
+pub(crate) mod plan;
+pub(crate) mod plan_o2;
+pub(crate) mod plan_o3;
+mod scan;
 mod weekly;
 
 use baskfy_db::OrderedJson;
 use baskfy_providers::factory::{KiteFamily, KiteLane};
 use chrono::{DateTime, Duration, FixedOffset};
 
-use super::{BoundArgs, Lane, TaskContext, TaskResult, not_ported};
+use super::{BoundArgs, TaskContext, TaskResult};
 use crate::error::WorkerError;
 use crate::pyjson::{object, s};
 use common::{
@@ -46,6 +43,57 @@ use common::{
     required_date,
 };
 use model::hm;
+
+pub use plan::{MarginFn, MarginReader};
+
+/// The three plan builders.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlanFamily {
+    /// O1-M and O1-W.
+    O1,
+    /// O2.
+    O2,
+    /// O3-B then O3-A.
+    O3,
+}
+
+/// The scan's body past its gates: one minute for `user_id` (`scan_minute_for`).
+///
+/// # Errors
+/// The core's and the database's.
+pub async fn scan_minute(
+    conn: &mut sqlx::PgConnection,
+    user_id: i64,
+    now: DateTime<FixedOffset>,
+    worker: &crate::settings::WorkerSettings,
+) -> TaskResult {
+    scan::scan_minute_for(conn, user_id, now, true, worker).await
+}
+
+/// A builder's body past its gates (`plan_o*_minute`): the payload without `alerts`, and each
+/// alert as `Alert.as_dict()` at `raised_at` (not dispatched). O2 never asks `margin`.
+///
+/// # Errors
+/// The core's and the database's.
+pub async fn plan_minute(
+    family: PlanFamily,
+    conn: &mut sqlx::PgConnection,
+    user_id: i64,
+    now: DateTime<FixedOffset>,
+    margin: Option<&MarginReader>,
+    worker: &crate::settings::WorkerSettings,
+    raised_at: chrono::DateTime<chrono::Utc>,
+) -> Result<(OrderedJson, Vec<OrderedJson>), WorkerError> {
+    let (payload, alerts) = match family {
+        PlanFamily::O1 => plan::plan_o1_minute(conn, user_id, now, margin, worker).await?,
+        PlanFamily::O2 => plan_o2::plan_o2_minute(conn, user_id, now, worker).await?,
+        PlanFamily::O3 => plan_o3::plan_o3_minute(conn, user_id, now, margin, worker).await?,
+    };
+    Ok((
+        OrderedJson::Object(payload),
+        alerts.iter().map(|a| a.as_dict(raised_at)).collect(),
+    ))
+}
 
 /// The tasks this lane has ported (the `tasks` listing and the cutover read it).
 pub const PORTED: &[&str] = &[
@@ -56,9 +104,11 @@ pub const PORTED: &[&str] = &[
     "baskfy.options.weekly",
     "baskfy.options.checks",
     "baskfy.options.backfill_index_bars",
+    "baskfy.options.scan",
+    "baskfy.options.plan_o1",
+    "baskfy.options.plan_o2",
+    "baskfy.options.plan_o3",
 ];
-
-const LANE: Lane = Lane::Options;
 
 fn skipped_at(now: DateTime<FixedOffset>, why: impl Into<String>) -> OrderedJson {
     object([("at", s(iso_dt(now))), ("skipped", s(why.into()))])
@@ -264,42 +314,69 @@ fn plan_gate_free(
     None
 }
 
-/// The session-day refusal every gated task asks once its free gate has passed; `NotPorted`
-/// past it (R8.op2).
-async fn holiday_then_not_ported(
-    ctx: &TaskContext,
+/// `is_session_day` on today's IST date.
+async fn session_day(
+    conn: &mut sqlx::PgConnection,
     now: DateTime<FixedOffset>,
-    task: &'static str,
-) -> TaskResult {
-    let mut tx = ctx.db.begin().await?;
-    let session = is_session_day(&mut tx, in_ist(now).date_naive()).await?;
-    tx.commit().await?;
-    if !session {
-        return Ok(skipped_at(now, "not an NSE trading day"));
+) -> Result<bool, WorkerError> {
+    is_session_day(conn, in_ist(now).date_naive()).await
+}
+
+/// `kite_margin_reader(build_options_kite().general) if kite_session_usable() else None`.
+pub(crate) async fn margin_reader(
+    ctx: &TaskContext,
+) -> Result<Option<plan::MarginReader>, WorkerError> {
+    if !kite_session_usable(ctx) {
+        return Ok(None);
     }
-    not_ported(task, LANE)
+    let general = common::family_kite(ctx, KiteFamily::General, KiteLane::Interactive).await?;
+    Ok(Some(plan::MarginReader::Kite(Box::new(general))))
+}
+
+/// A plan minute's payload with every alert dispatched (`report["alerts"] = [...]`).
+async fn with_alerts(
+    ctx: &TaskContext,
+    mut payload: Vec<(String, OrderedJson)>,
+    alerts: Vec<alerting::OptionsAlert>,
+) -> OrderedJson {
+    let mut sent = Vec::with_capacity(alerts.len());
+    for alert in &alerts {
+        sent.push(alerting::dispatch(alert, &ctx.settings, ctx.now_utc()).await);
+    }
+    crate::pyjson::update(&mut payload, "alerts", OrderedJson::Array(sent));
+    OrderedJson::Object(payload)
 }
 
 /// Ports `baskfy_worker.tasks.celery_tasks.options_scan_task` — `baskfy.options.scan(at=None)`:
-/// the free gate and the NSE calendar; the scan itself is **not ported** (R8.op2).
+/// every sleeve's state and candidates for this minute into `op_scan`. No Kite call.
 ///
 /// # Errors
-/// A bad `at`; `NotPorted` once every refusal has passed.
+/// A bad `at`; the core's and the database's.
 pub async fn options_scan_task(ctx: &TaskContext, args: BoundArgs) -> TaskResult {
     let now = options_now(ctx, &args)?;
     let user = ctx.sole_user_id();
     if let Some(why) = scan_gate_free(ctx, now, user) {
         return Ok(skipped_at(now, why));
     }
-    holiday_then_not_ported(ctx, now, "baskfy.options.scan").await
+    let Some(user) = user else {
+        return Ok(skipped_at(now, "no BASKFY_SOLE_USER_ID configured"));
+    };
+    let mut tx = ctx.db.begin().await?;
+    if !session_day(&mut tx, now).await? {
+        tx.commit().await?;
+        return Ok(skipped_at(now, "not an NSE trading day"));
+    }
+    let report = scan::scan_minute_for(&mut tx, user, now, true, &ctx.worker).await?;
+    tx.commit().await?;
+    Ok(report)
 }
 
 /// Ports `baskfy_worker.tasks.celery_tasks.options_plan_o1_task` —
-/// `baskfy.options.plan_o1(at=None)`: the free gate (10:00–10:16) and the NSE calendar; the O1
-/// plan builder is **not ported** (R8.op2).
+/// `baskfy.options.plan_o1(at=None)`: lapse expired plans, then decide O1-M and O1-W once each.
+/// The only Kite read is the margin calculator, and only with a usable session.
 ///
 /// # Errors
-/// A bad `at`; `NotPorted` once every refusal has passed.
+/// A bad `at`; the provider builder's, the core's and the database's.
 pub async fn options_plan_o1_task(ctx: &TaskContext, args: BoundArgs) -> TaskResult {
     let now = options_now(ctx, &args)?;
     let user = ctx.sole_user_id();
@@ -315,15 +392,28 @@ pub async fn options_plan_o1_task(ctx: &TaskContext, args: BoundArgs) -> TaskRes
     ) {
         return Ok(skipped_at(now, why));
     }
-    holiday_then_not_ported(ctx, now, "baskfy.options.plan_o1").await
+    let Some(user) = user else {
+        return Ok(skipped_at(now, "no BASKFY_SOLE_USER_ID configured"));
+    };
+    let margin = margin_reader(ctx).await?;
+    let mut tx = ctx.db.begin().await?;
+    if !session_day(&mut tx, now).await? {
+        tx.commit().await?;
+        return Ok(skipped_at(now, "not an NSE trading day"));
+    }
+    let (payload, alerts) =
+        plan::plan_o1_minute(&mut tx, user, now, margin.as_ref(), &ctx.worker).await?;
+    let out = with_alerts(ctx, payload, alerts).await;
+    tx.commit().await?;
+    Ok(out)
 }
 
 /// Ports `baskfy_worker.tasks.celery_tasks.options_plan_o2_task` —
-/// `baskfy.options.plan_o2(at=None)`: the free gate (09:30–13:34) and the NSE calendar; the O2
-/// plan builder is **not ported** (R8.op2).
+/// `baskfy.options.plan_o2(at=None)`: lapse expired plans, then decide today's O2 session once.
+/// No Kite call at all.
 ///
 /// # Errors
-/// A bad `at`; `NotPorted` once every refusal has passed.
+/// A bad `at`; the core's and the database's.
 pub async fn options_plan_o2_task(ctx: &TaskContext, args: BoundArgs) -> TaskResult {
     let now = options_now(ctx, &args)?;
     let user = ctx.sole_user_id();
@@ -331,15 +421,26 @@ pub async fn options_plan_o2_task(ctx: &TaskContext, args: BoundArgs) -> TaskRes
     if let Some(why) = plan_gate_free(ctx, now, user, window, "outside 09:30-13:34 IST") {
         return Ok(skipped_at(now, why));
     }
-    holiday_then_not_ported(ctx, now, "baskfy.options.plan_o2").await
+    let Some(user) = user else {
+        return Ok(skipped_at(now, "no BASKFY_SOLE_USER_ID configured"));
+    };
+    let mut tx = ctx.db.begin().await?;
+    if !session_day(&mut tx, now).await? {
+        tx.commit().await?;
+        return Ok(skipped_at(now, "not an NSE trading day"));
+    }
+    let (payload, alerts) = plan_o2::plan_o2_minute(&mut tx, user, now, &ctx.worker).await?;
+    let out = with_alerts(ctx, payload, alerts).await;
+    tx.commit().await?;
+    Ok(out)
 }
 
 /// Ports `baskfy_worker.tasks.celery_tasks.options_plan_o3_task` —
-/// `baskfy.options.plan_o3(at=None)`: the free gate (09:45–13:34) and the NSE calendar; the O3
-/// plan builder is **not ported** (R8.op2).
+/// `baskfy.options.plan_o3(at=None)`: lapse expired plans, then decide O3-B and O3-A once each.
+/// The only Kite read is the margin calculator, and only with a usable session.
 ///
 /// # Errors
-/// A bad `at`; `NotPorted` once every refusal has passed.
+/// A bad `at`; the provider builder's, the core's and the database's.
 pub async fn options_plan_o3_task(ctx: &TaskContext, args: BoundArgs) -> TaskResult {
     let now = options_now(ctx, &args)?;
     let user = ctx.sole_user_id();
@@ -348,7 +449,20 @@ pub async fn options_plan_o3_task(ctx: &TaskContext, args: BoundArgs) -> TaskRes
     if let Some(why) = plan_gate_free(ctx, now, user, window, "outside 09:45-13:34 IST") {
         return Ok(skipped_at(now, why));
     }
-    holiday_then_not_ported(ctx, now, "baskfy.options.plan_o3").await
+    let Some(user) = user else {
+        return Ok(skipped_at(now, "no BASKFY_SOLE_USER_ID configured"));
+    };
+    let margin = margin_reader(ctx).await?;
+    let mut tx = ctx.db.begin().await?;
+    if !session_day(&mut tx, now).await? {
+        tx.commit().await?;
+        return Ok(skipped_at(now, "not an NSE trading day"));
+    }
+    let (payload, alerts) =
+        plan_o3::plan_o3_minute(&mut tx, user, now, margin.as_ref(), &ctx.worker).await?;
+    let out = with_alerts(ctx, payload, alerts).await;
+    tx.commit().await?;
+    Ok(out)
 }
 
 /// Ports `baskfy_worker.tasks.celery_tasks.options_weekly_task` —
@@ -443,18 +557,20 @@ pub async fn options_backfill_index_bars_task(ctx: &TaskContext, args: BoundArgs
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tasks::Lane;
 
     #[test]
     fn the_ported_list_is_this_lanes_and_holds_no_order_task() {
-        assert_eq!(PORTED.len(), 7);
+        assert_eq!(PORTED.len(), 11);
         for name in PORTED {
             assert!(name.starts_with("baskfy.options."));
             let spec = crate::tasks::find(name);
             assert!(spec.is_some_and(|s| s.lane == Lane::Options), "{name}");
         }
-        for gated in ["scan", "plan_o1", "plan_o2", "plan_o3"] {
-            assert!(!PORTED.contains(&format!("baskfy.options.{gated}").as_str()));
+        for body in ["scan", "plan_o1", "plan_o2", "plan_o3"] {
+            assert!(PORTED.contains(&format!("baskfy.options.{body}").as_str()));
         }
+        assert!(!PORTED.contains(&"baskfy.options.backtest"));
     }
 
     #[test]

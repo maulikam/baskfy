@@ -14,6 +14,7 @@
 mod common;
 #[cfg(test)]
 mod db_tests;
+mod options;
 mod swing;
 mod swing_core;
 mod twt;
@@ -21,14 +22,17 @@ mod vbt;
 
 pub use twt::{SOURCE_PLANT as TWT_SOURCE_PLANT, TwtBacktestArgs, TwtRun, run_twt_backtest};
 
-use super::{BoundArgs, Lane, TaskContext, TaskResult, not_ported};
+use super::{BoundArgs, TaskContext, TaskResult};
+use crate::error::WorkerError;
 use crate::pyjson::{int, object, s};
 use baskfy_db::OrderedJson;
 
 /// The tasks this lane has ported (the `tasks` listing and the cutover read it).
-pub const PORTED: &[&str] = &["baskfy.swing.backtest", "baskfy.vbt.backtest"];
-
-const LANE: Lane = Lane::SleeveBacktests;
+pub const PORTED: &[&str] = &[
+    "baskfy.swing.backtest",
+    "baskfy.vbt.backtest",
+    "baskfy.options.backtest",
+];
 
 /// Ports `baskfy_worker.tasks.celery_tasks.swing_backtest_task` — `baskfy.swing.backtest(start=None, end=None, sleeve_inr=None, cost_pct_per_side=None)`.
 ///
@@ -85,8 +89,39 @@ pub async fn vbt_backtest_task(ctx: &TaskContext, args: BoundArgs) -> TaskResult
 /// Ports `baskfy_worker.tasks.celery_tasks.options_backtest_task` — `baskfy.options.backtest(sleeve, tier, date_from, date_to=None)`.
 ///
 /// # Errors
-/// [`WorkerError::TaskNotPorted`](crate::WorkerError::TaskNotPorted) until this lane lands it.
+/// What Python raises: a bad date, an unknown sleeve (`ValueError`) or tier (`KeyError`), a run
+/// that ends before it starts, a database or core failure (the transaction rolls back).
 pub async fn options_backtest_task(ctx: &TaskContext, args: BoundArgs) -> TaskResult {
-    let _ = (ctx, args);
-    not_ported("baskfy.options.backtest", LANE)
+    let start = match args.value("date_from") {
+        Some(OrderedJson::Str(text)) => crate::tasks::args::fromisoformat_date(text)?,
+        _ => {
+            return Err(WorkerError::python(
+                "TypeError",
+                "fromisoformat: argument must be str",
+            ));
+        }
+    };
+    let end = common::date_if_given(&args, "date_to")?.unwrap_or_else(|| ctx.today_ist());
+    let Some(user_id) = ctx.sole_user_id() else {
+        return Ok(object([
+            ("from", s(common::iso_date(start))),
+            ("skipped", s("no BASKFY_SOLE_USER_ID configured")),
+        ]));
+    };
+    let mut tx = ctx.db.begin().await?;
+    let sleeve = options::sleeve_of(args.value("sleeve").unwrap_or(&OrderedJson::Null))?;
+    let tier = options::tier_of(args.value("tier").unwrap_or(&OrderedJson::Null))?;
+    let run = options::OptionsRun {
+        user_id,
+        sleeve,
+        tier,
+        start,
+        end,
+        options: baskfy_core::options::config::OptionsConfig::default(),
+        ceilings: options::ceilings(&ctx.worker),
+        sha: options::git_sha().await,
+    };
+    let report = options::run_backtest(&mut tx, &run).await?;
+    tx.commit().await?;
+    Ok(report)
 }

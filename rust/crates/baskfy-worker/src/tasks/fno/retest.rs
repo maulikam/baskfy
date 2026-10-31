@@ -317,7 +317,10 @@ pub(crate) async fn measured_spreads(
             (
                 k,
                 (
-                    dec_to_f64(v.median_half_spread_pct_of_mid),
+                    v.median_half_spread_pct_of_mid
+                        .to_string()
+                        .parse::<f64>()
+                        .unwrap_or(f64::NAN),
                     i64::try_from(v.sessions).unwrap_or(i64::MAX),
                 ),
             )

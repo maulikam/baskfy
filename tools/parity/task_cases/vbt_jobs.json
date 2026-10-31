@@ -44,7 +44,7 @@
         "trade_date": "2026-10-29"
       },
       "now": "2026-10-29T21:10:00",
-      "seed_sql": "DELETE FROM vb_signal_daily WHERE user_id = 1 AND date = DATE '2026-10-29'; INSERT INTO vb_signal_daily (user_id, date, instrument_id, state, provisional) VALUES (1, DATE '2026-10-29', 2642, 'SIGNAL', true)",
+      "seed_sql": "DELETE FROM vb_signal_daily WHERE user_id = 1 AND date = DATE '2026-10-29'; INSERT INTO vb_signal_daily (user_id, date, instrument_id, state, close, close_raw, limit_price, stop_price, provisional) VALUES (1, DATE '2026-10-29', 2642, 'SIGNAL', 2861.70, 2861.7000, 2861.70, 2518.30, true)",
       "mask": {
         "vb_signal_daily": {
           "created_at": "stamp"

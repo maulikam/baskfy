@@ -167,6 +167,385 @@ fn header_value(value: &str) -> String {
     }
 }
 
+const MAXLEN: i64 = 78;
+const CHROME_LEN: i64 = 12;
+
+fn is_wsp(c: char) -> bool {
+    c == ' ' || c == '\t'
+}
+
+fn clen(s: &str) -> i64 {
+    i64::try_from(s.chars().count()).unwrap_or(i64::MAX)
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Kind {
+    Name,
+    Sep,
+    Utext,
+    Fws,
+    Label,
+    Cfws,
+    Unstructured,
+    EndBlocked,
+}
+
+#[derive(Clone)]
+struct Tok {
+    kind: Kind,
+    text: String,
+    children: Vec<Tok>,
+}
+
+impl Tok {
+    fn term(kind: Kind, text: &str) -> Self {
+        Self {
+            kind,
+            text: text.to_owned(),
+            children: Vec::new(),
+        }
+    }
+    fn list(kind: Kind, children: Vec<Tok>) -> Self {
+        Self {
+            kind,
+            text: String::new(),
+            children,
+        }
+    }
+    fn is_list(&self) -> bool {
+        matches!(self.kind, Kind::Label | Kind::Cfws | Kind::Unstructured)
+    }
+    fn render(&self) -> String {
+        if self.is_list() {
+            self.children.iter().map(Tok::render).collect()
+        } else {
+            self.text.clone()
+        }
+    }
+    fn as_ew_allowed(&self) -> bool {
+        match self.kind {
+            Kind::Label => false,
+            Kind::Cfws | Kind::Unstructured => self.children.iter().all(Tok::as_ew_allowed),
+            _ => true,
+        }
+    }
+    fn startswith_fws(&self) -> bool {
+        match self.kind {
+            Kind::Fws => self.text.starts_with(is_wsp),
+            Kind::Label | Kind::Cfws | Kind::Unstructured => {
+                self.children.first().is_some_and(Tok::startswith_fws)
+            }
+            _ => false,
+        }
+    }
+}
+
+/// `get_unstructured` for a value with no encoded words: WSP runs and non-WSP runs.
+fn unstructured_tokens(value: &str) -> Vec<Tok> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    let mut cur_ws = false;
+    for c in value.chars() {
+        if !cur.is_empty() && is_wsp(c) != cur_ws {
+            out.push(Tok::term(
+                if cur_ws { Kind::Fws } else { Kind::Utext },
+                &cur,
+            ));
+            cur.clear();
+        }
+        cur_ws = is_wsp(c);
+        cur.push(c);
+    }
+    if !cur.is_empty() {
+        out.push(Tok::term(
+            if cur_ws { Kind::Fws } else { Kind::Utext },
+            &cur,
+        ));
+    }
+    out
+}
+
+/// `email._encoded_words.encode(s, "utf-8")`: q unless b is five or more shorter.
+fn ew_encode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let q_safe = |b: u8| b.is_ascii_alphanumeric() || b"-!*+/".contains(&b);
+    let qlen: usize = bytes
+        .iter()
+        .map(|&b| if q_safe(b) || b == b' ' { 1 } else { 3 })
+        .sum();
+    let blen = bytes.len() / 3 * 4 + if bytes.len().is_multiple_of(3) { 0 } else { 4 };
+    if qlen < blen + 5 {
+        let mut q = String::new();
+        for &b in bytes {
+            if b == b' ' {
+                q.push('_');
+            } else if q_safe(b) {
+                q.push(char::from(b));
+            } else {
+                q.push_str(&format!("={b:02X}"));
+            }
+        }
+        format!("=?utf-8?q?{q}?=")
+    } else {
+        format!(
+            "=?utf-8?b?{}?=",
+            base64::engine::general_purpose::STANDARD.encode(bytes)
+        )
+    }
+}
+
+fn ew_decode(cte: char, text: &str) -> Option<String> {
+    let bytes = if cte == 'b' {
+        base64::engine::general_purpose::STANDARD
+            .decode(text)
+            .ok()?
+    } else {
+        let raw = text.as_bytes();
+        let mut out = Vec::new();
+        let mut i = 0;
+        while i < raw.len() {
+            match raw[i] {
+                b'_' => out.push(b' '),
+                b'=' if raw.len() >= i + 3 => {
+                    let h = std::str::from_utf8(&raw[i + 1..i + 3]).ok()?;
+                    out.push(u8::from_str_radix(h, 16).ok()?);
+                    i += 2;
+                }
+                b => out.push(b),
+            }
+            i += 1;
+        }
+        out
+    };
+    String::from_utf8(bytes).ok()
+}
+
+/// `str(get_unstructured(s))` over a line this folder wrote: encoded words decoded, and the
+/// whitespace between two encoded words dropped.
+fn unstructured_str(s: &str) -> String {
+    let mut toks: Vec<(bool, bool, String)> = Vec::new();
+    let mut rest = s;
+    while !rest.is_empty() {
+        if rest.starts_with(is_wsp) {
+            let n = rest.len() - rest.trim_start_matches(is_wsp).len();
+            toks.push((false, true, rest[..n].to_owned()));
+            rest = &rest[n..];
+            continue;
+        }
+        if let Some(body) = rest.strip_prefix("=?utf-8?") {
+            let cte = body.chars().next().unwrap_or(' ');
+            if (cte == 'q' || cte == 'b')
+                && body.get(1..).is_some_and(|b| b.starts_with('?'))
+                && let Some(end) = body[2..].find("?=")
+                && let Some(text) = ew_decode(cte, &body[2..2 + end])
+            {
+                let n = toks.len();
+                if n > 1 && toks[n - 1].1 && toks[n - 2].0 {
+                    toks[n - 1].2.clear();
+                }
+                toks.push((true, false, text));
+                rest = &body[2 + end + 2..];
+                continue;
+            }
+        }
+        let mut n = rest.find(is_wsp).unwrap_or(rest.len());
+        let first = rest.chars().next().map_or(0, char::len_utf8);
+        if let Some(at) = rest[first..].find("=?utf-8?") {
+            n = n.min(at + first);
+        }
+        toks.push((false, false, rest[..n].to_owned()));
+        rest = &rest[n..];
+    }
+    toks.into_iter().map(|t| t.2).collect()
+}
+
+fn steal_trailing_wsp(lines: &mut [String]) -> String {
+    if let Some(last) = lines.last_mut()
+        && last.ends_with(is_wsp)
+        && let Some(c) = last.pop()
+    {
+        return c.to_string();
+    }
+    String::new()
+}
+
+fn last_line(lines: &mut Vec<String>) -> &mut String {
+    if lines.is_empty() {
+        lines.push(String::new());
+    }
+    let n = lines.len() - 1;
+    &mut lines[n]
+}
+
+/// `_fold_as_ew` (CPython 3.12) with `charset="utf-8"` and combining allowed.
+fn fold_as_ew(
+    to_encode: &str,
+    lines: &mut Vec<String>,
+    last_ew: Option<usize>,
+    leading_whitespace: &str,
+) -> Option<usize> {
+    let mut to_encode: Vec<char> = to_encode.chars().collect();
+    let mut leading_whitespace = leading_whitespace.to_owned();
+    if let Some(at) = last_ew {
+        let last = last_line(lines);
+        let tail = last.get(at..).unwrap_or("").to_owned();
+        last.truncate(at);
+        let joined: String = tail + &to_encode.iter().collect::<String>();
+        to_encode = unstructured_str(&joined).chars().collect();
+    } else if to_encode.first().is_some_and(|&c| is_wsp(c)) {
+        let leading = to_encode.remove(0);
+        if clen(last_line(lines)) == MAXLEN {
+            let w = steal_trailing_wsp(lines);
+            lines.push(w);
+        }
+        last_line(lines).push(leading);
+    }
+    let mut trailing = None;
+    if to_encode.last().is_some_and(|&c| is_wsp(c)) {
+        trailing = to_encode.pop();
+    }
+    let mut new_last_ew = last_ew.unwrap_or_else(|| last_line(lines).len());
+    while !to_encode.is_empty() {
+        let remaining = MAXLEN - clen(last_line(lines));
+        let text_space = remaining - CHROME_LEN - clen(&leading_whitespace);
+        if text_space <= 0 {
+            lines.push(" ".to_owned());
+            continue;
+        }
+        if lines.len() > 1 && clen(last_line(lines)) == 1 && !leading_whitespace.is_empty() {
+            let ew = ew_encode(&leading_whitespace);
+            last_line(lines).push_str(&ew);
+            leading_whitespace.clear();
+        }
+        let mut take = usize::try_from(text_space)
+            .unwrap_or(0)
+            .min(to_encode.len());
+        let mut word: String = to_encode[..take].iter().collect();
+        let mut encoded = ew_encode(&word);
+        while clen(&encoded) > remaining && take > 0 {
+            take -= 1;
+            word = to_encode[..take].iter().collect();
+            encoded = ew_encode(&word);
+        }
+        last_line(lines).push_str(&encoded);
+        to_encode.drain(..take);
+        leading_whitespace.clear();
+        if !to_encode.is_empty() {
+            lines.push(" ".to_owned());
+            new_last_ew = 1;
+        }
+    }
+    if let Some(c) = trailing {
+        last_line(lines).push(c);
+    }
+    Some(new_last_ew)
+}
+
+/// `_refold_parse_tree` (CPython 3.12, `policy.default`, `utf8=False`) over the tree a list
+/// of tokens makes; the lines without their separators.
+fn refold(tree: Vec<Tok>) -> Vec<String> {
+    let mut lines = vec![String::new()];
+    let mut leading_whitespace = String::new();
+    let mut last_ew: Option<usize> = None;
+    let mut blocked = 0_i32;
+    let mut want_encoding = false;
+    let mut parts: std::collections::VecDeque<Tok> = tree.into();
+    while let Some(part) = parts.pop_front() {
+        if part.kind == Kind::EndBlocked {
+            blocked -= 1;
+            continue;
+        }
+        let tstr = part.render();
+        if !want_encoding {
+            want_encoding = tstr.contains(['\n', '\r']);
+        }
+        if !tstr.is_ascii() {
+            want_encoding = true;
+        }
+        if want_encoding && blocked == 0 {
+            if !part.as_ew_allowed() {
+                want_encoding = false;
+                last_ew = None;
+                let folded = refold(part.children.clone());
+                if folded.len() == 1 {
+                    let encoded = folded.into_iter().next().unwrap_or_default();
+                    if clen(&encoded) > MAXLEN - clen(last_line(&mut lines)) {
+                        let w = steal_trailing_wsp(&mut lines);
+                        lines.push(w);
+                    }
+                    last_line(&mut lines).push_str(&encoded);
+                    continue;
+                }
+            }
+            if part.is_list() {
+                parts = part.children.into_iter().chain(parts).collect();
+                want_encoding = false;
+                continue;
+            }
+            last_ew = fold_as_ew(&tstr, &mut lines, last_ew, &leading_whitespace);
+            leading_whitespace.clear();
+            want_encoding = false;
+            continue;
+        }
+        if clen(&tstr) <= MAXLEN - clen(last_line(&mut lines)) {
+            last_line(&mut lines).push_str(&tstr);
+            continue;
+        }
+        leading_whitespace.clear();
+        if clen(&tstr) < MAXLEN {
+            let newline = steal_trailing_wsp(&mut lines);
+            if !newline.is_empty() || part.startswith_fws() {
+                lines.push(newline + &tstr);
+                leading_whitespace = last_line(&mut lines)
+                    .chars()
+                    .take_while(|&c| is_wsp(c))
+                    .collect();
+                last_ew = None;
+                continue;
+            }
+        }
+        if part.is_list() {
+            let allowed = part.as_ew_allowed();
+            let mut newparts = part.children;
+            if !allowed {
+                blocked += 1;
+                newparts.push(Tok::term(Kind::EndBlocked, ""));
+            }
+            parts = newparts.into_iter().chain(parts).collect();
+            continue;
+        }
+        if blocked == 0 {
+            parts.push_front(part);
+            want_encoding = true;
+            continue;
+        }
+        let newline = steal_trailing_wsp(&mut lines);
+        if !newline.is_empty() || part.startswith_fws() {
+            lines.push(newline + &tstr);
+        } else {
+            last_line(&mut lines).push_str(&tstr);
+        }
+    }
+    lines
+}
+
+/// An unstructured header (`Subject`) as `EmailMessage` + `smtplib.send_message` write it:
+/// folded at 78 with RFC 2047 words, CRLF-terminated.
+fn fold_unstructured(name: &str, value: &str) -> String {
+    let mut tree = vec![Tok::list(
+        Kind::Label,
+        vec![Tok::term(Kind::Name, name), Tok::term(Kind::Sep, ":")],
+    )];
+    let body = unstructured_tokens(value);
+    if !body.is_empty() {
+        tree.push(Tok::list(Kind::Cfws, vec![Tok::term(Kind::Fws, " ")]));
+    }
+    tree.push(Tok::list(Kind::Unstructured, body));
+    let mut out = refold(tree).join("\r\n");
+    out.push_str("\r\n");
+    out
+}
+
 /// A body part's content as `set_content` stores it: one trailing newline.
 fn part_body(text: &str) -> String {
     let mut body = text.replace("\r\n", "\n");
@@ -191,7 +570,7 @@ fn mime(message: &Message, from: &str, reply_to: Option<&str>) -> String {
     let mut out = String::new();
     out.push_str(&format!("From: {}\r\n", header_value(from)));
     out.push_str(&format!("To: {}\r\n", header_value(&message.to)));
-    out.push_str(&format!("Subject: {}\r\n", header_value(&message.subject)));
+    out.push_str(&fold_unstructured("Subject", &message.subject));
     if let Some(r) = reply_to {
         out.push_str(&format!("Reply-To: {}\r\n", header_value(r)));
     }
@@ -330,9 +709,20 @@ mod tests {
         let text_at = raw.find("text/plain").unwrap_or(usize::MAX);
         let html_at = raw.find("text/html").unwrap_or(0);
         assert!(text_at < html_at);
-        assert!(raw.contains("Subject: =?utf-8?b?"));
+        assert!(raw.contains("Subject: Hi =?utf-8?b?4oK5?=\r\n"));
         assert!(raw.contains("MIME-Version: 1.0\r\n"));
         let encoded = base64::engine::general_purpose::STANDARD.encode(b"one\n\ntwo\n");
         assert!(raw.contains(&encoded));
+    }
+
+    #[test]
+    fn subject_folding_is_byte_identical_to_python_email() {
+        let vectors: Vec<(String, String)> =
+            serde_json::from_str(include_str!("../tests/data/mail_subject_vectors.json"))
+                .unwrap_or_default();
+        assert!(vectors.len() >= 16);
+        for (subject, want) in &vectors {
+            assert_eq!(&fold_unstructured("Subject", subject), want, "{subject:?}");
+        }
     }
 }

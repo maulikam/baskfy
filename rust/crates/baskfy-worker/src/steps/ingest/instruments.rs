@@ -282,7 +282,7 @@ pub(super) struct ListingsResult {
 
 /// `run_refresh_listings`: the main register (raising, after noting, on a provider error) plus
 /// the Emerge register (recorded and carried on failure).
-pub(super) async fn run_refresh_listings(
+pub(crate) async fn run_refresh_listings(
     conn: &mut PgConnection,
     provider: &CompositeProvider,
     outcome: &mut StepOutcome,

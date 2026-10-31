@@ -5,11 +5,6 @@
 //! (`/meta/trading-days`), the freshness of the data (`/meta/status`) and the screens' live price
 //! overlay (`/meta/live-marks`).
 //!
-//! **`/meta/live-marks` is ported on its closed and no-session answers only.** While the NSE
-//! session is open *and* a Kite session exists Python asks Kite for quotes; that branch needs the
-//! live quote client (a later wave), so Rust reports `no_session` there and
-//! [`reference::quotes_permitted`] says so (DECISIONS-RS R5.11).
-//!
 //! This file also hosts the lane's shared private module, [`reference`].
 
 #[path = "reference/mod.rs"]
@@ -27,10 +22,12 @@ use baskfy_db::OrderedJson;
 use chrono::{DateTime, Datelike, FixedOffset, NaiveTime, Utc, Weekday};
 
 use crate::auth::{Principal, require_authenticated};
+use crate::live_prices::LiveQuote;
 use crate::problems::{Problem, ProblemType};
 use crate::query::{QueryParams, Validation};
 use crate::state::AppState;
 use crate::wire;
+use baskfy_providers::records::PyDateTime;
 
 /// `MAX_TRADING_DAY_SPAN`: five 366-day years.
 pub const MAX_TRADING_DAY_SPAN_DAYS: i64 = 5 * 366;
@@ -343,7 +340,7 @@ pub async fn get_status(State(state): State<AppState>) -> Result<Response, Probl
             .is_some_and(|r| r.status == RUNNING_RUN_STATUS),
         last_pipeline_run: last,
         data_start_date: reference::data_start_date(),
-        live_quotes: reference::quotes_permitted(),
+        live_quotes: reference::quotes_permitted()?,
         session_day,
         market_open,
     };
@@ -391,11 +388,95 @@ fn requested_names(symbols: &str) -> Vec<String> {
     names
 }
 
+/// `STALE_AFTER_SECONDS`, as a duration.
+const STALE_AFTER: i64 = STALE_AFTER_SECONDS;
+
+/// `_is_stale(as_of, served_at)`: a naive stamp is read as IST; no stamp is not stale.
+fn is_stale(as_of: Option<&PyDateTime>, served_at: DateTime<FixedOffset>) -> bool {
+    let stamp = match as_of {
+        None => return false,
+        Some(PyDateTime::Aware(t)) => *t,
+        Some(PyDateTime::Naive(n)) => {
+            let ist = baskfy_providers::tokens::ist();
+            match n.and_local_timezone(ist).single() {
+                Some(t) => t,
+                None => return false,
+            }
+        }
+    };
+    let micros = (served_at - stamp).num_microseconds().unwrap_or(i64::MAX);
+    micros > STALE_AFTER * 1_000_000
+}
+
+/// `as_of` as pydantic writes a datetime.
+fn py_datetime_json(t: &PyDateTime) -> OrderedJson {
+    match t {
+        PyDateTime::Aware(a) => OrderedJson::Str(wire::py_datetime_fixed(*a)),
+        PyDateTime::Naive(n) => OrderedJson::Str(wire::py_naive_datetime(*n)),
+    }
+}
+
+/// `_live_quote_out(quote, served_at)`.
+fn live_quote_out(quote: &LiveQuote, served_at: DateTime<FixedOffset>) -> OrderedJson {
+    let change = quote.prev_close.and_then(|prev| {
+        let pct = (quote.last_price - prev).checked_div(prev)? * rust_decimal::Decimal::from(100);
+        let mut r =
+            pct.round_dp_with_strategy(2, rust_decimal::RoundingStrategy::MidpointNearestEven);
+        r.rescale(2);
+        Some(r)
+    });
+    let dec = |d: rust_decimal::Decimal| OrderedJson::Str(wire::py_decimal(d));
+    OrderedJson::Object(vec![
+        ("last_price".to_owned(), dec(quote.last_price)),
+        (
+            "prev_close".to_owned(),
+            quote.prev_close.map_or(OrderedJson::Null, dec),
+        ),
+        (
+            "change_pct".to_owned(),
+            change.map_or(OrderedJson::Null, dec),
+        ),
+        (
+            "as_of".to_owned(),
+            quote
+                .as_of
+                .as_ref()
+                .map_or(OrderedJson::Null, py_datetime_json),
+        ),
+        (
+            "stale".to_owned(),
+            OrderedJson::Bool(is_stale(quote.as_of.as_ref(), served_at)),
+        ),
+    ])
+}
+
+fn closed_marks(
+    reason: &'static str,
+    market_open: bool,
+    as_of: Option<NaiveDate>,
+    now: DateTime<FixedOffset>,
+    requested: usize,
+) -> LiveMarksOut {
+    LiveMarksOut {
+        live: false,
+        reason: Some(reason),
+        market_open,
+        as_of,
+        quotes: OrderedJson::Object(Vec::new()),
+        live_overlay: false,
+        marks: OrderedJson::Object(Vec::new()),
+        served_at: now,
+        requested: i64::try_from(requested).unwrap_or(i64::MAX),
+        covered: 0,
+        stale_after_seconds: STALE_AFTER_SECONDS,
+    }
+}
+
 /// `GET /meta/live-marks?symbols=`: live last prices while the session is open and a Kite
 /// session exists; otherwise the closed answer, which keeps the published close.
 ///
 /// # Errors
-/// 401 for an anonymous caller, 500 for a database failure.
+/// 401 for an anonymous caller, 500 for a database or token-store failure.
 pub async fn get_live_marks(
     State(state): State<AppState>,
     Extension(principal): Extension<Principal>,
@@ -407,23 +488,60 @@ pub async fn get_live_marks(
     let as_of = reference::latest_published_date(&state).await?;
     let (_, market_open) = session_day_and_market_open(&state, reference::now_ist()).await?;
     let now = reference::now_ist();
-    let reason = if !market_open {
-        "market_closed"
-    } else {
-        // `quotes_permitted()` false — or, in Rust, a session the quote client cannot use yet.
-        "no_session"
-    };
+    if !market_open {
+        return Ok(wire::json(&closed_marks(
+            "market_closed",
+            false,
+            as_of,
+            now,
+            names.len(),
+        )));
+    }
+    if !reference::quotes_permitted()? {
+        return Ok(wire::json(&closed_marks(
+            "no_session",
+            true,
+            as_of,
+            now,
+            names.len(),
+        )));
+    }
+    let details = crate::live_prices::live_quote_details(&names)
+        .await
+        .map_err(|_| crate::problems::internal_error())?;
+    let covered = names.iter().filter(|n| details.contains_key(*n)).count();
+    if details.is_empty() || covered == 0 {
+        return Ok(wire::json(&closed_marks(
+            "unavailable",
+            true,
+            as_of,
+            now,
+            names.len(),
+        )));
+    }
+    let order: Vec<&String> = names.iter().filter(|n| details.contains_key(*n)).collect();
+    let mut quotes = Vec::with_capacity(order.len());
+    let mut marks = Vec::with_capacity(order.len());
+    for name in order {
+        if let Some(quote) = details.get(name) {
+            quotes.push((name.clone(), live_quote_out(quote, now)));
+            marks.push((
+                name.clone(),
+                OrderedJson::Str(wire::py_decimal(quote.last_price)),
+            ));
+        }
+    }
     let out = LiveMarksOut {
-        live: false,
-        reason: Some(reason),
-        market_open,
+        live: true,
+        reason: None,
+        market_open: true,
         as_of,
-        quotes: OrderedJson::Object(Vec::new()),
-        live_overlay: false,
-        marks: OrderedJson::Object(Vec::new()),
+        quotes: OrderedJson::Object(quotes),
+        live_overlay: true,
+        marks: OrderedJson::Object(marks),
         served_at: now,
         requested: i64::try_from(names.len()).unwrap_or(i64::MAX),
-        covered: 0,
+        covered: i64::try_from(covered).unwrap_or(i64::MAX),
         stale_after_seconds: STALE_AFTER_SECONDS,
     };
     Ok(wire::json(&out))

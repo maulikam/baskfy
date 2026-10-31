@@ -9,9 +9,8 @@
 //! Ported (lane writes-sleeves, RS4c): `PUT`/`DELETE /tags` and `POST /catalyst-scan`
 //! (`writes.rs`). Ported at wave 6 (lane api_routes, R5.21 and R6.29 closed): `GET ` — the
 //! overlap read itself ([`view`], with `baskfy_core.candidate_review` in [`review`]) — and
-//! `PUT`/`DELETE /reviews`, which re-read the row through that same view. The live-marks overlay
-//! is the shared one, which in Rust is always the closed answer (no Kite quote client yet), so
-//! `last_price` is `null` exactly when Python's is without a session.
+//! `PUT`/`DELETE /reviews`, which re-read the row through that same view. `last_price` is the
+//! shared live-marks overlay (`live_prices::live_marks_for_symbols`).
 //!
 //! No route here reaches a rank, a size or an order: the tags and labels are display context.
 
@@ -432,7 +431,7 @@ fn opinion_j(opinion: &review::ReviewOpinion, laya: Option<&review::ReviewOpinio
 }
 
 /// `OverlapRowOut`.
-fn row_j(row: &view::CandidateRow) -> J {
+fn row_j(row: &view::CandidateRow, marks: &std::collections::HashMap<String, Decimal>) -> J {
     let strategies = row
         .strategies
         .iter()
@@ -477,8 +476,10 @@ fn row_j(row: &view::CandidateRow) -> J {
         .put("symbol", J::s(&row.symbol))
         .put("name", J::s(&row.name))
         .put("close", J::opt_dec(row.close))
-        // The shared live-marks overlay: always the closed answer in Rust (`/meta/live-marks`).
-        .put("last_price", J::Null)
+        .put(
+            "last_price",
+            J::opt_dec(marks.get(&row.symbol.trim().to_uppercase()).copied()),
+        )
         .put(
             "strategy_count",
             J::Int(i64::try_from(row.strategy_count()).unwrap_or(i64::MAX)),
@@ -530,6 +531,10 @@ pub async fn get_overlap(
     let view = view::overlap(&mut conn, user_id, sole, scope == "all", cache, today_utc()).await?;
     drop(conn);
     let last_pass = view::laya_last_pass(cache).await;
+    let symbols: Vec<String> = view.rows.iter().map(|r| r.symbol.clone()).collect();
+    let marks = crate::live_prices::live_marks_for_symbols(&symbols)
+        .await
+        .map_err(|_| crate::problems::internal_error())?;
     let (answered, shown, of) = view::laya_status(&view.rows);
     let out = Obj::new()
         .put(
@@ -552,7 +557,10 @@ pub async fn get_overlap(
                 .put("of", J::Int(of))
                 .done(),
         )
-        .put("data", J::Arr(view.rows.iter().map(row_j).collect()))
+        .put(
+            "data",
+            J::Arr(view.rows.iter().map(|r| row_j(r, &marks)).collect()),
+        )
         .done();
     Ok(canonical_response(&out))
 }

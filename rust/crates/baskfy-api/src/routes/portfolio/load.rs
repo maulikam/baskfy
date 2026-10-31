@@ -391,26 +391,6 @@ async fn closes_on_or_before(
     Ok(out)
 }
 
-/// `live_prices_by_instrument`'s gates, without a network call: the broker-holdings read needs
-/// `DRY_RUN` off, the quotes read needs `BASKFY_LIVE_QUOTES` on, and both need
-/// `BASKFY_KITE_API_KEY` and a stored session. On a deployment with no usable Kite session both
-/// are shut and the overlay is empty — Python's answer too. When one may be open, Python would
-/// read Kite; that read is not ported (DECISIONS-RS, api-portfolio P3), so the close stands and it is logged.
-fn live_overlay_possible() -> bool {
-    let flag = |name: &str| {
-        let raw = std::env::var(name)
-            .unwrap_or_else(|_| "true".to_owned())
-            .trim()
-            .to_lowercase();
-        matches!(raw.as_str(), "" | "1" | "true" | "yes" | "on")
-    };
-    let api_key = !std::env::var("BASKFY_KITE_API_KEY")
-        .unwrap_or_default()
-        .trim()
-        .is_empty();
-    api_key && (!flag("DRY_RUN") || flag("BASKFY_LIVE_QUOTES"))
-}
-
 /// `_load_prices`.
 async fn load_prices(conn: &mut PgConnection, ids: &[i64]) -> Result<Prices, Problem> {
     if ids.is_empty() {
@@ -449,12 +429,24 @@ async fn load_prices(conn: &mut PgConnection, ids: &[i64]) -> Result<Prices, Pro
         today - Duration::days(1)
     };
     let quote_session = last_session_on_or_before(quote_bound, &closed, &open_days);
-    if live_overlay_possible() {
-        crate::logging::warning(
-            "baskfy_api.routers.portfolio_overview",
-            "a Kite session may exist but the live overlay is not ported; serving the close",
-            &[],
-        );
+    let symbols: Vec<(i64, String)> =
+        sqlx::query_as("SELECT id, symbol FROM instrument WHERE id = ANY($1)")
+            .bind(ids)
+            .fetch_all(&mut *conn)
+            .await
+            .map_err(db::fail)?;
+    let live = crate::live_prices::live_prices_by_instrument_rows(&symbols)
+        .await
+        .map_err(|e| super::fail(e.python_type()))?;
+    for (id, price) in live {
+        if prices.dated.get(&id).is_some_and(|d| *d >= quote_session) {
+            continue;
+        }
+        if let Some(stored) = prices.latest.get(&id).cloned() {
+            prices.previous.insert(id, stored);
+        }
+        prices.latest.insert(id, Dec::from_decimal(price));
+        prices.live_overlay = true;
     }
     let week_since = last_session_on_or_before(
         quote_session

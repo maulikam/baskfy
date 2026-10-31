@@ -11,8 +11,7 @@
 //!
 //! **The screener run** ([`execute_screen`], [`record_run`], [`warm_screen_cache`]): the legacy
 //! docs/06 statement, the desk-score columns, provenance, the Redis cache and the `screen_run`
-//! upsert, exactly as `publish` runs them. A definition with `ranking_terms` (the ranking-engine
-//! path) raises `NotPorted` — R-gate.2's cutover gate, unchanged (no screen on the bed has one).
+//! upsert, exactly as `publish` runs them (the executor is `baskfy_api::screener`, R8.ar6).
 //!
 //! Each Python `run_in_session` is one transaction: commit on return, roll back on raise.
 //! **Law 2:** nothing here reaches an order, a GTT or a Kite endpoint.
@@ -65,10 +64,10 @@ impl From<WarmCacheResult> for WarmSummary {
 
 /// `screener.execute_screen(session, definition, as_of=, data_version=, columns=,
 /// requested_as_of=)`: one statement over `factor_daily` for `as_of`, every error raised with
-/// its Python class. A `ranking_terms` definition raises `NotPorted` (R-gate.2).
+/// its Python class.
 ///
 /// # Errors
-/// The screener's (`ScreenQueryError`, `ValidationError`, ...), the database's, `NotPorted`.
+/// The screener's (`ScreenQueryError`, `ValidationError`, ...), the database's.
 pub async fn execute_screen(
     conn: &mut PgConnection,
     definition: &ScreenDefinition,

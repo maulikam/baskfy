@@ -331,15 +331,21 @@ pub fn marked_prices(
     (prices, marked_at_cost)
 }
 
-/// `live_prices.live_prices_by_instrument(session, ids)` as far as this wave can answer it:
-/// Python overlays the broker book's `last_price` (a live Kite holdings read) and then read-only
-/// quotes, both only with a real Kite session. Neither the session reader nor the holdings read
-/// is ported, so this is `{}` — exactly Python's answer with no session (the bed, and any host
-/// without Kite) and the answer `routes::reference::quotes_permitted` gives with a key
-/// configured (DECISIONS-RS R5.11).
-#[must_use]
-pub fn live_prices_by_instrument(_ids: &[i64]) -> std::collections::HashMap<i64, Decimal> {
-    std::collections::HashMap::new()
+/// `live_prices.live_prices_by_instrument(session, ids)`: the broker book's `last_price`, then
+/// read-only quotes, both only with a real Kite session.
+///
+/// # Errors
+/// 500 for a database or token-store failure.
+pub async fn live_prices_by_instrument(
+    state: &AppState,
+    ids: &[i64],
+) -> Result<std::collections::HashMap<i64, Decimal>, Problem> {
+    crate::live_prices::live_prices_by_instrument(state.db.pool(), ids)
+        .await
+        .map_err(|e| {
+            crate::logging::error("baskfy_api.app", "unhandled error", &[("error", &e)]);
+            crate::problems::internal_error()
+        })
 }
 
 /// Reads the holdings of one investment (no `ORDER BY`, as Python reads them).

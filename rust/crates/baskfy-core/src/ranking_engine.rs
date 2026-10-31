@@ -1972,7 +1972,7 @@ fn py_list_repr(items: &[String]) -> String {
 }
 
 /// Python `format(x, ".{precision}g")`.
-fn py_format_g(x: f64, precision: usize) -> String {
+pub fn py_format_g(x: f64, precision: usize) -> String {
     if x.is_nan() {
         return "nan".to_owned();
     }

@@ -55,10 +55,19 @@ pub enum Ty {
         /// `le`.
         le: Option<&'static str>,
     },
+    /// `float` with `ge`/`le` (each the bound and its printed form).
+    Float {
+        /// `ge`.
+        ge: Option<(f64, &'static str)>,
+        /// `le`.
+        le: Option<(f64, &'static str)>,
+    },
     /// `bool`.
     Bool,
     /// `Literal[...]` of strings.
     Lit(&'static [&'static str]),
+    /// A `StrEnum` of these values.
+    Enum(&'static [&'static str]),
     /// `datetime.date`.
     Date,
     /// `list[T]` with an optional `min_length`.
@@ -128,6 +137,8 @@ pub enum V {
     Dec(WideDecimal),
     /// A bool.
     Bool(bool),
+    /// A float.
+    Float(f64),
     /// A date.
     Date(NaiveDate),
     /// A list.
@@ -176,6 +187,15 @@ impl V {
     pub fn dec(&self) -> Option<&WideDecimal> {
         match self {
             V::Dec(d) => Some(d),
+            _ => None,
+        }
+    }
+
+    /// The float, if this is one.
+    #[must_use]
+    pub fn float(&self) -> Option<f64> {
+        match self {
+            V::Float(f) => Some(*f),
             _ => None,
         }
     }
@@ -618,6 +638,52 @@ pub fn validate(e: &mut Errors, ty: &Ty, value: &OrderedJson, loc: &[String]) ->
                 }
             }
         }
+        Ty::Float { ge, le } => {
+            #[allow(clippy::cast_precision_loss)]
+            let f = match value {
+                OrderedJson::Bool(b) => f64::from(u8::from(*b)),
+                OrderedJson::Int(i) => *i as f64,
+                OrderedJson::UInt(u) => *u as f64,
+                OrderedJson::BigInt(t) => t.parse::<f64>().unwrap_or(f64::NAN),
+                OrderedJson::Float(f) => *f,
+                OrderedJson::Str(t) => {
+                    let Ok(f) = t.trim().parse::<f64>() else {
+                        e.push(
+                            loc,
+                            "Input should be a valid number, unable to parse string as a number",
+                            "float_parsing",
+                        );
+                        return None;
+                    };
+                    f
+                }
+                _ => {
+                    e.push(loc, "Input should be a valid number", "float_type");
+                    return None;
+                }
+            };
+            if let Some((g, text)) = ge
+                && f < *g
+            {
+                e.push(
+                    loc,
+                    &format!("Input should be greater than or equal to {text}"),
+                    "greater_than_equal",
+                );
+                return None;
+            }
+            if let Some((l, text)) = le
+                && f > *l
+            {
+                e.push(
+                    loc,
+                    &format!("Input should be less than or equal to {text}"),
+                    "less_than_equal",
+                );
+                return None;
+            }
+            Some(V::Float(f))
+        }
         Ty::Bool => {
             let b = match value {
                 OrderedJson::Bool(b) => Some(*b),
@@ -652,6 +718,13 @@ pub fn validate(e: &mut Errors, ty: &Ty, value: &OrderedJson, loc: &[String]) ->
             }
             b.map(V::Bool)
         }
+        Ty::Enum(choices) => match value {
+            OrderedJson::Str(s) if choices.contains(&s.as_str()) => Some(V::Str(s.clone())),
+            _ => {
+                e.push(loc, &literal_message(choices), "enum");
+                None
+            }
+        },
         Ty::Lit(choices) => match value {
             OrderedJson::Str(s) if choices.contains(&s.as_str()) => Some(V::Str(s.clone())),
             _ => {

@@ -5,14 +5,15 @@
 //! Ported: `GET /sample-csv` (anonymous), `GET ` (the caller's portfolios as a forest),
 //! `GET /{portfolio_id}`, `GET /{portfolio_id}/holdings` (the subtree roll-up by broker),
 //! `GET /{portfolio_id}/rebalances` and `GET /{portfolio_id}/rebalances/{rebalance_id}`.
-//! **Not ported** (they write; Python keeps serving them): `POST `, `POST /import-csv`,
-//! `PATCH /{id}`, `DELETE /{id}`, `PUT /{id}/holdings`, `POST /{id}/rebalance`.
+//! The writes live in `portfolio::portfolios_writes` and `rebalance_post`.
 //!
 //! `{id}` is the numeric `portfolio.id`; not-yours is a 404, never a 403. This module also owns
 //! the lane's shared private machinery, [`portfolio`] (the `routes/portfolio/` directory).
 
 #[path = "portfolio/mod.rs"]
 pub(crate) mod portfolio;
+#[path = "portfolios_rebalance.rs"]
+mod rebalance_post;
 
 use std::collections::HashMap;
 
@@ -774,10 +775,8 @@ pub fn router() -> Router<AppState> {
             "/portfolios/{portfolio_id}/rebalances/{rebalance_id}",
             get(get_rebalance),
         )
-        // `POST /{id}/rebalance` is not ported (DECISIONS-RS R6.23): Python keeps serving it, and
-        // a GET is Starlette's 405.
         .route(
             "/portfolios/{portfolio_id}/rebalance",
-            axum::routing::MethodRouter::new(),
+            post(rebalance_post::rebalance),
         )
 }

@@ -420,7 +420,7 @@ pub async fn list_investments(
         .collect();
     let baskets = baskets(&state, &basket_ids).await?;
     let instrument_ids: Vec<i64> = holdings.iter().map(|(_, h)| h.instrument_id).collect();
-    let live = live_prices_by_instrument(&instrument_ids);
+    let live = live_prices_by_instrument(&state, &instrument_ids).await?;
 
     let mut items = Vec::new();
     let mut net = WideDecimal::zero();
@@ -519,7 +519,7 @@ pub async fn get_investment(
             && json_equals_int(a.payload.get("basket_id"), inv.basket_id)
     });
     let instrument_ids: Vec<i64> = held.iter().map(|h| h.instrument_id).collect();
-    let live = live_prices_by_instrument(&instrument_ids);
+    let live = live_prices_by_instrument(&state, &instrument_ids).await?;
     let portfolio = match inv.portfolio_id {
         Some(pid) => portfolios(&state, &[pid], inv.user_id).await?.remove(&pid),
         None => None,

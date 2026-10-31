@@ -8,10 +8,8 @@
 //! * `GET /screens/{public_id}/runs` — keyset-paginated run summaries;
 //! * `GET /screens/{public_id}/csv` — the entitlement-gated export ([`csv`]).
 //!
-//! The CRUD writes (`POST /screens`, `PATCH`/`DELETE /screens/{public_id}`,
-//! `POST /screens/{public_id}/duplicate`) are ported at wave 4c ([`writes`]). **Not ported** (they
-//! run the screener; the Python API keeps serving them, DECISIONS-RS, lane writes-screens R6.13):
-//! `POST /screens/preview`, `/explain`, `/selection` and `POST /screens/{public_id}/run`.
+//! The CRUD writes are ported at wave 4c ([`writes`]); the screener-running routes
+//! (`POST /screens/preview`, `/explain`, `/selection`, `/screens/{public_id}/run`) in `runs`.
 //!
 //! Visibility, as Python states it once: a screen with `user_id IS NULL` is a system/example
 //! screen everyone can read; a screen with a `user_id` is visible only to that user, and
@@ -21,6 +19,7 @@
 #[path = "accounts/mod.rs"]
 pub(crate) mod accounts;
 pub(crate) mod body_model;
+mod runs;
 pub(crate) mod write_kit;
 mod writes;
 
@@ -529,7 +528,10 @@ pub async fn resolve_as_of(
 }
 
 /// `Entitlements.require_universe(code)`: the ₹0 tier's restriction.
-fn require_universe(e: &crate::entitlements::Entitlements, code: &str) -> Result<(), Problem> {
+pub(crate) fn require_universe(
+    e: &crate::entitlements::Entitlements,
+    code: &str,
+) -> Result<(), Problem> {
     let Some(allowed) = &e.universes else {
         return Ok(());
     };
@@ -552,7 +554,10 @@ fn require_universe(e: &crate::entitlements::Entitlements, code: &str) -> Result
     ))
 }
 
-fn require_feature(e: &crate::entitlements::Entitlements, feature: &str) -> Result<(), Problem> {
+pub(crate) fn require_feature(
+    e: &crate::entitlements::Entitlements,
+    feature: &str,
+) -> Result<(), Problem> {
     if e.allows(feature) {
         Ok(())
     } else {
@@ -654,7 +659,28 @@ pub fn router() -> Router<AppState> {
             "/screens/{public_id}/duplicate",
             post(writes::duplicate_screen),
         )
-        .route("/screens/{public_id}/run", super::common::write_only())
+        .route("/screens/{public_id}/run", post(runs::run_saved_screen))
+        .route(
+            "/screens/preview",
+            post(runs::preview_screen)
+                .get(runs::as_id::preview_get)
+                .patch(runs::as_id::preview_patch)
+                .delete(runs::as_id::preview_delete),
+        )
+        .route(
+            "/screens/explain",
+            post(runs::explain_screen_row)
+                .get(runs::as_id::explain_get)
+                .patch(runs::as_id::explain_patch)
+                .delete(runs::as_id::explain_delete),
+        )
+        .route(
+            "/screens/selection",
+            post(runs::select_over_screen)
+                .get(runs::as_id::selection_get)
+                .patch(runs::as_id::selection_patch)
+                .delete(runs::as_id::selection_delete),
+        )
         .route("/screens", get(list_screens).post(writes::create_screen))
         .route(
             "/screens/{public_id}",

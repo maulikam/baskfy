@@ -12,9 +12,7 @@
 //! screen (`user_id IS NULL`) is never editable: `not-found` with the "read-only; duplicate it"
 //! sentence. Not-yours is the same 404 as no-such-screen.
 //!
-//! **Not ported** (they run the screener, which no Rust module executes yet; the Python API keeps
-//! serving them — DECISIONS-RS, lane writes-screens R6.13): `POST /screens/preview`, `/explain`, `/selection` and
-//! `POST /screens/{public_id}/run`. Nothing here places, modifies or cancels an order (law 2).
+//! Nothing here places, modifies or cancels an order (law 2).
 
 use axum::extract::{Extension, Path, Request, State};
 use axum::http::StatusCode;

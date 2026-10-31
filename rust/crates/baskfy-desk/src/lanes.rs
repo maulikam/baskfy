@@ -5,6 +5,7 @@ pub mod analytics;
 pub mod exec_core;
 pub mod fno;
 pub mod options;
+pub mod service_loop;
 pub mod session;
 pub mod swing;
 pub mod twt;

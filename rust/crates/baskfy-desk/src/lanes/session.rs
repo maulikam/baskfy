@@ -96,7 +96,7 @@ pub fn register_templates(templates: &mut crate::templates::Templates) {
 /// Run one of the lane's background services by name; `None` if the name is not this lane's.
 pub async fn run_service(name: &str, state: &AppState) -> Option<Result<(), String>> {
     match name {
-        "session-supervisor" => Some(run_supervisor(state).await),
+        "session-supervisor" | "session-supervisor-loop" => Some(run_supervisor(state).await),
         _ => None,
     }
 }

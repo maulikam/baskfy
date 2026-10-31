@@ -21,8 +21,11 @@
 
 pub mod analytics_regime;
 pub mod analytics_views;
+pub mod autorun_cli;
 pub mod breadth;
+pub mod daily_cli;
 pub mod daily_runs;
+pub mod desk_daily;
 pub mod desk_settings;
 pub mod index_cache;
 pub mod ops;
@@ -65,9 +68,25 @@ pub fn register_templates(templates: &mut crate::templates::Templates) {
 
 /// Run one of the lane's background services by name; `None` if the name is not this lane's.
 pub async fn run_service(name: &str, state: &AppState) -> Option<Result<(), String>> {
-    let _ = state;
-    let _ = name;
-    None
+    use crate::lanes::service_loop as sl;
+    match name {
+        "desk-daily-loop" => {
+            let mut seams = sl::ProcessSeams {
+                clock: std::sync::Arc::clone(&state.clock),
+            };
+            let program = sl::program();
+            Some(
+                sl::blocking(move || desk_daily::run_forever(&mut seams, &program, None)).await,
+            )
+        }
+        "daily" => Some(sl::exit_with(
+            Box::pin(daily_cli::main(state, &sl::service_args())).await,
+        )),
+        "autorun" => Some(sl::exit_with(
+            Box::pin(autorun_cli::main(state, &sl::service_args())).await,
+        )),
+        _ => None,
+    }
 }
 
 /// `with db.connect() as conn: db.migrate(conn)`.

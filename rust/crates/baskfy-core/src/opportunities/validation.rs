@@ -10,7 +10,8 @@ use serde::{Deserialize, Serialize};
 use crate::error::{CoreError, CoreResult};
 use crate::opportunities::config::{SetupType, SwingFilters, SwingParams, TriggerStatus};
 use crate::opportunities::indicators::{IndicatorRow, indicator_rows};
-use crate::opportunities::swing::{InstrumentContext, evaluate, passes_filters};
+use crate::opportunities::patterns::History;
+use crate::opportunities::swing::{InstrumentContext, evaluate_on, passes_filters};
 use crate::ranking_engine::py_format_g;
 use crate::twt::indicators::frame::cmp_nulls_first;
 
@@ -287,6 +288,11 @@ pub fn validate_setup(
             .map_or(all.len(), |k| begin + k);
         let rows = &all[begin..stop_at];
         begin = stop_at;
+        let mut history = if setup.needs_history() {
+            History::new(rows)
+        } else {
+            None
+        };
         let mut busy_until: i64 = -1;
         for (index, row) in rows.iter().enumerate() {
             let Some(day) = row.date else { continue };
@@ -308,7 +314,12 @@ pub fn validate_setup(
             if !passes_filters(row, &context, filters) {
                 continue;
             }
-            let Some(evaluation) = evaluate(row, setup, params, horizon) else {
+            let at = match history.as_mut() {
+                Some(h) => h.set_end(index).then_some(&*h),
+                None => None,
+            };
+            let Some(evaluation) = evaluate_on(at, row, setup, params, horizon)
+            else {
                 continue;
             };
             if evaluation.status != TriggerStatus::Triggered {

@@ -4,6 +4,7 @@
 pub mod config;
 pub mod indicators;
 pub mod options;
+pub mod patterns;
 pub mod ranking;
 pub mod swing;
 pub mod validation;

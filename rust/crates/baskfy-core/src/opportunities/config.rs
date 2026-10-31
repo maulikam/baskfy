@@ -12,24 +12,75 @@ use serde::{Deserialize, Serialize};
 pub enum SetupType {
     /// `BREAKOUT`.
     Breakout,
+    /// `CUP_WITH_HANDLE`.
+    CupWithHandle,
+    /// `EPISODIC_PIVOT`.
+    EpisodicPivot,
+    /// `FLAG`.
+    Flag,
+    /// `HIGH_52W_BREAKOUT`.
+    #[serde(rename = "HIGH_52W_BREAKOUT")]
+    High52wBreakout,
+    /// `INSIDE_BAR_NR7`.
+    #[serde(rename = "INSIDE_BAR_NR7")]
+    InsideBarNr7,
+    /// `MA_BOUNCE`.
+    MaBounce,
     /// `PULLBACK`.
     Pullback,
     /// `RELATIVE_STRENGTH`.
     RelativeStrength,
+    /// `THREE_WEEKS_TIGHT`.
+    ThreeWeeksTight,
+    /// `VBT`.
+    Vbt,
+    /// `VCP`.
+    Vcp,
 }
 
 impl SetupType {
     /// Every member, in declaration order.
-    pub const ALL: [Self; 3] = [Self::Breakout, Self::Pullback, Self::RelativeStrength];
+    pub const ALL: [Self; 12] = [
+        Self::Breakout,
+        Self::CupWithHandle,
+        Self::EpisodicPivot,
+        Self::Flag,
+        Self::High52wBreakout,
+        Self::InsideBarNr7,
+        Self::MaBounce,
+        Self::Pullback,
+        Self::RelativeStrength,
+        Self::ThreeWeeksTight,
+        Self::Vbt,
+        Self::Vcp,
+    ];
+
+    /// The three setups a request without `setups` scans (the original contract).
+    pub const CLASSIC: [Self; 3] = [Self::Breakout, Self::Pullback, Self::RelativeStrength];
 
     /// The enum's string value.
     #[must_use]
     pub const fn value(self) -> &'static str {
         match self {
             Self::Breakout => "BREAKOUT",
+            Self::CupWithHandle => "CUP_WITH_HANDLE",
+            Self::EpisodicPivot => "EPISODIC_PIVOT",
+            Self::Flag => "FLAG",
+            Self::High52wBreakout => "HIGH_52W_BREAKOUT",
+            Self::InsideBarNr7 => "INSIDE_BAR_NR7",
+            Self::MaBounce => "MA_BOUNCE",
             Self::Pullback => "PULLBACK",
             Self::RelativeStrength => "RELATIVE_STRENGTH",
+            Self::ThreeWeeksTight => "THREE_WEEKS_TIGHT",
+            Self::Vbt => "VBT",
+            Self::Vcp => "VCP",
         }
+    }
+
+    /// Whether the setup reads the instrument's bar history rather than one indicated row.
+    #[must_use]
+    pub const fn needs_history(self) -> bool {
+        !matches!(self, Self::Breakout | Self::Pullback | Self::RelativeStrength)
     }
 }
 
@@ -347,6 +398,247 @@ impl Default for ScoreWeights {
     }
 }
 
+/// Minervini's volatility contraction pattern (standard definition; DECISIONS-RS R8.os).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct VcpParams {
+    /// Longest base, sessions (the window the first high is found in).
+    pub base_max_bars: i64,
+    /// Shortest base, sessions since the base high.
+    pub base_min_bars: i64,
+    /// A swing high is a high no lower than this many bars on each side.
+    pub swing_bars: i64,
+    /// Fewest contractions.
+    pub min_contractions: i64,
+    /// Deepest first contraction, %.
+    pub max_first_depth_pct: f64,
+    /// Deepest last contraction, %.
+    pub max_last_depth_pct: f64,
+    /// Volume dry-up: 10-session mean over the 50-session mean at most this.
+    pub dryup_max_ratio: f64,
+    /// Close within this % of the 52-week high.
+    pub max_below_52w_high_pct: f64,
+    /// Holding horizon, low end (sessions).
+    pub horizon_min: i64,
+    /// Holding horizon, high end (sessions).
+    pub horizon_max: i64,
+}
+
+/// Three weeks tight — the desk's TWT-1 lines (`crate::twt::config`), read on the opportunity bars.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct TwtSetupParams {
+    /// Holding horizon, low end (sessions).
+    pub horizon_min: i64,
+    /// Holding horizon, high end (sessions).
+    pub horizon_max: i64,
+}
+
+/// The episodic pivot — the desk's swing EP (`crate::swing::setups::EpConfig`) plus its
+/// liquidity ADR floor.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct EpisodicPivotParams {
+    /// Holding horizon, low end (sessions).
+    pub horizon_min: i64,
+    /// Holding horizon, high end (sessions).
+    pub horizon_max: i64,
+}
+
+/// The flag — the desk's swing FLAG (`crate::swing::setups::FlagConfig`); the high-tight label
+/// is O'Neil's.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct FlagSetupParams {
+    /// A high tight flag's pole gain, %.
+    pub htf_min_pole_pct: f64,
+    /// ...made within this many sessions.
+    pub htf_max_pole_bars: i64,
+    /// ...and a flag no deeper than this, %.
+    pub htf_max_depth_pct: f64,
+    /// Holding horizon, low end (sessions).
+    pub horizon_min: i64,
+    /// Holding horizon, high end (sessions).
+    pub horizon_max: i64,
+}
+
+/// Inside bar / NR7 squeeze (Crabel's NR7; standard inside bar).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct SqueezeParams {
+    /// Narrowest range of this many sessions.
+    pub nr_bars: i64,
+    /// Holding horizon, low end (sessions).
+    pub horizon_min: i64,
+    /// Holding horizon, high end (sessions).
+    pub horizon_max: i64,
+}
+
+/// 52-week-high breakout.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct High52wParams {
+    /// Sessions in a year.
+    pub lookback_bars: i64,
+    /// Holding horizon, low end (sessions).
+    pub horizon_min: i64,
+    /// Holding horizon, high end (sessions).
+    pub horizon_max: i64,
+}
+
+/// O'Neil's cup with handle (standard definition).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct CupParams {
+    /// Shortest cup, sessions from left lip to right lip.
+    pub cup_min_bars: i64,
+    /// Longest cup.
+    pub cup_max_bars: i64,
+    /// Shallowest cup, %.
+    pub min_depth_pct: f64,
+    /// Deepest cup, %.
+    pub max_depth_pct: f64,
+    /// The right lip within this % below the left lip...
+    pub right_lip_min_pct: f64,
+    /// ...and no more than this % above it.
+    pub right_lip_max_pct: f64,
+    /// The bottom sits in this central share of the cup (each side).
+    pub bottom_edge_share: f64,
+    /// Shortest handle, sessions.
+    pub handle_min_bars: i64,
+    /// Longest handle.
+    pub handle_max_bars: i64,
+    /// Deepest handle, %.
+    pub handle_max_depth_pct: f64,
+    /// The prior advance into the left lip, %.
+    pub prior_uptrend_pct: f64,
+    /// Sessions the prior advance is measured over.
+    pub prior_bars: i64,
+    /// Holding horizon, low end (sessions).
+    pub horizon_min: i64,
+    /// Holding horizon, high end (sessions).
+    pub horizon_max: i64,
+}
+
+/// Moving-average bounce off the 10/20/50 EMA.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct MaBounceParams {
+    /// The three EMA spans, fastest first.
+    pub spans: [i64; 3],
+    /// A touch is the low within this many ATR above the EMA.
+    pub touch_atr: f64,
+    /// The touch may be on this many most recent sessions.
+    pub touch_bars: i64,
+    /// Sessions the 50 EMA must have risen over.
+    pub slope_bars: i64,
+    /// Holding horizon, low end (sessions).
+    pub horizon_min: i64,
+    /// Holding horizon, high end (sessions).
+    pub horizon_max: i64,
+}
+
+/// VBT — the desk's VBT-1 scan and filters (`crate::vbt::config`), read on the opportunity bars.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct VbtSetupParams {
+    /// Holding horizon, low end (sessions).
+    pub horizon_min: i64,
+    /// Holding horizon, high end (sessions).
+    pub horizon_max: i64,
+}
+
+/// The pattern setups' parameters (RS8 opps-setups).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct PatternParams {
+    /// VCP.
+    pub vcp: VcpParams,
+    /// Three weeks tight.
+    pub twt: TwtSetupParams,
+    /// Episodic pivot.
+    pub episodic_pivot: EpisodicPivotParams,
+    /// Flag / high tight flag.
+    pub flag: FlagSetupParams,
+    /// Inside bar / NR7.
+    pub squeeze: SqueezeParams,
+    /// 52-week high.
+    pub high_52w: High52wParams,
+    /// Cup with handle.
+    pub cup: CupParams,
+    /// MA bounce.
+    pub ma_bounce: MaBounceParams,
+    /// VBT.
+    pub vbt: VbtSetupParams,
+}
+
+impl PatternParams {
+    /// Defaults (DECISIONS-RS R8.os).
+    pub const DEFAULT: Self = Self {
+        vcp: VcpParams {
+            base_max_bars: 65,
+            base_min_bars: 15,
+            swing_bars: 2,
+            min_contractions: 2,
+            max_first_depth_pct: 35.0,
+            max_last_depth_pct: 10.0,
+            dryup_max_ratio: 0.75,
+            max_below_52w_high_pct: 25.0,
+            horizon_min: 5,
+            horizon_max: 20,
+        },
+        twt: TwtSetupParams {
+            horizon_min: 10,
+            horizon_max: 60,
+        },
+        episodic_pivot: EpisodicPivotParams {
+            horizon_min: 3,
+            horizon_max: 20,
+        },
+        flag: FlagSetupParams {
+            htf_min_pole_pct: 90.0,
+            htf_max_pole_bars: 40,
+            htf_max_depth_pct: 25.0,
+            horizon_min: 3,
+            horizon_max: 20,
+        },
+        squeeze: SqueezeParams {
+            nr_bars: 7,
+            horizon_min: 2,
+            horizon_max: 10,
+        },
+        high_52w: High52wParams {
+            lookback_bars: 252,
+            horizon_min: 5,
+            horizon_max: 30,
+        },
+        cup: CupParams {
+            cup_min_bars: 30,
+            cup_max_bars: 150,
+            min_depth_pct: 12.0,
+            max_depth_pct: 35.0,
+            right_lip_min_pct: 10.0,
+            right_lip_max_pct: 5.0,
+            bottom_edge_share: 0.2,
+            handle_min_bars: 5,
+            handle_max_bars: 25,
+            handle_max_depth_pct: 15.0,
+            prior_uptrend_pct: 30.0,
+            prior_bars: 60,
+            horizon_min: 10,
+            horizon_max: 40,
+        },
+        ma_bounce: MaBounceParams {
+            spans: [10, 20, 50],
+            touch_atr: 0.25,
+            touch_bars: 2,
+            slope_bars: 10,
+            horizon_min: 3,
+            horizon_max: 15,
+        },
+        vbt: VbtSetupParams {
+            horizon_min: 10,
+            horizon_max: 60,
+        },
+    };
+}
+
+impl Default for PatternParams {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
 /// Ports `SwingParams`.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct SwingParams {
@@ -362,6 +654,9 @@ pub struct SwingParams {
     pub data: DataRules,
     /// Score weights.
     pub weights: ScoreWeights,
+    /// The pattern setups (not in Python).
+    #[serde(default)]
+    pub patterns: PatternParams,
 }
 
 impl SwingParams {
@@ -373,11 +668,13 @@ impl SwingParams {
         risk: RiskParams::DEFAULT,
         data: DataRules::DEFAULT,
         weights: ScoreWeights::DEFAULT,
+        patterns: PatternParams::DEFAULT,
     };
 
     /// Ports `horizon_for`: the setup's own holding horizon.
     #[must_use]
     pub const fn horizon_for(&self, setup: SetupType) -> (i64, i64) {
+        let p = &self.patterns;
         match setup {
             SetupType::Breakout => (self.breakout.horizon_min, self.breakout.horizon_max),
             SetupType::Pullback => (self.pullback.horizon_min, self.pullback.horizon_max),
@@ -385,6 +682,17 @@ impl SwingParams {
                 self.relative_strength.horizon_min,
                 self.relative_strength.horizon_max,
             ),
+            SetupType::Vcp => (p.vcp.horizon_min, p.vcp.horizon_max),
+            SetupType::ThreeWeeksTight => (p.twt.horizon_min, p.twt.horizon_max),
+            SetupType::EpisodicPivot => {
+                (p.episodic_pivot.horizon_min, p.episodic_pivot.horizon_max)
+            }
+            SetupType::Flag => (p.flag.horizon_min, p.flag.horizon_max),
+            SetupType::InsideBarNr7 => (p.squeeze.horizon_min, p.squeeze.horizon_max),
+            SetupType::High52wBreakout => (p.high_52w.horizon_min, p.high_52w.horizon_max),
+            SetupType::CupWithHandle => (p.cup.horizon_min, p.cup.horizon_max),
+            SetupType::MaBounce => (p.ma_bounce.horizon_min, p.ma_bounce.horizon_max),
+            SetupType::Vbt => (p.vbt.horizon_min, p.vbt.horizon_max),
         }
     }
 }
@@ -426,7 +734,7 @@ pub struct SwingFilters {
 impl Default for SwingFilters {
     fn default() -> Self {
         Self {
-            setups: SetupType::ALL.into_iter().collect(),
+            setups: SetupType::CLASSIC.into_iter().collect(),
             sectors: BTreeSet::new(),
             min_turnover_cr: 5.0,
             min_price: 50.0,

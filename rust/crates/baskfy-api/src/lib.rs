@@ -32,6 +32,7 @@ pub mod idempotency;
 pub mod live_prices;
 pub mod logging;
 pub mod mailer;
+pub mod opportunities_llm;
 pub mod problems;
 pub mod query;
 pub mod ratelimit;

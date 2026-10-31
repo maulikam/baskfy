@@ -1,0 +1,47 @@
+# syntax=docker/dockerfile:1.9
+# Context is the repo root: docker build -f decile-blueprint/infra/docker/Dockerfile.rust -t baskfy-rs .
+
+ARG RUST_IMAGE=rust:1.99.1-slim-bookworm
+ARG DEBIAN_IMAGE=debian:bookworm-slim
+
+FROM ${RUST_IMAGE} AS build
+WORKDIR /src/rust
+COPY rust/rust-toolchain.toml ./
+RUN rustup toolchain install && rustup show active-toolchain
+COPY rust/ ./
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,target=/src/rust/target,sharing=locked \
+    cargo build --release --locked -p baskfy-api -p baskfy-worker -p baskfy-desk --bins \
+ && install -d /out \
+ && install -m 0755 target/release/baskfy-api target/release/baskfy-worker target/release/baskfy-desk /out/
+
+FROM ${DEBIAN_IMAGE} AS runtime
+ENV TZ=Asia/Kolkata \
+    DRY_RUN=true \
+    DESK_DB_BACKEND=postgres \
+    RUST_BACKTRACE=1
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends tzdata curl ca-certificates openssh-client \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd --system --gid 1001 baskfy \
+ && useradd --system --uid 1001 --gid baskfy --home /desk baskfy \
+ && install -d -o baskfy -g baskfy /desk /desk/app /desk/data /desk/data/uploads \
+      /var/lib/baskfy /var/lib/baskfy/archive /var/lib/baskfy/state
+COPY --from=build /out/ /usr/local/bin/
+COPY --chown=baskfy:baskfy kite-momentum-rebalancer/app/templates /desk/app/templates
+COPY --chown=baskfy:baskfy kite-momentum-rebalancer/app/static    /desk/app/static
+# Same BASKFY_ -> desk credential mapping as Dockerfile.desk's desk-entrypoint.
+RUN cat > /usr/local/bin/baskfy-rs-entrypoint <<'EOF'
+#!/bin/sh
+set -eu
+export KITE_API_KEY="${BASKFY_KITE_API_KEY:-${KITE_API_KEY:-}}"
+export KITE_TOKEN_ENCRYPTION_KEY="${BASKFY_KITE_TOKEN_ENCRYPTION_KEY:-${KITE_TOKEN_ENCRYPTION_KEY:-}}"
+exec "$@"
+EOF
+RUN chmod 0755 /usr/local/bin/baskfy-rs-entrypoint
+WORKDIR /desk
+USER baskfy
+EXPOSE 8000 8420
+ENTRYPOINT ["baskfy-rs-entrypoint"]
+CMD ["baskfy-api", "--host", "0.0.0.0", "--port", "8000"]

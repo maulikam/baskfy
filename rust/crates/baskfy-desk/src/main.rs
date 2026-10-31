@@ -4,9 +4,8 @@
 //! `baskfy-desk snapshot [args]` for `python -m app.analytics.snapshot`.
 //!
 //! Settings come from the process environment (plus `--env-file F`, never overriding it, as
-//! `load_dotenv()` does). **There is no live Kite client in this build** (R8.0): without
-//! `--harness` the desk runs with no broker session — every Kite read fails, pages degrade to
-//! "not logged in", and nothing can reach an order.
+//! `load_dotenv()` does). Without `--harness` the broker is [`KiteHttp`] (Kite Connect over
+//! HTTP); its order verbs are reachable only through the gateway, which honours `DRY_RUN`.
 //!
 //! `--harness <fixture dir>` (`tools/parity/desk_diff.py` only): the replay Kite over that
 //! fixture (calls appended to `--kite-log`), a settable clock starting at `--harness-clock`
@@ -23,15 +22,12 @@ use baskfy_desk::app::{DeskPaths, Harness, StateParts};
 use baskfy_desk::clock::{Clock, FixedClock, SystemClock};
 use baskfy_desk::fake_kite::ReplayKite;
 use baskfy_desk::ids::{HarnessIds, IdSource, RandomIds};
-use baskfy_desk::kite::{
-    GttParams, KiteError, KiteExceptionKind, KiteReads, KiteWrites, OrderParams,
-};
+use baskfy_desk::kite::{KiteHttp, KiteWrites};
 use baskfy_desk::lanes::exec_core::kite_client::DeskKite;
 use baskfy_desk::lanes::weekly::weekly_books::snapshot::SnapshotKite;
 use baskfy_desk::settings::{Settings, dotenv_lookup};
 use baskfy_desk::storage::{Db, DbConfig};
 use baskfy_desk::wire::{PyDict, PyValue};
-use baskfy_providers::secret::Secret;
 
 fn arg(args: &[String], name: &str) -> Option<String> {
     args.iter()
@@ -146,111 +142,6 @@ type Seams = (
     Option<Harness>,
 );
 
-/// No broker at all: what the desk has before a live client is ported (R8.0).
-#[derive(Debug)]
-struct NoKite;
-
-fn no_session() -> KiteError {
-    KiteError::Kite {
-        kind: KiteExceptionKind::Token,
-        message: "no Kite client in this build of baskfy-desk (R8.0)".to_owned(),
-        code: 403,
-    }
-}
-
-#[async_trait]
-impl KiteReads for NoKite {
-    fn login_url(&self) -> String {
-        String::new()
-    }
-    fn set_access_token(&self, _token: &Secret) {}
-    async fn generate_session(&self, _r: &str, _s: &Secret) -> Result<PyValue, KiteError> {
-        Err(no_session())
-    }
-    async fn profile(&self) -> Result<PyValue, KiteError> {
-        Err(no_session())
-    }
-    async fn holdings(&self) -> Result<PyValue, KiteError> {
-        Err(no_session())
-    }
-    async fn positions(&self) -> Result<PyValue, KiteError> {
-        Err(no_session())
-    }
-    async fn margins(&self, _s: Option<&str>) -> Result<PyValue, KiteError> {
-        Err(no_session())
-    }
-    async fn ltp(&self, _i: &[String]) -> Result<PyValue, KiteError> {
-        Err(no_session())
-    }
-    async fn ohlc(&self, _i: &[String]) -> Result<PyValue, KiteError> {
-        Err(no_session())
-    }
-    async fn quote(&self, _i: &[String]) -> Result<PyValue, KiteError> {
-        Err(no_session())
-    }
-    async fn instruments(&self, _e: Option<&str>) -> Result<PyValue, KiteError> {
-        Err(no_session())
-    }
-    async fn historical_data(
-        &self,
-        _t: i64,
-        _f: &str,
-        _to: &str,
-        _i: &str,
-        _c: bool,
-        _o: bool,
-    ) -> Result<PyValue, KiteError> {
-        Err(no_session())
-    }
-    async fn orders(&self) -> Result<PyValue, KiteError> {
-        Err(no_session())
-    }
-    async fn order_history(&self, _o: &str) -> Result<PyValue, KiteError> {
-        Err(no_session())
-    }
-    async fn trades(&self) -> Result<PyValue, KiteError> {
-        Err(no_session())
-    }
-    async fn get_gtts(&self) -> Result<PyValue, KiteError> {
-        Err(no_session())
-    }
-    async fn basket_order_margins(
-        &self,
-        _p: &[PyValue],
-        _c: bool,
-        _m: Option<&str>,
-    ) -> Result<PyValue, KiteError> {
-        Err(no_session())
-    }
-}
-
-#[async_trait]
-impl KiteWrites for NoKite {
-    async fn place_order(&self, _o: &OrderParams) -> Result<String, KiteError> {
-        Err(no_session())
-    }
-    async fn modify_order(&self, _v: &str, _o: &str, _p: &PyDict) -> Result<String, KiteError> {
-        Err(no_session())
-    }
-    async fn cancel_order(
-        &self,
-        _v: &str,
-        _o: &str,
-        _p: Option<&str>,
-    ) -> Result<String, KiteError> {
-        Err(no_session())
-    }
-    async fn place_gtt(&self, _g: &GttParams) -> Result<PyValue, KiteError> {
-        Err(no_session())
-    }
-    async fn modify_gtt(&self, _t: i64, _g: &GttParams) -> Result<PyValue, KiteError> {
-        Err(no_session())
-    }
-    async fn delete_gtt(&self, _t: i64) -> Result<PyValue, KiteError> {
-        Err(no_session())
-    }
-}
-
 #[tokio::main]
 async fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().collect();
@@ -311,12 +202,13 @@ async fn main() -> ExitCode {
                 Some(harness),
             )
         }
-        None => (
-            Arc::new(SystemClock),
-            Arc::new(RandomIds),
-            Arc::new(NoKite),
-            None,
-        ),
+        None => {
+            let live = match KiteHttp::new(&settings.kite_api_key) {
+                Ok(k) => Arc::new(k),
+                Err(e) => return fail(&e.to_string()),
+            };
+            (Arc::new(SystemClock), Arc::new(RandomIds), live, None)
+        }
     };
 
     let state = baskfy_desk::build_state(StateParts {

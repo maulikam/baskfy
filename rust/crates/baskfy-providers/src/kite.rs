@@ -853,9 +853,159 @@ pub const USER_AGENT: &str = "Kiteconnect-python/5.2.1";
 pub const ACCEPT_ENCODING: &str = "gzip, deflate";
 
 /// What a request returned once the SDK validated it.
-enum Body {
+#[derive(Debug, Clone, PartialEq)]
+pub enum Body {
+    /// The JSON envelope's `data`.
     Json(KiteValue),
+    /// A CSV body's bytes.
     Csv(Vec<u8>),
+}
+
+/// The SDK's `requests` session: HTTP/1.1, no brotli, a cookie jar, and the connect/read
+/// timeout (`timeout or 7`), returned with the effective timeout.
+///
+/// # Errors
+/// `UpstreamUnavailable` when the TLS backend fails.
+pub fn sdk_http_client(timeout: Option<f64>) -> Result<(GuardedClient, f64), ProviderError> {
+    let timeout = match timeout {
+        Some(t) if t != 0.0 && !t.is_nan() => t,
+        _ => DEFAULT_TIMEOUT_SECONDS,
+    };
+    let wait = crate::clock::duration(timeout);
+    let builder = client_builder()
+        .http1_only()
+        .no_brotli()
+        .cookie_store(true)
+        .connect_timeout(wait)
+        .read_timeout(wait);
+    Ok((GuardedClient::from_builder(builder)?, timeout))
+}
+
+/// The SDK's headers on `request`, with `Authorization: token key:token` (sensitive) when both
+/// are set.
+pub fn sdk_headers(
+    request: reqwest::RequestBuilder,
+    api_key: &Secret,
+    access_token: &Secret,
+) -> reqwest::RequestBuilder {
+    let mut request = request
+        .header("User-Agent", USER_AGENT)
+        .header("Accept-Encoding", ACCEPT_ENCODING)
+        .header("Accept", "*/*")
+        .header("Connection", "keep-alive")
+        .header("X-Kite-Version", KITE_HEADER_VERSION);
+    if api_key.is_set() && access_token.is_set() {
+        let header = format!("token {}:{}", api_key.expose(), access_token.expose());
+        request = match reqwest::header::HeaderValue::from_str(&header) {
+            Ok(mut value) => {
+                value.set_sensitive(true);
+                request.header(reqwest::header::AUTHORIZATION, value)
+            }
+            Err(_) => request.header("Authorization", header),
+        };
+    }
+    request
+}
+
+/// `_request`'s validation of an answer: the JSON envelope (`status`/`error_type` raise the
+/// named exception, else `data`), CSV bytes, or `DataException` for anything else.
+///
+/// # Errors
+/// The SDK's exceptions ([`KiteError`]).
+pub fn validate_response(
+    status: u16,
+    content_type: Option<String>,
+    content: &[u8],
+) -> Result<Body, KiteError> {
+    let Some(content_type) = content_type else {
+        return Err(ProviderError::foreign("KeyError", "'content-type'").into());
+    };
+    if content_type.contains("json") {
+        let Ok(data) = KiteValue::from_json(content) else {
+            return Err(KiteError::kite(
+                KiteExceptionKind::Data,
+                format!(
+                    "Couldn't parse the JSON response received from the server: {}",
+                    repr_bytes(content)
+                ),
+            ));
+        };
+        let KiteValue::Map(map) = &data else {
+            return Err(no_attribute(&data, "get").into());
+        };
+        let status_field = map.get("status").unwrap_or(&NONE);
+        let error_type = map.get("error_type").unwrap_or(&NONE);
+        let is_error = matches!(status_field, KiteValue::Str(s) if s == "error");
+        if is_error || error_type.truthy() {
+            let KiteValue::Str(class) = error_type else {
+                return Err(ProviderError::foreign(
+                    "TypeError",
+                    format!(
+                        "attribute name must be string, not '{}'",
+                        error_type.type_name()
+                    ),
+                )
+                .into());
+            };
+            let Some(message) = map.get("message") else {
+                return Err(ProviderError::foreign("KeyError", "'message'").into());
+            };
+            return Err(KiteError::Kite {
+                kind: KiteExceptionKind::from_class_name(class),
+                message: message.py_str(),
+                code: status,
+            });
+        }
+        return match map.get("data") {
+            Some(inner) => Ok(Body::Json(inner.clone())),
+            None => Err(ProviderError::foreign("KeyError", "'data'").into()),
+        };
+    }
+    if content_type.contains("csv") {
+        return Ok(Body::Csv(content.to_vec()));
+    }
+    Err(KiteError::kite(
+        KiteExceptionKind::Data,
+        format!(
+            "Unknown Content-Type ({content_type}) with response: ({})",
+            repr_bytes(content)
+        ),
+    ))
+}
+
+/// `quote(...)`'s `{key: _format_response(data[key]) for key in data}`.
+///
+/// # Errors
+/// Python's `TypeError` for a non-dict answer; `_format_response`'s failures.
+pub fn format_quote(data: &KiteValue) -> Result<KiteValue, KiteError> {
+    let KiteValue::Map(map) = data else {
+        let error = match data {
+            KiteValue::List(items) if items.is_empty() => None,
+            KiteValue::Str(text) if text.is_empty() => None,
+            KiteValue::Bytes(bytes) if bytes.is_empty() => None,
+            KiteValue::List(items) => Some(format!(
+                "list indices must be integers or slices, not {}",
+                items.first().map_or("str", KiteValue::type_name)
+            )),
+            KiteValue::Str(_) => Some("string indices must be integers, not 'str'".to_owned()),
+            KiteValue::Bytes(_) => {
+                Some("byte indices must be integers or slices, not int".to_owned())
+            }
+            other => Some(format!("'{}' object is not iterable", other.type_name())),
+        };
+        return match error {
+            None => Ok(KiteValue::Map(KiteMap::new())),
+            Some(message) => Err(KiteError::Other(ProviderError::foreign(
+                "TypeError",
+                message,
+            ))),
+        };
+    };
+    let mut out = KiteMap::new();
+    for (key, value) in map.iter() {
+        out.insert(key, format_response(value).map_err(KiteError::Other)?);
+    }
+    Ok(KiteValue::Map(out))
 }
 
 /// The production [`KiteClient`]: `kiteconnect.KiteConnect`'s read-only REST routes over HTTP/1.1
@@ -898,26 +1048,16 @@ impl KiteConnect {
         root: &str,
         timeout: Option<f64>,
     ) -> Result<Self, ProviderError> {
-        let timeout = match timeout {
-            Some(t) if t != 0.0 && !t.is_nan() => t,
-            _ => DEFAULT_TIMEOUT_SECONDS,
-        };
         let root = reqwest::Url::parse(root).map_err(|e| {
             ProviderError::value_error(format!("invalid Kite root {}: {e}", repr_str(root)))
         })?;
-        let wait = crate::clock::duration(timeout);
-        let builder = client_builder()
-            .http1_only()
-            .no_brotli()
-            .cookie_store(true)
-            .connect_timeout(wait)
-            .read_timeout(wait);
+        let (http, timeout) = sdk_http_client(timeout)?;
         Ok(Self {
             api_key: Secret::new(api_key),
             access_token: Mutex::new(Secret::default()),
             root,
             timeout,
-            http: GuardedClient::from_builder(builder)?,
+            http,
         })
     }
 
@@ -997,27 +1137,11 @@ impl KiteConnect {
             url.push(if joined.query().is_some() { '&' } else { '?' });
             url.push_str(&encode_query(query));
         }
-        let mut request = self
-            .http
-            .request(method, &url)?
-            .header("User-Agent", USER_AGENT)
-            .header("Accept-Encoding", ACCEPT_ENCODING)
-            .header("Accept", "*/*")
-            .header("Connection", "keep-alive")
-            .header("X-Kite-Version", KITE_HEADER_VERSION);
-        let token = self.access_token();
-        if self.api_key.is_set() && token.is_set() {
-            let header = format!("token {}:{}", self.api_key.expose(), token.expose());
-            // Marked sensitive so no `Debug` of the request can carry the credential. A value
-            // that is not a valid header keeps the plain path, so its failure is unchanged.
-            request = match reqwest::header::HeaderValue::from_str(&header) {
-                Ok(mut value) => {
-                    value.set_sensitive(true);
-                    request.header(reqwest::header::AUTHORIZATION, value)
-                }
-                Err(_) => request.header("Authorization", header),
-            };
-        }
+        let mut request = sdk_headers(
+            self.http.request(method, &url)?,
+            &self.api_key,
+            &self.access_token(),
+        );
         if let Some(body) = json {
             request = request
                 .header("Content-Type", "application/json")
@@ -1029,61 +1153,8 @@ impl KiteConnect {
             .headers()
             .get(reqwest::header::CONTENT_TYPE)
             .map(|v| String::from_utf8_lossy(v.as_bytes()).into_owned());
-        let content = response.bytes().await.map_err(requests_error)?.to_vec();
-        let Some(content_type) = content_type else {
-            return Err(ProviderError::foreign("KeyError", "'content-type'").into());
-        };
-        if content_type.contains("json") {
-            let Ok(data) = KiteValue::from_json(&content) else {
-                return Err(KiteError::kite(
-                    KiteExceptionKind::Data,
-                    format!(
-                        "Couldn't parse the JSON response received from the server: {}",
-                        repr_bytes(&content)
-                    ),
-                ));
-            };
-            let KiteValue::Map(map) = &data else {
-                return Err(no_attribute(&data, "get").into());
-            };
-            let status_field = map.get("status").unwrap_or(&NONE);
-            let error_type = map.get("error_type").unwrap_or(&NONE);
-            let is_error = matches!(status_field, KiteValue::Str(s) if s == "error");
-            if is_error || error_type.truthy() {
-                let KiteValue::Str(class) = error_type else {
-                    return Err(ProviderError::foreign(
-                        "TypeError",
-                        format!(
-                            "attribute name must be string, not '{}'",
-                            error_type.type_name()
-                        ),
-                    )
-                    .into());
-                };
-                let Some(message) = map.get("message") else {
-                    return Err(ProviderError::foreign("KeyError", "'message'").into());
-                };
-                return Err(KiteError::Kite {
-                    kind: KiteExceptionKind::from_class_name(class),
-                    message: message.py_str(),
-                    code: status,
-                });
-            }
-            return match map.get("data") {
-                Some(inner) => Ok(Body::Json(inner.clone())),
-                None => Err(ProviderError::foreign("KeyError", "'data'").into()),
-            };
-        }
-        if content_type.contains("csv") {
-            return Ok(Body::Csv(content));
-        }
-        Err(KiteError::kite(
-            KiteExceptionKind::Data,
-            format!(
-                "Unknown Content-Type ({content_type}) with response: ({})",
-                repr_bytes(&content)
-            ),
-        ))
+        let content = response.bytes().await.map_err(requests_error)?;
+        validate_response(status, content_type, &content)
     }
 }
 
@@ -1123,7 +1194,8 @@ pub fn encode_query(pairs: &[(String, String)]) -> String {
 }
 
 /// A `reqwest` failure as the `requests` exception class Python would see.
-fn requests_error(error: reqwest::Error) -> KiteError {
+#[must_use]
+pub fn requests_error(error: reqwest::Error) -> KiteError {
     let mut source: Option<&(dyn std::error::Error + 'static)> = Some(&error);
     while let Some(cause) = source {
         if let Some(blocked) = cause.downcast_ref::<crate::net::NetworkAccessBlocked>() {
@@ -1221,36 +1293,7 @@ impl KiteClient for KiteConnect {
         let data = self
             .get_json("/quote", &instrument_params(instruments))
             .await?;
-        // `{key: self._format_response(data[key]) for key in data}`: an empty container is an
-        // empty dict; anything else that is not a dict fails as Python's subscript would.
-        let KiteValue::Map(map) = &data else {
-            let error = match &data {
-                KiteValue::List(items) if items.is_empty() => None,
-                KiteValue::Str(text) if text.is_empty() => None,
-                KiteValue::Bytes(bytes) if bytes.is_empty() => None,
-                KiteValue::List(items) => Some(format!(
-                    "list indices must be integers or slices, not {}",
-                    items.first().map_or("str", KiteValue::type_name)
-                )),
-                KiteValue::Str(_) => Some("string indices must be integers, not 'str'".to_owned()),
-                KiteValue::Bytes(_) => {
-                    Some("byte indices must be integers or slices, not int".to_owned())
-                }
-                other => Some(format!("'{}' object is not iterable", other.type_name())),
-            };
-            return match error {
-                None => Ok(KiteValue::Map(KiteMap::new())),
-                Some(message) => Err(KiteError::Other(ProviderError::foreign(
-                    "TypeError",
-                    message,
-                ))),
-            };
-        };
-        let mut out = KiteMap::new();
-        for (key, value) in map.iter() {
-            out.insert(key, format_response(value).map_err(KiteError::Other)?);
-        }
-        Ok(KiteValue::Map(out))
+        format_quote(&data)
     }
 
     async fn trades(&self) -> Result<KiteValue, KiteError> {
@@ -1532,7 +1575,11 @@ pub fn format_response(data: &KiteValue) -> Result<KiteValue, ProviderError> {
 
 /// `dateutil.parser.parse` for the forms Kite sends: ISO dates and datetimes with a `T` or a
 /// space, optional fraction, and an optional `Z`, `±HH:MM` or `±HHMM` offset.
-fn dateutil_parse(text: &str) -> Result<PyDateTime, ProviderError> {
+/// `dateutil.parser.parse(text)` as the SDK's timestamps need it.
+///
+/// # Errors
+/// `ParserError` for an unparseable string.
+pub fn dateutil_parse(text: &str) -> Result<PyDateTime, ProviderError> {
     parse_iso(text).ok_or_else(|| {
         ProviderError::foreign("ParserError", format!("Unknown string format: {text}"))
     })

@@ -650,29 +650,16 @@ pub(crate) fn py_upper(s: &str) -> String {
     s.to_uppercase()
 }
 
-/// `live_prices.market_data_enabled()`: `BASKFY_LIVE_QUOTES`, on unless explicitly off.
-pub(crate) fn market_data_enabled() -> bool {
-    let raw = std::env::var("BASKFY_LIVE_QUOTES").unwrap_or_else(|_| "true".to_owned());
-    matches!(
-        raw.trim().to_lowercase().as_str(),
-        "" | "1" | "true" | "yes" | "on"
-    )
-}
-
-/// `live_prices.quotes_permitted()`, as far as this wave can answer it: market data enabled and
-/// `BASKFY_KITE_API_KEY` set are Python's first two checks; the third (a real, unexpired Kite
-/// session in the token store) needs the broker session reader, which is not ported, so a
-/// configured key is answered **false** here (DECISIONS-RS R5.11). With no key — the bed, and any
-/// deployment without Kite — this is exactly Python's answer.
-pub(crate) fn quotes_permitted() -> bool {
-    if !market_data_enabled() {
-        return false;
-    }
-    let key = std::env::var("BASKFY_KITE_API_KEY").unwrap_or_default();
-    if key.trim().is_empty() {
-        return false;
-    }
-    false
+/// `live_prices.quotes_permitted()`; a token store that cannot be read is Python's 500.
+pub(crate) fn quotes_permitted() -> Result<bool, Problem> {
+    crate::live_prices::quotes_permitted().map_err(|e| {
+        crate::logging::error(
+            "baskfy_api.app",
+            "unhandled error",
+            &[("error", e.python_type())],
+        );
+        crate::problems::internal_error()
+    })
 }
 
 // ---------------------------------------------------------------------------------------------

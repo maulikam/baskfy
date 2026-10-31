@@ -213,6 +213,36 @@ fn register_oauth_state(state: &str, user_id: i64, broker_id: &str) {
     }
 }
 
+/// `consume_oauth_state(state)`: validate and remove `state`; `None` when missing, reused or
+/// expired. Returns `(user_id, broker_id)`.
+pub(crate) fn consume_oauth_state(state: &str) -> Option<(i64, String)> {
+    if state.is_empty() {
+        return None;
+    }
+    let file = env_stripped("BASKFY_BROKER_OAUTH_STATE_PATH");
+    let file = (!file.is_empty()).then(|| std::path::PathBuf::from(file));
+    let now = now_seconds();
+    let taken = {
+        let mut pending = PENDING.lock().ok()?;
+        if let Some(path) = &file {
+            load_states(&mut pending, path);
+        }
+        pending.retain(|p| now - p.created_at <= STATE_TTL_SECONDS);
+        let taken = pending
+            .iter()
+            .position(|p| p.state == state)
+            .map(|i| pending.remove(i));
+        if let Some(path) = &file {
+            persist_states(&pending, path);
+        }
+        taken
+    }?;
+    if now - taken.created_at > STATE_TTL_SECONDS {
+        return None;
+    }
+    Some((taken.user_id, taken.broker_id))
+}
+
 /// `urllib.parse.quote_plus`.
 fn quote_plus(s: &str) -> String {
     const SAFE: &percent_encoding::AsciiSet = &percent_encoding::NON_ALPHANUMERIC
@@ -356,10 +386,10 @@ struct SyncHoldingsOut {
 }
 
 /// `HoldingsResult`.
-struct HoldingsResult {
+pub(crate) struct HoldingsResult {
     rows: Vec<BrokerHoldingOut>,
-    source: &'static str,
-    degraded: bool,
+    pub(crate) source: &'static str,
+    pub(crate) degraded: bool,
     detail: String,
 }
 
@@ -455,8 +485,9 @@ fn fixture_result(detail: &str, degraded: bool) -> Result<HoldingsResult, Proble
     })
 }
 
-/// `holdings_for_broker(broker_id)`, every branch that reads no broker. `Err` for the live read.
-fn holdings_for_broker(broker_id: &str) -> Result<HoldingsResult, Problem> {
+/// `holdings_for_broker(broker_id)`: tagged with where the rows came from; the live branch reads
+/// `GET /portfolio/holdings` through the rate-limited provider.
+pub(crate) async fn holdings_for_broker(broker_id: &str) -> Result<HoldingsResult, Problem> {
     if broker_id != "zerodha" {
         return Ok(HoldingsResult {
             rows: Vec::new(),
@@ -468,7 +499,8 @@ fn holdings_for_broker(broker_id: &str) -> Result<HoldingsResult, Problem> {
     if dry_run_enabled() {
         return fixture_result("", false);
     }
-    if env_stripped("BASKFY_KITE_API_KEY").is_empty() {
+    let api_key = env_stripped("BASKFY_KITE_API_KEY");
+    if api_key.is_empty() {
         return fixture_result("no broker app key is configured on this deployment", false);
     }
     let store = baskfy_providers::tokens::AccessTokenStore::new(
@@ -490,7 +522,45 @@ fn holdings_for_broker(broker_id: &str) -> Result<HoldingsResult, Problem> {
             true,
         );
     }
-    Err(live_read_not_ported())
+    let rows = match crate::live_prices::fetch_kite_holdings(&api_key, broker_id).await {
+        Ok(rows) => rows,
+        Err(kind) => {
+            crate::logging::warning(
+                "baskfy_api.broker_holdings",
+                "holdings: live fetch failed; serving fixture",
+                &[("broker_id", broker_id), ("error", &kind)],
+            );
+            return fixture_result(&format!("the live holdings fetch failed ({kind})"), true);
+        }
+    };
+    if rows.is_empty() {
+        return Ok(HoldingsResult {
+            rows: Vec::new(),
+            source: "empty",
+            degraded: false,
+            detail: "fetched from the broker's holdings endpoint".to_owned(),
+        });
+    }
+    let py = crate::wire::py_decimal;
+    Ok(HoldingsResult {
+        rows: rows
+            .into_iter()
+            .map(|r| BrokerHoldingOut {
+                total_quantity: py(r.quantity + r.t1_quantity + r.collateral_quantity),
+                quantity: py(r.quantity),
+                t1_quantity: py(r.t1_quantity),
+                collateral_quantity: py(r.collateral_quantity),
+                average_price: py(r.average_price),
+                last_price: r.last_price.map(py),
+                symbol: r.symbol,
+                exchange: r.exchange,
+                product: r.product,
+            })
+            .collect(),
+        source: "live",
+        degraded: false,
+        detail: "fetched from the broker's holdings endpoint".to_owned(),
+    })
 }
 
 /// The cutover gate: a live broker read is served by the Python API (DECISIONS-RS R6.22).
@@ -503,6 +573,16 @@ pub(crate) fn live_read_not_ported() -> Problem {
     Problem::new(
         ProblemType::PipelineDegraded,
         "This deployment's live broker read is served by the Python API.",
+    )
+}
+
+/// `not_persisted(result).reason`.
+pub(crate) fn not_persisted_reason(result: &HoldingsResult) -> String {
+    format!(
+        "not persisted: holdings source is {}{}. Only a live read is written to a portfolio — a \
+         fixture behind a real total would be indistinguishable from your own positions.",
+        baskfy_providers::py::repr_str(result.source),
+        if result.degraded { " and degraded" } else { "" }
     )
 }
 
@@ -552,15 +632,13 @@ pub async fn sync_holdings(
     let Some(broker): Option<&BrokerDef> = BROKERS.iter().find(|b| b.id == broker_id) else {
         return Err(not_found_broker(&broker_id));
     };
-    let result = holdings_for_broker(&broker_id)?;
+    let result = holdings_for_broker(&broker_id).await?;
+    if result.source == "live" {
+        return Err(live_read_not_ported());
+    }
     let dry = dry_run_enabled();
     let note = holdings_note(&result, broker.name, dry);
-    let sync_note = format!(
-        "not persisted: holdings source is {}{}. Only a live read is written to a portfolio — a \
-         fixture behind a real total would be indistinguishable from your own positions.",
-        baskfy_providers::py::repr_str(result.source),
-        if result.degraded { " and degraded" } else { "" }
-    );
+    let sync_note = not_persisted_reason(&result);
     Ok(wire::json(&SyncHoldingsOut {
         broker_id,
         holdings: result.rows,

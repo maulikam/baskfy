@@ -65,7 +65,7 @@ pub async fn get_investment_costs(
     let batches = batches_of(&state, &[inv.id], "").await?;
     let own: Vec<&Batch> = batches.iter().collect();
     let ids: Vec<i64> = held.iter().map(|h| h.instrument_id).collect();
-    let live = live_prices_by_instrument(&ids);
+    let live = live_prices_by_instrument(&state, &ids).await?;
     let (prices, marked_at_cost) = marked_prices(&held, &live);
     let snap = snapshot(
         &buy_amounts(&own),

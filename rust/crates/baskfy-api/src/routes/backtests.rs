@@ -11,10 +11,8 @@
 //!
 //! `Feature.BACKTESTS` gates every route but the download, whose signature is the credential. A
 //! row that is not yours is a 404, never a 403. **The event stream** reproduces Python exactly
-//! for a finished run (`progress` then `end`, the frame synthesised from the row); for a run
-//! still queued or running it answers as Python does when it has no Redis (`progress` + `end`
-//! with the stored or synthesised frame, and the client reconnects) — a live pub/sub stream
-//! needs a streaming body dependency this crate does not have yet (DECISIONS-RS R5.22).
+//! for a finished run (`progress` then `end`, the frame synthesised from the row) and streams a
+//! run in flight over the Redis pub/sub channel, as Python's `event_stream` does.
 
 use std::collections::BTreeSet;
 
@@ -1231,8 +1229,20 @@ pub async fn backtest_events(
             col::opt_text(&row, "error")?.as_deref(),
         ),
     };
-    let body = format!("{}{}", sse("progress", &initial), sse("end", &initial));
-    let mut response = (StatusCode::OK, body).into_response();
+    let url = state.settings.redis_url.expose().to_owned();
+    let mut response = if terminal || url.is_empty() {
+        let body = format!("{}{}", sse("progress", &initial), sse("end", &initial));
+        (StatusCode::OK, body).into_response()
+    } else {
+        let (tx, rx) = tokio::sync::mpsc::channel::<String>(16);
+        tokio::spawn(event_stream(url, events_channel(&public_id), initial, tx));
+        let stream = futures_util::stream::unfold(rx, |mut rx| async move {
+            rx.recv()
+                .await
+                .map(|frame| (Ok::<_, std::convert::Infallible>(frame), rx))
+        });
+        (StatusCode::OK, axum::body::Body::from_stream(stream)).into_response()
+    };
     let headers = response.headers_mut();
     headers.insert(
         header::CONTENT_TYPE,
@@ -1241,6 +1251,88 @@ pub async fn backtest_events(
     headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     headers.insert("x-accel-buffering", HeaderValue::from_static("no"));
     Ok(response)
+}
+
+/// `SSE_HEARTBEAT_SECONDS`.
+const SSE_HEARTBEAT: std::time::Duration = std::time::Duration::from_secs(15);
+/// `SSE_MAX_SECONDS`.
+const SSE_MAX: std::time::Duration = std::time::Duration::from_secs(30 * 60);
+
+/// `service.events_channel(public_id)`.
+fn events_channel(public_id: &str) -> String {
+    format!("backtest:events:{public_id}")
+}
+
+/// `_is_terminal(payload)`.
+fn is_terminal_frame(payload: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(payload)
+        .ok()
+        .and_then(|v| v.get("status").and_then(|s| s.as_str().map(str::to_owned)))
+        .is_some_and(|s| s == "done" || s == "failed")
+}
+
+/// `event_stream(cache, public_id, initial, terminal)` for a run in flight: subscribe, send the
+/// current frame, relay published frames until a terminal one (heartbeat every 15 s, 30 min cap).
+async fn event_stream(
+    url: String,
+    channel: String,
+    initial: String,
+    tx: tokio::sync::mpsc::Sender<String>,
+) {
+    use futures_util::StreamExt as _;
+    let failed = |tx: tokio::sync::mpsc::Sender<String>, initial: String| async move {
+        crate::logging::warning(
+            "baskfy_api.routers.backtests",
+            "backtest event stream failed",
+            &[],
+        );
+        let _ = tx.send(sse("progress", &initial)).await;
+        let _ = tx.send(sse("end", &initial)).await;
+    };
+    let Ok(client) = redis::Client::open(url.as_str()) else {
+        return failed(tx, initial).await;
+    };
+    let mut pubsub = match client.get_async_pubsub().await {
+        Ok(p) => p,
+        Err(_) => return failed(tx, initial).await,
+    };
+    if pubsub.subscribe(&channel).await.is_err() {
+        return failed(tx, initial).await;
+    }
+    if tx.send(sse("progress", &initial)).await.is_err() {
+        return;
+    }
+    let began = std::time::Instant::now();
+    let mut messages = pubsub.on_message();
+    while began.elapsed() < SSE_MAX {
+        match tokio::time::timeout(SSE_HEARTBEAT, messages.next()).await {
+            Err(_) => {
+                if tx.send(": keep-alive\n\n".to_owned()).await.is_err() {
+                    return;
+                }
+            }
+            Ok(None) => {
+                drop(messages);
+                return failed(tx, initial).await;
+            }
+            Ok(Some(message)) => {
+                let Ok(bytes) = message.get_payload::<Vec<u8>>() else {
+                    continue;
+                };
+                let Ok(payload) = String::from_utf8(bytes) else {
+                    continue;
+                };
+                if tx.send(sse("progress", &payload)).await.is_err() {
+                    return;
+                }
+                if is_terminal_frame(&payload) {
+                    let _ = tx.send(sse("end", &payload)).await;
+                    return;
+                }
+            }
+        }
+    }
+    let _ = tx.send(sse("end", &initial)).await;
 }
 
 /// The ported `/backtests` routes, relative to `/api/v1` (`POST` and `DELETE` stay on Python).

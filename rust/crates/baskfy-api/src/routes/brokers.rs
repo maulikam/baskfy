@@ -2,13 +2,9 @@
 //! `baskfy_api.routers.brokers` (Python declares `APIRouter(prefix="/brokers", tags=["brokers"])`)
 //! and the catalog in `baskfy_core.broker_connections`.
 //!
-//! Ported: `GET /brokers`, `GET /brokers/{broker_id}`, and `GET /brokers/callback` **up to its
-//! refusals** — validation, the sole-tenant guard, the D3 gate and the one-time `state` check.
-//! A `state` is minted only by `POST /brokers/{id}/connect`, which this wave does not serve, so
-//! the Rust process holds no pending state and answers every callback "Invalid or expired OAuth
-//! state." — what a second Python worker without the shared state file answers too. The success
-//! path (token exchange, encrypted store, holdings sync) writes, and stays on Python until the
-//! write wave; DECISIONS-RS, api-portfolio P5. The write routes `POST /{broker_id}/connect` and
+//! Ported: `GET /brokers`, `GET /brokers/{broker_id}`, and `GET /brokers/callback` (state check,
+//! Kite `session/token` exchange, the encrypted token store, the post-login refresh). The write
+//! routes `POST /{broker_id}/connect` and
 //! `POST /{broker_id}/sync-holdings` are in [`writes`] (wave 4c; the live holdings read is a
 //! cutover gate, DECISIONS-RS R6.22). Nothing here reaches an order path (law 2).
 
@@ -475,26 +471,268 @@ pub async fn get_one_broker(
     Ok(wire::json(&broker_out(broker)?))
 }
 
-/// `GET /brokers/callback?request_token=&state=` — the refusals only (see the module docs).
+/// `SESSION_CATCH_UP_TASK`.
+const SESSION_CATCH_UP_TASK: &str = "baskfy.pipeline.session_catch_up";
+/// `SWING_SCAN_AFTER_LOGIN_TASK`.
+const SWING_SCAN_AFTER_LOGIN_TASK: &str = "baskfy.swing.scan_after_login";
+
+/// `CallbackOut`.
+#[derive(Debug, Clone, Serialize)]
+struct CallbackOut {
+    broker_id: String,
+    connected: bool,
+    token_stored: bool,
+    simulated: bool,
+    holdings_synced: i64,
+    note: String,
+}
+
+/// `simulated_exchange_reasons(api_key=, api_secret=)`.
+fn simulated_exchange_reasons(api_key: &str, secret: &str) -> Vec<&'static str> {
+    let mut reasons = Vec::new();
+    if writes::dry_run_enabled() {
+        reasons.push("DRY_RUN is on, so no live broker call may be made");
+    }
+    if api_key.trim().is_empty() {
+        reasons.push("BASKFY_KITE_API_KEY is not set on this deployment");
+    }
+    if secret.is_empty() {
+        reasons.push("BASKFY_KITE_API_SECRET is not set on this deployment");
+    }
+    reasons
+}
+
+fn hex(bytes: &[u8]) -> String {
+    use std::fmt::Write as _;
+    bytes.iter().fold(String::new(), |mut out, b| {
+        let _ = write!(out, "{b:02x}");
+        out
+    })
+}
+
+/// `exchange_request_token_stub(...)`.
+fn exchange_stub(api_key: &str, request_token: &str, user_id: i64) -> String {
+    use sha2::Digest as _;
+    let digest = sha2::Sha256::digest(
+        format!("{api_key}|{request_token}|{user_id}|baskfy-oauth-stub").as_bytes(),
+    );
+    let text = hex(&digest);
+    format!("{SIMULATED_TOKEN_PREFIX}{}", &text[..40])
+}
+
+/// The live `POST https://api.kite.trade/session/token`. Errors are Python's uncaught raises.
+async fn exchange_live(api_key: &str, request_token: &str, secret: &str) -> Result<String, String> {
+    use sha2::Digest as _;
+    let checksum = hex(&sha2::Sha256::digest(
+        format!("{api_key}{request_token}{secret}").as_bytes(),
+    ));
+    let client = baskfy_providers::net::GuardedClient::from_builder(
+        baskfy_providers::net::client_builder().timeout(std::time::Duration::from_secs(30)),
+    )
+    .map_err(|e| e.python_type().to_owned())?;
+    let response = client
+        .post("https://api.kite.trade/session/token")
+        .map_err(|e| e.python_type().to_owned())?
+        .header("X-Kite-Version", "3")
+        .form(&[
+            ("api_key", api_key),
+            ("request_token", request_token),
+            ("checksum", checksum.as_str()),
+        ])
+        .send()
+        .await
+        .map_err(|_| "HTTPError".to_owned())?
+        .error_for_status()
+        .map_err(|_| "HTTPStatusError".to_owned())?;
+    let body: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|_| "JSONDecodeError".to_owned())?;
+    let token = body
+        .get("data")
+        .and_then(|d| d.get("access_token"))
+        .ok_or_else(|| "ValueError: kite session/token response missing access_token".to_owned())?;
+    let token = match token {
+        serde_json::Value::String(t) => t.clone(),
+        other => other.to_string(),
+    };
+    if token.is_empty() {
+        return Err("ValueError: kite session/token returned an empty access_token".to_owned());
+    }
+    if token.starts_with(SIMULATED_TOKEN_PREFIX) {
+        return Err("ValueError: kite session/token returned a reserved token prefix".to_owned());
+    }
+    Ok(token)
+}
+
+/// `simulated_token_store_path()`: `<stem>.simulated<suffix>` beside the real blob.
+fn simulated_token_store_path() -> std::path::PathBuf {
+    let real = token_store_path();
+    let stem = real
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let suffix = real
+        .extension()
+        .map(|s| format!(".{}", s.to_string_lossy()))
+        .unwrap_or_default();
+    real.with_file_name(format!("{stem}.simulated{suffix}"))
+}
+
+fn store_token(path: std::path::PathBuf, token: &str) -> Result<(), Problem> {
+    baskfy_providers::tokens::AccessTokenStore::new(
+        path,
+        env_stripped("BASKFY_KITE_TOKEN_ENCRYPTION_KEY").into(),
+    )
+    .save(token, None)
+    .map(|_| ())
+    .map_err(|e| {
+        crate::logging::error(
+            "baskfy_api.app",
+            "unhandled error",
+            &[("error", e.python_type())],
+        );
+        crate::problems::internal_error()
+    })
+}
+
+/// `_queue_post_login_refresh(request, user_id, session)`: never fails the login.
+async fn queue_post_login_refresh(
+    state: &AppState,
+    user_id: i64,
+    pool: Option<&crate::session::WritePool>,
+) -> String {
+    use crate::routes::sleeves::writes::{
+        ScanSpec, has_queue, publish_after_commit, request_scan, send_task,
+    };
+    let url = &state.settings.redis_url;
+    if !has_queue(url) {
+        return "no task queue configured, so no data refresh was requested".to_owned();
+    }
+    let mut queued: Vec<&str> = Vec::new();
+    let mut failed: Vec<String> = Vec::new();
+    for (name, args, label) in [
+        (SESSION_CATCH_UP_TASK, Vec::new(), "missed-session catch-up"),
+        (
+            SWING_SCAN_AFTER_LOGIN_TASK,
+            vec![OrderedJson::Int(user_id)],
+            "live swing scan",
+        ),
+    ] {
+        match send_task(url, name, &args).await {
+            Ok(_) => queued.push(label),
+            Err(_) => failed.push(format!("{label} (ConnectionError)")),
+        }
+    }
+    if let Some(pool) = pool {
+        let specs = [
+            (
+                "TWT scan of the last published session",
+                ScanSpec {
+                    table: "tw_scan_run",
+                    insert_sql: "INSERT INTO tw_scan_run (user_id, requested_at, status, source) \
+                                 VALUES ($1, $2, 'QUEUED', 'web') RETURNING id",
+                    task: crate::routes::twt::writes::SCAN_TASK_NAME,
+                    min_interval_seconds: state.settings.twt_scan_min_interval_seconds,
+                    stale_after_seconds: state.settings.twt_scan_stale_after_seconds,
+                },
+            ),
+            (
+                "VBT scan of the last published session",
+                ScanSpec {
+                    table: "vb_scan_run",
+                    insert_sql: "INSERT INTO vb_scan_run (user_id, requested_at, status, source, \
+                                 detail) VALUES ($1, $2, 'QUEUED', 'desk', \
+                                 '{\"source\": \"desk\"}'::jsonb) RETURNING id",
+                    task: crate::routes::vbt::writes::SCAN_TASK_NAME,
+                    min_interval_seconds: state.settings.vbt_scan_min_interval_seconds,
+                    stale_after_seconds: state.settings.vbt_scan_stale_after_seconds,
+                },
+            ),
+        ];
+        for (label, spec) in specs {
+            match request_scan(pool, user_id, spec).await {
+                Ok((run_id, _)) => {
+                    publish_after_commit(url, pool, spec.table, spec.task, run_id).await;
+                    queued.push(label);
+                }
+                Err(_) => failed.push(format!("{label} (Problem)")),
+            }
+        }
+    }
+    let original = ["missed-session catch-up", "live swing scan"];
+    let base_ok = original.iter().all(|o| queued.contains(o));
+    let head = |f: &String| f.split(" (").next().unwrap_or("").to_owned();
+    let base_failed: Vec<&String> = failed
+        .iter()
+        .filter(|f| original.contains(&head(f).as_str()))
+        .collect();
+    let extra_ok: Vec<&str> = queued
+        .iter()
+        .copied()
+        .filter(|l| !original.contains(l))
+        .collect();
+    let extra_failed: Vec<&String> = failed
+        .iter()
+        .filter(|f| !original.contains(&head(f).as_str()))
+        .collect();
+    let join = |v: &[&String]| v.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ");
+    let mut note = if base_ok {
+        "missed sessions will be caught up and today's live swing scan was requested".to_owned()
+    } else {
+        let base_queued: Vec<&str> = queued
+            .iter()
+            .copied()
+            .filter(|l| original.contains(l))
+            .collect();
+        format!(
+            "queued {}; could not be queued: {}",
+            if base_queued.is_empty() {
+                "no refresh jobs".to_owned()
+            } else {
+                base_queued.join(", ")
+            },
+            join(&base_failed)
+        )
+    };
+    if !extra_ok.is_empty() {
+        note.push_str("; also queued: ");
+        note.push_str(&extra_ok.join(", "));
+    }
+    if !extra_failed.is_empty() {
+        note.push_str("; could not be queued: ");
+        note.push_str(&join(&extra_failed));
+    }
+    note
+}
+
+/// `GET /brokers/callback?request_token=&state=`: validate `state`, exchange `request_token`,
+/// store the session encrypted, queue the post-login refresh. Tokens are never logged.
 ///
 /// # Errors
-/// 401 anonymous; 400 for missing or mis-sized parameters; the sole-tenant guard's 503/404; the
-/// 400 "Invalid or expired OAuth state." for every state this process could hold.
+/// 401 anonymous; 400 for parameters or a bad state; the sole-tenant guard's 503/404; 503 when
+/// only a simulated login is possible and not opted into; 500 for a failed live exchange.
 pub async fn oauth_callback(
     State(state): State<AppState>,
     Extension(principal): Extension<Principal>,
+    write: Option<Extension<crate::session::WritePool>>,
     RawQuery(raw): RawQuery,
 ) -> Result<Response, Problem> {
     let principal = require_authenticated(&principal)?;
     let q = QueryParams::parse(raw.as_deref());
     let mut v = Validation::new();
-    if let Some(t) = v.required(&q, "request_token") {
+    let request_token = v.required(&q, "request_token").map(str::to_owned);
+    if let Some(t) = &request_token {
         params::str_value(&mut v, "request_token", t, Some(8), Some(128));
     }
-    if let Some(s) = v.required(&q, "state") {
+    let oauth_state = v.required(&q, "state").map(str::to_owned);
+    if let Some(s) = &oauth_state {
         params::str_value(&mut v, "state", s, Some(8), Some(128));
     }
     v.finish()?;
+    let (Some(request_token), Some(oauth_state)) = (request_token, oauth_state) else {
+        return Err(crate::problems::internal_error());
+    };
     let user_id = principal.require_user()?;
     tenant::scoped_sole_user_id(&state, Some(user_id), Some("broker connect")).await?;
     if !BROKER_OAUTH_REVIEW.signed_off {
@@ -502,8 +740,99 @@ pub async fn oauth_callback(
             "Broker OAuth is not signed off; callback is closed.",
         ));
     }
-    // consume_oauth_state(state): this process never minted one (connect is not served here).
-    Err(bad_request("Invalid or expired OAuth state."))
+    let Some((owner, broker_id)) = writes::consume_oauth_state(&oauth_state) else {
+        return Err(bad_request("Invalid or expired OAuth state."));
+    };
+    if owner != user_id {
+        return Err(bad_request("OAuth state does not belong to this account."));
+    }
+    if !OAUTH_COMPLETABLE.contains(&broker_id.as_str()) {
+        return Err(bad_request(&format!(
+            "Baskfy cannot complete an OAuth login for {}; only Zerodha's token exchange is \
+             implemented.",
+            baskfy_providers::py::repr_str(&broker_id)
+        )));
+    }
+    let api_key = env_stripped("BASKFY_KITE_API_KEY");
+    let secret = env_stripped("BASKFY_KITE_API_SECRET");
+    let reasons = simulated_exchange_reasons(&api_key, &secret);
+    if !reasons.is_empty() {
+        let allowed = matches!(
+            env_stripped("BASKFY_BROKER_OAUTH_ALLOW_SIMULATED")
+                .to_lowercase()
+                .as_str(),
+            "1" | "true" | "yes" | "on"
+        );
+        if !allowed {
+            return Err(Problem::new(
+                ProblemType::PipelineDegraded,
+                format!(
+                    "This deployment cannot complete a broker login: {}. Nothing was stored and \
+                     any existing broker session is untouched. This login's one-time state has \
+                     been spent, so start the connect flow again once the deployment is \
+                     configured; or set BASKFY_BROKER_OAUTH_ALLOW_SIMULATED=true to exercise the \
+                     flow with a simulated session instead.",
+                    reasons.join("; ")
+                ),
+            )
+            .with(
+                "reasons",
+                OrderedJson::Array(
+                    reasons
+                        .iter()
+                        .map(|r| OrderedJson::Str((*r).to_owned()))
+                        .collect(),
+                ),
+            ));
+        }
+        let token = exchange_stub(&api_key, &request_token, user_id);
+        store_token(simulated_token_store_path(), &token)?;
+        return Ok(wire::json(&CallbackOut {
+            note: format!(
+                "simulated: the OAuth flow ran end to end and stored a fake session in a \
+                 separate file. You are not connected to {broker_id}, and the real broker session \
+                 was not touched ({}).",
+                reasons.join("; ")
+            ),
+            broker_id,
+            connected: false,
+            token_stored: true,
+            simulated: true,
+            holdings_synced: 0,
+        }));
+    }
+    let token = exchange_live(&api_key, &request_token, &secret)
+        .await
+        .map_err(|kind| {
+            crate::logging::error("baskfy_api.app", "unhandled error", &[("error", &kind)]);
+            crate::problems::internal_error()
+        })?;
+    store_token(token_store_path(), &token)?;
+    let pool = write.map(|Extension(p)| p);
+    let catch_up_note = queue_post_login_refresh(&state, user_id, pool.as_ref()).await;
+    crate::logging::info(
+        "baskfy_api.brokers",
+        &format!("broker connect: {catch_up_note}"),
+        &[],
+    );
+    let sync_note = match writes::holdings_for_broker(&broker_id).await {
+        Ok(result) if result.source == "live" && !result.degraded => {
+            "holdings were not read on connect (NotPorted); use Sync holdings.".to_owned()
+        }
+        Ok(result) => writes::not_persisted_reason(&result),
+        Err(_) => "holdings were not read on connect (Problem); use Sync holdings.".to_owned(),
+    };
+    Ok(wire::json(&CallbackOut {
+        note: format!(
+            "live: a real {broker_id} session was exchanged and stored encrypted. {sync_note} \
+             {catch_up_note}."
+        ),
+        broker_id,
+        connected: true,
+        token_stored: true,
+        simulated: false,
+        holdings_synced: 0,
+    }))
 }
 
 /// The GET routes of `baskfy_api.routers.brokers`, relative to `/api/v1`. `/callback` is

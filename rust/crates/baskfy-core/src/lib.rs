@@ -20,6 +20,7 @@
 
 pub mod backtest;
 pub mod backtest_metrics;
+pub mod basket_sizing;
 pub mod decimal;
 pub mod error;
 pub mod exposure;
@@ -29,7 +30,9 @@ pub mod fno;
 pub mod options;
 pub mod pl;
 pub mod py;
+pub mod rank_buffer;
 pub mod ranking_engine;
+pub mod ranking_selection;
 pub mod screener;
 pub mod swing;
 pub mod twt;

@@ -411,6 +411,7 @@ pub struct DeskKite {
     kc: Arc<Broker>,
     settings: SharedSettings,
     limit_clock: Arc<dyn LimitClock>,
+    cache_clock: Arc<dyn Clock>,
     limits: OnceCell<Arc<DeskLimits>>,
     shared: Arc<SharedSpacers>,
     ltp_cache: Mutex<HashMap<String, (f64, f64)>>,
@@ -432,20 +433,20 @@ impl std::fmt::Debug for DeskKite {
 impl DeskKite {
     /// The handle the gateway holds, built at boot: `FORCE_IPV4` pins first (before any session
     /// exists), then — configured — `Kite()`'s token load. Unconfigured, nothing is loaded or
-    /// written and every method raises `KITE_API_KEY missing` ([`DeskKite::ready`]). `clock` is
-    /// accepted for the callers' sake; the LTP cache reads `time.monotonic()` (the limiter's real
-    /// clock), as Python's does — never the harness's settable wall clock.
+    /// written and every method raises `KITE_API_KEY missing` ([`DeskKite::ready`]). The LTP
+    /// cache ages on `clock.monotonic()` (`app.kite_client`'s `time.monotonic`); the limiter
+    /// keeps its own real clock.
     #[must_use]
     pub fn new(kc: Arc<Broker>, settings: SharedSettings, clock: Arc<dyn Clock>) -> Self {
         Self::with_limit_clock(kc, settings, clock, Arc::new(TokioClock::default()))
     }
 
-    /// As [`DeskKite::new`] with the limiter's clock (and so the LTP cache's) injected (tests).
+    /// As [`DeskKite::new`] with the limiter's clock injected (tests).
     #[must_use]
     pub fn with_limit_clock(
         kc: Arc<Broker>,
         settings: SharedSettings,
-        _clock: Arc<dyn Clock>,
+        clock: Arc<dyn Clock>,
         limit_clock: Arc<dyn LimitClock>,
     ) -> Self {
         let s = snapshot(&settings);
@@ -461,6 +462,7 @@ impl DeskKite {
             kc,
             settings,
             limit_clock,
+            cache_clock: clock,
             limits: OnceCell::new(),
             shared,
             ltp_cache: Mutex::new(HashMap::new()),
@@ -842,7 +844,7 @@ impl DeskKite {
                 wanted.push(sym);
             }
         }
-        let now = self.limit_clock.now();
+        let now = self.cache_clock.monotonic();
         let mut out = PyDict::new();
         let mut missing: Vec<String> = Vec::new();
         {
@@ -866,7 +868,7 @@ impl DeskKite {
                 .collect();
             self.slot("quote").await;
             let data = self.kc.ltp(&keys).await?;
-            let fetched = self.limit_clock.now();
+            let fetched = self.cache_clock.monotonic();
             for (key, value) in items(&data)?.iter() {
                 let price = to_float(subscript(value, "last_price")?)?;
                 if let Ok(mut cache) = self.ltp_cache.lock() {

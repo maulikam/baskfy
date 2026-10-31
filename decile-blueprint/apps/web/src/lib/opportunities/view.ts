@@ -80,6 +80,15 @@ export const SETUP_LABEL: Record<string, string> = {
   BREAKOUT: "Breakout",
   PULLBACK: "Pullback",
   RELATIVE_STRENGTH: "Relative strength",
+  VCP: "VCP",
+  THREE_WEEKS_TIGHT: "Three weeks tight",
+  EPISODIC_PIVOT: "Episodic pivot",
+  FLAG: "Flag / high tight flag",
+  INSIDE_BAR_NR7: "Inside bar / NR7",
+  HIGH_52W_BREAKOUT: "52-week high",
+  CUP_WITH_HANDLE: "Cup with handle",
+  MA_BOUNCE: "EMA bounce",
+  VBT: "VBT",
 };
 
 export const STRATEGY_LABEL: Record<string, string> = {

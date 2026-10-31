@@ -2939,3 +2939,8 @@ on the real 150 closes to 29 Sep; the EMA seed and weight; the desk's live-gate 
 `position_id` field SW28 added to plan lines; the goldens were not regenerated then. Unrelated to
 the index.
 
+## Opportunities › Swing: nine pattern setups (31 Oct 2026) ⚠ UNREVIEWED
+
+- Scanner-only (no orders): VCP, TWT, EP, FLAG/HTF, inside bar/NR7, 52w high, cup with handle,
+  EMA bounce, VBT. Rules and sources: `docs/rust-rewrite/DECISIONS-RS.md` R8.os.
+

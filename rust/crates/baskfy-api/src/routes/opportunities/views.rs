@@ -13,7 +13,7 @@ use crate::problems::{Problem, internal_error};
 use crate::routes::sleeves::common::{J, Obj, quantize_j};
 use crate::wire;
 
-use super::service::{MAX_RESULTS, MAX_UNIVERSE, OptionsAnalysis, ProviderState, SwingScan};
+use super::service::{MAX_RESULTS, OptionsAnalysis, ProviderState, SwingScan, max_universe};
 
 /// Python's `round(x, ndigits)` on a float.
 pub(crate) fn py_round(x: f64, ndigits: usize) -> f64 {
@@ -455,7 +455,7 @@ pub(crate) fn limits() -> J {
         .put("max_results", J::Int(MAX_RESULTS))
         .put(
             "max_universe",
-            J::Int(i64::try_from(MAX_UNIVERSE).unwrap_or(i64::MAX)),
+            J::Int(i64::try_from(max_universe()).unwrap_or(i64::MAX)),
         )
         .done()
 }

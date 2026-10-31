@@ -286,6 +286,10 @@ pub(crate) enum Ty {
     Int(Vec<Bound>),
     /// `Decimal` with bounds.
     Dec(Vec<Bound>),
+    /// `float` with bounds; the value is held as [`PV::Dec`] of its `repr`.
+    Float(Vec<Bound>),
+    /// `list[T]` with `min_length` / `max_length`.
+    BoundedList(Box<Ty>, Option<usize>, Option<usize>),
     /// `str` with `min_length`, `max_length` and a `pattern` (its source, and the matcher).
     Str {
         /// `min_length`.
@@ -605,6 +609,43 @@ fn check(value: &OrderedJson, ty: &Ty, loc: &[Loc], ctx: &mut Ctx) -> Result<Opt
         }),
         Ty::Dec(bounds) => decimal(value, loc, ctx)
             .and_then(|d| bounded(&d, bounds, loc, ctx).then_some(PV::Dec(d))),
+        Ty::Float(bounds) => float(value, loc, ctx)
+            .and_then(|d| bounded(&d, bounds, loc, ctx).then_some(PV::Dec(d))),
+        Ty::BoundedList(inner, min, max) => {
+            let n = match value {
+                OrderedJson::Array(items) => Some(items.len()),
+                _ => None,
+            };
+            let item = |k: usize| if k == 1 { "item" } else { "items" };
+            match (n, min, max) {
+                (Some(n), _, Some(max)) if n > *max => {
+                    ctx.push(
+                        loc,
+                        format!("List should have at most {max} {} after validation, not {n}", item(*max)),
+                        "too_long",
+                    );
+                    None
+                }
+                _ => match check(value, &Ty::List(inner.clone()), loc, ctx)? {
+                    Some(PV::List(out)) => match min {
+                        Some(min) if out.len() < *min => {
+                            ctx.push(
+                                loc,
+                                format!(
+                                    "List should have at least {min} {} after validation, not {}",
+                                    item(*min),
+                                    out.len()
+                                ),
+                                "too_short",
+                            );
+                            None
+                        }
+                        _ => Some(PV::List(out)),
+                    },
+                    other => other,
+                },
+            }
+        }
         Ty::Str { min, max, pattern } => string(value, *min, *max, *pattern, loc, ctx),
         Ty::Bool => boolean(value, loc, ctx).map(PV::Bool),
         Ty::Date => date(value, loc, ctx).map(PV::Date),
@@ -964,6 +1005,39 @@ fn decimal(value: &OrderedJson, loc: &[Loc], ctx: &mut Ctx) -> Option<PyDec> {
                 "Decimal input should be an integer, float, string or Decimal object",
                 "decimal_type",
             );
+            None
+        }
+    }
+}
+
+// pydantic's lax `float`: a bool or an int converts, a string parses as Python's `float()`.
+fn float(value: &OrderedJson, loc: &[Loc], ctx: &mut Ctx) -> Option<PyDec> {
+    let finite = |f: f64, ctx: &mut Ctx| {
+        let d = PyDec::from_float(f);
+        if d.is_none() {
+            ctx.push(loc, "Input should be a finite number", "finite_number");
+        }
+        d
+    };
+    match value {
+        OrderedJson::Bool(b) => PyDec::parse(if *b { "1.0" } else { "0.0" }),
+        OrderedJson::Int(i) => finite(*i as f64, ctx),
+        OrderedJson::UInt(u) => finite(*u as f64, ctx),
+        OrderedJson::BigInt(s) => finite(s.parse::<f64>().unwrap_or(f64::INFINITY), ctx),
+        OrderedJson::Float(f) => finite(*f, ctx),
+        OrderedJson::Str(s) => match s.trim().parse::<f64>() {
+            Ok(f) => finite(f, ctx),
+            Err(_) => {
+                ctx.push(
+                    loc,
+                    "Input should be a valid number, unable to parse string as a number",
+                    "float_parsing",
+                );
+                None
+            }
+        },
+        _ => {
+            ctx.push(loc, "Input should be a valid number", "float_type");
             None
         }
     }

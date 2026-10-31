@@ -43,6 +43,7 @@ pub mod managers;
 pub mod market_data;
 pub mod meta;
 pub mod ops;
+pub mod opportunities;
 pub mod options;
 pub mod overlap;
 pub mod portfolio_overview;
@@ -106,5 +107,6 @@ pub fn api_router() -> Router<AppState> {
         .merge(vbt::router())
         .merge(twt::router())
         .merge(options::router())
+        .merge(opportunities::router())
         .merge(fno::router())
 }

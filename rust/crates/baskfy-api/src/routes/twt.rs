@@ -189,6 +189,26 @@ async fn marks(
     Ok(out)
 }
 
+/// `(mark - entry) * qty` and its fraction of cost (4 dp; `None` at zero cost).
+fn unrealised(mark: Decimal, entry: Decimal, quantity: i64) -> Result<(J, J), Problem> {
+    let qty = Decimal::from(quantity);
+    let gain = mul(mark - entry, qty)?;
+    let cost = mul(entry, qty)?;
+    // Python's `(mark - entry) * 0` with a falling mark is `-0.0000`; `rust_decimal` has no
+    // negative zero, so the sign is carried explicitly.
+    let unrealised = if gain.is_zero() && mark < entry {
+        J::NegZero(gain.scale())
+    } else {
+        J::Dec(gain)
+    };
+    let fraction = if cost.is_zero() {
+        J::Null
+    } else {
+        quantize_j(div(gain, cost)?, 4)
+    };
+    Ok((unrealised, fraction))
+}
+
 async fn positions(state: &AppState, user_id: i64, day: NaiveDate) -> Result<Vec<J>, Problem> {
     let rows = sqlx::query(
         "SELECT p.id, p.instrument_id, i.symbol, i.name, p.entry_date, p.entry_avg, \
@@ -218,20 +238,8 @@ async fn positions(state: &AppState, user_id: i64, day: NaiveDate) -> Result<Vec
         let quantity: i64 = col(row, "quantity_open")?;
         let (mut last, mut unrealised, mut fraction) = (None, J::Null, J::Null);
         if let Some(mark) = marked.get(&instrument_id).copied() {
-            let qty = Decimal::from(quantity);
-            let gain = mul(mark - entry, qty)?;
-            let cost = mul(entry, qty)?;
             last = Some(mark);
-            // Python's `(mark - entry) * 0` with a falling mark is `-0.0000`; `rust_decimal`
-            // has no negative zero, so the sign is carried explicitly.
-            unrealised = if gain.is_zero() && mark < entry {
-                J::NegZero(gain.scale())
-            } else {
-                J::Dec(gain)
-            };
-            if !cost.is_zero() {
-                fraction = quantize_j(div(gain, cost)?, 4);
-            }
+            (unrealised, fraction) = self::unrealised(mark, entry, quantity)?;
         }
         out.push(
             Obj::new()
@@ -355,7 +363,7 @@ pub async fn get_today(
                 .done()
         }
     };
-    let (gate, tight_rows, open) = match as_of {
+    let (gate, mut tight_rows, mut open) = match as_of {
         None => (gate_j(None, None)?, Vec::new(), Vec::new()),
         Some(d) => (
             gate_j(reading.as_ref(), Some(d))?,
@@ -363,6 +371,33 @@ pub async fn get_today(
             positions(&state, user_id, d).await?,
         ),
     };
+    let marks = crate::routes::sleeves::common::live_marks(
+        &tight_rows.iter().chain(open.iter()).collect::<Vec<_>>(),
+    )
+    .await?;
+    for row in &mut tight_rows {
+        let mark = marks
+            .get(&crate::routes::sleeves::common::symbol_key(row))
+            .copied();
+        crate::routes::sleeves::common::set_field(row, "last_price", J::opt_dec(mark));
+    }
+    for row in &mut open {
+        if let Some(live) = marks
+            .get(&crate::routes::sleeves::common::symbol_key(row))
+            .copied()
+        {
+            let entry =
+                crate::routes::sleeves::common::field_dec(row, "entry_avg").unwrap_or_default();
+            let quantity = match crate::routes::sleeves::common::field(row, "quantity_open") {
+                Some(J::Int(q)) => *q,
+                _ => 0,
+            };
+            let (unrealised, fraction) = unrealised(live, entry, quantity)?;
+            crate::routes::sleeves::common::set_field(row, "last_price", J::Dec(live));
+            crate::routes::sleeves::common::set_field(row, "unrealised_inr", unrealised);
+            crate::routes::sleeves::common::set_field(row, "unrealised_fraction", fraction);
+        }
+    }
     let body = Obj::new()
         .put("as_of", J::opt_date(as_of))
         .put("gate", gate)

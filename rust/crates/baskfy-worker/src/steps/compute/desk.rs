@@ -11,20 +11,19 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
+use baskfy_api::basket_build::scan::{Carried, DeskBars, build_scan};
+use baskfy_api::basket_build::score::score;
 use baskfy_core::factors::{
-    FactorConfig, HIGH_1Y_BARS, MA_LENGTHS, MEDIAN_VOL_BARS, VOL_AVG_BARS, compute_factors,
-    subtract_months,
+    HIGH_1Y_BARS, MA_LENGTHS, MEDIAN_VOL_BARS, VOL_AVG_BARS, subtract_months,
 };
 use baskfy_db::OrderedJson;
 use chrono::NaiveDate;
-use polars::prelude::{DataFrame, IntoColumn, NamedFrom, Series};
 use rust_decimal::Decimal;
 use sqlx::{PgConnection, Row};
 
-use super::factors::{NSE_EXCHANGE_ID, date_column, day_number, floats, mask_value, strings};
+use super::core_err;
+use super::factors::{NSE_EXCHANGE_ID, mask_value};
 use super::numeric::quantize_half_up_repr;
-use super::score::{ScanRow, score};
-use super::{core_err, pl_err};
 use crate::error::WorkerError;
 use crate::pyjson;
 use crate::steps::StepOutcome;
@@ -78,26 +77,6 @@ pub(crate) fn desk_bar_window_start(
     match ordered.len() {
         0 => as_of,
         n => ordered[n.saturating_sub(lookback)],
-    }
-}
-
-/// The desk's bar columns (`DESK_BAR_SCHEMA`), accumulated row by row.
-#[derive(Default)]
-pub(crate) struct DeskBars {
-    /// `symbol`.
-    pub(crate) symbol: Vec<String>,
-    /// `instrument_id`.
-    pub(crate) instrument_id: Vec<i64>,
-    /// `date`.
-    pub(crate) date: Vec<NaiveDate>,
-    /// open, high, low, close, volume, close_raw, volume_raw.
-    pub(crate) numbers: [Vec<f64>; 7],
-}
-
-impl DeskBars {
-    /// The number of bars.
-    pub(crate) fn len(&self) -> usize {
-        self.instrument_id.len()
     }
 }
 
@@ -234,23 +213,6 @@ async fn load_desk_bars(
 }
 
 /// `load_carried(session, as_of)`: 2B.2's carried columns, by symbol.
-pub(crate) struct Carried {
-    /// `symbol`.
-    pub(crate) symbol: String,
-    /// `series`.
-    pub(crate) series: Option<String>,
-    /// `marketcap`.
-    pub(crate) marketcap: Option<f64>,
-    /// `beta`.
-    pub(crate) beta: Option<f64>,
-    /// `circuits_three_months`.
-    pub(crate) circuits_three_months: Option<i64>,
-    /// `circuits_one_year`.
-    pub(crate) circuits_one_year: Option<i64>,
-    /// `is_nifty_fno`.
-    pub(crate) is_nifty_fno: i64,
-}
-
 async fn load_carried(
     conn: &mut PgConnection,
     as_of: NaiveDate,
@@ -329,130 +291,6 @@ fn instrument_ids(bars: &DeskBars, as_of: NaiveDate) -> Result<HashMap<String, i
         .collect())
 }
 
-/// `momentum_scan.build(bars, as_of, trading_days, cfg=DESK_CONFIG, carried=carried)`'s frame,
-/// as the rows `score.score` reads, sorted by symbol (and `drop_duplicates(subset="symbol")`).
-pub(crate) fn build_scan(
-    bars: &DeskBars,
-    as_of: NaiveDate,
-    trading_days: &[NaiveDate],
-    carried: &[Carried],
-) -> Result<Vec<ScanRow>, WorkerError> {
-    let n = bars.len();
-    let [open, high, low, close, volume, close_raw, volume_raw] = &bars.numbers;
-    let frame = DataFrame::new(
-        n,
-        vec![
-            Series::new("symbol".into(), bars.symbol.clone()).into_column(),
-            Series::new("instrument_id".into(), bars.instrument_id.clone()).into_column(),
-            date_column("date", bars.date.iter().map(|d| day_number(*d)).collect())?,
-            Series::new("open".into(), open.clone()).into_column(),
-            Series::new("high".into(), high.clone()).into_column(),
-            Series::new("low".into(), low.clone()).into_column(),
-            Series::new("close".into(), close.clone()).into_column(),
-            Series::new("volume".into(), volume.clone()).into_column(),
-            Series::new("close_raw".into(), close_raw.clone()).into_column(),
-            Series::new("volume_raw".into(), volume_raw.clone()).into_column(),
-        ],
-    )
-    .map_err(|e| pl_err(&e))?;
-    let computed = compute_factors(
-        &frame,
-        as_of,
-        trading_days,
-        None,
-        &FactorConfig::default(),
-        None,
-    )
-    .map_err(core_err)?
-    .frame;
-
-    let symbols = strings(&computed, "symbol")?;
-    let col = |name: &str| -> Result<Vec<f64>, WorkerError> {
-        Ok(floats(&computed, name)?
-            .into_iter()
-            .map(|v| v.unwrap_or(f64::NAN))
-            .collect())
-    };
-    let close_c = col("close")?;
-    let median = col("median_vol_12m")?;
-    let rsi = col("rsi_1m")?;
-    let vol = col("vol_12m")?;
-    let pos3 = col("pos_days_3m")?;
-    let pos6 = col("pos_days_6m")?;
-    let ma20 = col("ma_20")?;
-    let ma50 = col("ma_50")?;
-    let ma100 = col("ma_100")?;
-    let ma200 = col("ma_200")?;
-    let away = col("away_high_1y")?;
-    let rets: Vec<Vec<f64>> = ["ret_1m", "ret_3m", "ret_6m", "ret_9m", "ret_12m"]
-        .iter()
-        .map(|c| col(c))
-        .collect::<Result<_, _>>()?;
-    let sharpes: Vec<Vec<f64>> = [
-        "sharpe_1m",
-        "sharpe_3m",
-        "sharpe_6m",
-        "sharpe_9m",
-        "sharpe_12m",
-    ]
-    .iter()
-    .map(|c| col(c))
-    .collect::<Result<_, _>>()?;
-
-    // The inner join on symbol: carried wins every column both sides have.
-    let mut by_symbol: HashMap<&str, Vec<&Carried>> = HashMap::new();
-    for c in carried {
-        by_symbol.entry(c.symbol.as_str()).or_default().push(c);
-    }
-    let nan = |v: Option<f64>| v.unwrap_or(f64::NAN);
-    #[allow(clippy::cast_precision_loss)]
-    let nan_i = |v: Option<i64>| v.map_or(f64::NAN, |x| x as f64);
-    let mut rows: Vec<ScanRow> = Vec::new();
-    for (i, symbol) in symbols.iter().enumerate() {
-        let Some(symbol) = symbol else { continue };
-        let Some(matches) = by_symbol.get(symbol.as_str()) else {
-            continue;
-        };
-        for c in matches {
-            #[allow(clippy::cast_precision_loss)]
-            let fno = c.is_nifty_fno as f64;
-            rows.push(ScanRow {
-                symbol: symbol.clone(),
-                series: c.series.clone(),
-                close: close_c[i],
-                marketcap: nan(c.marketcap),
-                median_volume_one_year: median[i],
-                rsi_one_month: rsi[i],
-                volatility_one_year: vol[i],
-                beta: nan(c.beta),
-                circuits_three_months: nan_i(c.circuits_three_months),
-                circuits_one_year: nan_i(c.circuits_one_year),
-                positive_days_3m: pos3[i],
-                positive_days_6m: pos6[i],
-                ma_20: ma20[i],
-                ma_50: ma50[i],
-                ma_100: ma100[i],
-                ma_200: ma200[i],
-                away_from_high_one_year: away[i],
-                is_nifty_fno: fno,
-                returns: [rets[0][i], rets[1][i], rets[2][i], rets[3][i], rets[4][i]],
-                sharpe: [
-                    sharpes[0][i],
-                    sharpes[1][i],
-                    sharpes[2][i],
-                    sharpes[3][i],
-                    sharpes[4][i],
-                ],
-            });
-        }
-    }
-    // `.sort("symbol")` (symbols are unique here: `_instrument_ids` refused a shared one), then
-    // `drop_duplicates(subset="symbol")` keeping the first.
-    rows.sort_by(|a, b| a.symbol.cmp(&b.symbol));
-    rows.dedup_by(|b, a| a.symbol == b.symbol);
-    Ok(rows)
-}
-
 /// One `desk_score_daily` row (`desk_rows`).
 struct DeskRow {
     instrument_id: i64,
@@ -470,7 +308,7 @@ fn score_day(
     carried: &[Carried],
 ) -> Result<Vec<DeskRow>, WorkerError> {
     let ids = instrument_ids(bars, as_of)?;
-    let scan = build_scan(bars, as_of, trading_days, carried)?;
+    let scan = build_scan(bars, as_of, trading_days, carried).map_err(WorkerError::from)?;
     if scan.is_empty() {
         return Ok(Vec::new());
     }
@@ -674,5 +512,103 @@ mod tests {
         let err = instrument_ids(&bars, day).err().unwrap();
         assert_eq!(err.python_type(), "ValueError");
         assert!(err.to_string().contains("['X']"));
+    }
+
+    /// Differential check against Python's `score.score` + `desk_score_service._stored` over
+    /// generated scans (`BASKFY_SCORE_DIFF_JSON` names the dump; see DECISIONS-RS R7.x of the
+    /// compute lane). Ignored by default: the dump is generated, not committed.
+    #[test]
+    #[ignore = "needs BASKFY_SCORE_DIFF_JSON (a dump written by the lane's score_gen.py)"]
+    fn score_matches_python_on_generated_scans() {
+        use std::str::FromStr;
+
+        use rust_decimal::Decimal;
+
+        let path = std::env::var("BASKFY_SCORE_DIFF_JSON").unwrap();
+        let text = std::fs::read_to_string(path).unwrap();
+        let cases: serde_json::Value = serde_json::from_str(&text).unwrap();
+        let f = |v: &serde_json::Value| v.as_f64().unwrap_or(f64::NAN);
+        let mut checked = 0;
+        for case in cases.as_array().unwrap() {
+            let rows: Vec<baskfy_api::basket_build::score::ScanRow> = case["rows"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|r| {
+                    let w = [
+                        "one_month",
+                        "three_months",
+                        "six_months",
+                        "nine_months",
+                        "one_year",
+                    ];
+                    baskfy_api::basket_build::score::ScanRow {
+                        symbol: r["symbol"].as_str().unwrap().to_owned(),
+                        series: r["series"].as_str().map(str::to_owned),
+                        close: f(&r["close"]),
+                        marketcap: f(&r["marketcap"]),
+                        median_volume_one_year: f(&r["median_volume_one_year"]),
+                        rsi_one_month: f(&r["rsi_one_month"]),
+                        volatility_one_year: f(&r["volatility_one_year"]),
+                        beta: f(&r["beta"]),
+                        circuits_three_months: f(&r["circuits_three_months"]),
+                        circuits_one_year: f(&r["circuits_one_year"]),
+                        positive_days_3m: f(&r["positive_days_percent_three_months"]),
+                        positive_days_6m: f(&r["positive_days_percent_six_months"]),
+                        ma_20: f(&r["ma_20"]),
+                        ma_50: f(&r["ma_50"]),
+                        ma_100: f(&r["ma_100"]),
+                        ma_200: f(&r["ma_200"]),
+                        away_from_high_one_year: f(&r["away_from_high_one_year"]),
+                        is_nifty_fno: f(&r["is_nifty_fno"]),
+                        returns: w.map(|k| f(&r[format!("absolute_return_{k}").as_str()])),
+                        sharpe: w.map(|k| f(&r[format!("sharpe_return_{k}").as_str()])),
+                    }
+                })
+                .collect();
+            let out = score(&rows);
+            let want = &case["out"];
+            let dec = |v: &serde_json::Value| v.as_str().map(|s| Decimal::from_str(s).unwrap());
+            for (i, s) in out.iter().enumerate() {
+                let rejected = !s.reject.is_empty();
+                assert_eq!(
+                    s.reject,
+                    want["reject"][i].as_str().unwrap(),
+                    "reject row {i}"
+                );
+                let got_score = if rejected {
+                    None
+                } else {
+                    crate::steps::compute::numeric::quantize_half_up_repr(s.score, 1).unwrap()
+                };
+                assert_eq!(got_score, dec(&want["score"][i]), "score row {i}");
+                let got_rank = if rejected { None } else { s.rank };
+                assert_eq!(got_rank, want["rank"][i].as_i64(), "rank row {i}");
+                let names = [
+                    "A_trend",
+                    "B_momentum",
+                    "C_sharpe",
+                    "D_consistency",
+                    "E_liquidity",
+                    "F_penalty",
+                    "ext_over_20dma",
+                ];
+                for (k, name) in names.iter().enumerate() {
+                    let x = if k < 6 {
+                        s.components[k]
+                    } else {
+                        s.ext_over_20dma
+                    };
+                    let got = if rejected {
+                        None
+                    } else {
+                        crate::steps::compute::numeric::quantize_half_up_repr(x, 4).unwrap()
+                    };
+                    assert_eq!(got, dec(&want[*name][i]), "{name} row {i}");
+                }
+                checked += 1;
+            }
+        }
+        assert!(checked > 0);
     }
 }

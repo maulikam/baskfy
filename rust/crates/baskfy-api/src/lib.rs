@@ -20,6 +20,7 @@
 
 pub mod app;
 pub mod auth;
+pub mod basket_build;
 pub mod body;
 pub mod cache;
 pub mod cors;

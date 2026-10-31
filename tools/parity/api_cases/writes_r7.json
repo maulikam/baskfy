@@ -1,0 +1,152 @@
+{
+ "mode": "writes",
+ "lane": "r7",
+ "note": "Lane R7: the broker holdings sync (POST /brokers/{id}/sync-holdings) and the OAuth callback's post-login sync, DRY_RUN and fixture reads (no live Kite read is reachable without a session).",
+ "env": {
+  "BASKFY_SOLE_USER_ID": "1"
+ },
+ "db_mask": {
+  "portfolio": [
+   "created_at"
+  ],
+  "broker_account": [
+   "created_at",
+   "holdings_synced_at"
+  ]
+ },
+ "tables": [
+  "portfolio",
+  "portfolio_holding",
+  "broker_account",
+  "reconciliation_item"
+ ],
+ "cases": [
+  {
+   "name": "sync-holdings-zerodha-owner",
+   "method": "POST",
+   "path": "/api/v1/brokers/zerodha/sync-holdings",
+   "user": "owner"
+  },
+  {
+   "name": "sync-holdings-upstox-owner",
+   "method": "POST",
+   "path": "/api/v1/brokers/upstox/sync-holdings",
+   "user": "owner"
+  },
+  {
+   "name": "sync-holdings-hdfc-owner",
+   "method": "POST",
+   "path": "/api/v1/brokers/hdfc/sync-holdings",
+   "user": "owner"
+  },
+  {
+   "name": "sync-holdings-nope-owner",
+   "method": "POST",
+   "path": "/api/v1/brokers/nope/sync-holdings",
+   "user": "owner"
+  },
+  {
+   "name": "sync-holdings-x-owner",
+   "method": "POST",
+   "path": "/api/v1/brokers/x/sync-holdings",
+   "user": "owner"
+  },
+  {
+   "name": "sync-holdings-plain",
+   "method": "POST",
+   "path": "/api/v1/brokers/zerodha/sync-holdings",
+   "user": "plain"
+  },
+  {
+   "name": "sync-holdings-anon",
+   "method": "POST",
+   "path": "/api/v1/brokers/zerodha/sync-holdings"
+  },
+  {
+   "name": "sync-holdings-expired",
+   "method": "POST",
+   "path": "/api/v1/brokers/zerodha/sync-holdings",
+   "user": "expired"
+  },
+  {
+   "name": "broker-callback-anon",
+   "method": "GET",
+   "path": "/api/v1/brokers/callback"
+  },
+  {
+   "name": "broker-callback-missing",
+   "method": "GET",
+   "path": "/api/v1/brokers/callback",
+   "user": "owner"
+  },
+  {
+   "name": "broker-callback-short",
+   "method": "GET",
+   "path": "/api/v1/brokers/callback",
+   "user": "owner",
+   "query": "request_token=abc&state=def"
+  },
+  {
+   "name": "broker-callback-no-tenant",
+   "method": "GET",
+   "path": "/api/v1/brokers/callback",
+   "user": "owner",
+   "query": "request_token=abcdefgh123&state=statestatestate",
+   "note": "no sole tenant configured on the bed: 503"
+  },
+  {
+   "name": "broker-callback-plain",
+   "method": "GET",
+   "path": "/api/v1/brokers/callback",
+   "user": "plain",
+   "query": "request_token=abcdefgh123&state=statestatestate"
+  },
+  {
+   "name": "rv-auth-unknown-brokers-callback",
+   "method": "GET",
+   "path": "/api/v1/brokers/callback",
+   "user": "unknown",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-brokers-callback-request_token=abcdefgh123",
+   "method": "GET",
+   "path": "/api/v1/brokers/callback",
+   "user": "owner",
+   "query": "request_token=abcdefgh123",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-brokers-callback-state=statestatestate",
+   "method": "GET",
+   "path": "/api/v1/brokers/callback",
+   "user": "owner",
+   "query": "state=statestatestate",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-brokers-callback-request_token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&state=statestatestate",
+   "method": "GET",
+   "path": "/api/v1/brokers/callback",
+   "user": "owner",
+   "query": "request_token=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&state=statestatestate",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-param-brokers-callback-request_token=abcdefgh&state=abcdefgh",
+   "method": "GET",
+   "path": "/api/v1/brokers/callback",
+   "user": "owner",
+   "query": "request_token=abcdefgh&state=abcdefgh",
+   "note": "adversarial review"
+  },
+  {
+   "name": "rv-brokers-callback-subscriber",
+   "method": "GET",
+   "path": "/api/v1/brokers/callback",
+   "user": "subscriber",
+   "query": "request_token=abcdefgh123&state=statestatestate",
+   "note": "adversarial review"
+  }
+ ]
+}

@@ -32,10 +32,15 @@ SIGNIN_ID="${BASKFY_LOCAL_SIGNIN_PUBLIC_ID:-$(cat "$HOME_DIR/signin.public_id" 2
 URL="${BASKFY_LOCAL_URL:-$(cat "$HOME_DIR/public.url" 2>/dev/null || echo http://localhost:8480)}"
 P="${BASKFY_LOCAL_PROJECT:-baskfy-local}"
 SVC="caddy web api worker ingest-worker beat desk desk-daily swing-monitor twt-auto session-supervisor options-monitor fno-monitor"
+RS_TAG="${BASKFY_LOCAL_RS_TAG:-$(cat "$HOME_DIR/rs.tag" 2>/dev/null || echo local)}"
+RS_SVC="api worker ingest-worker beat desk desk-daily session-supervisor swing-monitor twt-auto fno-monitor options-monitor"
 
 die() { echo "✗ $*" >&2; exit 1; }
-compose() { docker compose -p "$P" --project-directory "$HOME_DIR" -f "$HOME_DIR/compose.prod.yml" \
-              -f "$HOME_DIR/compose.local.yml" --env-file "$HOME_DIR/.env.staging.compose" "$@"; }
+compose() {
+  local f=(-f "$HOME_DIR/compose.prod.yml" -f "$HOME_DIR/compose.local.yml")
+  [ -s "$HOME_DIR/compose.rust.yml" ] && f+=(-f "$HOME_DIR/compose.rust.yml")
+  docker compose -p "$P" --project-directory "$HOME_DIR" "${f[@]}" --env-file "$HOME_DIR/.env.staging.compose" "$@"
+}
 # Every name that can let an order out. Matched by shape, so a flag added later is caught too.
 MONEY='(EXECUTION_ENABLED|AUTO_EXECUTE|AUTO_EXIT|_AUTO|CARRY_ENABLED|INTRADAY_ENABLED|OPTIONS_ENABLED)='
 
@@ -47,7 +52,7 @@ stage() {
   # The box's env, with every money flag forced off and DRY_RUN forced on. Appended last so it
   # wins over the box's own lines (compose and env_file both take the last assignment).
   for f in .env.staging .env.staging.compose; do
-    { grep -Ev "$MONEY|^(DRY_RUN|BASKFY_DRY_RUN|BASKFY_DESK_DRY_RUN|BASKFY_(PY|WEB|DESK)_IMAGE|BASKFY_SITE_ADDRESS|BASKFY_DESK_SITE_ADDRESS|BASKFY_PUBLIC_URL|BASKFY_DESK_HOST|BASKFY_LOCAL_SIGNIN_PUBLIC_ID|DESK_PATH_PREFIX|BASKFY_HTTPS?_PORT|BASKFY_ACME_[A-Z_]*)=" "$HOME_DIR/box/$f" || true
+    { grep -Ev "$MONEY|^(DRY_RUN|BASKFY_DRY_RUN|BASKFY_DESK_DRY_RUN|BASKFY_(PY|WEB|DESK|RS)_IMAGE|BASKFY_SITE_ADDRESS|BASKFY_DESK_SITE_ADDRESS|BASKFY_PUBLIC_URL|BASKFY_DESK_HOST|BASKFY_LOCAL_SIGNIN_PUBLIC_ID|DESK_PATH_PREFIX|BASKFY_HTTPS?_PORT|BASKFY_ACME_[A-Z_]*)=" "$HOME_DIR/box/$f" || true
       grep -oE "^[A-Z0-9_]+($MONEY)" "$HOME_DIR/box/$f" | sed 's/=$/=false/' || true
       cat <<EOF
 # --- local.sh: read-only on this Mac (no registered static IP) ---
@@ -63,6 +68,7 @@ BASKFY_FNO_F3_AUTO_EXIT=false
 BASKFY_PY_IMAGE=baskfy-py:$TAG
 BASKFY_WEB_IMAGE=baskfy-web:$WEB_TAG
 BASKFY_DESK_IMAGE=baskfy-desk:$DESK_TAG
+BASKFY_RS_IMAGE=baskfy-rs:$RS_TAG
 BASKFY_SITE_ADDRESS=:80
 BASKFY_DESK_SITE_ADDRESS=:8081
 BASKFY_PUBLIC_URL=$URL
@@ -96,8 +102,66 @@ services:
   migrate:       {volumes: ["$HOME_DIR/box/secrets/ssh:/var/lib/baskfy/.ssh:ro"]}
   seed:          {volumes: ["$HOME_DIR/box/secrets/ssh:/var/lib/baskfy/.ssh:ro"]}
 EOF
+  render_rust
   docker image inspect "baskfy-py:$TAG" >/dev/null 2>&1 || \
     gunzip -c "$(dirname "$BUNDLE")/images/baskfy-images-$TAG.tar.gz" | docker load
+}
+
+# The Rust override, cut down to the services named in rust.services (none: no override at all).
+render_rust() {
+  local on; on=" $(tr '\n' ' ' 2>/dev/null < "$HOME_DIR/rust.services" || true) "
+  if [ -z "${on// /}" ]; then rm -f "$HOME_DIR/compose.rust.yml"; return 0; fi
+  awk -v on="$on" '/^services:/ {svc=1; print; next} !svc {print; next}
+    /^  [a-z][a-z0-9-]*:/ {n=$1; sub(/:$/, "", n); keep=index(on, " " n " ") > 0} keep {print}' \
+    "$ROOT/tools/deploy/compose.rust.yml" > "$HOME_DIR/compose.rust.yml"
+}
+
+# The named services (default: every Rust-capable one), each checked against RS_SVC.
+pick() {
+  local s; [ "$#" -gt 0 ] || set -- $RS_SVC
+  for s in "$@"; do case " $RS_SVC " in *" $s "*) echo "$s" ;; *) die "no Rust build of '$s' (one of: $RS_SVC)" ;; esac; done
+}
+
+# Moves the named services between runtimes: rust.services is the state, stage renders it.
+switch() {
+  local to="$1"; shift
+  local want; want="$(pick "$@" | tr '\n' ' ')"
+  mkdir -p "$HOME_DIR"; touch "$HOME_DIR/rust.services"
+  if [ "$to" = rust ]; then
+    docker image inspect "baskfy-rs:$RS_TAG" >/dev/null 2>&1 || die "no image baskfy-rs:$RS_TAG — build Dockerfile.rust first"
+    { cat "$HOME_DIR/rust.services"; printf '%s\n' $want; } | sort -u | grep . > "$HOME_DIR/rust.services.tmp" || true
+  else
+    grep -vxF -f <(printf '%s\n' $want) "$HOME_DIR/rust.services" > "$HOME_DIR/rust.services.tmp" || true
+  fi
+  mv "$HOME_DIR/rust.services.tmp" "$HOME_DIR/rust.services"
+  stage
+  compose up -d --no-deps $want
+  if ! verify; then
+    echo "✗ rolling $want back to Python" >&2
+    grep -vxF -f <(printf '%s\n' $want) "$HOME_DIR/rust.services" > "$HOME_DIR/rust.services.tmp" || true
+    mv "$HOME_DIR/rust.services.tmp" "$HOME_DIR/rust.services"
+    render_rust; compose up -d --no-deps $want; exit 1
+  fi
+  echo "on Rust: $(tr '\n' ' ' < "$HOME_DIR/rust.services")"
+}
+
+# Each Rust service's health through the compose network (its own DNS name), or its run state.
+rust_check() {
+  local bad=0 s id url st
+  [ -s "$HOME_DIR/rust.services" ] || { echo "no service is on Rust"; return 0; }
+  for s in $(cat "$HOME_DIR/rust.services"); do
+    id="$(compose ps -q "$s")"
+    [ -n "$id" ] || { echo "✗ $s: not running"; bad=1; continue; }
+    [ "$(docker inspect -f '{{index .Config.Labels "baskfy.runtime"}}' "$id")" = rust ] || { echo "✗ $s: not on baskfy-rs"; bad=1; continue; }
+    st="$(docker inspect -f '{{.State.Status}} restarts={{.RestartCount}}' "$id")"
+    case "$s" in api) url="http://api:8000/health" ;; desk) url="http://desk:8420/status" ;; *) url= ;; esac
+    if [ -n "$url" ]; then
+      if compose exec -T "$s" curl -fsS -m 10 -o /dev/null "$url"; then echo "✓ $s $url ($st)"; else echo "✗ $s $url ($st)"; bad=1; fi
+    else
+      case "$st" in "running restarts=0") echo "✓ $s ($st)" ;; *) echo "✗ $s ($st)"; bad=1 ;; esac
+    fi
+  done
+  return "$bad"
 }
 
 rowcounts() {
@@ -110,9 +174,11 @@ verify() {
   for c in $(docker ps -q --filter "label=com.docker.compose.project=$P"); do
     if docker exec "$c" env 2>/dev/null | grep -E "$MONEY" | grep -viE '=(false|0)?$'; then
       echo "  ^ in $(docker inspect -f '{{.Name}}' "$c")"; bad=1; fi
+    # LOCAL-1: the API alone runs with DRY_RUN=false (it has no order path); every other container must read true.
+    [ "$(docker inspect -f '{{index .Config.Labels "com.docker.compose.service"}}' "$c")" = api ] && continue
     if docker exec "$c" env 2>/dev/null | grep -E '^DRY_RUN=' | grep -viE '=true$'; then bad=1; fi
   done
-  [ "$bad" = 0 ] || { echo "✗ a money flag is not false" >&2; return 1; }; echo "✓ read-only: every money flag false, DRY_RUN true"
+  [ "$bad" = 0 ] || { echo "✗ a money flag is not false" >&2; return 1; }; echo "✓ read-only: every money flag false, DRY_RUN true (api: false, LOCAL-1)"
 }
 
 case "${1:-}" in
@@ -172,5 +238,8 @@ down)    compose stop ;;
 verify)  verify ;;
 status)  compose ps --format '{{.Service}}\t{{.Status}}' ;;
 rowcounts) rowcounts ;;
-*) echo "usage: $0 restore|up|down|verify|status|rowcounts|tailscale" >&2; exit 64 ;;
+rust)    shift; switch rust "$@" ;;
+python)  shift; switch python "$@" ;;
+rust-check) rust_check ;;
+*) echo "usage: $0 restore|up|down|verify|status|rowcounts|tailscale|rust [svc...]|python [svc...]|rust-check" >&2; exit 64 ;;
 esac

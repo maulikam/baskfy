@@ -31,7 +31,7 @@ SIGNIN_ID="${BASKFY_LOCAL_SIGNIN_PUBLIC_ID:-$(cat "$HOME_DIR/signin.public_id" 2
 # once, so a plain `up` keeps using it; BASKFY_LOCAL_URL still overrides for one run.
 URL="${BASKFY_LOCAL_URL:-$(cat "$HOME_DIR/public.url" 2>/dev/null || echo http://localhost:8480)}"
 P="${BASKFY_LOCAL_PROJECT:-baskfy-local}"
-SVC="caddy web api worker ingest-worker beat desk desk-daily swing-monitor twt-auto session-supervisor options-monitor fno-monitor"
+SVC="caddy web api api-py worker ingest-worker beat desk desk-daily swing-monitor twt-auto session-supervisor options-monitor fno-monitor"
 RS_TAG="${BASKFY_LOCAL_RS_TAG:-$(cat "$HOME_DIR/rs.tag" 2>/dev/null || echo local)}"
 RS_SVC="api worker ingest-worker beat desk desk-daily session-supervisor swing-monitor twt-auto fno-monitor options-monitor"
 
@@ -39,6 +39,7 @@ die() { echo "✗ $*" >&2; exit 1; }
 compose() {
   local f=(-f "$HOME_DIR/compose.prod.yml" -f "$HOME_DIR/compose.local.yml")
   [ -s "$HOME_DIR/compose.rust.yml" ] && f+=(-f "$HOME_DIR/compose.rust.yml")
+  [ -s "$HOME_DIR/compose.opps.yml" ] && f+=(-f "$HOME_DIR/compose.opps.yml")
   docker compose -p "$P" --project-directory "$HOME_DIR" "${f[@]}" --env-file "$HOME_DIR/.env.staging.compose" "$@"
 }
 # Every name that can let an order out. Matched by shape, so a flag added later is caught too.
@@ -49,6 +50,7 @@ stage() {
   [ -f "$HOME_DIR/box/.env.staging" ] || tar -C "$HOME_DIR/box" -xzf "$BUNDLE/config.tgz"
   chmod -R go-rwx "$HOME_DIR/box"
   cp "$DOCK/compose.prod.yml" "$DOCK/Caddyfile" "$HOME_DIR/"
+  cp "$ROOT/tools/deploy/compose.opps.yml" "$HOME_DIR/"  # opportunities on Python while api is Rust
   # The box's env, with every money flag forced off and DRY_RUN forced on. Appended last so it
   # wins over the box's own lines (compose and env_file both take the last assignment).
   for f in .env.staging .env.staging.compose; do

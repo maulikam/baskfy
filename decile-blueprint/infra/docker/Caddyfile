@@ -205,6 +205,16 @@ Disallow: /
 			reverse_proxy web:3000
 		}
 
+		# Opportunities can live on its own upstream (local strangler: api-py). Default: api.
+		handle /api/v1/opportunities/* {
+			reverse_proxy {$BASKFY_OPPS_UPSTREAM:api:8000} {
+				flush_interval -1
+				transport http {
+					response_header_timeout 300s
+				}
+			}
+		}
+
 		handle /api/v1/* {
 			reverse_proxy api:8000 {
 				# docs/08 §5: "the backtest SSE stream goes to api.baskfy.com directly on the ALB (idle

@@ -9,6 +9,8 @@
 //!                   [--replay-bundle DIR] [--replay-upstream URL]
 //! baskfy-worker tasks
 //! baskfy-worker beat --now YYYY-MM-DDTHH:MM
+//! baskfy-worker beat --serve
+//! baskfy-worker serve --queues q1,q2 [--concurrency N]
 //! ```
 //!
 //! * `nightly` is `nightly_pipeline(trade_date)`: three transactions, the alert, the task's
@@ -54,6 +56,7 @@ use baskfy_worker::error::WorkerError;
 use baskfy_worker::nightly::{NightlyResult, run_nightly};
 use baskfy_worker::orchestrator::{ChainState, run_single_step};
 use baskfy_worker::pyjson::{self, object, s};
+use baskfy_worker::runtime;
 use baskfy_worker::settings::WorkerSettings;
 use baskfy_worker::steps::{PipelineStep, RunStatus};
 use baskfy_worker::tasks::{self, TaskContext, context::TaskClock};
@@ -64,7 +67,8 @@ const USAGE: &str = "usage: baskfy-worker nightly --date YYYY-MM-DD [--replay-bu
                      [--replay-bundle DIR]\n       baskfy-worker catch-up [--now YYYY-MM-DDTHH:MM[:SS]] [--replay-bundle DIR]\n       \
                      baskfy-worker task <name> [--args JSON] [--now YYYY-MM-DDTHH:MM[:SS]] \
                      [--replay-bundle DIR] [--replay-upstream URL]\n       baskfy-worker tasks\n       \
-                     baskfy-worker beat --now YYYY-MM-DDTHH:MM";
+                     baskfy-worker beat --now YYYY-MM-DDTHH:MM\n       baskfy-worker beat --serve\n       \
+                     baskfy-worker serve --queues q1,q2 [--concurrency N]";
 
 #[derive(Debug, Default)]
 struct Args {
@@ -78,6 +82,9 @@ struct Args {
     task: Option<String>,
     task_args: Option<String>,
     upstream: Option<String>,
+    serve: bool,
+    queues: Vec<String>,
+    concurrency: Option<usize>,
 }
 
 fn parse_args(raw: &[String]) -> Result<Args, String> {
@@ -111,6 +118,22 @@ fn parse_args(raw: &[String]) -> Result<Args, String> {
             "--replay-bundle" => args.replay = Some(PathBuf::from(value()?)),
             "--replay-upstream" => args.upstream = Some(value()?),
             "--args" => args.task_args = Some(value()?),
+            "--serve" => args.serve = true,
+            "--queues" | "-Q" => {
+                args.queues = value()?
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|q| !q.is_empty())
+                    .map(str::to_owned)
+                    .collect();
+            }
+            "--concurrency" | "-c" => {
+                let v = value()?;
+                args.concurrency = Some(
+                    v.parse()
+                        .map_err(|_| format!("--concurrency {v:?} is not an integer"))?,
+                );
+            }
             "--now" => {
                 let v = value()?;
                 args.now = Some(
@@ -181,6 +204,7 @@ async fn run(args: Args) -> ExitCode {
     }
     match args.command.as_str() {
         "tasks" => return list_tasks(),
+        "beat" if args.serve => return beat_serve().await,
         "beat" => return beat_due(args.now),
         _ => {}
     }
@@ -192,6 +216,9 @@ async fn run(args: Args) -> ExitCode {
         Ok(s) => s,
         Err(e) => return fail(&format!("worker settings: {e}")),
     };
+    if args.command == "serve" {
+        return serve_command(settings, worker, args.queues, args.concurrency).await;
+    }
     let db = match WriteDb::connect_lazy(&settings.db_settings()) {
         Ok(db) => db,
         Err(e) => return fail(&format!("database: {e}")),
@@ -448,6 +475,57 @@ fn beat_due(now: Option<chrono::NaiveDateTime>) -> ExitCode {
             ExitCode::SUCCESS
         }
         Err(e) => fail(&e),
+    }
+}
+
+async fn beat_serve() -> ExitCode {
+    let worker = match WorkerSettings::from_env() {
+        Ok(s) => s,
+        Err(e) => return fail(&format!("worker settings: {e}")),
+    };
+    let (cold, _) = tokio::sync::watch::channel(false);
+    let shutdown = match runtime::shutdown_signals(cold) {
+        Ok(f) => f,
+        Err(e) => return fail(&format!("signals: {e}")),
+    };
+    match runtime::beat_daemon::run(worker.broker_url(), shutdown).await {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            let _ = writeln!(std::io::stderr(), "baskfy-worker beat: {e}");
+            ExitCode::from(1)
+        }
+    }
+}
+
+async fn serve_command(
+    settings: Settings,
+    worker: WorkerSettings,
+    queues: Vec<String>,
+    concurrency: Option<usize>,
+) -> ExitCode {
+    if queues.is_empty() {
+        return fail("serve needs --queues q1,q2");
+    }
+    let concurrency = concurrency.unwrap_or_else(|| {
+        std::thread::available_parallelism().map_or(1, std::num::NonZeroUsize::get)
+    });
+    let (cold_tx, cold_rx) = tokio::sync::watch::channel(false);
+    let (warm_tx, warm_rx) = tokio::sync::watch::channel(false);
+    let shutdown = match runtime::shutdown_signals(cold_tx) {
+        Ok(f) => f,
+        Err(e) => return fail(&format!("signals: {e}")),
+    };
+    tokio::spawn(async move {
+        shutdown.await;
+        let _ = warm_tx.send(true);
+    });
+    let cfg = runtime::consumer::ServeConfig::new(settings, worker, queues, concurrency);
+    match runtime::consumer::serve(cfg, warm_rx, cold_rx).await {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            let _ = writeln!(std::io::stderr(), "baskfy-worker serve: {e}");
+            ExitCode::from(1)
+        }
     }
 }
 

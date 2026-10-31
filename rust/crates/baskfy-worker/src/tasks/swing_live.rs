@@ -170,8 +170,8 @@ pub async fn swing_scan_now_task(ctx: &TaskContext, args: BoundArgs) -> TaskResu
 /// Ports `baskfy_worker.tasks.celery_tasks.swing_scan_after_login_task` — `baskfy.swing.scan_after_login(user_id)`.
 ///
 /// Start today's provisional swing scan right after a verified broker login; outside an open
-/// session this records nothing (`request_login_scan` explains why). Run directly the task has
-/// no request id, so the row's `task_id` is `broker-login-<requested_at>` as Python's fallback.
+/// session this records nothing (`request_login_scan` explains why). The row's `task_id` is the
+/// delivering message's id, or `broker-login-<requested_at>` when run directly.
 ///
 /// # Errors
 /// The database's.
@@ -188,7 +188,9 @@ pub async fn swing_scan_after_login_task(ctx: &TaskContext, args: BoundArgs) -> 
     }
     let requested_at = ctx.now_utc();
     let market_now = ctx.now_ist();
-    let task_id = format!("broker-login-{}", crate::alerts::py_isoformat(requested_at));
+    let task_id = crate::runtime::current_task_id()
+        .filter(|id| !id.is_empty())
+        .unwrap_or_else(|| format!("broker-login-{}", crate::alerts::py_isoformat(requested_at)));
     let mut tx = ctx.db.begin().await?;
     let request =
         intraday::request_login_scan(ctx, &mut tx, login_user, market_now, requested_at, &task_id)

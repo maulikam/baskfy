@@ -145,6 +145,14 @@ export const PAGES = {
     title: "Options settings",
     blurb: "The options account's money limits, the server's ceilings, and every rule read-only.",
   },
+  "/opportunities/swing": {
+    title: "Swing · Opportunities",
+    blurb: "Rule-based swing setups with entry, invalidation and targets, scanned on demand.",
+  },
+  "/opportunities/options": {
+    title: "Options · Opportunities",
+    blurb: "Compare defined-risk option strategies for one stock, with payoff and costs per lot.",
+  },
   /* The settings live under Me, not the hub (docs/swing/05 §2): they are about the person's
      money and limits, not today's tape. */
   "/me/swing": {

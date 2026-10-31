@@ -917,7 +917,7 @@ impl KiteConnect {
             access_token: Mutex::new(Secret::default()),
             root,
             timeout,
-            http: GuardedClient::from_builder(builder)?,
+            http: GuardedClient::from_builder(crate::net::with_kite_proxy(builder)?)?,
         })
     }
 

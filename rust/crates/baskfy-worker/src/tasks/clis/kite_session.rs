@@ -358,7 +358,10 @@ async fn verify_session(settings: &ProviderSettings, token: &str) -> Result<Stri
         ))
     };
     let client = baskfy_providers::net::GuardedClient::from_builder(
-        baskfy_providers::net::client_builder().timeout(Duration::from_secs(15)),
+        baskfy_providers::net::with_kite_proxy(
+            baskfy_providers::net::client_builder().timeout(Duration::from_secs(15)),
+        )
+        .map_err(provider)?,
     )
     .map_err(provider)?;
     let mut request = client.get(PROFILE_URL).map_err(provider)?;

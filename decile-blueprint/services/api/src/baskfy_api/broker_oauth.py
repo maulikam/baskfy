@@ -430,12 +430,15 @@ def exchange_request_token(
     # Live path — kept for operator sole-tenant login; network-blocked suites never reach here.
     import httpx  # noqa: PLC0415
 
+    from baskfy_providers.settings import get_provider_settings  # noqa: PLC0415
+
     checksum = hashlib.sha256(f"{api_key}{request_token}{secret}".encode()).hexdigest()
     response = httpx.post(
         "https://api.kite.trade/session/token",
         data={"api_key": api_key, "request_token": request_token, "checksum": checksum},
         headers={"X-Kite-Version": "3"},
         timeout=30.0,
+        proxy=get_provider_settings().kite_proxy_url.strip() or None,
     )
     response.raise_for_status()
     body = response.json()

@@ -404,6 +404,12 @@ EXPECTED_PATHS: Final[dict[str, set[str]]] = {
     "/options/config": {"get", "patch"},
     # FO5 (docs/fno/06): the FO run's read surface and its one money-free write. No execute
     # route (docs/fno/02 Track C §4); `test_fno_readonly.py` pins it.
+    "/opportunities/meta": {"get"},
+    "/opportunities/swing/scan": {"post"},
+    "/opportunities/swing/scan/stream": {"post"},
+    "/opportunities/swing/validate": {"post"},
+    "/opportunities/options/analyze": {"post"},
+    "/opportunities/agui": {"post"},
     "/fno/overnight": {"get"},
     "/fno/info": {"get"},
     "/fno/config": {"get", "patch"},

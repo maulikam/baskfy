@@ -71,6 +71,10 @@ BASKFY_HTTP_PORT=8480
 BASKFY_HTTPS_PORT=8443
 BASKFY_LOCAL_SIGNIN_PUBLIC_ID=$SIGNIN_ID
 DESK_PATH_PREFIX=/desk
+# Opportunities Ask panel: local Ollama on the Mac (empty URL = keyword matching)
+BASKFY_LLM_URL=http://host.docker.internal:11434/v1
+BASKFY_LLM_MODEL=qwen3:8b
+BASKFY_LLM_TIMEOUT_S=20
 EOF
     } > "$HOME_DIR/$f.tmp" && mv "$HOME_DIR/$f.tmp" "$HOME_DIR/$f" && chmod 600 "$HOME_DIR/$f"
   done
@@ -110,9 +114,11 @@ verify() {
   for c in $(docker ps -q --filter "label=com.docker.compose.project=$P"); do
     if docker exec "$c" env 2>/dev/null | grep -E "$MONEY" | grep -viE '=(false|0)?$'; then
       echo "  ^ in $(docker inspect -f '{{.Name}}' "$c")"; bad=1; fi
+    # LOCAL-1: the API alone runs with DRY_RUN=false (it has no order path); every other container must read true.
+    [ "$(docker inspect -f '{{index .Config.Labels "com.docker.compose.service"}}' "$c")" = api ] && continue
     if docker exec "$c" env 2>/dev/null | grep -E '^DRY_RUN=' | grep -viE '=true$'; then bad=1; fi
   done
-  [ "$bad" = 0 ] || { echo "✗ a money flag is not false" >&2; return 1; }; echo "✓ read-only: every money flag false, DRY_RUN true"
+  [ "$bad" = 0 ] || { echo "✗ a money flag is not false" >&2; return 1; }; echo "✓ read-only: every money flag false, DRY_RUN true (api: false, LOCAL-1)"
 }
 
 case "${1:-}" in

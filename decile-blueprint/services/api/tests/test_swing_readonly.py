@@ -71,7 +71,7 @@ def spec() -> OpenApiSpec:
 
 
 def _swing_paths(spec: OpenApiSpec) -> list[str]:
-    return sorted(path for path in spec["paths"] if "/swing" in path)
+    return sorted(path for path in spec["paths"] if path.startswith("/api/v1/swing"))
 
 
 class TestTheSurfaceIsRegisteredAndReadOnly:

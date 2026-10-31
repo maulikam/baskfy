@@ -8548,3 +8548,13 @@ Kite app has no registered static IP, so Kite refuses API orders regardless.
 staying unconnected (no holdings, no live marks).
 **Reverse.** Delete `environment: {DRY_RUN: "false"}` from the `api` line in `local.sh` and
 `/Volumes/T7-Work/baskfy-local/compose.local.yml`, then recreate `api`.
+
+## KITE-PROXY — static-IP egress for Kite (31 Oct 2026)
+
+* Maulik bought a static IP (staticip.in, `82.118.26.6`, valid to 30 Oct 2027). Every Kite call
+  (Python desk + screener providers/worker/API oauth; Rust providers `KiteConnect` + session
+  verifiers) now honours `BASKFY_KITE_PROXY_URL`; empty = direct, as before. `https://` scheme so
+  the proxy credentials travel encrypted. Credentials live only in untracked env files.
+* No flag moved. Note: LOCAL-1 cited "no registered static IP" as a backstop; once the IP is
+  whitelisted on the Kite app that backstop is gone — the money flags and DRY_RUN remain the guard.
+* Reverse: unset `BASKFY_KITE_PROXY_URL`.

@@ -178,6 +178,9 @@ export const SECTION_TABS = {
        so switching Volume → Swing does not require a hop through Screens. Overlap stays:
        it is a Build tool, not a sleeve. */
     { href: "/build/overlap" as Route, label: "Overlap" },
+    /* Research-only scans (no orders), so it sits on the consumer row, not the staff sleeves.
+       `/opportunities` (not `/swing`) so the tab stays lit on both Swing and Options. */
+    { href: "/opportunities" as Route, label: "Opportunities" },
   ],
   /*
     The swing hub (SW4, `docs/swing/05` §2): "Setups | Watchlist | Market | Positions | Journal".

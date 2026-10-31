@@ -105,6 +105,7 @@ describe("the primary consumer IA", () => {
       "Backtests",
       "Create",
       "Overlap",
+      "Opportunities",
     ]);
     expect(SECTION_TABS.build.map((t) => t.href)).toContain("/build/overlap");
     expect(PAGES["/build/overlap"]).toBeDefined();
@@ -269,6 +270,7 @@ describe("the primary consumer IA", () => {
       "/build/backtests",
       "/create",
       "/build/overlap",
+      "/opportunities",
       "/swing",
       "/vbt",
       "/twt",
@@ -279,6 +281,7 @@ describe("the primary consumer IA", () => {
       "Backtests",
       "Create",
       "Overlap",
+      "Opportunities",
       "Swing",
       "Volume",
       "Tight",

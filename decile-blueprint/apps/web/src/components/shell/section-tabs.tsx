@@ -36,7 +36,11 @@ export function SectionTabs({
   const isStaff = isStaffProp ?? isStaffFromContext;
   const localTabs = buildSectionTabs(section, { isStaff });
   const hubTabs =
-    isStaff && isSleeveSection(section) ? buildSectionTabs("build", { isStaff: true }) : null;
+    isStaff && isSleeveSection(section)
+      ? buildSectionTabs("build", { isStaff: true })
+      : section === "opportunities"
+        ? buildSectionTabs("build", { isStaff })
+        : null;
 
   return (
     <div className="mb-2 flex flex-col gap-2">

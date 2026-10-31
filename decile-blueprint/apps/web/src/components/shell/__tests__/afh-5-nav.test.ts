@@ -23,6 +23,7 @@ describe("AFH 5.5–5.7 / 5.12 nav and build copy", () => {
       "Backtests",
       "Create",
       "Overlap",
+      "Opportunities",
     ]);
   });
 

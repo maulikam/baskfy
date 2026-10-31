@@ -75,7 +75,7 @@ pub struct ToolChoice {
 }
 
 /// Does an argument object validate as the API's request model? The API layer plugs its structs in.
-pub trait ToolArgsValidator {
+pub trait ToolArgsValidator: Sync {
     /// `SwingScanIn.model_validate(arguments)` succeeds.
     fn swing_valid(&self, arguments: &Map<String, Value>) -> bool;
     /// `OptionsIn.model_validate(arguments)` succeeds.

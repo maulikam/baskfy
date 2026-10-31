@@ -18,7 +18,7 @@ baskfy-providers = { workspace = true }
 # The worker imports baskfy_api.settings and baskfy_api.email in Python; the Rust worker reads
 # the same Settings and sends alert mail through the same Mailer (DECISIONS-RS R7.2).
 baskfy-api = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["signal"] }
 sqlx = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -43,6 +43,7 @@ sha2 = { workspace = true }
 # workspace and in the lock through baskfy-providers; no new crate (DECISIONS-RS R8.oa1).
 reqwest = { workspace = true }
 hmac = { workspace = true }
+rand = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

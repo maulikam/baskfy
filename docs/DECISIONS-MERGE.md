@@ -8548,3 +8548,11 @@ Kite app has no registered static IP, so Kite refuses API orders regardless.
 staying unconnected (no holdings, no live marks).
 **Reverse.** Delete `environment: {DRY_RUN: "false"}` from the `api` line in `local.sh` and
 `/Volumes/T7-Work/baskfy-local/compose.local.yml`, then recreate `api`.
+
+## LOCAL-2 — DRY_RUN off on the local stack (31 Oct 2026, Maulik)
+
+* Maulik registered 82.118.26.6 on the Kite app and asked to "remove dry run from everywhere".
+  Applied to the running local stack: `local.sh live` writes `$HOME_DIR/dry_run=false`; every
+  service reads DRY_RUN=false; `verify` checks that value. Execution/auto flags stay forced false.
+* Not changed: in-repo defaults (DRY_RUN=true, flags false — safety rails), so a fresh environment
+  still starts simulated. Reverse: `local.sh dry`.

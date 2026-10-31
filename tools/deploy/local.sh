@@ -4,8 +4,11 @@
 #     bash tools/deploy/local.sh restore   # once: volumes + Postgres from the bundle, row counts checked
 #     bash tools/deploy/local.sh up        # start (on demand — Maulik, 29 Oct 2026: not always on)
 #     bash tools/deploy/local.sh down      # stop; data stays in the named volumes
-#     bash tools/deploy/local.sh verify    # every container's money flags read false / DRY_RUN true
+#     bash tools/deploy/local.sh verify    # every money flag false; DRY_RUN matches $HOME_DIR/dry_run
+#     bash tools/deploy/local.sh live|dry  # DRY_RUN false|true on every service (Maulik, 31 Oct 2026)
 #
+# 31 Oct 2026: the static IP 82.118.26.6 (BASKFY_KITE_PROXY_URL) is registered on the Kite app, so
+# `live` turns DRY_RUN off for manual orders. Execution/auto flags below stay forced false.
 # READ-ONLY, and not by preference: Kite accepts API orders only from the registered static IP
 # (docs/07 §4a), which was the AWS EIP. A home connection is not that IP, so every execution and
 # auto-execute flag is forced false here and `up` refuses to finish if any container reads true.
@@ -31,6 +34,7 @@ SIGNIN_ID="${BASKFY_LOCAL_SIGNIN_PUBLIC_ID:-$(cat "$HOME_DIR/signin.public_id" 2
 # once, so a plain `up` keeps using it; BASKFY_LOCAL_URL still overrides for one run.
 URL="${BASKFY_LOCAL_URL:-$(cat "$HOME_DIR/public.url" 2>/dev/null || echo http://localhost:8480)}"
 P="${BASKFY_LOCAL_PROJECT:-baskfy-local}"
+DRY="$(cat "$HOME_DIR/dry_run" 2>/dev/null || echo true)"; [ "$DRY" = false ] || DRY=true
 SVC="caddy web api worker ingest-worker beat desk desk-daily swing-monitor twt-auto session-supervisor options-monitor fno-monitor"
 RS_TAG="${BASKFY_LOCAL_RS_TAG:-$(cat "$HOME_DIR/rs.tag" 2>/dev/null || echo local)}"
 RS_SVC="api worker ingest-worker beat desk desk-daily session-supervisor swing-monitor twt-auto fno-monitor options-monitor"
@@ -56,9 +60,9 @@ stage() {
       grep -oE "^[A-Z0-9_]+($MONEY)" "$HOME_DIR/box/$f" | sed 's/=$/=false/' || true
       cat <<EOF
 # --- local.sh: read-only on this Mac (no registered static IP) ---
-DRY_RUN=true
-BASKFY_DRY_RUN=true
-BASKFY_DESK_DRY_RUN=true
+DRY_RUN=$DRY
+BASKFY_DRY_RUN=$DRY
+BASKFY_DESK_DRY_RUN=$DRY
 BASKFY_SWING_EXECUTION_ENABLED=false
 BASKFY_SWING_AUTO_EXECUTE=false
 BASKFY_TWT_EXECUTION_ENABLED=false
@@ -178,11 +182,13 @@ verify() {
   for c in $(docker ps -q --filter "label=com.docker.compose.project=$P"); do
     if docker exec "$c" env 2>/dev/null | grep -E "$MONEY" | grep -viE '=(false|0)?$'; then
       echo "  ^ in $(docker inspect -f '{{.Name}}' "$c")"; bad=1; fi
-    # LOCAL-1: the API alone runs with DRY_RUN=false (it has no order path); every other container must read true.
+    # LOCAL-1: the API alone always runs with DRY_RUN=false (it has no order path).
     [ "$(docker inspect -f '{{index .Config.Labels "com.docker.compose.service"}}' "$c")" = api ] && continue
-    if docker exec "$c" env 2>/dev/null | grep -E '^DRY_RUN=' | grep -viE '=true$'; then bad=1; fi
+    if docker exec "$c" env 2>/dev/null | grep -E '^DRY_RUN=' | grep -viE "=$DRY\$"; then
+      echo "  ^ DRY_RUN is not $DRY in $(docker inspect -f '{{.Name}}' "$c")"; bad=1; fi
   done
-  [ "$bad" = 0 ] || { echo "✗ a money flag is not false" >&2; return 1; }; echo "✓ read-only: every money flag false, DRY_RUN true (api: false, LOCAL-1)"
+  [ "$bad" = 0 ] || { echo "✗ a money flag is not false, or DRY_RUN is not $DRY" >&2; return 1; }
+  echo "✓ every money flag false; DRY_RUN=$DRY on every service (api: false, LOCAL-1)"
 }
 
 case "${1:-}" in
@@ -240,10 +246,18 @@ tailscale)
 stage)   stage ;;
 down)    compose stop ;;
 verify)  verify ;;
+live|dry)
+  # Recreates every running service so all of them read the new DRY_RUN; money flags stay false.
+  [ "$1" = live ] && DRY=false || DRY=true
+  echo "$DRY" > "$HOME_DIR/dry_run"
+  stage
+  compose up -d $SVC
+  verify
+  ;;
 status)  compose ps --format '{{.Service}}\t{{.Status}}' ;;
 rowcounts) rowcounts ;;
 rust)    shift; switch rust "$@" ;;
 python)  shift; switch python "$@" ;;
 rust-check) rust_check ;;
-*) echo "usage: $0 restore|up|down|verify|status|rowcounts|tailscale|rust [svc...]|python [svc...]|rust-check" >&2; exit 64 ;;
+*) echo "usage: $0 restore|up|down|verify|live|dry|status|rowcounts|tailscale|rust [svc...]|python [svc...]|rust-check" >&2; exit 64 ;;
 esac

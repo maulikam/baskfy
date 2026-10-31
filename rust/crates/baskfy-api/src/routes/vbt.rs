@@ -9,9 +9,7 @@
 //! writes and stay on the Python API until writes are ported (not registered here).
 //!
 //! Every body is `canonical_json` (decimals unquoted with their stored scale: a limit price is a
-//! number somebody types into a broker). The live overlay (`last_price`) is always `null` here —
-//! Python's answer without a Kite session (DECISIONS-RS, lane api-sleeves). **No route may place, modify or
-//! cancel an order** (law 2).
+//! number somebody types into a broker). **No route may place, modify or cancel an order** (law 2).
 
 use std::collections::HashMap;
 
@@ -261,6 +259,18 @@ pub async fn get_today(
             .put("rejects", J::Arr(Vec::new())),
         Some(r) => {
             let date: NaiveDate = col(r, "date")?;
+            let mut signal = candidates(&state, user_id, date, "SIGNAL").await?;
+            let mut scan_only = candidates(&state, user_id, date, "SCAN_ONLY").await?;
+            let marks = crate::routes::sleeves::common::live_marks(
+                &signal.iter().chain(scan_only.iter()).collect::<Vec<_>>(),
+            )
+            .await?;
+            for row in signal.iter_mut().chain(scan_only.iter_mut()) {
+                let mark = marks
+                    .get(&crate::routes::sleeves::common::symbol_key(row))
+                    .copied();
+                crate::routes::sleeves::common::set_field(row, "last_price", J::opt_dec(mark));
+            }
             let shut: i64 = sqlx::query_scalar(
                 "SELECT count(*) FROM (SELECT gate FROM vb_breadth_daily \
                  WHERE user_id = $1 AND date <= $2 ORDER BY date DESC LIMIT $3) recent \
@@ -283,14 +293,8 @@ pub async fn get_today(
                 .put("funnel", ojson(r, "detail")?.map_or(J::Null, J::Raw))
                 .put("shut_sessions_recent", J::Int(shut))
                 .put("shut_window", J::Int(SHUT_WINDOW_SESSIONS))
-                .put(
-                    "candidates",
-                    J::Arr(candidates(&state, user_id, date, "SIGNAL").await?),
-                )
-                .put(
-                    "rejects",
-                    J::Arr(candidates(&state, user_id, date, "SCAN_ONLY").await?),
-                )
+                .put("candidates", J::Arr(signal))
+                .put("rejects", J::Arr(scan_only))
         }
     };
     let newest = sqlx::query(&format!(
@@ -627,6 +631,24 @@ pub async fn get_book(
                     .put("simulated", J::Bool(col(row, "simulated")?))
                     .done(),
             );
+        }
+    }
+    let marks =
+        crate::routes::sleeves::common::live_marks(&open.iter().collect::<Vec<_>>()).await?;
+    for row in &mut open {
+        if let Some(live) = marks
+            .get(&crate::routes::sleeves::common::symbol_key(row))
+            .copied()
+        {
+            let entry =
+                crate::routes::sleeves::common::field_dec(row, "entry_avg").unwrap_or_default();
+            let stop =
+                crate::routes::sleeves::common::field_dec(row, "initial_stop").unwrap_or_default();
+            let return_pct = pct_over(Some(live), Some(entry))?.unwrap_or(J::Null);
+            let r = r_multiple(entry, stop, Some(live))?.unwrap_or(J::Null);
+            crate::routes::sleeves::common::set_field(row, "last_price", J::Dec(live));
+            crate::routes::sleeves::common::set_field(row, "return_pct", return_pct);
+            crate::routes::sleeves::common::set_field(row, "r_multiple", r);
         }
     }
     let counts: Vec<(String, i64)> =

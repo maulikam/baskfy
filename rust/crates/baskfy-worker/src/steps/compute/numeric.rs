@@ -171,12 +171,6 @@ pub(crate) fn round_half_up(value: Option<f64>, places: i32) -> Option<f64> {
     }
 }
 
-/// numpy's `round(x, places)` for `places >= 0`: `rint(x * 10^p) / 10^p`.
-pub(crate) fn numpy_round(x: f64, places: i32) -> f64 {
-    let f = 10.0_f64.powi(places);
-    (x * f).round_ties_even() / f
-}
-
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
@@ -239,8 +233,5 @@ mod tests {
         assert_eq!(round_half_up(Some(2.5), 0), Some(3.0));
         assert_eq!(round_half_up(Some(-2.5), 0), Some(-3.0));
         assert_eq!(round_half_up(Some(f64::NAN), 2), None);
-        assert_eq!(numpy_round(0.25, 1), 0.2);
-        // np.round(0.35, 1) == 0.4 (0.35 * 10 rounds to 3.5 in binary, then to even 4).
-        assert_eq!(numpy_round(0.35, 1), 0.4);
     }
 }

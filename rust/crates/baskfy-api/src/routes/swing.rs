@@ -32,8 +32,8 @@ use crate::problems::{Problem, ProblemType, bad_request, not_found};
 use crate::query::{QueryParams, Validation};
 use crate::routes::sleeves::common::{
     J, LaxInt, Obj, as_dict, canonical_response, db, dec, div, field_error, from_isoformat,
-    get as col, id_or_500, int_param, mul, odec, ojson, py_list_repr, quantize, quantize_j,
-    scoped_sole_user_id,
+    get as col, id_or_500, int_param, mul, odec, ojson, overlay_last_price, py_list_repr, quantize,
+    quantize_j, scoped_sole_user_id,
 };
 use crate::state::AppState;
 
@@ -396,6 +396,7 @@ pub async fn get_setups(
                 .done(),
         );
     }
+    overlay_last_price(&mut data).await?;
 
     let market = sqlx::query(
         "SELECT gate, exposure_level::bigint AS exposure_level, \
@@ -999,6 +1000,19 @@ pub(crate) async fn watch_rows(
                 .done(),
         ));
     }
+    let marks = crate::routes::sleeves::common::live_marks(
+        &data.iter().map(|(_, j)| j).collect::<Vec<_>>(),
+    )
+    .await?;
+    for (_, j) in &mut data {
+        let mark = marks
+            .get(&crate::routes::sleeves::common::symbol_key(j))
+            .copied();
+        crate::routes::sleeves::common::set_field(j, "last_price", J::opt_dec(mark));
+        if let J::Obj(fields) = j {
+            recompute_distance(fields)?;
+        }
+    }
     Ok(data)
 }
 
@@ -1017,7 +1031,8 @@ pub(crate) fn recompute_distance(fields: &mut [(String, J)]) -> Result<(), Probl
                 _ => None,
             })
     };
-    let distance = pct_below(get(fields, "trigger"), get(fields, "last_close"))?.unwrap_or(J::Null);
+    let mark = get(fields, "last_price").or_else(|| get(fields, "last_close"));
+    let distance = pct_below(get(fields, "trigger"), mark)?.unwrap_or(J::Null);
     for (k, v) in fields.iter_mut() {
         if k == "distance_to_trigger_pct" {
             *v = distance.clone();
@@ -1202,6 +1217,7 @@ pub async fn get_positions(
                 .done(),
         );
     }
+    overlay_last_price(&mut data).await?;
     Ok(canonical_response(
         &Obj::new()
             .put("data", J::Arr(data))

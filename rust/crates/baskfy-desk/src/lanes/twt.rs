@@ -18,6 +18,7 @@
 //! `derive_sleeve` the route refuses every send (fail closed), and nothing reaches a broker.
 
 pub mod auto;
+pub mod auto_loop;
 pub mod common;
 pub mod execute;
 pub mod store;
@@ -94,6 +95,18 @@ pub fn register_templates(templates: &mut crate::templates::Templates) {
 pub async fn run_service(name: &str, state: &AppState) -> Option<Result<(), String>> {
     match name {
         "twt-auto" => Some(auto::main(state).await),
+        "twt-auto-loop" => {
+            let mut seams = crate::lanes::service_loop::ProcessSeams {
+                clock: Arc::clone(&state.clock),
+            };
+            let program = crate::lanes::service_loop::program();
+            Some(
+                crate::lanes::service_loop::blocking(move || {
+                    auto_loop::run_forever(&mut seams, &program, None);
+                })
+                .await,
+            )
+        }
         _ => None,
     }
 }

@@ -44,6 +44,7 @@ pub mod desk;
 pub mod execute;
 pub mod gateway;
 pub mod live_gate;
+pub mod monitor_loop;
 pub mod notify;
 pub mod rules;
 pub mod store;
@@ -76,6 +77,18 @@ pub async fn run_service(name: &str, state: &AppState) -> Option<Result<(), Stri
         // auto-execute sends only with all three flags on (each defaults false).
         // Boxed: the watch's future is deep, and the binary's `main` lays out every service's.
         "swing-monitor" => Some(Box::pin(swing_monitor::service::run(state)).await),
+        "swing-monitor-loop" => {
+            let mut seams = crate::lanes::service_loop::ProcessSeams {
+                clock: std::sync::Arc::clone(&state.clock),
+            };
+            let program = crate::lanes::service_loop::program();
+            Some(
+                crate::lanes::service_loop::blocking(move || {
+                    monitor_loop::run_forever(&mut seams, &program, &monitor_loop::env_flag, None);
+                })
+                .await,
+            )
+        }
         _ => None,
     }
 }

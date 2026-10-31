@@ -10,7 +10,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{CoreError, CoreResult};
 use crate::opportunities::config::{SetupType, SwingFilters, SwingParams, TriggerStatus};
-use crate::opportunities::indicators::{IndicatorRow, rows_on};
+use crate::opportunities::indicators::{IndicatorRow, indicator_rows};
+use crate::opportunities::patterns::{History, evaluate_history};
 use crate::opportunities::ranking::{ScoreBreakdown, score_swing};
 use crate::py::{decimal_from_float_str, float_repr};
 
@@ -35,7 +36,7 @@ pub struct Evidence {
 }
 
 impl Evidence {
-    fn new(
+    pub(crate) fn new(
         key: &str,
         label: impl Into<String>,
         value: Option<f64>,
@@ -232,7 +233,7 @@ pub struct SwingScanResult {
 }
 
 /// Ports `_num`: a finite value, else `None`.
-fn num(value: Option<f64>) -> Option<f64> {
+pub(crate) fn num(value: Option<f64>) -> Option<f64> {
     value.filter(|v| v.is_finite())
 }
 
@@ -267,7 +268,7 @@ pub fn effective_horizon(
     (start <= end).then_some((start, end))
 }
 
-fn targets(
+pub(crate) fn targets(
     entry: f64,
     stop: f64,
     structural: Option<f64>,
@@ -303,11 +304,11 @@ fn targets(
     out
 }
 
-fn reach(entry: f64, atr: f64, horizon: (i64, i64), params: &SwingParams) -> f64 {
+pub(crate) fn reach(entry: f64, atr: f64, horizon: (i64, i64), params: &SwingParams) -> f64 {
     entry + params.risk.reach_atr_per_sqrt_session * atr * (horizon.1 as f64).sqrt()
 }
 
-const fn entry_basis(triggered: bool) -> &'static str {
+pub(crate) const fn entry_basis(triggered: bool) -> &'static str {
     if triggered {
         "CLOSE_OF_TRIGGER_BAR"
     } else {
@@ -315,7 +316,7 @@ const fn entry_basis(triggered: bool) -> &'static str {
     }
 }
 
-const fn status_of(triggered: bool) -> TriggerStatus {
+pub(crate) const fn status_of(triggered: bool) -> TriggerStatus {
     if triggered {
         TriggerStatus::Triggered
     } else {
@@ -596,7 +597,8 @@ pub fn evaluate_relative_strength(
     })
 }
 
-/// Ports `evaluate`: dispatch on the setup.
+/// Ports `evaluate`: dispatch on the setup. The history setups need the bars behind the row
+/// and read `None` here; see [`evaluate_on`].
 #[must_use]
 pub fn evaluate(
     row: &IndicatorRow,
@@ -608,7 +610,51 @@ pub fn evaluate(
         SetupType::Breakout => evaluate_breakout(row, params, horizon),
         SetupType::Pullback => evaluate_pullback(row, params, horizon),
         SetupType::RelativeStrength => evaluate_relative_strength(row, params, horizon),
+        _ => None,
     }
+}
+
+/// Any setup on the last bar of one instrument's history (oldest first, ending at the bar).
+#[must_use]
+pub fn evaluate_on(
+    history: Option<&History<'_>>,
+    row: &IndicatorRow,
+    setup: SetupType,
+    params: &SwingParams,
+    horizon: (i64, i64),
+) -> Option<Evaluation> {
+    if setup.needs_history() {
+        history.and_then(|h| evaluate_history(h, setup, params, horizon))
+    } else {
+        evaluate(row, setup, params, horizon)
+    }
+}
+
+/// Every row up to `as_of`, sorted by `(instrument_id, date)`, and each instrument's range.
+fn histories(
+    rows: &[IndicatorRow],
+    as_of: NaiveDate,
+) -> (Vec<IndicatorRow>, HashMap<i64, std::ops::Range<usize>>) {
+    let mut kept: Vec<IndicatorRow> = rows
+        .iter()
+        .filter(|r| r.instrument_id.is_some() && r.date.is_some_and(|d| d <= as_of))
+        .cloned()
+        .collect();
+    kept.sort_by(|a, b| a.instrument_id.cmp(&b.instrument_id).then_with(|| a.date.cmp(&b.date)));
+    let mut ranges = HashMap::new();
+    let mut start = 0;
+    while start < kept.len() {
+        let id = kept[start].instrument_id;
+        let end = kept[start..]
+            .iter()
+            .position(|r| r.instrument_id != id)
+            .map_or(kept.len(), |k| start + k);
+        if let Some(id) = id {
+            ranges.insert(id, start..end);
+        }
+        start = end;
+    }
+    (kept, ranges)
 }
 
 /// `Decimal(str(x)).quantize(Decimal("0.01"), ROUND_HALF_UP)`.
@@ -792,7 +838,8 @@ pub fn scan(
     filters: &SwingFilters,
     params: &SwingParams,
 ) -> CoreResult<SwingScanResult> {
-    let today = rows_on(indicated, as_of)?;
+    let all = indicator_rows(indicated)?;
+    let today: Vec<&IndicatorRow> = all.iter().filter(|r| r.date == Some(as_of)).collect();
     let universe = today.len();
     let horizons: BTreeMap<SetupType, (i64, i64)> = filters
         .setups
@@ -814,11 +861,16 @@ pub fn scan(
             filters.horizon_max
         ));
     }
+    let (sorted, ranges) = if horizons.keys().any(|s| s.needs_history()) {
+        histories(&all, as_of)
+    } else {
+        (Vec::new(), HashMap::new())
+    };
     let default_context = InstrumentContext::default();
     let mut insufficient = 0_i64;
     let mut evaluated = 0_i64;
     let mut found = Vec::new();
-    for row in &today {
+    for row in today {
         if row.bars.unwrap_or(0) < params.data.min_bars {
             insufficient += 1;
             continue;
@@ -831,8 +883,13 @@ pub fn scan(
             continue;
         }
         evaluated += 1;
+        let history = ranges
+            .get(&id)
+            .and_then(|r| History::new(&sorted[r.clone()]))
+            .filter(|h| h.ends_on(as_of));
         for (setup, horizon) in &horizons {
-            let Some(evaluation) = evaluate(row, *setup, params, *horizon) else {
+            let Some(evaluation) = evaluate_on(history.as_ref(), row, *setup, params, *horizon)
+            else {
                 continue;
             };
             if evaluation.risk() <= 0.0 || evaluation.risk_reward() < filters.min_rr {

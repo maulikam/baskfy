@@ -2496,3 +2496,11 @@ session and the 18:40–21:15 nightly window:
   on the Mac before shipping: `make test-db` in `decile-blueprint` with the test database exported.
 * Nothing in F3-7 moves a flag, a capital figure or an order path. Q10 (F3's capital) and Q12
   (its auto-exit flag) are still yours and unchanged.
+
+## Static IP — whitelist on the Kite app (31 Oct 2026)
+
+* **Needed:** add `82.118.26.6` as the static IP in the Kite Connect developer console (RENIL app).
+* **Done meanwhile:** all Kite traffic routes via the proxy when `BASKFY_KITE_PROXY_URL` is set
+  (set in the untracked env files); verified egress = `82.118.26.6`, Kite reachable (Python + Rust).
+* **Also:** the proxy password was pasted into a chat session; rotate it at staticip.in if you
+  want it out of that transcript, then update the env files.

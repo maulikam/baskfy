@@ -15,6 +15,7 @@ use axum::routing::{get, post};
 use baskfy_db::OrderedJson;
 use serde::Serialize;
 
+pub(crate) mod holdings_sync;
 pub(crate) mod writes;
 
 use crate::auth::{Principal, require_authenticated};
@@ -815,12 +816,24 @@ pub async fn oauth_callback(
         &format!("broker connect: {catch_up_note}"),
         &[],
     );
-    let sync_note = match writes::holdings_for_broker(&broker_id).await {
-        Ok(result) if result.source == "live" && !result.degraded => {
-            "holdings were not read on connect (NotPorted); use Sync holdings.".to_owned()
+    let failed =
+        |kind: &str| format!("holdings were not read on connect ({kind}); use Sync holdings.");
+    let (synced, sync_note) = match writes::holdings_for_broker(&broker_id).await {
+        Ok(result) if holdings_sync::is_persistable(result.source, result.degraded) => {
+            let persisted = match (&pool, writes::sync_rows(&result)) {
+                (Some(p), Ok(rows)) => {
+                    writes::persist(p, rows, user_id, broker_id.clone(), broker_id.clone()).await
+                }
+                (_, Err(e)) => Err(e),
+                (None, _) => Err(crate::problems::internal_error()),
+            };
+            match persisted {
+                Ok(sync) => (sync.written, sync.reason),
+                Err(_) => (0, failed("Problem")),
+            }
         }
-        Ok(result) => writes::not_persisted_reason(&result),
-        Err(_) => "holdings were not read on connect (Problem); use Sync holdings.".to_owned(),
+        Ok(result) => (0, writes::not_persisted_reason(&result)),
+        Err(_) => (0, failed("Problem")),
     };
     Ok(wire::json(&CallbackOut {
         note: format!(
@@ -831,7 +844,7 @@ pub async fn oauth_callback(
         connected: true,
         token_stored: true,
         simulated: false,
-        holdings_synced: 0,
+        holdings_synced: synced,
     }))
 }
 

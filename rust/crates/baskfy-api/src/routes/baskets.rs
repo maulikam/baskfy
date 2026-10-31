@@ -5,11 +5,8 @@
 //!
 //! * `GET /baskets/plan` — ported whole: the desk's newest rebalance plan from the `desk` schema
 //!   (a deployment without that schema answers 404, not 500).
-//! * `GET /baskets` — ported for the **nightly snapshot** (`basket_snapshot`, M30). Python's
-//!   fallback when no snapshot exists builds the basket live (bars → `compute_factors` →
-//!   `MomentumScan` → `score` → the basket engine, plus the desk's newest uploaded scan CSV),
-//!   none of which exists in Rust before the desk wave; this server answers that case with the
-//!   404 Python gives when the live build misses its 3 s budget (DECISIONS-RS, lane api-sleeves).
+//! * `GET /baskets` — the nightly snapshot (`basket_snapshot`, M30); without one, the live build
+//!   (`crate::basket_build`) under Python's 3 s budget.
 //!
 //! READ-ONLY: there is no write here and there never will be — execution stays in the desk
 //! console. **No route may place, modify or cancel an order** (law 2).
@@ -189,17 +186,41 @@ pub async fn current_basket(
         .await,
     }
     .map_err(db)?;
-    let Some(row) = row else {
-        return Err(Problem::new(
+    if let Some(row) = row {
+        let payload =
+            baskfy_db::row::jsonb(&row, "payload").map_err(crate::routes::sleeves::common::dbe)?;
+        return Ok(pydantic_response(&basket_out(&payload)?));
+    }
+    let build = async {
+        let mut conn = state.db.pool().acquire().await.map_err(db)?;
+        crate::basket_build::build_current_basket(&mut conn, date)
+            .await
+            .map_err(|e| {
+                crate::logging::error(
+                    "baskfy_api.app",
+                    "unhandled error",
+                    &[("error", &e.to_string())],
+                );
+                crate::problems::internal_error()
+            })
+    };
+    match tokio::time::timeout(LIVE_BUILD_BUDGET, build).await {
+        Err(_) => Err(Problem::new(
             ProblemType::NotFound,
             "no basket snapshot is ready yet, and the live rebuild exceeded the 3s page budget. \
              Wait for the nightly basket_snapshot job, or retry later.",
-        ));
-    };
-    let payload =
-        baskfy_db::row::jsonb(&row, "payload").map_err(crate::routes::sleeves::common::dbe)?;
-    Ok(pydantic_response(&basket_out(&payload)?))
+        )),
+        Ok(Err(p)) => Err(p),
+        Ok(Ok(None)) => Err(Problem::new(
+            ProblemType::NotFound,
+            "no bars are available to build a basket from.",
+        )),
+        Ok(Ok(Some(built))) => Ok(pydantic_response(&basket_out(&built.payload)?)),
+    }
 }
+
+/// `asyncio.wait_for(build_current_basket(...), timeout=3.0)`.
+const LIVE_BUILD_BUDGET: std::time::Duration = std::time::Duration::from_secs(3);
 
 /// Python's `float(x)` for a driver `NUMERIC` (`_f`): the exact decimal, correctly rounded.
 fn float_of(d: rust_decimal::Decimal) -> f64 {

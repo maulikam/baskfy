@@ -29,6 +29,7 @@ use crate::auth::{Principal, require_authenticated};
 use crate::problems::{Problem, ProblemType};
 use crate::query::Validation;
 use crate::routes::portfolios::portfolio::{params, pyfmt, tenant};
+use crate::session::WritePool;
 use crate::state::AppState;
 use crate::wire;
 
@@ -357,16 +358,16 @@ pub async fn connect_broker(
 
 /// `HoldingRow`, as `holding_row_to_dict` puts it on the wire (`BrokerHoldingOut`).
 #[derive(Debug, Clone, Serialize)]
-struct BrokerHoldingOut {
-    symbol: String,
+pub(crate) struct BrokerHoldingOut {
+    pub(crate) symbol: String,
     exchange: String,
     quantity: String,
     t1_quantity: String,
     collateral_quantity: String,
-    average_price: String,
+    pub(crate) average_price: String,
     last_price: Option<String>,
     product: String,
-    total_quantity: String,
+    pub(crate) total_quantity: String,
 }
 
 /// `SyncHoldingsOut`.
@@ -387,7 +388,7 @@ struct SyncHoldingsOut {
 
 /// `HoldingsResult`.
 pub(crate) struct HoldingsResult {
-    rows: Vec<BrokerHoldingOut>,
+    pub(crate) rows: Vec<BrokerHoldingOut>,
     pub(crate) source: &'static str,
     pub(crate) degraded: bool,
     detail: String,
@@ -615,14 +616,72 @@ fn holdings_note(result: &HoldingsResult, broker_name: &str, dry_run: bool) -> S
     }
 }
 
-/// `POST /brokers/{broker_id}/sync-holdings`: holdings labelled with where they came from.
+/// The live rows a sync writes (`total_quantity(row)`, `average_price`).
 ///
 /// # Errors
-/// 401 anonymous; 400 for the id; the sole-tenant guard's 503/404; 404 for an unknown broker;
-/// 503 where a live session would be read (not ported).
+/// 500 for a quantity that does not parse.
+pub(crate) fn sync_rows(
+    result: &HoldingsResult,
+) -> Result<Vec<super::holdings_sync::SyncRow>, Problem> {
+    let parse = |t: &str| {
+        t.parse::<WideDecimal>()
+            .map_err(|_| crate::problems::internal_error())
+    };
+    result
+        .rows
+        .iter()
+        .map(|r| {
+            Ok(super::holdings_sync::SyncRow {
+                symbol: r.symbol.clone(),
+                total_quantity: parse(&r.total_quantity)?,
+                average_price: parse(&r.average_price)?,
+            })
+        })
+        .collect()
+}
+
+/// `sync_holdings_into_portfolio` in one transaction, after `ensure_default_broker_account`.
+///
+/// # Errors
+/// The database's.
+pub(crate) async fn persist(
+    pool: &WritePool,
+    rows: Vec<super::holdings_sync::SyncRow>,
+    user_id: i64,
+    broker_id: String,
+    broker_name: String,
+) -> Result<super::holdings_sync::BrokerSyncResult, Problem> {
+    let as_of = crate::routes::common::today_ist();
+    crate::session::run(pool, move |tx| {
+        Box::pin(async move {
+            let broker_account_id =
+                crate::routes::portfolios::portfolio::symbols::ensure_default_broker_account(
+                    tx, user_id, &broker_id,
+                )
+                .await?;
+            super::holdings_sync::sync_holdings_into_portfolio(
+                tx,
+                &rows,
+                user_id,
+                broker_account_id,
+                &broker_name,
+                as_of,
+            )
+            .await
+        })
+    })
+    .await
+}
+
+/// `POST /brokers/{broker_id}/sync-holdings`: holdings labelled with where they came from, a
+/// live read written into the broker's own holding group.
+///
+/// # Errors
+/// 401 anonymous; 400 for the id; the sole-tenant guard's 503/404; 404 for an unknown broker.
 pub async fn sync_holdings(
     State(state): State<AppState>,
     Extension(principal): Extension<Principal>,
+    write: Option<Extension<WritePool>>,
     Path(broker_id): Path<String>,
 ) -> Result<Response, Problem> {
     let principal = require_authenticated(&principal)?;
@@ -633,21 +692,38 @@ pub async fn sync_holdings(
         return Err(not_found_broker(&broker_id));
     };
     let result = holdings_for_broker(&broker_id).await?;
-    if result.source == "live" {
-        return Err(live_read_not_ported());
-    }
     let dry = dry_run_enabled();
     let note = holdings_note(&result, broker.name, dry);
-    let sync_note = not_persisted_reason(&result);
+    let sync = if super::holdings_sync::is_persistable(result.source, result.degraded) {
+        let pool = write
+            .map(|Extension(p)| p)
+            .ok_or_else(crate::problems::internal_error)?;
+        persist(
+            &pool,
+            sync_rows(&result)?,
+            user_id,
+            broker_id.clone(),
+            broker.name.to_owned(),
+        )
+        .await?
+    } else {
+        super::holdings_sync::BrokerSyncResult {
+            persisted: false,
+            written: 0,
+            unresolved: Vec::new(),
+            portfolio_id: None,
+            reason: not_persisted_reason(&result),
+        }
+    };
     Ok(wire::json(&SyncHoldingsOut {
         broker_id,
         holdings: result.rows,
         dry_run: dry,
-        persisted: false,
-        written: 0,
-        portfolio_id: None,
-        sync_note,
-        unresolved: Vec::new(),
+        persisted: sync.persisted,
+        written: sync.written,
+        portfolio_id: sync.portfolio_id,
+        sync_note: sync.reason,
+        unresolved: sync.unresolved,
         source: result.source,
         degraded: result.degraded,
         note,

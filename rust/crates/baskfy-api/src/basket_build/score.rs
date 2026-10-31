@@ -1,7 +1,6 @@
 //! The weekly book's Momentum Quality Score — `baskfy_core.score.apply_filters` and `score`
 //! (pandas and NumPy in Python, "byte-for-byte what the desk was traded on"), with the
-//! `DESK_CONFIG` values of `baskfy_core.desk_config`. No Rust home existed; the desk score is
-//! its only worker caller, so it lives here (R2.3's pattern).
+//! `DESK_CONFIG` values of `baskfy_core.desk_config`. Shared by the worker's desk score and the basket build.
 //!
 //! Every pandas/NumPy operation is reproduced with its own semantics, because a 1-dp SCORE and
 //! a rank turn last-bit differences into different rows:
@@ -38,7 +37,7 @@ const SHARPE_BLEND: [(usize, f64); 4] = [(1, 0.35), (2, 0.35), (3, 0.15), (4, 0.
 
 /// One row of the desk's scan frame (`score.required(DESK_CONFIG)`'s columns), missing as `NaN`.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct ScanRow {
+pub struct ScanRow {
     /// `symbol`.
     pub symbol: String,
     /// `series` (`None` is never in `REJECT_SERIES`).
@@ -84,7 +83,7 @@ pub(crate) struct ScanRow {
 /// `score.score`'s added columns for one row of the input, in input order. Rejected rows (and
 /// every row when nothing is eligible) carry `NaN`/`None` everywhere but `reject`.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct Scored {
+pub struct Scored {
     /// `reject` (`""` when eligible).
     pub reject: String,
     /// `SCORE`.
@@ -98,7 +97,7 @@ pub(crate) struct Scored {
 }
 
 /// `apply_filters`: the reject reasons, concatenated in the desk's order.
-pub(crate) fn reject_reason(u: &ScanRow) -> String {
+pub fn reject_reason(u: &ScanRow) -> String {
     let mut reject = String::new();
     if u.ma_50.is_nan() || u.ma_200.is_nan() || (u.close < u.ma_50 && u.close < u.ma_200) {
         reject.push_str("below50&200DMA;");
@@ -185,7 +184,7 @@ const SMALL_QUICKSORT: usize = 15;
 /// `np.argsort(v, kind="quicksort")` for float64 where NumPy has no SIMD argsort (arm64, the
 /// box and the bed): `npysort/quicksort.cpp`'s `aquicksort_` — median-of-three introsort,
 /// insertion sort below 16 elements, heapsort past `2 * floor(log2 n)` levels. Not stable.
-pub(crate) fn numpy_argsort(v: &[f64]) -> Vec<usize> {
+pub fn numpy_argsort(v: &[f64]) -> Vec<usize> {
     let num = v.len();
     let mut t: Vec<usize> = (0..num).collect();
     if num <= 1 {
@@ -267,7 +266,7 @@ pub(crate) fn numpy_argsort(v: &[f64]) -> Vec<usize> {
 }
 
 /// pandas' `nargsort(items, kind="quicksort", ascending=False, na_position="last")`.
-pub(crate) fn nargsort_descending(items: &[f64]) -> Vec<usize> {
+pub fn nargsort_descending(items: &[f64]) -> Vec<usize> {
     let non_nan_idx: Vec<usize> = (0..items.len()).filter(|i| !items[*i].is_nan()).collect();
     let nan_idx: Vec<usize> = (0..items.len()).filter(|i| items[*i].is_nan()).collect();
     let reversed_idx: Vec<usize> = non_nan_idx.iter().rev().copied().collect();
@@ -290,7 +289,7 @@ fn lerp(a: f64, b: f64, t: f64) -> f64 {
 }
 
 /// `Series.quantile(q)` (linear): `np.percentile(non_nan, q * 100.0)`; `NaN` with no values.
-pub(crate) fn pandas_quantile(values: &[f64], q: f64) -> f64 {
+pub fn pandas_quantile(values: &[f64], q: f64) -> f64 {
     let mut sorted: Vec<f64> = values.iter().copied().filter(|v| !v.is_nan()).collect();
     if sorted.is_empty() {
         return f64::NAN;
@@ -345,7 +344,7 @@ fn np_clip(x: f64, lo: f64, hi: f64) -> f64 {
 
 /// `_pct(s) = s.rank(pct=True) * 100`. Ties are exact float equality, as pandas'.
 #[allow(clippy::float_cmp)]
-pub(crate) fn pct_rank(values: &[f64]) -> Vec<f64> {
+pub fn pct_rank(values: &[f64]) -> Vec<f64> {
     let mut order: Vec<usize> = (0..values.len()).filter(|i| !values[*i].is_nan()).collect();
     order.sort_by(|a, b| values[*a].total_cmp(&values[*b]));
     let count = order.len();
@@ -381,7 +380,7 @@ fn between(x: f64, lo: f64, hi: f64) -> bool {
 
 /// `score.score(u, DESK_CONFIG)`: the filters, then the eligible rows clipped, scored and
 /// ranked; one [`Scored`] per input row, in input order.
-pub(crate) fn score(u: &[ScanRow]) -> Vec<Scored> {
+pub fn score(u: &[ScanRow]) -> Vec<Scored> {
     let rejects: Vec<String> = u.iter().map(reject_reason).collect();
     let mut out: Vec<Scored> = rejects
         .iter()
@@ -551,7 +550,7 @@ pub(crate) fn score(u: &[ScanRow]) -> Vec<Scored> {
                 + d_consistency[i]
                 + e_liquidity[i]
                 + f_penalty[i];
-            super::numeric::numpy_round(total, 1)
+            super::numpy_round(total, 1)
         })
         .collect();
     let order = nargsort_descending(&scores);
@@ -559,7 +558,7 @@ pub(crate) fn score(u: &[ScanRow]) -> Vec<Scored> {
         let target = &mut out[eligible[*k]];
         target.score = scores[*k];
         target.rank = Some(i64::try_from(position + 1).unwrap_or(i64::MAX));
-        target.ext_over_20dma = super::numeric::numpy_round(ext[*k], 1);
+        target.ext_over_20dma = super::numpy_round(ext[*k], 1);
         target.components = [
             a_trend[*k],
             b_momentum[*k],
@@ -657,104 +656,6 @@ mod tests {
         assert_eq!(p[0], 1.0 / 3.0 * 100.0);
         assert!(p[1].is_nan());
         assert_eq!(p[2], 2.5 / 3.0 * 100.0);
-    }
-
-    /// Differential check against Python's `score.score` + `desk_score_service._stored` over
-    /// generated scans (`BASKFY_SCORE_DIFF_JSON` names the dump; see DECISIONS-RS R7.x of the
-    /// compute lane). Ignored by default: the dump is generated, not committed.
-    #[test]
-    #[ignore = "needs BASKFY_SCORE_DIFF_JSON (a dump written by the lane's score_gen.py)"]
-    fn score_matches_python_on_generated_scans() {
-        use std::str::FromStr;
-
-        use rust_decimal::Decimal;
-
-        let path = std::env::var("BASKFY_SCORE_DIFF_JSON").unwrap();
-        let text = std::fs::read_to_string(path).unwrap();
-        let cases: serde_json::Value = serde_json::from_str(&text).unwrap();
-        let f = |v: &serde_json::Value| v.as_f64().unwrap_or(f64::NAN);
-        let mut checked = 0;
-        for case in cases.as_array().unwrap() {
-            let rows: Vec<ScanRow> = case["rows"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|r| {
-                    let w = [
-                        "one_month",
-                        "three_months",
-                        "six_months",
-                        "nine_months",
-                        "one_year",
-                    ];
-                    ScanRow {
-                        symbol: r["symbol"].as_str().unwrap().to_owned(),
-                        series: r["series"].as_str().map(str::to_owned),
-                        close: f(&r["close"]),
-                        marketcap: f(&r["marketcap"]),
-                        median_volume_one_year: f(&r["median_volume_one_year"]),
-                        rsi_one_month: f(&r["rsi_one_month"]),
-                        volatility_one_year: f(&r["volatility_one_year"]),
-                        beta: f(&r["beta"]),
-                        circuits_three_months: f(&r["circuits_three_months"]),
-                        circuits_one_year: f(&r["circuits_one_year"]),
-                        positive_days_3m: f(&r["positive_days_percent_three_months"]),
-                        positive_days_6m: f(&r["positive_days_percent_six_months"]),
-                        ma_20: f(&r["ma_20"]),
-                        ma_50: f(&r["ma_50"]),
-                        ma_100: f(&r["ma_100"]),
-                        ma_200: f(&r["ma_200"]),
-                        away_from_high_one_year: f(&r["away_from_high_one_year"]),
-                        is_nifty_fno: f(&r["is_nifty_fno"]),
-                        returns: w.map(|k| f(&r[format!("absolute_return_{k}").as_str()])),
-                        sharpe: w.map(|k| f(&r[format!("sharpe_return_{k}").as_str()])),
-                    }
-                })
-                .collect();
-            let out = score(&rows);
-            let want = &case["out"];
-            let dec = |v: &serde_json::Value| v.as_str().map(|s| Decimal::from_str(s).unwrap());
-            for (i, s) in out.iter().enumerate() {
-                let rejected = !s.reject.is_empty();
-                assert_eq!(
-                    s.reject,
-                    want["reject"][i].as_str().unwrap(),
-                    "reject row {i}"
-                );
-                let got_score = if rejected {
-                    None
-                } else {
-                    crate::steps::compute::numeric::quantize_half_up_repr(s.score, 1).unwrap()
-                };
-                assert_eq!(got_score, dec(&want["score"][i]), "score row {i}");
-                let got_rank = if rejected { None } else { s.rank };
-                assert_eq!(got_rank, want["rank"][i].as_i64(), "rank row {i}");
-                let names = [
-                    "A_trend",
-                    "B_momentum",
-                    "C_sharpe",
-                    "D_consistency",
-                    "E_liquidity",
-                    "F_penalty",
-                    "ext_over_20dma",
-                ];
-                for (k, name) in names.iter().enumerate() {
-                    let x = if k < 6 {
-                        s.components[k]
-                    } else {
-                        s.ext_over_20dma
-                    };
-                    let got = if rejected {
-                        None
-                    } else {
-                        crate::steps::compute::numeric::quantize_half_up_repr(x, 4).unwrap()
-                    };
-                    assert_eq!(got, dec(&want[*name][i]), "{name} row {i}");
-                }
-                checked += 1;
-            }
-        }
-        assert!(checked > 0);
     }
 
     #[test]

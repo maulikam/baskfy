@@ -50,7 +50,12 @@ pub async fn write_access(
     mut request: Request,
     next: Next,
 ) -> Response {
-    if is_write_method(request.method())
+    let callback = request.method() == Method::GET
+        && matches!(
+            request.uri().path(),
+            "/brokers/callback" | crate::routes::brokers::OAUTH_CALLBACK_PATH
+        );
+    if (is_write_method(request.method()) || callback)
         && let Some(write) = state.write_db()
     {
         request.extensions_mut().insert(WritePool(write.clone()));

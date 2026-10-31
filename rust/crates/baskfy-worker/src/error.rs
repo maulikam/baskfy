@@ -93,3 +93,14 @@ fn db_python_type(e: &DbError) -> &'static str {
         None => "OperationalError",
     }
 }
+
+impl From<baskfy_api::basket_build::BuildError> for WorkerError {
+    fn from(e: baskfy_api::basket_build::BuildError) -> Self {
+        match e {
+            baskfy_api::basket_build::BuildError::Db(d) => Self::Db(d),
+            baskfy_api::basket_build::BuildError::Python { type_name, message } => {
+                Self::Python { type_name, message }
+            }
+        }
+    }
+}

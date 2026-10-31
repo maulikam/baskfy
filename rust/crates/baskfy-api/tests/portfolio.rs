@@ -138,7 +138,7 @@ async fn write_routes_answer_only_their_own_verb() {
         ("/api/v1/cb/public-signup", "POST", 404),
         ("/api/v1/cb/fees/collect", "POST", 404),
         ("/api/v1/portfolios/3/holdings", "PUT", 401),
-        ("/api/v1/portfolios/3/rebalance", "", 0),
+        ("/api/v1/portfolios/3/rebalance", "POST", 401),
     ] {
         if served != "PUT" {
             assert_eq!(get(&app, uri, None).await.status, 405, "GET {uri}");

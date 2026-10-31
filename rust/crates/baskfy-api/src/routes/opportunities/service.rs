@@ -31,8 +31,21 @@ use crate::routes::sleeves::common::db;
 const BENCHMARK_SLUGS: [&str; 2] = ["nifty-500", "nifty-50"];
 const SESSION_DATA_READY_HOUR: u32 = 18;
 const HISTORY_CALENDAR_DAYS: i64 = 420;
+/// Safety ceiling on names per swing scan; `BASKFY_OPPS_MAX_UNIVERSE` overrides the default,
+/// which covers the whole NSE equity universe.
+const DEFAULT_MAX_UNIVERSE: usize = 6000;
+static MAX_UNIVERSE_CELL: LazyLock<usize> = LazyLock::new(|| {
+    std::env::var("BASKFY_OPPS_MAX_UNIVERSE")
+        .ok()
+        .and_then(|v| v.trim().parse::<usize>().ok())
+        .filter(|n| *n > 0)
+        .unwrap_or(DEFAULT_MAX_UNIVERSE)
+});
+
 /// `MAX_UNIVERSE`.
-pub(crate) const MAX_UNIVERSE: usize = 1000;
+pub(crate) fn max_universe() -> usize {
+    *MAX_UNIVERSE_CELL
+}
 /// `MAX_RESULTS`.
 pub(crate) const MAX_RESULTS: i64 = 100;
 /// `MAX_VALIDATION_DAYS`.
@@ -386,21 +399,21 @@ async fn load_bars(
     Ok(bars)
 }
 
-fn bar_frame(b: &Bars) -> Result<DataFrame, ScanError> {
+fn bar_frame(b: Bars) -> Result<DataFrame, ScanError> {
     let col = |name: &str, v: Vec<f64>| Series::new(name.into(), v).into_column();
     DataFrame::new(
         b.instrument_id.len(),
         vec![
-            Series::new("instrument_id".into(), b.instrument_id.clone()).into_column(),
-            Series::new("symbol".into(), b.symbol.clone()).into_column(),
-            Series::new("date".into(), b.date.clone()).into_column(),
-            col("open", b.open.clone()),
-            col("high", b.high.clone()),
-            col("low", b.low.clone()),
-            col("close", b.close.clone()),
-            col("volume", b.volume.clone()),
-            Series::new("turnover".into(), b.turnover.clone()).into_column(),
-            col("adj_factor", b.adj_factor.clone()),
+            Series::new("instrument_id".into(), b.instrument_id).into_column(),
+            Series::new("symbol".into(), b.symbol).into_column(),
+            Series::new("date".into(), b.date).into_column(),
+            col("open", b.open),
+            col("high", b.high),
+            col("low", b.low),
+            col("close", b.close),
+            col("volume", b.volume),
+            Series::new("turnover".into(), b.turnover).into_column(),
+            col("adj_factor", b.adj_factor),
         ],
     )
     .map_err(|e| core_err(&e.into()))
@@ -644,13 +657,16 @@ pub(crate) async fn run_swing_scan(
         }));
     };
     let permit = SCAN_SLOTS.acquire().await.map_err(|_| ScanError::Failed(internal_error()))?;
+    let started = Instant::now();
     step(progress, "Resolving universe", 1, total).await?;
     let mut ids = members_on(pool, universe, as_of).await?;
     let mut warnings: Vec<String> = Vec::new();
-    if ids.len() > MAX_UNIVERSE {
-        warnings.push(format!("Universe trimmed to {MAX_UNIVERSE} names for this scan."));
-        ids = ids.into_iter().take(MAX_UNIVERSE).collect();
+    let cap = max_universe();
+    if ids.len() > cap {
+        warnings.push(format!("Universe trimmed to {cap} names for this scan."));
+        ids = ids.into_iter().take(cap).collect();
     }
+    let names = ids.len();
     let start = as_of - Days::days(HISTORY_CALENDAR_DAYS);
     step(progress, "Loading daily bars", 2, total).await?;
     let bars = load_bars(pool, &ids, start, as_of).await?;
@@ -665,7 +681,7 @@ pub(crate) async fn run_swing_scan(
     let calendar = trading_days(pool, start, as_of).await?;
     let ctx = contexts(pool, &ids, as_of, &bars, &calendar).await?;
     step(progress, "Computing indicators", 3, total).await?;
-    let frame = bar_frame(&bars)?;
+    let frame = bar_frame(bars)?;
     let bench_frame = bench.map(|(_, f)| f);
     let indicated = blocking(move || {
         with_indicators(&frame, bench_frame.as_ref(), &DEFAULT_SWING_PARAMS)
@@ -678,6 +694,15 @@ pub(crate) async fn run_swing_scan(
     })
     .await?;
     drop(permit);
+    crate::logging::info(
+        "baskfy_api.opportunities",
+        "swing scan finished",
+        &[
+            ("universe", universe),
+            ("names", &names.to_string()),
+            ("elapsed_ms", &started.elapsed().as_millis().to_string()),
+        ],
+    );
     warnings.extend(result.warnings.iter().cloned());
     let out = Arc::new(SwingScan {
         scan_id,
@@ -718,7 +743,7 @@ pub(crate) async fn run_validation(
     let tail = end + Days::days(DEFAULT_SWING_PARAMS.relative_strength.horizon_max * 2);
     let bars = load_bars(pool, &ids, warm, tail).await?;
     let bench = load_benchmark(pool, warm, tail).await?.map(|(_, f)| f);
-    let frame = bar_frame(&bars)?;
+    let frame = bar_frame(bars)?;
     blocking(move || {
         let indicated = with_indicators(&frame, bench.as_ref(), &DEFAULT_SWING_PARAMS)?;
         validate_setup(

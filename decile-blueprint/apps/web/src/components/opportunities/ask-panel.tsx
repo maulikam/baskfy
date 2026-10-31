@@ -24,6 +24,7 @@ export function askExamples(symbol?: string): string[] {
   return [
     "Find liquid swing setups for the next 5–15 trading sessions.",
     "Breakouts in Nifty 200 with reward to risk of at least 2.",
+    "Show me VCPs in smallcaps.",
     `Compare bull call spreads for ${symbol ?? "INFY"} within a maximum loss of ₹5,000.`,
   ];
 }

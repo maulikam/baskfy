@@ -4168,3 +4168,32 @@ ported and keep their R6.11 routing (Python serves them). Either reason suffices
 No `routes/screener_writes.rs` stub was registered: it would change answers Python's routing gives
 today. **Next:** move the executor down, port the four cores with goldens, then the seven routes
 in one pass.
+
+## R8.os — Opportunities › Swing gains nine pattern setups (RS8, 31 Oct 2026) ⚠ UNREVIEWED
+
+Rust-only (`baskfy-core/src/opportunities/patterns.rs`); no Python twin, no tests yet (CODE FIRST).
+Detectors read bars up to the as-of bar only. Desk setups reuse the desk's own config defaults.
+
+- **VCP** (Minervini, standard): close > SMA50 (> SMA200), ≤25% below 52w high; 15–65-bar base,
+  ≥2 shrinking pullbacks (first ≤35%, last ≤10%), 10/50 volume ≤0.75; trigger close > last
+  contraction high on breakout volume.
+- **THREE_WEEKS_TIGHT** (desk TWT-1, `docs/twt/04` §3, `TwtConfig`): tight-state today, out of
+  it the prior N sessions, turnover floor, no ETFs; desk stop %.
+- **EPISODIC_PIVOT** (swing book EP, `docs/swing/04` §3, `SwingConfig.ep`): gap/rvol/held/neglect
+  rules; trigger above gap-day high within `valid_bars` while its low holds; stop gap-day low.
+- **FLAG** (swing book FLAG, `docs/swing/04` §2): pole/base/tightness/dry-up rules, trigger close >
+  prior pivot on rvol; labelled high tight flag (O'Neil) when pole ≥90% in ≤40 bars, ≤25% deep.
+- **INSIDE_BAR_NR7** (Crabel NR7 / inside bar, standard): close > SMA50; trigger next close above
+  the squeeze bar's high; stop its low − buffer.
+- **HIGH_52W_BREAKOUT** (standard): close > SMA50; close above prior 252-bar high on breakout
+  volume; stop = entry − `stop_atr`·ATR.
+- **CUP_WITH_HANDLE** (O'Neil, standard): ≥30% advance over 60 bars, 30–150-bar cup 12–35% deep,
+  rounded bottom, right lip −10/+5% of left, 5–25-bar handle ≤15% deep in upper half on lighter
+  volume; trigger above handle high.
+- **MA_BOUNCE** (standard 10/20/50 EMA): stacked, 50 EMA rising over 10 bars; low tagged an EMA
+  (±0.25 ATR) in last 2 bars and closed above; trigger close > prior high.
+- **VBT** (desk VBT-1, `docs/vbt/04` §3/§7, `VbtConfig`): Chartink lines + filters A–F; limit at
+  signal close, working `valid_sessions`, cancelled if filled through; desk stop %.
+- Web: local `SwingSetupType` widened to 12; `packages/api-client` generated schema still lists 3
+  (generated from the Python API, which was not changed) — the web does not use that enum.
+- Reverse: drop the nine from `SetupType::ALL`.

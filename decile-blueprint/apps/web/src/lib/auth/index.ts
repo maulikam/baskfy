@@ -165,6 +165,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (!local) {
           throw new Error("The accounts service rejected the local sign-in.");
         }
+        // Google fills these from its profile; the local provider has only /me.
+        token.email = local.email;
+        token.name = local.name;
         claims.publicId = local.publicId;
         claims.accessToken = local.accessToken;
         claims.accessTokenExpiresAt = local.accessTokenExpiresAt;

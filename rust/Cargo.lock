@@ -282,6 +282,7 @@ dependencies = [
  "baskfy-db",
  "baskfy-providers",
  "chrono",
+ "csv",
  "futures-util",
  "hmac",
  "num-bigint",

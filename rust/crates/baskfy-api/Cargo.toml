@@ -34,6 +34,7 @@ percent-encoding = { workspace = true }
 num-bigint = { workspace = true }
 redis = { workspace = true }
 futures-util = { workspace = true }
+csv = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }

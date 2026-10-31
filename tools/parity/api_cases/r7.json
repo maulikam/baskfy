@@ -1,0 +1,10 @@
+{
+  "lane": "r7",
+  "note": "Lane R7: GET /baskets' live build when no snapshot exists. Run with --env BASKFY_SOLE_USER_ID=1; add --env BASKFY_DESK_ROOT=<desk with data/uploads> to exercise a built basket.",
+  "cases": [
+    {"name": "r7-baskets-live", "method": "GET", "path": "/api/v1/baskets", "user": "owner", "note": "no snapshot: the live build"},
+    {"name": "r7-baskets-live-date", "method": "GET", "path": "/api/v1/baskets", "user": "owner", "query": {"date": "2026-10-28"}},
+    {"name": "r7-baskets-live-plain", "method": "GET", "path": "/api/v1/baskets", "user": "plain"},
+    {"name": "r7-baskets-live-no-bars", "method": "GET", "path": "/api/v1/baskets", "user": "owner", "query": {"date": "2001-01-01"}, "note": "a date before every bar"}
+  ]
+}

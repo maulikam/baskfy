@@ -197,6 +197,78 @@ impl Obj {
     }
 }
 
+/// A model's field.
+pub(crate) fn field<'a>(j: &'a J, key: &str) -> Option<&'a J> {
+    match j {
+        J::Obj(fields) => fields.iter().find(|(k, _)| k == key).map(|(_, v)| v),
+        _ => None,
+    }
+}
+
+/// Replaces a model's field in place.
+pub(crate) fn set_field(j: &mut J, key: &str, value: J) {
+    if let J::Obj(fields) = j
+        && let Some((_, v)) = fields.iter_mut().find(|(k, _)| k == key)
+    {
+        *v = value;
+    }
+}
+
+/// A field as a `Decimal`.
+pub(crate) fn field_dec(j: &J, key: &str) -> Option<Decimal> {
+    match field(j, key) {
+        Some(J::Dec(d)) => Some(*d),
+        _ => None,
+    }
+}
+
+/// `row.symbol.strip().upper()`.
+pub(crate) fn symbol_key(j: &J) -> String {
+    match field(j, "symbol") {
+        Some(J::Str(s)) => s.trim().to_uppercase(),
+        _ => String::new(),
+    }
+}
+
+/// `live_marks_for_symbols([row.symbol for row in rows])`.
+///
+/// # Errors
+/// 500 when the token store cannot be read.
+pub(crate) async fn live_marks(
+    rows: &[&J],
+) -> Result<std::collections::HashMap<String, Decimal>, Problem> {
+    let symbols: Vec<String> = rows
+        .iter()
+        .filter_map(|r| match field(r, "symbol") {
+            Some(J::Str(s)) => Some(s.clone()),
+            _ => None,
+        })
+        .collect();
+    crate::live_prices::live_marks_for_symbols(&symbols)
+        .await
+        .map_err(|e| {
+            crate::logging::error(
+                "baskfy_api.app",
+                "unhandled error",
+                &[("error", e.python_type())],
+            );
+            crate::problems::internal_error()
+        })
+}
+
+/// Sets each row's `last_price` to its live mark (`None` without one).
+///
+/// # Errors
+/// As [`live_marks`].
+pub(crate) async fn overlay_last_price(rows: &mut [J]) -> Result<(), Problem> {
+    let marks = live_marks(&rows.iter().collect::<Vec<_>>()).await?;
+    for row in rows.iter_mut() {
+        let mark = marks.get(&symbol_key(row)).copied();
+        set_field(row, "last_price", J::opt_dec(mark));
+    }
+    Ok(())
+}
+
 fn float_token(f: f64, pydantic: bool) -> String {
     if f.is_nan() {
         if pydantic { "null" } else { "NaN" }.to_owned()

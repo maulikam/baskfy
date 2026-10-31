@@ -23,7 +23,6 @@ pub(crate) mod factors;
 pub(crate) mod market_health;
 mod numeric;
 pub(crate) mod ranking;
-pub(crate) mod score;
 
 use baskfy_core::error::CoreError;
 use chrono::NaiveDate;

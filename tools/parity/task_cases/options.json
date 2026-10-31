@@ -1,6 +1,6 @@
 {
   "lane": "options",
-  "note": "Lane options (RS6): every task at the clocks that change its answer (before/inside/after the session, a Friday, a Saturday), its refusals and failure paths. The scan and the three plan families are graded on their gates only (DECISIONS-RS R8.op2). The first five cases are the foundation's proof of the replay upstream (R8.3).",
+  "note": "Lane options (RS6): every task at the clocks that change its answer (before/inside/after the session, a Friday, a Saturday), its refusals and failure paths. The scan and the three plan families are graded on their gates and on their bodies over the bed's recorded days (no Kite session: the margin calculator is never asked). The first five cases are the foundation's proof of the replay upstream (R8.3).",
   "cases": [
     {
       "name": "refresh-master-from-replayed-dump",
@@ -757,6 +757,203 @@
       "task": "baskfy.options.plan_o3",
       "args": {},
       "now": "2026-10-29T11:00:00"
+    },
+    {
+      "name": "scan-at-1315",
+      "task": "baskfy.options.scan",
+      "args": {},
+      "now": "2026-10-29T13:15:20",
+      "bundle": "session",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_SCAN_ENABLED": "true"
+      },
+      "seed_sql": "DELETE FROM op_scan WHERE ts = TIMESTAMPTZ '2026-10-29 13:15:00+05:30';",
+      "payload_mask": [
+        "/seconds"
+      ],
+      "note": "every sleeve's row for the minute, from the recorded chain, bars and master"
+    },
+    {
+      "name": "scan-rerun-same-minute",
+      "task": "baskfy.options.scan",
+      "args": {},
+      "now": "2026-10-29T13:15:20",
+      "bundle": "session",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_SCAN_ENABLED": "true"
+      },
+      "payload_mask": [
+        "/seconds"
+      ],
+      "note": "an upsert on (user_id, sleeve, ts): the same five rows rewritten"
+    },
+    {
+      "name": "scan-at-argument-o1-morning",
+      "task": "baskfy.options.scan",
+      "args": {
+        "at": "2026-10-27T10:06:20+05:30"
+      },
+      "now": "2026-10-29T13:15:20",
+      "bundle": "session",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_SCAN_ENABLED": "true"
+      },
+      "payload_mask": [
+        "/seconds"
+      ],
+      "note": "the monthly Tuesday after the O1 decision minute: O1-M priced from its 10:00 snapshot"
+    },
+    {
+      "name": "scan-at-open",
+      "task": "baskfy.options.scan",
+      "args": {},
+      "now": "2026-10-29T09:15:10",
+      "bundle": "session",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_SCAN_ENABLED": "true"
+      },
+      "payload_mask": [
+        "/seconds"
+      ]
+    },
+    {
+      "name": "plan-o1-kept-session",
+      "task": "baskfy.options.plan_o1",
+      "args": {},
+      "now": "2026-10-27T10:05:00",
+      "bundle": "session",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true"
+      },
+      "note": "O1-M already decided on the bed: returned as it stands, nothing sent"
+    },
+    {
+      "name": "plan-o1-rebuilds-the-monthly",
+      "task": "baskfy.options.plan_o1",
+      "args": {},
+      "now": "2026-10-27T10:05:00",
+      "bundle": "session",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true"
+      },
+      "seed_sql": "DELETE FROM op_session WHERE trade_date = '2026-10-27' AND sleeve IN ('O1M', 'O1W');",
+      "payload_mask": [
+        "/alerts/0/raised_at",
+        "/alerts/1/raised_at"
+      ],
+      "note": "O1-M decided again from the recorded 10:00 chain; O1-W has no session on the monthly"
+    },
+    {
+      "name": "plan-o1-not-an-o1-day",
+      "task": "baskfy.options.plan_o1",
+      "args": {},
+      "now": "2026-10-29T10:05:00",
+      "bundle": "session",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true"
+      }
+    },
+    {
+      "name": "plan-o1-lapses-at-1016",
+      "task": "baskfy.options.plan_o1",
+      "args": {},
+      "now": "2026-10-28T10:16:00",
+      "bundle": "session",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true"
+      },
+      "note": "every issued entry plan past expires_at lapses with its session"
+    },
+    {
+      "name": "plan-o2-kept-session",
+      "task": "baskfy.options.plan_o2",
+      "args": {},
+      "now": "2026-10-29T11:00:00",
+      "bundle": "session",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true"
+      }
+    },
+    {
+      "name": "plan-o2-rebuilds-the-day",
+      "task": "baskfy.options.plan_o2",
+      "args": {},
+      "now": "2026-10-29T13:33:00",
+      "bundle": "session",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true"
+      },
+      "seed_sql": "DELETE FROM op_session WHERE trade_date = '2026-10-29' AND sleeve = 'O2';",
+      "mask": {
+        "op_session": {
+          "created_at": "stamp"
+        }
+      },
+      "payload_mask": [
+        "/alerts/0/raised_at"
+      ],
+      "note": "the day decided again from the recorded bars and the trigger minute's chain"
+    },
+    {
+      "name": "plan-o2-before-the-range-settles",
+      "task": "baskfy.options.plan_o2",
+      "args": {},
+      "now": "2026-10-29T09:31:00",
+      "bundle": "session",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true"
+      },
+      "seed_sql": "DELETE FROM op_session WHERE trade_date = '2026-10-29' AND sleeve = 'O2';"
+    },
+    {
+      "name": "plan-o3-kept-sessions",
+      "task": "baskfy.options.plan_o3",
+      "args": {},
+      "now": "2026-10-27T10:30:00",
+      "bundle": "session",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true"
+      }
+    },
+    {
+      "name": "plan-o3-rebuilds-the-expiry",
+      "task": "baskfy.options.plan_o3",
+      "args": {},
+      "now": "2026-10-27T11:30:00",
+      "bundle": "session",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true"
+      },
+      "seed_sql": "DELETE FROM op_session WHERE trade_date = '2026-10-27' AND sleeve IN ('O3A', 'O3B');",
+      "payload_mask": [
+        "/alerts/0/raised_at",
+        "/alerts/1/raised_at"
+      ],
+      "note": "O3-B then O3-A on the weekly expiry, no Kite session: a plan carries MARGIN_UNKNOWN"
+    },
+    {
+      "name": "plan-o3-not-an-expiry",
+      "task": "baskfy.options.plan_o3",
+      "args": {},
+      "now": "2026-10-29T10:30:00",
+      "bundle": "session",
+      "env": {
+        "BASKFY_OPTIONS_COLLECT_ENABLED": "true",
+        "BASKFY_OPTIONS_MONITOR_ENABLED": "true"
+      }
     }
   ]
 }

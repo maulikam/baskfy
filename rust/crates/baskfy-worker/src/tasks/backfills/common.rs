@@ -201,7 +201,7 @@ pub(super) fn provider_settings() -> Result<ProviderSettings, WorkerError> {
     ProviderSettings::from_env().map_err(|e| WorkerError::Settings(e.to_string()))
 }
 
-pub(super) async fn kite_bars(ctx: &TaskContext) -> Result<KiteProvider, WorkerError> {
+pub(crate) async fn kite_bars(ctx: &TaskContext) -> Result<KiteProvider, WorkerError> {
     let settings = provider_settings()?;
     let limiter = build_kite_family_limiter(
         &RedisSource::from_settings(&settings),

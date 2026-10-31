@@ -43,6 +43,7 @@ FUTURES_COLUMNS: tuple[str, ...] = (
     "turnover",
     "lot_size",
 )
+_FLOAT_COLUMNS: tuple[str, ...] = ("open", "high", "low", "settle", "underlying", "turnover")
 
 
 def _daily_aggregates(fut: pl.DataFrame) -> pl.DataFrame:
@@ -149,7 +150,12 @@ def continuous_futures(futures: pl.DataFrame, config: SeriesConfig) -> pl.DataFr
     caller passes every session it has, not one symbol's. Returns one row per (symbol, session
     the held contract printed), sorted by symbol and date.
     """
-    fut = futures.select(FUTURES_COLUMNS).filter(pl.col("settle") > 0)
+    # A Decimal(38,2) ratio rounds to 2 dp in polars; the series is float, as in the Rust port.
+    fut = (
+        futures.select(FUTURES_COLUMNS)
+        .with_columns(pl.col(c).cast(pl.Float64) for c in _FLOAT_COLUMNS)
+        .filter(pl.col("settle") > 0)
+    )
     dates = fut.select("trade_date").unique().sort("trade_date").with_row_index("di")
     fut = fut.join(dates, on="trade_date")
     held = _held_bars(fut, config)

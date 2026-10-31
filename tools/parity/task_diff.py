@@ -112,6 +112,9 @@ def log(message: str) -> None:
     print(message, flush=True)
 
 
+RATELIMIT_PREFIX = "baskfy:ratelimit:"
+
+
 @dataclass
 class Side:
     label: str
@@ -360,8 +363,13 @@ def compare(case: dict[str, Any], a: Side, b: Side, seq_before: dict[str, Any], 
     presence = case.get("redis_presence", [])
     ra = _clock_headers(redis_dump(REDIS_URL, a.redis_db, presence))
     rb = _clock_headers(redis_dump(REDIS_URL, b.redis_db, presence))
+    rl_a = sorted(k for k in ra if k.startswith(RATELIMIT_PREFIX))
+    rl_b = sorted(k for k in rb if k.startswith(RATELIMIT_PREFIX))
+    ra = {k: v for k, v in ra.items() if not k.startswith(RATELIMIT_PREFIX)}
+    rb = {k: v for k, v in rb.items() if not k.startswith(RATELIMIT_PREFIX)}
     rtag = "Celery ids/origin/delivery_tag normalised, eta/expires as <set>" + (
-        f"; by presence: {', '.join(presence)}" if presence else "")
+        f"; by presence: {', '.join(presence)}" if presence else "") + (
+        f"; {RATELIMIT_PREFIX}* excluded (a={len(rl_a)} b={len(rl_b)})")
     if ra == rb:
         lines.append(f"  EQUAL   redis ({len(ra)} keys; {rtag})")
         for line in enqueued(ra):

@@ -151,3 +151,18 @@ def test_rerunning_is_identical() -> None:
     days = _sessions(dt.date(2024, 7, 1), 30)
     frame = _frame({(d, NEXT): 100.0 + i for i, d in enumerate(days)})
     assert continuous_futures(frame, CFG).equals(continuous_futures(frame, CFG))
+
+
+def test_decimal_bhavcopy_columns_give_the_full_precision_ratio() -> None:
+    days = [dt.date(2024, 7, 22), dt.date(2024, 7, 23)]
+    frame = _frame({(days[0], NEAR): 6542.50, (days[1], NEAR): 6540.50}, spot=6500.0).with_columns(
+        pl.col("high", "low").round(2)
+    )
+    dec = frame.with_columns(
+        pl.col(c).cast(pl.Decimal(38, 2)) for c in ("open", "high", "low", "settle", "underlying")
+    )
+    out = continuous_futures(dec, CFG)
+    ret = out.filter(pl.col("trade_date") == days[1])["ret"].item()
+    assert ret == pytest.approx(math.log(6540.50 / 6542.50), rel=1e-12)
+    assert ret != 0.0
+    assert out.equals(continuous_futures(frame, CFG))

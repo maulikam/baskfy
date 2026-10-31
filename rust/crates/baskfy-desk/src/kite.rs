@@ -18,13 +18,22 @@
 //! `tools/parity/desk_harness.py` records the same call from Python by intercepting
 //! `KiteConnect._request` — so the two desks' order and GTT calls are compared at the wire.
 //!
-//! No production HTTP client is in this crate yet: the desk's live Kite is a cutover item
-//! (R8.0), and no agent ever points one at a live account.
+//! [`KiteHttp`] is the production client: kiteconnect 5.2.1's `_request` over HTTP, built on
+//! `baskfy_providers::kite`'s session, headers and response validation. Its writes are reachable
+//! only through the gateway, which simulates every one of them under `DRY_RUN`.
 
 use async_trait::async_trait;
 
 pub use baskfy_providers::kite::{KiteError, KiteExceptionKind};
+use baskfy_providers::errors::ProviderError;
+use baskfy_providers::kite::{
+    Body, DEFAULT_ROOT_URI, KITE_HEADER_VERSION, dateutil_parse, encode_query, format_historical,
+    format_quote, format_response, parse_instruments, py_json_dumps, requests_error, sdk_headers,
+    sdk_http_client, validate_response,
+};
+use baskfy_providers::net::GuardedClient;
 use baskfy_providers::secret::Secret;
+use sha2::{Digest, Sha256};
 
 use crate::wire::{PyDict, PyValue};
 
@@ -220,7 +229,7 @@ impl GttParams {
             })
             .collect();
         let dumps =
-            |v: &PyValue| baskfy_providers::kite::py_json_dumps(v).map_err(KiteError::Other);
+            |v: &PyValue| py_json_dumps(v).map_err(KiteError::Other);
         let mut params = PyDict::new();
         params.insert("condition", PyValue::Str(dumps(&PyValue::Map(condition))?));
         params.insert("orders", PyValue::Str(dumps(&PyValue::List(legs))?));
@@ -334,4 +343,442 @@ pub trait KiteWrites: KiteReads {
 
     /// `delete_gtt(trigger_id)`.
     async fn delete_gtt(&self, trigger_id: i64) -> Result<PyValue, KiteError>;
+}
+
+/// `KiteConnect._default_login_uri`.
+pub const LOGIN_URI: &str = "https://kite.zerodha.com/connect/login";
+
+enum Payload<'a> {
+    Empty,
+    Form(&'a PyDict),
+    Json(&'a PyValue),
+}
+
+/// `requests`' `urlencode(params, doseq=True)` pairs: `None` dropped, a list repeated.
+fn pairs(params: &PyDict) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for (k, v) in params.iter() {
+        match v {
+            PyValue::None => {}
+            PyValue::List(items) => {
+                for item in items.iter().filter(|i| **i != PyValue::None) {
+                    out.push((k.to_owned(), item.py_str()));
+                }
+            }
+            other => out.push((k.to_owned(), other.py_str())),
+        }
+    }
+    out
+}
+
+fn key_error(key: &str) -> KiteError {
+    KiteError::Other(ProviderError::foreign("KeyError", format!("'{key}'")))
+}
+
+/// `data[key]`.
+fn subscript(data: &PyValue, key: &str) -> Result<PyValue, KiteError> {
+    match data {
+        PyValue::Map(m) => m.get(key).cloned().ok_or_else(|| key_error(key)),
+        other => Err(KiteError::Other(ProviderError::foreign(
+            "TypeError",
+            format!(
+                "{} indices must be integers or slices, not str",
+                other.type_name()
+            ),
+        ))),
+    }
+}
+
+fn order_id(data: &PyValue) -> Result<String, KiteError> {
+    Ok(subscript(data, "order_id")?.py_str())
+}
+
+fn str_dict<const N: usize>(items: [(&str, &str); N]) -> PyDict {
+    let mut d = PyDict::new();
+    for (k, v) in items {
+        d.insert(k, PyValue::Str(v.to_owned()));
+    }
+    d
+}
+
+/// `kiteconnect.KiteConnect` over HTTP: the desk's production broker.
+pub struct KiteHttp {
+    api_key: Secret,
+    access_token: std::sync::Mutex<Secret>,
+    root: reqwest::Url,
+    http: GuardedClient,
+}
+
+impl std::fmt::Debug for KiteHttp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("KiteHttp")
+            .field("root", &self.root.as_str())
+            .finish_non_exhaustive()
+    }
+}
+
+impl KiteHttp {
+    /// `KiteConnect(api_key=...)` against `https://api.kite.trade`.
+    ///
+    /// # Errors
+    /// As [`KiteHttp::with_root`].
+    pub fn new(api_key: &str) -> Result<Self, KiteError> {
+        Self::with_root(api_key, DEFAULT_ROOT_URI, None)
+    }
+
+    /// `KiteConnect(api_key=..., root=..., timeout=...)`.
+    ///
+    /// # Errors
+    /// `ValueError` for an unparseable root; the TLS backend's failure.
+    pub fn with_root(api_key: &str, root: &str, timeout: Option<f64>) -> Result<Self, KiteError> {
+        let root = reqwest::Url::parse(root)
+            .map_err(|e| ProviderError::value_error(format!("invalid Kite root: {e}")))?;
+        let (http, _) = sdk_http_client(timeout)?;
+        Ok(Self {
+            api_key: Secret::new(api_key),
+            access_token: std::sync::Mutex::new(Secret::default()),
+            root,
+            http,
+        })
+    }
+
+    fn token(&self) -> Secret {
+        self.access_token
+            .lock()
+            .map(|t| t.clone())
+            .unwrap_or_default()
+    }
+
+    async fn request(
+        &self,
+        method: reqwest::Method,
+        uri: &str,
+        query: Option<&PyDict>,
+        payload: Payload<'_>,
+    ) -> Result<Body, KiteError> {
+        let joined = self
+            .root
+            .join(uri)
+            .map_err(|e| ProviderError::value_error(format!("invalid Kite path: {e}")))?;
+        let mut url = joined.to_string();
+        let query = query.map(pairs).unwrap_or_default();
+        if !query.is_empty() {
+            url.push(if joined.query().is_some() { '&' } else { '?' });
+            url.push_str(&encode_query(&query));
+        }
+        let mut request = sdk_headers(
+            self.http.request(method, &url)?,
+            &self.api_key,
+            &self.token(),
+        );
+        match payload {
+            Payload::Empty => {}
+            Payload::Form(params) => {
+                let body = pairs(params);
+                if !body.is_empty() {
+                    request = request
+                        .header("Content-Type", "application/x-www-form-urlencoded")
+                        .body(encode_query(&body).into_bytes());
+                }
+            }
+            Payload::Json(body) => {
+                request = request
+                    .header("Content-Type", "application/json")
+                    .body(py_json_dumps(body)?.into_bytes());
+            }
+        }
+        let response = request.send().await.map_err(requests_error)?;
+        let status = response.status().as_u16();
+        let content_type = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .map(|v| String::from_utf8_lossy(v.as_bytes()).into_owned());
+        let content = response.bytes().await.map_err(requests_error)?;
+        validate_response(status, content_type, &content)
+    }
+
+    async fn data(
+        &self,
+        method: reqwest::Method,
+        uri: &str,
+        query: Option<&PyDict>,
+        payload: Payload<'_>,
+    ) -> Result<PyValue, KiteError> {
+        Ok(match self.request(method, uri, query, payload).await? {
+            Body::Json(v) => v,
+            Body::Csv(bytes) => PyValue::Bytes(bytes),
+        })
+    }
+
+    async fn get(&self, uri: &str, query: Option<&PyDict>) -> Result<PyValue, KiteError> {
+        self.data(reqwest::Method::GET, uri, query, Payload::Empty)
+            .await
+    }
+
+    async fn quotes(&self, uri: &str, instruments: &[String]) -> Result<PyValue, KiteError> {
+        let mut q = PyDict::new();
+        q.insert(
+            "i",
+            PyValue::List(instruments.iter().cloned().map(PyValue::Str).collect()),
+        );
+        self.get(uri, Some(&q)).await
+    }
+
+    async fn instrument_dump(&self, uri: &str) -> Result<PyValue, KiteError> {
+        match self.get(uri, None).await? {
+            PyValue::Bytes(bytes) => parse_instruments(&bytes).map_err(KiteError::Other),
+            other => Err(KiteError::Other(ProviderError::foreign(
+                "TypeError",
+                format!(
+                    "initial_value must be str or None, not {}",
+                    other.type_name()
+                ),
+            ))),
+        }
+    }
+}
+
+#[async_trait]
+impl KiteReads for KiteHttp {
+    fn login_url(&self) -> String {
+        format!(
+            "{LOGIN_URI}?api_key={}&v={KITE_HEADER_VERSION}",
+            self.api_key.expose()
+        )
+    }
+
+    fn set_access_token(&self, token: &Secret) {
+        if let Ok(mut slot) = self.access_token.lock() {
+            *slot = token.clone();
+        }
+    }
+
+    async fn generate_session(
+        &self,
+        request_token: &str,
+        api_secret: &Secret,
+    ) -> Result<PyValue, KiteError> {
+        let mut h = Sha256::new();
+        h.update(self.api_key.expose().as_bytes());
+        h.update(request_token.as_bytes());
+        h.update(api_secret.expose().as_bytes());
+        let checksum: String = h.finalize().iter().map(|b| format!("{b:02x}")).collect();
+        let params = str_dict([
+            ("api_key", self.api_key.expose()),
+            ("request_token", request_token),
+            ("checksum", &checksum),
+        ]);
+        let mut resp = self
+            .data(
+                reqwest::Method::POST,
+                "/session/token",
+                None,
+                Payload::Form(&params),
+            )
+            .await?;
+        if let PyValue::Map(m) = &resp
+            && let Some(token) = m.get("access_token")
+        {
+            self.set_access_token(&Secret::new(token.py_str()));
+        }
+        let login_time = subscript(&resp, "login_time")?;
+        if let PyValue::Str(t) = &login_time
+            && t.chars().count() == 19
+        {
+            let parsed = dateutil_parse(t).map_err(KiteError::Other)?;
+            if let PyValue::Map(m) = &mut resp {
+                m.insert("login_time", PyValue::DateTime(parsed));
+            }
+        }
+        Ok(resp)
+    }
+
+    async fn profile(&self) -> Result<PyValue, KiteError> {
+        self.get("/user/profile", None).await
+    }
+
+    async fn holdings(&self) -> Result<PyValue, KiteError> {
+        self.get("/portfolio/holdings", None).await
+    }
+
+    async fn positions(&self) -> Result<PyValue, KiteError> {
+        self.get("/portfolio/positions", None).await
+    }
+
+    async fn margins(&self, segment: Option<&str>) -> Result<PyValue, KiteError> {
+        match segment.filter(|s| !s.is_empty()) {
+            Some(s) => self.get(&format!("/user/margins/{s}"), None).await,
+            None => self.get("/user/margins", None).await,
+        }
+    }
+
+    async fn ltp(&self, instruments: &[String]) -> Result<PyValue, KiteError> {
+        self.quotes("/quote/ltp", instruments).await
+    }
+
+    async fn ohlc(&self, instruments: &[String]) -> Result<PyValue, KiteError> {
+        self.quotes("/quote/ohlc", instruments).await
+    }
+
+    async fn quote(&self, instruments: &[String]) -> Result<PyValue, KiteError> {
+        format_quote(&self.quotes("/quote", instruments).await?)
+    }
+
+    async fn instruments(&self, exchange: Option<&str>) -> Result<PyValue, KiteError> {
+        match exchange.filter(|e| !e.is_empty()) {
+            Some(e) => self.instrument_dump(&format!("/instruments/{e}")).await,
+            None => self.instrument_dump("/instruments").await,
+        }
+    }
+
+    async fn historical_data(
+        &self,
+        instrument_token: i64,
+        from: &str,
+        to: &str,
+        interval: &str,
+        continuous: bool,
+        oi: bool,
+    ) -> Result<PyValue, KiteError> {
+        let mut q = str_dict([("from", from), ("to", to), ("interval", interval)]);
+        q.insert("continuous", PyValue::Int(i64::from(continuous)));
+        q.insert("oi", PyValue::Int(i64::from(oi)));
+        let data = self
+            .get(
+                &format!("/instruments/historical/{instrument_token}/{interval}"),
+                Some(&q),
+            )
+            .await?;
+        format_historical(&data).map_err(KiteError::Other)
+    }
+
+    async fn orders(&self) -> Result<PyValue, KiteError> {
+        format_response(&self.get("/orders", None).await?).map_err(KiteError::Other)
+    }
+
+    async fn order_history(&self, order_id: &str) -> Result<PyValue, KiteError> {
+        format_response(&self.get(&format!("/orders/{order_id}"), None).await?)
+            .map_err(KiteError::Other)
+    }
+
+    async fn trades(&self) -> Result<PyValue, KiteError> {
+        format_response(&self.get("/trades", None).await?).map_err(KiteError::Other)
+    }
+
+    async fn get_gtts(&self) -> Result<PyValue, KiteError> {
+        self.get("/gtt/triggers", None).await
+    }
+
+    async fn basket_order_margins(
+        &self,
+        params: &[PyValue],
+        consider_positions: bool,
+        mode: Option<&str>,
+    ) -> Result<PyValue, KiteError> {
+        let mut q = PyDict::new();
+        q.insert("consider_positions", PyValue::Bool(consider_positions));
+        q.insert(
+            "mode",
+            mode.map_or(PyValue::None, |m| PyValue::Str(m.to_owned())),
+        );
+        let body = PyValue::List(params.to_vec());
+        self.data(
+            reqwest::Method::POST,
+            "/margins/basket",
+            Some(&q),
+            Payload::Json(&body),
+        )
+        .await
+    }
+}
+
+#[async_trait]
+impl KiteWrites for KiteHttp {
+    async fn place_order(&self, order: &OrderParams) -> Result<String, KiteError> {
+        let params = order.to_params();
+        let data = self
+            .data(
+                reqwest::Method::POST,
+                &format!("/orders/{}", order.variety),
+                None,
+                Payload::Form(&params),
+            )
+            .await?;
+        order_id(&data)
+    }
+
+    async fn modify_order(
+        &self,
+        variety: &str,
+        order_id_: &str,
+        params: &PyDict,
+    ) -> Result<String, KiteError> {
+        let mut all = str_dict([("variety", variety), ("order_id", order_id_)]);
+        for (k, v) in params.iter() {
+            all.insert(k, v.clone());
+        }
+        let data = self
+            .data(
+                reqwest::Method::PUT,
+                &format!("/orders/{variety}/{order_id_}"),
+                None,
+                Payload::Form(&all),
+            )
+            .await?;
+        order_id(&data)
+    }
+
+    async fn cancel_order(
+        &self,
+        variety: &str,
+        order_id_: &str,
+        parent_order_id: Option<&str>,
+    ) -> Result<String, KiteError> {
+        let mut q = PyDict::new();
+        q.insert(
+            "parent_order_id",
+            parent_order_id.map_or(PyValue::None, |p| PyValue::Str(p.to_owned())),
+        );
+        let data = self
+            .data(
+                reqwest::Method::DELETE,
+                &format!("/orders/{variety}/{order_id_}"),
+                Some(&q),
+                Payload::Empty,
+            )
+            .await?;
+        order_id(&data)
+    }
+
+    async fn place_gtt(&self, gtt: &GttParams) -> Result<PyValue, KiteError> {
+        let params = gtt.to_params()?;
+        self.data(
+            reqwest::Method::POST,
+            "/gtt/triggers",
+            None,
+            Payload::Form(&params),
+        )
+        .await
+    }
+
+    async fn modify_gtt(&self, trigger_id: i64, gtt: &GttParams) -> Result<PyValue, KiteError> {
+        let params = gtt.to_params()?;
+        self.data(
+            reqwest::Method::PUT,
+            &format!("/gtt/triggers/{trigger_id}"),
+            None,
+            Payload::Form(&params),
+        )
+        .await
+    }
+
+    async fn delete_gtt(&self, trigger_id: i64) -> Result<PyValue, KiteError> {
+        self.data(
+            reqwest::Method::DELETE,
+            &format!("/gtt/triggers/{trigger_id}"),
+            None,
+            Payload::Empty,
+        )
+        .await
+    }
 }

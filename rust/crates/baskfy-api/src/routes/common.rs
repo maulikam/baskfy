@@ -17,21 +17,6 @@ use baskfy_db::{Db, OrderedJson};
 use chrono::{DateTime, FixedOffset, NaiveDate};
 
 use crate::problems::{Problem, ProblemType, internal_error, pipeline_degraded};
-use crate::state::AppState;
-
-// ---------------------------------------------------------------------------------------------
-// Write-only paths
-// ---------------------------------------------------------------------------------------------
-
-/// A path Python serves only with write methods that this port has not registered yet: every
-/// method is Starlette's `405 Method Not Allowed`, decided by routing before the token is read
-/// (R5.15, closed in every lane at wave 4c's foundation). A path a Python **GET** route would also
-/// match (`/screens/preview` under `GET /screens/{public_id}`) is deliberately left out: there
-/// Starlette serves the GET, and so does the Rust GET route. Wave 4c replaces each with the real
-/// method as it ports the write.
-pub(crate) fn write_only() -> axum::routing::MethodRouter<AppState> {
-    axum::routing::MethodRouter::new()
-}
 
 // ---------------------------------------------------------------------------------------------
 // Python integers

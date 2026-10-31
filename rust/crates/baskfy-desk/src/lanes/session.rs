@@ -25,14 +25,11 @@
 //! (`--fixture desk_fixtures/session_refused`: no session, a refused exchange) and
 //! `desk_cases/session_variants/no_key.json` (`--env KITE_API_KEY=`).
 //!
-//! **Not ported yet (loud):** the `session-supervisor` service refuses to start until
-//! `reconcile.run_pass_from_desk` (the swing/twt/vbt `SleeveHooks`) exists — `DeskDeps` takes
-//! it as a `ReconcilePass`. The successful `/callback` exchange is not a parity case (a Fernet
-//! blob with a random IV, and the autorun subprocess). `/status?ip=1` reports
-//! `outbound_ip: null` and is not a case: the Python desk's lookup is a live network call.
-//! `/lifecycle*` and the token store's sync are not this file's.
+//! **D2 (session):** Starlette's `redirect_slashes` app-wide ([`routing`]), `/` ([`home`]), `/reconcile*`
+//! ([`reconcile`]), `/tradebook*` ([`tradebook`]), `/status` through `exec_kite::status_session`,
+//! `app.main`'s import-time boot ([`boot`]) and the `session-supervisor` service over the real
+//! reconcile pass. `/status?ip=1` reports `outbound_ip: null` (no live network lookup).
 //!
-//! The lane never edits `lib.rs`, `app.rs` or `lanes.rs`.
 
 use std::path::{Path, PathBuf};
 
@@ -48,9 +45,14 @@ use crate::app::AppState;
 use crate::lanes::analytics::web::{self, MultiDict, json, redirect_307};
 use crate::wire::{PyValue, dict};
 
+pub mod boot;
+pub mod home;
+pub mod reconcile;
+pub mod routing;
 pub mod supervisor;
 pub mod telemetry;
 pub mod ticker;
+pub mod tradebook;
 
 /// The lane's routes.
 pub fn routes() -> Router<AppState> {
@@ -62,36 +64,18 @@ pub fn routes() -> Router<AppState> {
         .route("/options/run", post(options_frozen))
         .route("/options/data", get_only(get(options_frozen)))
         .route("/static/{*path}", any(static_file))
-        // Starlette's `redirect_slashes`: a path no route matches, whose slash-toggled twin one
-        // does, is a 307 to the twin (any verb) — `/static` to the mount, `/status/` to `/status`.
-        .route("/static", any(toggle_slash))
-        .route("/status/", any(toggle_slash))
-        .route("/login/", any(toggle_slash))
-        .route("/callback/", any(toggle_slash))
-        .route("/options/", any(toggle_slash))
-        .route("/options/run/", any(toggle_slash))
-        .route("/options/data/", any(toggle_slash))
-}
-
-/// `Router.app`'s slash redirect: `RedirectResponse(URL(scope=redirect_scope))` — absolute,
-/// built from the `Host` header, the query string kept.
-async fn toggle_slash(headers: HeaderMap, uri: Uri) -> Response<Body> {
-    let path = uri.path();
-    let twin = match path.strip_suffix('/') {
-        Some(stripped) => stripped.to_owned(),
-        None => format!("{path}/"),
-    };
-    let host = headers
-        .get(header::HOST)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("127.0.0.1");
-    let query = uri.query().map(|q| format!("?{q}")).unwrap_or_default();
-    redirect_307(&format!("http://{host}{twin}{query}"))
+        .route("/static/", any(static_root))
+        // The mount's bare path: axum's catch-all never matches it, so the app-wide slash
+        // redirect (`routing`) cannot see its twin.
+        .route("/static", any(routing::toggle))
+        .merge(home::routes())
+        .merge(reconcile::routes())
+        .merge(tradebook::routes())
 }
 
 /// FastAPI's `@app.get`: the route's methods are `{"GET"}` alone, so `HEAD` (which axum's `get`
 /// would answer) and every other verb get Starlette's 405 with `Allow: GET`.
-fn get_only(
+pub(crate) fn get_only(
     router: axum::routing::MethodRouter<AppState>,
 ) -> axum::routing::MethodRouter<AppState> {
     router.head(get_405).fallback(get_405)
@@ -111,18 +95,26 @@ pub fn register_templates(templates: &mut crate::templates::Templates) {
 
 /// Run one of the lane's background services by name; `None` if the name is not this lane's.
 pub async fn run_service(name: &str, state: &AppState) -> Option<Result<(), String>> {
-    let _ = state;
     match name {
-        // `python -m app.session_supervisor`. The state machine, its clock, the heartbeat table
-        // and the desk's Kite/risk/TWT-drain wiring are ported (`supervisor`); the reconcile
-        // pass (`reconcile.run_pass_from_desk`, the swing/twt/vbt `SleeveHooks`) is not, so the
-        // service refuses to start rather than beat a reconciler that does not exist.
-        "session-supervisor" => Some(Err(format!(
-            "service {name} cannot start: reconcile.run_pass_from_desk (the sleeves' SleeveHooks) \
-             is not ported; supervisor::DeskDeps::from_desk takes it as a ReconcilePass (lane session)"
-        ))),
+        "session-supervisor" => Some(run_supervisor(state).await),
         _ => None,
     }
+}
+
+/// `python -m app.session_supervisor`: `from_desk()` imports `app.main` (so its boot runs),
+/// then `run_forever` over the real reconcile pass and TWT's flag-gated drain.
+async fn run_supervisor(state: &AppState) -> Result<(), String> {
+    boot::boot(state).await;
+    let pass = std::sync::Arc::new(
+        crate::lanes::weekly::weekly_books::reconcile_hooks::DeskReconcilePass::new(state.clone()),
+    );
+    let deps = supervisor::DeskDeps::from_desk(state, pass).ok_or_else(|| {
+        "the desk's gateway is not wired (no Kite wrapper or risk manager)".to_owned()
+    })?;
+    let mut sup = supervisor::Supervisor::new(std::sync::Arc::new(deps));
+    let clock = supervisor::DeskWallClock(state.clock.clone());
+    supervisor::run_forever(&mut sup, &clock, None).await;
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -239,38 +231,10 @@ async fn redis_ping(url: &str) -> bool {
     matches!(tokio::time::timeout(timeout, attempt).await, Ok(Some(true)))
 }
 
-fn key_error(key: &str) -> String {
-    baskfy_providers::py::repr_str(key)
-}
-
-/// `Kite.available_cash()`: `float(margins()["equity"]["available"]["live_balance"])`.
-async fn available_cash(state: &AppState) -> Result<PyValue, String> {
-    let m = state.kite.margins(None).await.map_err(|e| e.to_string())?;
-    let mut cur = &m;
-    for key in ["equity", "available", "live_balance"] {
-        cur = match cur {
-            PyValue::Map(d) => d.get(key).ok_or_else(|| key_error(key))?,
-            _ => return Err("'NoneType' object is not subscriptable".to_owned()),
-        };
-    }
-    match cur {
-        PyValue::Float(f) => Ok(PyValue::Float(*f)),
-        #[allow(clippy::cast_precision_loss)]
-        PyValue::Int(i) => Ok(PyValue::Float(*i as f64)),
-        PyValue::Str(s) => crate::settings::py_float(s)
-            .map(PyValue::Float)
-            .ok_or_else(|| {
-                format!(
-                    "could not convert string to float: {}",
-                    baskfy_providers::py::repr_str(s)
-                )
-            }),
-        _ => Err("float() argument must be a string or a real number".to_owned()),
-    }
-}
-
 const NO_KEY: &str = "KITE_API_KEY missing — copy .env.example to .env and fill it.";
 
+/// `GET /status[?ip=1]`: the flags, the limiter mode, then the session half through the desk's
+/// Kite wrapper (`exec_kite::status_session`).
 async fn status(State(state): State<AppState>, uri: Uri) -> Response<Body> {
     let q = MultiDict::from_query(&uri);
     let settings = state.settings_snapshot();
@@ -285,26 +249,10 @@ async fn status(State(state): State<AppState>, uri: Uri) -> Response<Body> {
     if !q.str_or_empty("ip").is_empty() {
         out.insert("outbound_ip", PyValue::None);
     }
-    if settings.kite_api_key.is_empty() {
-        out.insert("authed", PyValue::Bool(false));
-        out.insert("error", PyValue::Str(NO_KEY.to_owned()));
-        return json(StatusCode::OK, &PyValue::Map(out));
+    let session = crate::lanes::exec_core::exec_kite::status_session(&state).await;
+    for (k, v) in session.iter() {
+        out.insert(k, v.clone());
     }
-    let authed = state.kite.profile().await.is_ok();
-    let cash = if authed {
-        match available_cash(&state).await {
-            Ok(c) => c,
-            Err(e) => {
-                out.insert("authed", PyValue::Bool(false));
-                out.insert("error", PyValue::Str(e));
-                return json(StatusCode::OK, &PyValue::Map(out));
-            }
-        }
-    } else {
-        PyValue::None
-    };
-    out.insert("authed", PyValue::Bool(authed));
-    out.insert("cash", cash);
     json(StatusCode::OK, &PyValue::Map(out))
 }
 
@@ -511,6 +459,14 @@ fn slice(bytes: &[u8], start: i128, end: i128) -> &[u8] {
 /// every verb reaches it — `GET`/`HEAD` are served, anything else is the `HTTPException(405)`
 /// FastAPI renders as `{"detail": "Method Not Allowed"}` with no `Allow`. `If-None-Match` /
 /// `If-Modified-Since` give the 304, and `FileResponse` answers `Range` (206, 400, 416).
+/// `/static/`: the mount with an empty path — `.` is the directory itself, so 404.
+async fn static_root(method: Method) -> Response<Body> {
+    if method != Method::GET && method != Method::HEAD {
+        return web::detail(StatusCode::METHOD_NOT_ALLOWED, "Method Not Allowed");
+    }
+    not_found()
+}
+
 #[allow(clippy::too_many_lines)]
 async fn static_file(
     State(state): State<AppState>,

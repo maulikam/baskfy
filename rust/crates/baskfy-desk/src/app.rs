@@ -237,14 +237,6 @@ async fn harness_kite_calls(State(state): State<AppState>) -> Response<Body> {
     json(StatusCode::OK, &PyValue::List(lines))
 }
 
-/// Starlette's 404: `{"detail":"Not Found"}`.
-async fn not_found() -> Response<Body> {
-    json(
-        StatusCode::NOT_FOUND,
-        &PyValue::Map(dict([("detail", PyValue::Str("Not Found".to_owned()))])),
-    )
-}
-
 /// Starlette's 405 (the `Allow` header is the routing lane's to grade per route).
 async fn method_not_allowed() -> Response<Body> {
     json(
@@ -256,8 +248,8 @@ async fn method_not_allowed() -> Response<Body> {
     )
 }
 
-/// The app: every lane's routes, the harness hooks when present, then `DeskSecurity`, then
-/// `PathPrefix` outermost.
+/// The app: every lane's routes, the harness hooks when present, Starlette's slash redirect as
+/// the fallback, then `DeskSecurity`, then `PathPrefix` outermost.
 pub fn build_app(state: AppState) -> Router {
     let prefix = crate::path_prefix::normalise(&state.settings_snapshot().desk_path_prefix);
     let mut router = crate::lanes::routes();
@@ -266,8 +258,11 @@ pub fn build_app(state: AppState) -> Router {
             .route("/__harness/clock", post(harness_clock))
             .route("/__harness/kite-calls", get(harness_kite_calls));
     }
+    let probe = crate::lanes::session::routing::probe(router.clone(), state.clone());
     router
-        .fallback(not_found)
+        .fallback(move |req: axum::extract::Request| {
+            crate::lanes::session::routing::fallback(probe.clone(), req)
+        })
         .method_not_allowed_fallback(method_not_allowed)
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),

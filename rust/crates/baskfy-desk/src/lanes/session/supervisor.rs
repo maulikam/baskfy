@@ -15,10 +15,8 @@
 //! Everything time- and broker-dependent is injected ([`Deps`], [`WallClock`]), so the
 //! supervisor is a table of tests (`tests` below, ported from `tests/test_session_supervisor.py`).
 //!
-//! **Not wired yet (loud):** `reconcile.run_pass_from_desk` — the swing/twt/vbt `SleeveHooks`
-//! belong to the sleeve lanes. [`DeskDeps`] takes the pass as a [`ReconcilePass`]; until one
-//! exists the `session-supervisor` service refuses to start (lane `session`'s `run_service`)
-//! rather than beat a reconciler that does not exist. DECISIONS-RS R8 (session lane).
+//! The `session-supervisor` service wires [`DeskDeps`] over `weekly_books::reconcile_hooks`'
+//! `DeskReconcilePass` (`reconcile.run_pass_from_desk`).
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -699,12 +697,37 @@ impl Deps for DeskDeps {
     async fn drain_twt(&self, now: DateTime<FixedOffset>) -> Result<DrainOutcome, DepError> {
         let report = crate::lanes::twt::auto::drain_now(&self.state, Some(now))
             .await
-            .map_err(DepError::runtime)?;
+            .map_err(|e| drain_error(&e))?;
         Ok(DrainOutcome {
             ran: report.ran,
             reason: report.reason,
             attempts: report.attempts.len(),
         })
+    }
+}
+
+/// The class Python's drain would have raised, recovered from the error text: a
+/// `"<Type>: message"` prefix names it; the driver's own words map to psycopg's classes.
+#[must_use]
+pub fn drain_error(text: &str) -> DepError {
+    let named = crate::lanes::weekly::weekly_books::reconcile_hooks::dep_error(text);
+    if named.kind != "RuntimeError" || text.starts_with("RuntimeError: ") {
+        return named;
+    }
+    let lower = text.to_ascii_lowercase();
+    let kind = if lower.starts_with("error returned from database") {
+        "DatabaseError"
+    } else if lower.contains("error communicating with database")
+        || lower.contains("pool timed out")
+        || lower.contains("connection")
+    {
+        "OperationalError"
+    } else {
+        "RuntimeError"
+    };
+    DepError {
+        kind: kind.to_owned(),
+        message: text.to_owned(),
     }
 }
 

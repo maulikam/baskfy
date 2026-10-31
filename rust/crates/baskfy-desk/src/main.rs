@@ -1,6 +1,7 @@
 //! `baskfy-desk`: the desk server. Python: `uvicorn app.main:app --host H --port P` run from the
 //! desk's directory; here `baskfy-desk --host H --port P [--root DIR]` (defaults `127.0.0.1`,
-//! `8420`, the working directory), or `baskfy-desk service <name>` for a background service.
+//! `8420`, the working directory), `baskfy-desk service <name>` for a background service, or
+//! `baskfy-desk snapshot [args]` for `python -m app.analytics.snapshot`.
 //!
 //! Settings come from the process environment (plus `--env-file F`, never overriding it, as
 //! `load_dotenv()` does). **There is no live Kite client in this build** (R8.0): without
@@ -25,6 +26,8 @@ use baskfy_desk::ids::{HarnessIds, IdSource, RandomIds};
 use baskfy_desk::kite::{
     GttParams, KiteError, KiteExceptionKind, KiteReads, KiteWrites, OrderParams,
 };
+use baskfy_desk::lanes::exec_core::kite_client::DeskKite;
+use baskfy_desk::lanes::weekly::weekly_books::snapshot::SnapshotKite;
 use baskfy_desk::settings::{Settings, dotenv_lookup};
 use baskfy_desk::storage::{Db, DbConfig};
 use baskfy_desk::wire::{PyDict, PyValue};
@@ -37,10 +40,96 @@ fn arg(args: &[String], name: &str) -> Option<String> {
         .cloned()
 }
 
-/// One operator log line on stderr (the desk has no logging dependency).
-#[allow(clippy::print_stderr)]
-fn log_line(message: &str) {
-    eprintln!("{message}");
+/// The flags `main` itself reads, each with its value.
+const MAIN_FLAGS: [&str; 8] = [
+    "--host",
+    "--port",
+    "--root",
+    "--env-file",
+    "--harness",
+    "--harness-clock",
+    "--harness-seed",
+    "--kite-log",
+];
+
+/// The arguments after `snapshot`, without the server's own flags.
+fn snapshot_args(rest: &[String]) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut it = rest.iter();
+    while let Some(a) = it.next() {
+        if MAIN_FLAGS.contains(&a.as_str()) {
+            it.next();
+        } else {
+            out.push(a.clone());
+        }
+    }
+    out
+}
+
+/// `Kite()` built lazily, as `snapshot.run` does: a missing key fails the first read only.
+struct LazyKite(Result<Arc<DeskKite>, String>);
+
+impl LazyKite {
+    fn get(&self) -> Result<&DeskKite, String> {
+        self.0.as_deref().map_err(Clone::clone)
+    }
+}
+
+#[async_trait]
+impl SnapshotKite for LazyKite {
+    async fn is_authed(&self) -> bool {
+        match self.get() {
+            Ok(k) => SnapshotKite::is_authed(k).await,
+            Err(_) => false,
+        }
+    }
+    async fn holdings(&self) -> Result<Vec<PyDict>, String> {
+        SnapshotKite::holdings(self.get()?).await
+    }
+    async fn available_cash(&self) -> Result<f64, String> {
+        SnapshotKite::available_cash(self.get()?).await
+    }
+    async fn quote_raw(&self, keys: &[String]) -> Result<PyDict, String> {
+        SnapshotKite::quote_raw(self.get()?, keys).await
+    }
+    async fn instruments(&self, exchange: &str) -> Result<Vec<PyValue>, String> {
+        SnapshotKite::instruments(self.get()?, exchange).await
+    }
+    async fn historical(&self, token: i64, day: chrono::NaiveDate) -> Result<Vec<PyValue>, String> {
+        SnapshotKite::historical(self.get()?, token, day).await
+    }
+}
+
+/// `python -m app.analytics.snapshot [args]`: the EOD snapshot (reads only).
+#[allow(clippy::print_stdout, clippy::print_stderr)]
+async fn snapshot(state: &baskfy_desk::app::AppState, argv: &[String]) -> ExitCode {
+    use baskfy_desk::lanes::weekly::weekly_books::snapshot::{CollectOptions, cli};
+    let settings = state.settings_snapshot();
+    let kite = LazyKite(
+        baskfy_desk::lanes::exec_core::exec_kite::kite(state)
+            .map_err(|e| format!("{}: {}", e.python_type, e.message)),
+    );
+    let mut conn = match state.db.connect().await {
+        Ok(c) => c,
+        Err(e) => return fail(&e.to_string()),
+    };
+    let base = CollectOptions {
+        on_date: None,
+        price_source: "holdings",
+        cash: None,
+        allow_stale_cash: false,
+        today: state.clock.now_ist().date_naive(),
+        include_untouchable_in_nav: settings.include_untouchable_in_nav,
+        root: &state.paths.root,
+    };
+    let out = cli(argv, &kite, &mut conn, base, settings.dry_run).await;
+    for line in &out.stdout {
+        println!("{line}");
+    }
+    for line in &out.stderr {
+        eprintln!("{line}");
+    }
+    ExitCode::from(u8::try_from(out.code).unwrap_or(1))
 }
 
 #[allow(clippy::print_stderr)]
@@ -250,23 +339,13 @@ async fn main() -> ExitCode {
         };
     }
 
-    // `main._apply_stored_settings()`, run at import in Python: migrate, then push the stored
-    // overrides onto the settings. A failure is a warning, never a refused boot.
-    match baskfy_desk::lanes::session::startup(&state).await {
-        Ok(applied) if !applied.is_empty() => {
-            let mut applied = applied;
-            applied.sort();
-            log_line(&format!(
-                "INFO:root:applied {} stored setting override(s): {}",
-                applied.len(),
-                applied.join(", ")
-            ));
-        }
-        Ok(_) => {}
-        Err(e) => log_line(&format!(
-            "WARNING:root:could not apply stored settings: {e}"
-        )),
+    if args.get(1).is_some_and(|a| a == "snapshot") {
+        return snapshot(&state, &snapshot_args(&args[2..])).await;
     }
+
+    // `import app.main`: secret files tightened, stored settings applied, ceilings and
+    // observability logged. Never a refused boot.
+    baskfy_desk::lanes::session::boot::boot(&state).await;
 
     // The `fno_badge()` nav global reads the book through the app state from the first page on,
     // as Python's module-level global does (DECISIONS-RS R8.F2 / R8.8).

@@ -856,7 +856,7 @@ async fn ltp_is_served_from_cache_inside_the_ttl_and_refetched_after() {
         .unwrap();
     assert_eq!(PyValue::Map(first), v(r#"{"INFY": 1500.5, "TCS": 4000.0}"#));
     assert_eq!(d.broker.calls(), [s("ltp NSE:INFY,NSE:TCS")]);
-    d.mono.advance(4.9);
+    d.clock.advance(4.9);
     let again = d.kite.ltp(&[s("TCS"), s("INFY")], "NSE").await.unwrap();
     assert_eq!(PyValue::Map(again), v(r#"{"TCS": 4000.0, "INFY": 1500.5}"#));
     assert_eq!(
@@ -869,7 +869,7 @@ async fn ltp_is_served_from_cache_inside_the_ttl_and_refetched_after() {
         v(r#"{"NSE:WIPRO": {"last_price": 250.0}, "NSE:INFY": {"last_price": 1.0}}"#);
     d.kite.ltp(&[s("INFY"), s("WIPRO")], "NSE").await.unwrap();
     assert_eq!(d.broker.calls()[1], "ltp NSE:WIPRO");
-    d.mono.advance(0.2);
+    d.clock.advance(0.2);
     let late = d.kite.ltp(&[s("INFY")], "NSE").await.unwrap();
     assert_eq!(
         late.get("INFY"),
@@ -1184,18 +1184,17 @@ async fn a_store_that_cannot_be_built_refuses_kite_and_the_next_call_retries() {
     k.ready().unwrap();
 }
 
-/// The LTP cache ages on `time.monotonic()`, never on the desk's wall clock: the harness moving
-/// its settable clock an hour does not expire a price fetched a moment ago (Python's harness
-/// leaves `time.monotonic` alone, so its cache did not expire either).
+/// The LTP cache ages on the desk clock's `monotonic()` (the harness's settable monotonic, as
+/// Python's `app.kite_client.time.monotonic`), never on the read limiter's clock.
 #[tokio::test]
-async fn the_ltp_cache_ages_on_monotonic_time_not_the_wall_clock() {
+async fn the_ltp_cache_ages_on_the_desk_clocks_monotonic_not_the_limiters() {
     let d = desk(true);
     *d.broker.ltp.lock().unwrap() = v(r#"{"NSE:INFY": {"last_price": 1500.5}}"#);
     d.kite.ltp(&[s("INFY")], "NSE").await.unwrap();
-    d.clock.advance(3_600.0);
+    d.mono.advance(3_600.0);
     d.kite.ltp(&[s("INFY")], "NSE").await.unwrap();
     assert_eq!(d.broker.calls().len(), 1, "{:?}", d.broker.calls());
-    d.mono.advance(5.0);
+    d.clock.advance(5.0);
     d.kite.ltp(&[s("INFY")], "NSE").await.unwrap();
     assert_eq!(d.broker.calls().len(), 2, "{:?}", d.broker.calls());
 }

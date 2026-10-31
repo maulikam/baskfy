@@ -540,3 +540,18 @@ fn the_seed_reads_symbol_as_str_x_or_empty() {
             .is_empty()
     );
 }
+
+#[test]
+fn a_raising_drain_beats_the_class_python_would_name() {
+    assert_eq!(drain_error("ValueError: bad band").kind, "ValueError");
+    assert_eq!(drain_error("RuntimeError: x").kind, "RuntimeError");
+    assert_eq!(
+        drain_error("error returned from database: relation does not exist").kind,
+        "DatabaseError"
+    );
+    assert_eq!(
+        drain_error("pool timed out while waiting for an open connection").kind,
+        "OperationalError"
+    );
+    assert_eq!(drain_error("something else").kind, "RuntimeError");
+}

@@ -168,6 +168,12 @@ pub struct ShimGateway {
 }
 
 impl ShimGateway {
+    /// The core gateway's rate limiter.
+    #[must_use]
+    pub fn limits(&self) -> Arc<dyn crate::lanes::exec_core::ratelimit::GatewayLimits> {
+        self.core.limits()
+    }
+
     /// Wrap a core gateway.
     #[must_use]
     pub const fn new(core: Arc<OrderGateway>, settings: SharedSettings) -> Self {
@@ -341,6 +347,12 @@ impl DeskGateway {
     /// As [`SharedRisk::get`].
     pub async fn risk(&self) -> Result<Arc<RiskManager>, RiskError> {
         self.risk.get().await
+    }
+
+    /// `gw.limits`: the gateway's rate limiter.
+    #[must_use]
+    pub fn limits(&self) -> Arc<dyn crate::lanes::exec_core::ratelimit::GatewayLimits> {
+        self.shim.limits()
     }
 
     /// `app.main.kite()`: the desk's Kite wrapper (reads limited per family, the LTP cache,

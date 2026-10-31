@@ -221,6 +221,12 @@ impl OrderGateway {
         self.journal.path()
     }
 
+    /// The rate limiter (for routes that pace broker calls on the same bucket).
+    #[must_use]
+    pub fn limits(&self) -> Arc<dyn GatewayLimits> {
+        self.limits.clone()
+    }
+
     /// The broker (for siblings that share it).
     #[must_use]
     pub fn kite(&self) -> Arc<Broker> {

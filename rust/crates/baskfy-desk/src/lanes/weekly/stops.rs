@@ -334,6 +334,18 @@ fn outcome_of(res: &PyDict) -> String {
     }
 }
 
+async fn api_slot(state: &AppState, desk: &StopPlans) {
+    let shared = state
+        .gateway
+        .as_any()
+        .and_then(|a| a.downcast_ref::<crate::lanes::exec_core::desk::DeskGateway>())
+        .map(crate::lanes::exec_core::desk::DeskGateway::limits);
+    match shared {
+        Some(limits) => limits.api_slot().await,
+        None => desk.limits.api_slot().await,
+    }
+}
+
 /// Cancels first, then one stop per row; single use; the outcome as a 303 back to `/stops`.
 pub async fn arm_plan(state: &AppState, plan: &StopPlan, armer: &dyn StopArmer) -> Response<Body> {
     let desk = stop_plans(state);
@@ -342,7 +354,7 @@ pub async fn arm_plan(state: &AppState, plan: &StopPlan, armer: &dyn StopArmer) 
 
     let mut cancelled: Vec<PyDict> = Vec::new();
     for c in &cancels {
-        desk.limits.api_slot().await;
+        api_slot(state, &desk).await;
         let symbol = py_str(field(c, "symbol"));
         let gtt_id = field(c, "gtt_id").clone();
         let tried = match as_i64(&gtt_id) {
@@ -367,7 +379,7 @@ pub async fn arm_plan(state: &AppState, plan: &StopPlan, armer: &dyn StopArmer) 
 
     let mut placed: Vec<PyDict> = Vec::new();
     for r in &rows {
-        desk.limits.api_slot().await;
+        api_slot(state, &desk).await;
         let symbol = py_str(field(r, "symbol"));
         let size = as_i64(field(r, "qty")).unwrap_or(0);
         let trigger = as_f64(field(r, "trigger"));

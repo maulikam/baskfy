@@ -49,6 +49,8 @@ fn only_the_session_module_opens_the_write_pool() {
     }
 }
 
+const GET_WRITERS: [&str; 1] = ["oauth_callback"];
+
 #[test]
 fn every_handler_that_takes_the_write_pool_is_mounted_on_a_write_method() {
     let files = all();
@@ -61,7 +63,7 @@ fn every_handler_that_takes_the_write_pool_is_mounted_on_a_write_method() {
                 .take_while(|c| c.is_alphanumeric() || *c == '_')
                 .collect();
             let signature = chunk.split('{').next().unwrap_or("");
-            if signature.contains("WritePool") {
+            if !name.is_empty() && signature.contains("WritePool") {
                 writers.push(name);
             }
         }
@@ -83,6 +85,16 @@ fn every_handler_that_takes_the_write_pool_is_mounted_on_a_write_method() {
                     "{file}: `{name}` is mounted with `{verb}`"
                 );
                 mounted += 1;
+            }
+            for verb in ["post", "put", "patch", "delete", "get"] {
+                let hits = text.matches(&format!("{verb}({name})")).count();
+                if hits > 0 {
+                    assert!(
+                        verb != "get" || GET_WRITERS.contains(&name.as_str()),
+                        "{file}: `{name}` is mounted with `get`"
+                    );
+                    mounted += hits;
+                }
             }
         }
     }

@@ -26,7 +26,11 @@ const MAX_MESSAGES: usize = 100;
 const TICKER_STOPWORDS: [&str; 12] = [
     "NSE", "BSE", "INR", "IST", "DTE", "OI", "IV", "ATR", "RR", "CE", "PE", "NIFTY",
 ];
-const UNIVERSES: [(&str, &str); 6] = [
+const UNIVERSES: [(&str, &str); 10] = [
+    ("smallcap", "nifty-smallcap-250"),
+    ("small cap", "nifty-smallcap-250"),
+    ("midcap", "nifty-midcap-150"),
+    ("mid cap", "nifty-midcap-150"),
     ("nifty 50", "nifty-50"),
     ("nifty 100", "nifty-100"),
     ("nifty 200", "nifty-200"),
@@ -72,7 +76,29 @@ static RR: Rx = LazyLock::new(|| {
 static OPTIONS_WORDS: Rx =
     LazyLock::new(|| re(r"\b(options?|calls?|puts?|spreads?|strikes?|expiry)\b"));
 static SWING_WORDS: Rx = LazyLock::new(|| {
-    re(r"\b(swing|setups?|breakouts?|pullbacks?|relative strength|scan|liquid)\b")
+    re(r"\b(swing|setups?|breakouts?|pullbacks?|relative strength|scan|liquid|patterns?|vcps?|volatility contraction|twt|weeks tight|episodic pivots?|gap[- ]?ups?|gappers?|flags?|htf|inside bars?|nr7|nr-7|squeeze|52[- ]?(?:week|wk|w)|cups?|bounces?|ema|vbt)\b")
+});
+
+/// Setup phrases, most specific first; a matched phrase is consumed so "52 week high
+/// breakouts" is not also a plain BREAKOUT.
+static SETUP_WORDS: LazyLock<Vec<(Option<Regex>, &'static str)>> = LazyLock::new(|| {
+    [
+        (r"\b(?:vcps?|volatility contraction(?: patterns?)?)\b", "VCP"),
+        (r"\b(?:three|3)[- ]weeks?[- ]tight\b|\btwt\b", "THREE_WEEKS_TIGHT"),
+        (r"\bepisodic pivots?\b|\bgap[- ]?ups?(?: on volume)?\b|\bgappers?\b|\bep\b", "EPISODIC_PIVOT"),
+        (r"\b(?:high[- ]tight[- ]flags?|htf|flags?)\b", "FLAG"),
+        (r"\b(?:inside[- ]bars?|nr-?7|narrow[- ]range|squeeze)\b", "INSIDE_BAR_NR7"),
+        (r"\b52[- ]?(?:week|wk|w)[- ]?highs?(?: breakouts?)?\b", "HIGH_52W_BREAKOUT"),
+        (r"\bcups?(?: (?:and|with|&) handles?)?\b", "CUP_WITH_HANDLE"),
+        (r"\b(?:(?:10|20|50)[- ]?(?:day )?ema|ema|ma|moving[- ]average)[- ]?bounces?\b|\bbounces? off (?:the )?(?:10|20|50)\b|\b(?:10|20|50)[- ]?ema\b", "MA_BOUNCE"),
+        (r"\bvbt\b|\bvolume[- ]breakouts?\b", "VBT"),
+        (r"\bbreakouts?\b", "BREAKOUT"),
+        (r"\bpullbacks?\b", "PULLBACK"),
+        (r"\brelative strength\b", "RELATIVE_STRENGTH"),
+    ]
+    .into_iter()
+    .map(|(p, name)| (re(p), name))
+    .collect()
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -356,15 +382,17 @@ fn swing_intent(text: &str) -> Intent {
     } else if text.contains("liquid") {
         set(&mut args, "min_turnover_cr", Value::from(LIQUID_CR));
     }
-    let setups: Vec<&str> = [
-        ("breakout", "BREAKOUT"),
-        ("pullback", "PULLBACK"),
-        ("relative strength", "RELATIVE_STRENGTH"),
-    ]
-    .into_iter()
-    .filter(|(word, _)| text.contains(word))
-    .map(|(_, name)| name)
-    .collect();
+    let mut rest = text.to_owned();
+    let mut setups: Vec<&str> = Vec::new();
+    for (rx, name) in SETUP_WORDS.iter() {
+        let Some(rx) = rx else { continue };
+        if rx.is_match(&rest) {
+            if !setups.contains(name) {
+                setups.push(*name);
+            }
+            rest = rx.replace_all(&rest, " ").into_owned();
+        }
+    }
     if !setups.is_empty() {
         set(&mut args, "setups", strings(&setups));
     }
@@ -396,8 +424,10 @@ fn parse_intent(original: &str, state: &Value) -> Intent {
     Intent {
         tool: None,
         arguments: Vec::new(),
-        note: "I can scan swing setups (breakout, pullback, relative strength) or compare long \
-               calls, long puts, bull call spreads and bear put spreads for one underlying."
+        note: "I can scan swing setups (breakout, pullback, relative strength, VCP, three weeks \
+               tight, episodic pivot, flag, inside bar / NR7, 52-week high, cup with handle, \
+               EMA bounce, VBT) or compare long calls, long puts, bull call spreads and bear put \
+               spreads for one underlying."
             .to_owned(),
     }
 }

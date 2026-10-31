@@ -374,6 +374,10 @@ pub struct IndicatorRow {
     pub low: F,
     /// `close`.
     pub close: F,
+    /// `volume`.
+    pub volume: F,
+    /// `turnover_inr`: the session's rupee turnover.
+    pub turnover_inr: F,
     /// `adj_factor`.
     pub adj_factor: F,
     /// `bench_level`.
@@ -468,6 +472,8 @@ pub fn indicator_rows(frame: &DataFrame) -> CoreResult<Vec<IndicatorRow>> {
         "high",
         "low",
         "close",
+        "volume",
+        "turnover_inr",
         "adj_factor",
         "bench_level",
         "prev_high",
@@ -501,6 +507,8 @@ pub fn indicator_rows(frame: &DataFrame) -> CoreResult<Vec<IndicatorRow>> {
             high: get("high", i),
             low: get("low", i),
             close: get("close", i),
+            volume: get("volume", i),
+            turnover_inr: get("turnover_inr", i),
             adj_factor: get("adj_factor", i),
             bench_level: get("bench_level", i),
             prev_high: get("prev_high", i),

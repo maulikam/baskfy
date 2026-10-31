@@ -1,5 +1,17 @@
 export type DataStatus = "FRESH" | "STALE" | "UNAVAILABLE";
-export type SwingSetupType = "BREAKOUT" | "PULLBACK" | "RELATIVE_STRENGTH";
+export type SwingSetupType =
+  | "BREAKOUT"
+  | "PULLBACK"
+  | "RELATIVE_STRENGTH"
+  | "VCP"
+  | "THREE_WEEKS_TIGHT"
+  | "EPISODIC_PIVOT"
+  | "FLAG"
+  | "INSIDE_BAR_NR7"
+  | "HIGH_52W_BREAKOUT"
+  | "CUP_WITH_HANDLE"
+  | "MA_BOUNCE"
+  | "VBT";
 export type TriggerStatus = "PENDING" | "TRIGGERED";
 export type OptionDirection = "BULLISH" | "BEARISH";
 export type OptionStrategy = "LONG_CALL" | "LONG_PUT" | "BULL_CALL_SPREAD" | "BEAR_PUT_SPREAD";

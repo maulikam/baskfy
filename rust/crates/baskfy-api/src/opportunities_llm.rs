@@ -46,13 +46,34 @@ pub const OPTIONS_FIELDS: [&str; 7] = [
     "quote_rules",
 ];
 
+/// The swing setup ids the scan accepts.
+pub const SETUP_IDS: [&str; 12] = [
+    "BREAKOUT",
+    "CUP_WITH_HANDLE",
+    "EPISODIC_PIVOT",
+    "FLAG",
+    "HIGH_52W_BREAKOUT",
+    "INSIDE_BAR_NR7",
+    "MA_BOUNCE",
+    "PULLBACK",
+    "RELATIVE_STRENGTH",
+    "THREE_WEEKS_TIGHT",
+    "VBT",
+    "VCP",
+];
+
 /// The router's system prompt.
 pub const SYSTEM_PROMPT: &str = "You route requests for an Indian equity (NSE) trading-opportunity scanner. \
 Call exactly one tool when the request asks for swing setups or for option structures \
 on one underlying; otherwise call no tool. Use only arguments the user stated or clearly \
-implied and leave everything else unset. Symbols are NSE trading symbols in upper case. \
-Holding horizons are in trading sessions. Money is in Indian rupees. Never invent prices \
-or symbols; if no symbol is named or selected, call no tool.";
+implied and leave everything else unset. When the user names a chart pattern, set setups \
+to its id: VCP or volatility contraction -> VCP; three weeks tight or TWT -> THREE_WEEKS_TIGHT; \
+episodic pivot, EP or gap up -> EPISODIC_PIVOT; flag or high tight flag -> FLAG; inside bar or \
+NR7 -> INSIDE_BAR_NR7; 52-week high -> HIGH_52W_BREAKOUT; cup and handle -> CUP_WITH_HANDLE; \
+EMA or moving-average bounce -> MA_BOUNCE; VBT or volume thrust -> VBT. Smallcaps means \
+universe nifty-smallcap-250 and midcaps nifty-midcap-150. Symbols are NSE trading symbols in \
+upper case. Holding horizons are in trading sessions. Money is in Indian rupees. Never invent \
+prices or symbols; if no symbol is named or selected, call no tool.";
 
 /// Where and how to reach the model.
 #[derive(Debug, Clone, PartialEq)]
@@ -120,8 +141,8 @@ fn swing_parameters() -> Value {
             "universe": universe,
             "sectors": {"items": slug, "maxItems": 20, "title": "Sectors", "type": "array"},
             "setups": {
-                "items": {"enum": ["BREAKOUT", "PULLBACK", "RELATIVE_STRENGTH"], "type": "string"},
-                "maxItems": 3, "minItems": 1, "title": "Setups", "type": "array"
+                "items": {"enum": SETUP_IDS, "type": "string"},
+                "maxItems": SETUP_IDS.len(), "minItems": 1, "title": "Setups", "type": "array"
             },
             "min_turnover_cr": {"default": 5.0, "maximum": 10000, "minimum": 0, "title": "Min Turnover Cr", "type": "number"},
             "min_price": {"default": 50.0, "maximum": 1_000_000, "minimum": 0, "title": "Min Price", "type": "number"},
@@ -171,10 +192,14 @@ pub fn tool_definitions() -> Value {
             "type": "function",
             "function": {
                 "name": SWING_TOOL,
-                "description": "Scan NSE stocks for swing setups (BREAKOUT, PULLBACK, RELATIVE_STRENGTH) \
-on completed daily bars, with liquidity, horizon, volatility and \
-reward-to-risk filters. min_turnover_cr is average daily turnover in \
-rupee crore; 'liquid' means about 25.",
+                "description": "Scan NSE stocks for swing setups on completed daily bars, with \
+liquidity, horizon, volatility and reward-to-risk filters. Setups: BREAKOUT, PULLBACK, \
+RELATIVE_STRENGTH, VCP (volatility contraction pattern), THREE_WEEKS_TIGHT (TWT), \
+EPISODIC_PIVOT (gap up on volume), FLAG (flag or high tight flag), INSIDE_BAR_NR7 \
+(inside bar / NR7 squeeze), HIGH_52W_BREAKOUT (52-week high), CUP_WITH_HANDLE, MA_BOUNCE \
+(bounce off the 10/20/50 EMA) and VBT (volume breakout thrust). min_turnover_cr is average \
+daily turnover in rupee crore; 'liquid' means about 25. Smallcaps is the universe \
+nifty-smallcap-250, midcaps nifty-midcap-150.",
                 "parameters": swing_parameters(),
             }
         },

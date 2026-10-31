@@ -20,7 +20,24 @@ use super::service::MAX_VALIDATION_DAYS;
 
 /// `DEFAULT_UNIVERSE`.
 pub(crate) const DEFAULT_UNIVERSE: &str = "nifty-500";
-const SETUP_NAMES: &[&str] = &["BREAKOUT", "PULLBACK", "RELATIVE_STRENGTH"];
+/// Every setup id the scan accepts (`SetupType::ALL`).
+pub(crate) const SETUP_NAMES: &[&str] = &[
+    "BREAKOUT",
+    "CUP_WITH_HANDLE",
+    "EPISODIC_PIVOT",
+    "FLAG",
+    "HIGH_52W_BREAKOUT",
+    "INSIDE_BAR_NR7",
+    "MA_BOUNCE",
+    "PULLBACK",
+    "RELATIVE_STRENGTH",
+    "THREE_WEEKS_TIGHT",
+    "VBT",
+    "VCP",
+];
+/// The setups a request without `setups` scans (the original three).
+const DEFAULT_SETUP_NAMES: &[&str] = &["BREAKOUT", "PULLBACK", "RELATIVE_STRENGTH"];
+const MAX_SETUPS: usize = SETUP_NAMES.len();
 const STRATEGY_NAMES: &[&str] = &["LONG_CALL", "LONG_PUT", "BULL_CALL_SPREAD", "BEAR_PUT_SPREAD"];
 const DIRECTIONS: &[&str] = &["BULLISH", "BEARISH"];
 
@@ -144,7 +161,7 @@ impl Default for SwingScanIn {
         Self {
             universe: DEFAULT_UNIVERSE.to_owned(),
             sectors: Vec::new(),
-            setups: SETUP_NAMES.iter().map(|s| (*s).to_owned()).collect(),
+            setups: DEFAULT_SETUP_NAMES.iter().map(|s| (*s).to_owned()).collect(),
             min_turnover_cr: f.min_turnover_cr,
             min_price: f.min_price,
             horizon_min: f.horizon_min,
@@ -185,7 +202,7 @@ fn swing_model() -> Model {
             ),
             (
                 "setups",
-                Ty::BoundedList(Box::new(Ty::StrLit(SETUP_NAMES)), Some(1), Some(3)),
+                Ty::BoundedList(Box::new(Ty::StrLit(SETUP_NAMES)), Some(1), Some(MAX_SETUPS)),
                 D::Unset,
             ),
             ("min_turnover_cr", float("0", "10000"), D::Unset),

@@ -1044,7 +1044,10 @@ fn test_the_scan_fails_when_a_slot_is_removed() {
 // --- TestAnalyticsGoesThroughTheClient -------------------------------------------------------
 
 /// `app/analytics/` modules that may still hold the raw client, with the reason. Empty.
-const ANALYTICS_RAW_ALLOWED: [(&str, &str); 0] = [];
+const ANALYTICS_RAW_ALLOWED: [(&str, &str); 1] = [(
+    "performance_view.rs",
+    "ports main._holdings_block, whose k.kc.holdings()/get_gtts() are raw in Python too; state.kite is limited_reads",
+)];
 
 fn analytics_sources() -> Vec<(std::path::PathBuf, String)> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lanes/analytics");

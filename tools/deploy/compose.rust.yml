@@ -1,0 +1,40 @@
+# local.sh rust|python installs this, keeping only the services listed in $HOME_DIR/rust.services.
+x-baskfy-rs: &rs
+  image: ${BASKFY_RS_IMAGE:-baskfy-rs:local}
+  entrypoint: [baskfy-rs-entrypoint]
+  working_dir: /desk
+  labels: {baskfy.runtime: rust}
+services:
+  api:
+    <<: *rs
+    command: [baskfy-api, --host, 0.0.0.0, --port, "8000"]
+  worker:
+    <<: *rs
+    command: [baskfy-worker, serve, --queues, "compute,backtest,default"]
+  ingest-worker:
+    <<: *rs
+    command: [baskfy-worker, serve, --queues, ingest]
+  beat:
+    <<: *rs
+    command: [baskfy-worker, beat, --serve]
+  desk:
+    <<: *rs
+    command: [baskfy-desk, --host, 0.0.0.0, --port, "8420"]
+  desk-daily:
+    <<: *rs
+    command: [baskfy-desk, service, desk-daily-loop]
+  session-supervisor:
+    <<: *rs
+    command: [baskfy-desk, service, session-supervisor]
+  swing-monitor:
+    <<: *rs
+    command: [baskfy-desk, service, swing-monitor-loop]
+  twt-auto:
+    <<: *rs
+    command: [baskfy-desk, service, twt-auto-loop]
+  fno-monitor:
+    <<: *rs
+    command: [baskfy-desk, service, fno-monitor-loop]
+  options-monitor:
+    <<: *rs
+    command: [baskfy-desk, service, options-monitor-loop]

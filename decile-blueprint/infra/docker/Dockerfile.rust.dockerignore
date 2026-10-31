@@ -1,0 +1,10 @@
+*
+!rust
+!kite-momentum-rebalancer/app/templates
+!kite-momentum-rebalancer/app/static
+rust/target
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/*.db

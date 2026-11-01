@@ -61,7 +61,7 @@ fn d(text: &str) -> Decimal {
 }
 
 fn settings() -> Settings {
-    Settings::defaults().unwrap()
+    Settings::dry_defaults().unwrap()
 }
 
 // =============================================================================================

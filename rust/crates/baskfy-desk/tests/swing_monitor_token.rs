@@ -29,7 +29,7 @@ struct Client {
 fn client(token: &str) -> Client {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("kite-token.enc");
-    let mut s = Settings::defaults().unwrap();
+    let mut s = Settings::dry_defaults().unwrap();
     s.token_file = path.display().to_string();
     s.kite_api_key = "key".to_owned();
     s.force_ipv4 = false;

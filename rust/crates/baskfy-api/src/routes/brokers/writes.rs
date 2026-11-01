@@ -394,10 +394,10 @@ pub(crate) struct HoldingsResult {
     detail: String,
 }
 
-/// `dry_run_enabled()`: only an explicit false opts out.
+/// `dry_run_enabled()`: unset is live (DECISIONS-MERGE DRY-LIVE); a set value is dry unless false.
 pub(crate) fn dry_run_enabled() -> bool {
     let raw = std::env::var("DRY_RUN")
-        .unwrap_or_else(|_| "true".to_owned())
+        .unwrap_or_else(|_| "false".to_owned())
         .trim()
         .to_lowercase();
     ["", "1", "true", "yes", "on"].contains(&raw.as_str())

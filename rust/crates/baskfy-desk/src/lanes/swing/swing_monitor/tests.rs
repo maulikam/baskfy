@@ -52,7 +52,7 @@ pub(super) fn past_close() -> NaiveDateTime {
 }
 
 pub(super) fn settings() -> Settings {
-    Settings::defaults().unwrap()
+    Settings::dry_defaults().unwrap()
 }
 
 /// `_name(symbol, token, setup=FLAG, pivot="100", circuit=None)`.

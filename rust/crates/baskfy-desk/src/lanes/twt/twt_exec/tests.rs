@@ -43,7 +43,7 @@ fn d(text: &str) -> Decimal {
 }
 
 fn flags(dry_run: bool, execution: bool, auto: bool) -> Settings {
-    let mut s = Settings::defaults().unwrap();
+    let mut s = Settings::dry_defaults().unwrap();
     s.dry_run = dry_run;
     s.twt_execution_enabled = execution;
     s.twt_auto_execute = auto;
@@ -470,7 +470,7 @@ impl Collaborators for Seams {
 
 #[test]
 fn it_defaults_false_and_so_do_the_sleeves_execution_flag_and_dry_run_defaults_true() {
-    let s = Settings::defaults().unwrap();
+    let s = Settings::dry_defaults().unwrap();
     assert!(!s.twt_auto_execute);
     assert!(!s.twt_execution_enabled);
     assert!(s.dry_run);
@@ -1052,7 +1052,7 @@ fn the_gates_are_cnc_only_and_dry_run_unless_both_flags_say_live() {
             );
         }
     }
-    assert!(x::twt_gates(&Settings::defaults().unwrap()).dry_run);
+    assert!(x::twt_gates(&Settings::dry_defaults().unwrap()).dry_run);
 }
 
 #[test]

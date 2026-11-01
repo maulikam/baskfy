@@ -18,7 +18,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
 
 FROM ${DEBIAN_IMAGE} AS runtime
 ENV TZ=Asia/Kolkata \
-    DRY_RUN=true \
+    DRY_RUN=false \
     DESK_DB_BACKEND=postgres \
     RUST_BACKTRACE=1
 RUN apt-get update \

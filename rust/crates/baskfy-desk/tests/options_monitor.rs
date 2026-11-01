@@ -121,7 +121,7 @@ fn flag_off_the_strategy_is_never_constructed() {
 
 #[test]
 fn the_flag_defaults_off() {
-    assert!(!Settings::defaults().unwrap().options_monitor_enabled);
+    assert!(!Settings::dry_defaults().unwrap().options_monitor_enabled);
 }
 
 const KITE: &str = r#"{"session": {"authed": true}, "routes": {}, "quotes": {}, "historical": {}}"#;
@@ -137,7 +137,7 @@ async fn state_with(
     std::fs::create_dir_all(kite_dir.join("instruments")).unwrap();
     std::fs::write(kite_dir.join("kite.json"), KITE).unwrap();
     let kite = Arc::new(ReplayKite::load(&kite_dir, None, "test-api-key").unwrap());
-    let mut settings = Settings::defaults().unwrap();
+    let mut settings = Settings::dry_defaults().unwrap();
     tweak(&mut settings);
     let db = Db::open(DbConfig {
         backend: "postgres".to_owned(),
@@ -1052,7 +1052,7 @@ fn compose_runs_it_from_the_desk_block_with_money_flags_false() {
     assert_eq!(get("INTRADAY_ENABLED").as_deref(), Some("false"));
     assert_eq!(
         get("DRY_RUN").as_deref(),
-        Some("${BASKFY_DESK_DRY_RUN:-true}")
+        Some("${BASKFY_DESK_DRY_RUN:-false}")
     );
 }
 

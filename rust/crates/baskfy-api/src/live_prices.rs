@@ -88,10 +88,10 @@ pub fn market_data_enabled() -> bool {
     truthy_default_on("BASKFY_LIVE_QUOTES")
 }
 
-/// `dry_run_enabled()`: only an explicit false opts out.
+/// `dry_run_enabled()`: unset is live (DECISIONS-MERGE DRY-LIVE); a set value is dry unless false.
 #[must_use]
 pub fn dry_run_enabled() -> bool {
-    truthy_default_on("DRY_RUN")
+    crate::routes::brokers::writes::dry_run_enabled()
 }
 
 /// `token_store_path()`: broker-specific env, then the shared Kite path, then the default.

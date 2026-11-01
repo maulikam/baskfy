@@ -113,7 +113,7 @@ impl QuoteSource for Quotes {
 
 fn paper_defaults() -> Settings {
     // Every flag at its shipped default: DRY_RUN on, the options flags off (PAPER).
-    Settings::defaults().unwrap()
+    Settings::dry_defaults().unwrap()
 }
 
 struct Bed {

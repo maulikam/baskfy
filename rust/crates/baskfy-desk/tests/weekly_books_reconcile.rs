@@ -95,7 +95,7 @@ fn d(text: &str) -> Decimal {
 }
 
 fn settings() -> Settings {
-    let s = Settings::defaults().unwrap();
+    let s = Settings::dry_defaults().unwrap();
     // `_flags_off`: both sleeves' flags false and the desk in dry run. No test flips any.
     assert!(s.dry_run && !s.twt_execution_enabled && !s.vbt_execution_enabled);
     s

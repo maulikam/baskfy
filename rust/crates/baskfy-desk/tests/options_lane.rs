@@ -45,7 +45,7 @@ const FIXTURE: &str =
     r#"{"session": {"authed": true}, "routes": {}, "quotes": {}, "historical": {}}"#;
 
 fn defaults() -> Settings {
-    Settings::defaults().unwrap()
+    Settings::dry_defaults().unwrap()
 }
 
 /// `_set(...)`: DRY_RUN, OPTIONS_ENABLED, INTRADAY_ENABLED and **only** this sleeve's
@@ -125,7 +125,7 @@ fn another_groups_flag_never_makes_a_sleeve_live() {
 #[test]
 fn the_shipped_defaults_are_paper_for_every_sleeve() {
     let s = defaults();
-    assert!(s.dry_run, "DRY_RUN defaults true");
+    assert!(s.dry_run, "the harness pins DRY_RUN on");
     assert!(!s.options_enabled, "OPTIONS_ENABLED defaults off");
     assert!(!s.intraday_enabled, "INTRADAY_ENABLED defaults off");
     assert!(!s.options_o1m_execution_enabled);

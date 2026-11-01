@@ -106,7 +106,7 @@ pub struct WorkerSettings {
     pub options_scan_enabled: bool,
     /// `BASKFY_EQ_BARS_ENABLED` (Python default `True`).
     pub eq_bars_enabled: bool,
-    /// `DRY_RUN` (Python default `true`).
+    /// `DRY_RUN` (Python default `false`, DECISIONS-MERGE DRY-LIVE).
     pub options_desk_dry_run: String,
     /// `OPTIONS_ENABLED` (Python default `false`).
     pub options_desk_options_enabled: String,
@@ -180,7 +180,7 @@ impl Default for WorkerSettings {
             options_collect_enabled: false,
             options_scan_enabled: false,
             eq_bars_enabled: true,
-            options_desk_dry_run: "true".to_owned(),
+            options_desk_dry_run: "false".to_owned(),
             options_desk_options_enabled: "false".to_owned(),
             options_desk_intraday_enabled: "false".to_owned(),
             options_risk_per_trade_inr_max: dec("25000"),

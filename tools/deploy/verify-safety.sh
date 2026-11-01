@@ -40,14 +40,15 @@ fi
 
 # 3. The safety rails, in the file that describes the box.
 C="$BLUE/infra/docker/compose.prod.yml"
-# c51f46b parameterised this as `${BASKFY_DRY_RUN:-true}` so the box sets it from its env file
-# instead of diverging from git by hand. The rail is that the DEFAULT is true — a literal
-# `DRY_RUN: "true"` has not existed since, so this check had been failing on its own convention.
-grep -qE 'DRY_RUN: "(true|\$\{BASKFY_DRY_RUN:-true\})"' "$C" \
-  || fail "DRY_RUN does not default to true in compose.prod.yml"
+# The default is false since 1 Nov 2026 (Maulik; DECISIONS-MERGE DRY-LIVE). The rail now is that
+# compose reads it from the env file and deploy-swing.sh pins the box true when that file is silent.
+grep -qE 'DRY_RUN: "\$\{BASKFY_DRY_RUN:-false\}"' "$C" \
+  || fail "the api's DRY_RUN is not \${BASKFY_DRY_RUN:-false} in compose.prod.yml"
+grep -q 'for k in BASKFY_DRY_RUN BASKFY_DESK_DRY_RUN' "$ROOT/tools/deploy/deploy-swing.sh" \
+  || fail "deploy-swing.sh no longer pins the box's DRY_RUN when unset"
 grep -q 'BASKFY_PUBLIC_API_ENABLED: "false"' "$C" || fail "the public API is not shut (D9)"
 grep -q 'BASKFY_FREE_TIER_ENABLED: "false"'  "$C" || fail "a Track B flag is not false"
-grep -q 'DRY_RUN=true' "$BLUE/infra/docker/Dockerfile.python" || fail "DRY_RUN is not baked into the image"
+grep -q 'DRY_RUN=false' "$BLUE/infra/docker/Dockerfile.python" || fail "the image does not state DRY_RUN's default (DRY-LIVE)"
 
 # 3b. VB13 — the volume-breakout sleeve's rails, as compose defaults.
 #
@@ -81,4 +82,4 @@ for svc in ("postgres:", "redis:"):
         raise SystemExit(1)
 PY
 
-echo "SAFETY OK — no tracked secrets, DRY_RUN true, VBT execution false and no auto-execute, public API shut, data ports unpublished"
+echo "SAFETY OK — no tracked secrets, DRY_RUN default false + AWS pin (DRY-LIVE), VBT execution false and no auto-execute, public API shut, data ports unpublished"

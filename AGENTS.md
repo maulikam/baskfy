@@ -27,8 +27,9 @@ feature-gate briefs; `docs/` holds the merge record (00–08, `DECISIONS-MERGE.m
 
 These are the ones that are catastrophic to miss. They are not advisory.
 
-1. **Never place a live order. Ever.** `DRY_RUN=true` is the default in every environment an
-   agent creates; never run execution tests against live credentials. Orders fire only from
+1. **Never place a live order. Ever.** `DRY_RUN`'s code default is `false` by Maulik's decision
+   of 1 Nov 2026 (`docs/DECISIONS-MERGE.md` DRY-LIVE), so every test harness pins
+   `DRY_RUN=true`; never run execution tests against live credentials. Orders fire only from
    `POST /execute` with `confirm=true` and a `plan_id` from `/analyze` — and never from an agent.
 2. **`kite-momentum-rebalancer/data/portfolio.db` is unrebuildable evidence.** Before anything
    that could touch it: verified backup (`python -m scripts.backup` says `ok`) plus a dated

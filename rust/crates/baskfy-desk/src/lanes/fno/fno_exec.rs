@@ -52,7 +52,10 @@ mod tests {
         assert!(!f3_auto_exit_enabled(&s));
         assert!(!s.options_enabled);
         assert!(!s.fno_carry_enabled);
-        assert!(s.dry_run);
+        assert!(
+            !s.dry_run,
+            "DRY_RUN defaults false (DECISIONS-MERGE DRY-LIVE)"
+        );
         for sleeve in FoSleeve::ALL {
             assert_eq!(mode_of(&s, sleeve), Mode::Paper);
             let g = paper_gates(&s, sleeve);

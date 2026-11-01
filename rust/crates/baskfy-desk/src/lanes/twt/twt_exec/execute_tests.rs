@@ -1091,7 +1091,7 @@ fn test_the_gates_are_cnc_only_and_dry_run_while_the_flag_is_false() {
 
 #[test]
 fn test_both_flags_are_false_by_default_and_auto_execute_is_the_one_named_setting() {
-    let s = crate::settings::Settings::defaults().unwrap();
+    let s = crate::settings::Settings::dry_defaults().unwrap();
     assert!(!s.twt_execution_enabled);
     assert!(!s.twt_auto_execute);
     // `[name for name in dir(config) if name.startswith("TWT_AUTO")] == ["TWT_AUTO_EXECUTE"]`:

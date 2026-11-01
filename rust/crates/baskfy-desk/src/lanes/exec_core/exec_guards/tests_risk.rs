@@ -338,7 +338,7 @@ async fn test_two_managers_over_the_desk_row_share_one_cap() {
 
 #[test]
 fn the_limits_derive_from_nav_and_never_contradict_the_strategy() {
-    let s = crate::settings::Settings::defaults().unwrap();
+    let s = crate::settings::Settings::dry_defaults().unwrap();
     let cfg = risk_config(0.0, &s).unwrap();
     assert_eq!(cfg.max_daily_loss, 100_000.0);
     assert_eq!(cfg.max_position_value, 1_500_000.0);
@@ -568,7 +568,7 @@ fn the_shared_rows_reading_stays_tolerant_but_int_still_raises_on_nan() {
 
 #[test]
 fn a_limit_override_is_read_as_python_float_reads_it() {
-    let mut s = crate::settings::Settings::defaults().unwrap();
+    let mut s = crate::settings::Settings::dry_defaults().unwrap();
     s.risk_max_position_value = "1_500_000".to_owned();
     s.risk_max_gross_exposure = " 2e7 ".to_owned();
     let cfg = risk_config(0.0, &s).unwrap();
@@ -592,7 +592,7 @@ async fn test_the_gateway_wires_the_row_only_on_postgres() {
     let dir = tempfile::tempdir().unwrap();
     let settings = || {
         Arc::new(std::sync::RwLock::new(
-            crate::settings::Settings::defaults().unwrap(),
+            crate::settings::Settings::dry_defaults().unwrap(),
         ))
     };
     // SQLite: the in-memory state it always had.

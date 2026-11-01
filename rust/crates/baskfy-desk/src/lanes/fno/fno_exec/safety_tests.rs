@@ -68,7 +68,7 @@ fn set_flags(
     execution: bool,
     intraday: bool,
 ) -> (Settings, bool) {
-    let mut s = Settings::defaults().unwrap();
+    let mut s = Settings::dry_defaults().unwrap();
     s.dry_run = !dry_off;
     s.options_enabled = options;
     s.fno_carry_enabled = carry;

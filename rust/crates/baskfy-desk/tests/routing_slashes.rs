@@ -18,7 +18,7 @@ use chrono::{FixedOffset, TimeZone};
 use tower::ServiceExt as _;
 
 async fn app(dir: &Path) -> Router {
-    let mut settings = Settings::defaults().unwrap();
+    let mut settings = Settings::dry_defaults().unwrap();
     assert!(settings.dry_run);
     settings.kite_api_key = "replay-test-key".to_owned();
     settings.db_backend = "sqlite".to_owned();

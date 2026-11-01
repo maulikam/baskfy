@@ -426,7 +426,7 @@ impl Desk {
         std::fs::create_dir_all(fixture.join("instruments")).unwrap();
         std::fs::write(fixture.join("kite.json"), kite_fixture(books).to_string()).unwrap();
         let kite = Arc::new(ReplayKite::load(&fixture, None, "test-api-key").unwrap());
-        let mut settings = Settings::defaults().unwrap();
+        let mut settings = Settings::dry_defaults().unwrap();
         settings.sole_user_id = uid;
         settings.sole_broker_account_id = 1;
         // A test key, never a real one: the replay Kite answers whatever key it is given.

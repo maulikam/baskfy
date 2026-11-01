@@ -307,7 +307,7 @@ async fn the_flag_off_builds_nothing_and_returns_ok() {
     use crate::storage::{Db, DbConfig};
 
     let dir = tempfile::tempdir().unwrap();
-    let mut settings = Settings::defaults().unwrap();
+    let mut settings = Settings::dry_defaults().unwrap();
     assert!(!settings.fno_monitor_enabled, "the flag defaults false");
     assert!(settings.dry_run);
     settings.kite_api_key = "replay-test-key".to_owned();
